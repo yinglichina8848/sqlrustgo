@@ -12,6 +12,13 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10"
 
+[dev-dependencies]
+serde_json = "1.0"
+
 [[test]]
 name = "project_test"
 path = "tests/project_test.rs"
+
+[[test]]
+name = "ci_test"
+path = "tests/ci_test.rs"

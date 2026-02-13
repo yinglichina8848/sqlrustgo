@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, nightly]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust ${{ matrix.rust }}
+        run: rustup default ${{ matrix.rust }}
+
+      - name: Build
+        run: cargo build --all-features
+
+      - name: Test
+        run: cargo test --all-features
+
+      - name: Clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --check --all
+
+      - name: Doc test
+        run: cargo test --doc
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: rustup default stable
+
+      - name: Generate coverage
+        run: |
+          rustup component add rust-src
+          cargo install cargo-llvm-cov
+          cargo llvm-cov --all-features --all --workspace --codecov --output-path coverage.json
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.json
+          fail_ci_if_error: true
