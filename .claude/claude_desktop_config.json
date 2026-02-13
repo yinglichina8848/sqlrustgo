@@ -1,0 +1,32 @@
+{
+  "project": {
+    "name": "SQLRustGo",
+    "description": "Rust implementation of SQL-92 compliant database",
+    "type": "rust"
+  },
+  "tools": {
+    "shell": {
+      "enabled": true
+    },
+    "tdd": {
+      "enabled": true,
+      "framework": "cargo"
+    },
+    "coverage": {
+      "threshold": 80,
+      "fail_below": true
+    }
+  },
+  "commands": {
+    "build": "cargo build",
+    "test": "cargo test --all-features",
+    "test-coverage": "cargo llvm-cov --all-features --all --workspace",
+    "clippy": "cargo clippy --all-features -- -D warnings",
+    "format": "cargo fmt --all",
+    "format-check": "cargo fmt --check --all"
+  },
+  "git": {
+    "commit_style": "conventional",
+    "require_tests": true
+  }
+}
