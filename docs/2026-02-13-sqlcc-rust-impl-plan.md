@@ -1,4 +1,4 @@
-# SQLCC Rust 重构项目实施计划
+# SQLRustGo 项目实施计划
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -15,16 +15,16 @@
 ### Task 1: 创建 Rust 项目结构
 
 **文件:**
-- Create: `sqlcc-rs/Cargo.toml`
-- Create: `sqlcc-rs/src/main.rs`
-- Create: `sqlcc-rs/src/lib.rs`
+- Create: `sqlrustgo/Cargo.toml`
+- Create: `sqlrustgo/src/main.rs`
+- Create: `sqlrustgo/src/lib.rs`
 
 **Step 1: 创建 Cargo.toml**
 
 ```toml
 [package]
-name = "sqlcc-rs"
-version = "0.1.0"
+name = "sqlrustgo"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
@@ -41,19 +41,19 @@ env_logger = "0.10"
 
 ```rust
 fn main() {
-    println!("SQLCC Rust Database System");
+    println!("SQLRustGo Database System");
 }
 ```
 
 **Step 3: 编译验证**
 
-Run: `cd sqlcc-rs && cargo build`
+Run: `cd sqlrustgo && cargo build`
 Expected: SUCCESS
 
 **Step 4: 提交**
 
 ```bash
-git add sqlcc-rs/
+git add sqlrustgo/
 git commit -m "feat: 初始化 Rust 项目结构"
 ```
 
@@ -62,9 +62,9 @@ git commit -m "feat: 初始化 Rust 项目结构"
 ### Task 2: 配置 AI 工具链和 CI/CD
 
 **文件:**
-- Create: `sqlcc-rs/.claude/claude_desktop_config.json`
-- Create: `sqlcc-rs/.github/workflows/ci.yml`
-- Create: `sqlcc-rs/cargo-toolchain.toml`
+- Create: `sqlrustgo/.claude/claude_desktop_config.json`
+- Create: `sqlrustgo/.github/workflows/ci.yml`
+- Create: `sqlrustgo/cargo-toolchain.toml`
 
 **Step 1: 创建 GitHub Actions CI**
 
@@ -90,7 +90,7 @@ jobs:
 **Step 2: 提交**
 
 ```bash
-git add sqlcc-rs/.github/ sqlcc-rs/.claude/
+git add sqlrustgo/.github/ sqlrustgo/.claude/
 git commit -m "feat: 添加 AI 工具链和 CI/CD 配置"
 ```
 
@@ -101,9 +101,9 @@ git commit -m "feat: 添加 AI 工具链和 CI/CD 配置"
 ### Task 3: 定义 SQL 值类型和错误类型
 
 **文件:**
-- Create: `sqlcc-rs/src/types/mod.rs`
-- Create: `sqlcc-rs/src/types/value.rs`
-- Create: `sqlcc-rs/src/types/error.rs`
+- Create: `sqlrustgo/src/types/mod.rs`
+- Create: `sqlrustgo/src/types/value.rs`
+- Create: `sqlrustgo/src/types/error.rs`
 
 **Step 1: 创建 value.rs**
 
@@ -159,7 +159,7 @@ pub use error::SqlError;
 **Step 4: 提交**
 
 ```bash
-git add sqlcc-rs/src/types/
+git add sqlrustgo/src/types/
 git commit -m "feat: 定义核心类型系统"
 ```
 
@@ -170,9 +170,9 @@ git commit -m "feat: 定义核心类型系统"
 ### Task 4: 实现词法分析器
 
 **文件:**
-- Create: `sqlcc-rs/src/lexer/mod.rs`
-- Create: `sqlcc-rs/src/lexer/token.rs`
-- Create: `sqlcc-rs/src/lexer/lexer.rs`
+- Create: `sqlrustgo/src/lexer/mod.rs`
+- Create: `sqlrustgo/src/lexer/token.rs`
+- Create: `sqlrustgo/src/lexer/lexer.rs`
 
 **Step 1: 创建 token.rs**
 
@@ -273,7 +273,7 @@ impl<'a> Lexer<'a> {
 **Step 3: 提交**
 
 ```bash
-git add sqlcc-rs/src/lexer/
+git add sqlrustgo/src/lexer/
 git commit -m "feat: 实现词法分析器"
 ```
 
@@ -282,9 +282,9 @@ git commit -m "feat: 实现词法分析器"
 ### Task 5: 实现语法解析器
 
 **文件:**
-- Create: `sqlcc-rs/src/parser/mod.rs`
-- Create: `sqlcc-rs/src/parser/ast.rs`
-- Create: `sqlcc-rs/src/parser/parser.rs`
+- Create: `sqlrustgo/src/parser/mod.rs`
+- Create: `sqlrustgo/src/parser/ast.rs`
+- Create: `sqlrustgo/src/parser/parser.rs`
 
 **Step 1: 创建 ast.rs**
 
@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
 **Step 3: 提交**
 
 ```bash
-git add sqlcc-rs/src/parser/
+git add sqlrustgo/src/parser/
 git commit -m "feat: 实现语法解析器"
 ```
 
@@ -534,9 +534,9 @@ git commit -m "feat: 实现语法解析器"
 ### Task 6: 实现页面和缓冲区管理
 
 **文件:**
-- Create: `sqlcc-rs/src/storage/mod.rs`
-- Create: `sqlcc-rs/src/storage/page.rs`
-- Create: `sqlcc-rs/src/storage/buffer_pool.rs`
+- Create: `sqlrustgo/src/storage/mod.rs`
+- Create: `sqlrustgo/src/storage/page.rs`
+- Create: `sqlrustgo/src/storage/buffer_pool.rs`
 
 **Step 1: 创建 page.rs**
 
@@ -608,7 +608,7 @@ impl BufferPool {
 **Step 3: 提交**
 
 ```bash
-git add sqlcc-rs/src/storage/
+git add sqlrustgo/src/storage/
 git commit -m "feat: 实现页面和缓冲区管理"
 ```
 
@@ -617,9 +617,9 @@ git commit -m "feat: 实现页面和缓冲区管理"
 ### Task 7: 实现 B+ 树索引
 
 **文件:**
-- Create: `sqlcc-rs/src/storage/bplus_tree/mod.rs`
-- Create: `sqlcc-rs/src/storage/bplus_tree/node.rs`
-- Create: `sqlcc-rs/src/storage/bplus_tree/tree.rs`
+- Create: `sqlrustgo/src/storage/bplus_tree/mod.rs`
+- Create: `sqlrustgo/src/storage/bplus_tree/node.rs`
+- Create: `sqlrustgo/src/storage/bplus_tree/tree.rs`
 
 **Step 1: 创建 node.rs**
 
@@ -670,7 +670,7 @@ impl BPlusTree {
 **Step 3: 提交**
 
 ```bash
-git add sqlcc-rs/src/storage/bplus_tree/
+git add sqlrustgo/src/storage/bplus_tree/
 git commit -m "feat: 实现 B+ 树索引"
 ```
 
@@ -681,9 +681,9 @@ git commit -m "feat: 实现 B+ 树索引"
 ### Task 8: 实现执行器框架
 
 **文件:**
-- Create: `sqlcc-rs/src/executor/mod.rs`
-- Create: `sqlcc-rs/src/executor/engine.rs`
-- Create: `sqlcc-rs/src/executor/select_executor.rs`
+- Create: `sqlrustgo/src/executor/mod.rs`
+- Create: `sqlrustgo/src/executor/engine.rs`
+- Create: `sqlrustgo/src/executor/select_executor.rs`
 
 **Step 1: 创建 engine.rs**
 
@@ -736,7 +736,7 @@ impl<'a> ExecutionEngine<'a> {
 **Step 3: 提交**
 
 ```bash
-git add sqlcc-rs/src/executor/
+git add sqlrustgo/src/executor/
 git commit -m "feat: 实现执行器框架"
 ```
 
@@ -747,9 +747,9 @@ git commit -m "feat: 实现执行器框架"
 ### Task 9: 实现事务管理
 
 **文件:**
-- Create: `sqlcc-rs/src/transaction/mod.rs`
-- Create: `sqlcc-rs/src/transaction/manager.rs`
-- Create: `sqlcc-rs/src/transaction/wal.rs`
+- Create: `sqlrustgo/src/transaction/mod.rs`
+- Create: `sqlrustgo/src/transaction/manager.rs`
+- Create: `sqlrustgo/src/transaction/wal.rs`
 
 **Step 1: 创建 wal.rs**
 
@@ -779,7 +779,7 @@ impl WriteAheadLog {
 **Step 2: 提交**
 
 ```bash
-git add sqlcc-rs/src/transaction/
+git add sqlrustgo/src/transaction/
 git commit -m "feat: 实现事务管理"
 ```
 
@@ -790,9 +790,9 @@ git commit -m "feat: 实现事务管理"
 ### Task 10: 实现网络协议
 
 **文件:**
-- Create: `sqlcc-rs/src/network/mod.rs`
-- Create: `sqlcc-rs/src/network/server.rs`
-- Create: `sqlcc-rs/src/network/protocol.rs`
+- Create: `sqlrustgo/src/network/mod.rs`
+- Create: `sqlrustgo/src/network/server.rs`
+- Create: `sqlrustgo/src/network/protocol.rs`
 
 **Step 1: 创建 server.rs**
 
@@ -817,7 +817,7 @@ async fn handle_connection(socket: TcpStream) {
 **Step 2: 提交**
 
 ```bash
-git add sqlcc-rs/src/network/
+git add sqlrustgo/src/network/
 git commit -m "feat: 实现网络协议层"
 ```
 
@@ -828,7 +828,7 @@ git commit -m "feat: 实现网络协议层"
 ### Task 11: 端到端集成测试
 
 **文件:**
-- Create: `sqlcc-rs/tests/integration_test.rs`
+- Create: `sqlrustgo/tests/integration_test.rs`
 
 **Step 1: 创建集成测试**
 
@@ -852,7 +852,7 @@ async fn test_basic_select() {
 **Step 2: 提交**
 
 ```bash
-git add sqlcc-rs/tests/
+git add sqlrustgo/tests/
 git commit -m "feat: 添加集成测试"
 ```
 
