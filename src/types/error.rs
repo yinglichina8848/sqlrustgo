@@ -60,6 +60,12 @@ impl From<&str> for SqlError {
     }
 }
 
+impl From<std::io::Error> for SqlError {
+    fn from(e: std::io::Error) -> Self {
+        SqlError::IoError(e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
