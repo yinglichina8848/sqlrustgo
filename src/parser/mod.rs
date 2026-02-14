@@ -101,6 +101,7 @@ impl<> Parser<> {
     }
     
     /// Check if at end
+    #[allow(dead_code)]
     fn is_eof(&self) -> bool {
         self.position >= self.tokens.len() || matches!(self.current(), Some(Token::Eof))
     }
