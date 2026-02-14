@@ -1,9 +1,8 @@
 //! Integration tests for SQLRustGo
 //! Tests the complete SQL execution flow
 
-use sqlrustgo::{parse, execute, ExecutionEngine, TransactionManager, WriteAheadLog};
+use sqlrustgo::{parse, ExecutionEngine, TransactionManager, WriteAheadLog};
 use std::sync::Arc;
-use std::fs;
 
 #[test]
 fn test_full_select_flow() {

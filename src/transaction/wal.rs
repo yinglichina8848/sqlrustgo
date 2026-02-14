@@ -15,6 +15,7 @@ pub enum WalRecord {
 }
 
 /// Write-Ahead Log
+#[allow(dead_code)]
 pub struct WriteAheadLog {
     file: Mutex<File>,
     path: String,

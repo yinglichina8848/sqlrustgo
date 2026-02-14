@@ -4,7 +4,6 @@
 use super::wal::{WalRecord, WriteAheadLog};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::fs;
 
 /// Transaction state
 #[derive(Debug, Clone, PartialEq)]

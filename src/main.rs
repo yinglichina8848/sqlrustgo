@@ -2,7 +2,7 @@
 //! 
 //! Interactive SQL REPL and command-line interface
 
-use sqlrustgo::{parse, execute, ExecutionResult, init};
+use sqlrustgo::{parse, ExecutionResult, init};
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -100,6 +100,9 @@ fn handle_command(input: &str) -> Result<Option<ExecutionResult>, String> {
         ".schema" => {
             println!("Schema: (catalog not yet implemented)");
             Ok(None)
+        }
+        ".exit" | ".quit" => {
+            std::process::exit(0);
         }
         _ => Err("Unknown command. Type .help for available commands.".to_string()),
     }

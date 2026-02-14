@@ -74,8 +74,7 @@ mod tests {
     #[test]
     fn test_transaction() {
         use std::sync::Arc;
-        use std::fs;
-        
+
         let path = "/tmp/lib_test_wal.log";
         std::fs::remove_file(path).ok();
         

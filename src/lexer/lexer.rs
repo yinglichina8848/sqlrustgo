@@ -31,6 +31,7 @@ impl<'a> Lexer<'a> {
     }
     
     /// Get the current character and advance
+    #[allow(dead_code)]
     fn next_char(&mut self) -> char {
         let ch = self.peek_char();
         self.position += 1;

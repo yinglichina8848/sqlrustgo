@@ -3,7 +3,7 @@
 
 use crate::parser::{Statement, SelectStatement, InsertStatement};
 use crate::types::{Value, SqlError, SqlResult};
-use crate::storage::{BufferPool, Page, BPlusTree};
+use crate::storage::BufferPool;
 
 /// Execution result
 #[derive(Debug)]
@@ -14,6 +14,7 @@ pub struct ExecutionResult {
 }
 
 /// Query execution engine
+#[allow(dead_code)]
 pub struct ExecutionEngine {
     buffer_pool: BufferPool,
     tables: std::collections::HashMap<String, TableInfo>,
@@ -139,7 +140,7 @@ mod tests {
     fn test_execute_select() {
         let mut engine = ExecutionEngine::new();
         // Create table first
-        engine.execute(crate::parser::parse("CREATE TABLE users").unwrap());
+        let _ = engine.execute(crate::parser::parse("CREATE TABLE users").unwrap());
         
         // Select from existing table
         let result = engine.execute(
