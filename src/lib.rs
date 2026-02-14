@@ -8,6 +8,7 @@ pub mod parser;
 pub mod storage;
 pub mod executor;
 pub mod transaction;
+pub mod network;
 
 pub use types::{Value, SqlError, SqlResult, parse_sql_literal};
 pub use lexer::{Token, Lexer, tokenize};
@@ -15,6 +16,7 @@ pub use parser::{Statement, parse};
 pub use storage::{Page, BufferPool, BPlusTree};
 pub use executor::{ExecutionEngine, ExecutionResult, execute};
 pub use transaction::{WriteAheadLog, TransactionManager, TxState};
+pub use network::{NetworkHandler, start_server, connect};
 
 /// Initialize the database system
 pub fn init() {
