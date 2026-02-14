@@ -48,6 +48,18 @@ pub enum SqlError {
 /// Result type alias for SQL operations
 pub type SqlResult<T> = Result<T, SqlError>;
 
+impl From<String> for SqlError {
+    fn from(s: String) -> Self {
+        SqlError::ExecutionError(s)
+    }
+}
+
+impl From<&str> for SqlError {
+    fn from(s: &str) -> Self {
+        SqlError::ExecutionError(s.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
