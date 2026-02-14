@@ -7,12 +7,14 @@ pub mod lexer;
 pub mod parser;
 pub mod storage;
 pub mod executor;
+pub mod transaction;
 
 pub use types::{Value, SqlError, SqlResult, parse_sql_literal};
 pub use lexer::{Token, Lexer, tokenize};
 pub use parser::{Statement, parse};
 pub use storage::{Page, BufferPool, BPlusTree};
 pub use executor::{ExecutionEngine, ExecutionResult, execute};
+pub use transaction::{WriteAheadLog, TransactionManager, TxState};
 
 /// Initialize the database system
 pub fn init() {
@@ -65,5 +67,25 @@ mod tests {
         let result = engine.execute(parse("CREATE TABLE users").unwrap());
         assert!(result.is_ok());
         assert!(engine.get_table("users").is_some());
+    }
+
+    #[test]
+    fn test_transaction() {
+        use std::sync::Arc;
+        use std::fs;
+        
+        let path = "/tmp/lib_test_wal.log";
+        std::fs::remove_file(path).ok();
+        
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+        
+        let tx_id = tm.begin().unwrap();
+        assert!(tm.is_active(tx_id));
+        
+        tm.commit(tx_id).unwrap();
+        assert!(!tm.is_active(tx_id));
+        
+        std::fs::remove_file(path).ok();
     }
 }
