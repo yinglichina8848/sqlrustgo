@@ -6,11 +6,13 @@ pub mod types;
 pub mod lexer;
 pub mod parser;
 pub mod storage;
+pub mod executor;
 
 pub use types::{Value, SqlError, SqlResult, parse_sql_literal};
 pub use lexer::{Token, Lexer, tokenize};
 pub use parser::{Statement, parse};
 pub use storage::{Page, BufferPool, BPlusTree};
+pub use executor::{ExecutionEngine, ExecutionResult, execute};
 
 /// Initialize the database system
 pub fn init() {
@@ -55,5 +57,13 @@ mod tests {
         let mut tree = storage::BPlusTree::new();
         tree.insert(10, 100);
         assert_eq!(tree.search(10), Some(100));
+    }
+
+    #[test]
+    fn test_executor() {
+        let mut engine = ExecutionEngine::new();
+        let result = engine.execute(parse("CREATE TABLE users").unwrap());
+        assert!(result.is_ok());
+        assert!(engine.get_table("users").is_some());
     }
 }
