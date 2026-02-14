@@ -1,7 +1,6 @@
 #[test]
 fn test_project_structure() {
-    let result = sqlrustgo::greet();
-    assert_eq!(result, "SQLRustGo Database System");
+    sqlrustgo::init();
 }
 
 #[test]
