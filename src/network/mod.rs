@@ -1,6 +1,15 @@
-//! Network Layer for SQLRustGo
+//! Network Module
 //!
-//! Provides network protocol support for client-server architecture.
+//! # What (是什么)
+//! 网络通信模块，支持客户端-服务器架构
+//!
+//! # Why (为什么)
+//! 单一进程数据库只能单机使用，网络支持让数据库可以服务多个客户端
+//!
+//! # How (如何实现)
+//! - TCP 服务器监听连接
+//! - MySQL 协议兼容（可选）
+//! - 连接池管理并发
 
 use crate::{ExecutionResult, SqlError, execute};
 use std::io::{Read, Write};
