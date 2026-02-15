@@ -241,6 +241,92 @@ mod tests {
     }
 
     #[test]
+    fn test_token_display_operators() {
+        assert_eq!(Token::Equal.to_string(), "=");
+        assert_eq!(Token::NotEqual.to_string(), "<>");
+        assert_eq!(Token::Greater.to_string(), ">");
+        assert_eq!(Token::Less.to_string(), "<");
+        assert_eq!(Token::GreaterEqual.to_string(), ">=");
+        assert_eq!(Token::LessEqual.to_string(), "<=");
+        assert_eq!(Token::And.to_string(), "AND");
+        assert_eq!(Token::Or.to_string(), "OR");
+        assert_eq!(Token::Not.to_string(), "NOT");
+        assert_eq!(Token::Plus.to_string(), "+");
+        assert_eq!(Token::Minus.to_string(), "-");
+        assert_eq!(Token::Asterisk.to_string(), "*");
+        assert_eq!(Token::Slash.to_string(), "/");
+        assert_eq!(Token::Percent.to_string(), "%");
+    }
+
+    #[test]
+    fn test_token_display_syntax() {
+        assert_eq!(Token::LParen.to_string(), "(");
+        assert_eq!(Token::RParen.to_string(), ")");
+        assert_eq!(Token::Comma.to_string(), ",");
+        assert_eq!(Token::Dot.to_string(), ".");
+        assert_eq!(Token::Semicolon.to_string(), ";");
+        assert_eq!(Token::Colon.to_string(), ":");
+        assert_eq!(Token::SingleQuote.to_string(), "'");
+        assert_eq!(Token::Star.to_string(), "*");
+        assert_eq!(Token::Eof.to_string(), "EOF");
+    }
+
+    #[test]
+    fn test_token_display_keywords() {
+        assert_eq!(Token::From.to_string(), "FROM");
+        assert_eq!(Token::Where.to_string(), "WHERE");
+        assert_eq!(Token::Insert.to_string(), "INSERT");
+        assert_eq!(Token::Into.to_string(), "INTO");
+        assert_eq!(Token::Values.to_string(), "VALUES");
+        assert_eq!(Token::Update.to_string(), "UPDATE");
+        assert_eq!(Token::Set.to_string(), "SET");
+        assert_eq!(Token::Delete.to_string(), "DELETE");
+        assert_eq!(Token::Create.to_string(), "CREATE");
+        assert_eq!(Token::Table.to_string(), "TABLE");
+        assert_eq!(Token::Drop.to_string(), "DROP");
+        assert_eq!(Token::Alter.to_string(), "ALTER");
+        assert_eq!(Token::Index.to_string(), "INDEX");
+    }
+
+    #[test]
+    fn test_token_display_data_types() {
+        assert_eq!(Token::Text.to_string(), "TEXT");
+        assert_eq!(Token::Float.to_string(), "FLOAT");
+        assert_eq!(Token::Boolean.to_string(), "BOOLEAN");
+        assert_eq!(Token::Blob.to_string(), "BLOB");
+        assert_eq!(Token::Null.to_string(), "NULL");
+    }
+
+    #[test]
+    fn test_token_display_transaction() {
+        assert_eq!(Token::Begin.to_string(), "BEGIN");
+        assert_eq!(Token::Commit.to_string(), "COMMIT");
+        assert_eq!(Token::Rollback.to_string(), "ROLLBACK");
+        assert_eq!(Token::Grant.to_string(), "GRANT");
+        assert_eq!(Token::Revoke.to_string(), "REVOKE");
+    }
+
+    #[test]
+    fn test_token_display_other_keywords() {
+        assert_eq!(Token::On.to_string(), "ON");
+        assert_eq!(Token::Primary.to_string(), "PRIMARY");
+        assert_eq!(Token::Key.to_string(), "KEY");
+    }
+
+    #[test]
+    fn test_token_boolean_literal() {
+        assert_eq!(Token::BooleanLiteral(true).to_string(), "true");
+        assert_eq!(Token::BooleanLiteral(false).to_string(), "false");
+    }
+
+    #[test]
+    fn test_token_clone() {
+        let token = Token::Identifier("test".to_string());
+        let cloned = token.clone();
+        assert_eq!(token, cloned);
+    }
+
+    #[test]
     fn test_is_keyword() {
         assert!(is_keyword("SELECT"));
         assert!(is_keyword("select"));
@@ -250,11 +336,88 @@ mod tests {
     }
 
     #[test]
+    fn test_is_keyword_various() {
+        // Data type keywords
+        assert!(is_keyword("INTEGER"));
+        assert!(is_keyword("TEXT"));
+        assert!(is_keyword("FLOAT"));
+        assert!(is_keyword("BOOLEAN"));
+        assert!(is_keyword("BLOB"));
+
+        // Boolean keywords
+        assert!(is_keyword("TRUE"));
+        assert!(is_keyword("FALSE"));
+
+        // Logical operators
+        assert!(is_keyword("AND"));
+        assert!(is_keyword("OR"));
+        assert!(is_keyword("NOT"));
+
+        // Non-keyword
+        assert!(!is_keyword("users"));
+        assert!(!is_keyword("foo"));
+        assert!(!is_keyword("bar123"));
+    }
+
+    #[test]
     fn test_token_from_keyword() {
         assert_eq!(from_keyword("SELECT"), Some(Token::Select));
         assert_eq!(from_keyword("INSERT"), Some(Token::Insert));
         assert_eq!(from_keyword("UNKNOWN"), None);
         assert_eq!(from_keyword("select"), Some(Token::Select));
         assert_eq!(from_keyword("TRUE"), Some(Token::BooleanLiteral(true)));
+    }
+
+    #[test]
+    fn test_from_keyword_various() {
+        // DML keywords
+        assert_eq!(from_keyword("FROM"), Some(Token::From));
+        assert_eq!(from_keyword("WHERE"), Some(Token::Where));
+        assert_eq!(from_keyword("UPDATE"), Some(Token::Update));
+        assert_eq!(from_keyword("SET"), Some(Token::Set));
+        assert_eq!(from_keyword("DELETE"), Some(Token::Delete));
+
+        // DDL keywords
+        assert_eq!(from_keyword("CREATE"), Some(Token::Create));
+        assert_eq!(from_keyword("TABLE"), Some(Token::Table));
+        assert_eq!(from_keyword("DROP"), Some(Token::Drop));
+        assert_eq!(from_keyword("ALTER"), Some(Token::Alter));
+        assert_eq!(from_keyword("INDEX"), Some(Token::Index));
+
+        // Transaction keywords
+        assert_eq!(from_keyword("BEGIN"), Some(Token::Begin));
+        assert_eq!(from_keyword("COMMIT"), Some(Token::Commit));
+        assert_eq!(from_keyword("ROLLBACK"), Some(Token::Rollback));
+
+        // Data types
+        assert_eq!(from_keyword("INTEGER"), Some(Token::Integer));
+        assert_eq!(from_keyword("TEXT"), Some(Token::Text));
+        assert_eq!(from_keyword("FLOAT"), Some(Token::Float));
+        assert_eq!(from_keyword("BOOLEAN"), Some(Token::Boolean));
+        assert_eq!(from_keyword("BLOB"), Some(Token::Blob));
+        assert_eq!(from_keyword("NULL"), Some(Token::Null));
+
+        // Boolean literals
+        assert_eq!(from_keyword("FALSE"), Some(Token::BooleanLiteral(false)));
+
+        // Logical operators
+        assert_eq!(from_keyword("AND"), Some(Token::And));
+        assert_eq!(from_keyword("OR"), Some(Token::Or));
+        assert_eq!(from_keyword("NOT"), Some(Token::Not));
+
+        // Case insensitive
+        assert_eq!(from_keyword("Select"), Some(Token::Select));
+        assert_eq!(from_keyword("FROM"), Some(Token::From));
+
+        // Non-keywords return None
+        assert_eq!(from_keyword("users"), None);
+        assert_eq!(from_keyword("foo"), None);
+    }
+
+    #[test]
+    fn test_token_debug() {
+        let token = Token::Identifier("test".to_string());
+        let debug_str = format!("{:?}", token);
+        assert!(debug_str.contains("Identifier"));
     }
 }

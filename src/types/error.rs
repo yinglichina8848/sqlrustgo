@@ -109,6 +109,7 @@ impl From<std::io::Error> for SqlError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
 
     #[test]
     fn test_error_messages() {
@@ -117,5 +118,99 @@ mod tests {
 
         let err = SqlError::TableNotFound("users".to_string());
         assert!(err.to_string().contains("Table not found"));
+    }
+
+    #[test]
+    fn test_execution_error() {
+        let err = SqlError::ExecutionError("invalid operation".to_string());
+        assert!(err.to_string().contains("Execution error"));
+        assert!(err.to_string().contains("invalid operation"));
+    }
+
+    #[test]
+    fn test_type_mismatch() {
+        let err = SqlError::TypeMismatch("cannot add string and number".to_string());
+        assert!(err.to_string().contains("Type mismatch"));
+        assert!(err.to_string().contains("cannot add string and number"));
+    }
+
+    #[test]
+    fn test_division_by_zero() {
+        let err = SqlError::DivisionByZero;
+        assert!(err.to_string().contains("Division by zero"));
+    }
+
+    #[test]
+    fn test_null_value_error() {
+        let err = SqlError::NullValueError("column cannot be null".to_string());
+        assert!(err.to_string().contains("Null value error"));
+        assert!(err.to_string().contains("column cannot be null"));
+    }
+
+    #[test]
+    fn test_constraint_violation() {
+        let err = SqlError::ConstraintViolation("unique constraint failed".to_string());
+        assert!(err.to_string().contains("Constraint violation"));
+        assert!(err.to_string().contains("unique constraint failed"));
+    }
+
+    #[test]
+    fn test_column_not_found() {
+        let err = SqlError::ColumnNotFound("age".to_string());
+        assert!(err.to_string().contains("Column not found"));
+        assert!(err.to_string().contains("age"));
+    }
+
+    #[test]
+    fn test_duplicate_key() {
+        let err = SqlError::DuplicateKey("id=1".to_string());
+        assert!(err.to_string().contains("Duplicate key"));
+        assert!(err.to_string().contains("id=1"));
+    }
+
+    #[test]
+    fn test_io_error() {
+        let err = SqlError::IoError("file not found".to_string());
+        assert!(err.to_string().contains("I/O error"));
+        assert!(err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn test_from_string() {
+        let err: SqlError = String::from("test error").into();
+        assert!(matches!(err, SqlError::ExecutionError(_)));
+    }
+
+    #[test]
+    fn test_from_str() {
+        let err: SqlError = "test error".into();
+        assert!(matches!(err, SqlError::ExecutionError(_)));
+    }
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err: SqlError = io_err.into();
+        assert!(matches!(err, SqlError::IoError(_)));
+    }
+
+    #[test]
+    fn test_error_debug() {
+        let err = SqlError::ParseError("test".to_string());
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("ParseError"));
+    }
+
+    #[test]
+    fn test_sql_result_alias() {
+        fn return_result() -> SqlResult<i32> {
+            Ok(42)
+        }
+        fn return_error() -> SqlResult<i32> {
+            Err(SqlError::TableNotFound("test".to_string()))
+        }
+
+        assert_eq!(return_result().unwrap(), 42);
+        assert!(return_error().is_err());
     }
 }
