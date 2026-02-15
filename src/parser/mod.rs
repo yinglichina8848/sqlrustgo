@@ -37,7 +37,7 @@ pub struct SelectColumn {
 pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
-    pub values: Vec<Expression>,
+    pub values: Vec<Vec<Expression>>, // Multiple rows
 }
 
 /// UPDATE statement  
@@ -230,51 +230,74 @@ impl Parser {
         }
         self.next(); // consume VALUES
 
-        // Parse values: (val1, val2, ...)
+        // Parse multiple rows: (val1, val2, ...), (val1, val2, ...), ...
         let mut values = Vec::new();
+
+        // Parse first row
         if !matches!(self.current(), Some(Token::LParen)) {
             return Err("Expected ( after VALUES".to_string());
         }
 
-        // Parse first row of values
-        self.next(); // consume '('
+        // Parse all rows
         loop {
-            match self.current() {
-                Some(Token::RParen) => {
-                    self.next();
-                    break;
-                }
-                Some(Token::Identifier(name)) => {
-                    values.push(Expression::Identifier(name.clone()));
-                    self.next();
-                }
-                Some(Token::NumberLiteral(n)) => {
-                    values.push(Expression::Literal(n.clone()));
-                    self.next();
-                }
-                Some(Token::StringLiteral(s)) => {
-                    values.push(Expression::Literal(format!("'{}'", s)));
-                    self.next();
-                }
-                Some(Token::Comma) => {
-                    self.next();
-                }
-                Some(Token::Null) => {
-                    values.push(Expression::Literal("NULL".to_string()));
-                    self.next();
-                }
-                Some(Token::Minus) => {
-                    // Negative number
-                    self.next();
-                    if let Some(Token::NumberLiteral(n)) = self.current() {
-                        values.push(Expression::Literal(format!("-{}", n)));
-                        self.next();
-                    } else {
-                        return Err("Expected number after -".to_string());
-                    }
-                }
-                _ => return Err("Expected value".to_string()),
+            if !matches!(self.current(), Some(Token::LParen)) {
+                break;
             }
+
+            // Parse one row
+            self.next(); // consume '('
+            let mut row = Vec::new();
+            loop {
+                match self.current() {
+                    Some(Token::RParen) => {
+                        self.next();
+                        break;
+                    }
+                    Some(Token::Identifier(name)) => {
+                        row.push(Expression::Identifier(name.clone()));
+                        self.next();
+                    }
+                    Some(Token::NumberLiteral(n)) => {
+                        row.push(Expression::Literal(n.clone()));
+                        self.next();
+                    }
+                    Some(Token::StringLiteral(s)) => {
+                        row.push(Expression::Literal(format!("'{}'", s)));
+                        self.next();
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::Null) => {
+                        row.push(Expression::Literal("NULL".to_string()));
+                        self.next();
+                    }
+                    Some(Token::Minus) => {
+                        // Negative number
+                        self.next();
+                        if let Some(Token::NumberLiteral(n)) = self.current() {
+                            row.push(Expression::Literal(format!("-{}", n)));
+                            self.next();
+                        } else {
+                            return Err("Expected number after -".to_string());
+                        }
+                    }
+                    _ => return Err("Expected value".to_string()),
+                }
+            }
+            values.push(row);
+
+            // Check for more rows: either comma or end
+            match self.current() {
+                Some(Token::Comma) => {
+                    self.next(); // consume comma, continue to next row
+                }
+                _ => break,
+            }
+        }
+
+        if values.is_empty() {
+            return Err("Expected at least one row of values".to_string());
         }
 
         Ok(Statement::Insert(InsertStatement {
@@ -536,7 +559,8 @@ mod tests {
         match result.unwrap() {
             Statement::Insert(i) => {
                 assert_eq!(i.table, "users");
-                assert_eq!(i.values.len(), 1);
+                assert_eq!(i.values.len(), 1); // 1 row
+                assert_eq!(i.values[0].len(), 1); // 1 value per row
             }
             _ => panic!("Expected INSERT statement"),
         }
@@ -549,7 +573,8 @@ mod tests {
         match result.unwrap() {
             Statement::Insert(i) => {
                 assert_eq!(i.table, "users");
-                assert_eq!(i.values.len(), 2);
+                assert_eq!(i.values.len(), 1); // 1 row
+                assert_eq!(i.values[0].len(), 2); // 2 values per row
             }
             _ => panic!("Expected INSERT statement"),
         }
@@ -563,7 +588,24 @@ mod tests {
             Statement::Insert(i) => {
                 assert_eq!(i.table, "users");
                 assert_eq!(i.columns, vec!["id", "name"]);
-                assert_eq!(i.values.len(), 2);
+                assert_eq!(i.values.len(), 1); // 1 row
+                assert_eq!(i.values[0].len(), 2); // 2 values
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_insert_multi_row() {
+        let result = parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert_eq!(i.values.len(), 3); // 3 rows
+                assert_eq!(i.values[0].len(), 2); // 2 values per row
+                assert_eq!(i.values[1].len(), 2);
+                assert_eq!(i.values[2].len(), 2);
             }
             _ => panic!("Expected INSERT statement"),
         }

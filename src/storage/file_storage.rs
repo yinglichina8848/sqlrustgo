@@ -143,6 +143,15 @@ impl FileStorage {
     pub fn contains_table(&self, name: &str) -> bool {
         self.tables.contains_key(name)
     }
+
+    /// Save a table to disk (call after modifications)
+    pub fn persist_table(&self, name: &str) -> std::io::Result<()> {
+        if let Some(table_data) = self.tables.get(name) {
+            self.save_table(name, table_data)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Stored table data (for serialization)
