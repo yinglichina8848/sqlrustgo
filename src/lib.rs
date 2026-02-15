@@ -14,7 +14,7 @@ pub use executor::{ExecutionEngine, ExecutionResult, execute};
 pub use lexer::{Lexer, Token, tokenize};
 pub use network::{NetworkHandler, connect, start_server};
 pub use parser::{Statement, parse};
-pub use storage::{BPlusTree, BufferPool, Page};
+pub use storage::{BPlusTree, BufferPool, FileStorage, Page};
 pub use transaction::{TransactionManager, TxState, WriteAheadLog};
 pub use types::{SqlError, SqlResult, Value, parse_sql_literal};
 
