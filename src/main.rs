@@ -1,11 +1,11 @@
 //! SQLRustGo - A Rust SQL-92 Database Implementation
-//! 
+//!
 //! Interactive SQL REPL and command-line interface
 
-use sqlrustgo::{parse, ExecutionResult, init};
+use sqlrustgo::{ExecutionResult, init, parse};
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn main() {
     println!("╔════════════════════════════════════════════════╗");
@@ -24,7 +24,8 @@ fn main() {
 
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let mut engine = sqlrustgo::ExecutionEngine::new();
 
@@ -58,7 +59,10 @@ fn main() {
 }
 
 /// Process user input
-fn process_input(input: &str, engine: &mut sqlrustgo::ExecutionEngine) -> Result<Option<ExecutionResult>, String> {
+fn process_input(
+    input: &str,
+    engine: &mut sqlrustgo::ExecutionEngine,
+) -> Result<Option<ExecutionResult>, String> {
     // Handle special commands
     if input.starts_with('.') {
         return handle_command(input);
@@ -71,12 +75,10 @@ fn process_input(input: &str, engine: &mut sqlrustgo::ExecutionEngine) -> Result
 
     // Execute SQL statement
     match parse(input) {
-        Ok(statement) => {
-            match engine.execute(statement) {
-                Ok(result) => Ok(Some(result)),
-                Err(e) => Err(format!("Execution error: {}", e)),
-            }
-        }
+        Ok(statement) => match engine.execute(statement) {
+            Ok(result) => Ok(Some(result)),
+            Err(e) => Err(format!("Execution error: {}", e)),
+        },
         Err(e) => Err(format!("Parse error: {}", e)),
     }
 }

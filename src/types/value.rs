@@ -32,7 +32,7 @@ impl Value {
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
         }
     }
-    
+
     /// Get the SQL type name
     pub fn type_name(&self) -> &'static str {
         match self {
