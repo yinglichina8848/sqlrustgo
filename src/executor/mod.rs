@@ -78,10 +78,16 @@ impl ExecutionEngine {
             }).collect()
         };
 
+        // Build column index map for WHERE clause evaluation
+        let column_map: std::collections::HashMap<String, usize> = table_columns.iter()
+            .enumerate()
+            .map(|(i, c)| (c.clone(), i))
+            .collect();
+
         // Filter rows by WHERE clause
         let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_expr) = stmt.where_clause {
             table_data.rows.iter()
-                .filter(|row| evaluate_where_static(row, where_expr))
+                .filter(|row| evaluate_where(row, where_expr, &column_map))
                 .cloned()
                 .collect()
         } else {
@@ -104,62 +110,87 @@ impl ExecutionEngine {
         })
     }
 
-    /// Execute INSERT
+    /// Execute INSERT (supports multi-row)
     fn execute_insert(&mut self, stmt: InsertStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
         if !self.storage.contains_table(&stmt.table) {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
-        // Convert expressions to values
-        let row: Vec<Value> = stmt.values.iter().map(expression_to_value_static).collect();
+        // Convert expressions to values (multiple rows)
+        let mut inserted_rows: Vec<Vec<Value>> = Vec::new();
 
-        // Get table and add row
-        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
-        table_data.rows.push(row.clone());
+        {
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            for row_expr in &stmt.values {
+                let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
+                table_data.rows.push(row.clone());
+                inserted_rows.push(row);
+            }
+        }
+        self.storage.persist_table(&stmt.table)?;
+
+        let rows_affected = inserted_rows.len() as u64;
 
         Ok(ExecutionResult {
-            rows_affected: 1,
+            rows_affected,
             columns: Vec::new(),
-            rows: vec![row],
+            rows: inserted_rows,
         })
     }
 
-    /// Execute UPDATE
+    /// Execute UPDATE (with dynamic column mapping)
     fn execute_update(&mut self, stmt: UpdateStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
         if !self.storage.contains_table(&stmt.table) {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
-        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
-        let mut rows_affected = 0;
         let where_clause = stmt.where_clause.clone();
         let set_clauses = stmt.set_clauses.clone();
 
-        // Evaluate WHERE clause if present
-        for row in &mut table_data.rows {
-            // If no WHERE clause, update all rows
-            let matches = if let Some(ref where_expr) = where_clause {
-                evaluate_where_static(row, where_expr)
-            } else {
-                true
-            };
+        // Build column index map from table schema
+        let column_indices: std::collections::HashMap<String, usize> = {
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            table_data
+                .info
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (c.name.clone(), i))
+                .collect()
+        };
 
-            if matches {
-                // Apply SET clauses
-                for (column, value_expr) in &set_clauses {
-                    // Find column index (simple implementation: assume column 0 is id, column 1 is name)
-                    // In a real implementation, we'd match against column definitions
-                    if *column == "id" && !row.is_empty() {
-                        row[0] = expression_to_value_static(value_expr);
-                    } else if *column == "name" && row.len() >= 2 {
-                        row[1] = expression_to_value_static(value_expr);
+        let rows_affected = {
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let mut count = 0;
+
+            // Evaluate WHERE clause if present
+            for row in &mut table_data.rows {
+                // If no WHERE clause, update all rows
+                let matches = if let Some(ref where_expr) = where_clause {
+                    evaluate_where(row, where_expr, &column_indices)
+                } else {
+                    true
+                };
+
+                if matches {
+                    // Apply SET clauses with dynamic column mapping
+                    for (column, value_expr) in &set_clauses {
+                        if let Some(&idx) = column_indices.get(column) {
+                            if idx < row.len() {
+                                row[idx] = expression_to_value_static(value_expr);
+                            }
+                        }
                     }
+                    count += 1;
                 }
-                rows_affected += 1;
             }
-        }
+            count
+        };
+
+        // Persist to disk
+        self.storage.persist_table(&stmt.table)?;
 
         Ok(ExecutionResult {
             rows_affected,
@@ -175,20 +206,38 @@ impl ExecutionEngine {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
-        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
-        let original_count = table_data.rows.len();
         let where_clause = stmt.where_clause.clone();
 
-        // If WHERE clause is present, filter rows; otherwise delete all
-        if let Some(where_expr) = where_clause {
+        // Build column index map for WHERE clause evaluation
+        let column_indices: std::collections::HashMap<String, usize> = {
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
             table_data
-                .rows
-                .retain(|row| !evaluate_where_static(row, &where_expr));
-        } else {
-            table_data.rows.clear();
-        }
+                .info
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (c.name.clone(), i))
+                .collect()
+        };
 
-        let rows_affected = (original_count - table_data.rows.len()) as u64;
+        let rows_affected = {
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let original_count = table_data.rows.len();
+
+            // If WHERE clause is present, filter rows; otherwise delete all
+            if let Some(where_expr) = where_clause {
+                table_data
+                    .rows
+                    .retain(|row| !evaluate_where(row, &where_expr, &column_indices));
+            } else {
+                table_data.rows.clear();
+            }
+
+            (original_count - table_data.rows.len()) as u64
+        };
+
+        // Persist to disk
+        self.storage.persist_table(&stmt.table)?;
 
         Ok(ExecutionResult {
             rows_affected,
@@ -249,19 +298,23 @@ fn expression_to_value_static(expr: &Expression) -> Value {
     }
 }
 
-/// Evaluate WHERE clause for a row (static function)
-fn evaluate_where_static(row: &[Value], expr: &Expression) -> bool {
+/// Evaluate WHERE clause for a row with dynamic column mapping
+fn evaluate_where(
+    row: &[Value],
+    expr: &Expression,
+    column_indices: &std::collections::HashMap<String, usize>,
+) -> bool {
     match expr {
         Expression::BinaryOp(left, op, right) => {
             // Get left value (column reference)
             let left_val = match left.as_ref() {
                 Expression::Identifier(name) => {
-                    // Assume columns are in order: id, name, ...
-                    match name.as_str() {
-                        "id" if !row.is_empty() => row.get(0).cloned().unwrap_or(Value::Null),
-                        "name" if row.len() >= 2 => row.get(1).cloned().unwrap_or(Value::Null),
-                        _ => Value::Null,
-                    }
+                    // Dynamic column lookup
+                    column_indices
+                        .get(name)
+                        .and_then(|&idx| row.get(idx))
+                        .cloned()
+                        .unwrap_or(Value::Null)
                 }
                 Expression::Literal(s) => parse_sql_literal(s),
                 _ => Value::Null,
@@ -270,11 +323,12 @@ fn evaluate_where_static(row: &[Value], expr: &Expression) -> bool {
             // Get right value
             let right_val = match right.as_ref() {
                 Expression::Identifier(name) => {
-                    match name.as_str() {
-                        "id" if !row.is_empty() => row.get(0).cloned().unwrap_or(Value::Null),
-                        "name" if row.len() >= 2 => row.get(1).cloned().unwrap_or(Value::Null),
-                        _ => Value::Null,
-                    }
+                    // Dynamic column lookup
+                    column_indices
+                        .get(name)
+                        .and_then(|&idx| row.get(idx))
+                        .cloned()
+                        .unwrap_or(Value::Null)
                 }
                 Expression::Literal(s) => parse_sql_literal(s),
                 _ => Value::Null,
@@ -347,11 +401,16 @@ pub fn execute(sql: &str) -> SqlResult<ExecutionResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn test_execution_engine_create() {
-        let engine = ExecutionEngine::new();
+        // Use a unique temp directory for test isolation
+        let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_{}", std::process::id()));
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
         assert!(engine.storage.table_names().is_empty());
+        // Clean up
+        let _ = std::fs::remove_dir_all(temp_dir);
     }
 
     #[test]
