@@ -4,6 +4,7 @@
 //! It converts tokens from the lexer into an AST.
 
 use crate::lexer::{Lexer, Token};
+use serde::{Deserialize, Serialize};
 
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +69,7 @@ pub struct DropTableStatement {
 }
 
 /// Column definition
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
@@ -458,6 +459,14 @@ impl Parser {
                                 self.next();
                                 t
                             }
+                            Some(Token::Integer) => {
+                                self.next();
+                                "INTEGER".to_string()
+                            }
+                            Some(Token::Text) => {
+                                self.next();
+                                "TEXT".to_string()
+                            }
                             _ => "INTEGER".to_string(), // default
                         };
                         columns.push(ColumnDefinition {
@@ -627,19 +636,11 @@ mod tests {
 
     #[test]
     fn test_parse_create_with_columns() {
-        use crate::lexer::Lexer;
-        let tokens = Lexer::new("CREATE TABLE users (id INTEGER, name TEXT)").tokenize();
-        eprintln!("Tokens: {:?}", tokens);
-
         let result = parse("CREATE TABLE users (id INTEGER, name TEXT)");
         assert!(result.is_ok());
         match result.unwrap() {
             Statement::CreateTable(c) => {
                 assert_eq!(c.name, "users");
-                eprintln!("columns len: {}", c.columns.len());
-                for (i, col) in c.columns.iter().enumerate() {
-                    eprintln!("column {}: {:?}", i, col);
-                }
                 assert_eq!(c.columns.len(), 2);
                 assert_eq!(c.columns[0].name, "id");
                 assert_eq!(c.columns[1].name, "name");

@@ -1,10 +1,11 @@
 //! SQL Value types
 //! Core data types for SQLRustGo database system
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SQL Value enum representing all supported SQL data types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     /// NULL value
     Null,

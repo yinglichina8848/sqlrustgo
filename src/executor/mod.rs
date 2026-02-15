@@ -4,8 +4,9 @@
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
 };
-use crate::storage::BufferPool;
+use crate::storage::{BufferPool, FileStorage};
 use crate::types::{SqlError, SqlResult, Value, parse_sql_literal};
+use std::path::PathBuf;
 
 /// Execution result
 #[derive(Debug)]
@@ -19,15 +20,21 @@ pub struct ExecutionResult {
 #[allow(dead_code)]
 pub struct ExecutionEngine {
     buffer_pool: BufferPool,
-    tables: std::collections::HashMap<String, TableData>,
+    storage: FileStorage,
 }
 
 impl ExecutionEngine {
-    /// Create a new execution engine
+    /// Create a new execution engine with file-based storage
     pub fn new() -> Self {
+        Self::with_data_dir(std::path::PathBuf::from("data"))
+    }
+
+    /// Create a new execution engine with custom data directory
+    pub fn with_data_dir(data_dir: PathBuf) -> Self {
+        let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
         Self {
             buffer_pool: BufferPool::new(100),
-            tables: std::collections::HashMap::new(),
+            storage,
         }
     }
 
@@ -46,8 +53,8 @@ impl ExecutionEngine {
     /// Execute SELECT
     fn execute_select(&mut self, stmt: SelectStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
-        let table_data = self.tables
-            .get(&stmt.table)
+        let table_data = self.storage
+            .get_table(&stmt.table)
             .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
 
         // Get column names from table schema
@@ -100,7 +107,7 @@ impl ExecutionEngine {
     /// Execute INSERT
     fn execute_insert(&mut self, stmt: InsertStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
-        if !self.tables.contains_key(&stmt.table) {
+        if !self.storage.contains_table(&stmt.table) {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
@@ -108,7 +115,7 @@ impl ExecutionEngine {
         let row: Vec<Value> = stmt.values.iter().map(expression_to_value_static).collect();
 
         // Get table and add row
-        let table_data = self.tables.get_mut(&stmt.table).unwrap();
+        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
         table_data.rows.push(row.clone());
 
         Ok(ExecutionResult {
@@ -121,11 +128,11 @@ impl ExecutionEngine {
     /// Execute UPDATE
     fn execute_update(&mut self, stmt: UpdateStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
-        if !self.tables.contains_key(&stmt.table) {
+        if !self.storage.contains_table(&stmt.table) {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
-        let table_data = self.tables.get_mut(&stmt.table).unwrap();
+        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
         let mut rows_affected = 0;
         let where_clause = stmt.where_clause.clone();
         let set_clauses = stmt.set_clauses.clone();
@@ -164,11 +171,11 @@ impl ExecutionEngine {
     /// Execute DELETE
     fn execute_delete(&mut self, stmt: DeleteStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
-        if !self.tables.contains_key(&stmt.table) {
+        if !self.storage.contains_table(&stmt.table) {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
-        let table_data = self.tables.get_mut(&stmt.table).unwrap();
+        let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
         let original_count = table_data.rows.len();
         let where_clause = stmt.where_clause.clone();
 
@@ -195,16 +202,15 @@ impl ExecutionEngine {
         &mut self,
         stmt: crate::parser::CreateTableStatement,
     ) -> SqlResult<ExecutionResult> {
-        self.tables.insert(
-            stmt.name.clone(),
-            TableData {
-                info: TableInfo {
-                    name: stmt.name,
-                    columns: stmt.columns,
-                },
-                rows: Vec::new(),
+        let table_data = TableData {
+            info: TableInfo {
+                name: stmt.name.clone(),
+                columns: stmt.columns,
             },
-        );
+            rows: Vec::new(),
+        };
+        self.storage
+            .insert_table(stmt.name, table_data)?;
 
         Ok(ExecutionResult {
             rows_affected: 0,
@@ -218,7 +224,8 @@ impl ExecutionEngine {
         &mut self,
         stmt: crate::parser::DropTableStatement,
     ) -> SqlResult<ExecutionResult> {
-        self.tables.remove(&stmt.name);
+        self.storage
+            .drop_table(&stmt.name)?;
 
         Ok(ExecutionResult {
             rows_affected: 0,
@@ -229,7 +236,7 @@ impl ExecutionEngine {
 
     /// Get table data
     pub fn get_table(&self, name: &str) -> Option<&TableData> {
-        self.tables.get(name)
+        self.storage.get_table(name)
     }
 }
 
@@ -317,14 +324,14 @@ fn evaluate_where_static(row: &[Value], expr: &Expression) -> bool {
 }
 
 /// Table data with rows
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TableData {
     pub info: TableInfo,
     pub rows: Vec<Vec<Value>>,
 }
 
 /// Table metadata
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TableInfo {
     pub name: String,
     pub columns: Vec<crate::parser::ColumnDefinition>,
@@ -344,7 +351,7 @@ mod tests {
     #[test]
     fn test_execution_engine_create() {
         let engine = ExecutionEngine::new();
-        assert!(engine.tables.is_empty());
+        assert!(engine.storage.table_names().is_empty());
     }
 
     #[test]
