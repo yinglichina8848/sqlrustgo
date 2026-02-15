@@ -169,17 +169,121 @@ mod tests {
     use std::fs::remove_dir_all;
 
     #[test]
-    fn test_file_storage() {
-        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_file_storage");
+    fn test_file_storage_crud() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_crud");
         let _ = remove_dir_all(&temp_dir);
 
+        // Create storage
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // CREATE: Insert first table
+        let table1 = TableData {
+            info: TableInfo {
+                name: "test_table".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![vec![Value::Integer(1)]],
+        };
+        storage.insert_table("test_table".to_string(), table1).unwrap();
+
+        // READ: Verify table exists
+        assert!(storage.contains_table("test_table"));
+        let retrieved = storage.get_table("test_table").unwrap();
+        assert_eq!(retrieved.info.name, "test_table");
+        assert_eq!(retrieved.rows.len(), 1);
+
+        // UPDATE: Add more rows
+        {
+            let table = storage.get_table_mut("test_table").unwrap();
+            table.rows.push(vec![Value::Integer(2)]);
+        }
+        storage.persist_table("test_table").unwrap();
+
+        // Verify update persisted
+        let updated = storage.get_table("test_table").unwrap();
+        assert_eq!(updated.rows.len(), 2);
+
+        // DELETE: Drop table
+        storage.drop_table("test_table").unwrap();
+        assert!(!storage.contains_table("test_table"));
+        assert!(storage.get_table("test_table").is_none());
+
+        // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_multiple_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_multi");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create multiple tables
+        let table_a = TableData {
+            info: TableInfo {
+                name: "table_a".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "col1".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![vec![Value::Text("hello".to_string())]],
+        };
+        storage.insert_table("table_a".to_string(), table_a).unwrap();
+
+        let table_b = TableData {
+            info: TableInfo {
+                name: "table_b".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "col2".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: true,
+                }],
+            },
+            rows: vec![
+                vec![Value::Integer(100)],
+                vec![Value::Integer(200)],
+            ],
+        };
+        storage.insert_table("table_b".to_string(), table_b).unwrap();
+
+        // Verify all tables exist
+        let names = storage.table_names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"table_a".to_string()));
+        assert!(names.contains(&"table_b".to_string()));
+
+        // Verify individual tables
+        assert!(storage.contains_table("table_a"));
+        assert!(storage.contains_table("table_b"));
+        assert_eq!(storage.get_table("table_b").unwrap().rows.len(), 2);
+
+        // Drop one table, verify other still exists
+        storage.drop_table("table_a").unwrap();
+        assert!(!storage.contains_table("table_a"));
+        assert!(storage.contains_table("table_b"));
+
+        // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_persistence() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_persist");
+        let _ = remove_dir_all(&temp_dir);
+
+        // First session: create and populate table
         {
             let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
-
-            // Insert a table
-            let table_data = TableData {
+            let table = TableData {
                 info: TableInfo {
-                    name: "users".to_string(),
+                    name: "persistent_table".to_string(),
                     columns: vec![
                         ColumnDefinition {
                             name: "id".to_string(),
@@ -187,28 +291,125 @@ mod tests {
                             nullable: false,
                         },
                         ColumnDefinition {
-                            name: "name".to_string(),
+                            name: "value".to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: true,
                         },
                     ],
                 },
                 rows: vec![
-                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                    vec![Value::Integer(1), Value::Text("first".to_string())],
+                    vec![Value::Integer(2), Value::Text("second".to_string())],
+                    vec![Value::Integer(3), Value::Text("third".to_string())],
                 ],
             };
-
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage.insert_table("persistent_table".to_string(), table).unwrap();
         }
 
-        // Load from disk
+        // Second session: verify data persisted
         {
             let storage = FileStorage::new(temp_dir.clone()).unwrap();
-            let table = storage.get_table("users").unwrap();
-            assert_eq!(table.info.name, "users");
-            assert_eq!(table.rows.len(), 1);
+            assert!(storage.contains_table("persistent_table"));
+
+            let table = storage.get_table("persistent_table").unwrap();
+            assert_eq!(table.info.columns.len(), 2);
+            assert_eq!(table.rows.len(), 3);
+            assert_eq!(table.rows[0], vec![Value::Integer(1), Value::Text("first".to_string())]);
+            assert_eq!(table.rows[1], vec![Value::Integer(2), Value::Text("second".to_string())]);
+            assert_eq!(table.rows[2], vec![Value::Integer(3), Value::Text("third".to_string())]);
         }
 
+        // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_drop_nonexistent() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_nonexistent");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Dropping non-existent table should not error
+        let result = storage.drop_table("nonexistent");
+        assert!(result.is_ok());
+        assert!(!storage.contains_table("nonexistent"));
+
+        // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_flush() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_flush");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table = TableData {
+            info: TableInfo {
+                name: "flush_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "x".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("flush_test".to_string(), table).unwrap();
+
+        // Add rows
+        {
+            let table = storage.get_table_mut("flush_test").unwrap();
+            table.rows.push(vec![Value::Integer(42)]);
+        }
+
+        // Flush should persist changes
+        storage.flush().unwrap();
+
+        // Verify flush worked by creating new storage instance
+        let storage2 = FileStorage::new(temp_dir.clone()).unwrap();
+        let table = storage2.get_table("flush_test").unwrap();
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0], vec![Value::Integer(42)]);
+
+        // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_get_mut() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_mut");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table = TableData {
+            info: TableInfo {
+                name: "mut_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "val".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![vec![Value::Integer(10)]],
+        };
+        storage.insert_table("mut_test".to_string(), table).unwrap();
+
+        // Modify via get_mut
+        {
+            let mut_table = storage.get_table_mut("mut_test").unwrap();
+            mut_table.rows[0] = vec![Value::Integer(99)];
+        }
+        storage.persist_table("mut_test").unwrap();
+
+        // Verify
+        let table = storage.get_table("mut_test").unwrap();
+        assert_eq!(table.rows[0], vec![Value::Integer(99)]);
+
+        // Cleanup
         let _ = remove_dir_all(&temp_dir);
     }
 }
