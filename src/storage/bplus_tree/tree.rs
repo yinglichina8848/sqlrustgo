@@ -8,6 +8,20 @@ const MAX_KEYS: usize = 4;
 const MIN_KEYS: usize = 2;
 
 /// B+ Tree index
+///
+/// # What (是什么)
+/// B+ Tree 是一种自平衡的多叉树数据结构，保持数据有序，支持高效的对数时间复杂度操作
+///
+/// # Why (为什么)
+/// - 磁盘友好：B+ Tree 的扇出因子大，树高小，磁盘 IO 次数少
+/// - 范围查询快：叶子节点链表连接，支持高效范围扫描
+/// - 平衡保证：所有叶子节点深度一致，操作时间复杂度稳定
+///
+/// # How (如何实现)
+/// - 内部节点仅存储键（用于路由），叶子节点存储键值对
+/// - 每个节点有最大和最小键数限制（MAX_KEYS, MIN_KEYS）
+/// - 节点满时分裂，保持平衡
+/// - 使用 Node 枚举表示内部节点和叶子节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BPlusTree {
     root: Option<Node>,
