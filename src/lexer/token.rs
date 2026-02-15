@@ -128,6 +128,46 @@ pub fn is_keyword(s: &str) -> bool {
     )
 }
 
+/// Convert a keyword string to its corresponding Token
+pub fn from_keyword(s: &str) -> Option<Token> {
+    match s.to_uppercase().as_str() {
+        "SELECT" => Some(Token::Select),
+        "FROM" => Some(Token::From),
+        "WHERE" => Some(Token::Where),
+        "INSERT" => Some(Token::Insert),
+        "INTO" => Some(Token::Into),
+        "VALUES" => Some(Token::Values),
+        "UPDATE" => Some(Token::Update),
+        "SET" => Some(Token::Set),
+        "DELETE" => Some(Token::Delete),
+        "CREATE" => Some(Token::Create),
+        "TABLE" => Some(Token::Table),
+        "DROP" => Some(Token::Drop),
+        "ALTER" => Some(Token::Alter),
+        "INDEX" => Some(Token::Index),
+        "ON" => Some(Token::On),
+        "PRIMARY" => Some(Token::Primary),
+        "KEY" => Some(Token::Key),
+        "BEGIN" => Some(Token::Begin),
+        "COMMIT" => Some(Token::Commit),
+        "ROLLBACK" => Some(Token::Rollback),
+        "GRANT" => Some(Token::Grant),
+        "REVOKE" => Some(Token::Revoke),
+        "INTEGER" => Some(Token::Integer),
+        "TEXT" => Some(Token::Text),
+        "FLOAT" => Some(Token::Float),
+        "BOOLEAN" => Some(Token::Boolean),
+        "BLOB" => Some(Token::Blob),
+        "NULL" => Some(Token::Null),
+        "TRUE" => Some(Token::BooleanLiteral(true)),
+        "FALSE" => Some(Token::BooleanLiteral(false)),
+        "AND" => Some(Token::And),
+        "OR" => Some(Token::Or),
+        "NOT" => Some(Token::Not),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +193,14 @@ mod tests {
         assert!(!is_keyword("users"));
         assert!(is_keyword("TRUE"));
         assert!(is_keyword("null"));
+    }
+
+    #[test]
+    fn test_token_from_keyword() {
+        assert_eq!(from_keyword("SELECT"), Some(Token::Select));
+        assert_eq!(from_keyword("INSERT"), Some(Token::Insert));
+        assert_eq!(from_keyword("UNKNOWN"), None);
+        assert_eq!(from_keyword("select"), Some(Token::Select));
+        assert_eq!(from_keyword("TRUE"), Some(Token::BooleanLiteral(true)));
     }
 }
