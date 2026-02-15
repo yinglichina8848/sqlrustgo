@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Maximum keys per node (fanout)
 const MAX_KEYS: usize = 4;
 /// Minimum keys per node (for split)
+#[allow(dead_code)]
 const MIN_KEYS: usize = 2;
 
 /// B+ Tree index
@@ -32,10 +33,7 @@ pub struct BPlusTree {
 impl BPlusTree {
     /// Create a new B+ Tree
     pub fn new() -> Self {
-        Self {
-            root: None,
-            len: 0,
-        }
+        Self { root: None, len: 0 }
     }
 
     /// Get the number of entries
@@ -65,12 +63,12 @@ impl BPlusTree {
         let is_leaf = matches!(self.root, Some(Node::Leaf(_)));
 
         if is_leaf {
-            if let Some(Node::Leaf(leaf)) = self.root.as_mut() {
-                if leaf.keys.len() < MAX_KEYS {
-                    leaf.insert_sorted(key, value);
-                    self.len += 1;
-                    return;
-                }
+            if let Some(Node::Leaf(leaf)) = self.root.as_mut()
+                && leaf.keys.len() < MAX_KEYS
+            {
+                leaf.insert_sorted(key, value);
+                self.len += 1;
+                return;
             }
             // Need to split root leaf
             let old_root = self.root.take().unwrap();
@@ -80,12 +78,14 @@ impl BPlusTree {
                 keys.push(key);
                 values.push(value);
 
+                #[allow(clippy::useless_conversion)]
                 let mut pairs: Vec<_> = keys.into_iter().zip(values.into_iter()).collect();
                 pairs.sort_by_key(|(k, _)| *k);
+                #[allow(clippy::clone_on_copy)]
                 let keys: Vec<Key> = pairs.iter().map(|(k, _)| k.clone()).collect();
                 let values: Vec<u32> = pairs.iter().map(|(_, v)| *v).collect();
 
-                let mid = (keys.len() + 1) / 2;
+                let mid = keys.len().div_ceil(2);
                 let left_keys: Vec<Key> = keys[..mid].to_vec();
                 let left_values: Vec<u32> = values[..mid].to_vec();
                 let right_keys: Vec<Key> = keys[mid..].to_vec();
@@ -99,6 +99,7 @@ impl BPlusTree {
                 right_leaf.keys = right_keys;
                 right_leaf.values = right_values;
 
+                #[allow(clippy::clone_on_copy)]
                 let mid_key = right_leaf.keys[0].clone();
 
                 let internal = InternalNode::new_internal_with_children(
@@ -136,12 +137,14 @@ impl BPlusTree {
                     keys.push(key);
                     values.push(value);
 
+                    #[allow(clippy::useless_conversion)]
                     let mut pairs: Vec<_> = keys.into_iter().zip(values.into_iter()).collect();
                     pairs.sort_by_key(|(k, _)| *k);
+                    #[allow(clippy::clone_on_copy)]
                     let keys: Vec<Key> = pairs.iter().map(|(k, _)| k.clone()).collect();
                     let values: Vec<u32> = pairs.iter().map(|(_, v)| *v).collect();
 
-                    let mid = (keys.len() + 1) / 2;
+                    let mid = keys.len().div_ceil(2);
                     let left_keys: Vec<Key> = keys[..mid].to_vec();
                     let left_values: Vec<u32> = values[..mid].to_vec();
                     let right_keys: Vec<Key> = keys[mid..].to_vec();
@@ -155,6 +158,7 @@ impl BPlusTree {
                     right_leaf.keys = right_keys;
                     right_leaf.values = right_values;
 
+                    #[allow(clippy::clone_on_copy)]
                     let mid_key = right_leaf.keys[0].clone();
 
                     // Replace child with two children
@@ -293,11 +297,12 @@ impl LeafNode {
 /// Internal node - points to child nodes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InternalNode {
-    keys: Vec<Key>,           // Separator keys
-    children: Vec<NodeBox>,  // Child pointers
+    keys: Vec<Key>,         // Separator keys
+    children: Vec<NodeBox>, // Child pointers
 }
 
 impl InternalNode {
+    #[allow(dead_code)]
     fn new_internal() -> Self {
         Self {
             keys: Vec::new(),
@@ -314,7 +319,10 @@ impl InternalNode {
 
     fn find_child_position(&self, key: &Key) -> usize {
         // Find first key > key
-        self.keys.iter().position(|k| k > key).unwrap_or(self.keys.len())
+        self.keys
+            .iter()
+            .position(|k| k > key)
+            .unwrap_or(self.keys.len())
     }
 }
 

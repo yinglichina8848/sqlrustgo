@@ -130,7 +130,9 @@ fn test_full_workflow() {
         .unwrap();
 
     // Select
-    let result = engine.execute(parse("SELECT * FROM test").unwrap()).unwrap();
+    let result = engine
+        .execute(parse("SELECT * FROM test").unwrap())
+        .unwrap();
     assert_eq!(result.rows.len(), 1);
 
     // Update
@@ -144,7 +146,5 @@ fn test_full_workflow() {
         .unwrap();
 
     // Drop
-    engine
-        .execute(parse("DROP TABLE test").unwrap())
-        .unwrap();
+    engine.execute(parse("DROP TABLE test").unwrap()).unwrap();
 }

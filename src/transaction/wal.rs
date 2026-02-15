@@ -24,10 +24,12 @@ pub struct WriteAheadLog {
 impl WriteAheadLog {
     /// Create or open WAL
     pub fn new(path: &str) -> Result<Self, std::io::Error> {
+        #[allow(clippy::suspicious_open_options)]
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(path)?;
 
         Ok(Self {
@@ -42,7 +44,7 @@ impl WriteAheadLog {
 
         // Serialize to JSON
         let json = serde_json::to_string(record)
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "serialization failed"))?;
+            .map_err(|_| std::io::Error::other("serialization failed"))?;
 
         // Write length prefix + newline
         let len_bytes = (json.len() as u32).to_le_bytes();
@@ -60,7 +62,7 @@ impl WriteAheadLog {
         let mut records = Vec::new();
 
         // Seek to start
-        if let Err(_) = file.seek(SeekFrom::Start(0)) {
+        if file.seek(SeekFrom::Start(0)).is_err() {
             return Ok(records);
         }
 
@@ -73,7 +75,7 @@ impl WriteAheadLog {
 
             let len = u32::from_le_bytes(len_buf) as usize;
             let mut data = vec![0u8; len];
-            if let Err(_) = file.read_exact(&mut data) {
+            if file.read_exact(&mut data).is_err() {
                 break;
             }
 

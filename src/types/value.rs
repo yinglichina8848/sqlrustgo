@@ -50,7 +50,7 @@ pub enum Value {
 }
 
 impl Value {
-    /// Convert Value to String representation for SQL output
+    /// Convert Value to SQL string representation
     ///
     /// # What
     /// 将 Value 转换为标准的 SQL 字符串格式，用于：
@@ -66,6 +66,8 @@ impl Value {
     /// # How
     /// - 使用 match 遍历所有 Value 变体
     /// - 对于 Blob，使用 hex::encode 转换为十六进制字符串
+    /// - 此方法通过 Display trait 实现，调用 to_string() 会自动使用 Display
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         match self {
             Value::Null => "NULL".to_string(),
@@ -106,7 +108,14 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Value::Null => write!(f, "NULL"),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Integer(i) => write!(f, "{}", i),
+            Value::Float(fl) => write!(f, "{}", fl),
+            Value::Text(s) => write!(f, "{}", s),
+            Value::Blob(b) => write!(f, "X'{}'", hex::encode(b)),
+        }
     }
 }
 

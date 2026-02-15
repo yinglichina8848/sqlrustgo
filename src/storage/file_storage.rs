@@ -48,12 +48,11 @@ impl FileStorage {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Some(table_name) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(table_data) = self.load_table(table_name) {
-                        self.tables.insert(table_name.to_string(), table_data);
-                    }
-                }
+            if path.extension().and_then(|s| s.to_str()) == Some("json")
+                && let Some(table_name) = path.file_stem().and_then(|s| s.to_str())
+                && let Ok(table_data) = self.load_table(table_name)
+            {
+                self.tables.insert(table_name.to_string(), table_data);
             }
         }
 
@@ -188,7 +187,9 @@ mod tests {
             },
             rows: vec![vec![Value::Integer(1)]],
         };
-        storage.insert_table("test_table".to_string(), table1).unwrap();
+        storage
+            .insert_table("test_table".to_string(), table1)
+            .unwrap();
 
         // READ: Verify table exists
         assert!(storage.contains_table("test_table"));
@@ -235,7 +236,9 @@ mod tests {
             },
             rows: vec![vec![Value::Text("hello".to_string())]],
         };
-        storage.insert_table("table_a".to_string(), table_a).unwrap();
+        storage
+            .insert_table("table_a".to_string(), table_a)
+            .unwrap();
 
         let table_b = TableData {
             info: TableInfo {
@@ -246,12 +249,11 @@ mod tests {
                     nullable: true,
                 }],
             },
-            rows: vec![
-                vec![Value::Integer(100)],
-                vec![Value::Integer(200)],
-            ],
+            rows: vec![vec![Value::Integer(100)], vec![Value::Integer(200)]],
         };
-        storage.insert_table("table_b".to_string(), table_b).unwrap();
+        storage
+            .insert_table("table_b".to_string(), table_b)
+            .unwrap();
 
         // Verify all tables exist
         let names = storage.table_names();
@@ -303,7 +305,9 @@ mod tests {
                     vec![Value::Integer(3), Value::Text("third".to_string())],
                 ],
             };
-            storage.insert_table("persistent_table".to_string(), table).unwrap();
+            storage
+                .insert_table("persistent_table".to_string(), table)
+                .unwrap();
         }
 
         // Second session: verify data persisted
@@ -314,9 +318,18 @@ mod tests {
             let table = storage.get_table("persistent_table").unwrap();
             assert_eq!(table.info.columns.len(), 2);
             assert_eq!(table.rows.len(), 3);
-            assert_eq!(table.rows[0], vec![Value::Integer(1), Value::Text("first".to_string())]);
-            assert_eq!(table.rows[1], vec![Value::Integer(2), Value::Text("second".to_string())]);
-            assert_eq!(table.rows[2], vec![Value::Integer(3), Value::Text("third".to_string())]);
+            assert_eq!(
+                table.rows[0],
+                vec![Value::Integer(1), Value::Text("first".to_string())]
+            );
+            assert_eq!(
+                table.rows[1],
+                vec![Value::Integer(2), Value::Text("second".to_string())]
+            );
+            assert_eq!(
+                table.rows[2],
+                vec![Value::Integer(3), Value::Text("third".to_string())]
+            );
         }
 
         // Cleanup
@@ -357,7 +370,9 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("flush_test".to_string(), table).unwrap();
+        storage
+            .insert_table("flush_test".to_string(), table)
+            .unwrap();
 
         // Add rows
         {
