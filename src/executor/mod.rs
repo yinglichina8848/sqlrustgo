@@ -1,5 +1,17 @@
 //! Query Execution Engine
-//! Executes SQL statements and returns results
+//!
+//! # What (是什么)
+//! Executor 负责执行 Parser 生成的 AST，产生查询结果
+//!
+//! # Why (为什么)
+//! Parser 解析 SQL 只是理解"要做什么"，Executor 才是真正"执行操作"的组件
+//! Executor 需要访问存储层，按需读写数据
+//!
+//! # How (如何实现)
+//! - Volcano 模型：迭代器风格，每步处理一个算子
+//! - 算子下推：将过滤等操作下推到存储层
+//! - 支持：DML (INSERT/UPDATE/DELETE) 和 DQL (SELECT)
+//! - 表达式求值：WHERE 子句的布尔表达式
 
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
