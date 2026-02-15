@@ -14,22 +14,22 @@ impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self { input, position: 0 }
     }
-    
+
     /// Get the current position in the input
     pub fn position(&self) -> usize {
         self.position
     }
-    
+
     /// Check if we've reached the end of input
     fn is_eof(&self) -> bool {
         self.position >= self.input.len()
     }
-    
+
     /// Get the current character without advancing
     fn peek_char(&self) -> char {
         self.input.chars().nth(self.position).unwrap_or('\0')
     }
-    
+
     /// Get the current character and advance
     #[allow(dead_code)]
     fn next_char(&mut self) -> char {
@@ -37,7 +37,7 @@ impl<'a> Lexer<'a> {
         self.position += 1;
         ch
     }
-    
+
     /// Skip whitespace characters
     fn skip_whitespace(&mut self) {
         while !self.is_eof() {
@@ -48,7 +48,7 @@ impl<'a> Lexer<'a> {
             self.position += 1;
         }
     }
-    
+
     /// Read a sequence of alphanumeric characters (for identifiers)
     fn read_identifier(&mut self) -> String {
         let start = self.position;
@@ -61,7 +61,7 @@ impl<'a> Lexer<'a> {
         }
         self.input[start..self.position].to_string()
     }
-    
+
     /// Read a number literal
     fn read_number(&mut self) -> String {
         let start = self.position;
@@ -80,12 +80,12 @@ impl<'a> Lexer<'a> {
         }
         self.input[start..self.position].to_string()
     }
-    
+
     /// Read a string literal (single-quoted)
     fn read_string(&mut self) -> String {
         self.position += 1; // Skip opening quote
         let start = self.position;
-        
+
         while !self.is_eof() {
             let ch = self.peek_char();
             if ch == '\'' {
@@ -97,38 +97,74 @@ impl<'a> Lexer<'a> {
             }
             self.position += 1;
         }
-        
+
         let result = self.input[start..self.position].to_string();
         if !self.is_eof() {
             self.position += 1; // Skip closing quote
         }
         result
     }
-    
+
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
-        
+
         if self.is_eof() {
             return Token::Eof;
         }
-        
+
         let ch = self.peek_char();
-        
+
         match ch {
-            '(' => { self.position += 1; Token::LParen }
-            ')' => { self.position += 1; Token::RParen }
-            ',' => { self.position += 1; Token::Comma }
-            ';' => { self.position += 1; Token::Semicolon }
-            '*' => { self.position += 1; Token::Star }
-            '+' => { self.position += 1; Token::Plus }
-            '-' => { self.position += 1; Token::Minus }
-            '/' => { self.position += 1; Token::Slash }
-            '%' => { self.position += 1; Token::Percent }
-            '.' => { self.position += 1; Token::Dot }
-            ':' => { self.position += 1; Token::Colon }
+            '(' => {
+                self.position += 1;
+                Token::LParen
+            }
+            ')' => {
+                self.position += 1;
+                Token::RParen
+            }
+            ',' => {
+                self.position += 1;
+                Token::Comma
+            }
+            ';' => {
+                self.position += 1;
+                Token::Semicolon
+            }
+            '*' => {
+                self.position += 1;
+                Token::Star
+            }
+            '+' => {
+                self.position += 1;
+                Token::Plus
+            }
+            '-' => {
+                self.position += 1;
+                Token::Minus
+            }
+            '/' => {
+                self.position += 1;
+                Token::Slash
+            }
+            '%' => {
+                self.position += 1;
+                Token::Percent
+            }
+            '.' => {
+                self.position += 1;
+                Token::Dot
+            }
+            ':' => {
+                self.position += 1;
+                Token::Colon
+            }
             '\'' => Token::StringLiteral(self.read_string()),
-            '=' => { self.position += 1; Token::Equal },
+            '=' => {
+                self.position += 1;
+                Token::Equal
+            }
             '!' => {
                 if self.input[self.position..].starts_with("!=") {
                     self.position += 2;
@@ -198,16 +234,14 @@ impl<'a> Lexer<'a> {
                     _ => Token::Identifier(ident),
                 }
             }
-            _ if ch.is_ascii_digit() => {
-                Token::NumberLiteral(self.read_number())
-            }
+            _ if ch.is_ascii_digit() => Token::NumberLiteral(self.read_number()),
             _ => {
                 self.position += 1;
                 Token::Identifier(ch.to_string())
             }
         }
     }
-    
+
     /// Tokenize the entire input and return a vector of tokens
     pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();

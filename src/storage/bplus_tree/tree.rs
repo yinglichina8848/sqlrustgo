@@ -27,14 +27,16 @@ impl BPlusTree {
 
     /// Search for a key
     pub fn search(&self, key: u64) -> Option<u32> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .find(|(k, _)| *k == key)
             .map(|(_, v)| *v)
     }
 
     /// Range query
     pub fn range_query(&self, start: u64, end: u64) -> Vec<u32> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|(k, _)| *k >= start && *k < end)
             .map(|(_, v)| *v)
             .collect()

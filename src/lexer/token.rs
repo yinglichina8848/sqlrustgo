@@ -7,31 +7,71 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
-    Select, From, Where, Insert, Into, Values, Update, Set, Delete,
-    Create, Table, Drop, Alter, Index, On, Primary, Key,
-    Begin, Commit, Rollback, Grant, Revoke,
-    
+    Select,
+    From,
+    Where,
+    Insert,
+    Into,
+    Values,
+    Update,
+    Set,
+    Delete,
+    Create,
+    Table,
+    Drop,
+    Alter,
+    Index,
+    On,
+    Primary,
+    Key,
+    Begin,
+    Commit,
+    Rollback,
+    Grant,
+    Revoke,
+
     // Data Types
-    Integer, Text, Float, Boolean, Blob, Null,
-    
+    Integer,
+    Text,
+    Float,
+    Boolean,
+    Blob,
+    Null,
+
     // Operators
-    Equal, NotEqual, Greater, Less, GreaterEqual, LessEqual,
-    And, Or, Not,
-    Plus, Minus, Asterisk, Slash, Percent,
-    
+    Equal,
+    NotEqual,
+    Greater,
+    Less,
+    GreaterEqual,
+    LessEqual,
+    And,
+    Or,
+    Not,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
+    Percent,
+
     // Syntax
-    LParen, RParen, Comma, Dot, Semicolon, Colon,
+    LParen,
+    RParen,
+    Comma,
+    Dot,
+    Semicolon,
+    Colon,
     SingleQuote,
-    
+
     // Wildcard
-    Star,  // * for SELECT *
-    
+    Star, // * for SELECT *
+
     // Literals
     Identifier(String),
     StringLiteral(String),
     NumberLiteral(String),
     BooleanLiteral(bool),
-    
+
     // Special
     Eof,
 }
@@ -50,13 +90,41 @@ impl fmt::Display for Token {
 
 /// Check if a string is a SQL keyword
 pub fn is_keyword(s: &str) -> bool {
-    matches!(s.to_uppercase().as_str(),
-        "SELECT" | "FROM" | "WHERE" | "INSERT" | "INTO" | "VALUES" |
-        "UPDATE" | "SET" | "DELETE" | "CREATE" | "TABLE" | "DROP" |
-        "ALTER" | "INDEX" | "ON" | "PRIMARY" | "KEY" |
-        "BEGIN" | "COMMIT" | "ROLLBACK" | "GRANT" | "REVOKE" |
-        "INTEGER" | "TEXT" | "FLOAT" | "BOOLEAN" | "BLOB" | "NULL" |
-        "TRUE" | "FALSE" | "AND" | "OR" | "NOT"
+    matches!(
+        s.to_uppercase().as_str(),
+        "SELECT"
+            | "FROM"
+            | "WHERE"
+            | "INSERT"
+            | "INTO"
+            | "VALUES"
+            | "UPDATE"
+            | "SET"
+            | "DELETE"
+            | "CREATE"
+            | "TABLE"
+            | "DROP"
+            | "ALTER"
+            | "INDEX"
+            | "ON"
+            | "PRIMARY"
+            | "KEY"
+            | "BEGIN"
+            | "COMMIT"
+            | "ROLLBACK"
+            | "GRANT"
+            | "REVOKE"
+            | "INTEGER"
+            | "TEXT"
+            | "FLOAT"
+            | "BOOLEAN"
+            | "BLOB"
+            | "NULL"
+            | "TRUE"
+            | "FALSE"
+            | "AND"
+            | "OR"
+            | "NOT"
     )
 }
 
@@ -67,8 +135,14 @@ mod tests {
     #[test]
     fn test_token_display() {
         assert_eq!(Token::Select.to_string(), "Select");
-        assert_eq!(Token::Identifier("users".to_string()).to_string(), "IDENTIFIER(users)");
-        assert_eq!(Token::StringLiteral("hello".to_string()).to_string(), "'hello'");
+        assert_eq!(
+            Token::Identifier("users".to_string()).to_string(),
+            "IDENTIFIER(users)"
+        );
+        assert_eq!(
+            Token::StringLiteral("hello".to_string()).to_string(),
+            "'hello'"
+        );
         assert_eq!(Token::NumberLiteral("42".to_string()).to_string(), "42");
     }
 

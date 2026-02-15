@@ -7,39 +7,39 @@ pub enum SqlError {
     /// Syntax error during parsing
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     /// Execution error during query processing
     #[error("Execution error: {0}")]
     ExecutionError(String),
-    
+
     /// Type mismatch error
     #[error("Type mismatch: {0}")]
     TypeMismatch(String),
-    
+
     /// Division by zero
     #[error("Division by zero")]
     DivisionByZero,
-    
+
     /// Null value error (operation on NULL)
     #[error("Null value error: {0}")]
     NullValueError(String),
-    
+
     /// Constraint violation
     #[error("Constraint violation: {0}")]
     ConstraintViolation(String),
-    
+
     /// Table not found
     #[error("Table not found: {0}")]
     TableNotFound(String),
-    
+
     /// Column not found
     #[error("Column not found: {0}")]
     ColumnNotFound(String),
-    
+
     /// Duplicate key error
     #[error("Duplicate key: {0}")]
     DuplicateKey(String),
-    
+
     /// I/O error
     #[error("I/O error: {0}")]
     IoError(String),
@@ -74,7 +74,7 @@ mod tests {
     fn test_error_messages() {
         let err = SqlError::ParseError("invalid syntax".to_string());
         assert!(err.to_string().contains("Parse error"));
-        
+
         let err = SqlError::TableNotFound("users".to_string());
         assert!(err.to_string().contains("Table not found"));
     }

@@ -18,7 +18,7 @@ pub enum TxState {
 pub struct Transaction {
     pub tx_id: u64,
     pub state: TxState,
-    pub snapshot: Vec<u64>,  // Snapshot of active transactions
+    pub snapshot: Vec<u64>, // Snapshot of active transactions
 }
 
 impl Transaction {
@@ -68,7 +68,9 @@ impl TransactionManager {
         tx.snapshot = snapshot;
 
         // Log BEGIN
-        self.wal.append(&WalRecord::Begin { tx_id }).map_err(|e| e.to_string())?;
+        self.wal
+            .append(&WalRecord::Begin { tx_id })
+            .map_err(|e| e.to_string())?;
 
         // Register transaction
         self.active_transactions.lock().unwrap().insert(tx_id, tx);
@@ -79,19 +81,21 @@ impl TransactionManager {
     /// Commit a transaction
     pub fn commit(&self, tx_id: u64) -> Result<(), String> {
         let mut active = self.active_transactions.lock().unwrap();
-        
+
         if let Some(tx) = active.get_mut(&tx_id) {
             if tx.state != TxState::Active {
                 return Err("Transaction not active".to_string());
             }
-            
+
             tx.state = TxState::Committed;
         } else {
             return Err("Transaction not found".to_string());
         }
 
         // Log COMMIT
-        self.wal.append(&WalRecord::Commit { tx_id }).map_err(|e| e.to_string())?;
+        self.wal
+            .append(&WalRecord::Commit { tx_id })
+            .map_err(|e| e.to_string())?;
 
         // Remove from active
         active.remove(&tx_id);
@@ -102,19 +106,21 @@ impl TransactionManager {
     /// Rollback a transaction
     pub fn rollback(&self, tx_id: u64) -> Result<(), String> {
         let mut active = self.active_transactions.lock().unwrap();
-        
+
         if let Some(tx) = active.get_mut(&tx_id) {
             if tx.state != TxState::Active {
                 return Err("Transaction not active".to_string());
             }
-            
+
             tx.state = TxState::Aborted;
         } else {
             return Err("Transaction not found".to_string());
         }
 
         // Log ROLLBACK
-        self.wal.append(&WalRecord::Rollback { tx_id }).map_err(|e| e.to_string())?;
+        self.wal
+            .append(&WalRecord::Rollback { tx_id })
+            .map_err(|e| e.to_string())?;
 
         // Remove from active
         active.remove(&tx_id);
@@ -142,14 +148,14 @@ mod tests {
     fn test_transaction_begin() {
         let path = "/tmp/tm_test_begin.log";
         std::fs::remove_file(path).ok();
-        
+
         let wal = Arc::new(WriteAheadLog::new(path).unwrap());
         let tm = TransactionManager::new(wal);
-        
+
         let tx_id = tm.begin().unwrap();
         assert_eq!(tx_id, 1);
         assert!(tm.is_active(1));
-        
+
         std::fs::remove_file(path).ok();
     }
 
@@ -157,15 +163,15 @@ mod tests {
     fn test_transaction_commit() {
         let path = "/tmp/tm_test_commit.log";
         std::fs::remove_file(path).ok();
-        
+
         let wal = Arc::new(WriteAheadLog::new(path).unwrap());
         let tm = TransactionManager::new(wal);
-        
+
         let tx_id = tm.begin().unwrap();
         tm.commit(tx_id).unwrap();
-        
+
         assert!(!tm.is_active(tx_id));
-        
+
         std::fs::remove_file(path).ok();
     }
 
@@ -173,15 +179,15 @@ mod tests {
     fn test_transaction_rollback() {
         let path = "/tmp/tm_test_rollback.log";
         std::fs::remove_file(path).ok();
-        
+
         let wal = Arc::new(WriteAheadLog::new(path).unwrap());
         let tm = TransactionManager::new(wal);
-        
+
         let tx_id = tm.begin().unwrap();
         tm.rollback(tx_id).unwrap();
-        
+
         assert!(!tm.is_active(tx_id));
-        
+
         std::fs::remove_file(path).ok();
     }
 }

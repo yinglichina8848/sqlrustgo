@@ -627,6 +627,10 @@ mod tests {
 
     #[test]
     fn test_parse_create_with_columns() {
+        use crate::lexer::Lexer;
+        let tokens = Lexer::new("CREATE TABLE users (id INTEGER, name TEXT)").tokenize();
+        eprintln!("Tokens: {:?}", tokens);
+
         let result = parse("CREATE TABLE users (id INTEGER, name TEXT)");
         assert!(result.is_ok());
         match result.unwrap() {

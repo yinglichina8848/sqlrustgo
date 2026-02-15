@@ -1,10 +1,10 @@
 //! Network Layer for SQLRustGo
-//! 
+//!
 //! Provides network protocol support for client-server architecture.
 
+use crate::{ExecutionResult, SqlError, execute};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use crate::{execute, ExecutionResult, SqlError};
 
 /// MySQL-compatible protocol handler
 pub struct NetworkHandler {
@@ -50,7 +50,7 @@ impl NetworkHandler {
     fn read_packet(&mut self) -> Result<Option<String>, SqlError> {
         let mut buf = [0u8; 1024];
         match self.stream.read(&mut buf) {
-            Ok(0) => Ok(None),  // Connection closed
+            Ok(0) => Ok(None), // Connection closed
             Ok(n) => {
                 let s = String::from_utf8_lossy(&buf[..n]).to_string();
                 Ok(Some(s))
