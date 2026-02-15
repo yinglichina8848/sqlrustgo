@@ -43,6 +43,10 @@ pub enum SqlError {
     /// I/O error
     #[error("I/O error: {0}")]
     IoError(String),
+
+    /// Network protocol error
+    #[error("Protocol error: {0}")]
+    ProtocolError(String),
 }
 
 /// Result type alias for SQL operations
