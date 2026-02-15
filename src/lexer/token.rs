@@ -83,7 +83,60 @@ impl fmt::Display for Token {
             Token::StringLiteral(s) => write!(f, "'{}'", s),
             Token::NumberLiteral(s) => write!(f, "{}", s),
             Token::BooleanLiteral(b) => write!(f, "{}", b),
-            _ => write!(f, "{:?}", self),
+            // Keywords and data types - uppercase
+            Token::Select => write!(f, "SELECT"),
+            Token::From => write!(f, "FROM"),
+            Token::Where => write!(f, "WHERE"),
+            Token::Insert => write!(f, "INSERT"),
+            Token::Into => write!(f, "INTO"),
+            Token::Values => write!(f, "VALUES"),
+            Token::Update => write!(f, "UPDATE"),
+            Token::Set => write!(f, "SET"),
+            Token::Delete => write!(f, "DELETE"),
+            Token::Create => write!(f, "CREATE"),
+            Token::Table => write!(f, "TABLE"),
+            Token::Drop => write!(f, "DROP"),
+            Token::Alter => write!(f, "ALTER"),
+            Token::Index => write!(f, "INDEX"),
+            Token::On => write!(f, "ON"),
+            Token::Primary => write!(f, "PRIMARY"),
+            Token::Key => write!(f, "KEY"),
+            Token::Begin => write!(f, "BEGIN"),
+            Token::Commit => write!(f, "COMMIT"),
+            Token::Rollback => write!(f, "ROLLBACK"),
+            Token::Grant => write!(f, "GRANT"),
+            Token::Revoke => write!(f, "REVOKE"),
+            Token::Integer => write!(f, "INTEGER"),
+            Token::Text => write!(f, "TEXT"),
+            Token::Float => write!(f, "FLOAT"),
+            Token::Boolean => write!(f, "BOOLEAN"),
+            Token::Blob => write!(f, "BLOB"),
+            Token::Null => write!(f, "NULL"),
+            // Operators - uppercase
+            Token::Equal => write!(f, "="),
+            Token::NotEqual => write!(f, "<>"),
+            Token::Greater => write!(f, ">"),
+            Token::Less => write!(f, "<"),
+            Token::GreaterEqual => write!(f, ">="),
+            Token::LessEqual => write!(f, "<="),
+            Token::And => write!(f, "AND"),
+            Token::Or => write!(f, "OR"),
+            Token::Not => write!(f, "NOT"),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Asterisk => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Percent => write!(f, "%"),
+            // Syntax
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
+            Token::Comma => write!(f, ","),
+            Token::Dot => write!(f, "."),
+            Token::Semicolon => write!(f, ";"),
+            Token::Colon => write!(f, ":"),
+            Token::SingleQuote => write!(f, "'"),
+            Token::Star => write!(f, "*"),
+            Token::Eof => write!(f, "EOF"),
         }
     }
 }
@@ -174,7 +227,8 @@ mod tests {
 
     #[test]
     fn test_token_display() {
-        assert_eq!(Token::Select.to_string(), "Select");
+        assert_eq!(Token::Select.to_string(), "SELECT");
+        assert_eq!(Token::Integer.to_string(), "INTEGER");
         assert_eq!(
             Token::Identifier("users".to_string()).to_string(),
             "IDENTIFIER(users)"
