@@ -1,22 +1,22 @@
 //! SQLRustGo Database System Library
-//! 
+//!
 //! A Rust implementation of a SQL-92 compliant database system.
 
-pub mod types;
+pub mod executor;
 pub mod lexer;
+pub mod network;
 pub mod parser;
 pub mod storage;
-pub mod executor;
 pub mod transaction;
-pub mod network;
+pub mod types;
 
-pub use types::{Value, SqlError, SqlResult, parse_sql_literal};
-pub use lexer::{Token, Lexer, tokenize};
-pub use parser::{Statement, parse};
-pub use storage::{Page, BufferPool, BPlusTree};
 pub use executor::{ExecutionEngine, ExecutionResult, execute};
-pub use transaction::{WriteAheadLog, TransactionManager, TxState};
-pub use network::{NetworkHandler, start_server, connect};
+pub use lexer::{Lexer, Token, tokenize};
+pub use network::{NetworkHandler, connect, start_server};
+pub use parser::{Statement, parse};
+pub use storage::{BPlusTree, BufferPool, Page};
+pub use transaction::{TransactionManager, TxState, WriteAheadLog};
+pub use types::{SqlError, SqlResult, Value, parse_sql_literal};
 
 /// Initialize the database system
 pub fn init() {
@@ -77,16 +77,16 @@ mod tests {
 
         let path = "/tmp/lib_test_wal.log";
         std::fs::remove_file(path).ok();
-        
+
         let wal = Arc::new(WriteAheadLog::new(path).unwrap());
         let tm = TransactionManager::new(wal);
-        
+
         let tx_id = tm.begin().unwrap();
         assert!(tm.is_active(tx_id));
-        
+
         tm.commit(tx_id).unwrap();
         assert!(!tm.is_active(tx_id));
-        
+
         std::fs::remove_file(path).ok();
     }
 }

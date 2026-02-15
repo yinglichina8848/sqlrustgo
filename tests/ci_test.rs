@@ -24,5 +24,8 @@ fn test_ci_workflows_has_build_job() {
     let content = std::fs::read_to_string(".github/workflows/ci.yml").unwrap();
     assert!(content.contains("cargo build"), "CI should have build step");
     assert!(content.contains("cargo test"), "CI should have test step");
-    assert!(content.contains("cargo clippy"), "CI should have clippy step");
+    assert!(
+        content.contains("cargo clippy"),
+        "CI should have clippy step"
+    );
 }
