@@ -132,4 +132,19 @@ mod tests {
 
         std::fs::remove_file(path).ok();
     }
+
+    #[test]
+    fn test_wal_basic_write() {
+        let path = "/tmp/test_wal.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = WriteAheadLog::new(path).unwrap();
+        wal.append(&WalRecord::Begin { tx_id: 1 }).unwrap();
+        wal.append(&WalRecord::Commit { tx_id: 1 }).unwrap();
+
+        let records = wal.read_all().unwrap();
+        assert_eq!(records.len(), 2);
+
+        std::fs::remove_file(path).ok();
+    }
 }
