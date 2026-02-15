@@ -3,7 +3,19 @@
 
 use super::token::Token;
 
-/// SQL Lexer that converts SQL text into tokens
+/// SQL Lexer - Tokenizer
+///
+/// # What (是什么)
+/// Lexer 将原始 SQL 字符串分解为 Token 序列，是编译器的第一阶段
+///
+/// # Why (为什么)
+/// Parser 需要结构化的 Token 而不是原始字符串，Lexer 负责这项转换工作
+///
+/// # How (如何实现)
+/// - 逐字符扫描输入
+/// - 识别关键字、标识符、字面量、运算符
+/// - 跳过空白字符
+/// - 使用有限状态机处理不同 token 类型
 pub struct Lexer<'a> {
     input: &'a str,
     position: usize,
@@ -307,5 +319,27 @@ mod tests {
         assert_eq!(tokens[4], Token::Create);
         assert_eq!(tokens[5], Token::Drop);
         assert_eq!(tokens[6], Token::Table);
+    }
+
+    #[test]
+    fn test_lexer_string_literal() {
+        let tokens = Lexer::new("'hello world'").tokenize();
+        assert!(matches!(&tokens[0], Token::StringLiteral(s) if s == "hello world"));
+    }
+
+    #[test]
+    fn test_lexer_operators() {
+        let tokens = Lexer::new("<> <= >=").tokenize();
+        assert!(matches!(tokens[0], Token::NotEqual));
+        assert!(matches!(tokens[1], Token::LessEqual));
+        assert!(matches!(tokens[2], Token::GreaterEqual));
+    }
+
+    #[test]
+    fn test_lexer_multiple_statements() {
+        let tokens = Lexer::new("SELECT 1; SELECT 2").tokenize();
+        // tokens structure: [Select, NumberLiteral(1), Semicolon, Select, NumberLiteral(2), Eof]
+        // Semicolon is at index 2
+        assert!(matches!(&tokens[2], Token::Semicolon));
     }
 }
