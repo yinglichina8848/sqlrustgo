@@ -84,12 +84,21 @@ impl ExecutionEngine {
             .map(|(i, c)| (c.clone(), i))
             .collect();
 
-        // Filter rows by WHERE clause
+        // Filter rows by WHERE clause (with index optimization)
         let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_expr) = stmt.where_clause {
-            table_data.rows.iter()
-                .filter(|row| evaluate_where(row, where_expr, &column_map))
-                .cloned()
-                .collect()
+            // Try to use index for optimization
+            if let Some(row_indices) = self.execute_select_with_index(&table_data, where_expr, &column_map) {
+                // Use index results
+                row_indices.iter()
+                    .filter_map(|&idx| table_data.rows.get(idx).cloned())
+                    .collect()
+            } else {
+                // Fall back to full table scan
+                table_data.rows.iter()
+                    .filter(|row| evaluate_where(row, where_expr, &column_map))
+                    .cloned()
+                    .collect()
+            }
         } else {
             table_data.rows.clone()
         };
@@ -117,17 +126,45 @@ impl ExecutionEngine {
             return Err(SqlError::TableNotFound(stmt.table));
         }
 
+        // Get indexed columns before mutating
+        let indexed_columns: Vec<(usize, String)> = {
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            table_data.info.columns.iter()
+                .enumerate()
+                .filter(|(_, c)| self.storage.has_index(&stmt.table, &c.name))
+                .map(|(i, c)| (i, c.name.clone()))
+                .collect()
+        };
+
         // Convert expressions to values (multiple rows)
         let mut inserted_rows: Vec<Vec<Value>> = Vec::new();
+        let mut index_updates: Vec<(String, i64, u32)> = Vec::new(); // (column_name, key, row_id)
 
         {
             let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
             for row_expr in &stmt.values {
                 let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
+                let row_id = table_data.rows.len() as u32;
                 table_data.rows.push(row.clone());
+
+                // Collect index updates to apply after borrow
+                for (col_idx, col_name) in &indexed_columns {
+                    if let Some(value) = row.get(*col_idx) {
+                        if let Value::Integer(key) = value {
+                            index_updates.push((col_name.clone(), *key, row_id));
+                        }
+                    }
+                }
+
                 inserted_rows.push(row);
             }
         }
+
+        // Apply index updates
+        for (col_name, key, row_id) in index_updates {
+            let _ = self.storage.insert_with_index(&stmt.table, &col_name, key, row_id);
+        }
+
         self.storage.persist_table(&stmt.table)?;
 
         let rows_affected = inserted_rows.len() as u64;
@@ -286,6 +323,72 @@ impl ExecutionEngine {
     /// Get table data
     pub fn get_table(&self, name: &str) -> Option<&TableData> {
         self.storage.get_table(name)
+    }
+
+    // ==================== Index Methods ====================
+
+    /// Create an index on a table column
+    pub fn create_index(&mut self, table_name: &str, column_name: &str) -> SqlResult<()> {
+        // Find column index in table schema
+        let table = self.storage.get_table(table_name)
+            .ok_or_else(|| SqlError::TableNotFound(table_name.to_string()))?;
+
+        let column_index = table.info.columns.iter()
+            .position(|c| c.name == column_name)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", column_name)))?;
+
+        // Check if column is INTEGER type (for B+ Tree index)
+        if table.info.columns[column_index].data_type != "INTEGER" {
+            return Err(SqlError::ExecutionError("Index only supports INTEGER columns".to_string()));
+        }
+
+        // Create index
+        self.storage.create_index(table_name, column_name, column_index)
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Check if an index exists
+    pub fn has_index(&self, table_name: &str, column_name: &str) -> bool {
+        self.storage.has_index(table_name, column_name)
+    }
+
+    /// Use index for optimized SELECT (if applicable)
+    fn execute_select_with_index(
+        &self,
+        table_data: &TableData,
+        where_expr: &Expression,
+        _column_map: &std::collections::HashMap<String, usize>,
+    ) -> Option<Vec<usize>> {
+        // Try to use index for simple equality conditions on indexed columns
+        if let Expression::BinaryOp(left, op, right) = where_expr {
+            if op.as_str() == "=" {
+                // Check if left side is a column reference
+                if let Expression::Identifier(col_name) = left.as_ref() {
+                    // Check if right side is a literal value
+                    if let Expression::Literal(val) = right.as_ref() {
+                        // Check if we have an index on this column
+                        let key_value = parse_sql_literal(val);
+                        if let Some(key) = key_value.as_integer() {
+                            if self.storage.has_index(&table_data.info.name, col_name) {
+                                // Use index to find matching row
+                                if let Some(row_id) = self.storage.search_index(
+                                    &table_data.info.name,
+                                    col_name,
+                                    key,
+                                ) {
+                                    return Some(vec![row_id as usize]);
+                                } else {
+                                    return Some(vec![]); // No match
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
