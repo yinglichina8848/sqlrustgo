@@ -22,6 +22,14 @@ sqlrustgo/
 └── src/
 ```
 
+## 功能特性
+
+- ✅ SQL-92 子集支持 (SELECT, INSERT, UPDATE, DELETE)
+- ✅ 存储引擎 (Buffer Pool, FileStorage)
+- ✅ B+ Tree 索引
+- ✅ 事务支持 (WAL)
+- ✅ 网络协议支持
+
 ## 文档
 
 - [设计文档](docs/2026-02-13-sqlcc-rust-redesign-design.md)
@@ -30,6 +38,16 @@ sqlrustgo/
 ## 构建
 
 ```bash
+# 构建项目
 cargo build
+
+# 运行测试
 cargo test
+
+# 运行示例
+cargo run --example demo
 ```
+
+## 参与贡献
+
+欢迎提交 PR！请参考 GitHub 上的 Issue 和 PR 列表。
