@@ -40,4 +40,46 @@ impl BufferPool {
         self.insert(Arc::clone(&page));
         page
     }
+
+    /// Get capacity
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_buffer_pool_basic() {
+        let pool = BufferPool::new(10);
+        assert_eq!(pool.capacity(), 10);
+    }
+
+    #[test]
+    fn test_buffer_pool_get_page() {
+        let pool = BufferPool::new(10);
+        let page = Arc::new(Page::new(1));
+        pool.insert(page);
+        let retrieved = pool.get(1);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().page_id(), 1);
+    }
+
+    #[test]
+    fn test_buffer_pool_allocate() {
+        let pool = BufferPool::new(10);
+        let page = pool.allocate(5);
+        assert_eq!(page.page_id(), 5);
+        let retrieved = pool.get(5);
+        assert!(retrieved.is_some());
+    }
+
+    #[test]
+    fn test_buffer_pool_empty() {
+        let pool = BufferPool::new(5);
+        let retrieved = pool.get(999);
+        assert!(retrieved.is_none());
+    }
 }
