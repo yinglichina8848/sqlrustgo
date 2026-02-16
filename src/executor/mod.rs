@@ -80,7 +80,15 @@ impl ExecutionEngine {
             storage,
         }
     }
+}
 
+impl Default for ExecutionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExecutionEngine {
     /// Execute a SQL statement
     pub fn execute(&mut self, statement: Statement) -> SqlResult<ExecutionResult> {
         match statement {

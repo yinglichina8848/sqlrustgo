@@ -69,14 +69,7 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Value::Null => write!(f, "NULL"),
-            Value::Boolean(b) => write!(f, "{}", b),
-            Value::Integer(i) => write!(f, "{}", i),
-            Value::Float(fl) => write!(f, "{}", fl),
-            Value::Text(s) => write!(f, "{}", s),
-            Value::Blob(b) => write!(f, "X'{}'", hex::encode(b)),
-        }
+        write!(f, "{}", self.to_sql_string())
     }
 }
 
