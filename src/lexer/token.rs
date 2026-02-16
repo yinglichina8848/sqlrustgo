@@ -37,7 +37,7 @@ use std::fmt;
 ///
 /// ### Special
 /// `Eof` - End of file marker
-
+///
 /// Token type enumeration representing all SQL lexical elements
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {

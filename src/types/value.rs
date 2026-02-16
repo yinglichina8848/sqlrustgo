@@ -42,8 +42,8 @@ impl Value {
         }
     }
 
-    /// Convert Value to String representation
-    pub fn to_string(&self) -> String {
+    /// Convert Value to SQL string representation
+    pub fn to_sql_string(&self) -> String {
         match self {
             Value::Null => "NULL".to_string(),
             Value::Boolean(b) => b.to_string(),
@@ -69,7 +69,14 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Value::Null => write!(f, "NULL"),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Integer(i) => write!(f, "{}", i),
+            Value::Float(fl) => write!(f, "{}", fl),
+            Value::Text(s) => write!(f, "{}", s),
+            Value::Blob(b) => write!(f, "X'{}'", hex::encode(b)),
+        }
     }
 }
 
@@ -79,11 +86,11 @@ mod tests {
 
     #[test]
     fn test_value_to_string() {
-        assert_eq!(Value::Null.to_string(), "NULL");
-        assert_eq!(Value::Boolean(true).to_string(), "true");
-        assert_eq!(Value::Integer(42).to_string(), "42");
-        assert_eq!(Value::Float(3.14).to_string(), "3.14");
-        assert_eq!(Value::Text("hello".to_string()).to_string(), "hello");
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Integer(42).to_sql_string(), "42");
+        assert_eq!(Value::Float(3.14).to_sql_string(), "3.14");
+        assert_eq!(Value::Text("hello".to_string()).to_sql_string(), "hello");
     }
 
     #[test]
@@ -98,12 +105,12 @@ mod tests {
 
     #[test]
     fn test_value_boolean_false() {
-        assert_eq!(Value::Boolean(false).to_string(), "false");
+        assert_eq!(Value::Boolean(false).to_sql_string(), "false");
     }
 
     #[test]
     fn test_value_integer_negative() {
-        assert_eq!(Value::Integer(-100).to_string(), "-100");
+        assert_eq!(Value::Integer(-100).to_sql_string(), "-100");
     }
 
     #[test]
@@ -127,7 +134,7 @@ mod tests {
     #[test]
     fn test_value_blob_to_string() {
         let blob = Value::Blob(vec![0x0a, 0x0b, 0x0c]);
-        let s = blob.to_string();
+        let s = blob.to_sql_string();
         assert!(s.starts_with("X'"));
         assert!(s.contains("0a0b0c"));
     }
@@ -142,12 +149,12 @@ mod tests {
 
     #[test]
     fn test_value_float_precision() {
-        assert_eq!(Value::Float(3.14159).to_string(), "3.14159");
+        assert_eq!(Value::Float(3.14159).to_sql_string(), "3.14159");
     }
 
     #[test]
     fn test_value_text_special_chars() {
         let text = Value::Text("hello world".to_string());
-        assert_eq!(text.to_string(), "hello world");
+        assert_eq!(text.to_sql_string(), "hello world");
     }
 }

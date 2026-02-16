@@ -53,9 +53,16 @@ pub struct ExecutionResult {
 /// - If indexed column in WHERE, use B+ Tree for O(log n) lookup
 /// - Otherwise fall back to full table scan
 #[allow(dead_code)]
+#[allow(clippy::new_without_default)]
 pub struct ExecutionEngine {
     buffer_pool: BufferPool,
     storage: FileStorage,
+}
+
+impl Default for ExecutionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExecutionEngine {
@@ -65,6 +72,7 @@ impl ExecutionEngine {
     }
 
     /// Create a new execution engine with custom data directory
+    #[allow(clippy::new_without_default)]
     pub fn with_data_dir(data_dir: PathBuf) -> Self {
         let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
         Self {
@@ -122,7 +130,7 @@ impl ExecutionEngine {
         // Filter rows by WHERE clause (with index optimization)
         let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_expr) = stmt.where_clause {
             // Try to use index for optimization
-            if let Some(row_indices) = self.execute_select_with_index(&table_data, where_expr, &column_map) {
+            if let Some(row_indices) = self.execute_select_with_index(table_data, where_expr, &column_map) {
                 // Use index results
                 row_indices.iter()
                     .filter_map(|&idx| table_data.rows.get(idx).cloned())
@@ -184,11 +192,10 @@ impl ExecutionEngine {
 
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
-                    if let Some(value) = row.get(*col_idx) {
-                        if let Value::Integer(key) = value {
+                    if let Some(value) = row.get(*col_idx)
+                        && let Value::Integer(key) = value {
                             index_updates.push((col_name.clone(), *key, row_id));
                         }
-                    }
                 }
 
                 inserted_rows.push(row);
@@ -249,11 +256,10 @@ impl ExecutionEngine {
                 if matches {
                     // Apply SET clauses with dynamic column mapping
                     for (column, value_expr) in &set_clauses {
-                        if let Some(&idx) = column_indices.get(column) {
-                            if idx < row.len() {
+                        if let Some(&idx) = column_indices.get(column)
+                            && idx < row.len() {
                                 row[idx] = expression_to_value_static(value_expr);
                             }
-                        }
                     }
                     count += 1;
                 }
@@ -397,16 +403,16 @@ impl ExecutionEngine {
         _column_map: &std::collections::HashMap<String, usize>,
     ) -> Option<Vec<usize>> {
         // Try to use index for simple equality conditions on indexed columns
-        if let Expression::BinaryOp(left, op, right) = where_expr {
-            if op.as_str() == "=" {
+        if let Expression::BinaryOp(left, op, right) = where_expr
+            && op.as_str() == "=" {
                 // Check if left side is a column reference
                 if let Expression::Identifier(col_name) = left.as_ref() {
                     // Check if right side is a literal value
                     if let Expression::Literal(val) = right.as_ref() {
                         // Check if we have an index on this column
                         let key_value = parse_sql_literal(val);
-                        if let Some(key) = key_value.as_integer() {
-                            if self.storage.has_index(&table_data.info.name, col_name) {
+                        if let Some(key) = key_value.as_integer()
+                            && self.storage.has_index(&table_data.info.name, col_name) {
                                 // Use index to find matching row
                                 if let Some(row_id) = self.storage.search_index(
                                     &table_data.info.name,
@@ -418,11 +424,9 @@ impl ExecutionEngine {
                                     return Some(vec![]); // No match
                                 }
                             }
-                        }
                     }
                 }
             }
-        }
         None
     }
 }
