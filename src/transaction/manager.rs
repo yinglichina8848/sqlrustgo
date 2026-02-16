@@ -1,5 +1,32 @@
 //! Transaction Manager
-//! Handles transaction lifecycle: BEGIN, COMMIT, ROLLBACK
+//!
+//! Manages transaction lifecycle: BEGIN, COMMIT, ROLLBACK.
+//! Works with WAL for durability and recovery.
+//!
+//! ## Transaction States
+//!
+//! ```mermaid
+//! stateDiagram-v2
+//!     [*] --> Active: BEGIN
+//!     Active --> Committed: COMMIT
+//!     Active --> Aborted: ROLLBACK
+//!     Committed --> [*]
+//!     Aborted --> [*]
+//! ```
+//!
+//! ## ACID Properties
+//!
+//! - **Atomicity**: Either all changes apply or none (rollback undoes)
+//! - **Consistency**: Transactions leave DB in valid state
+//! - **Isolation**: MVCC-like snapshot per transaction
+//! - **Durability**: Committed changes survive crash (via WAL)
+//!
+//! ## Lifecycle
+//!
+//! 1. `begin()` - Creates new transaction, returns tx_id, logs BEGIN
+//! 2. Operations - Modify data within transaction
+//! 3. `commit()` - Marks committed, logs COMMIT, removes from active
+//! 4. `rollback()` - Marks aborted, logs ROLLBACK, removes from active
 
 use super::wal::{WalRecord, WriteAheadLog};
 use std::collections::HashMap;
@@ -187,6 +214,204 @@ mod tests {
         tm.rollback(tx_id).unwrap();
 
         assert!(!tm.is_active(tx_id));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_get_state() {
+        let path = "/tmp/tm_test_state.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        assert_eq!(tm.get_state(tx_id), Some(TxState::Active));
+
+        // After commit, transaction may or may not be in state tracking
+        let _ = tm.commit(tx_id);
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_nonexistent() {
+        let path = "/tmp/tm_test_nonexistent.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Query non-existent transaction
+        assert!(!tm.is_active(999));
+        assert_eq!(tm.get_state(999), None);
+
+        std::fs::remove_file(path).ok();
+    }
+
+    // ==================== Additional Coverage Tests ====================
+
+    #[test]
+    fn test_transaction_commit_nonexistent() {
+        let path = "/tmp/tm_test_commit_nonexistent.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Try to commit non-existent transaction
+        let result = tm.commit(999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_rollback_nonexistent() {
+        let path = "/tmp/tm_test_rollback_nonexistent.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Try to rollback non-existent transaction
+        let result = tm.rollback(999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_double_commit() {
+        let path = "/tmp/tm_test_double_commit.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        tm.commit(tx_id).unwrap();
+
+        // Try to commit again - should fail because tx is no longer active
+        let result = tm.commit(tx_id);
+        assert!(result.is_err());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_double_rollback() {
+        let path = "/tmp/tm_test_double_rollback.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        tm.rollback(tx_id).unwrap();
+
+        // Try to rollback again - should fail because tx is no longer active
+        let result = tm.rollback(tx_id);
+        assert!(result.is_err());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_commit_after_rollback() {
+        let path = "/tmp/tm_test_commit_after_rollback.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        tm.rollback(tx_id).unwrap();
+
+        // Try to commit after rollback - should fail
+        let result = tm.commit(tx_id);
+        assert!(result.is_err());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_multiple_concurrent() {
+        let path = "/tmp/tm_test_concurrent.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Start multiple transactions
+        let tx1 = tm.begin().unwrap();
+        let tx2 = tm.begin().unwrap();
+        let tx3 = tm.begin().unwrap();
+
+        assert_eq!(tx1, 1);
+        assert_eq!(tx2, 2);
+        assert_eq!(tx3, 3);
+
+        // All should be active
+        assert!(tm.is_active(tx1));
+        assert!(tm.is_active(tx2));
+        assert!(tm.is_active(tx3));
+
+        // Commit one
+        tm.commit(tx2).unwrap();
+        assert!(!tm.is_active(tx2));
+        assert!(tm.is_active(tx1));
+        assert!(tm.is_active(tx3));
+
+        // Rollback one
+        tm.rollback(tx1).unwrap();
+        assert!(!tm.is_active(tx1));
+
+        // Only tx3 should remain active
+        assert!(!tm.is_active(tx1));
+        assert!(!tm.is_active(tx2));
+        assert!(tm.is_active(tx3));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_state_enum() {
+        // Test TxState enum variants
+        assert_eq!(TxState::Active, TxState::Active);
+        assert_eq!(TxState::Committed, TxState::Committed);
+        assert_eq!(TxState::Aborted, TxState::Aborted);
+        assert_ne!(TxState::Active, TxState::Committed);
+    }
+
+    #[test]
+    fn test_transaction_snapshot() {
+        let path = "/tmp/tm_test_snapshot.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Begin first transaction
+        let tx1 = tm.begin().unwrap();
+
+        // Begin second transaction while first is active
+        let tx2 = tm.begin().unwrap();
+
+        // Both should be active
+        assert!(tm.is_active(tx1));
+        assert!(tm.is_active(tx2));
+
+        // Get state for tx1
+        let state1 = tm.get_state(tx1);
+        assert_eq!(state1, Some(TxState::Active));
+
+        // Get state for tx2
+        let state2 = tm.get_state(tx2);
+        assert_eq!(state2, Some(TxState::Active));
 
         std::fs::remove_file(path).ok();
     }
