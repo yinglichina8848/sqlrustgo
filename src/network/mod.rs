@@ -374,7 +374,7 @@ impl NetworkHandler {
         // Read and handle packets
         loop {
             match self.read_packet() {
-                Ok(Some((sequence, payload))) => {
+                Ok(Some((_sequence, payload))) => {
                     let command = MySqlCommand::from(payload[0]);
                     
                     match command {
@@ -495,7 +495,7 @@ impl NetworkHandler {
         buf.put_slice(data);
         
         self.stream
-            .write_all(&buf.to_vec())
+            .write_all(&buf)
             .map_err(|e| SqlError::IoError(e.to_string()))?;
         
         Ok(())
@@ -506,7 +506,7 @@ impl NetworkHandler {
         // Column count (1)
         let mut buf = BytesMut::new();
         buf.put_u8(0x01); // 1 column
-        self.send_packet(&buf.to_vec())?;
+        self.send_packet(&buf)?;
         
         // Column definition: name="1", type=INT
         let mut col_buf = BytesMut::new();
@@ -523,23 +523,23 @@ impl NetworkHandler {
         col_buf.put_u8(0x00);       // decimals
         col_buf.put_u16_le(0x0000); // default
         
-        self.send_packet(&col_buf.to_vec())?;
+        self.send_packet(&col_buf)?;
         
         // EOF packet
         let mut eof_buf = BytesMut::new();
         eof_buf.put_u8(0xfe);
         eof_buf.put_u16_le(0x0000); // warnings
         eof_buf.put_u16_le(0x0000); // status flags
-        self.send_packet(&eof_buf.to_vec())?;
+        self.send_packet(&eof_buf)?;
         
         // Row data
         let mut row_buf = BytesMut::new();
         row_buf.put_u64_le(1); // length
         row_buf.put_slice(b"1"); // value
-        self.send_packet(&row_buf.to_vec())?;
+        self.send_packet(&row_buf)?;
         
         // EOF packet (final)
-        self.send_packet(&eof_buf.to_vec())?;
+        self.send_packet(&eof_buf)?;
         
         Ok(())
     }
@@ -598,7 +598,7 @@ pub fn execute_query_on_server(addr: &str, query: &str) -> Result<String, SqlErr
     packet.put_u8(0x03); // Query command
     packet.put_slice(query.as_bytes());
     
-    stream.write_all(&packet.to_vec())
+    stream.write_all(&packet)
         .map_err(|e| SqlError::IoError(e.to_string()))?;
     
     // Read response

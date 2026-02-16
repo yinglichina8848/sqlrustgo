@@ -30,8 +30,8 @@ impl Value {
         }
     }
 
-    /// Convert Value to String representation
-    pub fn to_string(&self) -> String {
+    /// Convert Value to SQL string representation
+    pub fn to_sql_string(&self) -> String {
         match self {
             Value::Null => "NULL".to_string(),
             Value::Boolean(b) => b.to_string(),
@@ -57,7 +57,7 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.to_sql_string())
     }
 }
 
