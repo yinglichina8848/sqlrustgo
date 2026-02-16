@@ -50,6 +50,14 @@ pub enum Value {
 }
 
 impl Value {
+    /// Get integer value if this is an Integer
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+
     /// Convert Value to SQL string representation
     ///
     /// # What

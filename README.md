@@ -69,6 +69,14 @@ sqlrustgo/
 └── tests/                   ← 集成测试
 ```
 
+## 功能特性
+
+- ✅ SQL-92 子集支持 (SELECT, INSERT, UPDATE, DELETE)
+- ✅ 存储引擎 (Buffer Pool, FileStorage)
+- ✅ B+ Tree 索引
+- ✅ 事务支持 (WAL)
+- ✅ 网络协议支持
+
 ## 文档
 
 - [架构设计](docs/architecture.md)
@@ -87,3 +95,7 @@ sqlrustgo/
 - Tokio 异步运行时
 - thiserror 错误处理
 - serde 序列化
+
+## 参与贡献
+
+欢迎提交 PR！请参考 GitHub 上的 Issue 和 PR 列表。

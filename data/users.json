@@ -1,14 +1,11 @@
 {
   "name": "users",
-  "columns": [],
-  "rows": [
-    [
-      {
-        "Integer": 1
-      },
-      {
-        "Text": "Alice"
-      }
-    ]
-  ]
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": []
 }

@@ -7,10 +7,19 @@
       "nullable": true
     },
     {
-      "name": "name",
-      "data_type": "TEXT",
+      "name": "value",
+      "data_type": "INTEGER",
       "nullable": true
     }
   ],
-  "rows": []
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Integer": 20
+      }
+    ]
+  ]
 }

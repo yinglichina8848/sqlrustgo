@@ -83,6 +83,10 @@ pub enum SqlError {
     /// 示例：数据库文件损坏、磁盘空间不足等
     #[error("I/O error: {0}")]
     IoError(String),
+
+    /// Network protocol error
+    #[error("Protocol error: {0}")]
+    ProtocolError(String),
 }
 
 /// Result type alias for SQL operations

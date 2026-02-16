@@ -1,5 +1,9 @@
 # SQLRustGo 并行开发协作指南
 
+> **本文档位置**: `docs/plans/2026-02-16-parallel-development-guide.md`
+> **所属分支**: `baseline` (所有功能分支共享)
+> **GitHub 访问链接**: https://github.com/yinglichina8848/sqlrustgo/blob/baseline/docs/plans/2026-02-16-parallel-development-guide.md
+
 ## 分支架构
 
 ```
