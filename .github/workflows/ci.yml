@@ -2,9 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - baseline
+      - feature/*-evaluation
+      - feature/*-alpha
+      - feature/*-beta
   pull_request:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - baseline
+      - feature/*-evaluation
+      - feature/*-alpha
+      - feature/*-beta
 
 jobs:
   build:
