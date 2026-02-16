@@ -1,5 +1,17 @@
 //! SQL Value types
-//! Core data types for SQLRustGo database system
+//!
+//! Core data types for SQLRustGo database system.
+//!
+//! ## Type Mapping
+//!
+//! | SQL Type | Rust Type | Notes |
+//! |----------|-----------|-------|
+//! | NULL     | Null      | Missing value |
+//! | BOOLEAN  | bool      | TRUE/FALSE |
+//! | INTEGER  | i64       | 64-bit signed |
+//! | FLOAT    | f64       | 64-bit float |
+//! | TEXT     | String    | UTF-8 string |
+//! | BLOB     | Vec<u8>   | Binary data |
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -82,5 +94,60 @@ mod tests {
         assert_eq!(Value::Float(1.0).type_name(), "FLOAT");
         assert_eq!(Value::Text("test".to_string()).type_name(), "TEXT");
         assert_eq!(Value::Blob(vec![0x01, 0x02]).type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_boolean_false() {
+        assert_eq!(Value::Boolean(false).to_string(), "false");
+    }
+
+    #[test]
+    fn test_value_integer_negative() {
+        assert_eq!(Value::Integer(-100).to_string(), "-100");
+    }
+
+    #[test]
+    fn test_value_blob() {
+        let blob = Value::Blob(vec![0x01, 0x02, 0x03]);
+        assert_eq!(blob.type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_as_integer() {
+        assert_eq!(Value::Integer(42).as_integer(), Some(42));
+        assert_eq!(Value::Null.as_integer(), None);
+        assert_eq!(Value::Text("test".to_string()).as_integer(), None);
+    }
+
+    #[test]
+    fn test_value_as_integer_negative() {
+        assert_eq!(Value::Integer(-100).as_integer(), Some(-100));
+    }
+
+    #[test]
+    fn test_value_blob_to_string() {
+        let blob = Value::Blob(vec![0x0a, 0x0b, 0x0c]);
+        let s = blob.to_string();
+        assert!(s.starts_with("X'"));
+        assert!(s.contains("0a0b0c"));
+    }
+
+    #[test]
+    fn test_value_display_trait() {
+        use std::fmt::Write;
+        let mut s = String::new();
+        write!(&mut s, "{}", Value::Integer(42)).unwrap();
+        assert_eq!(s, "42");
+    }
+
+    #[test]
+    fn test_value_float_precision() {
+        assert_eq!(Value::Float(3.14159).to_string(), "3.14159");
+    }
+
+    #[test]
+    fn test_value_text_special_chars() {
+        let text = Value::Text("hello world".to_string());
+        assert_eq!(text.to_string(), "hello world");
     }
 }
