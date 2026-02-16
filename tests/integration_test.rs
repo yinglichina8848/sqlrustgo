@@ -114,3 +114,37 @@ fn test_value_type_conversion() {
     assert_eq!(parse_sql_literal("42"), Value::Integer(42));
     assert_eq!(parse_sql_literal("3.14"), Value::Float(3.14));
 }
+
+#[test]
+fn test_full_workflow() {
+    let mut engine = ExecutionEngine::new();
+
+    // Create table
+    engine
+        .execute(parse("CREATE TABLE test (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+
+    // Insert
+    engine
+        .execute(parse("INSERT INTO test VALUES (1, 'Alice')").unwrap())
+        .unwrap();
+
+    // Select
+    let result = engine
+        .execute(parse("SELECT * FROM test").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 1);
+
+    // Update
+    engine
+        .execute(parse("UPDATE test SET name = 'Bob' WHERE id = 1").unwrap())
+        .unwrap();
+
+    // Delete
+    engine
+        .execute(parse("DELETE FROM test WHERE id = 1").unwrap())
+        .unwrap();
+
+    // Drop
+    engine.execute(parse("DROP TABLE test").unwrap()).unwrap();
+}

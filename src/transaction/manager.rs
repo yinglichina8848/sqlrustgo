@@ -190,4 +190,23 @@ mod tests {
 
         std::fs::remove_file(path).ok();
     }
+
+    #[test]
+    fn test_transaction_manager() {
+        let path = "/tmp/test_tx.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        // Begin transaction
+        let tx_id = tm.begin().unwrap();
+        assert!(tm.is_active(tx_id));
+
+        // Commit
+        tm.commit(tx_id).unwrap();
+        assert!(!tm.is_active(tx_id));
+
+        std::fs::remove_file(path).ok();
+    }
 }

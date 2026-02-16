@@ -5,19 +5,47 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SQL Value enum representing all supported SQL data types
+///
+/// # What (是什么)
+/// Value 是 SQL 数据的运行时表示，支持 NULL、布尔、整数、浮点、文本和二进制类型
+/// 这些是 SQL-92 标准中最常用的数据类型，涵盖了绝大多数业务场景的需求
+///
+/// # Why (为什么)
+/// SQL 标准定义了多种数据类型，数据库需要在内部统一表示这些类型：
+/// - 为 SQL 语句的执行结果提供标准化的数据结构
+/// - 支持类型检查和类型转换
+/// - 便于数据的序列化和持久化存储
+/// - 实现跨平台的数据交换（通过 serde）
+///
+/// # How (如何实现)
+/// - 使用 Rust 枚举表示 SQL 类型，每种变体对应一种 SQL 类型
+/// - 实现 Display trait 用于 SQL 输出格式（与 to_string() 保持一致）
+/// - 使用 serde 进行序列化/反序列化（支持持久化和网络传输）
+/// - 通过 type_name() 方法提供运行时类型信息
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
-    /// NULL value
+    /// NULL value - represents missing or unknown data
+    /// Example: INSERT INTO t VALUES (NULL)
     Null,
-    /// Boolean (TRUE/FALSE)
+
+    /// Boolean - TRUE/FALSE values for logical operations
+    /// Example: WHERE active = true
     Boolean(bool),
-    /// 64-bit signed integer
+
+    /// 64-bit signed integer - whole numbers in range [-2^63, 2^63-1]
+    /// Example: age = 25, quantity = 1000
     Integer(i64),
-    /// 64-bit floating point
+
+    /// 64-bit floating point - decimal numbers with double precision
+    /// Example: price = 19.99, ratio = 0.5
     Float(f64),
-    /// Text string
+
+    /// Text string - variable-length Unicode text
+    /// Example: name = 'John', email = 'user@example.com'
     Text(String),
-    /// Binary large object
+
+    /// Binary large object - arbitrary binary data
+    /// Example: image_data, file_content
     Blob(Vec<u8>),
 }
 
@@ -30,7 +58,24 @@ impl Value {
         }
     }
 
-    /// Convert Value to String representation
+    /// Convert Value to SQL string representation
+    ///
+    /// # What
+    /// 将 Value 转换为标准的 SQL 字符串格式，用于：
+    /// - SQL 查询结果的显示输出
+    /// - SQL 语句的拼接和生成
+    ///
+    /// # Why
+    /// SQL 有其独特的字符串表示规范，需要特殊处理：
+    /// - NULL 显示为 "NULL"（非空字符串）
+    /// - Blob 显示为十六进制格式 X'...'
+    /// - 文本直接输出，不加引号（与 PostgreSQL 的 \x 格式类似）
+    ///
+    /// # How
+    /// - 使用 match 遍历所有 Value 变体
+    /// - 对于 Blob，使用 hex::encode 转换为十六进制字符串
+    /// - 此方法通过 Display trait 实现，调用 to_string() 会自动使用 Display
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         match self {
             Value::Null => "NULL".to_string(),
@@ -42,7 +87,21 @@ impl Value {
         }
     }
 
-    /// Get the SQL type name
+    /// Get the SQL type name as a string literal
+    ///
+    /// # What
+    /// 返回 Value 对应的 SQL 类型名称
+    ///
+    /// # Why
+    /// 在运行时需要知道 Value 的具体类型：
+    /// - 用于错误消息的生成（如类型不匹配错误）
+    /// - 用于元数据查询和 SHOW 命令
+    /// - 用于类型推断和类型转换
+    ///
+    /// # How
+    /// - 返回静态字符串字面量，避免运行时内存分配
+    /// - 使用 match 遍历所有变体
+    /// - 对于多态类型（如 Integer、Boolean），统一返回类型名称
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::Null => "NULL",
@@ -57,7 +116,14 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Value::Null => write!(f, "NULL"),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Integer(i) => write!(f, "{}", i),
+            Value::Float(fl) => write!(f, "{}", fl),
+            Value::Text(s) => write!(f, "{}", s),
+            Value::Blob(b) => write!(f, "X'{}'", hex::encode(b)),
+        }
     }
 }
 

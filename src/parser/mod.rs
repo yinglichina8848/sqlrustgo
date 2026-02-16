@@ -1,7 +1,17 @@
 //! SQL Parser Module
 //!
-//! This module provides SQL parsing functionality.
-//! It converts tokens from the lexer into an AST.
+//! # What (是什么)
+//! Parser 将 Lexer 输出的 Token 序列转换为抽象语法树 (AST)
+//!
+//! # Why (为什么)
+//! Token 序列只是单词的列表，无法表达 SQL 语句的层级结构
+//! AST 将单词组织成有意义的树结构，表示查询的语义
+//!
+//! # How (如何实现)
+//! - 递归下降解析器：自顶向下处理 SQL 语句
+//! - 每个 Statement 类型有对应的 parse_xxx 方法
+//! - 支持：SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE
+//! - 表达式解析支持基本二元运算
 
 use crate::lexer::{Lexer, Token};
 use serde::{Deserialize, Serialize};
