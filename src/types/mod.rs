@@ -41,4 +41,33 @@ mod tests {
             Value::Text("hello".to_string())
         );
     }
+
+    #[test]
+    fn test_parse_sql_literal_case_insensitive() {
+        // Test case insensitivity
+        assert_eq!(parse_sql_literal("null"), Value::Null);
+        assert_eq!(parse_sql_literal("true"), Value::Boolean(true));
+        assert_eq!(parse_sql_literal("false"), Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_whitespace() {
+        // Test whitespace handling
+        assert_eq!(parse_sql_literal("  NULL  "), Value::Null);
+        assert_eq!(parse_sql_literal("  42  "), Value::Integer(42));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_negative() {
+        // Test negative numbers
+        assert_eq!(parse_sql_literal("-10"), Value::Integer(-10));
+        assert_eq!(parse_sql_literal("-3.14"), Value::Float(-3.14));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_default_text() {
+        // Test default to text for unknown values
+        let result = parse_sql_literal("unknown");
+        assert_eq!(result, Value::Text("unknown".to_string()));
+    }
 }

@@ -396,4 +396,332 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_contains_and_drop() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_contains");
+        let _ = remove_dir_all(&temp_dir);
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+        storage.insert_table("test".to_string(), table_data).unwrap();
+
+        // Test contains_table
+        assert!(storage.contains_table("test"));
+        assert!(!storage.contains_table("nonexistent"));
+
+        // Test table_names
+        let names = storage.table_names();
+        assert!(names.contains(&"test".to_string()));
+
+        // Test drop_table
+        storage.drop_table("test").unwrap();
+        assert!(!storage.contains_table("test"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_persist() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_persist");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create table without saving
+        let table_data = TableData {
+            info: TableInfo {
+                name: "persist_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("persist_test".to_string(), table_data).unwrap();
+
+        // Test persist_table
+        storage.persist_table("persist_test").unwrap();
+
+        // Test flush
+        storage.flush().unwrap();
+
+        // Verify table still exists after reload
+        let storage2 = FileStorage::new(temp_dir.clone()).unwrap();
+        assert!(storage2.contains_table("persist_test"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_get_mut() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_mut");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "mutable".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("mutable".to_string(), table_data).unwrap();
+
+        // Test get_table_mut
+        {
+            let table = storage.get_table_mut("mutable").unwrap();
+            table.rows.push(vec![Value::Integer(1)]);
+        }
+
+        let table = storage.get_table("mutable").unwrap();
+        assert_eq!(table.rows.len(), 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_index");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Insert table with data
+        let table_data = TableData {
+            info: TableInfo {
+                name: "idx_test".to_string(),
+                columns: vec![
+                    ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                    ColumnDefinition {
+                        name: "value".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                ],
+            },
+            rows: vec![
+                vec![Value::Integer(1), Value::Integer(100)],
+                vec![Value::Integer(2), Value::Integer(200)],
+            ],
+        };
+        storage.insert_table("idx_test".to_string(), table_data).unwrap();
+
+        // Create index on id column (column_index = 0)
+        storage.create_index("idx_test", "id", 0).unwrap();
+
+        // Test has_index
+        assert!(storage.has_index("idx_test", "id"));
+        assert!(!storage.has_index("idx_test", "nonexistent"));
+
+        // Test search_index
+        let row_id = storage.search_index("idx_test", "id", 1);
+        assert!(row_id.is_some());
+
+        // Test range_index
+        let range_results = storage.range_index("idx_test", "id", 1, 3);
+        assert!(!range_results.is_empty());
+
+        // Test insert_with_index
+        storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
+
+        // Test drop_index
+        storage.drop_index("idx_test", "id").unwrap();
+        assert!(!storage.has_index("idx_test", "id"));
+
+        // Test flush_indexes
+        storage.flush_indexes().unwrap();
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_index_search() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_idx_search");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create table and index
+        let table_data = TableData {
+            info: TableInfo {
+                name: "search_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("search_test".to_string(), table_data).unwrap();
+        storage.create_index("search_test", "id", 0).unwrap();
+
+        // Insert with index
+        storage.insert_with_index("search_test", "id", 10, 0).unwrap();
+        storage.insert_with_index("search_test", "id", 20, 1).unwrap();
+
+        // Search
+        let result = storage.search_index("search_test", "id", 10);
+        assert_eq!(result, Some(0));
+
+        // Range query
+        let range = storage.range_index("search_test", "id", 5, 15);
+        assert!(!range.is_empty());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    // ==================== Additional Coverage Tests ====================
+
+    #[test]
+    fn test_file_storage_get_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_index");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "get_idx_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("get_idx_test".to_string(), table_data).unwrap();
+        storage.create_index("get_idx_test", "id", 0).unwrap();
+
+        // Test get_index
+        let index = storage.get_index("get_idx_test", "id");
+        assert!(index.is_some());
+
+        // Test get_index for non-existent
+        let index_none = storage.get_index("get_idx_test", "nonexistent");
+        assert!(index_none.is_none());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_index_no_matching_rows() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_no_match");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create table with non-integer columns (will skip indexing)
+        let table_data = TableData {
+            info: TableInfo {
+                name: "text_table".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![
+                vec![Value::Text("Alice".to_string())],
+            ],
+        };
+        storage.insert_table("text_table".to_string(), table_data).unwrap();
+
+        // Create index - this will work but won't have any entries
+        storage.create_index("text_table", "name", 0).unwrap();
+
+        // search_index should return None for TEXT column (no Integer keys)
+        let result = storage.search_index("text_table", "name", 1);
+        assert_eq!(result, None);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_empty_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_empty");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Test empty storage
+        assert_eq!(storage.table_names().len(), 0);
+        assert!(!storage.contains_table("anything"));
+        assert!(storage.get_table("anything").is_none());
+
+        // Test flush on empty storage
+        storage.flush().unwrap();
+        storage.flush_indexes().unwrap();
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_persist_nonexistent() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_persist_none");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // persist_table on non-existent table should return Ok
+        let result = storage.persist_table("nonexistent");
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_range_index_no_results() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_range_empty");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "range_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage.insert_table("range_test".to_string(), table_data).unwrap();
+        storage.create_index("range_test", "id", 0).unwrap();
+
+        // Add some data
+        storage.insert_with_index("range_test", "id", 5, 0).unwrap();
+
+        // Range with no matching results
+        let range = storage.range_index("range_test", "id", 100, 200);
+        assert!(range.is_empty());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }

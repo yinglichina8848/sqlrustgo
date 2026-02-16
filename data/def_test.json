@@ -1,0 +1,16 @@
+{
+  "name": "def_test",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "DEFAULT",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": []
+}

@@ -1,0 +1,57 @@
+{
+  "name": "test_is",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "name",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "name1"
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Text": "name2"
+      }
+    ],
+    [
+      {
+        "Integer": 3
+      },
+      {
+        "Text": "name3"
+      }
+    ],
+    [
+      {
+        "Integer": 4
+      },
+      {
+        "Text": "name4"
+      }
+    ],
+    [
+      {
+        "Integer": 5
+      },
+      {
+        "Text": "name5"
+      }
+    ]
+  ]
+}
