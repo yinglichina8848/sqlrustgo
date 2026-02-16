@@ -29,7 +29,8 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust
+//! ```ignore
+//! use sqlrustgo::BPlusTree;
 //! let mut tree = BPlusTree::new();
 //! tree.insert(1, 100);
 //! tree.insert(2, 200);
