@@ -1,0 +1,27 @@
+{
+  "name": "or_test",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      }
+    ],
+    [
+      {
+        "Integer": 3
+      }
+    ]
+  ]
+}

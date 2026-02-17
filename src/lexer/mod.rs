@@ -2,6 +2,8 @@
 //!
 //! This module provides lexical analysis (tokenization) for SQL statements.
 
+#[allow(clippy::module_name_repetitions)]
+#[allow(clippy::module_inception)]
 pub mod lexer;
 pub mod token;
 

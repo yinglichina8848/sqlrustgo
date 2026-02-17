@@ -1,0 +1,11 @@
+{
+  "name": "users",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": []
+}

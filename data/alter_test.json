@@ -1,0 +1,11 @@
+{
+  "name": "alter_test",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": []
+}
