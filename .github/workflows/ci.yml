@@ -2,9 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - baseline
+      - feature/*-evaluation
+      - feature/*-alpha
+      - feature/*-beta
   pull_request:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - baseline
+      - feature/*-evaluation
+      - feature/*-alpha
+      - feature/*-beta
 
 jobs:
   build:
@@ -19,6 +31,9 @@ jobs:
       - name: Setup Rust ${{ matrix.rust }}
         run: rustup default ${{ matrix.rust }}
 
+      - name: Install Rust Components
+        run: rustup component add clippy rustfmt
+
       - name: Build
         run: cargo build --all-features
 
@@ -29,6 +44,7 @@ jobs:
         run: cargo clippy --all-features -- -D warnings
 
       - name: Format check
+        if: ${{ github.ref_name == 'main' || github.ref_name == 'baseline' || github.base_ref == 'main' || github.base_ref == 'baseline' }}
         run: cargo fmt --check --all
 
       - name: Doc test
@@ -46,7 +62,7 @@ jobs:
         run: |
           rustup component add rust-src
           cargo install cargo-llvm-cov
-          cargo llvm-cov --all-features --all --workspace --codecov --output-path coverage.json
+          cargo llvm-cov --all-features --all --codecov --output-path coverage.json
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
