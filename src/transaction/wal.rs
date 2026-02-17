@@ -52,7 +52,6 @@ impl WriteAheadLog {
     pub fn new(path: &str) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .read(true)
-            
             .create(true)
             .append(true)
             .open(path)?;
