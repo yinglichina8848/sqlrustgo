@@ -1,0 +1,41 @@
+{
+  "name": "order_test",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "value",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Integer": 30
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Integer": 10
+      }
+    ],
+    [
+      {
+        "Integer": 3
+      },
+      {
+        "Integer": 20
+      }
+    ]
+  ]
+}

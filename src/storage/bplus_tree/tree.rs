@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Maximum keys per node (fanout)
 const MAX_KEYS: usize = 4;
 
-/// B+ Tree index
+/// B+ Tree index - In-memory B+ Tree index with serialization support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BPlusTree {
     root: Option<Node>,
@@ -32,7 +32,7 @@ impl BPlusTree {
         self.root.is_none()
     }
 
-    /// Insert a key-value pair
+    /// Insert a key-value pair. Handles node splitting when node is full.
     pub fn insert(&mut self, key: i64, value: u32) {
         if self.root.is_none() {
             let mut leaf = LeafNode::new();
@@ -74,10 +74,10 @@ impl BPlusTree {
         values.push(value);
 
         // Sort by key
-        let mut pairs: Vec<_> = keys.into_iter().zip(values.into_iter()).collect();
+        let mut pairs: Vec<_> = keys.into_iter().zip(values).collect();
         pairs.sort_by_key(|(k, _)| *k);
 
-        let mid = (pairs.len() + 1) / 2;
+        let mid = pairs.len().div_ceil(2);
         let left_pairs: Vec<_> = pairs[..mid].to_vec();
         let right_pairs: Vec<_> = pairs[mid..].to_vec();
 
@@ -123,7 +123,7 @@ impl BPlusTree {
         }
     }
 
-    /// Search for a key
+    /// Search for a key using binary search, returns value if found
     pub fn search(&self, key: i64) -> Option<u32> {
         self.search_node(self.root.as_ref()?, key)
     }
@@ -138,7 +138,7 @@ impl BPlusTree {
         }
     }
 
-    /// Range query: [start, end)
+    /// Query all values in range [start, end)
     pub fn range_query(&self, start: i64, end: i64) -> Vec<u32> {
         if self.root.is_none() {
             return vec![];
@@ -159,7 +159,7 @@ impl BPlusTree {
         }
     }
 
-    /// Get all keys in order
+    /// Return all keys in sorted order
     pub fn keys(&self) -> Vec<i64> {
         if let Some(root) = &self.root {
             self.collect_keys(root)
@@ -188,7 +188,7 @@ impl Default for BPlusTree {
     }
 }
 
-/// Leaf node - stores actual data
+/// Leaf node - stores actual key-value pairs in sorted order, linked for efficient range scans
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LeafNode {
     keys: Vec<i64>,
@@ -225,7 +225,7 @@ impl LeafNode {
     }
 }
 
-/// Internal node - points to child nodes
+/// Internal node - guides search to correct child using separating keys
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InternalNode {
     keys: Vec<i64>,
@@ -252,7 +252,7 @@ impl InternalNode {
     }
 }
 
-/// Boxed node for type erasure
+/// Type-erased node wrapper for serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum NodeBox {
     Leaf(LeafNode),
@@ -336,5 +336,127 @@ mod tests {
         let tree = BPlusTree::new();
         assert!(tree.is_empty());
         assert_eq!(tree.search(10), None);
+    }
+
+    // ==================== Additional Coverage Tests ====================
+
+    #[test]
+    fn test_bplus_tree_leaf_split() {
+        let mut tree = BPlusTree::new();
+
+        // Insert enough to cause potential split (default order is 4)
+        for i in 0..10 {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 10);
+        // Verify all keys are searchable
+        for i in 0..10 {
+            assert_eq!(tree.search(i), Some(i as u32));
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_many_inserts() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many to create internal nodes
+        for i in 0..20 {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 20);
+        // Test range query across internal nodes
+        let results = tree.range_query(5, 15);
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_bplus_tree_reverse_insert() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in reverse order
+        for i in (0..10).rev() {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 10);
+        // All should be searchable
+        for i in 0..10 {
+            assert_eq!(tree.search(i), Some(i as u32));
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_duplicate_key() {
+        let mut tree = BPlusTree::new();
+
+        tree.insert(1, 100);
+        tree.insert(1, 200); // Same key, different value
+
+        // Should have both values or last one wins
+        let result = tree.search(1);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_bplus_tree_range_out_of_bounds() {
+        let mut tree = BPlusTree::new();
+
+        tree.insert(5, 50);
+        tree.insert(10, 100);
+        tree.insert(15, 150);
+
+        // Range completely before first key
+        let results = tree.range_query(1, 3);
+        assert!(results.is_empty());
+
+        // Range completely after last key
+        let results = tree.range_query(20, 30);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_bplus_tree_keys_sorted() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in random order
+        let values = vec![5, 2, 8, 1, 9, 3, 7, 4, 6];
+        for v in values {
+            tree.insert(v, (v * 10) as u32);
+        }
+
+        let keys = tree.keys();
+        // Keys should be sorted
+        for i in 1..keys.len() {
+            assert!(keys[i] > keys[i - 1]);
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_large_range() {
+        let mut tree = BPlusTree::new();
+
+        for i in 0..50 {
+            tree.insert(i, i as u32);
+        }
+
+        let results = tree.range_query(10, 40);
+        assert!(results.len() > 20);
+    }
+
+    #[test]
+    fn test_bplus_tree_many_inserts_large() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many values
+        for i in 0..100 {
+            tree.insert(i, (i * 10) as u32);
+        }
+
+        // Verify many are found
+        assert_eq!(tree.search(0), Some(0));
+        assert_eq!(tree.search(50), Some(500));
+        assert_eq!(tree.search(99), Some(990));
     }
 }

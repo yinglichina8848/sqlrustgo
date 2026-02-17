@@ -1,0 +1,22 @@
+{
+  "name": "test_update",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 100
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      }
+    ]
+  ]
+}
