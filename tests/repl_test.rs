@@ -1,6 +1,6 @@
 //! Tests for REPL main functions
 
-use sqlrustgo::{parse, ExecutionEngine, ExecutionResult};
+use sqlrustgo::{ExecutionEngine, ExecutionResult, parse};
 
 /// Process user input - copied from main.rs for testing
 fn process_input(
@@ -118,7 +118,10 @@ fn test_print_result_with_rows() {
 #[test]
 fn test_process_input_create_table() {
     let mut engine = ExecutionEngine::new();
-    let result = process_input("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)", &mut engine);
+    let result = process_input(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+        &mut engine,
+    );
     assert!(result.is_ok());
 }
 

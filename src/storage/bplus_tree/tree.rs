@@ -16,10 +16,7 @@ pub struct BPlusTree {
 impl BPlusTree {
     /// Create a new B+ Tree
     pub fn new() -> Self {
-        Self {
-            root: None,
-            len: 0,
-        }
+        Self { root: None, len: 0 }
     }
 
     /// Get the number of entries
@@ -74,10 +71,10 @@ impl BPlusTree {
         values.push(value);
 
         // Sort by key
-        let mut pairs: Vec<_> = keys.into_iter().zip(values.into_iter()).collect();
+        let mut pairs: Vec<_> = keys.into_iter().zip(values).collect();
         pairs.sort_by_key(|(k, _)| *k);
 
-        let mid = (pairs.len() + 1) / 2;
+        let mid = pairs.len().div_ceil(2);
         let left_pairs: Vec<_> = pairs[..mid].to_vec();
         let right_pairs: Vec<_> = pairs[mid..].to_vec();
 
@@ -241,7 +238,10 @@ impl InternalNode {
     }
 
     fn find_child_position(&self, key: i64) -> usize {
-        self.keys.iter().position(|k| *k > key).unwrap_or(self.keys.len())
+        self.keys
+            .iter()
+            .position(|k| *k > key)
+            .unwrap_or(self.keys.len())
     }
 
     fn child(&self, pos: usize) -> Node {
