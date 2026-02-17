@@ -98,12 +98,16 @@ impl ExecutionEngine {
     /// Execute SELECT
     fn execute_select(&mut self, stmt: SelectStatement) -> SqlResult<ExecutionResult> {
         // Check if table exists
-        let table_data = self.storage
+        let table_data = self
+            .storage
             .get_table(&stmt.table)
             .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
 
         // Get column names from table schema
-        let table_columns: Vec<String> = table_data.info.columns.iter()
+        let table_columns: Vec<String> = table_data
+            .info
+            .columns
+            .iter()
             .map(|c| c.name.clone())
             .collect();
 
@@ -118,13 +122,15 @@ impl ExecutionEngine {
         let column_indices: Vec<usize> = if stmt.columns.iter().any(|c| c.name == "*") {
             (0..table_columns.len()).collect()
         } else {
-            stmt.columns.iter().filter_map(|c| {
-                table_columns.iter().position(|tc| tc == &c.name)
-            }).collect()
+            stmt.columns
+                .iter()
+                .filter_map(|c| table_columns.iter().position(|tc| tc == &c.name))
+                .collect()
         };
 
         // Build column index map for WHERE clause evaluation
-        let column_map: std::collections::HashMap<String, usize> = table_columns.iter()
+        let column_map: std::collections::HashMap<String, usize> = table_columns
+            .iter()
             .enumerate()
             .map(|(i, c)| (c.clone(), i))
             .collect();
@@ -132,14 +138,19 @@ impl ExecutionEngine {
         // Filter rows by WHERE clause (with index optimization)
         let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_expr) = stmt.where_clause {
             // Try to use index for optimization
-            if let Some(row_indices) = self.execute_select_with_index(table_data, where_expr, &column_map) {
+            if let Some(row_indices) =
+                self.execute_select_with_index(table_data, where_expr, &column_map)
+            {
                 // Use index results
-                row_indices.iter()
+                row_indices
+                    .iter()
                     .filter_map(|&idx| table_data.rows.get(idx).cloned())
                     .collect()
             } else {
                 // Fall back to full table scan
-                table_data.rows.iter()
+                table_data
+                    .rows
+                    .iter()
                     .filter(|row| evaluate_where(row, where_expr, &column_map))
                     .cloned()
                     .collect()
@@ -149,9 +160,11 @@ impl ExecutionEngine {
         };
 
         // Project to result columns
-        let result_rows: Vec<Vec<Value>> = filtered_rows.iter()
+        let result_rows: Vec<Vec<Value>> = filtered_rows
+            .iter()
             .map(|row| {
-                column_indices.iter()
+                column_indices
+                    .iter()
                     .filter_map(|&idx| row.get(idx).cloned())
                     .collect()
             })
@@ -174,7 +187,10 @@ impl ExecutionEngine {
         // Get indexed columns before mutating
         let indexed_columns: Vec<(usize, String)> = {
             let table_data = self.storage.get_table(&stmt.table).unwrap();
-            table_data.info.columns.iter()
+            table_data
+                .info
+                .columns
+                .iter()
                 .enumerate()
                 .filter(|(_, c)| self.storage.has_index(&stmt.table, &c.name))
                 .map(|(i, c)| (i, c.name.clone()))
@@ -195,9 +211,10 @@ impl ExecutionEngine {
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
                     if let Some(value) = row.get(*col_idx)
-                        && let Value::Integer(key) = value {
-                            index_updates.push((col_name.clone(), *key, row_id));
-                        }
+                        && let Value::Integer(key) = value
+                    {
+                        index_updates.push((col_name.clone(), *key, row_id));
+                    }
                 }
 
                 inserted_rows.push(row);
@@ -206,7 +223,9 @@ impl ExecutionEngine {
 
         // Apply index updates
         for (col_name, key, row_id) in index_updates {
-            let _ = self.storage.insert_with_index(&stmt.table, &col_name, key, row_id);
+            let _ = self
+                .storage
+                .insert_with_index(&stmt.table, &col_name, key, row_id);
         }
 
         self.storage.persist_table(&stmt.table)?;
@@ -259,9 +278,10 @@ impl ExecutionEngine {
                     // Apply SET clauses with dynamic column mapping
                     for (column, value_expr) in &set_clauses {
                         if let Some(&idx) = column_indices.get(column)
-                            && idx < row.len() {
-                                row[idx] = expression_to_value_static(value_expr);
-                            }
+                            && idx < row.len()
+                        {
+                            row[idx] = expression_to_value_static(value_expr);
+                        }
                     }
                     count += 1;
                 }
@@ -338,8 +358,7 @@ impl ExecutionEngine {
             },
             rows: Vec::new(),
         };
-        self.storage
-            .insert_table(stmt.name, table_data)?;
+        self.storage.insert_table(stmt.name, table_data)?;
 
         Ok(ExecutionResult {
             rows_affected: 0,
@@ -353,8 +372,7 @@ impl ExecutionEngine {
         &mut self,
         stmt: crate::parser::DropTableStatement,
     ) -> SqlResult<ExecutionResult> {
-        self.storage
-            .drop_table(&stmt.name)?;
+        self.storage.drop_table(&stmt.name)?;
 
         Ok(ExecutionResult {
             rows_affected: 0,
@@ -373,20 +391,30 @@ impl ExecutionEngine {
     /// Create an index on a table column
     pub fn create_index(&mut self, table_name: &str, column_name: &str) -> SqlResult<()> {
         // Find column index in table schema
-        let table = self.storage.get_table(table_name)
+        let table = self
+            .storage
+            .get_table(table_name)
             .ok_or_else(|| SqlError::TableNotFound(table_name.to_string()))?;
 
-        let column_index = table.info.columns.iter()
+        let column_index = table
+            .info
+            .columns
+            .iter()
             .position(|c| c.name == column_name)
-            .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", column_name)))?;
+            .ok_or_else(|| {
+                SqlError::ExecutionError(format!("Column '{}' not found", column_name))
+            })?;
 
         // Check if column is INTEGER type (for B+ Tree index)
         if table.info.columns[column_index].data_type != "INTEGER" {
-            return Err(SqlError::ExecutionError("Index only supports INTEGER columns".to_string()));
+            return Err(SqlError::ExecutionError(
+                "Index only supports INTEGER columns".to_string(),
+            ));
         }
 
         // Create index
-        self.storage.create_index(table_name, column_name, column_index)
+        self.storage
+            .create_index(table_name, column_name, column_index)
             .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
 
         Ok(())
@@ -406,29 +434,30 @@ impl ExecutionEngine {
     ) -> Option<Vec<usize>> {
         // Try to use index for simple equality conditions on indexed columns
         if let Expression::BinaryOp(left, op, right) = where_expr
-            && op.as_str() == "=" {
-                // Check if left side is a column reference
-                if let Expression::Identifier(col_name) = left.as_ref() {
-                    // Check if right side is a literal value
-                    if let Expression::Literal(val) = right.as_ref() {
-                        // Check if we have an index on this column
-                        let key_value = parse_sql_literal(val);
-                        if let Some(key) = key_value.as_integer()
-                            && self.storage.has_index(&table_data.info.name, col_name) {
-                                // Use index to find matching row
-                                if let Some(row_id) = self.storage.search_index(
-                                    &table_data.info.name,
-                                    col_name,
-                                    key,
-                                ) {
-                                    return Some(vec![row_id as usize]);
-                                } else {
-                                    return Some(vec![]); // No match
-                                }
-                            }
+            && op.as_str() == "="
+        {
+            // Check if left side is a column reference
+            if let Expression::Identifier(col_name) = left.as_ref() {
+                // Check if right side is a literal value
+                if let Expression::Literal(val) = right.as_ref() {
+                    // Check if we have an index on this column
+                    let key_value = parse_sql_literal(val);
+                    if let Some(key) = key_value.as_integer()
+                        && self.storage.has_index(&table_data.info.name, col_name)
+                    {
+                        // Use index to find matching row
+                        if let Some(row_id) =
+                            self.storage
+                                .search_index(&table_data.info.name, col_name, key)
+                        {
+                            return Some(vec![row_id as usize]);
+                        } else {
+                            return Some(vec![]); // No match
+                        }
                     }
                 }
             }
+        }
         None
     }
 }
@@ -482,38 +511,30 @@ fn evaluate_where(
             match op.as_str() {
                 "=" => left_val == right_val,
                 "!=" => left_val != right_val,
-                ">" => {
-                    match (&left_val, &right_val) {
-                        (Value::Integer(l), Value::Integer(r)) => l > r,
-                        (Value::Float(l), Value::Float(r)) => l > r,
-                        (Value::Text(l), Value::Text(r)) => l > r,
-                        _ => false,
-                    }
-                }
-                "<" => {
-                    match (&left_val, &right_val) {
-                        (Value::Integer(l), Value::Integer(r)) => l < r,
-                        (Value::Float(l), Value::Float(r)) => l < r,
-                        (Value::Text(l), Value::Text(r)) => l < r,
-                        _ => false,
-                    }
-                }
-                ">=" => {
-                    match (&left_val, &right_val) {
-                        (Value::Integer(l), Value::Integer(r)) => l >= r,
-                        (Value::Float(l), Value::Float(r)) => l >= r,
-                        (Value::Text(l), Value::Text(r)) => l >= r,
-                        _ => false,
-                    }
-                }
-                "<=" => {
-                    match (&left_val, &right_val) {
-                        (Value::Integer(l), Value::Integer(r)) => l <= r,
-                        (Value::Float(l), Value::Float(r)) => l <= r,
-                        (Value::Text(l), Value::Text(r)) => l <= r,
-                        _ => false,
-                    }
-                }
+                ">" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => l > r,
+                    (Value::Float(l), Value::Float(r)) => l > r,
+                    (Value::Text(l), Value::Text(r)) => l > r,
+                    _ => false,
+                },
+                "<" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => l < r,
+                    (Value::Float(l), Value::Float(r)) => l < r,
+                    (Value::Text(l), Value::Text(r)) => l < r,
+                    _ => false,
+                },
+                ">=" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => l >= r,
+                    (Value::Float(l), Value::Float(r)) => l >= r,
+                    (Value::Text(l), Value::Text(r)) => l >= r,
+                    _ => false,
+                },
+                "<=" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => l <= r,
+                    (Value::Float(l), Value::Float(r)) => l <= r,
+                    (Value::Text(l), Value::Text(r)) => l <= r,
+                    _ => false,
+                },
                 _ => false,
             }
         }
@@ -560,7 +581,8 @@ mod tests {
     #[test]
     fn test_execute_create_table() {
         let mut engine = ExecutionEngine::new();
-        let result = engine.execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap());
         assert!(result.is_ok());
         assert!(engine.get_table("users").is_some());
     }
@@ -569,7 +591,8 @@ mod tests {
     fn test_execute_select() {
         let mut engine = ExecutionEngine::new();
         // Create table first
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap());
+        let _ = engine
+            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap());
 
         // Select from existing table
         let result = engine.execute(crate::parser::parse("SELECT id FROM users").unwrap());
@@ -701,7 +724,9 @@ mod tests {
 
         // Create table
         engine
-            .execute(crate::parser::parse("CREATE TABLE test_idx (id INTEGER, value INTEGER)").unwrap())
+            .execute(
+                crate::parser::parse("CREATE TABLE test_idx (id INTEGER, value INTEGER)").unwrap(),
+            )
             .unwrap();
 
         // Insert some data
@@ -750,7 +775,9 @@ mod tests {
         // Insert data
         for i in 1..=5 {
             engine
-                .execute(crate::parser::parse(&format!("INSERT INTO ops_test VALUES ({})", i)).unwrap())
+                .execute(
+                    crate::parser::parse(&format!("INSERT INTO ops_test VALUES ({})", i)).unwrap(),
+                )
                 .unwrap();
         }
 
@@ -791,7 +818,10 @@ mod tests {
 
         // Create table
         engine
-            .execute(crate::parser::parse("CREATE TABLE update_test (id INTEGER, value INTEGER)").unwrap())
+            .execute(
+                crate::parser::parse("CREATE TABLE update_test (id INTEGER, value INTEGER)")
+                    .unwrap(),
+            )
             .unwrap();
 
         // Insert multiple rows
@@ -846,12 +876,19 @@ mod tests {
 
         // Create table
         engine
-            .execute(crate::parser::parse("CREATE TABLE multi_insert (id INTEGER, name TEXT)").unwrap())
+            .execute(
+                crate::parser::parse("CREATE TABLE multi_insert (id INTEGER, name TEXT)").unwrap(),
+            )
             .unwrap();
 
         // Insert multiple values at once
         let result = engine
-            .execute(crate::parser::parse("INSERT INTO multi_insert VALUES (1, 'A'), (2, 'B'), (3, 'C')").unwrap())
+            .execute(
+                crate::parser::parse(
+                    "INSERT INTO multi_insert VALUES (1, 'A'), (2, 'B'), (3, 'C')",
+                )
+                .unwrap(),
+            )
             .unwrap();
         assert_eq!(result.rows_affected, 3);
 
@@ -870,9 +907,15 @@ mod tests {
             .unwrap();
 
         // Insert data
-        engine.execute(crate::parser::parse("INSERT INTO or_test VALUES (1)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO or_test VALUES (2)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO or_test VALUES (3)").unwrap()).unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO or_test VALUES (1)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO or_test VALUES (2)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO or_test VALUES (3)").unwrap())
+            .unwrap();
 
         // Test OR condition - currently may return partial results
         let result = engine
@@ -891,7 +934,8 @@ mod tests {
 
     #[test]
     fn test_execution_engine_with_data_dir() {
-        let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_data_dir_{}", std::process::id()));
+        let temp_dir =
+            env::temp_dir().join(format!("sqlrustgo_test_data_dir_{}", std::process::id()));
         let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
         assert!(engine.storage.table_names().is_empty());
         let _ = std::fs::remove_dir_all(temp_dir);
@@ -900,33 +944,43 @@ mod tests {
     #[test]
     fn test_execute_insert_multiple_rows() {
         let mut engine = ExecutionEngine::new();
-        let result = engine.execute(crate::parser::parse("CREATE TABLE test_multi (id INTEGER)").unwrap());
+        let result =
+            engine.execute(crate::parser::parse("CREATE TABLE test_multi (id INTEGER)").unwrap());
         assert!(result.is_ok());
 
-        let result = engine.execute(crate::parser::parse("INSERT INTO test_multi VALUES (1), (2), (3)").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("INSERT INTO test_multi VALUES (1), (2), (3)").unwrap());
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_execute_select_between() {
         let mut engine = ExecutionEngine::new();
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE test_between (id INTEGER)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (1)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (5)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (10)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("CREATE TABLE test_between (id INTEGER)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (1)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (5)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO test_between VALUES (10)").unwrap());
 
-        let result = engine.execute(crate::parser::parse("SELECT * FROM test_between WHERE id >= 3 AND id <= 8").unwrap());
+        let result = engine.execute(
+            crate::parser::parse("SELECT * FROM test_between WHERE id >= 3 AND id <= 8").unwrap(),
+        );
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_execute_update_specific_row() {
         let mut engine = ExecutionEngine::new();
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE test_update (id INTEGER)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("CREATE TABLE test_update (id INTEGER)").unwrap());
         let _ = engine.execute(crate::parser::parse("INSERT INTO test_update VALUES (1)").unwrap());
         let _ = engine.execute(crate::parser::parse("INSERT INTO test_update VALUES (2)").unwrap());
 
-        let result = engine.execute(crate::parser::parse("UPDATE test_update SET id = 100 WHERE id = 1").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("UPDATE test_update SET id = 100 WHERE id = 1").unwrap());
         assert!(result.is_ok());
     }
 
@@ -939,7 +993,8 @@ mod tests {
         let _ = engine.execute(crate::parser::parse("INSERT INTO test_del VALUES (3)").unwrap());
 
         // Delete specific row
-        let result = engine.execute(crate::parser::parse("DELETE FROM test_del WHERE id = 2").unwrap());
+        let result =
+            engine.execute(crate::parser::parse("DELETE FROM test_del WHERE id = 2").unwrap());
         assert!(result.is_ok());
 
         // Verify remaining rows
@@ -950,9 +1005,12 @@ mod tests {
     #[test]
     fn test_execute_select_distinct_columns() {
         let mut engine = ExecutionEngine::new();
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE col_test (a INTEGER, b INTEGER)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO col_test VALUES (1, 10)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO col_test VALUES (2, 20)").unwrap());
+        let _ = engine
+            .execute(crate::parser::parse("CREATE TABLE col_test (a INTEGER, b INTEGER)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO col_test VALUES (1, 10)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO col_test VALUES (2, 20)").unwrap());
 
         // Select specific columns
         let result = engine.execute(crate::parser::parse("SELECT a FROM col_test").unwrap());
@@ -963,24 +1021,32 @@ mod tests {
     #[test]
     fn test_execute_update_multiple_rows() {
         let mut engine = ExecutionEngine::new();
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE multi_upd (id INTEGER, val INTEGER)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (1, 10)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (2, 20)").unwrap());
-        let _ = engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (3, 30)").unwrap());
+        let _ = engine.execute(
+            crate::parser::parse("CREATE TABLE multi_upd (id INTEGER, val INTEGER)").unwrap(),
+        );
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (1, 10)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (2, 20)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("INSERT INTO multi_upd VALUES (3, 30)").unwrap());
 
         // Update with WHERE that matches multiple rows
-        let result = engine.execute(crate::parser::parse("UPDATE multi_upd SET val = 100 WHERE id > 1").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("UPDATE multi_upd SET val = 100 WHERE id > 1").unwrap());
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_execute_select_no_results() {
         let mut engine = ExecutionEngine::new();
-        let _ = engine.execute(crate::parser::parse("CREATE TABLE empty_test (id INTEGER)").unwrap());
+        let _ =
+            engine.execute(crate::parser::parse("CREATE TABLE empty_test (id INTEGER)").unwrap());
         let _ = engine.execute(crate::parser::parse("INSERT INTO empty_test VALUES (1)").unwrap());
 
         // Select with no matching rows
-        let result = engine.execute(crate::parser::parse("SELECT * FROM empty_test WHERE id = 999").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("SELECT * FROM empty_test WHERE id = 999").unwrap());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().rows.len(), 0);
     }
@@ -990,9 +1056,7 @@ mod tests {
         let result = ExecutionResult {
             rows_affected: 5,
             columns: vec!["id".to_string(), "name".to_string()],
-            rows: vec![
-                vec![Value::Integer(1), Value::Text("test".to_string())],
-            ],
+            rows: vec![vec![Value::Integer(1), Value::Text("test".to_string())]],
         };
         assert_eq!(result.rows_affected, 5);
         assert_eq!(result.columns.len(), 2);
@@ -1006,7 +1070,9 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create a table first
-        engine.execute(crate::parser::parse("CREATE TABLE test1 (id INTEGER)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE test1 (id INTEGER)").unwrap())
+            .ok();
 
         // Test SELECT on existing table
         let result = engine.execute(crate::parser::parse("SELECT * FROM test1").unwrap());
@@ -1090,15 +1156,25 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE like_test (name TEXT)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE like_test (name TEXT)").unwrap())
+            .ok();
 
         // Insert data
-        engine.execute(crate::parser::parse("INSERT INTO like_test VALUES ('hello')").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO like_test VALUES ('world')").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO like_test VALUES ('help')").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO like_test VALUES ('hello')").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO like_test VALUES ('world')").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO like_test VALUES ('help')").unwrap())
+            .ok();
 
         // Test SELECT with LIKE (will use default execution path since LIKE isn't fully implemented)
-        let result = engine.execute(crate::parser::parse("SELECT * FROM like_test WHERE name LIKE 'hel%'").unwrap());
+        let result = engine.execute(
+            crate::parser::parse("SELECT * FROM like_test WHERE name LIKE 'hel%'").unwrap(),
+        );
         assert!(result.unwrap().columns.len() >= 0);
     }
 
@@ -1107,18 +1183,29 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE null_test (id INTEGER, name TEXT)").unwrap()).ok();
+        engine
+            .execute(
+                crate::parser::parse("CREATE TABLE null_test (id INTEGER, name TEXT)").unwrap(),
+            )
+            .ok();
 
         // Insert data with null
-        engine.execute(crate::parser::parse("INSERT INTO null_test VALUES (1, 'test')").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO null_test VALUES (2, NULL)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO null_test VALUES (1, 'test')").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO null_test VALUES (2, NULL)").unwrap())
+            .ok();
 
         // Test IS NULL
-        let result = engine.execute(crate::parser::parse("SELECT * FROM null_test WHERE name IS NULL").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("SELECT * FROM null_test WHERE name IS NULL").unwrap());
         assert!(result.is_ok());
 
         // Test IS NOT NULL
-        let result = engine.execute(crate::parser::parse("SELECT * FROM null_test WHERE name IS NOT NULL").unwrap());
+        let result = engine.execute(
+            crate::parser::parse("SELECT * FROM null_test WHERE name IS NOT NULL").unwrap(),
+        );
         assert!(result.is_ok());
     }
 
@@ -1128,7 +1215,8 @@ mod tests {
 
         // Create table with PRIMARY KEY
         let result = engine.execute(
-            crate::parser::parse("CREATE TABLE pk_test (id INTEGER PRIMARY KEY, name TEXT)").unwrap()
+            crate::parser::parse("CREATE TABLE pk_test (id INTEGER PRIMARY KEY, name TEXT)")
+                .unwrap(),
         );
         assert!(result.is_ok());
     }
@@ -1158,7 +1246,9 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE alter_test (id INTEGER)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE alter_test (id INTEGER)").unwrap())
+            .ok();
 
         // Alter table (ADD COLUMN) - parser may not support ALTER, so just test it doesn't panic
         let parse_result = crate::parser::parse("ALTER TABLE alter_test ADD COLUMN name TEXT");
@@ -1171,15 +1261,27 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE order_test (id INTEGER, value INTEGER)").unwrap()).ok();
+        engine
+            .execute(
+                crate::parser::parse("CREATE TABLE order_test (id INTEGER, value INTEGER)")
+                    .unwrap(),
+            )
+            .ok();
 
         // Insert data
-        engine.execute(crate::parser::parse("INSERT INTO order_test VALUES (1, 30)").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO order_test VALUES (2, 10)").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO order_test VALUES (3, 20)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO order_test VALUES (1, 30)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO order_test VALUES (2, 10)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO order_test VALUES (3, 20)").unwrap())
+            .ok();
 
         // Test ORDER BY
-        let result = engine.execute(crate::parser::parse("SELECT * FROM order_test ORDER BY value DESC").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("SELECT * FROM order_test ORDER BY value DESC").unwrap());
         assert!(result.is_ok());
     }
 
@@ -1188,16 +1290,24 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE limit_test (id INTEGER)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE limit_test (id INTEGER)").unwrap())
+            .ok();
 
         // Insert data
         for i in 1..=10 {
-            engine.execute(crate::parser::parse(&format!("INSERT INTO limit_test VALUES ({})", i)).unwrap()).ok();
+            engine
+                .execute(
+                    crate::parser::parse(&format!("INSERT INTO limit_test VALUES ({})", i))
+                        .unwrap(),
+                )
+                .ok();
         }
 
         // Test LIMIT - query should parse and execute without error
         // Note: LIMIT clause may not be fully implemented, so we just verify no panic
-        let result = engine.execute(crate::parser::parse("SELECT * FROM limit_test LIMIT 5").unwrap());
+        let result =
+            engine.execute(crate::parser::parse("SELECT * FROM limit_test LIMIT 5").unwrap());
         assert!(result.is_ok());
     }
 
@@ -1206,11 +1316,21 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table
-        engine.execute(crate::parser::parse("CREATE TABLE test_is (id INTEGER, name TEXT)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE test_is (id INTEGER, name TEXT)").unwrap())
+            .ok();
 
         // Insert multiple rows
         for i in 1..=5 {
-            engine.execute(crate::parser::parse(&format!("INSERT INTO test_is VALUES ({}, 'name{}')", i, i)).unwrap()).ok();
+            engine
+                .execute(
+                    crate::parser::parse(&format!(
+                        "INSERT INTO test_is VALUES ({}, 'name{}')",
+                        i, i
+                    ))
+                    .unwrap(),
+                )
+                .ok();
         }
 
         // Select all
@@ -1223,7 +1343,9 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table with NOT NULL constraint
-        let result = engine.execute(crate::parser::parse("CREATE TABLE nn_test (id INTEGER NOT NULL, name TEXT)").unwrap());
+        let result = engine.execute(
+            crate::parser::parse("CREATE TABLE nn_test (id INTEGER NOT NULL, name TEXT)").unwrap(),
+        );
         assert!(result.is_ok());
     }
 
@@ -1233,7 +1355,8 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create table with DEFAULT value
-        let result = engine.execute(crate::parser::parse("CREATE TABLE def_test (id INTEGER DEFAULT 0)").unwrap());
+        let result = engine
+            .execute(crate::parser::parse("CREATE TABLE def_test (id INTEGER DEFAULT 0)").unwrap());
         assert!(result.is_ok());
     }
 
@@ -1262,7 +1385,8 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Try to insert into non-existent table
-        let result = engine.execute(crate::parser::parse("INSERT INTO nonexistent VALUES (1)").unwrap());
+        let result =
+            engine.execute(crate::parser::parse("INSERT INTO nonexistent VALUES (1)").unwrap());
         // Should handle gracefully
         let _ = result;
     }
@@ -1272,8 +1396,12 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create and populate table
-        engine.execute(crate::parser::parse("CREATE TABLE trun_test (id INTEGER)").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO trun_test VALUES (1)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE trun_test (id INTEGER)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO trun_test VALUES (1)").unwrap())
+            .ok();
 
         // Truncate table (if supported)
         let result = engine.execute(crate::parser::parse("DELETE FROM trun_test").unwrap());
@@ -1285,18 +1413,42 @@ mod tests {
         let mut engine = ExecutionEngine::new();
 
         // Create multiple tables
-        engine.execute(crate::parser::parse("CREATE TABLE t1 (id INTEGER)").unwrap()).ok();
-        engine.execute(crate::parser::parse("CREATE TABLE t2 (id INTEGER)").unwrap()).ok();
-        engine.execute(crate::parser::parse("CREATE TABLE t3 (id INTEGER)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE t1 (id INTEGER)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE t2 (id INTEGER)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE t3 (id INTEGER)").unwrap())
+            .ok();
 
         // Insert into each
-        engine.execute(crate::parser::parse("INSERT INTO t1 VALUES (1)").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO t2 VALUES (2)").unwrap()).ok();
-        engine.execute(crate::parser::parse("INSERT INTO t3 VALUES (3)").unwrap()).ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO t1 VALUES (1)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO t2 VALUES (2)").unwrap())
+            .ok();
+        engine
+            .execute(crate::parser::parse("INSERT INTO t3 VALUES (3)").unwrap())
+            .ok();
 
         // Select from each
-        assert!(engine.execute(crate::parser::parse("SELECT * FROM t1").unwrap()).is_ok());
-        assert!(engine.execute(crate::parser::parse("SELECT * FROM t2").unwrap()).is_ok());
-        assert!(engine.execute(crate::parser::parse("SELECT * FROM t3").unwrap()).is_ok());
+        assert!(
+            engine
+                .execute(crate::parser::parse("SELECT * FROM t1").unwrap())
+                .is_ok()
+        );
+        assert!(
+            engine
+                .execute(crate::parser::parse("SELECT * FROM t2").unwrap())
+                .is_ok()
+        );
+        assert!(
+            engine
+                .execute(crate::parser::parse("SELECT * FROM t3").unwrap())
+                .is_ok()
+        );
     }
 }
