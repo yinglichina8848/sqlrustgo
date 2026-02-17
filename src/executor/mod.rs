@@ -59,12 +59,6 @@ pub struct ExecutionEngine {
     storage: FileStorage,
 }
 
-impl Default for ExecutionEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ExecutionEngine {
     /// Create a new execution engine with file-based storage
     pub fn new() -> Self {
