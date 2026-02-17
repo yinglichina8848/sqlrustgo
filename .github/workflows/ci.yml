@@ -31,6 +31,9 @@ jobs:
       - name: Setup Rust ${{ matrix.rust }}
         run: rustup default ${{ matrix.rust }}
 
+      - name: Install Rust Components
+        run: rustup component add clippy rustfmt
+
       - name: Build
         run: cargo build --all-features
 
