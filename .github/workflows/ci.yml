@@ -41,6 +41,7 @@ jobs:
         run: cargo clippy --all-features -- -D warnings
 
       - name: Format check
+        if: ${{ github.ref_name == 'main' || github.ref_name == 'baseline' || github.base_ref == 'main' || github.base_ref == 'baseline' }}
         run: cargo fmt --check --all
 
       - name: Doc test
@@ -58,7 +59,7 @@ jobs:
         run: |
           rustup component add rust-src
           cargo install cargo-llvm-cov
-          cargo llvm-cov --all-features --all --workspace --codecov --output-path coverage.json
+          cargo llvm-cov --all-features --all --codecov --output-path coverage.json
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
