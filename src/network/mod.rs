@@ -214,7 +214,7 @@ impl HandshakeV10 {
                 | capability::FOUND_ROWS
                 | capability::MULTI_STATEMENTS
                 | capability::MULTI_RESULTS,
-            character_set: 0x21, // utf8mb4_general_ci
+            character_set: 0x21,  // utf8mb4_general_ci
             status_flags: 0x0002, // AUTOCOMMIT
         }
     }
@@ -222,33 +222,33 @@ impl HandshakeV10 {
     /// Serialize to bytes
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
-        
+
         // Protocol version
         buf.put_u8(self.protocol_version);
-        
+
         // Server version (null-terminated string)
         buf.put_slice(self.server_version.as_bytes());
         buf.put_u8(0);
-        
+
         // Connection ID
         buf.put_u32_le(self.connection_id);
-        
+
         // Auth plugin data part 1 (8 bytes)
         buf.put_slice(&self.auth_plugin_data[..8.min(self.auth_plugin_data.len())]);
         buf.put_u8(0); // Null terminator
-        
+
         // Capability flags lower 2 bytes
         buf.put_u16_le(self.capability_flags as u16);
-        
+
         // Character set
         buf.put_u8(self.character_set);
-        
+
         // Status flags
         buf.put_u16_le(self.status_flags);
-        
+
         // Capability flags upper 2 bytes
         buf.put_u16_le((self.capability_flags >> 16) as u16);
-        
+
         // Auth plugin data length (if plugin auth)
         let auth_len = if self.capability_flags & capability::PLUGIN_AUTH != 0 {
             self.auth_plugin_data.len() as u8
@@ -256,18 +256,18 @@ impl HandshakeV10 {
             0
         };
         buf.put_u8(auth_len);
-        
+
         // Reserved (10 bytes)
         buf.put_slice(&[0u8; 10]);
-        
+
         // Auth plugin data part 2 (if any)
         if self.auth_plugin_data.len() > 8 {
             buf.put_slice(&self.auth_plugin_data[8..]);
         }
-        
+
         // Auth plugin name (null-terminated)
         buf.put_slice(b"mysql_native_password\0");
-        
+
         buf.to_vec()
     }
 }
@@ -300,13 +300,13 @@ impl OkPacket {
         buf.put_u64_le(self.last_insert_id);
         buf.put_u16_le(self.status_flags);
         buf.put_u16_le(self.warnings);
-        
+
         if !self.message.is_empty() {
             // Use length-encoded string
             buf.put_u64_le(self.message.len() as u64);
             buf.put_slice(self.message.as_bytes());
         }
-        
+
         buf.to_vec()
     }
 }
@@ -332,17 +332,17 @@ impl ErrPacket {
         let mut buf = BytesMut::new();
         buf.put_u8(0xff); // Error packet header
         buf.put_u16_le(self.error_code);
-        
+
         // SQL state (5 bytes)
         if self.sql_state.len() == 5 {
             buf.put_slice(self.sql_state.as_bytes());
         } else {
             buf.put_slice(b"HY000");
         }
-        
+
         // Error message
         buf.put_slice(self.message.as_bytes());
-        
+
         buf.to_vec()
     }
 }
@@ -356,7 +356,7 @@ pub struct RowData {
 impl RowData {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
-        
+
         for value in &self.values {
             match value {
                 Value::Null => {
@@ -387,7 +387,7 @@ impl RowData {
                 }
             }
         }
-        
+
         buf.to_vec()
     }
 }
@@ -401,7 +401,10 @@ pub struct NetworkHandler {
 impl NetworkHandler {
     /// Create a new network handler
     pub fn new(stream: TcpStream, connection_id: u32) -> Self {
-        Self { stream, connection_id }
+        Self {
+            stream,
+            connection_id,
+        }
     }
 
     /// Handle a client connection
@@ -414,7 +417,7 @@ impl NetworkHandler {
             match self.read_packet() {
                 Ok(Some((_sequence, payload))) => {
                     let command = MySqlCommand::from(payload[0]);
-                    
+
                     match command {
                         MySqlCommand::Quit => {
                             break;
@@ -450,34 +453,37 @@ impl NetworkHandler {
             sequence: 0,
             payload: greeting.to_bytes(),
         };
-        
+
         self.stream
             .write_all(&packet.serialize())
             .map_err(|e| SqlError::IoError(e.to_string()))?;
-        
+
         Ok(())
     }
 
     /// Read a MySQL packet
     fn read_packet(&mut self) -> Result<Option<(u8, Vec<u8>)>, SqlError> {
         let mut header = [0u8; PACKET_HEADER_SIZE];
-        
+
         match self.stream.read(&mut header) {
             Ok(0) => Ok(None), // Connection closed
-            Ok(n) if n < PACKET_HEADER_SIZE => {
-                Err(SqlError::ProtocolError("Incomplete packet header".to_string()))
-            }
+            Ok(n) if n < PACKET_HEADER_SIZE => Err(SqlError::ProtocolError(
+                "Incomplete packet header".to_string(),
+            )),
             Ok(_) => {
-                let payload_length = u32::from_le_bytes([header[0], header[1], header[2], 0]) as usize;
+                let payload_length =
+                    u32::from_le_bytes([header[0], header[1], header[2], 0]) as usize;
                 let sequence = header[3];
-                
+
                 let mut payload = vec![0u8; payload_length];
                 let mut remaining = payload_length;
                 let mut offset = 0;
-                
+
                 while remaining > 0 {
                     match self.stream.read(&mut payload[offset..]) {
-                        Ok(0) => return Err(SqlError::ProtocolError("Connection closed".to_string())),
+                        Ok(0) => {
+                            return Err(SqlError::ProtocolError("Connection closed".to_string()));
+                        }
                         Ok(n) => {
                             remaining -= n;
                             offset += n;
@@ -485,7 +491,7 @@ impl NetworkHandler {
                         Err(e) => return Err(SqlError::IoError(e.to_string())),
                     }
                 }
-                
+
                 Ok(Some((sequence, payload)))
             }
             Err(e) => Err(SqlError::IoError(e.to_string())),
@@ -497,18 +503,19 @@ impl NetworkHandler {
         // For now, return a simple OK response
         // Full query execution would integrate with the executor
         let trimmed = query.trim();
-        
+
         if trimmed.eq_ignore_ascii_case("SELECT VERSION()") {
             let response = OkPacket::new(0, "1.0.0-SQLRustGo");
             self.send_packet(response.to_bytes().as_slice())?;
-        } else if trimmed.eq_ignore_ascii_case("SELECT 1") || 
-                  trimmed.eq_ignore_ascii_case("SELECT 1 AS a") {
+        } else if trimmed.eq_ignore_ascii_case("SELECT 1")
+            || trimmed.eq_ignore_ascii_case("SELECT 1 AS a")
+        {
             // Return a simple result set
             self.send_select_response()?;
         } else {
             self.send_ok("Query executed", 0)?;
         }
-        
+
         Ok(())
     }
 
@@ -531,11 +538,11 @@ impl NetworkHandler {
         buf.put_u32_le(data.len() as u32);
         buf.put_u8(0); // sequence
         buf.put_slice(data);
-        
+
         self.stream
             .write_all(&buf)
             .map_err(|e| SqlError::IoError(e.to_string()))?;
-        
+
         Ok(())
     }
 
@@ -545,49 +552,49 @@ impl NetworkHandler {
         let mut buf = BytesMut::new();
         buf.put_u8(0x01); // 1 column
         self.send_packet(&buf)?;
-        
+
         // Column definition: name="1", type=INT
         let mut col_buf = BytesMut::new();
         col_buf.put_slice(b"def\0"); // catalog
         col_buf.put_slice(b"test\0"); // schema
-        col_buf.put_slice(b"\0");   // table alias
+        col_buf.put_slice(b"\0"); // table alias
         col_buf.put_slice(b"test\0"); // table
-        col_buf.put_slice(b"\0");   // column alias
-        col_buf.put_slice(b"1\0");  // column
-        col_buf.put_u8(0x0c);       // charset
-        col_buf.put_u32_le(11);     // column length
-        col_buf.put_u8(0x03);       // type (MYSQL_TYPE_LONG)
-        col_buf.put_u8(0x00);       // flags
-        col_buf.put_u8(0x00);       // decimals
+        col_buf.put_slice(b"\0"); // column alias
+        col_buf.put_slice(b"1\0"); // column
+        col_buf.put_u8(0x0c); // charset
+        col_buf.put_u32_le(11); // column length
+        col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG)
+        col_buf.put_u8(0x00); // flags
+        col_buf.put_u8(0x00); // decimals
         col_buf.put_u16_le(0x0000); // default
-        
+
         self.send_packet(&col_buf)?;
-        
+
         // EOF packet
         let mut eof_buf = BytesMut::new();
         eof_buf.put_u8(0xfe);
         eof_buf.put_u16_le(0x0000); // warnings
         eof_buf.put_u16_le(0x0000); // status flags
         self.send_packet(&eof_buf)?;
-        
+
         // Row data
         let mut row_buf = BytesMut::new();
         row_buf.put_u64_le(1); // length
         row_buf.put_slice(b"1"); // value
         self.send_packet(&row_buf)?;
-        
+
         // EOF packet (final)
         self.send_packet(&eof_buf)?;
-        
+
         Ok(())
     }
 }
 
 /// Start the server (synchronous version)
 pub fn start_server_sync(addr: &str) -> Result<(), SqlError> {
-    let listener = TcpListener::bind(addr)
-        .map_err(|e| SqlError::IoError(format!("Failed to bind: {}", e)))?;
-    
+    let listener =
+        TcpListener::bind(addr).map_err(|e| SqlError::IoError(format!("Failed to bind: {}", e)))?;
+
     println!("SQLRustGo Server listening on {}", addr);
     println!("MySQL protocol compatible");
 
@@ -598,14 +605,14 @@ pub fn start_server_sync(addr: &str) -> Result<(), SqlError> {
             Ok(stream) => {
                 let conn_id = connection_id;
                 connection_id += 1;
-                
+
                 println!("New connection #{}", conn_id);
-                
+
                 let mut handler = NetworkHandler::new(stream, conn_id);
                 if let Err(e) = handler.handle() {
                     eprintln!("Client #{} error: {}", conn_id, e);
                 }
-                
+
                 println!("Connection #{} closed", conn_id);
             }
             Err(e) => {
@@ -625,24 +632,29 @@ pub fn connect(addr: &str) -> Result<TcpStream, SqlError> {
 /// Simple client query execution
 pub fn execute_query_on_server(addr: &str, query: &str) -> Result<String, SqlError> {
     let mut stream = connect(addr)?;
-    
+
     // Read greeting (skip for now, just read until we get a response)
     let mut buf = [0u8; 1024];
-    let _ = stream.read(&mut buf).map_err(|e| SqlError::IoError(e.to_string()))?;
-    
+    let _ = stream
+        .read(&mut buf)
+        .map_err(|e| SqlError::IoError(e.to_string()))?;
+
     // Send query as MySQL packet
     let mut packet = BytesMut::new();
     packet.put_u32_le((query.len() + 1) as u32);
     packet.put_u8(0x03); // Query command
     packet.put_slice(query.as_bytes());
-    
-    stream.write_all(&packet)
+
+    stream
+        .write_all(&packet)
         .map_err(|e| SqlError::IoError(e.to_string()))?;
-    
+
     // Read response
-    let n = stream.read(&mut buf).map_err(|e| SqlError::IoError(e.to_string()))?;
+    let n = stream
+        .read(&mut buf)
+        .map_err(|e| SqlError::IoError(e.to_string()))?;
     let response = String::from_utf8_lossy(&buf[..n]).to_string();
-    
+
     Ok(response)
 }
 
@@ -751,20 +763,14 @@ mod tests {
 
     #[test]
     fn test_row_data_new() {
-        let values = vec![
-            Value::Integer(1),
-            Value::Text("test".to_string()),
-        ];
+        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
         let row = RowData { values };
         assert_eq!(row.values.len(), 2);
     }
 
     #[test]
     fn test_row_data_serialize() {
-        let values = vec![
-            Value::Integer(1),
-            Value::Text("test".to_string()),
-        ];
+        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
         let row = RowData { values };
         let bytes = row.to_bytes();
         assert!(!bytes.is_empty());
@@ -1084,7 +1090,10 @@ mod tests {
     fn test_mysql_packet_parse_and_serialize() {
         // Create a packet with payload
         let payload = vec![0x01, 0x02, 0x03];
-        let packet = MySqlPacket { sequence: 1, payload: payload.clone() };
+        let packet = MySqlPacket {
+            sequence: 1,
+            payload: payload.clone(),
+        };
 
         // Serialize
         let bytes = packet.serialize();
@@ -1466,7 +1475,8 @@ mod tests {
     #[test]
     fn test_err_packet_with_long_message() {
         // Test ErrPacket with a very long message
-        let long_msg = "Error message that is quite long and exceeds typical buffer sizes".to_string();
+        let long_msg =
+            "Error message that is quite long and exceeds typical buffer sizes".to_string();
         let packet = ErrPacket::new(1234, &long_msg);
         let bytes = packet.to_bytes();
         assert!(bytes.len() > long_msg.len());
@@ -1479,5 +1489,293 @@ mod tests {
         let packet = MySqlPacket::parse(&data).unwrap();
         let bytes = packet.serialize();
         assert_eq!(bytes.len(), 7); // 4 header + 3 payload
+    }
+
+    // ==================== Additional Coverage Tests ====================
+
+    #[test]
+    fn test_handshake_default_values() {
+        let handshake = HandshakeV10::new(42);
+        assert_eq!(handshake.protocol_version, 0x0a);
+        assert_eq!(handshake.connection_id, 42);
+        assert_eq!(handshake.server_version, "1.0.0-SQLRustGo");
+        assert!(!handshake.auth_plugin_data.is_empty());
+    }
+
+    #[test]
+    fn test_handshake_with_custom_capabilities() {
+        use capability::*;
+        let mut handshake = HandshakeV10::new(1);
+        handshake.capability_flags = LONG_PASSWORD | FOUND_ROWS | PROTOCOL_41;
+        let bytes = handshake.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_ok_packet_with_affected_rows() {
+        let packet = OkPacket::new(100, "Updated 100 rows");
+        assert_eq!(packet.affected_rows, 100);
+        let bytes = packet.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_ok_packet_zero_affected_rows() {
+        let packet = OkPacket::new(0, "No rows affected");
+        assert_eq!(packet.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_err_packet_default_sql_state() {
+        let packet = ErrPacket::new(1064, "Syntax error");
+        // Should have default SQL state "HY000"
+        assert_eq!(packet.sql_state.len(), 5);
+    }
+
+    #[test]
+    fn test_err_packet_with_custom_code() {
+        let packet = ErrPacket::new(2000, "Custom error");
+        assert_eq!(packet.error_code, 2000);
+    }
+
+    #[test]
+    fn test_err_packet_empty_message() {
+        let packet = ErrPacket::new(0, "");
+        let bytes = packet.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_row_data_mixed_types() {
+        let values = vec![
+            Value::Integer(1),
+            Value::Text("hello".to_string()),
+            Value::Float(3.14),
+            Value::Boolean(true),
+            Value::Null,
+        ];
+        let row = RowData { values };
+        let bytes = row.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_row_data_all_nulls() {
+        let values = vec![Value::Null, Value::Null, Value::Null];
+        let row = RowData { values };
+        let bytes = row.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_row_data_large_integer() {
+        let values = vec![Value::Integer(9999999999i64)];
+        let row = RowData { values };
+        let bytes = row.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_row_data_negative_float() {
+        let values = vec![Value::Float(-273.15)];
+        let row = RowData { values };
+        let bytes = row.to_bytes();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_mysql_command_sleep_variant() {
+        let cmd = MySqlCommand::Sleep;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Sleep"));
+    }
+
+    #[test]
+    fn test_mysql_command_delayed_insert() {
+        let cmd = MySqlCommand::DelayedInsert;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("DelayedInsert"));
+    }
+
+    #[test]
+    fn test_mysql_command_change_user() {
+        let cmd = MySqlCommand::ChangeUser;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("ChangeUser"));
+    }
+
+    #[test]
+    fn test_mysql_command_binlog_dump() {
+        let cmd = MySqlCommand::BinlogDump;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("BinlogDump"));
+    }
+
+    #[test]
+    fn test_mysql_command_table_dump() {
+        let cmd = MySqlCommand::TableDump;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("TableDump"));
+    }
+
+    #[test]
+    fn test_mysql_command_connect_out() {
+        let cmd = MySqlCommand::ConnectOut;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("ConnectOut"));
+    }
+
+    #[test]
+    fn test_mysql_command_register_slave() {
+        let cmd = MySqlCommand::RegisterSlave;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("RegisterSlave"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_prepare() {
+        let cmd = MySqlCommand::StmtPrepare;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtPrepare"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_execute() {
+        let cmd = MySqlCommand::StmtExecute;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtExecute"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_close() {
+        let cmd = MySqlCommand::StmtClose;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtClose"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_send_long_data() {
+        let cmd = MySqlCommand::StmtSendLongData;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtSendLongData"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_reset() {
+        let cmd = MySqlCommand::StmtReset;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtReset"));
+    }
+
+    #[test]
+    fn test_mysql_command_set_option() {
+        let cmd = MySqlCommand::SetOption;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("SetOption"));
+    }
+
+    #[test]
+    fn test_mysql_command_stmt_fetch() {
+        let cmd = MySqlCommand::StmtFetch;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("StmtFetch"));
+    }
+
+    #[test]
+    fn test_mysql_command_daemon() {
+        let cmd = MySqlCommand::Daemon;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Daemon"));
+    }
+
+    #[test]
+    fn test_mysql_command_binlog_dump_gtid() {
+        let cmd = MySqlCommand::BinlogDumpGtid;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("BinlogDumpGtid"));
+    }
+
+    #[test]
+    fn test_mysql_command_reset_connection() {
+        let cmd = MySqlCommand::ResetConnection;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("ResetConnection"));
+    }
+
+    #[test]
+    fn test_mysql_command_field_list() {
+        let cmd = MySqlCommand::FieldList;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("FieldList"));
+    }
+
+    #[test]
+    fn test_mysql_command_refresh() {
+        let cmd = MySqlCommand::Refresh;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Refresh"));
+    }
+
+    #[test]
+    fn test_mysql_command_shutdown() {
+        let cmd = MySqlCommand::Shutdown;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Shutdown"));
+    }
+
+    #[test]
+    fn test_mysql_command_statistics() {
+        let cmd = MySqlCommand::Statistics;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Statistics"));
+    }
+
+    #[test]
+    fn test_mysql_command_process_info() {
+        let cmd = MySqlCommand::ProcessInfo;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("ProcessInfo"));
+    }
+
+    #[test]
+    fn test_mysql_command_process_kill() {
+        let cmd = MySqlCommand::ProcessKill;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("ProcessKill"));
+    }
+
+    #[test]
+    fn test_mysql_command_debug() {
+        let cmd = MySqlCommand::Debug;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Debug"));
+    }
+
+    #[test]
+    fn test_mysql_command_time() {
+        let cmd = MySqlCommand::Time;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("Time"));
+    }
+
+    #[test]
+    fn test_mysql_command_init_db() {
+        let cmd = MySqlCommand::InitDb;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("InitDb"));
+    }
+
+    #[test]
+    fn test_mysql_command_create_db() {
+        let cmd = MySqlCommand::CreateDb;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("CreateDb"));
+    }
+
+    #[test]
+    fn test_mysql_command_drop_db() {
+        let cmd = MySqlCommand::DropDb;
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("DropDb"));
     }
 }
