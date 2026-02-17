@@ -47,7 +47,8 @@ impl FileStorage {
 
     /// Get the path for an index file
     fn index_path(&self, table_name: &str, column_name: &str) -> PathBuf {
-        self.data_dir.join(format!("{}_idx_{}.json", table_name, column_name))
+        self.data_dir
+            .join(format!("{}_idx_{}.json", table_name, column_name))
     }
 
     /// Load all tables from the data directory
@@ -62,9 +63,10 @@ impl FileStorage {
 
             if path.extension().and_then(|s| s.to_str()) == Some("json")
                 && let Some(table_name) = path.file_stem().and_then(|s| s.to_str())
-                    && let Ok(table_data) = self.load_table(table_name) {
-                        self.tables.insert(table_name.to_string(), table_data);
-                    }
+                && let Ok(table_data) = self.load_table(table_name)
+            {
+                self.tables.insert(table_name.to_string(), table_data);
+            }
         }
 
         Ok(())
@@ -82,18 +84,19 @@ impl FileStorage {
 
             // Look for index files: table_idx_column.json
             if let Some(file_name) = path.file_name().and_then(|s| s.to_str())
-                && file_name.ends_with(".json") && file_name.contains("_idx_") {
-                    // Parse table_idx_column.json
-                    if let Some((table_name, column_name)) = file_name
-                        .strip_suffix(".json")
-                        .and_then(|s| s.split_once("_idx_"))
-                        && let Ok(index) = self.load_index(table_name, column_name) {
-                            self.indexes.insert(
-                                (table_name.to_string(), column_name.to_string()),
-                                index,
-                            );
-                        }
+                && file_name.ends_with(".json")
+                && file_name.contains("_idx_")
+            {
+                // Parse table_idx_column.json
+                if let Some((table_name, column_name)) = file_name
+                    .strip_suffix(".json")
+                    .and_then(|s| s.split_once("_idx_"))
+                    && let Ok(index) = self.load_index(table_name, column_name)
+                {
+                    self.indexes
+                        .insert((table_name.to_string(), column_name.to_string()), index);
                 }
+            }
         }
 
         Ok(())
@@ -111,7 +114,12 @@ impl FileStorage {
     }
 
     /// Save an index to disk
-    fn save_index(&self, table_name: &str, column_name: &str, index: &BPlusTree) -> std::io::Result<()> {
+    fn save_index(
+        &self,
+        table_name: &str,
+        column_name: &str,
+        index: &BPlusTree,
+    ) -> std::io::Result<()> {
         let path = self.index_path(table_name, column_name);
         let file = File::create(&path)?;
         let mut writer = BufWriter::new(file);
@@ -222,12 +230,14 @@ impl FileStorage {
 
     /// Check if an index exists for a table column
     pub fn has_index(&self, table_name: &str, column_name: &str) -> bool {
-        self.indexes.contains_key(&(table_name.to_string(), column_name.to_string()))
+        self.indexes
+            .contains_key(&(table_name.to_string(), column_name.to_string()))
     }
 
     /// Get an index for a table column (read-only)
     pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<&BPlusTree> {
-        self.indexes.get(&(table_name.to_string(), column_name.to_string()))
+        self.indexes
+            .get(&(table_name.to_string(), column_name.to_string()))
     }
 
     /// Create or update an index for a table column from existing data
@@ -246,19 +256,18 @@ impl FileStorage {
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
             if let Some(value) = row.get(column_index)
-                && let Value::Integer(key) = value {
-                    index.insert(*key, row_id as u32);
-                }
+                && let Value::Integer(key) = value
+            {
+                index.insert(*key, row_id as u32);
+            }
         }
 
         // Save to disk
         self.save_index(table_name, column_name, &index)?;
 
         // Store in memory
-        self.indexes.insert(
-            (table_name.to_string(), column_name.to_string()),
-            index,
-        );
+        self.indexes
+            .insert((table_name.to_string(), column_name.to_string()), index);
 
         Ok(())
     }
@@ -372,12 +381,12 @@ mod tests {
                         },
                     ],
                 },
-                rows: vec![
-                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
-                ],
+                rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
             };
 
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
         }
 
         // Load from disk
@@ -409,7 +418,9 @@ mod tests {
         };
 
         let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
-        storage.insert_table("test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("test".to_string(), table_data)
+            .unwrap();
 
         // Test contains_table
         assert!(storage.contains_table("test"));
@@ -445,7 +456,9 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("persist_test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("persist_test".to_string(), table_data)
+            .unwrap();
 
         // Test persist_table
         storage.persist_table("persist_test").unwrap();
@@ -478,7 +491,9 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("mutable".to_string(), table_data).unwrap();
+        storage
+            .insert_table("mutable".to_string(), table_data)
+            .unwrap();
 
         // Test get_table_mut
         {
@@ -521,7 +536,9 @@ mod tests {
                 vec![Value::Integer(2), Value::Integer(200)],
             ],
         };
-        storage.insert_table("idx_test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("idx_test".to_string(), table_data)
+            .unwrap();
 
         // Create index on id column (column_index = 0)
         storage.create_index("idx_test", "id", 0).unwrap();
@@ -570,12 +587,18 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("search_test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("search_test".to_string(), table_data)
+            .unwrap();
         storage.create_index("search_test", "id", 0).unwrap();
 
         // Insert with index
-        storage.insert_with_index("search_test", "id", 10, 0).unwrap();
-        storage.insert_with_index("search_test", "id", 20, 1).unwrap();
+        storage
+            .insert_with_index("search_test", "id", 10, 0)
+            .unwrap();
+        storage
+            .insert_with_index("search_test", "id", 20, 1)
+            .unwrap();
 
         // Search
         let result = storage.search_index("search_test", "id", 10);
@@ -608,7 +631,9 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("get_idx_test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("get_idx_test".to_string(), table_data)
+            .unwrap();
         storage.create_index("get_idx_test", "id", 0).unwrap();
 
         // Test get_index
@@ -639,11 +664,11 @@ mod tests {
                     nullable: false,
                 }],
             },
-            rows: vec![
-                vec![Value::Text("Alice".to_string())],
-            ],
+            rows: vec![vec![Value::Text("Alice".to_string())]],
         };
-        storage.insert_table("text_table".to_string(), table_data).unwrap();
+        storage
+            .insert_table("text_table".to_string(), table_data)
+            .unwrap();
 
         // Create index - this will work but won't have any entries
         storage.create_index("text_table", "name", 0).unwrap();
@@ -706,7 +731,9 @@ mod tests {
             },
             rows: vec![],
         };
-        storage.insert_table("range_test".to_string(), table_data).unwrap();
+        storage
+            .insert_table("range_test".to_string(), table_data)
+            .unwrap();
         storage.create_index("range_test", "id", 0).unwrap();
 
         // Add some data
