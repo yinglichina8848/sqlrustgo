@@ -1,0 +1,27 @@
+{
+  "name": "test_between",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      }
+    ],
+    [
+      {
+        "Integer": 5
+      }
+    ],
+    [
+      {
+        "Integer": 10
+      }
+    ]
+  ]
+}

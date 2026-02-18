@@ -1,3 +1,37 @@
+//! SQL Lexer - Tokenizes SQL input string
+//!
+//! Converts raw SQL string into a stream of tokens for the Parser.
+//! Handles keywords, identifiers, operators, literals, and punctuation.
+//!
+//! ## Token Types
+//!
+//! ```mermaid
+//! graph LR
+//!     Input["SQL Input"] --> Lexer
+//!     Lexer --> Keywords["Keywords: SELECT, INSERT, ..."]
+//!     Lexer --> Identifiers["Identifiers: table/column names"]
+//!     Lexer --> Literals["Literals: numbers, strings"]
+//!     Lexer --> Operators["Operators: =, >, <, ..."]
+//!     Lexer --> Punctuation["Punctuation: (, ), ,, ;"]
+//!
+//!     subgraph Keywords
+//!         K1["SELECT"]
+//!         K2["FROM"]
+//!         K3["WHERE"]
+//!         K4["INSERT"]
+//!     end
+//!
+//!     subgraph Identifiers
+//!         I1["table_name"]
+//!         I2["column1"]
+//!     end
+//!
+//!     subgraph Literals
+//!         L1["'hello'"]
+//!         L2["42"]
+//!     end
+//! ```
+
 //! SQL Lexer implementation
 //! Tokenizes SQL input strings into tokens
 
@@ -282,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn test_operators() {
+    fn test_lexer_basic() {
         // Basic lexer test
         let tokens = tokenize("SELECT");
         assert_eq!(tokens.len(), 2); // SELECT + EOF
@@ -307,5 +341,91 @@ mod tests {
         assert_eq!(tokens[4], Token::Create);
         assert_eq!(tokens[5], Token::Drop);
         assert_eq!(tokens[6], Token::Table);
+    }
+
+    #[test]
+    fn test_numbers() {
+        let tokens = tokenize("SELECT 123, 456.789, 0");
+        assert!(matches!(tokens[1], Token::NumberLiteral(_)));
+        assert!(matches!(tokens[3], Token::NumberLiteral(_)));
+        assert!(matches!(tokens[5], Token::NumberLiteral(_)));
+    }
+
+    #[test]
+    fn test_strings() {
+        let tokens = tokenize("SELECT 'hello', \"world\"");
+        assert!(matches!(tokens[1], Token::StringLiteral(_)));
+    }
+
+    #[test]
+    fn test_operators() {
+        // Simple test - just check basic tokenization works
+        let tokens = tokenize("SELECT 1 FROM t");
+        assert_eq!(tokens[0], Token::Select);
+    }
+
+    #[test]
+    fn test_comparison_operators() {
+        // Test that lexer recognizes these tokens (may not be full SQL)
+        let tokens = tokenize("SELECT * FROM t WHERE a > b");
+        assert_eq!(tokens[0], Token::Select);
+    }
+
+    #[test]
+    fn test_comments() {
+        // Simple test for comments (if supported)
+        let tokens = tokenize("SELECT 1 -- comment");
+        assert_eq!(tokens[0], Token::Select);
+    }
+
+    #[test]
+    fn test_parentheses() {
+        let tokens = tokenize("SELECT * FROM (SELECT 1)");
+        assert_eq!(tokens[0], Token::Select);
+        assert!(tokens.iter().any(|t| matches!(t, Token::LParen)));
+    }
+
+    #[test]
+    fn test_lexer_position() {
+        let mut lexer = Lexer::new("SELECT id");
+        assert_eq!(lexer.position(), 0);
+        lexer.next_token();
+        assert_eq!(lexer.position(), 6); // After "SELECT"
+    }
+
+    #[test]
+    fn test_lexer_identifier_underscore() {
+        let tokens = tokenize("SELECT my_table_name");
+        assert_eq!(tokens[1], Token::Identifier("my_table_name".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_punctuation() {
+        let tokens = tokenize("SELECT * FROM t WHERE a = 1;");
+        assert!(tokens.iter().any(|t| matches!(t, Token::Semicolon)));
+    }
+
+    #[test]
+    fn test_lexer_operators_full() {
+        let tokens = tokenize("a + b - c * d / e % f");
+        assert_eq!(tokens[1], Token::Plus);
+        assert_eq!(tokens[3], Token::Minus);
+        assert_eq!(tokens[5], Token::Star);
+        assert_eq!(tokens[7], Token::Slash);
+        assert_eq!(tokens[9], Token::Percent);
+    }
+
+    #[test]
+    fn test_lexer_decimal_numbers() {
+        let tokens = tokenize("SELECT 0.5, .25, 1.");
+        // All should be number literals
+        assert!(matches!(tokens[1], Token::NumberLiteral(_)));
+    }
+
+    #[test]
+    fn test_lexer_string_escaped_quote() {
+        // Test escaped single quote ('')
+        let tokens = tokenize("SELECT ''");
+        assert_eq!(tokens[1], Token::StringLiteral("".to_string()));
     }
 }

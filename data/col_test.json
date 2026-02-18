@@ -1,0 +1,33 @@
+{
+  "name": "col_test",
+  "columns": [
+    {
+      "name": "a",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "b",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Integer": 10
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Integer": 20
+      }
+    ]
+  ]
+}
