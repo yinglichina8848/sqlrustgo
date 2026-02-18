@@ -1,0 +1,48 @@
+name: "\U0001F4E6 Release Checklist"
+description: 发布检查清单
+title: "[Release] "
+labels: ["release"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 发布版本
+      placeholder: v1.0.0
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 发布阶段
+      options:
+        - alpha
+        - beta
+        - release (RC)
+        - baseline (正式)
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 发布检查项
+      options:
+        - label: 所有测试通过 (cargo test)
+        - label: 编译无警告 (cargo build)
+        - label: Clippy 检查通过
+        - label: 格式化检查通过 (cargo fmt)
+        - label: 所有 blocker bug 已修复
+        - label: 文档已更新
+        - label: CHANGELOG 已更新
+        - label: 版本号已更新
+        - label: Tag 已创建
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 发布说明
+      description: 本次发布的主要变更
+
+  - type: textarea
+    id: issues
+    attributes:
+      label: 关联 Issue
+      description: 本次发布关闭的 Issue 列表
+      placeholder: "Fixes #1, Fixes #2, ..."

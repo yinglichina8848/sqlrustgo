@@ -1,0 +1,51 @@
+name: "\U0001F680 Feature Request"
+description: 新功能提议
+title: "[Feature] "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请描述新功能需求。
+
+  - type: input
+    id: milestone
+    attributes:
+      label: 目标版本
+      placeholder: v1.1.0-alpha
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题背景
+      description: 这个功能解决什么问题？
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 解决方案
+      description: 你希望如何实现？
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - P0 (阻断性)
+        - P1 (高优先级)
+        - P2 (中优先级)
+        - P3 (低优先级)
+
+  - type: dropdown
+    id: branch
+    attributes:
+      label: 目标分支
+      options:
+        - alpha
+        - beta
+        - release

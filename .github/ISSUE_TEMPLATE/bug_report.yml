@@ -1,0 +1,53 @@
+name: "\U0001F41B Bug Report"
+description: 报告问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: v1.0.0-beta
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重程度
+      options:
+        - Blocker (阻断性)
+        - Critical (严重)
+        - Major (主要)
+        - Minor (次要)
+        - Trivial (轻微)
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重现步骤
+      description: 请提供详细的重现步骤
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 请粘贴相关错误日志
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: OS, Rust 版本等
+      value: |
+        - OS: 
+        - Rust: 
+        - Branch:
