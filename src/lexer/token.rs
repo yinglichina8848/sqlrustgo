@@ -3,6 +3,41 @@
 
 use std::fmt;
 
+/// SQL Token types
+///
+/// ## Categories
+///
+/// - **Keywords**: SQL reserved words (SELECT, FROM, WHERE, etc.)
+/// - **Identifiers**: Table/column names
+/// - **Literals**: String, numeric, boolean values
+/// - **Operators**: Comparison and arithmetic operators
+/// - **Punctuation**: Delimiters and separators
+///
+/// ## Token Variants
+///
+/// ### Keywords
+/// Data manipulation: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
+/// Data definition: `CREATE`, `DROP`, `ALTER`, `TABLE`
+/// Transaction control: `BEGIN`, `COMMIT`, `ROLLBACK`
+/// Other: `FROM`, `WHERE`, `INTO`, `VALUES`, `SET`, `ON`, `PRIMARY`, `KEY`
+///
+/// ### Data Types
+/// `INTEGER`, `TEXT`, `FLOAT`, `BOOLEAN`, `BLOB`
+///
+/// ### Operators
+/// Comparison: `=`, `!=`, `>`, `<`, `>=`, `<=`
+/// Logical: `AND`, `OR`, `NOT`
+/// Arithmetic: `+`, `-`, `*`, `/`, `%`
+///
+/// ### Punctuation
+/// `(`, `)`, `,`, `.`, `;`, `:`
+///
+/// ### Literals
+/// `Identifier(String)`, `StringLiteral(String)`, `NumberLiteral(String)`, `BooleanLiteral(bool)`
+///
+/// ### Special
+/// `Eof` - End of file marker
+///
 /// Token type enumeration representing all SQL lexical elements
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {

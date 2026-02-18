@@ -1,0 +1,31 @@
+{
+  "name": "null_test",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "name",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "test"
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      "Null"
+    ]
+  ]
+}
