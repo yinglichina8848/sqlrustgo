@@ -54,63 +54,89 @@ ChatGPT 的建议**信息不全面**，未考虑以下已有内容：
 
 ---
 
-## 二、修正后的版本迁移流程
+## 二、修正后的版本迁移流程（重要修正）
 
 ### 2.1 当前分支状态
 
 ```
 当前分支结构:
-├── main                    # 稳定版本 (保护分支)
-├── baseline                # 基线版本 (保护分支) ← ChatGPT 未考虑
+├── main                    # 正式稳定版本 (保护分支)
+├── baseline                # 当前正式稳定版本 (保护分支)
 ├── feature/v1.0.0-alpha    # Alpha 开发分支 (当前工作分支)
-├── feature/v1.0.0-beta     # Beta 开发分支
+├── feature/v1.0.0-beta     # Beta 验证分支
 └── feature/*               # 各种功能分支
 ```
 
-### 2.2 baseline 分支处理方案
-
-**问题**: baseline 分支应该怎么处理？是否和 alpha 同步？
-
-**回答**: **不应该同步**，原因如下：
+### 2.2 正确的版本推进模型
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     baseline 分支定位                                        │
+│                     正确的版本推进模型（阶段化发布）                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   baseline 是"合并点"，不是"开发分支"                                        │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌──────────┐ │
+│   │   Alpha     │ ──► │    Beta     │ ──► │   Release   │ ──► │ Baseline │ │
+│   │   开发      │     │   验证      │     │    候选     │     │   稳定   │ │
+│   └─────────────┘     └─────────────┘     └─────────────┘     └──────────┘ │
+│         │                   │                   │                  │        │
+│         │                   │                   │                  │        │
+│         ▼                   ▼                   ▼                  ▼        │
+│   功能开发完成        稳定性验证通过      发布候选验证        正式稳定版本  │
+│   门禁审核通过        测试覆盖达标        修复所有bug         可用于生产    │
 │                                                                              │
-│   正确流程:                                                                  │
-│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐                  │
-│   │   Alpha     │ ──► │  baseline   │ ──► │    main     │                  │
-│   │   开发      │     │   验证点    │     │   发布      │                  │
-│   └─────────────┘     └─────────────┘     └─────────────┘                  │
-│         │                   │                                                │
-│         │                   │                                                │
-│         ▼                   ▼                                                │
-│   文档补全+错误修复    门禁检查+评审                                         │
-│                                                                              │
-│   错误做法:                                                                  │
-│   ❌ baseline 和 alpha 同步                                                 │
-│   ❌ 直接在 baseline 上开发                                                 │
-│   ❌ baseline 作为开发分支                                                  │
+│   ⚠️ 重要原则：不要跳级！                                                    │
+│   ├── baseline 只能从 release 合并                                          │
+│   ├── release 只能从 beta 合并                                              │
+│   └── beta 只能从 alpha 合并                                                │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**baseline 分支的正确使用**:
+### 2.3 baseline 分支的正确定位
 
-| 阶段 | 操作 | 说明 |
-|:-----|:-----|:-----|
-| Alpha 完成 | `git checkout baseline && git merge --no-ff feature/v1.0.0-alpha` | Alpha 合并到 baseline |
-| Beta 完成 | `git checkout baseline && git merge --no-ff feature/v1.0.0-beta` | Beta 合并到 baseline |
-| 发布 | `git checkout main && git merge --no-ff baseline` | baseline 合并到 main |
+| 分支 | 含义 | 合并来源 |
+|:-----|:-----|:---------|
+| **baseline** | 当前正式稳定版本 | 只能从 release 合并 |
+| **release** | 发布候选 | 只能从 beta 合并 |
+| **beta** | 稳定性验证 | 只能从 alpha 合并 |
+| **alpha** | 当前功能开发 | 功能分支 |
+
+### 2.4 常见错误提醒
+
+```
+❌ alpha 推到 beta 后立刻合 baseline
+❌ baseline 同时接受 alpha 和 release
+❌ beta 修 bug 不回流 alpha
+
+正确做法：
+✅ alpha → beta 后冻结 alpha
+✅ baseline 只能接 release
+✅ bug 在 beta 修复后应合并回 alpha（如果 alpha 还在开发）
+```
+
+### 2.5 Alpha 冻结后的继续开发
+
+当 alpha 推进到 beta 后，alpha 分支应冻结。下一轮开发：
+
+**方法 A（推荐）**：从 baseline 切新的 alpha
+```bash
+git checkout baseline
+git checkout -b feature/v1.1.0-alpha
+```
+
+**方法 B**：保留 alpha 分支，reset 到 baseline
+```bash
+git checkout feature/v1.0.0-alpha
+git reset --hard baseline
+git push -f origin feature/v1.0.0-alpha
+```
+⚠️ 会改历史，不推荐多人协作时使用
 
 ---
 
-## 三、完整的 Alpha → Beta 迁移步骤
+## 三、正确的 Alpha → Beta → Release → Baseline 迁移步骤
 
-### 3.1 Step 1: 打 Alpha Tag
+### 3.1 Step 1: 打 Alpha Tag 并冻结
 
 ```bash
 # 当前在 feature/v1.0.0-alpha 分支
@@ -135,51 +161,89 @@ Quality:
 - Clippy clean"
 
 git push origin v1.0.0-alpha.1
+
+# ⚠️ alpha 分支冻结，不再添加新功能
 ```
 
-### 3.2 Step 2: 合并 Alpha 到 baseline
+### 3.2 Step 2: Alpha → Beta（当前执行）
+
+```bash
+# 切换到 beta 分支
+git checkout feature/v1.0.0-beta
+
+# 合并 alpha（带 --no-ff 保留历史）
+git merge --no-ff feature/v1.0.0-alpha
+
+# 推送 beta
+git push origin feature/v1.0.0-beta
+
+# 打 beta tag（开始 beta 阶段）
+git tag -a v1.0.0-beta.0 -m "Beta phase start v1.0.0-beta.0"
+git push origin v1.0.0-beta.0
+```
+
+### 3.3 Step 3: Beta 验证通过 → Release（Beta 完成后）
+
+```bash
+# 切换到 release 分支（如果不存在需创建）
+git checkout release/v1.0.0
+# 或 git checkout -b release/v1.0.0
+
+# 合并 beta
+git merge --no-ff feature/v1.0.0-beta
+
+# 推送 release
+git push origin release/v1.0.0
+
+# 打 release tag
+git tag -a v1.0.0-rc.1 -m "Release Candidate v1.0.0-rc.1"
+git push origin v1.0.0-rc.1
+```
+
+### 3.4 Step 4: Release 验证通过 → Baseline（正式发布）
 
 ```bash
 # 切换到 baseline 分支
 git checkout baseline
 
-# 合并 alpha（带 --no-ff 保留历史）
-git merge --no-ff feature/v1.0.0-alpha
+# 合并 release（只能从 release 合并！）
+git merge --no-ff release/v1.0.0
 
 # 推送 baseline
 git push origin baseline
+
+# 打正式版本 tag
+git tag -a v1.0.0 -m "Official Release v1.0.0"
+git push origin v1.0.0
 ```
 
-### 3.3 Step 3: 初始化 Beta 分支
+### 3.5 流程图总结
 
-```bash
-# 从 baseline 创建/更新 beta 分支
-git checkout feature/v1.0.0-beta
-
-# 如果分支已存在，合并 baseline 的更新
-git merge --no-ff baseline
-
-# 推送 beta
-git push origin feature/v1.0.0-beta
 ```
-
-### 3.4 Step 4: 创建 Beta Tag
-
-```bash
-# Beta 开发完成后
-git tag -a v1.0.0-beta.0 -m "Beta release v1.0.0-beta.0
-
-New Features:
-- Aggregate functions (COUNT/SUM/AVG/MIN/MAX)
-- Improved error handling
-- Client/Server separation
-
-Quality:
-- Coverage: 85%+
-- Benchmark tests
-- CI/CD pipeline"
-
-git push origin v1.0.0-beta.0
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        版本推进流程                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Step 1: Alpha 完成                                                        │
+│   ├── 打 tag: v1.0.0-alpha.1                                                │
+│   └── 冻结 alpha 分支                                                        │
+│                                                                              │
+│   Step 2: Alpha → Beta (当前)                                               │
+│   ├── git checkout feature/v1.0.0-beta                                      │
+│   ├── git merge --no-ff feature/v1.0.0-alpha                                │
+│   └── 打 tag: v1.0.0-beta.0                                                 │
+│                                                                              │
+│   Step 3: Beta → Release (Beta 验证通过后)                                  │
+│   ├── git checkout release/v1.0.0                                           │
+│   ├── git merge --no-ff feature/v1.0.0-beta                                 │
+│   └── 打 tag: v1.0.0-rc.1                                                   │
+│                                                                              │
+│   Step 4: Release → Baseline (正式发布)                                      │
+│   ├── git checkout baseline                                                 │
+│   ├── git merge --no-ff release/v1.0.0                                      │
+│   └── 打 tag: v1.0.0                                                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
