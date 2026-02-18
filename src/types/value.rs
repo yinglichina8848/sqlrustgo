@@ -30,8 +30,8 @@ impl Value {
         }
     }
 
-    /// Convert Value to String representation
-    pub fn to_string(&self) -> String {
+    /// Convert Value to SQL String representation
+    pub fn to_sql_string(&self) -> String {
         match self {
             Value::Null => "NULL".to_string(),
             Value::Boolean(b) => b.to_string(),
@@ -57,7 +57,7 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.to_sql_string())
     }
 }
 
@@ -67,11 +67,11 @@ mod tests {
 
     #[test]
     fn test_value_to_string() {
-        assert_eq!(Value::Null.to_string(), "NULL");
-        assert_eq!(Value::Boolean(true).to_string(), "true");
-        assert_eq!(Value::Integer(42).to_string(), "42");
-        assert_eq!(Value::Float(3.14).to_string(), "3.14");
-        assert_eq!(Value::Text("hello".to_string()).to_string(), "hello");
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Integer(42).to_sql_string(), "42");
+        assert_eq!(Value::Float(3.14).to_sql_string(), "3.14");
+        assert_eq!(Value::Text("hello".to_string()).to_sql_string(), "hello");
     }
 
     #[test]

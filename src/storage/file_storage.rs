@@ -47,7 +47,8 @@ impl FileStorage {
 
     /// Get the path for an index file
     fn index_path(&self, table_name: &str, column_name: &str) -> PathBuf {
-        self.data_dir.join(format!("{}_idx_{}.json", table_name, column_name))
+        self.data_dir
+            .join(format!("{}_idx_{}.json", table_name, column_name))
     }
 
     /// Load all tables from the data directory
@@ -91,10 +92,8 @@ impl FileStorage {
                         .and_then(|s| s.split_once("_idx_"))
                     {
                         if let Ok(index) = self.load_index(table_name, column_name) {
-                            self.indexes.insert(
-                                (table_name.to_string(), column_name.to_string()),
-                                index,
-                            );
+                            self.indexes
+                                .insert((table_name.to_string(), column_name.to_string()), index);
                         }
                     }
                 }
@@ -116,7 +115,12 @@ impl FileStorage {
     }
 
     /// Save an index to disk
-    fn save_index(&self, table_name: &str, column_name: &str, index: &BPlusTree) -> std::io::Result<()> {
+    fn save_index(
+        &self,
+        table_name: &str,
+        column_name: &str,
+        index: &BPlusTree,
+    ) -> std::io::Result<()> {
         let path = self.index_path(table_name, column_name);
         let file = File::create(&path)?;
         let mut writer = BufWriter::new(file);
@@ -227,12 +231,14 @@ impl FileStorage {
 
     /// Check if an index exists for a table column
     pub fn has_index(&self, table_name: &str, column_name: &str) -> bool {
-        self.indexes.contains_key(&(table_name.to_string(), column_name.to_string()))
+        self.indexes
+            .contains_key(&(table_name.to_string(), column_name.to_string()))
     }
 
     /// Get an index for a table column (read-only)
     pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<&BPlusTree> {
-        self.indexes.get(&(table_name.to_string(), column_name.to_string()))
+        self.indexes
+            .get(&(table_name.to_string(), column_name.to_string()))
     }
 
     /// Create or update an index for a table column from existing data
@@ -261,10 +267,8 @@ impl FileStorage {
         self.save_index(table_name, column_name, &index)?;
 
         // Store in memory
-        self.indexes.insert(
-            (table_name.to_string(), column_name.to_string()),
-            index,
-        );
+        self.indexes
+            .insert((table_name.to_string(), column_name.to_string()), index);
 
         Ok(())
     }
@@ -378,12 +382,12 @@ mod tests {
                         },
                     ],
                 },
-                rows: vec![
-                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
-                ],
+                rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
             };
 
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
         }
 
         // Load from disk
