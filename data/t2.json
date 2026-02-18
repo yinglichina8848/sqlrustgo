@@ -7,11 +7,5 @@
       "nullable": true
     }
   ],
-  "rows": [
-    [
-      {
-        "Integer": 2
-      }
-    ]
-  ]
+  "rows": []
 }
