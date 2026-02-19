@@ -13,6 +13,7 @@ docs/v2.0/
 ├── README.md                      # 本文档
 ├── WHITEPAPER.md                  # 2.0 白皮书
 ├── SQLRUSTGO_2_0_ROADMAP.md       # 2.0 总体路线图
+├── TRAE-2.0对话记录.md            # 2.0 规划对话记录
 │
 ├── 成熟度评估/
 │   ├── MATURITY_MODEL.md          # L0-L4 成熟度模型
