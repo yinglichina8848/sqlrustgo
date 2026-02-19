@@ -119,6 +119,8 @@ SELECT name, age FROM users WHERE age > 25;
 
 ### 4.4 聚合函数
 
+> **注意**: 聚合函数功能需要 PR #32 合并后才能使用。
+
 ```sql
 SELECT COUNT(*) FROM users;
 SELECT COUNT(id) FROM users;
