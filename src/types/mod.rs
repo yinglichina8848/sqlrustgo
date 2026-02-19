@@ -19,9 +19,16 @@ pub fn parse_sql_literal(s: &str) -> Value {
         "TRUE" => Value::Boolean(true),
         "FALSE" => Value::Boolean(false),
         _ if s.starts_with('\'') && s.ends_with('\'') => Value::Text(s[1..s.len() - 1].to_string()),
-        _ if s.parse::<i64>().is_ok() => Value::Integer(s.parse().unwrap()), // Safe: is_ok() checked
-        _ if s.parse::<f64>().is_ok() => Value::Float(s.parse().unwrap()), // Safe: is_ok() checked
-        _ => Value::Text(s.to_string()),
+        _ => {
+            // Try parsing as integer or float, fallback to text
+            if let Ok(v) = s.parse::<i64>() {
+                Value::Integer(v)
+            } else if let Ok(v) = s.parse::<f64>() {
+                Value::Float(v)
+            } else {
+                Value::Text(s.to_string())
+            }
+        }
     }
 }
 
