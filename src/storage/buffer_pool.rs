@@ -49,25 +49,25 @@ impl BufferPool {
 
     /// Get the number of pages in pool
     pub fn len(&self) -> usize {
-        let pages = self.pages.lock().unwrap();
+        let pages = self.pages.lock().expect("Failed to acquire pages lock");
         pages.len()
     }
 
     /// Check if pool is empty
     pub fn is_empty(&self) -> bool {
-        let pages = self.pages.lock().unwrap();
+        let pages = self.pages.lock().expect("Failed to acquire pages lock");
         pages.is_empty()
     }
 
     /// Get a page
     pub fn get(&self, page_id: u32) -> Option<Arc<Page>> {
-        let pages = self.pages.lock().unwrap();
+        let pages = self.pages.lock().expect("Failed to acquire pages lock");
         pages.get(&page_id).cloned()
     }
 
     /// Insert a page
     pub fn insert(&self, page: Arc<Page>) {
-        let mut pages = self.pages.lock().unwrap();
+        let mut pages = self.pages.lock().expect("Failed to acquire pages lock");
         if pages.len() >= self.capacity {
             pages.remove(&0); // Simple eviction
         }
@@ -83,13 +83,13 @@ impl BufferPool {
 
     /// Remove a page
     pub fn remove(&self, page_id: u32) -> Option<Arc<Page>> {
-        let mut pages = self.pages.lock().unwrap();
+        let mut pages = self.pages.lock().expect("Failed to acquire pages lock");
         pages.remove(&page_id)
     }
 
     /// Clear all pages
     pub fn clear(&self) {
-        let mut pages = self.pages.lock().unwrap();
+        let mut pages = self.pages.lock().expect("Failed to acquire pages lock");
         pages.clear();
     }
 }
