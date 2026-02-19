@@ -377,7 +377,7 @@ impl NetworkHandler {
         // Read and handle packets
         loop {
             match self.read_packet() {
-                Ok(Some((sequence, payload))) => {
+                Ok(Some((_sequence, payload))) => {
                     let command = MySqlCommand::from(payload[0]);
 
                     match command {
