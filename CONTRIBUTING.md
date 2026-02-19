@@ -1,197 +1,153 @@
-# 贡献指南
+# Contributing Guide
 
-感谢你对 SQLRustGo 项目的兴趣！
+感谢你对本项目的贡献！
 
-## 一、PR 命名规范（强约束版）
+本项目是一个数据库内核级 Rust 工程。为了保证稳定性和可维护性，请遵循以下规范。
 
-### 1. 标准格式
+---
 
-```
-<type>(<scope>): <summary>
-```
+## 1. 分支策略
 
-### 2. 示例
+主分支：
 
-```
-feat(auth): implement basic authentication
-fix(executor): resolve unwrap panic in pipeline
-refactor(network): replace unwrap with proper error handling
-perf(parser): optimize token scanning
-test(parser): increase coverage to 85%
-chore(ci): update workflow for coverage report
-docs(readme): update installation instructions
-```
+- `main` → 生产版本
+- `feature/v1.0.0-beta` → 当前开发主干
 
-### 3. type 规范（必须限制）
+开发流程：
 
-| type | 含义 | 是否进入 Release Note |
-|------|------|----------------------|
-| feat | 新功能 | ✅ |
-| fix | Bug 修复 | ✅ |
-| perf | 性能优化 | ✅ |
-| refactor | 结构重构 | ⚠️ 可选 |
-| test | 测试改进 | ❌ |
-| chore | 构建/CI | ❌ |
-| docs | 文档 | ❌ |
+1. 从 `feature/v1.0.0-beta` 创建功能分支
+2. 提交 PR 到 `feature/v1.0.0-beta`
+3. PR 合并后删除功能分支
 
-### 4. scope 规范（必须来自模块）
+禁止直接 push 到主分支。
 
-只允许以下 scope：
+---
 
-- `parser` - 词法/语法分析
-- `executor` - 执行引擎
-- `planner` - 查询规划
-- `network` - 网络协议
-- `auth` - 认证授权
-- `storage` - 存储引擎
-- `optimizer` - 优化器
-- `ci` - CI/CD
-- `docs` - 文档
+## 2. PR 命名规范（必须遵守）
 
-### 5. 禁止的 PR 标题
-
-❌ 以下标题一律拒绝：
+格式：
 
 ```
-fix bug
-update
-refactor
-improve code
-WIP
+type(scope): summary
 ```
 
-## 二、Commit 语义化规范
+示例：
 
-### 1. 格式
+- `feat(auth): implement basic authentication`
+- `fix(executor): remove unwrap panic`
+- `perf(parser): optimize tokenizer`
+- `refactor(network): improve error handling`
+
+### type 允许值
+
+- feat - 新功能
+- fix - Bug 修复
+- perf - 性能优化
+- refactor - 结构重构
+- test - 测试改进
+- docs - 文档
+- chore - 构建/CI
+
+### scope 允许值
+
+- parser - 词法/语法分析
+- executor - 执行引擎
+- planner - 查询规划
+- optimizer - 优化器
+- storage - 存储引擎
+- network - 网络协议
+- auth - 认证授权
+- ci - CI/CD
+
+---
+
+## 3. Commit Message 规范
+
+格式：
 
 ```
 type(scope): short summary
 
 (optional body)
-
-(optional footer)
 ```
 
-### 2. 示例
-
-```
-fix(executor): remove unwrap in result handling
-
-Replace unwrap() with proper error propagation using Result.
-This prevents panic during network failure.
-
-Closes #45
-```
-
-### 3. 关键规则
+规则：
 
 - 一次 commit 只做一件事
-- 不允许多个无关修改混在一起
-- PR 可以有多个 commit，但每个 commit 必须独立可理解
-- 必须关联相关 Issue
-
-## 三、Beta 阶段 PR 收敛策略
-
-### 允许的 PR 类型
-
-Beta 阶段只允许三类 PR：
-
-1. **fix** - Bug 修复
-2. **perf** - 性能优化
-3. **refactor** - 低风险重构
-
-### 禁止的 PR 类型
-
-❌ 以下类型一律拒绝：
-
-- 大型新功能
-- 架构推翻
-- 大规模 API 变更
-- 破坏性改动
-
-### PR 审核标准（Beta 阶段）
-
-- ✅ 必须有测试
-- ✅ 不允许 unwrap
-- ✅ 不允许 panic
-- ✅ 覆盖率不能下降
-- ✅ benchmark 不能明显退化
-
-## 四、分支策略
-
-### 当前活跃分支
-
-```
-main                    # 稳定发布分支
-baseline                # 开发基线分支
-feature/v1.0.0-beta     # Beta 开发主干
-```
-
-### 分支规则
-
-- Beta 作为唯一活跃开发主干
-- 所有 feature 分支从 beta 拉
-- PR 只合并到 beta
-- Beta 稳定后合并到 main
-
-## 五、版本号策略
-
-### Beta 阶段
-
-```
-v1.0.0-beta.1
-v1.0.0-beta.2
-v1.0.0-beta.3
-```
-
-### 稳定后
-
-```
-v1.0.0-rc.1
-v1.0.0
-```
-
-## 六、开发流程
-
-### 报告 Bug
-
-1. 搜索现有 Issue 确认是否已报告
-2. 创建新 Issue，包含:
-   - 清晰的标题
-   - 复现步骤
-   - 预期行为 vs 实际行为
-   - 环境信息 (OS, Rust 版本)
-
-### 提出新功能
-
-1. 创建 Issue 描述功能
-2. 说明使用场景
-3. 讨论确认后开始实现
-
-### 提交代码
-
-1. Fork 项目
-2. 从 `feature/v1.0.0-beta` 创建特性分支
-3. 遵循代码规范
-4. 添加测试
-5. 提交 PR（遵循命名规范）
-
-## 七、代码审查
-
-所有 PR 需要:
-
-- 至少 1 位审查者通过
-- CI 检查全部通过
-- 无合并冲突
-- 符合 PR 命名规范
-- 符合 Beta 阶段收敛策略
-
-## 八、行为准则
-
-- 尊重他人
-- 建设性讨论
-- 欢迎新手贡献
+- 不允许使用 `update`, `fix bug` 这种模糊信息
+- 不允许包含无关改动
 
 ---
 
-**注意**: 不符合规范的 PR 将被拒绝，请务必遵守以上规范。
+## 4. 代码规范
+
+- 禁止使用 `unwrap()`（除测试）
+- 禁止 `panic!`（除测试）
+- 必须使用 `Result` 传播错误
+- 所有新增逻辑必须有测试
+
+运行以下命令必须通过：
+
+```bash
+cargo fmt --all
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+---
+
+## 5. 覆盖率要求
+
+- 覆盖率不得下降
+- 核心模块（parser / executor / planner）必须 ≥ 80%
+
+---
+
+## 6. Benchmark 要求
+
+性能相关 PR 必须提供 benchmark 对比。
+
+```bash
+cargo bench
+```
+
+---
+
+## 7. Beta 阶段限制
+
+当前为 v1.0.0-beta 阶段：
+
+允许：
+- fix - Bug 修复
+- perf - 性能优化
+- 小规模 refactor
+
+禁止：
+- 重大架构变更
+- API 破坏性修改
+- 大型新功能
+
+---
+
+## 8. v1.0 冻结原则
+
+v1.0 定义：
+
+✅ 可运行
+✅ 不崩溃
+✅ 有测试
+✅ 有文档
+✅ 有版本
+✅ 有 CI
+✅ 有 Release Note
+✅ 符合工程规范
+
+从现在开始：
+
+❌ 禁止：新功能、性能优化、架构重构、API 变更、新模块
+
+✅ 只允许：panic 修复、unwrap 移除、测试补充、文档完善、CI 修复
+
+---
+
+感谢贡献 ❤️

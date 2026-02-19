@@ -5,13 +5,11 @@ on:
     branches:
       - main
       - baseline
-      - feature/v1.0.0-alpha
       - feature/v1.0.0-beta
   pull_request:
     branches:
       - main
       - baseline
-      - feature/v1.0.0-alpha
       - feature/v1.0.0-beta
 
 env:
@@ -48,17 +46,20 @@ jobs:
           path: target
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
       - name: Build
-        run: cargo build --verbose --all-features
+        run: cargo build --all
 
-      - name: Run tests
-        run: cargo test --verbose --all-features
+      - name: Test
+        run: cargo test --all
 
-      - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
-
-      - name: Check formatting
-        run: cargo fmt --check
+      - name: Benchmark (optional)
+        run: cargo bench --no-run || true
 
   coverage:
     runs-on: ubuntu-latest
