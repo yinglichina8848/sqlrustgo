@@ -36,8 +36,8 @@
 | [任务看板](./task-board.md) | Beta 阶段任务追踪 | ✅ |
 | [PR 证据链](./pr-evidence.md) | PR 审核与风险摘要 | ✅ |
 | [阶段日报模板](./daily-template.md) | 课堂用日报模板 | ✅ |
-| [执行手册(学生版)](./handbook-student.md) | 学生可复现步骤 | ⏳ |
-| [执行手册(助教版)](./handbook-ta.md) | PR 证据链示例 | ⏳ |
+| [执行手册(学生版)](./handbook-student.md) | 学生可复现步骤 | ✅ |
+| [执行手册(助教版)](./handbook-ta.md) | PR 证据链示例 | ✅ |
 
 ## 门禁检查
 
