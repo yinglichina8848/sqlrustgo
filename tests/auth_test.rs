@@ -229,11 +229,10 @@ fn test_permission_user_crud_operations() {
             .is_ok()
     );
     assert!(
-        !auth
-            .check_permission(&session.id, &Operation::Create)
-            .is_ok()
+        auth.check_permission(&session.id, &Operation::Create)
+            .is_err()
     );
-    assert!(!auth.check_permission(&session.id, &Operation::Drop).is_ok());
+    assert!(auth.check_permission(&session.id, &Operation::Drop).is_err());
 }
 
 #[test]
@@ -247,26 +246,22 @@ fn test_permission_readonly_only_select() {
             .is_ok()
     );
     assert!(
-        !auth
-            .check_permission(&session.id, &Operation::Insert)
-            .is_ok()
+        auth.check_permission(&session.id, &Operation::Insert)
+            .is_err()
     );
     assert!(
-        !auth
-            .check_permission(&session.id, &Operation::Update)
-            .is_ok()
+        auth.check_permission(&session.id, &Operation::Update)
+            .is_err()
     );
     assert!(
-        !auth
-            .check_permission(&session.id, &Operation::Delete)
-            .is_ok()
+        auth.check_permission(&session.id, &Operation::Delete)
+            .is_err()
     );
     assert!(
-        !auth
-            .check_permission(&session.id, &Operation::Create)
-            .is_ok()
+        auth.check_permission(&session.id, &Operation::Create)
+            .is_err()
     );
-    assert!(!auth.check_permission(&session.id, &Operation::Drop).is_ok());
+    assert!(auth.check_permission(&session.id, &Operation::Drop).is_err());
 }
 
 #[test]
