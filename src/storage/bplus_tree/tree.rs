@@ -137,10 +137,11 @@ impl BPlusTree {
 
     /// Query all values in range [start, end)
     pub fn range_query(&self, start: i64, end: i64) -> Vec<u32> {
-        if self.root.is_none() {
-            return vec![];
+        if let Some(root) = &self.root {
+            self.range_query_node(root, start, end)
+        } else {
+            vec![]
         }
-        self.range_query_node(self.root.as_ref().unwrap(), start, end)
     }
 
     fn range_query_node(&self, node: &Node, start: i64, end: i64) -> Vec<u32> {
