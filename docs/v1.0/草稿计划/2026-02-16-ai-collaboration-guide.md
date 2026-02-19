@@ -511,7 +511,7 @@ gh pr merge <number>               # 合并 PR
 ## 相关资源
 
 - [SQLRustGo 仓库](https://github.com/yinglichina8848/sqlrustgo)
-- [对话记录](./对话记录.md)
+- [Claude对话记录](../Claude对话记录.md)
 - [ROADMAP](./ROADMAP.md)
 - [CHANGELOG](./CHANGELOG.md)
 - [GitHub 文档](https://docs.github.com)
