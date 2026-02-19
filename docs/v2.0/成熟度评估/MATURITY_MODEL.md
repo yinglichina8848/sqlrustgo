@@ -154,7 +154,7 @@
 | 自动打 tag | ✅ | scripts/release.sh |
 | Issue 模板 | ✅ | .github/ISSUE_TEMPLATE/ |
 | Release 流程 | ✅ | .github/workflows/release.yml |
-| AI 协作治理 | ✅ | AI_AGENT_COLLAB_GOVERNANCE.md |
+| AI 协作治理 | ✅ | AI增强软件工程/AI_AGENT_COLLAB_GOVERNANCE.md |
 
 ### 3.2 当前等级
 
