@@ -89,6 +89,13 @@ pub enum Token {
     Slash,
     Percent,
 
+    // Aggregate Functions
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+
     // Syntax
     LParen,
     RParen,

@@ -46,12 +46,30 @@ pub enum Statement {
     DropTable(DropTableStatement),
 }
 
+/// Aggregate function type
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregateFunction {
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+}
+
+/// Aggregate function call
+#[derive(Debug, Clone, PartialEq)]
+pub struct AggregateCall {
+    pub func: AggregateFunction,
+    pub column: Option<String>,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
     pub columns: Vec<SelectColumn>,
     pub table: String,
     pub where_clause: Option<Expression>,
+    pub aggregates: Vec<AggregateCall>,
 }
 
 /// Column in SELECT
@@ -194,9 +212,16 @@ impl Parser {
         self.expect(Token::Select)?;
 
         let mut columns = Vec::new();
+        let mut aggregates = Vec::new();
+
         loop {
             match self.current() {
                 Some(Token::From) => break,
+                Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+                | Some(Token::Max) => {
+                    let agg = self.parse_aggregate()?;
+                    aggregates.push(agg);
+                }
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -238,7 +263,39 @@ impl Parser {
             columns,
             table,
             where_clause,
+            aggregates,
         }))
+    }
+
+    fn parse_aggregate(&mut self) -> Result<AggregateCall, String> {
+        let func_token = self
+            .current()
+            .cloned()
+            .ok_or("Expected aggregate function")?;
+        let func = match func_token {
+            Token::Count => AggregateFunction::Count,
+            Token::Sum => AggregateFunction::Sum,
+            Token::Avg => AggregateFunction::Avg,
+            Token::Min => AggregateFunction::Min,
+            Token::Max => AggregateFunction::Max,
+            _ => return Err("Not an aggregate function".to_string()),
+        };
+
+        self.next(); // consume function name
+
+        self.expect(Token::LParen)?;
+
+        let column = match self.next() {
+            Some(Token::Star) => {
+                None // COUNT(*) case
+            }
+            Some(Token::Identifier(name)) => Some(name),
+            _ => return Err("Expected column name or *".to_string()),
+        };
+
+        self.expect(Token::RParen)?;
+
+        Ok(AggregateCall { func, column })
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {

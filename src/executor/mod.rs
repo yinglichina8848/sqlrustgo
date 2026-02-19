@@ -2,7 +2,8 @@
 //! Executes SQL statements and returns results
 
 use crate::parser::{
-    DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
+    AggregateCall, AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
+    Statement, UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
 use crate::types::{SqlError, SqlResult, Value, parse_sql_literal};
@@ -159,6 +160,11 @@ impl ExecutionEngine {
             table_data.rows.clone()
         };
 
+        // Handle aggregate functions
+        if !stmt.aggregates.is_empty() {
+            return self.execute_aggregate(&stmt, &filtered_rows);
+        }
+
         // Project to result columns
         let result_rows: Vec<Vec<Value>> = filtered_rows
             .iter()
@@ -169,6 +175,202 @@ impl ExecutionEngine {
                     .collect()
             })
             .collect();
+
+        Ok(ExecutionResult {
+            rows_affected: result_rows.len() as u64,
+            columns: result_columns,
+            rows: result_rows,
+        })
+    }
+
+    /// Execute aggregate functions
+    fn execute_aggregate(
+        &self,
+        stmt: &SelectStatement,
+        rows: &[Vec<Value>],
+    ) -> SqlResult<ExecutionResult> {
+        let table_data = self
+            .storage
+            .get_table(&stmt.table)
+            .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+
+        let table_columns: Vec<String> = table_data
+            .info
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+
+        let column_map: std::collections::HashMap<String, usize> = table_columns
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (c.clone(), i))
+            .collect();
+
+        let mut result_columns = Vec::new();
+        let mut result_rows = Vec::new();
+
+        for agg in &stmt.aggregates {
+            let column_name = match &agg.column {
+                Some(name) => name.clone(),
+                None => "*".to_string(),
+            };
+
+            let column_idx = if column_name == "*" {
+                None
+            } else {
+                column_map.get(&column_name).copied()
+            };
+
+            let result = match agg.func {
+                AggregateFunction::Count => {
+                    if column_name == "*" {
+                        Value::Integer(rows.len() as i64)
+                    } else {
+                        let count = rows.iter().filter(|row| {
+                            if let Some(idx) = column_idx {
+                                row.get(idx) != Some(&Value::Null)
+                            } else {
+                                true
+                            }
+                        }).count();
+                        Value::Integer(count as i64)
+                    }
+                }
+                AggregateFunction::Sum => {
+                    if let Some(idx) = column_idx {
+                        let sum: i64 = rows
+                            .iter()
+                            .filter_map(|row| row.get(idx))
+                            .filter_map(|v| v.as_integer())
+                            .sum();
+                        Value::Integer(sum)
+                    } else {
+                        Value::Null
+                    }
+                }
+                AggregateFunction::Avg => {
+                    if let Some(idx) = column_idx {
+                        let sum: f64 = rows
+                            .iter()
+                            .filter_map(|row| row.get(idx))
+                            .filter_map(|v| match v {
+                                Value::Integer(i) => Some(*i as f64),
+                                Value::Float(f) => Some(*f),
+                                _ => None,
+                            })
+                            .sum();
+                        let count = rows
+                            .iter()
+                            .filter_map(|row| row.get(idx))
+                            .filter(|v| !matches!(v, Value::Null))
+                            .count();
+                        if count > 0 {
+                            Value::Float(sum / count as f64)
+                        } else {
+                            Value::Null
+                        }
+                    } else {
+                        Value::Null
+                    }
+                }
+                AggregateFunction::Min => {
+                    if let Some(idx) = column_idx {
+                        let mut min: Option<&Value> = None;
+                        for row in rows {
+                            if let Some(v) = row.get(idx) {
+                                if !matches!(v, Value::Null) {
+                                    let is_less = match (min, v) {
+                                        (None, _) => true,
+                                        (Some(m), Value::Integer(vi)) => {
+                                            if let Value::Integer(mi) = m {
+                                                vi < mi
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        (Some(m), Value::Float(vf)) => {
+                                            if let Value::Float(mf) = m {
+                                                vf < mf
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        (Some(m), Value::Text(vs)) => {
+                                            if let Value::Text(ms) = m {
+                                                vs < ms
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => false,
+                                    };
+                                    if is_less {
+                                        min = Some(v);
+                                    }
+                                }
+                            }
+                        }
+                        min.cloned().unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    }
+                }
+                AggregateFunction::Max => {
+                    if let Some(idx) = column_idx {
+                        let mut max: Option<&Value> = None;
+                        for row in rows {
+                            if let Some(v) = row.get(idx) {
+                                if !matches!(v, Value::Null) {
+                                    let is_greater = match (max, v) {
+                                        (None, _) => true,
+                                        (Some(m), Value::Integer(vi)) => {
+                                            if let Value::Integer(mi) = m {
+                                                vi > mi
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        (Some(m), Value::Float(vf)) => {
+                                            if let Value::Float(mf) = m {
+                                                vf > mf
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        (Some(m), Value::Text(vs)) => {
+                                            if let Value::Text(ms) = m {
+                                                vs > ms
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => false,
+                                    };
+                                    if is_greater {
+                                        max = Some(v);
+                                    }
+                                }
+                            }
+                        }
+                        max.cloned().unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    }
+                }
+            };
+
+            let col_name = match agg.func {
+                AggregateFunction::Count => format!("COUNT({})", column_name),
+                AggregateFunction::Sum => format!("SUM({})", column_name),
+                AggregateFunction::Avg => format!("AVG({})", column_name),
+                AggregateFunction::Min => format!("MIN({})", column_name),
+                AggregateFunction::Max => format!("MAX({})", column_name),
+            };
+            
+            result_columns.push(col_name);
+            result_rows.push(vec![result]);
+        }
 
         Ok(ExecutionResult {
             rows_affected: result_rows.len() as u64,
@@ -1450,5 +1652,137 @@ mod tests {
                 .execute(crate::parser::parse("SELECT * FROM t3").unwrap())
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn test_aggregate_count_star() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (3, 'Charlie')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(3));
+    }
+
+    #[test]
+    fn test_aggregate_count_column() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO users VALUES (NULL, 'Charlie')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT COUNT(id) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(2));
+    }
+
+    #[test]
+    fn test_aggregate_sum() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE orders (amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (100)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (200)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (300)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT SUM(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(600));
+    }
+
+    #[test]
+    fn test_aggregate_avg() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE orders (amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (100)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (200)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (300)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT AVG(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Float(200.0));
+    }
+
+    #[test]
+    fn test_aggregate_min() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE orders (amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (100)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (50)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (300)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT MIN(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(50));
+    }
+
+    #[test]
+    fn test_aggregate_max() {
+        let mut engine = ExecutionEngine::new();
+        engine
+            .execute(crate::parser::parse("CREATE TABLE orders (amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (100)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (500)").unwrap())
+            .unwrap();
+        engine
+            .execute(crate::parser::parse("INSERT INTO orders VALUES (300)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(crate::parser::parse("SELECT MAX(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(500));
     }
 }
