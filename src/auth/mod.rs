@@ -108,7 +108,7 @@ pub enum AuthError {
 pub struct AuthManager {
     users: HashMap<String, User>,
     sessions: HashMap<String, Session>,
-    session_timeout: u64,
+    session_timeout: u64,  // seconds
 }
 
 impl AuthManager {
@@ -117,7 +117,7 @@ impl AuthManager {
         Self {
             users: HashMap::new(),
             sessions: HashMap::new(),
-            session_timeout: 3600,
+            session_timeout: 3600,  // 1 hour default
         }
     }
 
@@ -219,7 +219,7 @@ impl AuthManager {
         Ok(())
     }
 
-    /// Simple password hashing
+    /// Simple password hashing (in production, use bcrypt or argon2)
     fn hash_password(password: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -246,7 +246,7 @@ impl AuthManager {
         self.users.get(username)
     }
 
-    /// List all users
+    /// List all users (without password hashes)
     pub fn list_users(&self) -> Vec<(i64, String, Role)> {
         self.users.values()
             .map(|u| (u.id, u.username.clone(), u.role.clone()))
@@ -267,12 +267,16 @@ mod tests {
     #[test]
     fn test_register_and_login() {
         let mut auth = AuthManager::new();
+        
+        // Register user
         let user = auth.register("testuser", "password123", Role::User).unwrap();
         assert_eq!(user.username, "testuser");
         
+        // Login
         let session = auth.login("testuser", "password123").unwrap();
         assert_eq!(session.username, "testuser");
         
+        // Verify session
         let verified = auth.verify(&session.id).unwrap();
         assert_eq!(verified.username, "testuser");
     }
@@ -292,6 +296,7 @@ mod tests {
         auth.register("admin", "pass", Role::Admin).unwrap();
         let session = auth.login("admin", "pass").unwrap();
         
+        // Admin can do everything
         assert!(auth.verify(&session.id).is_ok());
     }
 
@@ -301,8 +306,10 @@ mod tests {
         auth.register("reader", "pass", Role::Readonly).unwrap();
         let session = auth.login("reader", "pass").unwrap();
         
+        // Readonly can SELECT
         assert!(auth.check_permission(&session.id, &Operation::Select).is_ok());
         
+        // Readonly cannot INSERT
         assert!(matches!(
             auth.check_permission(&session.id, &Operation::Insert),
             Err(AuthError::PermissionDenied(_))
@@ -317,6 +324,7 @@ mod tests {
         
         auth.logout(&session.id).unwrap();
         
+        // Session should be invalid after logout
         let result = auth.verify(&session.id);
         assert!(result.is_err());
     }
