@@ -35,7 +35,7 @@
 | **学生/初学者** | [文档阅读指南](docs/文档阅读指南.md) → [v1.0 文档](docs/v1.0/README.md) | 1-2 小时 |
 | **开发者** | [开发文档](docs/v1.0/dev/DEVELOP.md) → [AI 协作指南](docs/v1.0/草稿计划/2026-02-16-ai-collaboration-guide.md) | 2-3 小时 |
 | **架构师** | [v2.0 白皮书](docs/v2.0/WHITEPAPER.md) → [插件架构设计](docs/v2.0/架构设计/PLUGIN_ARCHITECTURE.md) | 3-4 小时 |
-| **管理者** | [版本推进流程](docs/VERSION_PROMOTION_SOP.md) → [AI 协作治理](docs/AI_AGENT_COLLAB_GOVERNANCE.md) | 1 小时 |
+| **管理者** | [版本推进流程](docs/VERSION_PROMOTION_SOP.md) → [AI 协作治理](docs/AI增强软件工程/AI_AGENT_COLLAB_GOVERNANCE.md) | 1 小时 |
 
 ---
 
@@ -164,7 +164,9 @@ docs/
 │
 ├── VERSION_PROMOTION_SOP.md     ← 版本推进流程
 ├── VERSION_FLOW_DIAGRAM.md      ← 版本流转图
-├── AI_AGENT_COLLAB_GOVERNANCE.md← AI 协作治理
+├── AI增强软件工程/              ← AI 协作治理（已移入）
+│   ├── AI_AGENT_COLLAB_GOVERNANCE.md
+│   └── AI协作开发教程.md
 │
 ├── v1.0/                        ← v1.0 版本文档
 │   ├── README.md               ← v1.0 文档索引

@@ -305,7 +305,7 @@ src/
 │   ✅ Commit 规范 (COMMIT_CONVENTION.md)                                      │
 │   ✅ 自动版本 (scripts/bump_version.sh)                                      │
 │   ✅ 长期架构蓝图 (本文档)                                                   │
-│   ✅ AI 协作安全模型 (AI_AGENT_COLLAB_GOVERNANCE.md)                         │
+│   ✅ AI 协作安全模型 (AI增强软件工程/AI_AGENT_COLLAB_GOVERNANCE.md)                         │
 │                                                                              │
 │   这已经是一个：                                                             │
 │   🏆 可支撑 5 年演进的工程治理体系                                            │
