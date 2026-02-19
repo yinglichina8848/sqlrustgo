@@ -1,5 +1,5 @@
 //! Authentication module for SQLRustGo
-//!
+//! 
 //! Provides user authentication, session management, and permission control.
 
 use std::collections::HashMap;
@@ -32,10 +32,7 @@ impl Role {
     pub fn can_execute(&self, operation: &Operation) -> bool {
         match self {
             Role::Admin => true,
-            Role::User => matches!(
-                operation,
-                Operation::Select | Operation::Insert | Operation::Update | Operation::Delete
-            ),
+            Role::User => matches!(operation, Operation::Select | Operation::Insert | Operation::Update | Operation::Delete),
             Role::Readonly => matches!(operation, Operation::Select),
         }
     }
@@ -87,22 +84,22 @@ pub struct Session {
 pub enum AuthError {
     #[error("User not found: {0}")]
     UserNotFound(String),
-
+    
     #[error("Invalid password")]
     InvalidPassword,
-
+    
     #[error("Session expired")]
     SessionExpired,
-
+    
     #[error("Session not found: {0}")]
     SessionNotFound(String),
-
+    
     #[error("User already exists: {0}")]
     UserAlreadyExists(String),
-
+    
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
-
+    
     #[error("Invalid role: {0}")]
     InvalidRole(String),
 }
@@ -111,7 +108,7 @@ pub enum AuthError {
 pub struct AuthManager {
     users: HashMap<String, User>,
     sessions: HashMap<String, Session>,
-    session_timeout: u64, // seconds
+    session_timeout: u64,  // seconds
 }
 
 impl AuthManager {
@@ -120,7 +117,7 @@ impl AuthManager {
         Self {
             users: HashMap::new(),
             sessions: HashMap::new(),
-            session_timeout: 3600, // 1 hour default
+            session_timeout: 3600,  // 1 hour default
         }
     }
 
@@ -134,12 +131,7 @@ impl AuthManager {
     }
 
     /// Register a new user
-    pub fn register(
-        &mut self,
-        username: &str,
-        password: &str,
-        role: Role,
-    ) -> Result<User, AuthError> {
+    pub fn register(&mut self, username: &str, password: &str, role: Role) -> Result<User, AuthError> {
         if self.users.contains_key(username) {
             return Err(AuthError::UserAlreadyExists(username.to_string()));
         }
@@ -160,8 +152,7 @@ impl AuthManager {
 
     /// User login
     pub fn login(&mut self, username: &str, password: &str) -> Result<Session, AuthError> {
-        let user = self
-            .users
+        let user = self.users
             .get(username)
             .ok_or_else(|| AuthError::UserNotFound(username.to_string()))?;
 
@@ -198,8 +189,7 @@ impl AuthManager {
 
     /// Verify session and return user
     pub fn verify(&self, session_id: &str) -> Result<User, AuthError> {
-        let session = self
-            .sessions
+        let session = self.sessions
             .get(session_id)
             .ok_or_else(|| AuthError::SessionNotFound(session_id.to_string()))?;
 
@@ -219,17 +209,12 @@ impl AuthManager {
     }
 
     /// Check if user has permission to perform operation
-    pub fn check_permission(
-        &self,
-        session_id: &str,
-        operation: &Operation,
-    ) -> Result<(), AuthError> {
+    pub fn check_permission(&self, session_id: &str, operation: &Operation) -> Result<(), AuthError> {
         let user = self.verify(session_id)?;
         if !user.role.can_execute(operation) {
-            return Err(AuthError::PermissionDenied(format!(
-                "Role {} cannot perform {:?}",
-                user.role, operation
-            )));
+            return Err(AuthError::PermissionDenied(
+                format!("Role {} cannot perform {:?}", user.role, operation)
+            ));
         }
         Ok(())
     }
@@ -238,7 +223,7 @@ impl AuthManager {
     fn hash_password(password: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-
+        
         let mut hasher = DefaultHasher::new();
         password.hash(&mut hasher);
         format!("sha256:{:016x}", hasher.finish())
@@ -247,12 +232,12 @@ impl AuthManager {
     /// Generate unique session ID
     fn generate_session_id() -> String {
         use std::time::SystemTime;
-
+        
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-
+        
         format!("session:{:x}", now)
     }
 
@@ -263,8 +248,7 @@ impl AuthManager {
 
     /// List all users (without password hashes)
     pub fn list_users(&self) -> Vec<(i64, String, Role)> {
-        self.users
-            .values()
+        self.users.values()
             .map(|u| (u.id, u.username.clone(), u.role.clone()))
             .collect()
     }
@@ -283,17 +267,15 @@ mod tests {
     #[test]
     fn test_register_and_login() {
         let mut auth = AuthManager::new();
-
+        
         // Register user
-        let user = auth
-            .register("testuser", "password123", Role::User)
-            .unwrap();
+        let user = auth.register("testuser", "password123", Role::User).unwrap();
         assert_eq!(user.username, "testuser");
-
+        
         // Login
         let session = auth.login("testuser", "password123").unwrap();
         assert_eq!(session.username, "testuser");
-
+        
         // Verify session
         let verified = auth.verify(&session.id).unwrap();
         assert_eq!(verified.username, "testuser");
@@ -302,9 +284,8 @@ mod tests {
     #[test]
     fn test_invalid_password() {
         let mut auth = AuthManager::new();
-        auth.register("testuser", "password123", Role::User)
-            .unwrap();
-
+        auth.register("testuser", "password123", Role::User).unwrap();
+        
         let result = auth.login("testuser", "wrongpassword");
         assert!(matches!(result, Err(AuthError::InvalidPassword)));
     }
@@ -314,7 +295,7 @@ mod tests {
         let mut auth = AuthManager::new();
         auth.register("admin", "pass", Role::Admin).unwrap();
         let session = auth.login("admin", "pass").unwrap();
-
+        
         // Admin can do everything
         assert!(auth.verify(&session.id).is_ok());
     }
@@ -324,13 +305,10 @@ mod tests {
         let mut auth = AuthManager::new();
         auth.register("reader", "pass", Role::Readonly).unwrap();
         let session = auth.login("reader", "pass").unwrap();
-
+        
         // Readonly can SELECT
-        assert!(
-            auth.check_permission(&session.id, &Operation::Select)
-                .is_ok()
-        );
-
+        assert!(auth.check_permission(&session.id, &Operation::Select).is_ok());
+        
         // Readonly cannot INSERT
         assert!(matches!(
             auth.check_permission(&session.id, &Operation::Insert),
@@ -343,9 +321,9 @@ mod tests {
         let mut auth = AuthManager::new();
         auth.register("testuser", "pass", Role::User).unwrap();
         let session = auth.login("testuser", "pass").unwrap();
-
+        
         auth.logout(&session.id).unwrap();
-
+        
         // Session should be invalid after logout
         let result = auth.verify(&session.id);
         assert!(result.is_err());
