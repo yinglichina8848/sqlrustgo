@@ -1041,4 +1041,104 @@ mod tests {
         let result = parse("SELECT * FROM users WHERE age NOT IN (1, 2)");
         assert!(result.is_ok() || result.is_err());
     }
+
+    #[test]
+    fn test_parse_aggregate_count_star() {
+        let result = parse("SELECT COUNT(*) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Count);
+                assert!(s.aggregates[0].column.is_none());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_count_column() {
+        let result = parse("SELECT COUNT(id) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Count);
+                assert_eq!(s.aggregates[0].column, Some("id".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_sum() {
+        let result = parse("SELECT SUM(amount) FROM orders");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Sum);
+                assert_eq!(s.aggregates[0].column, Some("amount".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_avg() {
+        let result = parse("SELECT AVG(price) FROM products");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Avg);
+                assert_eq!(s.aggregates[0].column, Some("price".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_min() {
+        let result = parse("SELECT MIN(age) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Min);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_max() {
+        let result = parse("SELECT MAX(score) FROM tests");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Max);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_multiple() {
+        let result = parse("SELECT COUNT(*), SUM(amount), AVG(price) FROM orders");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 3);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_case_insensitive() {
+        let result = parse("select count(id) from users");
+        assert!(result.is_ok());
+    }
 }
