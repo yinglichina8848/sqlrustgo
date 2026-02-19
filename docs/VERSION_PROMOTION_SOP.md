@@ -1,7 +1,7 @@
 # SQLRustGo 版本推进标准操作流程（SOP）
 
-> 版本：v1.1
-> 日期：2026-02-19
+> 版本：v1.2 (更新分支命名规范)
+> 日期：2026-02-20
 > 来源：ChatGPT 建议 + 项目实际情况 + TRAE 修正
 
 ---
@@ -24,16 +24,18 @@
 | **alpha** | 当前功能开发阶段 | ✅ | ✅ |
 | **beta** | 稳定性验证阶段 | ⚠️ 仅已规划功能 | ✅ |
 | **release** | 发布候选阶段 | ❌ | 仅阻断性 Bug |
-| **baseline** | 正式稳定版本 | ❌ | 仅 hotfix |
+| **release/vX.Y.Z** | 正式稳定版本 | ❌ | 仅 hotfix |
+| **baseline** | 历史参考版本 | ❌ | 仅 hotfix |
 
 > **注**：Beta 阶段允许实现"Alpha 阶段已规划的功能"，禁止"新增未规划功能"
+> **注**：从 v1.0.0 开始，正式稳定版本使用 `release/vX.Y.Z` 格式命名，`baseline` 分支保留作为历史参考
 
 ---
 
 ## 3. 版本推进总流程
 
 ```
-alpha → beta → release → baseline
+alpha → beta → release → release/vX.Y.Z
 ```
 
 **禁止跳级合并。**
@@ -44,12 +46,12 @@ alpha → beta → release → baseline
 
 ### 4.1 进入 Alpha 阶段
 
-从 baseline 切出：
+从最新的正式版本分支切出：
 
 ```bash
-git checkout baseline
-git checkout -b feature/vX.Y.Z-alpha
-git push origin feature/vX.Y.Z-alpha
+git checkout release/vX.Y.Z
+git checkout -b feature/vX+1.Y.Z-alpha
+git push origin feature/vX+1.Y.Z-alpha
 ```
 
 ### 4.2 Alpha 阶段允许
@@ -181,18 +183,21 @@ git tag vX.Y.Z-rc.N
 
 ---
 
-## 9. Release → Baseline（基线升级）
+## 9. Release → release/vX.Y.Z（正式版本发布）
 
 当确认可正式发布：
 
 ```bash
-git checkout baseline
-git merge --no-ff release/vX.Y.Z
+git checkout -b release/vX.Y.Z
+git merge --no-ff release/vX.Y.Z-rc
+# 或者从最新的 RC 标签创建
+# git checkout vX.Y.Z-rc.N
+# git checkout -b release/vX.Y.Z
 git tag vX.Y.Z
-git push origin baseline --tags
+git push origin release/vX.Y.Z --tags
 ```
 
-这一步称为：**基线升级**
+这一步称为：**正式版本发布**
 
 ---
 
@@ -217,10 +222,10 @@ git merge release/vX.Y.Z
 
 ## 11. 下一轮开发
 
-Baseline 升级后：
+正式版本发布后：
 
 ```bash
-git checkout baseline
+git checkout release/vX.Y.Z
 git checkout -b feature/vX.Y+1.0-alpha
 ```
 
@@ -230,26 +235,27 @@ git checkout -b feature/vX.Y+1.0-alpha
 
 ## 12. 紧急 Hotfix 流程
 
-如果 baseline 出现严重线上问题：
+如果正式版本分支出现严重线上问题：
 
 ```bash
-git checkout baseline
+git checkout release/vX.Y.Z
 git checkout -b hotfix-X.Y.Z+1
 ```
 
 修复后：
 
 ```bash
-git checkout baseline
+git checkout release/vX.Y.Z
 git merge --no-ff hotfix-X.Y.Z+1
 git tag vX.Y.Z+1
+git push origin release/vX.Y.Z --tags
 ```
 
 然后必须同步回：
 
 ```bash
 git checkout feature/vX.Y+1.0-alpha
-git merge baseline
+git merge release/vX.Y.Z
 ```
 
 ---
@@ -290,7 +296,7 @@ git merge baseline
 ## 16. 生命周期示意图
 
 ```
-baseline
+release/vX.Y.Z
    ↑
 release
    ↑
@@ -305,10 +311,11 @@ alpha
 
 | 分支 | 定义 |
 |:-----|:-----|
-| **baseline** | 唯一正式可发布版本 |
+| **release/vX.Y.Z** | 唯一正式可发布版本 |
 | **release** | 发布候选 |
 | **beta** | 稳定验证 |
 | **alpha** | 功能开发 |
+| **baseline** | 历史参考版本 |
 
 ---
 
