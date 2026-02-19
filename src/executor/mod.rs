@@ -186,7 +186,9 @@ impl ExecutionEngine {
 
         // Get indexed columns before mutating
         let indexed_columns: Vec<(usize, String)> = {
-            let table_data = self.storage.get_table(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
@@ -203,7 +205,9 @@ impl ExecutionEngine {
         let mut index_updates: Vec<(String, i64, u32)> = Vec::new(); // (column_name, key, row_id)
 
         {
-            let table_data = self.storage.get_table_mut(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             for row_expr in &stmt.values {
                 let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
@@ -253,7 +257,9 @@ impl ExecutionEngine {
 
         // Build column index map from table schema
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
@@ -265,7 +271,9 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let mut count = 0;
 
@@ -314,7 +322,9 @@ impl ExecutionEngine {
 
         // Build column index map for WHERE clause evaluation
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
@@ -326,7 +336,9 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table)
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
                 .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let original_count = table_data.rows.len();
 

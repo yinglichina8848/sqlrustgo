@@ -170,7 +170,9 @@ impl Parser {
     /// Expect a specific token
     fn expect(&mut self, expected: Token) -> Result<Token, String> {
         match self.current() {
-            Some(t) if t == &expected => self.next().ok_or_else(|| "Unexpected end of input".to_string()),
+            Some(t) if t == &expected => self
+                .next()
+                .ok_or_else(|| "Unexpected end of input".to_string()),
             Some(t) => Err(format!("Expected {:?}, got {:?}", expected, t)),
             None => Err("Unexpected end of input".to_string()),
         }
