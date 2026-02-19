@@ -106,6 +106,7 @@ fn test_error_handling() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_value_type_conversion() {
     use sqlrustgo::Value;
     use sqlrustgo::parse_sql_literal;
