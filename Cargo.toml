@@ -20,6 +20,7 @@ serde_json = "1.0"
 [dev-dependencies]
 serde_json = "1.0"
 tempfile = "3.25.0"
+criterion = "0.5"
 
 [[test]]
 name = "project_test"
@@ -28,3 +29,7 @@ path = "tests/project_test.rs"
 [[test]]
 name = "ci_test"
 path = "tests/ci_test.rs"
+
+[[bench]]
+name = "sql_operations"
+harness = false
