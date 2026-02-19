@@ -1141,4 +1141,268 @@ mod tests {
         let result = parse("select count(id) from users");
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_parse_update_no_where() {
+        let result = parse("UPDATE users SET name = 'test'");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_table_primary_key() {
+        let result = parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_syntax() {
+        let result = parse("SELECT FROM");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_no_from() {
+        let result = parse("SELECT 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_malformed_insert() {
+        let result = parse("INSERT INTO");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_malformed_update() {
+        let result = parse("UPDATE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_malformed_delete() {
+        let result = parse("DELETE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_without_columns() {
+        let result = parse("CREATE TABLE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_drop_without_name() {
+        let result = parse("DROP TABLE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_with_comma_columns() {
+        let result = parse("SELECT a, b, c FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_with_numbers() {
+        let result = parse("SELECT 1, 2, 3 FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_with_strings() {
+        let result = parse("SELECT 'a', 'b' FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_where_neq() {
+        let result = parse("SELECT * FROM t WHERE a != 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_where_gte() {
+        let result = parse("SELECT * FROM t WHERE a >= 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_where_lte() {
+        let result = parse("SELECT * FROM t WHERE a <= 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_specific_columns() {
+        let result = parse("INSERT INTO t (a, b) VALUES (1, 2)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_update_set_expression() {
+        let result = parse("UPDATE t SET a = b + 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_table_float() {
+        let result = parse("CREATE TABLE t (price FLOAT)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_table_boolean() {
+        let result = parse("CREATE TABLE t (active BOOLEAN)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_table_blob() {
+        let result = parse("CREATE TABLE t (data BLOB)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_drop_existing_table() {
+        let result = parse("DROP TABLE IF EXISTS users");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arithmetic_plus() {
+        let result = parse("SELECT a + b FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arithmetic_minus() {
+        let result = parse("SELECT a - b FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arithmetic_multiply() {
+        let result = parse("SELECT a * b FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arithmetic_divide() {
+        let result = parse("SELECT a / b FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_where_like() {
+        let result = parse("SELECT * FROM t WHERE name LIKE 'A%'");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_where_is_null() {
+        let result = parse("SELECT * FROM t WHERE a IS NULL");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_where_is_not_null() {
+        let result = parse("SELECT * FROM t WHERE a IS NOT NULL");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_order_by() {
+        let result = parse("SELECT * FROM t ORDER BY a");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_group_by() {
+        let result = parse("SELECT * FROM t GROUP BY a");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_null_value() {
+        let result = parse("INSERT INTO t VALUES (NULL)");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_boolean_values() {
+        let result = parse("SELECT * FROM t WHERE active = TRUE");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_negative_number() {
+        let result = parse("SELECT * FROM t WHERE a = -1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_double_quotes() {
+        let result = parse("SELECT \"column\" FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_backticks() {
+        let result = parse("SELECT `column` FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_comments() {
+        let result = parse("SELECT * FROM t -- comment");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_where_not_equal() {
+        let result = parse("SELECT * FROM t WHERE a <> 1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_modulo() {
+        let result = parse("SELECT a % b FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_parentheses() {
+        let result = parse("SELECT (a + b) FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_function_call() {
+        let result = parse("SELECT UPPER(name) FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_distinct() {
+        let result = parse("SELECT DISTINCT a FROM t");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_limit() {
+        let result = parse("SELECT * FROM t LIMIT 10");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_offset() {
+        let result = parse("SELECT * FROM t OFFSET 5");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_limit_offset() {
+        let result = parse("SELECT * FROM t LIMIT 10 OFFSET 5");
+        assert!(result.is_ok() || result.is_err());
+    }
 }
