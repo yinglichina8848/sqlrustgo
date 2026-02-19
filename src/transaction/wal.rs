@@ -64,7 +64,7 @@ impl WriteAheadLog {
 
     /// Append a record to the log
     pub fn append(&self, record: &WalRecord) -> Result<(), std::io::Error> {
-        let mut file = self.file.lock().unwrap();
+        let mut file = self.file.lock().expect("Failed to acquire WAL file lock");
 
         // Serialize to JSON
         let json = serde_json::to_string(record)
@@ -82,7 +82,7 @@ impl WriteAheadLog {
 
     /// Read all records from log
     pub fn read_all(&self) -> Result<Vec<WalRecord>, std::io::Error> {
-        let mut file = self.file.lock().unwrap();
+        let mut file = self.file.lock().expect("Failed to acquire WAL file lock");
         let mut records = Vec::new();
 
         // Seek to start
@@ -117,7 +117,7 @@ impl WriteAheadLog {
 
     /// Truncate log (after successful checkpoint)
     pub fn truncate(&self) -> Result<(), std::io::Error> {
-        let mut file = self.file.lock().unwrap();
+        let mut file = self.file.lock().expect("Failed to acquire WAL file lock");
         file.set_len(0)?;
         file.seek(SeekFrom::Start(0))?;
         Ok(())

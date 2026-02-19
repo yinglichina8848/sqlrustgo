@@ -2,7 +2,7 @@
 //! Executes SQL statements and returns results
 
 use crate::parser::{
-    AggregateCall, AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
+    AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
     Statement, UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
@@ -278,36 +278,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut min: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_less = match (min, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi < mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf < mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs < ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_less {
-                                        min = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_less = match (min, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi < mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf < mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs < ms,
+                                    _ => false,
+                                };
+                                if is_less {
+                                    min = Some(v);
                                 }
                             }
                         }
@@ -320,36 +302,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut max: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_greater = match (max, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi > mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf > mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs > ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_greater {
-                                        max = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_greater = match (max, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi > mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf > mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs > ms,
+                                    _ => false,
+                                };
+                                if is_greater {
+                                    max = Some(v);
                                 }
                             }
                         }
@@ -388,7 +352,10 @@ impl ExecutionEngine {
 
         // Get indexed columns before mutating
         let indexed_columns: Vec<(usize, String)> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -404,7 +371,10 @@ impl ExecutionEngine {
         let mut index_updates: Vec<(String, i64, u32)> = Vec::new(); // (column_name, key, row_id)
 
         {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             for row_expr in &stmt.values {
                 let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
                 let row_id = table_data.rows.len() as u32;
@@ -453,7 +423,10 @@ impl ExecutionEngine {
 
         // Build column index map from table schema
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -464,7 +437,10 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let mut count = 0;
 
             // Evaluate WHERE clause if present
@@ -512,7 +488,10 @@ impl ExecutionEngine {
 
         // Build column index map for WHERE clause evaluation
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -523,7 +502,10 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let original_count = table_data.rows.len();
 
             // If WHERE clause is present, filter rows; otherwise delete all

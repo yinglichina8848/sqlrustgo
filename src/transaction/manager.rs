@@ -78,7 +78,10 @@ impl TransactionManager {
     /// Begin a new transaction
     pub fn begin(&self) -> Result<u64, String> {
         let tx_id = {
-            let mut next = self.next_tx_id.lock().unwrap();
+            let mut next = self
+                .next_tx_id
+                .lock()
+                .expect("Failed to acquire next_tx_id lock");
             let id = *next;
             *next += 1;
             id
@@ -86,7 +89,10 @@ impl TransactionManager {
 
         // Get snapshot of active transactions
         let snapshot: Vec<u64> = {
-            let active = self.active_transactions.lock().unwrap();
+            let active = self
+                .active_transactions
+                .lock()
+                .expect("Failed to acquire active_transactions lock");
             active.keys().cloned().collect()
         };
 
@@ -100,14 +106,20 @@ impl TransactionManager {
             .map_err(|e| e.to_string())?;
 
         // Register transaction
-        self.active_transactions.lock().unwrap().insert(tx_id, tx);
+        self.active_transactions
+            .lock()
+            .expect("Failed to acquire active_transactions lock")
+            .insert(tx_id, tx);
 
         Ok(tx_id)
     }
 
     /// Commit a transaction
     pub fn commit(&self, tx_id: u64) -> Result<(), String> {
-        let mut active = self.active_transactions.lock().unwrap();
+        let mut active = self
+            .active_transactions
+            .lock()
+            .expect("Failed to acquire active_transactions lock");
 
         if let Some(tx) = active.get_mut(&tx_id) {
             if tx.state != TxState::Active {
@@ -132,7 +144,10 @@ impl TransactionManager {
 
     /// Rollback a transaction
     pub fn rollback(&self, tx_id: u64) -> Result<(), String> {
-        let mut active = self.active_transactions.lock().unwrap();
+        let mut active = self
+            .active_transactions
+            .lock()
+            .expect("Failed to acquire active_transactions lock");
 
         if let Some(tx) = active.get_mut(&tx_id) {
             if tx.state != TxState::Active {
@@ -157,7 +172,10 @@ impl TransactionManager {
 
     /// Get transaction state
     pub fn get_state(&self, tx_id: u64) -> Option<TxState> {
-        let active = self.active_transactions.lock().unwrap();
+        let active = self
+            .active_transactions
+            .lock()
+            .expect("Failed to acquire active_transactions lock");
         active.get(&tx_id).map(|tx| tx.state.clone())
     }
 

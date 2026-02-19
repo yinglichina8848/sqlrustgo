@@ -1,0 +1,47 @@
+{
+  "name": "orders",
+  "columns": [
+    {
+      "name": "amount",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 100
+      }
+    ],
+    [
+      {
+        "Integer": 200
+      }
+    ],
+    [
+      {
+        "Integer": 300
+      }
+    ]
+  ]
+}tive"
+      }
+    ],
+    [
+      {
+        "Integer": 200
+      },
+      {
+        "Text": "active"
+      }
+    ],
+    [
+      {
+        "Integer": 50
+      },
+      {
+        "Text": "inactive"
+      }
+    ]
+  ]
+}
