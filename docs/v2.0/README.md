@@ -11,10 +11,12 @@
 ```
 docs/v2.0/
 ├── README.md                      # 本文档
+├── WHITEPAPER.md                  # 2.0 白皮书
 ├── SQLRUSTGO_2_0_ROADMAP.md       # 2.0 总体路线图
 │
 ├── 成熟度评估/
 │   ├── MATURITY_MODEL.md          # L0-L4 成熟度模型
+│   ├── MATURITY_SCORECARD.md      # 架构成熟度打分表
 │   ├── GROWTH_ROADMAP.md          # 成长路线图
 │   └── ARCHITECTURE_GOVERNANCE.md # 架构治理蓝图
 │
@@ -22,12 +24,15 @@ docs/v2.0/
 │   ├── PLUGIN_ARCHITECTURE.md     # 插件化执行架构
 │   ├── PLAN_DATA_STRUCTURES.md    # LogicalPlan/PhysicalPlan 设计
 │   ├── PLUGIN_EXECUTOR_DESIGN.md  # 插件化执行引擎原型
-│   └── PLUGIN_REGISTRY.md         # 插件注册机制
+│   ├── PLUGIN_REGISTRY.md         # 插件注册机制
+│   └── PLUGIN_SYSTEM_CODE.md      # 插件系统真实代码结构
 │
 ├── 性能优化/
 │   ├── VECTORIZED_EXECUTION.md    # 向量化执行模型
+│   ├── VECTORIZED_EXPRESSION.md   # 向量化表达式执行完整设计
 │   ├── PERFORMANCE_ANALYSIS_50K.md# 5万行压力测试分析
-│   └── CBO_DESIGN.md              # 成本优化器设计
+│   ├── CBO_DESIGN.md              # 成本优化器设计
+│   └── CBO_ALGORITHM.md           # CBO 详细算法（含 Join DP 公式）
 │
 └── 重构计划/
     ├── L3_UPGRADE_PLAN.md         # L3 升级计划
@@ -41,15 +46,23 @@ docs/v2.0/
 
 ## 二、文档分类
 
-### 2.1 成熟度评估
+### 2.1 白皮书与路线图
+
+| 文档 | 说明 |
+|:-----|:-----|
+| WHITEPAPER.md | SQLRustGo 2.0 白皮书 |
+| SQLRUSTGO_2_0_ROADMAP.md | 2.0 总体路线图 |
+
+### 2.2 成熟度评估
 
 | 文档 | 说明 |
 |:-----|:-----|
 | MATURITY_MODEL.md | L0-L4 五级成熟度定义 |
+| MATURITY_SCORECARD.md | 架构成熟度打分表（L1-L5） |
 | GROWTH_ROADMAP.md | 个人项目 → 企业级产品路线图 |
 | ARCHITECTURE_GOVERNANCE.md | 分支保护、权限控制、长期演进 |
 
-### 2.2 架构设计
+### 2.3 架构设计
 
 | 文档 | 说明 |
 |:-----|:-----|
@@ -57,16 +70,19 @@ docs/v2.0/
 | PLAN_DATA_STRUCTURES.md | LogicalPlan / PhysicalPlan 数据结构 |
 | PLUGIN_EXECUTOR_DESIGN.md | 可插拔执行引擎原型 |
 | PLUGIN_REGISTRY.md | 插件注册中心实现 |
+| PLUGIN_SYSTEM_CODE.md | 插件系统真实代码结构 |
 
-### 2.3 性能优化
+### 2.4 性能优化
 
 | 文档 | 说明 |
 |:-----|:-----|
 | VECTORIZED_EXECUTION.md | 向量化执行模型设计 |
+| VECTORIZED_EXPRESSION.md | 向量化表达式执行完整设计 |
 | PERFORMANCE_ANALYSIS_50K.md | 5万行规模压力测试分析 |
 | CBO_DESIGN.md | 成本优化器（CBO）设计 |
+| CBO_ALGORITHM.md | CBO 详细算法（含 Join DP 公式） |
 
-### 2.4 重构计划
+### 2.5 重构计划
 
 | 文档 | 说明 |
 |:-----|:-----|
@@ -135,7 +151,19 @@ docs/v2.0/
 
 ---
 
-## 五、对标分析
+## 五、阅读顺序
+
+推荐阅读顺序：
+
+1. **了解现状**：MATURITY_MODEL.md → MATURITY_SCORECARD.md → ARCHITECTURE_RISK_MODEL.md
+2. **理解目标**：WHITEPAPER.md → SQLRUSTGO_2_0_ROADMAP.md → GROWTH_ROADMAP.md
+3. **学习架构**：PLUGIN_ARCHITECTURE.md → PLAN_DATA_STRUCTURES.md → PLUGIN_SYSTEM_CODE.md
+4. **规划重构**：L3_UPGRADE_PLAN.md → REFACTORING_PRIORITY.md
+5. **深入优化**：VECTORIZED_EXPRESSION.md → CBO_ALGORITHM.md
+
+---
+
+## 六、对标分析
 
 | 模块 | sqlrustgo | DataFusion |
 |:-----|:----------|:-----------|
@@ -148,7 +176,7 @@ docs/v2.0/
 
 ---
 
-## 六、关键原则
+## 七、关键原则
 
 ```
 1. 模块独立 - 每个模块可独立开发、测试
@@ -157,18 +185,6 @@ docs/v2.0/
 4. 避免循环依赖 - 使用依赖注入解耦
 5. 每个模块可单测 - 模块边界清晰
 ```
-
----
-
-## 七、阅读顺序
-
-推荐阅读顺序：
-
-1. **了解现状**：MATURITY_MODEL.md → ARCHITECTURE_RISK_MODEL.md
-2. **理解目标**：SQLRUSTGO_2_0_ROADMAP.md → GROWTH_ROADMAP.md
-3. **学习架构**：PLUGIN_ARCHITECTURE.md → PLAN_DATA_STRUCTURES.md
-4. **规划重构**：L3_UPGRADE_PLAN.md → REFACTORING_PRIORITY.md
-5. **深入优化**：VECTORIZED_EXECUTION.md → CBO_DESIGN.md
 
 ---
 
