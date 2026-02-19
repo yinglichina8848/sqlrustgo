@@ -430,7 +430,7 @@ jobs:
 - README.md
 - CHANGELOG.md
 - ROADMAP.md
-- 对话记录.md
+- Claude对话记录.md
 - 设计文档和实施计划
 
 ---
