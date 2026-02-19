@@ -232,7 +232,10 @@ fn test_permission_user_crud_operations() {
         auth.check_permission(&session.id, &Operation::Create)
             .is_err()
     );
-    assert!(auth.check_permission(&session.id, &Operation::Drop).is_err());
+    assert!(
+        auth.check_permission(&session.id, &Operation::Drop)
+            .is_err()
+    );
 }
 
 #[test]
@@ -261,7 +264,10 @@ fn test_permission_readonly_only_select() {
         auth.check_permission(&session.id, &Operation::Create)
             .is_err()
     );
-    assert!(auth.check_permission(&session.id, &Operation::Drop).is_err());
+    assert!(
+        auth.check_permission(&session.id, &Operation::Drop)
+            .is_err()
+    );
 }
 
 #[test]
