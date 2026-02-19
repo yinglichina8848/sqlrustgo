@@ -265,6 +265,11 @@ impl<'a> Lexer<'a> {
                     "AND" => Token::And,
                     "OR" => Token::Or,
                     "NOT" => Token::Not,
+                    "COUNT" => Token::Count,
+                    "SUM" => Token::Sum,
+                    "AVG" => Token::Avg,
+                    "MIN" => Token::Min,
+                    "MAX" => Token::Max,
                     _ => Token::Identifier(ident),
                 }
             }
