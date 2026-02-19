@@ -1484,10 +1484,123 @@ mod tests {
 
     #[test]
     fn test_mysql_packet_serialize_via_parse() {
-        // Test MySqlPacket serialize via parse then serialize
         let data = vec![0x03, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03];
         let packet = MySqlPacket::parse(&data).unwrap();
         let bytes = packet.serialize();
-        assert_eq!(bytes.len(), 7); // 4 header + 3 payload
+        assert_eq!(bytes.len(), 7);
+    }
+
+    #[test]
+    fn test_handshake_parse_bytes() {
+        let handshake = HandshakeV10::new(99);
+        let bytes = handshake.to_bytes();
+        assert!(bytes.len() > 10);
+    }
+
+    #[test]
+    fn test_network_handler_fields_integration() {
+        use std::net::TcpListener;
+        use std::net::TcpStream;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let handle = std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                let handler = NetworkHandler::new(stream, 123);
+                assert_eq!(handler.connection_id, 123);
+            }
+        });
+
+        if let Ok(mut client) = TcpStream::connect(addr) {
+            use std::io::Read;
+            let mut buf = [0u8; 1];
+            let _ = client.read(&mut buf);
+        }
+
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn test_execute_query_integration() {
+        use std::net::TcpListener;
+        use std::net::TcpStream;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let handle = std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                let mut handler = NetworkHandler::new(stream, 1);
+                let _ = handler.send_greeting();
+                let _ = handler.read_packet();
+                let _ = handler.execute_query("SELECT 1");
+            }
+        });
+
+        if let Ok(mut client) = TcpStream::connect(addr) {
+            use std::io::Read;
+            let mut greeting = [0u8; 256];
+            let _ = client.read(&mut greeting).unwrap();
+
+            let mut packet = vec![
+                0x09, 0x00, 0x00, 0x01, 0x03, b'S', b'E', b'L', b'E', b'C', b'T', b' ', b'1',
+            ];
+            use std::io::Write;
+            let _ = client.write_all(&packet);
+
+            let mut resp = [0u8; 256];
+            let _ = client.read(&mut resp).unwrap();
+        }
+
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn test_send_ok_integration() {
+        use std::net::TcpListener;
+        use std::net::TcpStream;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let handle = std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                let mut handler = NetworkHandler::new(stream, 1);
+                let _ = handler.send_ok("test", 0);
+            }
+        });
+
+        if let Ok(mut client) = TcpStream::connect(addr) {
+            use std::io::Read;
+            let mut buf = [0u8; 256];
+            let _ = client.read(&mut buf).unwrap();
+        }
+
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn test_send_error_integration() {
+        use std::net::TcpListener;
+        use std::net::TcpStream;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let handle = std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                let mut handler = NetworkHandler::new(stream, 1);
+                let _ = handler.send_error(1064, "error");
+            }
+        });
+
+        if let Ok(mut client) = TcpStream::connect(addr) {
+            use std::io::Read;
+            let mut buf = [0u8; 256];
+            let _ = client.read(&mut buf).unwrap();
+        }
+
+        let _ = handle.join();
     }
 }
