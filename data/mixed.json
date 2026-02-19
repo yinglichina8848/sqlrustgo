@@ -1,0 +1,33 @@
+{
+  "name": "mixed",
+  "columns": [
+    {
+      "name": "a",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "b",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "x"
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Text": "y"
+      }
+    ]
+  ]
+}
