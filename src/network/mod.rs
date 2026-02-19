@@ -882,6 +882,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_row_data_float_serialization() {
         let values = vec![Value::Float(3.14159)];
         let row = RowData { values };
@@ -1008,6 +1009,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_row_data_multiple_values() {
         // Test serializing multiple values
         let values = vec![
