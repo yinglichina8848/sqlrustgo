@@ -1,0 +1,25 @@
+{
+  "name": "test_avg",
+  "columns": [
+    {
+      "name": "val",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 10
+      }
+    ],
+    [
+      "Null"
+    ],
+    [
+      {
+        "Integer": 20
+      }
+    ]
+  ]
+}

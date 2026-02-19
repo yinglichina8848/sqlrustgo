@@ -278,36 +278,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut min: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_less = match (min, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi < mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf < mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs < ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_less {
-                                        min = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_less = match (min, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi < mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf < mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs < ms,
+                                    _ => false,
+                                };
+                                if is_less {
+                                    min = Some(v);
                                 }
                             }
                         }
@@ -320,36 +302,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut max: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_greater = match (max, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi > mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf > mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs > ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_greater {
-                                        max = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_greater = match (max, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi > mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf > mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs > ms,
+                                    _ => false,
+                                };
+                                if is_greater {
+                                    max = Some(v);
                                 }
                             }
                         }
