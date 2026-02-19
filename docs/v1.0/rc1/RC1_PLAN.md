@@ -93,6 +93,17 @@
 - **2026-02-26**: 所有质量保证任务完成
 - **2026-02-27**: RC1 验收完成，准备发布到正式版
 
+### 4.3 观察期安排
+
+- **观察时间**: 3~5 天
+- **监控措施**:
+  - 自动化 CI 监控
+  - 定期运行安全扫描
+  - 问题反馈模板
+- **反馈渠道**: 
+  - GitHub Issues
+  - 团队沟通工具
+
 ## 5. 风险与应对
 
 ### 5.1 潜在风险
@@ -143,6 +154,11 @@
 - [ ] 所有文档更新完成
 - [ ] 所有测试通过
 - [ ] 发布说明编写完成
+- [ ] GPG 签名检查: `git verify-commit <commit>`
+- [ ] 分支保护状态检查: `gh api repos/minzuuniversity/sqlrustgo/branches/v1.0.0-rc1/protection`
+- [ ] 安全扫描: `cargo audit`
+- [ ] CHANGELOG 生成: `git cliff -o CHANGELOG.md --tag v1.0.0-beta..`
+- [ ] RC 标签创建 (Annotated): `git tag -a v1.0.0-rc1 -m "Release Candidate 1"`
 
 ### 7.2 发布流程
 
