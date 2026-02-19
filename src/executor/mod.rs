@@ -2,7 +2,7 @@
 //! Executes SQL statements and returns results
 
 use crate::parser::{
-    AggregateCall, AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
+    AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
     Statement, UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
