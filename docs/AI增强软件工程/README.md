@@ -10,6 +10,7 @@
 |:-----|:-----|:---------|
 | [AI协作开发教程.md](AI协作开发教程.md) | ⭐ AI-IDE、AI-CLI、OpenClaw 多 Agent 协作开发教程 | ⭐⭐⭐⭐⭐ |
 | [AI_AGENT_COLLAB_GOVERNANCE.md](AI_AGENT_COLLAB_GOVERNANCE.md) | AI Agent 协作治理规范，定义分支权限、提交流程、CI 门禁 | ⭐⭐⭐⭐ |
+| [高小原对话记录.md](高小原对话记录.md) | OpenClaw Agent 高小原的实战对话记录，包含协作流程和经验教训 | ⭐⭐⭐⭐ |
 
 ---
 
