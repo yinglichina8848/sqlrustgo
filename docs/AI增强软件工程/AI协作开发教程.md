@@ -787,6 +787,7 @@ SQLRustGo 是一个用 Rust 实现的 SQL 数据库内核，采用 AI 协作开�
 | 文档 | 路径 |
 |:-----|:-----|
 | AI Agent 协作治理规范 | [AI_AGENT_COLLAB_GOVERNANCE.md](AI_AGENT_COLLAB_GOVERNANCE.md) |
+| 高小原对话记录 | [高小原对话记录.md](高小原对话记录.md) ⭐ |
 | Claude 对话记录 | [Claude对话记录.md](../v1.0/Claude对话记录.md) |
 | 飞书群聊记录 | [飞书-龙虾群聊记录.md](../v1.0/飞书-龙虾群聊记录.md) |
 | 小龙虾群聊记录 | [小龙虾的群聊记录.md](../v1.0/小龙虾的群聊记录.md) |
