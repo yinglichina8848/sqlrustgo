@@ -1,5 +1,6 @@
 //! Authentication module tests
 
+use std::str::FromStr;
 use sqlrustgo::{AuthManager, AuthError, Role, Operation};
 
 #[test]
@@ -160,11 +161,11 @@ fn test_get_user() {
 
 #[test]
 fn test_role_from_str() {
-    assert_eq!(Role::from_str("admin"), Some(Role::Admin));
-    assert_eq!(Role::from_str("user"), Some(Role::User));
-    assert_eq!(Role::from_str("readonly"), Some(Role::Readonly));
-    assert_eq!(Role::from_str("ADMIN"), Some(Role::Admin));
-    assert_eq!(Role::from_str("unknown"), None);
+    assert_eq!(Role::from_str("admin"), Ok(Role::Admin));
+    assert_eq!(Role::from_str("user"), Ok(Role::User));
+    assert_eq!(Role::from_str("readonly"), Ok(Role::Readonly));
+    assert_eq!(Role::from_str("ADMIN"), Ok(Role::Admin));
+    assert!(Role::from_str("unknown").is_err());
 }
 
 #[test]
