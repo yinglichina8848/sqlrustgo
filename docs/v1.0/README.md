@@ -84,7 +84,7 @@ docs/v1.0/
 ├── README.md                   # 本文档
 ├── 文档阅读指南.md             # v1.0 专属阅读指南
 ├── Claude对话记录.md           # Phase 0: 项目起源（最初始设计）
-├── AI协作开发教程.md           # Phase 0: AI-IDE/CLI/OpenClaw 教程
+├── AI增强软件工程/           # Phase 0: AI-IDE/CLI/OpenClaw 教程（移至 docs/AI增强软件工程/）
 │
 ├── 草稿计划/                   # Phase 1: 规划阶段
 │   ├── 2026-02-14-sqlrustgo-feature-completion.md
@@ -127,7 +127,7 @@ docs/v1.0/
 | 文档 | 说明 |
 |:-----|:-----|
 | [Claude对话记录.md](Claude对话记录.md) | ⭐ 项目最初始的设计对话，是理解项目设计思想的起点 |
-| [AI协作开发教程.md](AI协作开发教程.md) | ⭐ AI-IDE、AI-CLI、OpenClaw 多 Agent 协作开发教程 |
+| [AI协作开发教程.md](../AI增强软件工程/AI协作开发教程.md) | ⭐ AI-IDE、AI-CLI、OpenClaw 多 Agent 协作开发教程 |
 
 ### Phase 1: 草稿计划（规划阶段）
 
