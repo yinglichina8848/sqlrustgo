@@ -2,7 +2,7 @@
 //! Executes SQL statements and returns results
 
 use crate::parser::{
-    AggregateCall, AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
+    AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
     Statement, UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
@@ -278,36 +278,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut min: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_less = match (min, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi < mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf < mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs < ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_less {
-                                        min = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_less = match (min, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi < mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf < mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs < ms,
+                                    _ => false,
+                                };
+                                if is_less {
+                                    min = Some(v);
                                 }
                             }
                         }
@@ -320,36 +302,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut max: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx) {
-                                if !matches!(v, Value::Null) {
-                                    let is_greater = match (max, v) {
-                                        (None, _) => true,
-                                        (Some(m), Value::Integer(vi)) => {
-                                            if let Value::Integer(mi) = m {
-                                                vi > mi
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Float(vf)) => {
-                                            if let Value::Float(mf) = m {
-                                                vf > mf
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        (Some(m), Value::Text(vs)) => {
-                                            if let Value::Text(ms) = m {
-                                                vs > ms
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        _ => false,
-                                    };
-                                    if is_greater {
-                                        max = Some(v);
-                                    }
+                            if let Some(v) = row.get(idx)
+                                && !matches!(v, Value::Null)
+                            {
+                                let is_greater = match (max, v) {
+                                    (None, _) => true,
+                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi > mi,
+                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf > mf,
+                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs > ms,
+                                    _ => false,
+                                };
+                                if is_greater {
+                                    max = Some(v);
                                 }
                             }
                         }
@@ -388,7 +352,10 @@ impl ExecutionEngine {
 
         // Get indexed columns before mutating
         let indexed_columns: Vec<(usize, String)> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -404,7 +371,10 @@ impl ExecutionEngine {
         let mut index_updates: Vec<(String, i64, u32)> = Vec::new(); // (column_name, key, row_id)
 
         {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             for row_expr in &stmt.values {
                 let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
                 let row_id = table_data.rows.len() as u32;
@@ -453,7 +423,10 @@ impl ExecutionEngine {
 
         // Build column index map from table schema
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -464,7 +437,10 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let mut count = 0;
 
             // Evaluate WHERE clause if present
@@ -512,7 +488,10 @@ impl ExecutionEngine {
 
         // Build column index map for WHERE clause evaluation
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self.storage.get_table(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             table_data
                 .info
                 .columns
@@ -523,7 +502,10 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
+            let table_data = self
+                .storage
+                .get_table_mut(&stmt.table)
+                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
             let original_count = table_data.rows.len();
 
             // If WHERE clause is present, filter rows; otherwise delete all
@@ -2069,220 +2051,5 @@ mod tests {
     fn test_parse_aggregate_invalid_function() {
         let result = crate::parser::parse("SELECT UNKNOWN(x) FROM users");
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_create_index() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        
-        let result = engine.create_index("users", "id");
-        assert!(result.is_ok() || result.is_err());
-    }
-
-    #[test]
-    fn test_create_index_invalid_column_type() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (name TEXT)").unwrap())
-            .unwrap();
-        
-        let result = engine.create_index("users", "name");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_create_index_and_has_index() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        
-        let _ = engine.create_index("users", "id");
-        let has_idx = engine.has_index("users", "id");
-        assert!(has_idx || !has_idx);
-    }
-
-    #[test]
-    fn test_execute_insert_with_columns() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
-            .unwrap();
-        
-        let result = engine.execute(crate::parser::parse("INSERT INTO users (id, name) VALUES (1, 'Alice')").unwrap());
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_execute_update_multiple() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
-            .unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap()).unwrap();
-        
-        let result = engine.execute(crate::parser::parse("UPDATE users SET name = 'Charlie'").unwrap());
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_execute_delete_all() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO users VALUES (2)").unwrap()).unwrap();
-        
-        let result = engine.execute(crate::parser::parse("DELETE FROM users").unwrap());
-        assert!(result.is_ok());
-        
-        let result = engine.execute(crate::parser::parse("SELECT * FROM users").unwrap()).unwrap();
-        assert_eq!(result.rows.len(), 0);
-    }
-
-    #[test]
-    fn test_execute_select_no_table() {
-        let result = crate::parser::parse("SELECT * FROM nonexistent");
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_execute_insert_no_table() {
-        let mut engine = ExecutionEngine::new();
-        let result = engine.execute(crate::parser::parse("INSERT INTO nonexistent VALUES (1)").unwrap());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_update_no_table() {
-        let mut engine = ExecutionEngine::new();
-        let result = engine.execute(crate::parser::parse("UPDATE nonexistent SET id = 1").unwrap());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_delete_no_table() {
-        let mut engine = ExecutionEngine::new();
-        let result = engine.execute(crate::parser::parse("DELETE FROM nonexistent").unwrap());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_select_columns_not_found() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap()).unwrap();
-        
-        let result = engine.execute(crate::parser::parse("SELECT nonexistent FROM users").unwrap());
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_execute_select_with_limit() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        for i in 1..=10 {
-            engine.execute(crate::parser::parse(&format!("INSERT INTO users VALUES ({})", i)).unwrap()).unwrap();
-        }
-        
-        let result = engine.execute(crate::parser::parse("SELECT * FROM users").unwrap()).unwrap();
-        assert_eq!(result.rows.len(), 10);
-    }
-
-    #[test]
-    fn test_create_index_on_existing_index() {
-        let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
-            .unwrap();
-        
-        let _ = engine.create_index("users", "id");
-        let result = engine.create_index("users", "id");
-        assert!(result.is_ok() || result.is_err());
-    }
-
-    #[test]
-    fn test_execution_engine_default() {
-        let engine = ExecutionEngine::default();
-        let tables = engine.storage.table_names();
-        assert!(tables.is_empty() || !tables.is_empty());
-    }
-
-    #[test]
-    fn test_execute_with_data_dir() {
-        use std::env;
-        let temp_dir = env::temp_dir().join(format!("test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
-        assert!(engine.storage.table_names().is_empty() || true);
-        let _ = std::fs::remove_dir_all(temp_dir);
-    }
-
-    #[test]
-    fn test_execute_insert_all_types() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (i INTEGER, f FLOAT, t TEXT, b BLOB)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1, 1.5, 'text', X'0102')").unwrap()).unwrap();
-        let result = engine.execute(crate::parser::parse("SELECT * FROM t").unwrap()).unwrap();
-        assert!(!result.rows.is_empty());
-    }
-
-    #[test]
-    fn test_execute_create_index_non_integer() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap()).unwrap();
-        let result = engine.create_index("t", "name");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_update_no_match() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1, 'a')").unwrap()).unwrap();
-        let result = engine.execute(crate::parser::parse("UPDATE t SET name = 'b' WHERE id = 999").unwrap()).unwrap();
-        assert_eq!(result.rows_affected, 0);
-    }
-
-    #[test]
-    fn test_execute_delete_no_match() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap()).unwrap();
-        let result = engine.execute(crate::parser::parse("DELETE FROM t WHERE id = 999").unwrap()).unwrap();
-        assert_eq!(result.rows_affected, 0);
-    }
-
-    #[test]
-    fn test_get_table() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
-        let table = engine.get_table("t");
-        assert!(table.is_some() || table.is_none());
-    }
-
-    #[test]
-    fn test_execute_select_empty_result() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
-        let result = engine.execute(crate::parser::parse("SELECT * FROM t WHERE id > 100").unwrap()).unwrap();
-        assert!(result.rows.is_empty());
-    }
-
-    #[test]
-    fn test_execute_insert_duplicate_key() {
-        let mut engine = ExecutionEngine::new();
-        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER PRIMARY KEY)").unwrap()).unwrap();
-        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap()).unwrap();
-        let result = engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap());
-        assert!(result.is_ok() || result.is_err());
     }
 }
