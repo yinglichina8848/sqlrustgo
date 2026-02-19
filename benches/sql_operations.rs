@@ -1,5 +1,5 @@
-use criterion::{Criterion, criterion_group, criterion_main};
-use sqlrustgo::{ExecutionEngine, parse};
+use criterion::{criterion_group, criterion_main, Criterion};
+use sqlrustgo::{parse, ExecutionEngine};
 
 fn bench_parse_select(c: &mut Criterion) {
     c.bench_function("parse_simple_select", |b| {
