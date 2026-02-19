@@ -46,12 +46,30 @@ pub enum Statement {
     DropTable(DropTableStatement),
 }
 
+/// Aggregate function type
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregateFunction {
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+}
+
+/// Aggregate function call
+#[derive(Debug, Clone, PartialEq)]
+pub struct AggregateCall {
+    pub func: AggregateFunction,
+    pub column: Option<String>,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
     pub columns: Vec<SelectColumn>,
     pub table: String,
     pub where_clause: Option<Expression>,
+    pub aggregates: Vec<AggregateCall>,
 }
 
 /// Column in SELECT
@@ -196,9 +214,16 @@ impl Parser {
         self.expect(Token::Select)?;
 
         let mut columns = Vec::new();
+        let mut aggregates = Vec::new();
+
         loop {
             match self.current() {
                 Some(Token::From) => break,
+                Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+                | Some(Token::Max) => {
+                    let agg = self.parse_aggregate()?;
+                    aggregates.push(agg);
+                }
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -240,7 +265,39 @@ impl Parser {
             columns,
             table,
             where_clause,
+            aggregates,
         }))
+    }
+
+    fn parse_aggregate(&mut self) -> Result<AggregateCall, String> {
+        let func_token = self
+            .current()
+            .cloned()
+            .ok_or("Expected aggregate function")?;
+        let func = match func_token {
+            Token::Count => AggregateFunction::Count,
+            Token::Sum => AggregateFunction::Sum,
+            Token::Avg => AggregateFunction::Avg,
+            Token::Min => AggregateFunction::Min,
+            Token::Max => AggregateFunction::Max,
+            _ => return Err("Not an aggregate function".to_string()),
+        };
+
+        self.next(); // consume function name
+
+        self.expect(Token::LParen)?;
+
+        let column = match self.next() {
+            Some(Token::Star) => {
+                None // COUNT(*) case
+            }
+            Some(Token::Identifier(name)) => Some(name),
+            _ => return Err("Expected column name or *".to_string()),
+        };
+
+        self.expect(Token::RParen)?;
+
+        Ok(AggregateCall { func, column })
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
@@ -985,5 +1042,105 @@ mod tests {
     fn test_parse_select_not_expression() {
         let result = parse("SELECT * FROM users WHERE age NOT IN (1, 2)");
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_aggregate_count_star() {
+        let result = parse("SELECT COUNT(*) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Count);
+                assert!(s.aggregates[0].column.is_none());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_count_column() {
+        let result = parse("SELECT COUNT(id) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Count);
+                assert_eq!(s.aggregates[0].column, Some("id".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_sum() {
+        let result = parse("SELECT SUM(amount) FROM orders");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Sum);
+                assert_eq!(s.aggregates[0].column, Some("amount".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_avg() {
+        let result = parse("SELECT AVG(price) FROM products");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Avg);
+                assert_eq!(s.aggregates[0].column, Some("price".to_string()));
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_min() {
+        let result = parse("SELECT MIN(age) FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Min);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_max() {
+        let result = parse("SELECT MAX(score) FROM tests");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Max);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_multiple() {
+        let result = parse("SELECT COUNT(*), SUM(amount), AVG(price) FROM orders");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.aggregates.len(), 3);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_case_insensitive() {
+        let result = parse("select count(id) from users");
+        assert!(result.is_ok());
     }
 }
