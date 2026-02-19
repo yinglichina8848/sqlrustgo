@@ -24,4 +24,24 @@
       }
     ]
   ]
+}tive"
+      }
+    ],
+    [
+      {
+        "Integer": 200
+      },
+      {
+        "Text": "active"
+      }
+    ],
+    [
+      {
+        "Integer": 50
+      },
+      {
+        "Text": "inactive"
+      }
+    ]
+  ]
 }

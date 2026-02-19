@@ -1,0 +1,43 @@
+{
+  "root": {
+    "Internal": {
+      "keys": [
+        1
+      ],
+      "children": [
+        {
+          "Leaf": {
+            "keys": [
+              1,
+              1,
+              1
+            ],
+            "values": [
+              0,
+              0,
+              0
+            ],
+            "next": null
+          }
+        },
+        {
+          "Leaf": {
+            "keys": [
+              1,
+              1,
+              1,
+              2
+            ],
+            "values": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "next": null
+          }
+        }
+      ]
+    }
+  }
+}
