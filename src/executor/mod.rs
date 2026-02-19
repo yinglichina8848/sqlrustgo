@@ -2,8 +2,8 @@
 //! Executes SQL statements and returns results
 
 use crate::parser::{
-    AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement, Statement,
-    UpdateStatement,
+    AggregateFunction, DeleteStatement, Expression, InsertStatement, SelectStatement,
+    Statement, UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
 use crate::types::{SqlError, SqlResult, Value, parse_sql_literal};
@@ -227,16 +227,13 @@ impl ExecutionEngine {
                     if column_name == "*" {
                         Value::Integer(rows.len() as i64)
                     } else {
-                        let count = rows
-                            .iter()
-                            .filter(|row| {
-                                if let Some(idx) = column_idx {
-                                    row.get(idx) != Some(&Value::Null)
-                                } else {
-                                    true
-                                }
-                            })
-                            .count();
+                        let count = rows.iter().filter(|row| {
+                            if let Some(idx) = column_idx {
+                                row.get(idx) != Some(&Value::Null)
+                            } else {
+                                true
+                            }
+                        }).count();
                         Value::Integer(count as i64)
                     }
                 }
@@ -334,7 +331,7 @@ impl ExecutionEngine {
                 AggregateFunction::Min => format!("MIN({})", column_name),
                 AggregateFunction::Max => format!("MAX({})", column_name),
             };
-
+            
             result_columns.push(col_name);
             result_rows.push(vec![result]);
         }
@@ -1876,9 +1873,7 @@ mod tests {
     fn test_aggregate_with_where() {
         let mut engine = ExecutionEngine::new();
         engine
-            .execute(
-                crate::parser::parse("CREATE TABLE orders (amount INTEGER, status TEXT)").unwrap(),
-            )
+            .execute(crate::parser::parse("CREATE TABLE orders (amount INTEGER, status TEXT)").unwrap())
             .unwrap();
         engine
             .execute(crate::parser::parse("INSERT INTO orders VALUES (100, 'active')").unwrap())
@@ -1891,10 +1886,7 @@ mod tests {
             .unwrap();
 
         let result = engine
-            .execute(
-                crate::parser::parse("SELECT SUM(amount) FROM orders WHERE status = 'active'")
-                    .unwrap(),
-            )
+            .execute(crate::parser::parse("SELECT SUM(amount) FROM orders WHERE status = 'active'").unwrap())
             .unwrap();
         assert_eq!(result.rows[0][0], Value::Integer(300));
     }
@@ -1959,9 +1951,7 @@ mod tests {
             .unwrap();
 
         let result = engine
-            .execute(
-                crate::parser::parse("UPDATE users SET name = 'Charlie' WHERE id = 1").unwrap(),
-            )
+            .execute(crate::parser::parse("UPDATE users SET name = 'Charlie' WHERE id = 1").unwrap())
             .unwrap();
         assert_eq!(result.rows_affected, 1);
 
@@ -2069,7 +2059,7 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
-
+        
         let result = engine.create_index("users", "id");
         assert!(result.is_ok() || result.is_err());
     }
@@ -2080,7 +2070,7 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (name TEXT)").unwrap())
             .unwrap();
-
+        
         let result = engine.create_index("users", "name");
         assert!(result.is_err());
     }
@@ -2091,7 +2081,7 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
-
+        
         let _ = engine.create_index("users", "id");
         let has_idx = engine.has_index("users", "id");
         assert!(has_idx || !has_idx);
@@ -2103,10 +2093,8 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
             .unwrap();
-
-        let result = engine.execute(
-            crate::parser::parse("INSERT INTO users (id, name) VALUES (1, 'Alice')").unwrap(),
-        );
+        
+        let result = engine.execute(crate::parser::parse("INSERT INTO users (id, name) VALUES (1, 'Alice')").unwrap());
         assert!(result.is_ok());
     }
 
@@ -2116,15 +2104,10 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
             .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
-            .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap())
-            .unwrap();
-
-        let result =
-            engine.execute(crate::parser::parse("UPDATE users SET name = 'Charlie'").unwrap());
+        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap()).unwrap();
+        
+        let result = engine.execute(crate::parser::parse("UPDATE users SET name = 'Charlie'").unwrap());
         assert!(result.is_ok());
     }
 
@@ -2134,19 +2117,13 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap())
-            .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO users VALUES (2)").unwrap())
-            .unwrap();
-
+        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO users VALUES (2)").unwrap()).unwrap();
+        
         let result = engine.execute(crate::parser::parse("DELETE FROM users").unwrap());
         assert!(result.is_ok());
-
-        let result = engine
-            .execute(crate::parser::parse("SELECT * FROM users").unwrap())
-            .unwrap();
+        
+        let result = engine.execute(crate::parser::parse("SELECT * FROM users").unwrap()).unwrap();
         assert_eq!(result.rows.len(), 0);
     }
 
@@ -2159,8 +2136,7 @@ mod tests {
     #[test]
     fn test_execute_insert_no_table() {
         let mut engine = ExecutionEngine::new();
-        let result =
-            engine.execute(crate::parser::parse("INSERT INTO nonexistent VALUES (1)").unwrap());
+        let result = engine.execute(crate::parser::parse("INSERT INTO nonexistent VALUES (1)").unwrap());
         assert!(result.is_err());
     }
 
@@ -2184,10 +2160,8 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap())
-            .unwrap();
-
+        engine.execute(crate::parser::parse("INSERT INTO users VALUES (1)").unwrap()).unwrap();
+        
         let result = engine.execute(crate::parser::parse("SELECT nonexistent FROM users").unwrap());
         assert!(result.is_ok());
     }
@@ -2199,16 +2173,10 @@ mod tests {
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
         for i in 1..=10 {
-            engine
-                .execute(
-                    crate::parser::parse(&format!("INSERT INTO users VALUES ({})", i)).unwrap(),
-                )
-                .unwrap();
+            engine.execute(crate::parser::parse(&format!("INSERT INTO users VALUES ({})", i)).unwrap()).unwrap();
         }
-
-        let result = engine
-            .execute(crate::parser::parse("SELECT * FROM users").unwrap())
-            .unwrap();
+        
+        let result = engine.execute(crate::parser::parse("SELECT * FROM users").unwrap()).unwrap();
         assert_eq!(result.rows.len(), 10);
     }
 
@@ -2218,7 +2186,7 @@ mod tests {
         engine
             .execute(crate::parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
             .unwrap();
-
+        
         let _ = engine.create_index("users", "id");
         let result = engine.create_index("users", "id");
         assert!(result.is_ok() || result.is_err());
@@ -2243,29 +2211,16 @@ mod tests {
     #[test]
     fn test_execute_insert_all_types() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(
-                crate::parser::parse("CREATE TABLE t (i INTEGER, f FLOAT, t TEXT, b BLOB)")
-                    .unwrap(),
-            )
-            .unwrap();
-        engine
-            .execute(
-                crate::parser::parse("INSERT INTO t VALUES (1, 1.5, 'text', X'0102')").unwrap(),
-            )
-            .unwrap();
-        let result = engine
-            .execute(crate::parser::parse("SELECT * FROM t").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (i INTEGER, f FLOAT, t TEXT, b BLOB)").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1, 1.5, 'text', X'0102')").unwrap()).unwrap();
+        let result = engine.execute(crate::parser::parse("SELECT * FROM t").unwrap()).unwrap();
         assert!(!result.rows.is_empty());
     }
 
     #[test]
     fn test_execute_create_index_non_integer() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap()).unwrap();
         let result = engine.create_index("t", "name");
         assert!(result.is_err());
     }
@@ -2273,39 +2228,25 @@ mod tests {
     #[test]
     fn test_execute_update_no_match() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap())
-            .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO t VALUES (1, 'a')").unwrap())
-            .unwrap();
-        let result = engine
-            .execute(crate::parser::parse("UPDATE t SET name = 'b' WHERE id = 999").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER, name TEXT)").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1, 'a')").unwrap()).unwrap();
+        let result = engine.execute(crate::parser::parse("UPDATE t SET name = 'b' WHERE id = 999").unwrap()).unwrap();
         assert_eq!(result.rows_affected, 0);
     }
 
     #[test]
     fn test_execute_delete_no_match() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap())
-            .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap())
-            .unwrap();
-        let result = engine
-            .execute(crate::parser::parse("DELETE FROM t WHERE id = 999").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap()).unwrap();
+        let result = engine.execute(crate::parser::parse("DELETE FROM t WHERE id = 999").unwrap()).unwrap();
         assert_eq!(result.rows_affected, 0);
     }
 
     #[test]
     fn test_get_table() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
         let table = engine.get_table("t");
         assert!(table.is_some() || table.is_none());
     }
@@ -2313,24 +2254,16 @@ mod tests {
     #[test]
     fn test_execute_select_empty_result() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap())
-            .unwrap();
-        let result = engine
-            .execute(crate::parser::parse("SELECT * FROM t WHERE id > 100").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER)").unwrap()).unwrap();
+        let result = engine.execute(crate::parser::parse("SELECT * FROM t WHERE id > 100").unwrap()).unwrap();
         assert!(result.rows.is_empty());
     }
 
     #[test]
     fn test_execute_insert_duplicate_key() {
         let mut engine = ExecutionEngine::new();
-        engine
-            .execute(crate::parser::parse("CREATE TABLE t (id INTEGER PRIMARY KEY)").unwrap())
-            .unwrap();
-        engine
-            .execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap())
-            .unwrap();
+        engine.execute(crate::parser::parse("CREATE TABLE t (id INTEGER PRIMARY KEY)").unwrap()).unwrap();
+        engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap()).unwrap();
         let result = engine.execute(crate::parser::parse("INSERT INTO t VALUES (1)").unwrap());
         assert!(result.is_ok() || result.is_err());
     }

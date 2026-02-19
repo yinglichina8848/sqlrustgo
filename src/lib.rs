@@ -11,7 +11,7 @@ pub mod storage;
 pub mod transaction;
 pub mod types;
 
-pub use auth::{AuthError, AuthManager, Operation, Role, Session, User};
+pub use auth::{AuthManager, AuthError, Role, Operation, Session, User};
 pub use executor::{ExecutionEngine, ExecutionResult, execute};
 pub use lexer::{Lexer, Token, tokenize};
 pub use network::{NetworkHandler, connect, start_server_sync};
