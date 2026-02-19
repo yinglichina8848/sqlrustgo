@@ -3,6 +3,7 @@
 //! Provides user authentication, session management, and permission control.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// User role types
@@ -13,21 +14,24 @@ pub enum Role {
     Readonly,
 }
 
-impl Role {
-    /// Parse role from string
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for Role {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "admin" => Some(Role::Admin),
-            "user" => Some(Role::User),
-            "readonly" => Some(Role::Readonly),
-            _ => None,
+            "admin" => Ok(Role::Admin),
+            "user" => Ok(Role::User),
+            "readonly" => Ok(Role::Readonly),
+            _ => Err(format!("Invalid role: {}", s)),
         }
     }
+}
 
+impl Role {
     /// Check if role can perform specific operation
     pub fn can_execute(&self, operation: &Operation) -> bool {
         match self {
-            Role::Admin => true,  // Admin can do everything
+            Role::Admin => true,
             Role::User => matches!(operation, Operation::Select | Operation::Insert | Operation::Update | Operation::Delete),
             Role::Readonly => matches!(operation, Operation::Select),
         }
