@@ -78,6 +78,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_value_to_string() {
         assert_eq!(Value::Null.to_sql_string(), "NULL");
         assert_eq!(Value::Boolean(true).to_sql_string(), "true");
@@ -141,6 +142,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_value_float_precision() {
         assert_eq!(Value::Float(3.14159).to_sql_string(), "3.14159");
     }
