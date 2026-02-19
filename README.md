@@ -7,21 +7,59 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
-> 一个用 Rust 从零实现的 SQL-92 子集兼容的关系型数据库系统
+> **一个用 Rust 从零实现的 SQL-92 子集兼容的关系型数据库系统**
+> 
 > 专为学习和研究数据库内核设计，同时具备生产级别的代码质量
+
+---
+
+## 写在前面
+
+你好，欢迎来到 SQLRustGo！
+
+这是一个**教学演示型项目**，也是一个关于 AI 与软件工程相遇的故事。
+
+如果你好奇：一个老师如何用 AI 辅助工具，在短短几天内从零开始构建一个关系型数据库系统？这个项目就是答案。
+
+**完整故事**：[项目诞生记](docs/项目诞生记.md) —— 从 DeepSeek 探索到 Mac mini 重生，见证 AI 时代的软件工程新可能。
+
+---
+
+## 给不同读者的建议
+
+### 🎯 你是谁？
+
+| 读者类型 | 建议阅读路径 | 预计时间 |
+|:---------|:-------------|:---------|
+| **外行/好奇者** | [项目诞生记](docs/项目诞生记.md) → 本文档 | 15 分钟 |
+| **学生/初学者** | [文档阅读指南](docs/文档阅读指南.md) → [v1.0 文档](docs/v1.0/README.md) | 1-2 小时 |
+| **开发者** | [开发文档](docs/v1.0/dev/DEVELOP.md) → [AI 协作指南](docs/v1.0/草稿计划/2026-02-16-ai-collaboration-guide.md) | 2-3 小时 |
+| **架构师** | [v2.0 白皮书](docs/v2.0/WHITEPAPER.md) → [插件架构设计](docs/v2.0/架构设计/PLUGIN_ARCHITECTURE.md) | 3-4 小时 |
+| **管理者** | [版本推进流程](docs/VERSION_PROMOTION_SOP.md) → [AI 协作治理](docs/AI_AGENT_COLLAB_GOVERNANCE.md) | 1 小时 |
 
 ---
 
 ## 项目简介
 
-SQLRustGo 是一个教学演示型项目，展示了如何使用 AI 辅助工具从零开始构建一个关系型数据库系统。项目完整记录了从规划、设计、实现到测试的全过程，适合：
+SQLRustGo 是一个用 Rust 从零实现的 SQL-92 子集兼容的关系型数据库系统。
 
-- 学习数据库内核实现
-- 了解 AI 辅助开发流程
-- 研究 Rust 系统编程
-- 参考 SDD/TDD 开发实践
+### 这个项目适合谁？
 
-**项目地址：** [https://github.com/minzuuniversity/sqlrustgo/](https://github.com/minzuuniversity/sqlrustgo/)
+- **学生**：学习数据库内核实现，理解 SQL 解析、存储引擎、事务机制
+- **开发者**：研究 Rust 系统编程，学习 AI 辅助开发流程
+- **教师**：参考 AI 时代的软件工程教学方法
+- **研究者**：探索多 Agent 协作、SDD/TDD 开发实践
+
+### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **SQL 支持** | SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE |
+| **存储引擎** | Buffer Pool + FileStorage 持久化存储 |
+| **索引结构** | B+ Tree 索引支持 |
+| **事务机制** | Write-Ahead Log (WAL) 保障事务安全 |
+| **网络协议** | MySQL 风格协议支持 TCP 连接 |
+| **交互式 REPL** | 支持交互式 SQL 命令行 |
 
 ---
 
@@ -36,22 +74,22 @@ SQLRustGo 是一个教学演示型项目，展示了如何使用 AI 辅助工具
 
 ---
 
-## 快速导航
+## 快速开始
 
-### 按版本浏览
+```bash
+# 克隆项目
+git clone https://github.com/minzuuniversity/sqlrustgo.git
+cd sqlrustgo
 
-| 版本 | 文档入口 | 说明 |
-|:-----|:---------|:-----|
-| **v1.0** | [docs/v1.0/README.md](docs/v1.0/README.md) | 当前开发版本，Beta 阶段 |
-| **v2.0** | [docs/v2.0/README.md](docs/v2.0/README.md) | 架构演进规划 |
+# 构建
+cargo build --all-features
 
-### 按角色浏览
+# 运行测试
+cargo test --all-features
 
-| 角色 | 推荐阅读 |
-|:-----|:---------|
-| **新用户/学生** | [文档阅读指南](docs/文档阅读指南.md) |
-| **开发者** | [开发文档](docs/v1.0/dev/DEVELOP.md) |
-| **架构师** | [v2.0 白皮书](docs/v2.0/WHITEPAPER.md) |
+# 启动 REPL
+cargo run --bin sqlrustgo
+```
 
 ---
 
@@ -85,36 +123,14 @@ SQLRustGo 是一个教学演示型项目，展示了如何使用 AI 辅助工具
 
 ---
 
-## v1.0 版本详情
+## 文档导航
 
-### 当前状态：Beta 阶段
+### 按版本浏览
 
-- **目标**：稳定性验证、性能测试
-- **质量门禁**：测试覆盖率 > 85%
-- **核心功能**：SQL-92 子集、存储引擎、事务支持
-
-### 核心特性
-
-| 特性 | 说明 |
-|------|------|
-| SQL 支持 | SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE |
-| 存储引擎 | Buffer Pool + FileStorage 持久化存储 |
-| 索引结构 | B+ Tree 索引支持 |
-| 事务机制 | Write-Ahead Log (WAL) 保障事务安全 |
-| 网络协议 | MySQL 风格协议支持 TCP 连接 |
-
-### 快速开始
-
-```bash
-# 构建
-cargo build --all-features
-
-# 运行测试
-cargo test --all-features
-
-# 启动 REPL
-cargo run --bin sqlrustgo
-```
+| 版本 | 文档入口 | 说明 |
+|:-----|:---------|:-----|
+| **v1.0** | [docs/v1.0/README.md](docs/v1.0/README.md) | 当前开发版本，Beta 阶段 |
+| **v2.0** | [docs/v2.0/README.md](docs/v2.0/README.md) | 架构演进规划 |
 
 ### v1.0 文档导航
 
@@ -126,49 +142,25 @@ cargo run --bin sqlrustgo
 | **评估改进** | [综合改进计划](docs/v1.0/评估改进/综合改进计划.md) | 问题汇总、改进措施 |
 | **对话记录** | [对话记录](docs/v1.0/对话记录.md) | 项目创建过程中的关键对话 |
 
-**完整 v1.0 文档目录**：[docs/v1.0/README.md](docs/v1.0/README.md)
-
----
-
-## v2.0 规划
-
-### 目标：架构演进
-
-v2.0 将实现内核级架构升级，对标 Apache DataFusion 的设计层级。
-
-### 核心方向
-
-| 方向 | 说明 |
-|:-----|:-----|
-| **成熟度评估** | L0-L4 五级成熟度模型 |
-| **架构设计** | 插件化执行引擎、LogicalPlan/PhysicalPlan 分离 |
-| **性能优化** | 向量化执行、成本优化器 (CBO) |
-| **重构计划** | L3 升级计划、技术债分析 |
-
-### v2.0 文档导航
+### v2.0 规划导航
 
 | 分类 | 文档 | 说明 |
 |:-----|:-----|:-----|
 | **白皮书** | [2.0 白皮书](docs/v2.0/WHITEPAPER.md) | SQLRustGo 2.0 架构愿景 |
-| **路线图** | [2.0 路线图](docs/v2.0/SQLRUSTGO_2_0_ROADMAP.md) | 总体规划 |
 | **成熟度** | [成熟度模型](docs/v2.0/成熟度评估/MATURITY_MODEL.md) | L0-L4 定义 |
 | **架构** | [插件架构](docs/v2.0/架构设计/PLUGIN_ARCHITECTURE.md) | 插件化执行架构 |
 | **性能** | [向量化执行](docs/v2.0/性能优化/VECTORIZED_EXECUTION.md) | 向量化执行模型 |
 | **重构** | [L3 升级计划](docs/v2.0/重构计划/L3_UPGRADE_PLAN.md) | L2→L3 升级路径 |
 
-**完整 v2.0 文档目录**：[docs/v2.0/README.md](docs/v2.0/README.md)
-
 ---
 
 ## 文档体系
 
-### 总体结构
-
 ```
 docs/
-├── 文档阅读指南.md              ← 推荐入口
+├── 项目诞生记.md                ← 项目故事（推荐先读）
+├── 文档阅读指南.md              ← 文档导航
 ├── 项目演进说明.md              ← 项目演进历史
-├── architecture.md              ← 架构设计
 │
 ├── VERSION_PROMOTION_SOP.md     ← 版本推进流程
 ├── VERSION_FLOW_DIAGRAM.md      ← 版本流转图
@@ -190,35 +182,6 @@ docs/
     ├── 性能优化/               ← 性能优化
     └── 重构计划/               ← 重构计划
 ```
-
-### 推荐阅读路径
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        阅读路径推荐                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  新用户/学生:                                                    │
-│  README.md → 文档阅读指南.md → v1.0/README.md                   │
-│                                                                  │
-│  开发者:                                                         │
-│  README.md → v1.0/dev/DEVELOP.md → 草稿计划/                    │
-│                                                                  │
-│  架构师:                                                         │
-│  README.md → v2.0/WHITEPAPER.md → v2.0/架构设计/                │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 项目诞生记
-
-> 这是一个关于 AI 与软件工程相遇的故事，展示了从零开始构建数据库系统的完整历程。
-
-项目始于 2025 年春节，从最初的 DeepSeek 探索，到使用各种 AI 辅助工具（Trae、Cline、Cursor、Claude Code），最终在 2026 年 2 月重构为 SQLRustGo。
-
-**完整故事**：[项目演进说明.md](docs/项目演进说明.md)
 
 ---
 
