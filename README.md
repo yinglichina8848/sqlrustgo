@@ -119,6 +119,70 @@ cargo run --bin sqlrustgo
 cargo clippy --all-features -- -D warnings
 ```
 
+## 示例输出
+
+### REPL 交互示例
+
+```sql
+SQLRustGo v1.1.0-beta
+Type "help" for more information.
+sql> CREATE TABLE users (id INT, name TEXT, age INT);
+Query OK, 0 rows affected
+
+sql> INSERT INTO users VALUES (1, 'Alice', 25);
+Query OK, 1 row affected
+
+sql> INSERT INTO users VALUES (2, 'Bob', 30);
+Query OK, 1 row affected
+
+sql> SELECT * FROM users;
++----+--------+-----+
+| id | name   | age |
++----+--------+-----+
+| 1  | Alice  | 25  |
+| 2  | Bob    | 30  |
++----+--------+-----+
+2 rows in set
+
+sql> SELECT COUNT(*) FROM users;
++----------+
+| COUNT(*) |
++----------+
+| 2        |
++----------+
+1 row in set
+
+sql> SELECT AVG(age) FROM users;
++----------+
+| AVG(age) |
++----------+
+| 27.5     |
++----------+
+1 row in set
+
+sql> DROP TABLE users;
+Query OK, 0 rows affected
+
+sql> exit
+Goodbye!
+```
+
+### 事务示例
+
+```sql
+sql> BEGIN;
+Query OK, 0 rows affected
+
+sql> INSERT INTO users VALUES (1, 'Test', 20);
+Query OK, 1 row affected
+
+sql> ROLLBACK;
+Query OK, 0 rows affected
+
+sql> SELECT * FROM users;
+Empty set
+```
+
 ## 架构概览
 
 ```
