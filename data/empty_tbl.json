@@ -1,0 +1,11 @@
+{
+  "name": "empty_tbl",
+  "columns": [
+    {
+      "name": "amount",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": []
+}

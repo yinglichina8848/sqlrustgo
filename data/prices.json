@@ -1,0 +1,27 @@
+{
+  "name": "prices",
+  "columns": [
+    {
+      "name": "price",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 10
+      }
+    ],
+    [
+      {
+        "Integer": 20
+      }
+    ],
+    [
+      {
+        "Integer": 30
+      }
+    ]
+  ]
+}
