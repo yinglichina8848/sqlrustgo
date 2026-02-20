@@ -1,0 +1,23 @@
+name: RC Guard
+
+on:
+  pull_request:
+    branches:
+      - rc
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source branch
+        run: |
+          SOURCE_BRANCH=${{ github.head_ref }}
+          if [[ "$SOURCE_BRANCH" == feature/* ]]; then
+            echo "❌ Cannot merge feature into rc"
+            exit 1
+          fi
+          if [[ "$SOURCE_BRANCH" == experiment/* ]]; then
+            echo "❌ Cannot merge experiment into rc"
+            exit 1
+          fi
+          echo "✅ Source branch is allowed"
