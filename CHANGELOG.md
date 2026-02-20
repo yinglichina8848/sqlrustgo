@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.0.0-beta.0..
+## 1.0.0-alpha.1..v1.0.0-rc.1
 
 ### Bug Fixes
 
@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Documentation
 
 - add RC branch protection guide
+- generate CHANGELOG from v1.0.0-beta.0
 
 ### Features
 
