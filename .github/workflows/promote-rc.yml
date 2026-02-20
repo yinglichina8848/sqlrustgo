@@ -1,0 +1,35 @@
+name: Promote to RC
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: true
+
+jobs:
+  create-rc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: beta
+
+      - name: Create RC branch
+        run: |
+          git checkout -b rc/v${{ github.event.inputs.version }}-1
+          git push origin rc/v${{ github.event.inputs.version }}-1
+
+      - name: Create PR to main
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `RC: v${{ github.event.inputs.version }}-1`,
+              head: 'rc/v${{ github.event.inputs.version }}-1',
+              base: 'main',
+              body: 'Automated RC branch creation'
+            })
+            console.log(`Created PR: ${pr.html_url}`)

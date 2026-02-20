@@ -1,0 +1,17 @@
+{
+  "extends": ["config:base"],
+  "schedule": ["before 3am on monday"],
+  "packageRules": [
+    {
+      "groupName": "minor dependencies",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "groupName": "major dependencies",
+      "matchUpdateTypes": ["major"],
+      "labels": ["breaking-change"]
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2
+}
