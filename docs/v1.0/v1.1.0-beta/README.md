@@ -52,5 +52,6 @@
 ## 相关链接
 
 - [Issue #18 - Phase 2 任务](https://github.com/minzuuniversity/sqlrustgo/issues/18)
-- [Phase 1 文档](../v1.0.0-alpha)
-- [版本演进计划](../plans/2026-02-16-version-evolution-plan.md)
+- [Issue #19 - RC1 任务和门禁验收](https://github.com/minzuuniversity/sqlrustgo/issues/19)
+- [Phase 1 文档](../alpha/)
+- [版本演进计划](../草稿计划/2026-02-16-version-evolution-plan.md)
