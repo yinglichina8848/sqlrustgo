@@ -1,0 +1,33 @@
+name: Promote Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Merge RC to Release
+        run: |
+          git checkout -b release/v${{ github.event.inputs.version }} origin/rc
+          git push origin release/v${{ github.event.inputs.version }}
+
+      - name: Create PR to main
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Release v${{ github.event.inputs.version }}`,
+              head: 'release/v${{ github.event.inputs.version }}',
+              base: 'main',
+              body: 'Automated release promotion'
+            })
+            console.log(`Created PR: ${pr.html_url}`)
