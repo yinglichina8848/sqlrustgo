@@ -2,10 +2,10 @@
 //!
 //! Interactive SQL REPL and command-line interface
 
-use sqlrustgo::{ExecutionResult, init, parse};
+use sqlrustgo::{init, parse, ExecutionResult};
 use std::io::{self, Write};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 fn main() {
     println!("╔════════════════════════════════════════════════╗");
