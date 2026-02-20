@@ -224,3 +224,4 @@ docs/
 ---
 
 *如果你对这个项目感兴趣，欢迎 star、fork、pr。让我们一起探索 AI 时代软件工程的新可能。*
+# Local CI Check
