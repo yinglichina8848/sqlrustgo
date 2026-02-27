@@ -183,26 +183,21 @@ fn test_permission_admin_all_operations() {
     auth.register("admin", "pass", Role::Admin).unwrap();
     let session = auth.login("admin", "pass").unwrap();
 
-    assert!(
-        auth.check_permission(&session.id, &Operation::Select)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Insert)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Update)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Delete)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Create)
-            .is_ok()
-    );
+    assert!(auth
+        .check_permission(&session.id, &Operation::Select)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Insert)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Update)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Delete)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Create)
+        .is_ok());
     assert!(auth.check_permission(&session.id, &Operation::Drop).is_ok());
 }
 
@@ -212,30 +207,24 @@ fn test_permission_user_crud_operations() {
     auth.register("user", "pass", Role::User).unwrap();
     let session = auth.login("user", "pass").unwrap();
 
-    assert!(
-        auth.check_permission(&session.id, &Operation::Select)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Insert)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Update)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Delete)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Create)
-            .is_err()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Drop)
-            .is_err()
-    );
+    assert!(auth
+        .check_permission(&session.id, &Operation::Select)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Insert)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Update)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Delete)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Create)
+        .is_err());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Drop)
+        .is_err());
 }
 
 #[test]
@@ -244,30 +233,24 @@ fn test_permission_readonly_only_select() {
     auth.register("reader", "pass", Role::Readonly).unwrap();
     let session = auth.login("reader", "pass").unwrap();
 
-    assert!(
-        auth.check_permission(&session.id, &Operation::Select)
-            .is_ok()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Insert)
-            .is_err()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Update)
-            .is_err()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Delete)
-            .is_err()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Create)
-            .is_err()
-    );
-    assert!(
-        auth.check_permission(&session.id, &Operation::Drop)
-            .is_err()
-    );
+    assert!(auth
+        .check_permission(&session.id, &Operation::Select)
+        .is_ok());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Insert)
+        .is_err());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Update)
+        .is_err());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Delete)
+        .is_err());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Create)
+        .is_err());
+    assert!(auth
+        .check_permission(&session.id, &Operation::Drop)
+        .is_err());
 }
 
 #[test]
