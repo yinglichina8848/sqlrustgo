@@ -61,11 +61,12 @@ impl FileStorage {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json")
-                && let Some(table_name) = path.file_stem().and_then(|s| s.to_str())
-                && let Ok(table_data) = self.load_table(table_name)
-            {
-                self.tables.insert(table_name.to_string(), table_data);
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(table_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Ok(table_data) = self.load_table(table_name) {
+                        self.tables.insert(table_name.to_string(), table_data);
+                    }
+                }
             }
         }
 
@@ -83,18 +84,18 @@ impl FileStorage {
             let path = entry.path();
 
             // Look for index files: table_idx_column.json
-            if let Some(file_name) = path.file_name().and_then(|s| s.to_str())
-                && file_name.ends_with(".json")
-                && file_name.contains("_idx_")
-            {
-                // Parse table_idx_column.json
-                if let Some((table_name, column_name)) = file_name
-                    .strip_suffix(".json")
-                    .and_then(|s| s.split_once("_idx_"))
-                    && let Ok(index) = self.load_index(table_name, column_name)
-                {
-                    self.indexes
-                        .insert((table_name.to_string(), column_name.to_string()), index);
+            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                if file_name.ends_with(".json") && file_name.contains("_idx_") {
+                    // Parse table_idx_column.json
+                    if let Some((table_name, column_name)) = file_name
+                        .strip_suffix(".json")
+                        .and_then(|s| s.split_once("_idx_"))
+                    {
+                        if let Ok(index) = self.load_index(table_name, column_name) {
+                            self.indexes
+                                .insert((table_name.to_string(), column_name.to_string()), index);
+                        }
+                    }
                 }
             }
         }
@@ -255,10 +256,10 @@ impl FileStorage {
         // Build B+ Tree from existing rows
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
-            if let Some(value) = row.get(column_index)
-                && let Value::Integer(key) = value
-            {
-                index.insert(*key, row_id as u32);
+            if let Some(value) = row.get(column_index) {
+                if let Value::Integer(key) = value {
+                    index.insert(*key, row_id as u32);
+                }
             }
         }
 

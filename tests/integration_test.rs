@@ -1,7 +1,7 @@
 //! Integration tests for SQLRustGo
 //! Tests the complete SQL execution flow
 
-use sqlrustgo::{ExecutionEngine, TransactionManager, WriteAheadLog, parse};
+use sqlrustgo::{parse, ExecutionEngine, TransactionManager, WriteAheadLog};
 use std::sync::Arc;
 
 #[test]
@@ -108,8 +108,8 @@ fn test_error_handling() {
 #[test]
 #[allow(clippy::approx_constant)]
 fn test_value_type_conversion() {
-    use sqlrustgo::Value;
     use sqlrustgo::parse_sql_literal;
+    use sqlrustgo::Value;
 
     assert_eq!(parse_sql_literal("NULL"), Value::Null);
     assert_eq!(parse_sql_literal("42"), Value::Integer(42));
