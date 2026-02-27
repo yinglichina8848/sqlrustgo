@@ -6,7 +6,7 @@ use crate::parser::{
     UpdateStatement,
 };
 use crate::storage::{BufferPool, FileStorage};
-use crate::types::{SqlError, SqlResult, Value, parse_sql_literal};
+use crate::types::{parse_sql_literal, SqlError, SqlResult, Value};
 use std::path::PathBuf;
 
 /// Execution result returned to client
@@ -281,18 +281,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut min: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx)
-                                && !matches!(v, Value::Null)
-                            {
-                                let is_less = match (min, v) {
-                                    (None, _) => true,
-                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi < mi,
-                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf < mf,
-                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs < ms,
-                                    _ => false,
-                                };
-                                if is_less {
-                                    min = Some(v);
+                            if let Some(v) = row.get(idx) {
+                                if !matches!(v, Value::Null) {
+                                    let is_less = match (min, v) {
+                                        (None, _) => true,
+                                        (Some(Value::Integer(mi)), Value::Integer(vi)) => vi < mi,
+                                        (Some(Value::Float(mf)), Value::Float(vf)) => vf < mf,
+                                        (Some(Value::Text(ms)), Value::Text(vs)) => vs < ms,
+                                        _ => false,
+                                    };
+                                    if is_less {
+                                        min = Some(v);
+                                    }
                                 }
                             }
                         }
@@ -305,18 +305,18 @@ impl ExecutionEngine {
                     if let Some(idx) = column_idx {
                         let mut max: Option<&Value> = None;
                         for row in rows {
-                            if let Some(v) = row.get(idx)
-                                && !matches!(v, Value::Null)
-                            {
-                                let is_greater = match (max, v) {
-                                    (None, _) => true,
-                                    (Some(Value::Integer(mi)), Value::Integer(vi)) => vi > mi,
-                                    (Some(Value::Float(mf)), Value::Float(vf)) => vf > mf,
-                                    (Some(Value::Text(ms)), Value::Text(vs)) => vs > ms,
-                                    _ => false,
-                                };
-                                if is_greater {
-                                    max = Some(v);
+                            if let Some(v) = row.get(idx) {
+                                if !matches!(v, Value::Null) {
+                                    let is_greater = match (max, v) {
+                                        (None, _) => true,
+                                        (Some(Value::Integer(mi)), Value::Integer(vi)) => vi > mi,
+                                        (Some(Value::Float(mf)), Value::Float(vf)) => vf > mf,
+                                        (Some(Value::Text(ms)), Value::Text(vs)) => vs > ms,
+                                        _ => false,
+                                    };
+                                    if is_greater {
+                                        max = Some(v);
+                                    }
                                 }
                             }
                         }
@@ -385,10 +385,10 @@ impl ExecutionEngine {
 
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
-                    if let Some(value) = row.get(*col_idx)
-                        && let Value::Integer(key) = value
-                    {
-                        index_updates.push((col_name.clone(), *key, row_id));
+                    if let Some(value) = row.get(*col_idx) {
+                        if let Value::Integer(key) = value {
+                            index_updates.push((col_name.clone(), *key, row_id));
+                        }
                     }
                 }
 
@@ -458,10 +458,10 @@ impl ExecutionEngine {
                 if matches {
                     // Apply SET clauses with dynamic column mapping
                     for (column, value_expr) in &set_clauses {
-                        if let Some(&idx) = column_indices.get(column)
-                            && idx < row.len()
-                        {
-                            row[idx] = expression_to_value_static(value_expr);
+                        if let Some(&idx) = column_indices.get(column) {
+                            if idx < row.len() {
+                                row[idx] = expression_to_value_static(value_expr);
+                            }
                         }
                     }
                     count += 1;
@@ -620,26 +620,26 @@ impl ExecutionEngine {
         _column_map: &std::collections::HashMap<String, usize>,
     ) -> Option<Vec<usize>> {
         // Try to use index for simple equality conditions on indexed columns
-        if let Expression::BinaryOp(left, op, right) = where_expr
-            && op.as_str() == "="
-        {
-            // Check if left side is a column reference
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                // Check if right side is a literal value
-                if let Expression::Literal(val) = right.as_ref() {
-                    // Check if we have an index on this column
-                    let key_value = parse_sql_literal(val);
-                    if let Some(key) = key_value.as_integer()
-                        && self.storage.has_index(&table_data.info.name, col_name)
-                    {
-                        // Use index to find matching row
-                        if let Some(row_id) =
-                            self.storage
-                                .search_index(&table_data.info.name, col_name, key)
-                        {
-                            return Some(vec![row_id as usize]);
-                        } else {
-                            return Some(vec![]); // No match
+        if let Expression::BinaryOp(left, op, right) = where_expr {
+            if op.as_str() == "=" {
+                // Check if left side is a column reference
+                if let Expression::Identifier(col_name) = left.as_ref() {
+                    // Check if right side is a literal value
+                    if let Expression::Literal(val) = right.as_ref() {
+                        // Check if we have an index on this column
+                        let key_value = parse_sql_literal(val);
+                        if let Some(key) = key_value.as_integer() {
+                            if self.storage.has_index(&table_data.info.name, col_name) {
+                                // Use index to find matching row
+                                if let Some(row_id) =
+                                    self.storage
+                                        .search_index(&table_data.info.name, col_name, key)
+                                {
+                                    return Some(vec![row_id as usize]);
+                                } else {
+                                    return Some(vec![]); // No match
+                                }
+                            }
                         }
                     }
                 }
@@ -1622,21 +1622,15 @@ mod tests {
             .ok();
 
         // Select from each
-        assert!(
-            engine
-                .execute(crate::parser::parse("SELECT * FROM t1").unwrap())
-                .is_ok()
-        );
-        assert!(
-            engine
-                .execute(crate::parser::parse("SELECT * FROM t2").unwrap())
-                .is_ok()
-        );
-        assert!(
-            engine
-                .execute(crate::parser::parse("SELECT * FROM t3").unwrap())
-                .is_ok()
-        );
+        assert!(engine
+            .execute(crate::parser::parse("SELECT * FROM t1").unwrap())
+            .is_ok());
+        assert!(engine
+            .execute(crate::parser::parse("SELECT * FROM t2").unwrap())
+            .is_ok());
+        assert!(engine
+            .execute(crate::parser::parse("SELECT * FROM t3").unwrap())
+            .is_ok());
     }
 
     #[test]

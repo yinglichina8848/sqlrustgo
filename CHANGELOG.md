@@ -2,41 +2,196 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.0.0-rc.1] - 2026-02-20
 
-## [Unreleased]
+### Bug Fixes
 
-## [1.0.0-alpha] - 2026-02-16
-
-### Added
-- SQL-92 DDL support (CREATE TABLE, DROP TABLE)
-- SQL-92 DML support (SELECT, INSERT, UPDATE, DELETE)
-- B+ Tree index implementation
-- Buffer Pool with LRU eviction
-- FileStorage for persistent storage
-- Write-Ahead Log (WAL) for transaction safety
-- MySQL-style network protocol
-- Interactive REPL (Read-Eval-Print Loop)
-- Comprehensive test suite (60+ tests)
-
-### Features
-- WHERE clause with comparison operators (=, >, <, >=, <=)
-- WHERE clause with logical operators (AND, OR)
-- Multiple INSERT values support
-- Column type support: INTEGER, FLOAT, TEXT, BOOLEAN, BLOB
+- apply cargo fmt
+- remove let chains for Rust 2021 compatibility
 
 ### Documentation
-- README.md with quick start guide
-- Developer documentation (DEVELOP.md)
-- Contributing guidelines (CONTRIBUTING.md)
 
-### Limitations (Alpha)
-- No JOIN support
-- No subquery support
-- No transaction nesting
-- No constraint support (foreign key, unique key)
-- No index auto-selection
+- add v1.0.0-rc1 security scan report
+- add dependency check results to security report
+- add RC branch protection guide
+- generate CHANGELOG from v1.0.0-beta.0
 
-[Unreleased]: https://github.com/yinglichina8848/sqlrustgo/compare/v1.0.0-alpha...HEAD
-[1.0.0-alpha]: https://github.com/yinglichina8848/sqlrustgo/releases/tag/v1.0.0-alpha
+### Features
+
+- setup engineering system rules for 2.0 development
+
+## 1.0.0-rc.1
+
+### Bug Fixes
+
+- resolve clippy warnings in aggregate functions
+- resolve clippy warnings in executor aggregate functions
+- implement FromStr trait for Role to satisfy clippy
+- implement FromStr trait for Role to satisfy clippy
+- replace unwrap with proper error handling
+- update version flow and fix code issues
+- 修复代码格式问题
+- 修复 clippy 警告
+- 修复 clippy 警告
+
+### Documentation
+
+- add L3 upgrade and governance framework
+- add architecture governance and plugin design
+- create v2.0 planning directory with architecture documents
+- add engineering-level design documents for v2.0
+- 重组文档目录结构，创建v1.0和v2.0分离结构
+- v2.0 目录按子目录分类整理
+- 重构 README 为项目索引和演进指南
+- 恢复项目故事，人性化重写 README
+- 修正文档时间顺序，增加版本专属阅读指南
+- 重命名对话记录为 Claude对话记录，强调项目起源
+- 项目演进说明增加项目起源章节
+- 添加 AI 协作开发教程
+- 重组 AI 相关文档到 AI增强软件工程 目录
+- 添加高小原对话记录文档
+- 更新 AI增强软件工程 README，添加 AI 规划与分析报告索引
+- 重写 AI增强软件工程 README，提升宏观视野
+- 修正 VERSION_PROMOTION_SOP Beta 阶段定义
+- v1.1.0-beta documentation (#31)
+- reorganize v1.1.0-beta documentation structure
+- establish engineering governance standards for beta phase
+- update version roadmap and flow diagram
+- update engineering governance for v1.0 freeze
+- 移除 RC-1 阶段，简化版本流程
+- add comprehensive version planning documentation
+
+### Features
+
+- add complete engineering governance framework
+- implement aggregate functions (COUNT/SUM/AVG/MIN/MAX) (#34)
+- implement aggregate functions (COUNT/SUM/AVG/MIN/MAX)
+- add benchmark framework with Criterion.rs (#40)
+- 实现基础认证机制
+- 实现基础认证机制
+
+### Refactor
+
+- replace unwrap with explicit error handling (16 fixes) (#29)
+
+### Testing
+
+- network coverage improvement to 90.94% (#33)
+- add network integration tests for coverage improvement
+- add more network integration tests for 90%+ coverage
+- add more aggregate and executor tests
+- add executor tests for coverage improvement
+- add parser tests for coverage improvement
+
+### Merge
+
+- resolve conflicts with feature/v1.0.0-beta
+- resolve conflicts with feature/v1.0.0-beta
+- resolve conflicts with feature/v1.0.0-beta
+
+### Style
+
+- fix rustfmt formatting for v1.0.0-beta
+
+## 1.0.0-beta.0
+
+### Documentation
+
+- correct alpha→beta→release→baseline workflow
+- add VERSION_PROMOTION_SOP
+
+## 1.0.0-alpha.1
+
+### Documentation
+
+- 添加Alpha版本文档补全计划
+- Phase 2 准备工作 - 文档完善
+- 添加高小药与李哥聊天记录 (2026-02-18)
+- add documentation reading guide and project evolution
+- add Alpha to Beta migration workflow plan
+
+### Features
+
+- add network integration tests
+
+### Testing
+
+- 添加network模块集成测试 - Mock TcpStream
+
+## 1.0.0
+
+### Bug Fixes
+
+- 统一项目名称为 sqlrustgo，版本号改为 1.0.0
+- 更新项目测试以匹配当前 API
+- 修复 .exit 命令 bug 和编译警告
+
+### Documentation
+
+- 添加对话记录文档
+- 更新对话记录，添加阶段一实施详情
+- 添加实施完成状态和测试统计
+- 更新阶段六、七完成状态
+- Task 11 完成，更新最终统计
+- 添加并行开发协作指南
+- 更新协作指南，添加文档位置说明和 GitHub 访问链接
+- 更新文档链接指向 baseline 分支
+- 添加并行开发协作指南
+- enhance README with features and usage
+- Task 11 完成，更新最终统计
+- 补全对话记录和添加 AI 协作开发指南
+- 创建 v1.0.0 版本文档目录
+- 添加 v1.0.0 评估改进报告 (教学阶段)
+- add v1.0.0 comprehensive evaluation reports
+- add comprehensive improvement plan for v1.0.0
+- add version evolution plan
+- update version plan for v1.0.0 official release
+
+### Features
+
+- 初始化项目，添加设计文档和实施计划
+- 初始化 Rust 项目结构 (Task 1)
+- 配置 AI 工具链和 CI/CD (Task 2)
+- 定义核心类型系统 (Task 3)
+- 实现词法分析器 (Task 4)
+- 实现语法分析器 (Task 5)
+- 实现存储引擎 (Task 6)
+- 实现查询执行器 (Task 8)
+- 实现 REPL 和 CLI (Task 9)
+- 实现事务管理 (Task 9)
+- 实现网络协议层 (Task 10)
+- 添加集成测试 (Task 11)
+- 实现完整的 DML 语句支持 (INSERT/UPDATE/DELETE)
+- 完成 DML 操作相关功能
+- 实现 B+ Tree 索引持久化和查询优化
+- 完善 MySQL 网络协议层
+
+### Miscellaneous Tasks
+
+- 添加 .worktrees 到 gitignore
+
+### Refactor
+
+- 导出 parser 模块
+- 导出 executor 模块
+- 导出 transaction 模块
+- 导出 network 模块，添加 From<io::Error> 实现
+- 使用 FileStorage 替代内存 HashMap 实现持久化存储
+
+### Testing
+
+- enhance network and executor test coverage
+
+### Merge
+
+- 解决与 baseline 的冲突
+
+### Release
+
+- promote v1.0.0 evaluation to alpha (#14)
+
+### Style
+
+- 代码格式化修复 (cargo fmt)
+
+<!-- generated by git-cliff -->
