@@ -2,14 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.0.0-alpha.1..v1.0.0-rc.1
+## [1.0.0-rc.1] - 2026-02-20
 
 ### Bug Fixes
 
 - apply cargo fmt
+- remove let chains for Rust 2021 compatibility
 
 ### Documentation
 
+- add v1.0.0-rc1 security scan report
+- add dependency check results to security report
 - add RC branch protection guide
 - generate CHANGELOG from v1.0.0-beta.0
 

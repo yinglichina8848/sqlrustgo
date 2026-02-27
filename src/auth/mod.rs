@@ -326,10 +326,9 @@ mod tests {
         let session = auth.login("reader", "pass").unwrap();
 
         // Readonly can SELECT
-        assert!(
-            auth.check_permission(&session.id, &Operation::Select)
-                .is_ok()
-        );
+        assert!(auth
+            .check_permission(&session.id, &Operation::Select)
+            .is_ok());
 
         // Readonly cannot INSERT
         assert!(matches!(
