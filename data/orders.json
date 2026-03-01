@@ -5,22 +5,36 @@
       "name": "amount",
       "data_type": "INTEGER",
       "nullable": true
+    },
+    {
+      "name": "status",
+      "data_type": "TEXT",
+      "nullable": true
     }
   ],
   "rows": [
     [
       {
         "Integer": 100
+      },
+      {
+        "Text": "active"
       }
     ],
     [
       {
         "Integer": 200
+      },
+      {
+        "Text": "active"
       }
     ],
     [
       {
-        "Integer": 300
+        "Integer": 50
+      },
+      {
+        "Text": "inactive"
       }
     ]
   ]
