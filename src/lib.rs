@@ -7,19 +7,17 @@ pub mod executor;
 pub mod lexer;
 pub mod network;
 pub mod parser;
+pub mod planner;
 pub mod storage;
 pub mod transaction;
 pub mod types;
 
-pub use auth::{AuthError, AuthManager, Operation, Role, Session as AuthSession, User};
+pub use auth::{AuthError, AuthManager, Operation, Role, Session, User};
 pub use executor::{execute, ExecutionEngine, ExecutionResult};
 pub use lexer::{tokenize, Lexer, Token};
-pub use network::{
-    async_server::{start_server_async, ConnectionPool, ServerConfig, SessionManager},
-    config::{Config, ServerSection, DatabaseSection, ConnectionPoolSection, LoggingSection},
-    connect, start_server_sync, NetworkHandler,
-};
+pub use network::{connect, start_server_sync, NetworkHandler};
 pub use parser::{parse, Statement};
+pub use planner::{LogicalPlan, PhysicalPlan};
 pub use storage::{BPlusTree, BufferPool, FileStorage, Page};
 pub use transaction::{TransactionManager, TxState, WriteAheadLog};
 pub use types::{parse_sql_literal, SqlError, SqlResult, Value};
