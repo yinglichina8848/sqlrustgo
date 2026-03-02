@@ -1,0 +1,179 @@
+name: Release Validation
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "version=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Validate version consistency
+        run: |
+          VERSION=$(grep -E '^[0-9]+\.[0-9]+\.[0-9]+' VERSION | head -1)
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: VERSION file not found or invalid"
+            exit 1
+          fi
+          
+          TAG_VERSION=${{ steps.extract_version.outputs.version }}
+          if [ "$TAG_VERSION" != "v$VERSION" ]; then
+            echo "ERROR: Version mismatch between tag and VERSION file"
+            echo "Tag version: $TAG_VERSION"
+            echo "VERSION file: v$VERSION"
+            exit 1
+          fi
+          echo "Version validation passed: $TAG_VERSION"
+
+      - name: Validate CHANGELOG
+        run: |
+          TAG_VERSION=${{ steps.extract_version.outputs.version }}
+          if ! grep -q "$TAG_VERSION" CHANGELOG.md; then
+            echo "ERROR: CHANGELOG.md does not contain version $TAG_VERSION"
+            exit 1
+          fi
+          echo "CHANGELOG validation passed"
+
+      - name: Validate release evidence
+        run: |
+          TAG_VERSION=${{ steps.extract_version.outputs.version }}
+          VERSION_DIR="docs/releases/${TAG_VERSION}"
+          if [ ! -d "$VERSION_DIR" ]; then
+            echo "ERROR: Release evidence directory not found: $VERSION_DIR"
+            exit 1
+          fi
+          
+          REQUIRED_FILES=(
+            "00-release-summary.md"
+            "01-release-notes.md"
+            "03-test-report.md"
+            "04-coverage-report.md"
+            "05-security-scan-report.md"
+            "07-dependency-audit.md"
+            "10-approval-record.md"
+          )
+          
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$VERSION_DIR/$file" ]; then
+              echo "ERROR: Required file not found: $VERSION_DIR/$file"
+              exit 1
+            fi
+          done
+          echo "Release evidence validation passed"
+
+      - name: Run tests
+        run: |
+          cargo test --all
+
+      - name: Check code quality
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Security audit
+        run: |
+          cargo audit
+
+      - name: Dependency check
+        run: |
+          cargo outdated --exit-code 1
+
+      - name: Build release
+        run: |
+          cargo build --release
+
+      - name: Calculate build hash
+        id: build_hash
+        run: |
+          if [ -f "target/release/sqlrustgo" ]; then
+            HASH=$(sha256sum target/release/sqlrustgo | cut -d ' ' -f 1)
+            echo "hash=$HASH" >> $GITHUB_OUTPUT
+            echo "Build hash: $HASH"
+          else
+            echo "WARNING: Binary not found, skipping hash calculation"
+          fi
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.extract_version.outputs.version }}
+          release_name: Release ${{ steps.extract_version.outputs.version }}
+          body: |
+            # SQLRustGo ${{ steps.extract_version.outputs.version }}
+
+            ## Release Information
+
+            - **Version**: ${{ steps.extract_version.outputs.version }}
+            - **Build Hash**: ${{ steps.build_hash.outputs.hash }}
+            - **Release Date**: ${{ github.event.created_at }}
+
+            ## Validation Results
+
+            - ✅ Version consistency validated
+            - ✅ CHANGELOG validated
+            - ✅ Release evidence validated
+            - ✅ Tests passed
+            - ✅ Code quality validated
+            - ✅ Security audit passed
+            - ✅ Dependency check passed
+
+            ## Release Notes
+
+            Please see CHANGELOG.md for detailed release notes.
+          draft: false
+          prerelease: false
+
+      - name: Verify main branch alignment
+        run: |
+          TAG_VERSION=${{ steps.extract_version.outputs.version }}
+          TAG_COMMIT=$(git rev-parse $TAG_VERSION)
+          MAIN_COMMIT=$(git rev-parse origin/main)
+          
+          if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then
+            echo "WARNING: main branch is not aligned with tag $TAG_VERSION"
+            echo "Tag commit: $TAG_COMMIT"
+            echo "Main commit: $MAIN_COMMIT"
+            echo "Please create a PR to align main branch"
+          else
+            echo "Main branch is aligned with tag $TAG_VERSION"
+          fi
+
+      - name: Notify release completion
+        if: success()
+        run: |
+          echo "🎉 Release validation completed successfully!"
+          echo "Version: ${{ steps.extract_version.outputs.version }}"
+          echo "Build hash: ${{ steps.build_hash.outputs.hash }}"
+          echo "GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.extract_version.outputs.version }}"
+
+      - name: Notify release failure
+        if: failure()
+        run: |
+          echo "❌ Release validation failed!"
+          echo "Please fix the issues and re-run the workflow."
+          exit 1
