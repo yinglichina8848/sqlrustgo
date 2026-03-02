@@ -1,5 +1,14 @@
 {
   "name": "users",
   "columns": [],
-  "rows": []
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "Alice"
+      }
+    ]
+  ]
 }
