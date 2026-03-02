@@ -21,7 +21,9 @@ SQLRustGo 是一个 Rust 原生 SQL 数据库内核项目，当前处于 2.0 开
 - GitHub: https://github.com/minzuuniversity/sqlrustgo
 - Gitee: https://gitee.com/yinglichina/sqlrustgo
 
-**当前分支**: release/v1.0.0
+**当前分支**: develop-v1.1.0
+
+⚠️ **重要**: 2.0 开发必须在 `develop-v1.1.0` 分支进行，不要在 `release/v1.0.0` 上开发！
 
 ## 二、核心文档（必读）
 
@@ -186,7 +188,7 @@ Issue: #<ISSUE_ID>
 3. Clippy 检查: `cargo clippy`
 4. 提交代码: `git commit`
 5. 推送分支: `git push origin <branch>`
-6. 创建 PR: `gh pr create --base release/v1.0.0 --head <branch>`
+6. 创建 PR: `gh pr create --base develop-v1.1.0 --head <branch>`
 7. 评论报告完成
 
 ## 五、代码规范
