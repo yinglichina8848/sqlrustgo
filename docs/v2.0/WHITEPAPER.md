@@ -1,385 +1,450 @@
-# SQLRustGo 2.0 白皮书
+# SQLRustGo 2.0 架构白皮书
 
 > 版本：v1.0
-> 日期：2026-02-18
-> 状态：设计文档
+> 日期：2026-03-02
+> 状态：草案
 
 ---
 
-## 摘要
+## 一、项目愿景
 
-SQLRustGo 是一个用 Rust 编写的嵌入式 SQL 数据库内核，目标是提供一个轻量级、高性能、可插拔的 SQL 执行引擎。本文档描述了 2.0 版本的架构设计、优化器设计、执行引擎和扩展能力。
+### 1.1 为什么做 SQLRustGo
 
----
+SQLRustGo 的目标是构建一个 **Rust 原生 SQL 数据库内核**，具备以下特点：
 
-## 1. Vision
+- **高性能**：利用 Rust 的零成本抽象和内存安全
+- **可嵌入**：可作为库嵌入到其他应用程序
+- **可扩展**：插件化架构，支持自定义执行引擎和存储后端
+- **教学友好**：清晰的代码结构，适合学习数据库内核实现
 
-### 1.1 核心定位
-
-**嵌入式 Rust SQL 内核**
-
-- 轻量级：无外部依赖，可嵌入任何 Rust 项目
-- 高性能：向量化执行，充分利用现代 CPU
-- 可插拔：插件化架构，支持自定义存储、函数、优化规则
-
-### 1.2 设计目标
+### 1.2 目标定位
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          设计目标                                            │
+│                          SQLRustGo 定位                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   🎯 轻量级                                                                 │
-│   ├── 单二进制文件                                                          │
-│   ├── 无外部依赖                                                            │
-│   └── 最小内存占用                                                          │
-│                                                                              │
-│   🚀 高性能                                                                 │
-│   ├── 向量化执行                                                            │
-│   ├── 并行处理                                                              │
-│   └── 零拷贝设计                                                            │
-│                                                                              │
-│   🔌 可插拔                                                                 │
-│   ├── 存储插件                                                              │
-│   ├── 函数插件                                                              │
-│   └── 优化规则插件                                                          │
-│                                                                              │
-│   📚 教学友好                                                               │
-│   ├── 清晰的架构分层                                                        │
-│   ├── 完整的文档                                                            │
-│   └── 可读的代码                                                            │
+│   SQLite ────────── SQLRustGo ────────── DuckDB                            │
+│   (嵌入式)            (C/S + 嵌入式)        (分析型)                         │
+│                         ▲                                                   │
+│                         │                                                   │
+│                    Rust 原生                                                │
+│                    插件化架构                                                │
+│                    教学友好                                                  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. 架构设计
+## 二、总体架构
 
-### 2.1 分层架构
+### 2.1 架构全景图
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          架构分层                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                          API Layer                                   │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │  Query   │  │  DDL     │  │  DML     │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                   │                                          │
-│                                   ▼                                          │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                        Parser Layer                                  │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │  Lexer   │  │  Parser  │  │   AST    │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                   │                                          │
-│                                   ▼                                          │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                        Planner Layer                                 │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │ Analyzer │  │ Logical  │  │ Physical │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                   │                                          │
-│                                   ▼                                          │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                       Optimizer Layer                                │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │   RBO    │  │   CBO    │  │  Stats   │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                   │                                          │
-│                                   ▼                                          │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                       Executor Layer                                 │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │  Vector  │  │ Parallel │  │Pipeline  │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                   │                                          │
-│                                   ▼                                          │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                        Storage Layer                                 │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │   │
-│   │  │  Memory  │  │   File   │  │    S3    │                           │   │
-│   │  └──────────┘  └──────────┘  └──────────┘                           │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Client["客户端层"]
+        CLI[CLI Client]
+        MYSQL[MySQL Client]
+        EMBED[Embedded API]
+    end
+    
+    subgraph Network["网络层"]
+        PROTO[Protocol Handler]
+        CONN[Connection Manager]
+        SESSION[Session Manager]
+    end
+    
+    subgraph Core["内核层"]
+        PARSER[SQL Parser]
+        PLANNER[Query Planner]
+        OPTIMIZER[Optimizer]
+        EXECUTOR[Execution Engine]
+    end
+    
+    subgraph Storage["存储层"]
+        STORAGE[Storage Engine]
+        BUFFER[Buffer Pool]
+        DISK[Disk Manager]
+    end
+    
+    CLI --> PROTO
+    MYSQL --> PROTO
+    EMBED --> EXECUTOR
+    
+    PROTO --> CONN
+    CONN --> SESSION
+    SESSION --> PARSER
+    
+    PARSER --> PLANNER
+    PLANNER --> OPTIMIZER
+    OPTIMIZER --> EXECUTOR
+    EXECUTOR --> STORAGE
+    
+    STORAGE --> BUFFER
+    BUFFER --> DISK
 ```
 
-### 2.2 插件模型
+### 2.2 数据流图
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          插件模型                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                       Plugin Registry                                │   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │   │
-│   │  │ Storage  │  │ Function │  │Optimizer │  │ Executor │            │   │
-│   │  │ Plugins  │  │ Plugins  │  │ Plugins │  │ Plugins │            │   │
-│   │  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│   Storage Plugins:                                                         │
-│   ├── MemoryStorage (内存存储)                                              │
-│   ├── FileStorage (文件存储)                                                │
-│   └── S3Storage (云存储)                                                    │
-│                                                                              │
-│   Function Plugins:                                                        │
-│   ├── ScalarUDF (标量函数)                                                  │
-│   └── AggregateUDF (聚合函数)                                               │
-│                                                                              │
-│   Optimizer Plugins:                                                       │
-│   ├── PredicatePushdown (谓词下推)                                          │
-│   ├── ProjectionPruning (投影裁剪)                                          │
-│   └── JoinReorder (Join 重排序)                                             │
-│                                                                              │
-│   Executor Plugins:                                                        │
-│   ├── DefaultExecutor (默认执行器)                                          │
-│   ├── ParallelExecutor (并行执行器)                                         │
-│   └── VectorizedExecutor (向量化执行器)                                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 2.3 执行模型
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          执行模型                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   SQL String                                                                │
-│       │                                                                      │
-│       ▼                                                                      │
-│   ┌─────────────┐                                                           │
-│   │   Parser    │  → AST                                                    │
-│   └─────────────┘                                                           │
-│       │                                                                      │
-│       ▼                                                                      │
-│   ┌─────────────┐                                                           │
-│   │   Binder    │  → LogicalPlan                                            │
-│   └─────────────┘                                                           │
-│       │                                                                      │
-│       ▼                                                                      │
-│   ┌─────────────┐                                                           │
-│   │  Optimizer  │  → Optimized LogicalPlan                                  │
-│   └─────────────┘                                                           │
-│       │                                                                      │
-│       ▼                                                                      │
-│   ┌─────────────┐                                                           │
-│   │  Physical   │  → PhysicalPlan                                           │
-│   │  Planner    │                                                           │
-│   └─────────────┘                                                           │
-│       │                                                                      │
-│       ▼                                                                      │
-│   ┌─────────────┐                                                           │
-│   │  Executor   │  → RecordBatch Stream                                     │
-│   └─────────────┘                                                           │
-│       │                                                                      │
-│       ▼                                                                      │
-│   QueryResult                                                               │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Network
+    participant P as Parser
+    participant L as LogicalPlan
+    participant H as PhysicalPlan
+    participant E as Executor
+    participant S as Storage
+    
+    C->>N: SQL Query
+    N->>P: Raw SQL
+    P->>L: AST
+    L->>H: Optimized Plan
+    H->>E: Physical Operators
+    E->>S: Data Requests
+    S-->>E: Data Pages
+    E-->>H: Result Stream
+    H-->>L: RecordBatch
+    L-->>N: Result Set
+    N-->>C: Response
 ```
 
 ---
 
-## 3. 优化器设计
+## 三、关键设计原则
 
-### 3.1 RBO（规则优化器）
-
-| 规则 | 说明 |
-|:-----|:-----|
-| PredicatePushdown | 谓词下推到存储层 |
-| ProjectionPruning | 裁剪不需要的列 |
-| ConstantFolding | 常量折叠 |
-| ExpressionSimplification | 表达式简化 |
-
-### 3.2 CBO（成本优化器）
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          CBO 架构                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   Statistics（统计信息）                                                    │
-│   ├── TableStats: row_count, total_bytes                                   │
-│   └── ColumnStats: distinct_count, null_count, min, max                    │
-│                                                                              │
-│   Cost Model（成本模型）                                                    │
-│   ├── CPU Cost: 操作计算量                                                  │
-│   ├── I/O Cost: 磁盘访问量                                                  │
-│   └── Memory Cost: 内存使用量                                               │
-│                                                                              │
-│   Plan Enumerator（计划枚举器）                                             │
-│   ├── Join Reorder (DP 算法)                                                │
-│   ├── Access Path Selection                                                 │
-│   └── Join Algorithm Selection                                              │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 3.3 Join DP 算法
-
-```
-dp[S] = 最优子计划
-
-初始化：
-dp[{T}] = Scan(T)
-
-递推：
-dp[S] = min(dp[S1] ⋈ dp[S2])
-
-时间复杂度：O(n² × 2ⁿ)
-适合：≤ 10 张表
-```
-
----
-
-## 4. 执行引擎
-
-### 4.1 行模式 vs 向量化
-
-| 特性 | 行模式 | 向量化 |
-|:-----|:-------|:-------|
-| 处理单位 | 单行 | 批量（1024行） |
-| CPU 缓存 | 差 | 好 |
-| SIMD | 不可用 | 可用 |
-| 性能 | 基准 | 10-20x 提升 |
-
-### 4.2 批处理 Pipeline
-
-```
-ScanExec → FilterExec → ProjectionExec → AggregateExec
-
-每个 Operator 处理 RecordBatch
-```
-
-### 4.3 向量化表达式
+### 3.1 Trait 驱动设计
 
 ```rust
-pub trait PhysicalExpr {
-    fn evaluate(&self, batch: &RecordBatch) -> Result<ArrayRef>;
-}
-
-// 批量计算
-fn evaluate(batch: &RecordBatch) -> Result<ArrayRef> {
-    let left = self.left.evaluate(batch)?;
-    let right = self.right.evaluate(batch)?;
-    vectorized_compute(&left, &right, self.op)
-}
-```
-
----
-
-## 5. 扩展能力
-
-### 5.1 多存储支持
-
-| 存储 | 说明 |
-|:-----|:-----|
-| MemoryStorage | 内存存储，适合测试 |
-| FileStorage | 文件存储，适合单机 |
-| S3Storage | 云存储，适合分布式 |
-
-### 5.2 UDF 支持
-
-```rust
-pub trait ScalarUDF {
+/// 核心执行引擎 trait
+pub trait ExecutionEngine: Send + Sync {
+    fn execute(&self, plan: Arc<dyn PhysicalPlan>) -> Result<RecordBatch>;
     fn name(&self) -> &str;
-    fn signature(&self) -> &Signature;
-    fn return_type(&self, args: &[DataType]) -> Result<DataType>;
-    fn invoke(&self, args: &[ArrayRef]) -> Result<ArrayRef>;
+}
+
+/// 物理计划 trait
+pub trait PhysicalPlan: Send + Sync {
+    fn schema(&self) -> &Schema;
+    fn execute(&self, partition: usize) -> Result<Box<dyn ExecutionPlan>>;
+    fn children(&self) -> Vec<Arc<dyn PhysicalPlan>>;
+}
+
+/// 存储引擎 trait
+pub trait StorageEngine: Send + Sync {
+    fn scan(&self, table: &str) -> Result<Box<dyn Iterator<Item = Row>>>;
+    fn insert(&self, table: &str, row: Row) -> Result<()>;
+    fn delete(&self, table: &str, id: RowId) -> Result<()>;
 }
 ```
 
-### 5.3 分布式接口
+### 3.2 插件化架构
+
+```mermaid
+graph LR
+    subgraph Core["核心模块"]
+        ENGINE[Engine Core]
+    end
+    
+    subgraph Plugins["插件模块"]
+        EXEC1[Default Executor]
+        EXEC2[Vectorized Executor]
+        STORE1[Memory Storage]
+        STORE2[Disk Storage]
+    end
+    
+    ENGINE -->|trait| EXEC1
+    ENGINE -->|trait| EXEC2
+    ENGINE -->|trait| STORE1
+    ENGINE -->|trait| STORE2
+```
+
+### 3.3 无全局状态
+
+- 所有状态通过参数传递
+- 便于测试和并发
+- 避免 hidden state
+
+### 3.4 可测试优先
 
 ```rust
-pub trait DistributedExecutor {
-    fn execute(&self, plan: &PhysicalPlan) -> Result<DistributedResult>;
-}
-
-pub trait Scheduler {
-    fn schedule(&self, task: Task) -> Result<TaskHandle>;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_select_execution() {
+        let storage = MockStorage::new();
+        let executor = DefaultExecutor::new(storage);
+        let plan = create_test_plan();
+        
+        let result = executor.execute(plan).unwrap();
+        assert_eq!(result.row_count(), 10);
+    }
 }
 ```
 
 ---
 
-## 6. Roadmap
+## 四、执行引擎模型
 
-### 6.1 v2.0 — 内核重构
+### 4.1 Volcano 模型
 
-**时间**：1-2 个月
+```mermaid
+graph TD
+    subgraph Pipeline["执行管道"]
+        SCAN[TableScan] --> FILTER[Filter]
+        FILTER --> PROJ[Projection]
+        PROJ --> AGG[Aggregate]
+        AGG --> OUT[Output]
+    end
+```
 
-| 任务 | 说明 |
-|:-----|:-----|
-| LogicalPlan 重构 | 独立模块 |
-| PhysicalPlan trait | 可扩展设计 |
-| Executor 插件化 | 可替换执行器 |
-| HashJoin | 解决 Join 性能 |
+### 4.2 Operator 接口
 
-**目标**：L3 结构化内核
+```rust
+pub trait Operator: Send + Sync {
+    fn open(&mut self) -> Result<()>;
+    fn next(&mut self) -> Result<Option<RecordBatch>>;
+    fn close(&mut self) -> Result<()>;
+    fn schema(&self) -> &Schema;
+}
+```
 
-### 6.2 v2.1 — 性能升级
+### 4.3 Iterator 设计
 
-**时间**：2-3 个月
+```rust
+pub struct FilterExec {
+    input: Arc<dyn PhysicalPlan>,
+    predicate: Arc<dyn PhysicalExpr>,
+}
 
-| 任务 | 说明 |
-|:-----|:-----|
-| 向量化执行 | 批量处理 |
-| 统计信息 | 表/列统计 |
-| 简化 CBO | 成本优化 |
-| Join Reorder | DP 算法 |
-
-**目标**：L4 高性能内核
-
-### 6.3 v3.0 — 分布式
-
-**时间**：6-12 个月
-
-| 任务 | 说明 |
-|:-----|:-----|
-| 分布式执行 | 多节点 |
-| Memory Pool | 内存管理 |
-| Spill to Disk | 磁盘溢出 |
-| 事务支持 | ACID |
-
-**目标**：L5 企业级引擎
+impl Operator for FilterExec {
+    fn next(&mut self) -> Result<Option<RecordBatch>> {
+        loop {
+            match self.input.next()? {
+                Some(batch) => {
+                    let filtered = self.predicate.evaluate(&batch)?;
+                    if filtered.row_count() > 0 {
+                        return Ok(Some(filtered));
+                    }
+                }
+                None => return Ok(None),
+            }
+        }
+    }
+}
+```
 
 ---
 
-## 7. 总结
+## 五、网络架构
 
-### 7.1 核心价值
+### 5.1 协议栈
 
+```mermaid
+graph TB
+    subgraph Protocol["协议层"]
+        MYSQL_PROTO[MySQL Protocol]
+        HANDSHAKE[Handshake V10]
+        AUTH[Authentication]
+        CMD[Command Phase]
+    end
+    
+    subgraph Transport["传输层"]
+        TCP[TCP Socket]
+        TLS[TLS/SSL]
+    end
+    
+    MYSQL_PROTO --> HANDSHAKE
+    HANDSHAKE --> AUTH
+    AUTH --> CMD
+    CMD --> TCP
+    TCP --> TLS
 ```
-SQLRustGo 2.0 将实现：
 
-✅ 对标 Apache DataFusion 的架构设计
-✅ 向量化执行带来的 10-20x 性能提升
-✅ 插件化架构带来的可扩展性
-✅ 完整的 CBO 优化器
+### 5.2 连接管理
+
+```rust
+pub struct ConnectionHandler {
+    stream: TcpStream,
+    executor: Arc<dyn ExecutionEngine>,
+    session: Session,
+}
+
+impl ConnectionHandler {
+    pub async fn handle(&mut self) -> Result<()> {
+        self.send_handshake().await?;
+        self.read_auth().await?;
+        
+        loop {
+            let command = self.read_command().await?;
+            match command {
+                Command::Query(sql) => {
+                    let result = self.executor.execute_sql(&sql)?;
+                    self.send_result(result).await?;
+                }
+                Command::Quit => break,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
 ```
 
-### 7.2 适用场景
+### 5.3 错误模型
 
-| 场景 | 说明 |
-|:-----|:-----|
-| 嵌入式数据库 | 嵌入 Rust 应用 |
-| 数据分析 | OLAP 查询 |
-| 教学学习 | 数据库内核学习 |
-| 原型开发 | 快速验证想法 |
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum SqlError {
+    #[error("Parse error: {0}")]
+    Parse(String),
+    
+    #[error("Execution error: {0}")]
+    Execution(String),
+    
+    #[error("Network error: {0}")]
+    Network(String),
+    
+    #[error("Storage error: {0}")]
+    Storage(String),
+}
+```
+
+---
+
+## 六、性能策略
+
+### 6.1 HashJoin 实现
+
+```rust
+pub struct HashJoinExec {
+    left: Arc<dyn PhysicalPlan>,
+    right: Arc<dyn PhysicalPlan>,
+    on: Vec<(Column, Column)>,
+    join_type: JoinType,
+}
+
+impl Operator for HashJoinExec {
+    fn next(&mut self) -> Result<Option<RecordBatch>> {
+        // Build phase: 构建左侧哈希表
+        let mut hash_table: HashMap<Key, Vec<Row>> = HashMap::new();
+        while let Some(batch) = self.left.next()? {
+            for row in batch.rows() {
+                let key = self.build_key(&row);
+                hash_table.entry(key).or_default().push(row);
+            }
+        }
+        
+        // Probe phase: 探测右侧
+        let mut result = Vec::new();
+        while let Some(batch) = self.right.next()? {
+            for row in batch.rows() {
+                let key = self.build_key(&row);
+                if let Some(matches) = hash_table.get(&key) {
+                    for left_row in matches {
+                        result.push(self.merge_rows(left_row, &row));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(RecordBatch::from_rows(result)))
+    }
+}
+```
+
+### 6.2 Pipeline 执行
+
+```mermaid
+graph LR
+    subgraph Stage1["Stage 1"]
+        S1[Scan]
+    end
+    
+    subgraph Stage2["Stage 2"]
+        S2[Filter]
+        S3[Filter]
+    end
+    
+    subgraph Stage3["Stage 3"]
+        S4[Join]
+    end
+    
+    S1 --> S2
+    S1 --> S3
+    S2 --> S4
+    S3 --> S4
+```
+
+### 6.3 内存分配优化
+
+- 预分配缓冲区
+- 避免频繁小分配
+- 使用对象池
+
+---
+
+## 七、未来路线（3.0 预告）
+
+### 7.1 向量化执行
+
+```rust
+pub trait VectorizedOperator {
+    fn execute_batch(&self, batch: &RecordBatch) -> Result<RecordBatch>;
+}
+```
+
+### 7.2 CBO 优化器
+
+```rust
+pub struct CostBasedOptimizer {
+    statistics: Arc<dyn StatisticsCollector>,
+    cost_model: Arc<dyn CostModel>,
+}
+
+impl CostBasedOptimizer {
+    fn optimize(&self, plan: LogicalPlan) -> Result<LogicalPlan> {
+        let alternatives = self.enumerate_plans(&plan)?;
+        let best = alternatives
+            .into_iter()
+            .min_by_key(|p| self.estimate_cost(p))?;
+        Ok(best)
+    }
+}
+```
+
+### 7.3 存储插件
+
+```rust
+pub trait StoragePlugin: Send + Sync {
+    fn create_table(&self, name: &str, schema: &Schema) -> Result<TableHandle>;
+    fn drop_table(&self, name: &str) -> Result<()>;
+    fn scan(&self, handle: &TableHandle) -> Result<Box<dyn ScanIterator>>;
+}
+```
+
+---
+
+## 八、版本规划
+
+| 版本 | 目标 | 核心特性 | 预计时间 |
+|------|------|----------|----------|
+| v1.1.0 | 内核架构 L4 | LogicalPlan/PhysicalPlan/Executor 插件化 | 2026-04 |
+| v1.1.1 | 基础 C/S | server/client 可执行程序 | 2026-03 |
+| v1.2.0 | 100万行级 | 向量化执行、统计信息、简化 CBO | 2026-06 |
+| v2.0.0 | 商用级内核 | 完整 CBO、Memory Pool、Spill to Disk | 2026-09 |
+| v3.0.0 | 企业级 | 分布式执行、事务支持、高可用 | 2027+ |
+
+---
+
+## 九、参考项目
+
+- [Apache DataFusion](https://github.com/apache/arrow-datafusion)
+- [TiKV](https://github.com/tikv/tikv)
+- [DuckDB](https://github.com/duckdb/duckdb)
+- [RisingWave](https://github.com/risingwavelabs/risingwave)
 
 ---
 
