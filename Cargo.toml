@@ -33,3 +33,11 @@ path = "tests/ci_test.rs"
 [[bench]]
 name = "sql_operations"
 harness = false
+
+[[bench]]
+name = "lexer_bench"
+harness = false
+
+[[bench]]
+name = "parser_bench"
+harness = false
