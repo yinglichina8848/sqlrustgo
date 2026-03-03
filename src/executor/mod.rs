@@ -385,10 +385,8 @@ impl ExecutionEngine {
 
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
-                    if let Some(value) = row.get(*col_idx) {
-                        if let Value::Integer(key) = value {
-                            index_updates.push((col_name.clone(), *key, row_id));
-                        }
+                    if let Some(Value::Integer(key)) = row.get(*col_idx) {
+                        index_updates.push((col_name.clone(), *key, row_id));
                     }
                 }
 
