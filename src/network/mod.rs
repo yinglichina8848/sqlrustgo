@@ -662,7 +662,6 @@ pub fn execute_query_on_server(addr: &str, query: &str) -> Result<String, SqlErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     #[test]
     fn test_handshake_creation() {
@@ -793,7 +792,6 @@ mod tests {
     #[test]
     fn test_network_handler_creation() {
         // Can't actually create without a real stream
-        assert!(true);
     }
 
     #[test]
@@ -1546,7 +1544,7 @@ mod tests {
             let mut greeting = [0u8; 256];
             let _ = client.read(&mut greeting).unwrap();
 
-            let mut packet = vec![
+            let packet = vec![
                 0x09, 0x00, 0x00, 0x01, 0x03, b'S', b'E', b'L', b'E', b'C', b'T', b' ', b'1',
             ];
             use std::io::Write;
@@ -1762,7 +1760,6 @@ mod tests {
     #[test]
     fn test_execute_query_on_server_integration() {
         use std::net::TcpListener;
-        use std::net::TcpStream;
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();

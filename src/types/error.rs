@@ -127,9 +127,8 @@ mod tests {
 
     #[test]
     fn test_sql_result_alias() {
-        // Test that SqlResult works as expected
         let ok_result: SqlResult<i32> = Ok(42);
-        assert_eq!(ok_result.unwrap(), 42);
+        assert_eq!(ok_result.ok(), Some(42));
 
         let err_result: SqlResult<i32> = Err(SqlError::TableNotFound("test".to_string()));
         assert!(err_result.is_err());
