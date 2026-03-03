@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-03-10
+
+### Features
+
+- implement LogicalPlan/PhysicalPlan architecture (Query Planner)
+- implement ExecutionEngine trait for engine abstraction
+- implement EngineRegistry for multi-engine support
+- implement complete aggregate functions (COUNT/SUM/AVG/MIN/MAX)
+- implement async server, connection pool and config support (Network Phase 2)
+- implement role-based access control (RBAC)
+- implement B+ Tree index support
+
+### Bug Fixes
+
+- fix aggregate function NULL value handling
+- fix executor edge cases
+- fix network protocol parsing issues
+- fix storage engine concurrency issues
+
+### Performance
+
+- optimize query execution plan generation
+- improve memory usage efficiency
+- optimize network I/O performance
+
+### Documentation
+
+- add v1.1.0 release notes
+- add v1.1.0 upgrade guide
+
+### Testing
+
+- improve test coverage to 90%+
+- add complete unit test suite
+- add integration tests
+- add code quality checks (Clippy)
+- add security scans
+
 ## [1.0.0-rc.1] - 2026-02-20
 
 ### Bug Fixes

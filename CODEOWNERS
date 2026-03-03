@@ -1,0 +1,21 @@
+# Code Owners
+#
+# This file defines the code owners for the project.
+# See https://help.github.com/articles/about-code-owners/
+
+# Default owner for everything
+* @yinglichina8848
+
+# Documentation
+/docs/ @yinglichina8848
+
+# Core modules
+/src/parser/ @yinglichina8848
+/src/lexer/ @yinglichina8848
+/src/executor/ @yinglichina8848
+/src/storage/ @yinglichina8848
+/src/transaction/ @yinglichina8848
+/src/network/ @yinglichina8848
+
+# CI/CD
+/.github/ @yinglichina8848
