@@ -744,4 +744,75 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_insert_with_index_no_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_no_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "no_idx_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage
+            .insert_table("no_idx_test".to_string(), table_data)
+            .unwrap();
+
+        // Insert with index when no index exists - should be ok (no-op)
+        let result = storage.insert_with_index("no_idx_test", "id", 1, 0);
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_has_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_has_idx_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Check index on non-existent table - should return false
+        let result = storage.has_index("nonexistent", "id");
+        assert_eq!(result, false);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_drop_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Try to drop index from non-existent table - should return Ok (no-op)
+        let result = storage.drop_index("nonexistent", "id");
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_range_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_range_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Range query on non-existent table - should return empty
+        let result = storage.range_index("nonexistent", "id", 0, 100);
+        assert_eq!(result, Vec::<u32>::new());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
