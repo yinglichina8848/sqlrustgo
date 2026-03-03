@@ -15,6 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 /// SQL Value enum representing all supported SQL data types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -31,6 +32,25 @@ pub enum Value {
     Text(String),
     /// Binary large object
     Blob(Vec<u8>),
+}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Null => 0.hash(state),
+            Value::Boolean(b) => b.hash(state),
+            Value::Integer(i) => i.hash(state),
+            Value::Float(f) => {
+                if f.is_nan() {
+                    0.hash(state);
+                } else {
+                    f.to_bits().hash(state);
+                }
+            }
+            Value::Text(s) => s.hash(state),
+            Value::Blob(b) => b.hash(state),
+        }
+    }
 }
 
 impl Value {

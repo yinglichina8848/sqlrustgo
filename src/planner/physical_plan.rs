@@ -540,14 +540,28 @@ impl PhysicalPlan for HashJoinExec {
         let left_key_indices: Vec<usize> = self
             .on
             .iter()
-            .map(|(col, _)| left_schema.field_index(&col.name).unwrap_or(0))
-            .collect();
+            .map(|(col, _)| {
+                left_schema.field_index(&col.name).ok_or_else(|| {
+                    crate::types::SqlError::ExecutionError(format!(
+                        "Join column '{}' not found in left schema",
+                        col.name
+                    ))
+                })
+            })
+            .collect::<SqlResult<Vec<usize>>>()?;
 
         let right_key_indices: Vec<usize> = self
             .on
             .iter()
-            .map(|(_, col)| right_schema.field_index(&col.name).unwrap_or(0))
-            .collect();
+            .map(|(_, col)| {
+                right_schema.field_index(&col.name).ok_or_else(|| {
+                    crate::types::SqlError::ExecutionError(format!(
+                        "Join column '{}' not found in right schema",
+                        col.name
+                    ))
+                })
+            })
+            .collect::<SqlResult<Vec<usize>>>()?;
 
         let mut hash_table: std::collections::HashMap<Vec<Value>, Vec<Vec<Value>>> =
             std::collections::HashMap::new();
