@@ -11,20 +11,25 @@ const SQL_SELECT_ALL: &str = "SELECT * FROM users";
 const SQL_SELECT_MULTI_COL: &str = "SELECT id, name, email, age FROM users";
 const SQL_SELECT_WHERE_AND: &str = "SELECT * FROM users WHERE age > 18 AND status = 'active'";
 const SQL_SELECT_WHERE_OR: &str = "SELECT * FROM users WHERE age < 18 OR status = 'banned'";
-const SQL_SELECT_WHERE_COMPLEX: &str = "SELECT * FROM users WHERE (age >= 18 AND age <= 65) AND status IN ('active', 'pending')";
-const SQL_SELECT_JOIN: &str = "SELECT u.id, u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id";
+const SQL_SELECT_WHERE_COMPLEX: &str =
+    "SELECT * FROM users WHERE (age >= 18 AND age <= 65) AND status IN ('active', 'pending')";
+const SQL_SELECT_JOIN: &str =
+    "SELECT u.id, u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id";
 const SQL_SELECT_ORDER_BY: &str = "SELECT * FROM users ORDER BY created_at DESC";
 const SQL_SELECT_LIMIT: &str = "SELECT * FROM users LIMIT 10";
 const SQL_SELECT_LIMIT_OFFSET: &str = "SELECT * FROM users LIMIT 10 OFFSET 20";
 
 const SQL_INSERT_SIMPLE: &str = "INSERT INTO users VALUES (1)";
 const SQL_INSERT_MULTI_COL: &str = "INSERT INTO users VALUES (1, 'Alice')";
-const SQL_INSERT_WITH_COLS: &str = "INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')";
-const SQL_INSERT_MULTI_ROW: &str = "INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')";
+const SQL_INSERT_WITH_COLS: &str =
+    "INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')";
+const SQL_INSERT_MULTI_ROW: &str =
+    "INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')";
 
 const SQL_UPDATE_SIMPLE: &str = "UPDATE users SET name = 'Bob'";
 const SQL_UPDATE_WITH_WHERE: &str = "UPDATE users SET name = 'Bob' WHERE id = 1";
-const SQL_UPDATE_MULTI_SET: &str = "UPDATE users SET name = 'Bob', email = 'bob@example.com', age = 30";
+const SQL_UPDATE_MULTI_SET: &str =
+    "UPDATE users SET name = 'Bob', email = 'bob@example.com', age = 30";
 
 const SQL_DELETE_SIMPLE: &str = "DELETE FROM users";
 const SQL_DELETE_WITH_WHERE: &str = "DELETE FROM users WHERE id = 1";

@@ -234,7 +234,8 @@ impl HandshakeV10 {
         buf.put_u32_le(self.connection_id);
 
         // Auth plugin data part 1 (8 bytes)
-        buf.put_slice(&self.auth_plugin_data[..8.min(self.auth_plugin_data.len())]);
+        let len = 8.min(self.auth_plugin_data.len());
+        buf.put_slice(&self.auth_plugin_data[..len]);
         buf.put_u8(0); // Null terminator
 
         // Capability flags lower 2 bytes
@@ -1030,8 +1031,8 @@ mod tests {
         let values: Vec<Value> = vec![];
         let row = RowData { values };
         let bytes = row.to_bytes();
-        // Empty row should still produce output (just the NULL-terminated columns indicator)
-        assert!(bytes.is_empty() || bytes.len() >= 1);
+        // Empty row should produce empty bytes
+        assert!(bytes.is_empty());
     }
 
     #[test]
