@@ -783,7 +783,7 @@ mod tests {
 
         // Check index on non-existent table - should return false
         let result = storage.has_index("nonexistent", "id");
-        assert_eq!(result, false);
+        assert!(!result);
 
         let _ = remove_dir_all(&temp_dir);
     }
