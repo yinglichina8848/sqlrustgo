@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 /// SQL Value enum representing all supported SQL data types
 ///
@@ -127,6 +128,21 @@ impl fmt::Display for Value {
     }
 }
 
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Null => 0u8.hash(state),
+            Value::Boolean(b) => b.hash(state),
+            Value::Integer(n) => n.hash(state),
+            Value::Float(f) => f.to_bits().hash(state),
+            Value::Text(s) => s.hash(state),
+            Value::Blob(b) => b.hash(state),
+        }
+    }
+}
+
+impl Eq for Value {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +164,17 @@ mod tests {
         assert_eq!(Value::Float(1.0).type_name(), "FLOAT");
         assert_eq!(Value::Text("test".to_string()).type_name(), "TEXT");
         assert_eq!(Value::Blob(vec![0x01, 0x02]).type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_hash() {
+        use std::collections::HashMap;
+
+        let mut map: HashMap<Value, i32> = HashMap::new();
+        map.insert(Value::Integer(1), 100);
+        map.insert(Value::Integer(2), 200);
+
+        assert_eq!(map.get(&Value::Integer(1)), Some(&100));
+        assert_eq!(map.get(&Value::Integer(2)), Some(&200));
     }
 }
