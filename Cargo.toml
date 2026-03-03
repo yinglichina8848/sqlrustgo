@@ -37,3 +37,19 @@ harness = false
 [[bench]]
 name = "parser_bench"
 harness = false
+
+[[bench]]
+name = "executor_bench"
+harness = false
+
+[[bench]]
+name = "storage_bench"
+harness = false
+
+[[bench]]
+name = "network_bench"
+harness = false
+
+[[bench]]
+name = "integration_bench"
+harness = false
