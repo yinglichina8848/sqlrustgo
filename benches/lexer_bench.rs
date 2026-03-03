@@ -12,7 +12,8 @@ const SQL_COMPLEX: &str = "SELECT u.id, u.name, o.amount, o.status FROM users u 
 const SQL_INSERT: &str = "INSERT INTO users (id, name, email, age, status) VALUES (1, 'Alice', 'alice@example.com', 25, 'active')";
 const SQL_UPDATE: &str = "UPDATE users SET name = 'Bob', email = 'bob@example.com' WHERE id = 1";
 const SQL_DELETE: &str = "DELETE FROM users WHERE id = 1 AND status = 'inactive'";
-const SQL_CREATE: &str = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT, age INTEGER)";
+const SQL_CREATE: &str =
+    "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT, age INTEGER)";
 const SQL_DROP: &str = "DROP TABLE users";
 const SQL_AGGREGATE: &str = "SELECT COUNT(*), SUM(amount), AVG(price), MIN(id), MAX(name) FROM orders WHERE status = 'active'";
 const SQL_MULTI_LINE: &str = "
