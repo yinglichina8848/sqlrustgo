@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-03-03
+
+### Added
+
+- LogicalPlan/PhysicalPlan 分离架构
+- ExecutionEngine 插件化接口
+- Client-Server 架构支持
+- 异步网络层 (Tokio)
+- HashJoin 实现 (Inner/Left Join)
+- Hash trait for Value (支持 Float NaN 特殊处理)
+- 性能基准测试框架 (Criterion)
+- 安全审计报告 (SECURITY_AUDIT.md)
+- 代码质量审计报告 (CODE_QUALITY_AUDIT.md)
+- 发布门禁检查清单 (RELEASE_GATE_CHECKLIST.md)
+
+### Changed
+
+- Executor 重构为插件化架构
+- 网络层升级为异步模式
+- 测试覆盖率提升至 93.61% (目标 ≥90%)
+- 代码质量门禁通过 (Clippy/Format)
+
+### Fixed
+
+- 修复 Clippy 警告 (11 个错误)
+- 修复格式检查问题
+- 修复测试代码中的逻辑问题
+
+### Security
+
+- 依赖审计通过
+- 无高危安全问题
+- 无敏感信息泄露
+- SQL 注入防护验证
+
+### Documentation
+
+- 添加 v1.1.0 Release Notes
+- 更新 CHANGELOG
+- 添加门禁检查清单
+
 ## [1.0.0-rc.1] - 2026-02-20
 
 ### Bug Fixes
