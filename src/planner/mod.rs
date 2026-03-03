@@ -5,11 +5,12 @@
 use crate::types::Value;
 use std::fmt;
 
+pub mod analyzer;
 pub mod executor;
 pub mod logical_plan;
 pub mod physical_plan;
 
-pub use executor::*;
+pub use analyzer::*;
 pub use logical_plan::*;
 pub use physical_plan::*;
 

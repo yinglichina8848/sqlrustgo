@@ -61,6 +61,27 @@ pub enum LogicalPlan {
         inputs: Vec<LogicalPlan>,
         schema: Schema,
     },
+    /// UPDATE statement
+    Update {
+        input: Box<LogicalPlan>,
+        set_exprs: Vec<(String, Expr)>,
+        schema: Schema,
+    },
+    /// DELETE statement
+    Delete {
+        input: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    /// CREATE TABLE statement
+    CreateTable {
+        name: String,
+        schema: Schema,
+    },
+    /// DROP TABLE statement
+    DropTable {
+        name: String,
+        schema: Schema,
+    },
 }
 
 impl LogicalPlan {
@@ -77,6 +98,10 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { schema, .. } => schema,
             LogicalPlan::Subquery { subquery, .. } => subquery.schema(),
             LogicalPlan::Union { schema, .. } => schema,
+            LogicalPlan::Update { schema, .. } => schema,
+            LogicalPlan::Delete { schema, .. } => schema,
+            LogicalPlan::CreateTable { schema, .. } => schema,
+            LogicalPlan::DropTable { schema, .. } => schema,
         }
     }
 
@@ -93,6 +118,10 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { .. } => vec![],
             LogicalPlan::Subquery { subquery, .. } => vec![subquery],
             LogicalPlan::Union { inputs, .. } => inputs.iter().collect(),
+            LogicalPlan::Update { input, .. } => vec![input],
+            LogicalPlan::Delete { input, .. } => vec![input],
+            LogicalPlan::CreateTable { .. } => vec![],
+            LogicalPlan::DropTable { .. } => vec![],
         }
     }
 }
@@ -154,6 +183,19 @@ impl fmt::Display for LogicalPlan {
             }
             LogicalPlan::Union { inputs, .. } => {
                 write!(f, "Union: {} inputs", inputs.len())
+            }
+            LogicalPlan::Update { set_exprs, .. } => {
+                let set_str: Vec<String> = set_exprs.iter().map(|(c, e)| format!("{}={}", c, e)).collect();
+                write!(f, "Update: {}", set_str.join(", "))
+            }
+            LogicalPlan::Delete { .. } => {
+                write!(f, "Delete")
+            }
+            LogicalPlan::CreateTable { name, .. } => {
+                write!(f, "CreateTable: {}", name)
+            }
+            LogicalPlan::DropTable { name, .. } => {
+                write!(f, "DropTable: {}", name)
             }
         }
     }
