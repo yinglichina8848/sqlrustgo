@@ -757,7 +757,7 @@ mod tests {
     fn test_execution_engine_create() {
         // Use a unique temp directory for test isolation
         let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         // Clean up
         let _ = std::fs::remove_dir_all(temp_dir);
@@ -1121,7 +1121,7 @@ mod tests {
     fn test_execution_engine_with_data_dir() {
         let temp_dir =
             env::temp_dir().join(format!("sqlrustgo_test_data_dir_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         let _ = std::fs::remove_dir_all(temp_dir);
     }
@@ -2227,7 +2227,7 @@ mod tests {
     fn test_execute_with_data_dir() {
         use std::env;
         let temp_dir = env::temp_dir().join(format!("test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty() || true);
         let _ = std::fs::remove_dir_all(temp_dir);
     }
