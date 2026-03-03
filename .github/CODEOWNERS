@@ -1,0 +1,43 @@
+# CODEOWNERS - SQLRustGo
+#
+# This file defines the code owners for each part of the codebase.
+# Code owners are automatically requested for review when someone opens
+# a pull request that modifies code that they own.
+#
+# For more information, see:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @yinglichina8848
+
+# Core modules
+/src/executor/ @yinglichina8848
+/src/planner/ @yinglichina8848
+/src/parser/ @yinglichina8848
+/src/lexer/ @yinglichina8848
+/src/storage/ @yinglichina8848
+/src/network/ @yinglichina8848
+/src/transaction/ @yinglichina8848
+/src/auth/ @yinglichina8848
+/src/types/ @yinglichina8848
+
+# Benchmarks
+/benches/ @yinglichina8848
+
+# Documentation
+/docs/ @yinglichina8848
+/README.md @yinglichina8848
+/CHANGELOG.md @yinglichina8848
+
+# Configuration
+/Cargo.toml @yinglichina8848
+/Cargo.lock @yinglichina8848
+/.github/ @yinglichina8848
+
+# Tests
+/tests/ @yinglichina8848
+/src/**/tests.rs @yinglichina8848
+/src/**/tests/ @yinglichina8848
+
+# CI/CD
+/.github/workflows/ @yinglichina8848
