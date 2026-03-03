@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-03-03
+
+### Features
+
+- Add Lexer benchmark (B-001)
+- Add Parser benchmark (B-002)
+- Add Executor benchmark (B-004)
+- Add Storage benchmark (B-005)
+- Add Network benchmark (B-006)
+- Add Planner benchmark (B-007)
+- Add Integration benchmark (B-008)
+- Implement HashJoin basic functionality (C-04)
+- Add Value Hash trait implementation
+- Add Query Analyzer Phase 1
+- Add LogicalPlan definitions
+- Add PhysicalPlan trait
+- Add Executor trait
+
+### Improvements
+
+- Fix clippy warnings (collapsible_match)
+- Remove unwrap/panic in production code
+- Use expect for clear error messages
+- Add security audit report
+- Add code quality audit report
+
+### Documentation
+
+- Add v1.1.0 Release Notes
+- Add v1.1.0 Upgrade Guide
+
 ## [1.0.0-rc.1] - 2026-02-20
 
 ### Bug Fixes
