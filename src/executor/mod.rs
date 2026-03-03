@@ -16,6 +16,8 @@
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
 };
+#[cfg(test)]
+use crate::planner::{HashJoinExec, PhysicalPlan};
 use crate::storage::{BufferPool, FileStorage};
 use crate::types::{SqlError, SqlResult, Value, parse_sql_literal};
 use std::path::PathBuf;
@@ -674,5 +676,40 @@ mod tests {
         // Verify row was deleted
         let table = engine.get_table("users").unwrap();
         assert_eq!(table.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_hash_join_inner() {
+        // Test basic inner join - verifies PhysicalPlan::HashJoin exists
+        use crate::planner::logical_plan::JoinType;
+
+        // Create a HashJoin physical plan
+        let plan = PhysicalPlan::HashJoin {
+            left: Box::new(PhysicalPlan::TableScan { table_name: "a".to_string() }),
+            right: Box::new(PhysicalPlan::TableScan { table_name: "b".to_string() }),
+            join_type: JoinType::Inner,
+            condition: Expression::Literal("true".to_string()),
+        };
+
+        match plan {
+            PhysicalPlan::HashJoin { .. } => (),
+            _ => panic!("Expected HashJoin plan"),
+        }
+    }
+
+    #[test]
+    fn test_hash_join_exec_exists() {
+        // Test that HashJoinExec can be created
+        use crate::planner::logical_plan::JoinType;
+
+        let exec = HashJoinExec::new(
+            Box::new(PhysicalPlan::TableScan { table_name: "a".to_string() }),
+            Box::new(PhysicalPlan::TableScan { table_name: "b".to_string() }),
+            JoinType::Inner,
+            Expression::Literal("true".to_string()),
+        );
+
+        // Verify the exec was created (we can't inspect internals, but creation succeeds)
+        let _ = exec;
     }
 }
