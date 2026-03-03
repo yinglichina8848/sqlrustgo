@@ -460,4 +460,49 @@ mod tests {
         assert_eq!(tree.search(50), Some(500));
         assert_eq!(tree.search(99), Some(990));
     }
+
+    #[test]
+    fn test_bplus_tree_internal_node_insert() {
+        let mut tree = BPlusTree::new();
+
+        // Insert enough to create internal nodes (requires multiple splits)
+        for i in 0..50 {
+            tree.insert((i * 10) as i64, (i * 100) as u32);
+        }
+
+        // Verify search works through internal nodes
+        assert_eq!(tree.search(0), Some(0));
+        assert_eq!(tree.search(250), Some(2500));
+        assert_eq!(tree.search(490), Some(4900));
+    }
+
+    #[test]
+    fn test_bplus_tree_range_large() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many values
+        for i in 0..100 {
+            tree.insert(i as i64, i as u32);
+        }
+
+        // Range query covering middle portion
+        let results = tree.range_query(25, 76);
+        assert_eq!(results.len(), 51); // 25 to 75 inclusive (76 is exclusive)
+    }
+
+    #[test]
+    fn test_bplus_tree_keys_after_inserts() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in random-ish order
+        tree.insert(5, 50);
+        tree.insert(2, 20);
+        tree.insert(8, 80);
+        tree.insert(1, 10);
+        tree.insert(9, 90);
+
+        // Keys should be sorted
+        let keys = tree.keys();
+        assert_eq!(keys, vec![1, 2, 5, 8, 9]);
+    }
 }
