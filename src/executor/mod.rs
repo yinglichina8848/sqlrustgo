@@ -63,17 +63,17 @@ pub struct ExecutionEngine {
 impl ExecutionEngine {
     /// Create a new execution engine with file-based storage
     pub fn new() -> Self {
-        Self::with_data_dir(std::path::PathBuf::from("data"))
+        Self::with_data_dir(std::path::PathBuf::from("data")).unwrap()
     }
 
     /// Create a new execution engine with custom data directory
     #[allow(clippy::new_without_default)]
-    pub fn with_data_dir(data_dir: PathBuf) -> Self {
-        let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
-        Self {
+    pub fn with_data_dir(data_dir: PathBuf) -> SqlResult<Self> {
+        let storage = FileStorage::new(data_dir)?;
+        Ok(Self {
             buffer_pool: BufferPool::new(100),
             storage,
-        }
+        })
     }
 }
 
@@ -648,11 +648,12 @@ impl ExecutionEngine {
 }
 
 /// Convert expression to value (static function)
+/// Note: BinaryOp cannot be evaluated in static context - returns Null
 fn expression_to_value_static(expr: &Expression) -> Value {
     match expr {
         Expression::Literal(s) => parse_sql_literal(s),
         Expression::Identifier(s) => parse_sql_literal(s),
-        Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
+        Expression::BinaryOp(_, _, _) => Value::Null,
     }
 }
 
@@ -757,7 +758,7 @@ mod tests {
     fn test_execution_engine_create() {
         // Use a unique temp directory for test isolation
         let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         // Clean up
         let _ = std::fs::remove_dir_all(temp_dir);
@@ -1121,7 +1122,7 @@ mod tests {
     fn test_execution_engine_with_data_dir() {
         let temp_dir =
             env::temp_dir().join(format!("sqlrustgo_test_data_dir_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         let _ = std::fs::remove_dir_all(temp_dir);
     }
@@ -2227,7 +2228,7 @@ mod tests {
     fn test_execute_with_data_dir() {
         use std::env;
         let temp_dir = env::temp_dir().join(format!("test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty() || true);
         let _ = std::fs::remove_dir_all(temp_dir);
     }
