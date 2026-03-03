@@ -7,7 +7,7 @@
 
 use crate::parser::{
     AggregateCall, ColumnDefinition, DeleteStatement, Expression, InsertStatement,
-    SelectStatement, Statement, UpdateStatement,
+    JoinClause, SelectStatement, Statement, UpdateStatement,
 };
 use crate::planner::{
     AggregateFunction as PlannerAggFunc, DataType, Expr, Field, LogicalPlan, Operator, Schema,
@@ -54,7 +54,7 @@ impl Analyzer {
     /// Analyze SELECT statement into LogicalPlan
     fn analyze_select(&self, select: SelectStatement) -> Result<LogicalPlan, SqlError> {
         // Get table schema
-        let table_schema = self
+        let left_schema = self
             .tables
             .get(&select.table)
             .ok_or_else(|| SqlError::ExecutionError(format!("Unknown table: {}", select.table)))?
@@ -65,30 +65,46 @@ impl Analyzer {
         let mut output_fields = Vec::new();
 
         for col in &select.columns {
-            let expr = self.bind_column(&col.name, &table_schema, col.alias.as_deref())?;
+            // Try to bind column to left schema first, then right schema if join present
+            let bound_expr = if let Some(join_clause) = &select.join_clause {
+                let right_schema = self
+                    .tables
+                    .get(&join_clause.table)
+                    .ok_or_else(|| SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table)))?
+                    .clone();
+                self.bind_column(&col.name, &left_schema, col.alias.as_deref())
+                    .or_else(|_| self.bind_column(&col.name, &right_schema, col.alias.as_deref()))?
+            } else {
+                self.bind_column(&col.name, &left_schema, col.alias.as_deref())?
+            };
 
             // Determine output field type
             let field_name = col.alias.clone().unwrap_or_else(|| col.name.clone());
-            let data_type = self.infer_expression_type(&expr, &table_schema);
+            let data_type = self.infer_expression_type(&bound_expr, &left_schema);
             output_fields.push(Field::new(field_name, data_type));
 
-            proj_exprs.push(expr);
+            proj_exprs.push(bound_expr);
         }
 
-        // Create TableScan as base
-        let mut plan = LogicalPlan::TableScan {
-            table_name: select.table,
+        // Create TableScan as base for left table
+        let mut left_plan = LogicalPlan::TableScan {
+            table_name: select.table.clone(),
             projection: None,
             filters: vec![],
             limit: None,
-            schema: table_schema,
+            schema: left_schema,
         };
+
+        // Handle JOIN clause
+        if let Some(join_clause) = &select.join_clause {
+            left_plan = self.add_join_to_plan(left_plan, join_clause)?;
+        }
 
         // Add WHERE filter if present
         if let Some(where_expr) = &select.where_clause {
-            let bound_expr = self.bind_expression(where_expr, &plan.schema())?;
-            plan = LogicalPlan::Filter {
-                input: Box::new(plan),
+            let bound_expr = self.bind_expression(where_expr, left_plan.schema())?;
+            left_plan = LogicalPlan::Filter {
+                input: Box::new(left_plan),
                 predicate: bound_expr,
             };
         }
@@ -97,11 +113,11 @@ impl Analyzer {
         if !select.aggregates.is_empty() {
             let mut aggr_exprs = Vec::new();
             for aggr in &select.aggregates {
-                let expr = self.bind_aggregate(aggr, &plan.schema())?;
+                let expr = self.bind_aggregate(aggr, left_plan.schema())?;
                 aggr_exprs.push(expr);
             }
-            plan = LogicalPlan::Aggregate {
-                input: Box::new(plan),
+            left_plan = LogicalPlan::Aggregate {
+                input: Box::new(left_plan),
                 group_expr: vec![],
                 aggr_expr: aggr_exprs,
                 schema: Schema::new(output_fields.clone()),
@@ -110,13 +126,13 @@ impl Analyzer {
 
         // Add projection
         let schema = Schema::new(output_fields);
-        plan = LogicalPlan::Projection {
-            input: Box::new(plan),
+        left_plan = LogicalPlan::Projection {
+            input: Box::new(left_plan),
             expr: proj_exprs,
             schema,
         };
 
-        Ok(plan)
+        Ok(left_plan)
     }
 
     /// Analyze INSERT statement
@@ -173,7 +189,7 @@ impl Analyzer {
 
         // Add WHERE filter if present
         if let Some(where_expr) = &update.where_clause {
-            let bound_expr = self.bind_expression(where_expr, &plan.schema())?;
+            let bound_expr = self.bind_expression(where_expr, plan.schema())?;
             plan = LogicalPlan::Filter {
                 input: Box::new(plan),
                 predicate: bound_expr,
@@ -207,7 +223,7 @@ impl Analyzer {
 
         // Add WHERE filter if present
         if let Some(where_expr) = &delete.where_clause {
-            let bound_expr = self.bind_expression(where_expr, &plan.schema())?;
+            let bound_expr = self.bind_expression(where_expr, plan.schema())?;
             plan = LogicalPlan::Filter {
                 input: Box::new(plan),
                 predicate: bound_expr,
@@ -244,7 +260,7 @@ impl Analyzer {
     }
 
     /// Bind a column reference to a schema
-    fn bind_column(&self, name: &str, schema: &Schema, alias: Option<&str>) -> Result<Expr, SqlError> {
+    fn bind_column(&self, name: &str, schema: &Schema, _alias: Option<&str>) -> Result<Expr, SqlError> {
         // Check if it's a wildcard
         if name == "*" {
             return Ok(Expr::Wildcard);
@@ -268,6 +284,7 @@ impl Analyzer {
 
     /// Bind a parser Expression to planner Expr
     fn bind_expression(&self, expr: &Expression, schema: &Schema) -> Result<Expr, SqlError> {
+        #[allow(unreachable_patterns)]
         match expr {
             Expression::Literal(lit) => Ok(Expr::Literal(crate::types::parse_sql_literal(lit))),
             Expression::Identifier(name) => {
@@ -281,6 +298,54 @@ impl Analyzer {
             }
             _ => Err(SqlError::ExecutionError("Unsupported expression".to_string())),
         }
+    }
+
+    /// Add JOIN to the logical plan
+    fn add_join_to_plan(
+        &self,
+        left_plan: LogicalPlan,
+        join_clause: &JoinClause,
+    ) -> Result<LogicalPlan, SqlError> {
+        // Get right table schema
+        let right_schema = self
+            .tables
+            .get(&join_clause.table)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table)))?
+            .clone();
+
+        // Create right TableScan
+        let right_plan = LogicalPlan::TableScan {
+            table_name: join_clause.table.clone(),
+            projection: None,
+            filters: vec![],
+            limit: None,
+            schema: right_schema,
+        };
+
+        // Convert join type
+        let join_type = match join_clause.join_type {
+            crate::parser::JoinType::Inner => crate::planner::JoinType::Inner,
+            crate::parser::JoinType::Left => crate::planner::JoinType::Left,
+            crate::parser::JoinType::Right => crate::planner::JoinType::Right,
+        };
+
+        // Bind ON clause expressions
+        let left_on = self.bind_expression(&join_clause.on_clause.0, left_plan.schema())?;
+        let right_on = self.bind_expression(&join_clause.on_clause.1, right_plan.schema())?;
+
+        // Combine schemas for output
+        let mut combined_fields = left_plan.schema().fields.clone();
+        combined_fields.extend(right_plan.schema().fields.clone());
+        let combined_schema = Schema::new(combined_fields);
+
+        Ok(LogicalPlan::Join {
+            left: Box::new(left_plan),
+            right: Box::new(right_plan),
+            join_type,
+            on: vec![(left_on, right_on)],
+            filter: None,
+            schema: combined_schema,
+        })
     }
 
     /// Bind aggregate call
@@ -327,6 +392,7 @@ impl Analyzer {
     }
 
     /// Bind unary operator
+    #[allow(dead_code)]
     fn bind_unary_operator(&self, op: &str) -> Result<Operator, SqlError> {
         match op.to_uppercase().as_str() {
             "NOT" => Ok(Operator::Not),
@@ -341,8 +407,8 @@ impl Analyzer {
             Expression::Literal(lit) => Expr::Literal(crate::types::parse_sql_literal(lit)),
             Expression::Identifier(name) => Expr::Column(crate::planner::Column::new(name.clone())),
             Expression::BinaryOp(left, op, right) => {
-                let left_bound = self.bind_expression(left, &Schema::empty()).unwrap_or_else(|_| Expr::Wildcard);
-                let right_bound = self.bind_expression(right, &Schema::empty()).unwrap_or_else(|_| Expr::Wildcard);
+                let left_bound = self.bind_expression(left, &Schema::empty()).unwrap_or(Expr::Wildcard);
+                let right_bound = self.bind_expression(right, &Schema::empty()).unwrap_or(Expr::Wildcard);
                 let operator = self.bind_operator(op).unwrap_or(Operator::Eq);
                 Expr::binary_expr(left_bound, operator, right_bound)
             }
