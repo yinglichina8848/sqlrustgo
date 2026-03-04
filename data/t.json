@@ -7,5 +7,26 @@
       "nullable": true
     }
   ],
-  "rows": []
+  "rows": [
+    [
+      {
+        "Integer": 1
+      }
+    ],
+    [
+      {
+        "Integer": 1
+      }
+    ],
+    [
+      {
+        "Integer": 1
+      }
+    ],
+    [
+      {
+        "Integer": 1
+      }
+    ]
+  ]
 }
