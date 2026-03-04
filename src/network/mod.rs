@@ -516,15 +516,15 @@ impl NetworkHandler {
             Err(e) => {
                 // Send error packet
                 let error_code = match e {
-                    SqlError::ParseError(_) => 1064, // Syntax error
+                    SqlError::ParseError(_) => 1064,     // Syntax error
                     SqlError::ExecutionError(_) => 1000, // General error
-                    SqlError::TableNotFound(_) => 1146, // Table doesn't exist
+                    SqlError::TableNotFound(_) => 1146,  // Table doesn't exist
                     SqlError::ColumnNotFound(_) => 1171, // Column doesn't exist
-                    SqlError::DuplicateKey(_) => 1062, // Duplicate entry
-                    SqlError::IoError(_) => 1000, // General error
+                    SqlError::DuplicateKey(_) => 1062,   // Duplicate entry
+                    SqlError::IoError(_) => 1000,        // General error
                     SqlError::ProtocolError(_) => 1000,
                     SqlError::TypeMismatch(_) => 22005, // Type mismatch
-                    SqlError::DivisionByZero => 22012, // Division by zero
+                    SqlError::DivisionByZero => 22012,  // Division by zero
                     SqlError::NullValueError(_) => 1048, // Column cannot be null
                     SqlError::ConstraintViolation(_) => 23000, // Constraint violation
                 };
@@ -536,11 +536,7 @@ impl NetworkHandler {
     }
 
     /// Send a result set to the client
-    fn send_result_set(
-        &mut self,
-        columns: &[String],
-        rows: &[Vec<Value>],
-    ) -> Result<(), SqlError> {
+    fn send_result_set(&mut self, columns: &[String], rows: &[Vec<Value>]) -> Result<(), SqlError> {
         // Column count
         let mut buf = BytesMut::new();
         buf.put_u8(columns.len() as u8);
