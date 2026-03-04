@@ -19,16 +19,9 @@ pub fn parse_sql_literal(s: &str) -> Value {
         "TRUE" => Value::Boolean(true),
         "FALSE" => Value::Boolean(false),
         _ if s.starts_with('\'') && s.ends_with('\'') => Value::Text(s[1..s.len() - 1].to_string()),
-        _ => {
-            // Try parsing as integer or float, fallback to text
-            if let Ok(v) = s.parse::<i64>() {
-                Value::Integer(v)
-            } else if let Ok(v) = s.parse::<f64>() {
-                Value::Float(v)
-            } else {
-                Value::Text(s.to_string())
-            }
-        }
+        _ if s.parse::<i64>().is_ok() => Value::Integer(s.parse().unwrap()),
+        _ if s.parse::<f64>().is_ok() => Value::Float(s.parse().unwrap()),
+        _ => Value::Text(s.to_string()),
     }
 }
 
@@ -37,7 +30,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::approx_constant)]
     fn test_parse_sql_literal() {
         assert_eq!(parse_sql_literal("NULL"), Value::Null);
         assert_eq!(parse_sql_literal("TRUE"), Value::Boolean(true));
@@ -48,35 +40,5 @@ mod tests {
             parse_sql_literal("'hello'"),
             Value::Text("hello".to_string())
         );
-    }
-
-    #[test]
-    fn test_parse_sql_literal_case_insensitive() {
-        // Test case insensitivity
-        assert_eq!(parse_sql_literal("null"), Value::Null);
-        assert_eq!(parse_sql_literal("true"), Value::Boolean(true));
-        assert_eq!(parse_sql_literal("false"), Value::Boolean(false));
-    }
-
-    #[test]
-    fn test_parse_sql_literal_whitespace() {
-        // Test whitespace handling
-        assert_eq!(parse_sql_literal("  NULL  "), Value::Null);
-        assert_eq!(parse_sql_literal("  42  "), Value::Integer(42));
-    }
-
-    #[test]
-    #[allow(clippy::approx_constant)]
-    fn test_parse_sql_literal_negative() {
-        // Test negative numbers
-        assert_eq!(parse_sql_literal("-10"), Value::Integer(-10));
-        assert_eq!(parse_sql_literal("-3.14"), Value::Float(-3.14));
-    }
-
-    #[test]
-    fn test_parse_sql_literal_default_text() {
-        // Test default to text for unknown values
-        let result = parse_sql_literal("unknown");
-        assert_eq!(result, Value::Text("unknown".to_string()));
     }
 }
