@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod executor;
 pub mod lexer;
+pub mod optimizer;
 pub mod network;
 pub mod parser;
 pub mod storage;
