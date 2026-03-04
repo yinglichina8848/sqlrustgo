@@ -238,12 +238,11 @@ impl ExecutionEngine {
                 };
 
                 if matches {
-                    // Apply SET clauses with dynamic column mapping
                     for (column, value_expr) in &set_clauses {
-                        if let Some(&idx) = column_indices.get(column)
-                            && idx < row.len()
-                        {
-                            row[idx] = expression_to_value_static(value_expr);
+                        if let Some(&idx) = column_indices.get(column) {
+                            if idx < row.len() {
+                                row[idx] = expression_to_value_static(value_expr);
+                            }
                         }
                     }
                     count += 1;
