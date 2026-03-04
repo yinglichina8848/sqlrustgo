@@ -11,7 +11,7 @@
 //! | INTEGER  | i64       | 64-bit signed |
 //! | FLOAT    | f64       | 64-bit float |
 //! | TEXT     | String    | UTF-8 string |
-//! | BLOB     | Vec<u8>   | Binary data |
+//! | BLOB     | `Vec<u8>` | Binary data |
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

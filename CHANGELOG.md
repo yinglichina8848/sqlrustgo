@@ -16,19 +16,28 @@ All notable changes to this project will be documented in this file.
 - 安全审计报告 (SECURITY_AUDIT.md)
 - 代码质量审计报告 (CODE_QUALITY_AUDIT.md)
 - 发布门禁检查清单 (RELEASE_GATE_CHECKLIST.md)
+- API 文档 (API_DOCUMENTATION.md)
+- 升级迁移指南 (UPGRADE_GUIDE.md)
+- 日志规范 (LOGGING_SPECIFICATION.md)
+- 监控规范 (MONITORING_SPECIFICATION.md)
+- 健康检查规范 (HEALTH_CHECK_SPECIFICATION.md)
+- 性能测试报告 (PERFORMANCE_REPORT.md)
+- 成熟度评估报告 (MATURITY_ASSESSMENT.md)
 
 ### Changed
 
 - Executor 重构为插件化架构
 - 网络层升级为异步模式
-- 测试覆盖率提升至 93.61% (目标 ≥90%)
+- 测试覆盖率提升至 94.18% (目标 ≥90%)
 - 代码质量门禁通过 (Clippy/Format)
+- 成熟度等级从 L2 升级到 L3 (产品级)
 
 ### Fixed
 
 - 修复 Clippy 警告 (11 个错误)
 - 修复格式检查问题
 - 修复测试代码中的逻辑问题
+- 修复文档注释中的 HTML 标签警告
 
 ### Security
 
@@ -42,6 +51,8 @@ All notable changes to this project will be documented in this file.
 - 添加 v1.1.0 Release Notes
 - 更新 CHANGELOG
 - 添加门禁检查清单
+- 更新 README.md 版本信息
+- 添加 CODEOWNERS 文件
 
 ## [1.0.0-rc.1] - 2026-02-20
 
