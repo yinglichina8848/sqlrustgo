@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use std::sync::RwLock;
 
 /// File-based storage manager
 pub struct FileStorage {
@@ -15,8 +16,8 @@ pub struct FileStorage {
     data_dir: PathBuf,
     /// In-memory cache of tables
     tables: HashMap<String, TableData>,
-    /// B+ Tree indexes: (table_name, column_name) -> BPlusTree
-    indexes: HashMap<(String, String), BPlusTree>,
+    /// B+ Tree indexes protected by RwLock for concurrent access
+    indexes: RwLock<HashMap<(String, String), BPlusTree>>,
 }
 
 impl FileStorage {
@@ -28,7 +29,7 @@ impl FileStorage {
         let mut storage = Self {
             data_dir,
             tables: HashMap::new(),
-            indexes: HashMap::new(),
+            indexes: RwLock::new(HashMap::new()),
         };
 
         // Load existing tables
@@ -92,8 +93,9 @@ impl FileStorage {
                         .and_then(|s| s.split_once("_idx_"))
                     {
                         if let Ok(index) = self.load_index(table_name, column_name) {
-                            self.indexes
-                                .insert((table_name.to_string(), column_name.to_string()), index);
+                            if let Ok(mut indexes) = self.indexes.write() {
+                                indexes.insert((table_name.to_string(), column_name.to_string()), index);
+                            }
                         }
                     }
                 }
@@ -232,13 +234,17 @@ impl FileStorage {
     /// Check if an index exists for a table column
     pub fn has_index(&self, table_name: &str, column_name: &str) -> bool {
         self.indexes
-            .contains_key(&(table_name.to_string(), column_name.to_string()))
+            .read()
+            .map(|indexes| indexes.contains_key(&(table_name.to_string(), column_name.to_string())))
+            .unwrap_or(false)
     }
 
     /// Get an index for a table column (read-only)
-    pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<&BPlusTree> {
+    pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<BPlusTree> {
         self.indexes
-            .get(&(table_name.to_string(), column_name.to_string()))
+            .read()
+            .ok()
+            .and_then(|indexes| indexes.get(&(table_name.to_string(), column_name.to_string())).cloned())
     }
 
     /// Create or update an index for a table column from existing data
@@ -267,8 +273,9 @@ impl FileStorage {
         self.save_index(table_name, column_name, &index)?;
 
         // Store in memory
-        self.indexes
-            .insert((table_name.to_string(), column_name.to_string()), index);
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.insert((table_name.to_string(), column_name.to_string()), index);
+        }
 
         Ok(())
     }
@@ -284,16 +291,22 @@ impl FileStorage {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
         // Clone the key for later use
-        let has_index = self.indexes.contains_key(&key_exists);
+        let has_index = self.indexes.read()
+            .map(|indexes| indexes.contains_key(&key_exists))
+            .unwrap_or(false);
 
         if has_index {
             // Get mutable reference, insert, then save
-            if let Some(index) = self.indexes.get_mut(&key_exists) {
-                index.insert(key, row_id);
-            }
-            // Now we can borrow immutably to save
-            if let Some(index) = self.indexes.get(&key_exists) {
-                self.save_index(table_name, column_name, index)?;
+            if let Ok(mut indexes) = self.indexes.write() {
+                if let Some(index) = indexes.get_mut(&key_exists) {
+                    index.insert(key, row_id);
+                    // Save to disk
+                    if let Ok(read_indexes) = self.indexes.read() {
+                        if let Some(idx) = read_indexes.get(&key_exists) {
+                            let _ = self.save_index(table_name, column_name, idx);
+                        }
+                    }
+                }
             }
         }
 
@@ -303,8 +316,13 @@ impl FileStorage {
     /// Search using index - returns row IDs matching the key
     pub fn search_index(&self, table_name: &str, column_name: &str, key: i64) -> Option<u32> {
         self.indexes
-            .get(&(table_name.to_string(), column_name.to_string()))
-            .and_then(|index| index.search(key))
+            .read()
+            .ok()
+            .and_then(|indexes| {
+                indexes
+                    .get(&(table_name.to_string(), column_name.to_string()))
+                    .and_then(|index| index.search(key))
+            })
     }
 
     /// Range query using index
@@ -316,15 +334,23 @@ impl FileStorage {
         end: i64,
     ) -> Vec<u32> {
         self.indexes
-            .get(&(table_name.to_string(), column_name.to_string()))
-            .map(|index| index.range_query(start, end))
+            .read()
+            .ok()
+            .and_then(|indexes| {
+                indexes
+                    .get(&(table_name.to_string(), column_name.to_string()))
+                    .map(|index| index.range_query(start, end))
+            })
             .unwrap_or_default()
     }
 
     /// Drop an index
     pub fn drop_index(&mut self, table_name: &str, column_name: &str) -> std::io::Result<()> {
         let key = (table_name.to_string(), column_name.to_string());
-        self.indexes.remove(&key);
+
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.remove(&key);
+        }
 
         let path = self.index_path(table_name, column_name);
         if path.exists() {
@@ -336,8 +362,10 @@ impl FileStorage {
 
     /// Flush all indexes to disk
     pub fn flush_indexes(&self) -> std::io::Result<()> {
-        for ((table_name, column_name), index) in &self.indexes {
-            self.save_index(table_name, column_name, index)?;
+        if let Ok(indexes) = self.indexes.read() {
+            for ((table_name, column_name), index) in indexes.iter() {
+                self.save_index(table_name, column_name, index)?;
+            }
         }
         Ok(())
     }
