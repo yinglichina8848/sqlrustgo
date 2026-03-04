@@ -2,7 +2,6 @@
 //!
 //! A Rust implementation of a SQL-92 compliant database system.
 
-pub mod auth;
 pub mod executor;
 pub mod lexer;
 pub mod network;
@@ -11,11 +10,18 @@ pub mod storage;
 pub mod transaction;
 pub mod types;
 
+<<<<<<< HEAD
 pub use auth::{AuthError, AuthManager, Operation, Role, Session, User};
 pub use executor::{execute, ExecutionEngine, ExecutionResult};
 pub use lexer::{tokenize, Lexer, Token};
 pub use network::{connect, start_server_sync, NetworkHandler};
 pub use parser::{parse, Statement};
+=======
+pub use executor::{ExecutionEngine, ExecutionResult, execute};
+pub use lexer::{Lexer, Token, tokenize};
+pub use network::{NetworkHandler, connect, start_server_sync};
+pub use parser::{Statement, parse};
+>>>>>>> origin/main
 pub use storage::{BPlusTree, BufferPool, FileStorage, Page};
 pub use transaction::{TransactionManager, TxState, WriteAheadLog};
 pub use types::{parse_sql_literal, SqlError, SqlResult, Value};

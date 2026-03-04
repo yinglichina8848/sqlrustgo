@@ -26,6 +26,7 @@ jobs:
         run: cargo build --release --benches
         
       - name: Run Lexer/Parser benchmarks
+<<<<<<< HEAD
         run: cargo run --release --benches -- lexer_parser_bench
         
       - name: Run Executor benchmarks
@@ -50,3 +51,30 @@ jobs:
           alert-threshold: '150%'
           comment-on-alert: true
           fail-on-alert: true
+=======
+        run: cargo bench --bench lexer_parser_bench
+        
+      - name: Run Executor benchmarks
+        run: cargo bench --bench executor_bench
+        
+      - name: Run Storage benchmarks
+        run: cargo bench --bench storage_bench
+        
+      - name: Run Network benchmarks
+        run: cargo bench --bench network_bench
+        
+      - name: Run Integration benchmarks
+        run: cargo bench --bench integration_bench
+        
+      - name: Run SQL Operations benchmarks
+        run: cargo bench --bench sql_operations
+        
+      - name: Run Parser benchmarks
+        run: cargo bench --bench parser_bench
+        
+      - name: Run Lexer benchmarks
+        run: cargo bench --bench lexer_bench
+
+  # Note: Benchmark upload disabled - criterion 0.5 compatibility issue
+  # Upload can be re-enabled once criterion produces JSON output
+>>>>>>> origin/main
