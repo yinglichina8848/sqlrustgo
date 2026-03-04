@@ -7,7 +7,8 @@ fn bench_executor_select_where(c: &mut Criterion) {
         .execute(parse("CREATE TABLE users (id INTEGER, name TEXT, age INTEGER)").unwrap())
         .unwrap();
 
-    for i in 0..100 {
+    // Use 1000 rows for benchmark
+    for i in 0..1000 {
         engine
             .execute(
                 parse(&format!(
@@ -23,7 +24,7 @@ fn bench_executor_select_where(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("executor_select");
 
-    group.bench_function("select_all", |b| {
+    group.bench_function("select_all_1k", |b| {
         b.iter(|| {
             engine
                 .execute(parse("SELECT * FROM users").unwrap())
@@ -31,15 +32,15 @@ fn bench_executor_select_where(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("select_where_id", |b| {
+    group.bench_function("select_where_id_1k", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM users WHERE id = 50").unwrap())
+                .execute(parse("SELECT * FROM users WHERE id = 500").unwrap())
                 .unwrap()
         });
     });
 
-    group.bench_function("select_where_age", |b| {
+    group.bench_function("select_where_age_1k", |b| {
         b.iter(|| {
             engine
                 .execute(parse("SELECT * FROM users WHERE age > 25").unwrap())
@@ -58,7 +59,7 @@ fn bench_executor_insert(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("executor_insert");
 
-    for size in [10, 100, 1000] {
+    for size in [1000, 10000, 100000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
                 for i in 0..size {
