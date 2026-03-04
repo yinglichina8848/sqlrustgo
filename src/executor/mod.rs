@@ -466,9 +466,6 @@ impl Default for ExecutionEngine {
     }
 }
 
-
-/// Evaluate expression to value (supports BinaryOp arithmetic)
-
 /// Evaluate expression to value (supports BinaryOp arithmetic)
 fn evaluate_expression(
     row: &[Value],
