@@ -1,5 +1,4 @@
 //! SQL Value types
-<<<<<<< HEAD
 //!
 //! Core data types for SQLRustGo database system.
 //!
@@ -13,9 +12,6 @@
 //! | FLOAT    | f64       | 64-bit float |
 //! | TEXT     | String    | UTF-8 string |
 //! | BLOB     | `Vec<u8>` | Binary data |
-=======
-//! Core data types for SQLRustGo database system
->>>>>>> origin/main
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -84,6 +80,9 @@ impl Hash for Value {
         }
     }
 }
+
+/// Implement Eq manually to handle Float case (NaN == NaN for HashMap keys)
+impl Eq for Value {}
 
 impl Value {
     /// Get integer value if this is an Integer

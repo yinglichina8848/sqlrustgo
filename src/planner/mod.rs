@@ -5,12 +5,12 @@
 use crate::types::Value;
 use std::fmt;
 
-pub mod analyzer;
+// pub mod analyzer; // Temporarily disabled - requires parser types that don't exist yet
 pub mod executor;
 pub mod logical_plan;
 pub mod physical_plan;
 
-pub use analyzer::*;
+// pub use analyzer::*; // Temporarily disabled
 pub use logical_plan::*;
 pub use physical_plan::*;
 

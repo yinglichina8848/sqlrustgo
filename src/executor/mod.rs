@@ -12,15 +12,12 @@
 //! - 算子下推：将过滤等操作下推到存储层
 //! - 支持：DML (INSERT/UPDATE/DELETE) 和 DQL (SELECT)
 //! - 表达式求值：WHERE 子句的布尔表达式
-<<<<<<< HEAD
 
 #![allow(
     clippy::collapsible_if,
     clippy::collapsible_match,
     clippy::needless_borrow
 )]
-=======
->>>>>>> origin/main
 
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
@@ -46,26 +43,16 @@ pub struct ExecutionEngine {
 
 impl ExecutionEngine {
     /// Create a new execution engine with file-based storage
-<<<<<<< HEAD
     #[allow(clippy::expect_used)]
-=======
-    /// Panics if storage initialization fails (use with_data_dir for error handling)
->>>>>>> origin/main
     pub fn new() -> Self {
         Self::with_data_dir(std::path::PathBuf::from("data"))
             .expect("Failed to create execution engine: data directory initialization failed")
     }
 
     /// Create a new execution engine with custom data directory
-<<<<<<< HEAD
     pub fn with_data_dir(data_dir: PathBuf) -> SqlResult<Self> {
         let storage = FileStorage::new(data_dir)?;
         Ok(Self {
-=======
-    pub fn with_data_dir(data_dir: PathBuf) -> Self {
-        let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
-        Self {
->>>>>>> origin/main
             buffer_pool: BufferPool::new(100),
             storage,
         })
@@ -205,13 +192,8 @@ impl ExecutionEngine {
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
                     if let Some(value) = row.get(*col_idx) {
-<<<<<<< HEAD
                         if let Some(key) = value.to_index_key() {
                             index_updates.push((col_name.clone(), key, row_id));
-=======
-                        if let Value::Integer(key) = value {
-                            index_updates.push((col_name.clone(), *key, row_id));
->>>>>>> origin/main
                         }
                     }
                 }
@@ -277,11 +259,7 @@ impl ExecutionEngine {
                     for (column, value_expr) in &set_clauses {
                         if let Some(&idx) = column_indices.get(column) {
                             if idx < row.len() {
-<<<<<<< HEAD
                                 row[idx] = evaluate_expression(row, value_expr, &column_indices);
-=======
-                                row[idx] = expression_to_value_static(value_expr);
->>>>>>> origin/main
                             }
                         }
                     }
@@ -470,7 +448,6 @@ impl Default for ExecutionEngine {
     }
 }
 
-<<<<<<< HEAD
 /// Evaluate expression to value (supports BinaryOp arithmetic)
 fn evaluate_expression(
     row: &[Value],
@@ -527,15 +504,6 @@ fn evaluate_expression(
                 _ => Value::Null,
             }
         }
-=======
-/// Convert expression to value (static function)
-/// Note: BinaryOp cannot be evaluated in static context - returns Null
-fn expression_to_value_static(expr: &Expression) -> Value {
-    match expr {
-        Expression::Literal(s) => parse_sql_literal(s),
-        Expression::Identifier(s) => parse_sql_literal(s),
-        Expression::BinaryOp(_, _, _) => Value::Null,
->>>>>>> origin/main
     }
 }
 
@@ -800,3 +768,5 @@ mod tests {
         assert_eq!(table.rows.len(), 0);
     }
 }
+
+mod batch;
