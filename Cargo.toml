@@ -29,8 +29,6 @@ path = "tests/project_test.rs"
 [[test]]
 name = "ci_test"
 path = "tests/ci_test.rs"
-<<<<<<< HEAD
-
 [[bench]]
 name = "sql_operations"
 harness = false
@@ -42,5 +40,3 @@ harness = false
 [[bench]]
 name = "parser_bench"
 harness = false
-=======
->>>>>>> origin/main
