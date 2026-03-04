@@ -504,10 +504,18 @@ fn evaluate_expression(
                 },
                 "/" => match (&left_val, &right_val) {
                     (Value::Integer(l), Value::Integer(r)) => {
-                        if *r != 0 { Value::Integer(l / r) } else { Value::Null }
+                        if *r != 0 {
+                            Value::Integer(l / r)
+                        } else {
+                            Value::Null
+                        }
                     }
                     (Value::Float(l), Value::Float(r)) => {
-                        if *r != 0.0 { Value::Float(l / r) } else { Value::Null }
+                        if *r != 0.0 {
+                            Value::Float(l / r)
+                        } else {
+                            Value::Null
+                        }
                     }
                     _ => Value::Null,
                 },
