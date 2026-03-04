@@ -24,7 +24,7 @@ pub use query::{
     create_query_service, create_query_service_with_dir, QueryService, QueryServiceHandle,
     QueryResult,
 };
-pub use storage::{BPlusTree, BufferPool, FileStorage, Page};
+pub use storage::{BPlusTree, BufferPool, FileStorage, Page, StorageEngine};
 pub use transaction::{TransactionManager, TxState, WriteAheadLog};
 pub use types::{parse_sql_literal, SqlError, SqlResult, Value};
 
