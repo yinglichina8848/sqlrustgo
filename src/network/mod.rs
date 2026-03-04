@@ -45,6 +45,9 @@ use std::net::{TcpListener, TcpStream};
 /// MySQL protocol packet header size
 const PACKET_HEADER_SIZE: usize = 4;
 
+/// Connection pool and session management
+pub mod pool;
+
 /// MySQL protocol capability flags
 pub mod capability {
     pub const LONG_PASSWORD: u32 = 0x00000001;
