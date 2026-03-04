@@ -92,21 +92,11 @@
 | ID | 检查项 | 状态 | 说明 | 检查结果 |
 |----|--------|------|------|----------|
 | A-01 | 编译通过 | ✅ | `cargo build --all` 无错误 | Finished `dev` profile |
-| A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | ok. 4 passed; 0 failed |
-| A-03 | Clippy 检查 | ❌ | `cargo clippy -- -D warnings` 无警告 | **11 errors** |
+| A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | 322 passed; 0 failed |
+| A-03 | Clippy 检查 | ✅ | `cargo clippy -- -D warnings` 无警告 | Finished `dev` profile |
 | A-04 | 格式检查 | ✅ | `cargo fmt --all -- --check` 通过 | 无格式差异 |
 | A-05 | 无 unwrap/panic | ⚠️ | 核心代码无 unwrap/panic 调用 | 609 处 unwrap (待区分) |
 | A-06 | 错误处理完整 | ⚠️ | 使用 SqlResult<T> 统一错误处理 | 需验证 |
-
-**A-03 Clippy 错误详情**:
-```
-error: comparison is useless due to type limits
-    --> src/executor/mod.rs:1364:17
-     |
-1364 |         assert!(result.unwrap().columns.len() >= 0);
-
-error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
-```
 
 **A-05 unwrap 统计**:
 | 项目 | 数量 | 说明 |
