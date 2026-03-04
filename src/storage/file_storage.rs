@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use std::sync::RwLock;
 
 /// File-based storage manager
 pub struct FileStorage {
@@ -15,8 +16,8 @@ pub struct FileStorage {
     data_dir: PathBuf,
     /// In-memory cache of tables
     tables: HashMap<String, TableData>,
-    /// B+ Tree indexes: (table_name, column_name) -> BPlusTree
-    indexes: HashMap<(String, String), BPlusTree>,
+    /// B+ Tree indexes protected by RwLock for concurrent access
+    indexes: RwLock<HashMap<(String, String), BPlusTree>>,
 }
 
 impl FileStorage {
@@ -28,7 +29,7 @@ impl FileStorage {
         let mut storage = Self {
             data_dir,
             tables: HashMap::new(),
-            indexes: HashMap::new(),
+            indexes: RwLock::new(HashMap::new()),
         };
 
         // Load existing tables
@@ -91,10 +92,19 @@ impl FileStorage {
                         .and_then(|s| s.split_once("_idx_"))
                     {
                         if let Ok(index) = self.load_index(table_name, column_name) {
+<<<<<<< HEAD
+                            if let Ok(mut indexes) = self.indexes.write() {
+                                indexes.insert(
+                                    (table_name.to_string(), column_name.to_string()),
+                                    index,
+                                );
+                            }
+=======
                             self.indexes.insert(
                                 (table_name.to_string(), column_name.to_string()),
                                 index,
                             );
+>>>>>>> origin/main
                         }
                     }
                 }
@@ -227,12 +237,28 @@ impl FileStorage {
 
     /// Check if an index exists for a table column
     pub fn has_index(&self, table_name: &str, column_name: &str) -> bool {
+<<<<<<< HEAD
+        self.indexes
+            .read()
+            .map(|indexes| indexes.contains_key(&(table_name.to_string(), column_name.to_string())))
+            .unwrap_or(false)
+    }
+
+    /// Get an index for a table column (read-only)
+    pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<BPlusTree> {
+        self.indexes.read().ok().and_then(|indexes| {
+            indexes
+                .get(&(table_name.to_string(), column_name.to_string()))
+                .cloned()
+        })
+=======
         self.indexes.contains_key(&(table_name.to_string(), column_name.to_string()))
     }
 
     /// Get an index for a table column (read-only)
     pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<&BPlusTree> {
         self.indexes.get(&(table_name.to_string(), column_name.to_string()))
+>>>>>>> origin/main
     }
 
     /// Create or update an index for a table column from existing data
@@ -251,8 +277,13 @@ impl FileStorage {
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
             if let Some(value) = row.get(column_index) {
+<<<<<<< HEAD
+                if let Some(key) = value.to_index_key() {
+                    index.insert(key, row_id as u32);
+=======
                 if let Value::Integer(key) = value {
                     index.insert(*key, row_id as u32);
+>>>>>>> origin/main
                 }
             }
         }
@@ -261,10 +292,16 @@ impl FileStorage {
         self.save_index(table_name, column_name, &index)?;
 
         // Store in memory
+<<<<<<< HEAD
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.insert((table_name.to_string(), column_name.to_string()), index);
+        }
+=======
         self.indexes.insert(
             (table_name.to_string(), column_name.to_string()),
             index,
         );
+>>>>>>> origin/main
 
         Ok(())
     }
@@ -280,16 +317,24 @@ impl FileStorage {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
         // Clone the key for later use
-        let has_index = self.indexes.contains_key(&key_exists);
+        let has_index = self
+            .indexes
+            .read()
+            .map(|indexes| indexes.contains_key(&key_exists))
+            .unwrap_or(false);
 
         if has_index {
             // Get mutable reference, insert, then save
-            if let Some(index) = self.indexes.get_mut(&key_exists) {
-                index.insert(key, row_id);
-            }
-            // Now we can borrow immutably to save
-            if let Some(index) = self.indexes.get(&key_exists) {
-                self.save_index(table_name, column_name, index)?;
+            if let Ok(mut indexes) = self.indexes.write() {
+                if let Some(index) = indexes.get_mut(&key_exists) {
+                    index.insert(key, row_id);
+                    // Save to disk
+                    if let Ok(read_indexes) = self.indexes.read() {
+                        if let Some(idx) = read_indexes.get(&key_exists) {
+                            let _ = self.save_index(table_name, column_name, idx);
+                        }
+                    }
+                }
             }
         }
 
@@ -298,9 +343,11 @@ impl FileStorage {
 
     /// Search using index - returns row IDs matching the key
     pub fn search_index(&self, table_name: &str, column_name: &str, key: i64) -> Option<u32> {
-        self.indexes
-            .get(&(table_name.to_string(), column_name.to_string()))
-            .and_then(|index| index.search(key))
+        self.indexes.read().ok().and_then(|indexes| {
+            indexes
+                .get(&(table_name.to_string(), column_name.to_string()))
+                .and_then(|index| index.search(key))
+        })
     }
 
     /// Range query using index
@@ -312,15 +359,23 @@ impl FileStorage {
         end: i64,
     ) -> Vec<u32> {
         self.indexes
-            .get(&(table_name.to_string(), column_name.to_string()))
-            .map(|index| index.range_query(start, end))
+            .read()
+            .ok()
+            .and_then(|indexes| {
+                indexes
+                    .get(&(table_name.to_string(), column_name.to_string()))
+                    .map(|index| index.range_query(start, end))
+            })
             .unwrap_or_default()
     }
 
     /// Drop an index
     pub fn drop_index(&mut self, table_name: &str, column_name: &str) -> std::io::Result<()> {
         let key = (table_name.to_string(), column_name.to_string());
-        self.indexes.remove(&key);
+
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.remove(&key);
+        }
 
         let path = self.index_path(table_name, column_name);
         if path.exists() {
@@ -332,8 +387,10 @@ impl FileStorage {
 
     /// Flush all indexes to disk
     pub fn flush_indexes(&self) -> std::io::Result<()> {
-        for ((table_name, column_name), index) in &self.indexes {
-            self.save_index(table_name, column_name, index)?;
+        if let Ok(indexes) = self.indexes.read() {
+            for ((table_name, column_name), index) in indexes.iter() {
+                self.save_index(table_name, column_name, index)?;
+            }
         }
         Ok(())
     }
@@ -611,6 +668,77 @@ mod tests {
         assert_eq!(table.rows[0], vec![Value::Integer(99)]);
 
         // Cleanup
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_insert_with_index_no_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_no_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "no_idx_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage
+            .insert_table("no_idx_test".to_string(), table_data)
+            .unwrap();
+
+        // Insert with index when no index exists - should be ok (no-op)
+        let result = storage.insert_with_index("no_idx_test", "id", 1, 0);
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_has_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_has_idx_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Check index on non-existent table - should return false
+        let result = storage.has_index("nonexistent", "id");
+        assert!(!result);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_drop_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Try to drop index from non-existent table - should return Ok (no-op)
+        let result = storage.drop_index("nonexistent", "id");
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_range_index_no_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_range_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Range query on non-existent table - should return empty
+        let result = storage.range_index("nonexistent", "id", 0, 100);
+        assert_eq!(result, Vec::<u32>::new());
+
         let _ = remove_dir_all(&temp_dir);
     }
 

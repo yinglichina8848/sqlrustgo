@@ -26,6 +26,32 @@ jobs:
         run: cargo build --release --benches
         
       - name: Run Lexer/Parser benchmarks
+<<<<<<< HEAD
+        run: cargo run --release --benches -- lexer_parser_bench
+        
+      - name: Run Executor benchmarks
+        run: cargo run --release --benches -- executor_bench
+        
+      - name: Run Storage benchmarks
+        run: cargo run --release --benches -- storage_bench
+        
+      - name: Run Network benchmarks
+        run: cargo run --release --benches -- network_bench
+        
+      - name: Run Integration benchmarks
+        run: cargo run --release --benches -- integration_bench
+        
+      - name: Upload benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          output-file-path: ./benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: true
+=======
         run: cargo bench --bench lexer_parser_bench
         
       - name: Run Executor benchmarks
@@ -51,3 +77,4 @@ jobs:
 
   # Note: Benchmark upload disabled - criterion 0.5 compatibility issue
   # Upload can be re-enabled once criterion produces JSON output
+>>>>>>> origin/main

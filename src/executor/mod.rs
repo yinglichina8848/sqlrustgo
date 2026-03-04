@@ -12,6 +12,15 @@
 //! - 算子下推：将过滤等操作下推到存储层
 //! - 支持：DML (INSERT/UPDATE/DELETE) 和 DQL (SELECT)
 //! - 表达式求值：WHERE 子句的布尔表达式
+<<<<<<< HEAD
+
+#![allow(
+    clippy::collapsible_if,
+    clippy::collapsible_match,
+    clippy::needless_borrow
+)]
+=======
+>>>>>>> origin/main
 
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
@@ -37,18 +46,29 @@ pub struct ExecutionEngine {
 
 impl ExecutionEngine {
     /// Create a new execution engine with file-based storage
+<<<<<<< HEAD
+    #[allow(clippy::expect_used)]
+=======
     /// Panics if storage initialization fails (use with_data_dir for error handling)
+>>>>>>> origin/main
     pub fn new() -> Self {
         Self::with_data_dir(std::path::PathBuf::from("data"))
+            .expect("Failed to create execution engine: data directory initialization failed")
     }
 
     /// Create a new execution engine with custom data directory
+<<<<<<< HEAD
+    pub fn with_data_dir(data_dir: PathBuf) -> SqlResult<Self> {
+        let storage = FileStorage::new(data_dir)?;
+        Ok(Self {
+=======
     pub fn with_data_dir(data_dir: PathBuf) -> Self {
         let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
         Self {
+>>>>>>> origin/main
             buffer_pool: BufferPool::new(100),
             storage,
-        }
+        })
     }
 
     /// Execute a SQL statement
@@ -107,7 +127,7 @@ impl ExecutionEngine {
         let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_expr) = stmt.where_clause {
             // Try to use index for optimization
             if let Some(row_indices) =
-                self.execute_select_with_index(table_data, where_expr, &column_map)
+                self.execute_select_with_index(&table_data, where_expr, &column_map)
             {
                 // Use index results
                 row_indices
@@ -172,15 +192,26 @@ impl ExecutionEngine {
         {
             let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
             for row_expr in &stmt.values {
-                let row: Vec<Value> = row_expr.iter().map(expression_to_value_static).collect();
+                let row: Vec<Value> = row_expr
+                    .iter()
+                    .map(|e| match e {
+                        Expression::Literal(s) => parse_sql_literal(s),
+                        _ => Value::Null,
+                    })
+                    .collect();
                 let row_id = table_data.rows.len() as u32;
                 table_data.rows.push(row.clone());
 
                 // Collect index updates to apply after borrow
                 for (col_idx, col_name) in &indexed_columns {
                     if let Some(value) = row.get(*col_idx) {
+<<<<<<< HEAD
+                        if let Some(key) = value.to_index_key() {
+                            index_updates.push((col_name.clone(), key, row_id));
+=======
                         if let Value::Integer(key) = value {
                             index_updates.push((col_name.clone(), *key, row_id));
+>>>>>>> origin/main
                         }
                     }
                 }
@@ -243,11 +274,14 @@ impl ExecutionEngine {
                 };
 
                 if matches {
-                    // Apply SET clauses with dynamic column mapping
                     for (column, value_expr) in &set_clauses {
                         if let Some(&idx) = column_indices.get(column) {
                             if idx < row.len() {
+<<<<<<< HEAD
+                                row[idx] = evaluate_expression(row, value_expr, &column_indices);
+=======
                                 row[idx] = expression_to_value_static(value_expr);
+>>>>>>> origin/main
                             }
                         }
                     }
@@ -436,6 +470,64 @@ impl Default for ExecutionEngine {
     }
 }
 
+<<<<<<< HEAD
+/// Evaluate expression to value (supports BinaryOp arithmetic)
+fn evaluate_expression(
+    row: &[Value],
+    expr: &Expression,
+    column_indices: &std::collections::HashMap<String, usize>,
+) -> Value {
+    match expr {
+        Expression::Literal(s) => parse_sql_literal(s),
+        Expression::Identifier(name) => {
+            // Dynamic column lookup
+            column_indices
+                .get(name)
+                .and_then(|&idx| row.get(idx))
+                .cloned()
+                .unwrap_or(Value::Null)
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression(row, left, column_indices);
+            let right_val = evaluate_expression(row, right, column_indices);
+
+            match op.as_str() {
+                "+" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    _ => Value::Null,
+                },
+                "-" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    _ => Value::Null,
+                },
+                "*" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    _ => Value::Null,
+                },
+                "/" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => {
+                        if *r != 0 {
+                            Value::Integer(l / r)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    (Value::Float(l), Value::Float(r)) => {
+                        if *r != 0.0 {
+                            Value::Float(l / r)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                },
+                _ => Value::Null,
+            }
+        }
+=======
 /// Convert expression to value (static function)
 /// Note: BinaryOp cannot be evaluated in static context - returns Null
 fn expression_to_value_static(expr: &Expression) -> Value {
@@ -443,6 +535,7 @@ fn expression_to_value_static(expr: &Expression) -> Value {
         Expression::Literal(s) => parse_sql_literal(s),
         Expression::Identifier(s) => parse_sql_literal(s),
         Expression::BinaryOp(_, _, _) => Value::Null,
+>>>>>>> origin/main
     }
 }
 
@@ -454,63 +547,79 @@ fn evaluate_where(
 ) -> bool {
     match expr {
         Expression::BinaryOp(left, op, right) => {
-            // Get left value (column reference)
-            let left_val = match left.as_ref() {
-                Expression::Identifier(name) => {
-                    // Dynamic column lookup
-                    column_indices
-                        .get(name)
-                        .and_then(|&idx| row.get(idx))
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                }
-                Expression::Literal(s) => parse_sql_literal(s),
-                _ => Value::Null,
-            };
-
-            // Get right value
-            let right_val = match right.as_ref() {
-                Expression::Identifier(name) => {
-                    // Dynamic column lookup
-                    column_indices
-                        .get(name)
-                        .and_then(|&idx| row.get(idx))
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                }
-                Expression::Literal(s) => parse_sql_literal(s),
-                _ => Value::Null,
-            };
-
-            // Evaluate based on operator
+            // Handle logical operators AND/OR
             match op.as_str() {
-                "=" => left_val == right_val,
-                "!=" => left_val != right_val,
-                ">" => match (&left_val, &right_val) {
-                    (Value::Integer(l), Value::Integer(r)) => l > r,
-                    (Value::Float(l), Value::Float(r)) => l > r,
-                    (Value::Text(l), Value::Text(r)) => l > r,
-                    _ => false,
-                },
-                "<" => match (&left_val, &right_val) {
-                    (Value::Integer(l), Value::Integer(r)) => l < r,
-                    (Value::Float(l), Value::Float(r)) => l < r,
-                    (Value::Text(l), Value::Text(r)) => l < r,
-                    _ => false,
-                },
-                ">=" => match (&left_val, &right_val) {
-                    (Value::Integer(l), Value::Integer(r)) => l >= r,
-                    (Value::Float(l), Value::Float(r)) => l >= r,
-                    (Value::Text(l), Value::Text(r)) => l >= r,
-                    _ => false,
-                },
-                "<=" => match (&left_val, &right_val) {
-                    (Value::Integer(l), Value::Integer(r)) => l <= r,
-                    (Value::Float(l), Value::Float(r)) => l <= r,
-                    (Value::Text(l), Value::Text(r)) => l <= r,
-                    _ => false,
-                },
-                _ => false,
+                "AND" => {
+                    let left_result = evaluate_where(row, left, column_indices);
+                    let right_result = evaluate_where(row, right, column_indices);
+                    left_result && right_result
+                }
+                "OR" => {
+                    let left_result = evaluate_where(row, left, column_indices);
+                    let right_result = evaluate_where(row, right, column_indices);
+                    left_result || right_result
+                }
+                _ => {
+                    // Comparison operators
+                    // Get left value (column reference)
+                    let left_val = match left.as_ref() {
+                        Expression::Identifier(name) => {
+                            // Dynamic column lookup
+                            column_indices
+                                .get(name)
+                                .and_then(|&idx| row.get(idx))
+                                .cloned()
+                                .unwrap_or(Value::Null)
+                        }
+                        Expression::Literal(s) => parse_sql_literal(s),
+                        _ => Value::Null,
+                    };
+
+                    // Get right value
+                    let right_val = match right.as_ref() {
+                        Expression::Identifier(name) => {
+                            // Dynamic column lookup
+                            column_indices
+                                .get(name)
+                                .and_then(|&idx| row.get(idx))
+                                .cloned()
+                                .unwrap_or(Value::Null)
+                        }
+                        Expression::Literal(s) => parse_sql_literal(s),
+                        _ => Value::Null,
+                    };
+
+                    // Evaluate based on operator
+                    match op.as_str() {
+                        "=" => left_val == right_val,
+                        "!=" => left_val != right_val,
+                        ">" => match (&left_val, &right_val) {
+                            (Value::Integer(l), Value::Integer(r)) => l > r,
+                            (Value::Float(l), Value::Float(r)) => l > r,
+                            (Value::Text(l), Value::Text(r)) => l > r,
+                            _ => false,
+                        },
+                        "<" => match (&left_val, &right_val) {
+                            (Value::Integer(l), Value::Integer(r)) => l < r,
+                            (Value::Float(l), Value::Float(r)) => l < r,
+                            (Value::Text(l), Value::Text(r)) => l < r,
+                            _ => false,
+                        },
+                        ">=" => match (&left_val, &right_val) {
+                            (Value::Integer(l), Value::Integer(r)) => l >= r,
+                            (Value::Float(l), Value::Float(r)) => l >= r,
+                            (Value::Text(l), Value::Text(r)) => l >= r,
+                            _ => false,
+                        },
+                        "<=" => match (&left_val, &right_val) {
+                            (Value::Integer(l), Value::Integer(r)) => l <= r,
+                            (Value::Float(l), Value::Float(r)) => l <= r,
+                            (Value::Text(l), Value::Text(r)) => l <= r,
+                            _ => false,
+                        },
+                        _ => false,
+                    }
+                }
             }
         }
         _ => true,
@@ -547,7 +656,7 @@ mod tests {
     fn test_execution_engine_create() {
         // Use a unique temp directory for test isolation
         let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         // Clean up
         let _ = std::fs::remove_dir_all(temp_dir);

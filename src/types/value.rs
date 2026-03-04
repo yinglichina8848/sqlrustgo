@@ -1,5 +1,21 @@
 //! SQL Value types
+<<<<<<< HEAD
+//!
+//! Core data types for SQLRustGo database system.
+//!
+//! ## Type Mapping
+//!
+//! | SQL Type | Rust Type | Notes |
+//! |----------|-----------|-------|
+//! | NULL     | Null      | Missing value |
+//! | BOOLEAN  | bool      | TRUE/FALSE |
+//! | INTEGER  | i64       | 64-bit signed |
+//! | FLOAT    | f64       | 64-bit float |
+//! | TEXT     | String    | UTF-8 string |
+//! | BLOB     | `Vec<u8>` | Binary data |
+=======
 //! Core data types for SQLRustGo database system
+>>>>>>> origin/main
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -130,6 +146,21 @@ impl Value {
             Value::Float(_) => "FLOAT",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
+        }
+    }
+
+    /// Convert value to index key (i64)
+    /// Used for B+Tree index key extraction
+    pub fn to_index_key(&self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => Some(*i),
+            Value::Text(s) => {
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                s.hash(&mut hasher);
+                Some(hasher.finish() as i64)
+            }
+            _ => None,
         }
     }
 }

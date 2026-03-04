@@ -247,4 +247,42 @@ mod tests {
 
         std::fs::remove_file(path).ok();
     }
+
+    #[test]
+    fn test_transaction_rollback_non_active() {
+        let path = "/tmp/tm_test_rollback_nonactive.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        tm.commit(tx_id).unwrap();
+
+        // Try to rollback a committed transaction - should fail (not found since removed)
+        let result = tm.rollback(tx_id);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_transaction_commit_non_active() {
+        let path = "/tmp/tm_test_commit_nonactive.log";
+        std::fs::remove_file(path).ok();
+
+        let wal = Arc::new(WriteAheadLog::new(path).unwrap());
+        let tm = TransactionManager::new(wal);
+
+        let tx_id = tm.begin().unwrap();
+        tm.rollback(tx_id).unwrap();
+
+        // Try to commit a rolled-back transaction - should fail (not found since removed)
+        let result = tm.commit(tx_id);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+
+        std::fs::remove_file(path).ok();
+    }
 }

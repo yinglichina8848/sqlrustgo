@@ -337,4 +337,174 @@ mod tests {
         assert!(tree.is_empty());
         assert_eq!(tree.search(10), None);
     }
+<<<<<<< HEAD
+
+    // ==================== Additional Coverage Tests ====================
+
+    #[test]
+    fn test_bplus_tree_leaf_split() {
+        let mut tree = BPlusTree::new();
+
+        // Insert enough to cause potential split (default order is 4)
+        for i in 0..10 {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 10);
+        // Verify all keys are searchable
+        for i in 0..10 {
+            assert_eq!(tree.search(i), Some(i as u32));
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_many_inserts() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many to create internal nodes
+        for i in 0..20 {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 20);
+        // Test range query across internal nodes
+        let results = tree.range_query(5, 15);
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_bplus_tree_reverse_insert() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in reverse order
+        for i in (0..10).rev() {
+            tree.insert(i, i as u32);
+        }
+
+        assert_eq!(tree.len(), 10);
+        // All should be searchable
+        for i in 0..10 {
+            assert_eq!(tree.search(i), Some(i as u32));
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_duplicate_key() {
+        let mut tree = BPlusTree::new();
+
+        tree.insert(1, 100);
+        tree.insert(1, 200); // Same key, different value
+
+        // Should have both values or last one wins
+        let result = tree.search(1);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_bplus_tree_range_out_of_bounds() {
+        let mut tree = BPlusTree::new();
+
+        tree.insert(5, 50);
+        tree.insert(10, 100);
+        tree.insert(15, 150);
+
+        // Range completely before first key
+        let results = tree.range_query(1, 3);
+        assert!(results.is_empty());
+
+        // Range completely after last key
+        let results = tree.range_query(20, 30);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_bplus_tree_keys_sorted() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in random order
+        let values = vec![5, 2, 8, 1, 9, 3, 7, 4, 6];
+        for v in values {
+            tree.insert(v, (v * 10) as u32);
+        }
+
+        let keys = tree.keys();
+        // Keys should be sorted
+        for i in 1..keys.len() {
+            assert!(keys[i] > keys[i - 1]);
+        }
+    }
+
+    #[test]
+    fn test_bplus_tree_large_range() {
+        let mut tree = BPlusTree::new();
+
+        for i in 0..50 {
+            tree.insert(i, i as u32);
+        }
+
+        let results = tree.range_query(10, 40);
+        assert!(results.len() > 20);
+    }
+
+    #[test]
+    fn test_bplus_tree_many_inserts_large() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many values
+        for i in 0..100 {
+            tree.insert(i, (i * 10) as u32);
+        }
+
+        // Verify many are found
+        assert_eq!(tree.search(0), Some(0));
+        assert_eq!(tree.search(50), Some(500));
+        assert_eq!(tree.search(99), Some(990));
+    }
+
+    #[test]
+    fn test_bplus_tree_internal_node_insert() {
+        let mut tree = BPlusTree::new();
+
+        // Insert enough to create internal nodes (requires multiple splits)
+        for i in 0..50 {
+            tree.insert((i * 10) as i64, (i * 100) as u32);
+        }
+
+        // Verify search works through internal nodes
+        assert_eq!(tree.search(0), Some(0));
+        assert_eq!(tree.search(250), Some(2500));
+        assert_eq!(tree.search(490), Some(4900));
+    }
+
+    #[test]
+    fn test_bplus_tree_range_large() {
+        let mut tree = BPlusTree::new();
+
+        // Insert many values
+        for i in 0..100 {
+            tree.insert(i as i64, i as u32);
+        }
+
+        // Range query covering middle portion
+        let results = tree.range_query(25, 76);
+        assert_eq!(results.len(), 51); // 25 to 75 inclusive (76 is exclusive)
+    }
+
+    #[test]
+    fn test_bplus_tree_keys_after_inserts() {
+        let mut tree = BPlusTree::new();
+
+        // Insert in random-ish order
+        tree.insert(5, 50);
+        tree.insert(2, 20);
+        tree.insert(8, 80);
+        tree.insert(1, 10);
+        tree.insert(9, 90);
+
+        // Keys should be sorted
+        let keys = tree.keys();
+        assert_eq!(keys, vec![1, 2, 5, 8, 9]);
+    }
+=======
+>>>>>>> origin/main
 }

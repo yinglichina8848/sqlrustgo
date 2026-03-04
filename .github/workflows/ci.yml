@@ -2,9 +2,24 @@ name: CI
 
 on:
   push:
+<<<<<<< HEAD
+    branches:
+      - main
+      - baseline
+      - release/v1.1.0-beta
+  pull_request:
+    branches:
+      - main
+      - baseline
+      - release/v1.1.0-beta
+
+env:
+  CARGO_TERM_COLOR: always
+=======
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+>>>>>>> origin/main
 
 jobs:
   build:
@@ -14,10 +29,44 @@ jobs:
         rust: [stable, nightly]
 
     steps:
+<<<<<<< HEAD
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target directory
+        uses: actions/cache@v5
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+=======
       - uses: actions/checkout@v4
 
       - name: Setup Rust ${{ matrix.rust }}
         run: rustup default ${{ matrix.rust }}
+>>>>>>> origin/main
 
       - name: Build
         run: cargo build --all-features
@@ -37,7 +86,12 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
+<<<<<<< HEAD
+      - name: Checkout
+        uses: actions/checkout@v6
+=======
       - uses: actions/checkout@v4
+>>>>>>> origin/main
 
       - name: Setup Rust
         run: rustup default stable
@@ -48,8 +102,13 @@ jobs:
           cargo install cargo-llvm-cov
           cargo llvm-cov --all-features --workspace --codecov --output-path coverage.json
 
+<<<<<<< HEAD
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+=======
       - name: Upload coverage
         uses: codecov/codecov-action@v4
+>>>>>>> origin/main
         with:
           files: coverage.json
           fail_ci_if_error: false

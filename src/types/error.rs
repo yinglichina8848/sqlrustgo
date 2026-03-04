@@ -196,6 +196,19 @@ mod tests {
         let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
         let err: SqlError = io_err.into();
         assert!(matches!(err, SqlError::IoError(_)));
+<<<<<<< HEAD
+        assert!(err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn test_sql_result_alias() {
+        let ok_result: SqlResult<i32> = Ok(42);
+        assert_eq!(ok_result.ok(), Some(42));
+
+        let err_result: SqlResult<i32> = Err(SqlError::TableNotFound("test".to_string()));
+        assert!(err_result.is_err());
+=======
+>>>>>>> origin/main
     }
 
     #[test]
