@@ -501,31 +501,32 @@ impl NetworkHandler {
 
     /// Execute a query and send result
     fn execute_query(&mut self, query: &str) -> Result<(), SqlError> {
-        // Actually call the execution engine
+        // Call the executor to actually execute the query
         match executor::execute(query) {
             Ok(result) => {
-                if result.rows.is_empty() {
-                    // DML operation or empty result
-                    self.send_ok(&format!("{} rows affected", result.rows_affected), result.rows_affected)?;
+                // Check if result has rows (SELECT query)
+                if !result.columns.is_empty() || !result.rows.is_empty() {
+                    // Send result set
+                    self.send_result_set(&result.columns, &result.rows)?;
                 } else {
-                    // SELECT result - send result set
-                    self.send_result_set(&result)?;
+                    // Send OK packet for INSERT/UPDATE/DELETE
+                    self.send_ok("Query executed", result.rows_affected)?;
                 }
             }
             Err(e) => {
-                // Send error response
+                // Send error packet
                 let error_code = match e {
                     SqlError::ParseError(_) => 1064, // Syntax error
+                    SqlError::ExecutionError(_) => 1000, // General error
                     SqlError::TableNotFound(_) => 1146, // Table doesn't exist
-                    SqlError::ColumnNotFound(_) => 1054, // Unknown column
-                    SqlError::TypeMismatch(_) => 1582, // Incorrect type
+                    SqlError::ColumnNotFound(_) => 1171, // Column doesn't exist
                     SqlError::DuplicateKey(_) => 1062, // Duplicate entry
-                    SqlError::IoError(_) => 1000, // Internal error
-                    SqlError::ProtocolError(_) => 1000, // Protocol error
-                    SqlError::ExecutionError(_) => 1200, // Execution error
-                    SqlError::DivisionByZero => 1365, // Division by zero
+                    SqlError::IoError(_) => 1000, // General error
+                    SqlError::ProtocolError(_) => 1000,
+                    SqlError::TypeMismatch(_) => 22005, // Type mismatch
+                    SqlError::DivisionByZero => 22012, // Division by zero
                     SqlError::NullValueError(_) => 1048, // Column cannot be null
-                    SqlError::ConstraintViolation(_) => 1451, // Constraint violation
+                    SqlError::ConstraintViolation(_) => 23000, // Constraint violation
                 };
                 self.send_error(error_code, &e.to_string())?;
             }
@@ -534,43 +535,48 @@ impl NetworkHandler {
         Ok(())
     }
 
-    /// Send result set to client
-    fn send_result_set(&mut self, result: &executor::ExecutionResult) -> Result<(), SqlError> {
+    /// Send a result set to the client
+    fn send_result_set(
+        &mut self,
+        columns: &[String],
+        rows: &[Vec<Value>],
+    ) -> Result<(), SqlError> {
         // Column count
         let mut buf = BytesMut::new();
-        buf.put_u8(result.columns.len() as u8);
+        buf.put_u8(columns.len() as u8);
         self.send_packet(&buf)?;
 
         // Column definitions
-        for col_name in &result.columns {
+        for col in columns {
             let mut col_buf = BytesMut::new();
             col_buf.put_slice(b"def\0"); // catalog
             col_buf.put_slice(b"test\0"); // schema
             col_buf.put_slice(b"\0"); // table alias
             col_buf.put_slice(b"test\0"); // table
             col_buf.put_slice(b"\0"); // column alias
-            col_buf.put_slice(col_name.as_bytes());
+            col_buf.put_slice(col.as_bytes()); // column name
             col_buf.put_u8(0); // null terminator
             col_buf.put_u8(0x0c); // charset
             col_buf.put_u32_le(255); // column length
-            col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG)
+            col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG for generic)
             col_buf.put_u8(0x00); // flags
             col_buf.put_u8(0x00); // decimals
             col_buf.put_u16_le(0x0000); // default
-
             self.send_packet(&col_buf)?;
         }
 
         // EOF packet
         let mut eof_buf = BytesMut::new();
         eof_buf.put_u8(0xfe);
-        eof_buf.put_u16_le(0x0000); // warnings
-        eof_buf.put_u16_le(0x0000); // status flags
+        eof_buf.put_u16_le(0x0000);
+        eof_buf.put_u16_le(0x0000);
         self.send_packet(&eof_buf)?;
 
         // Row data
-        for row in &result.rows {
-            let row_data = RowData { values: row.clone() };
+        for row in rows {
+            let row_data = RowData {
+                values: row.clone(),
+            };
             self.send_packet(&row_data.to_bytes())?;
         }
 

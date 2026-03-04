@@ -19,12 +19,49 @@
 |------|-----|
 | **版本号** | v1.1.0 |
 | **发布类型** | Draft (草稿) |
-| **目标分支** | release/v1.1.0 |
+| **当前分支** | draft/v1.1.0 |
+| **目标分支** | release/v1.1.0 (待达标后合并) |
 | **开发分支** | develop-v1.1.0 |
 | **前置版本** | v1.0.0 (GA) |
 | **目标成熟度** | L3 产品级 |
 
-### 1.2 版本目标
+### 1.2 正确的分支流程
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          v1.1.0 版本发布流程                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   develop-v1.1.0      → 开发分支（功能开发）                                 │
+│         ↓                                                                    │
+│   draft/v1.1.0        → 草稿分支（改进、修复）← 当前阶段                     │
+│         ↓ [门禁通过后]                                                       │
+│   release/v1.1.0      → 发布分支（alpha → beta → rc → GA）                  │
+│         ↓ [GA 验收后]                                                        │
+│   main                → 主分支（稳定版本）                                   │
+│         ↓                                                                    │
+│   baseline            → 基线分支（历史存档）                                 │
+│                                                                              │
+│   ⚠️ 当前状态: draft/v1.1.0 阶段，门禁未通过                                 │
+│   ⚠️ 禁止直接合并到 release/v1.1.0 或 main                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.3 AI-CLI PR 提交规范
+
+| AI 身份 | 工作分支 | PR 目标分支 |
+|---------|----------|-------------|
+| heartopen | fix/v1.1.0-* | **draft/v1.1.0** |
+| openheart | feat/v1.1.0-* | **draft/v1.1.0** |
+| maintainer | fix/v1.1.0-* | **draft/v1.1.0** |
+
+**⚠️ 禁止事项**:
+- 不要直接提交到 release/v1.1.0
+- 不要直接提交到 main
+- 所有 AI 的 PR 必须指向 draft/v1.1.0
+
+### 1.4 版本目标
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -55,28 +92,41 @@
 | ID | 检查项 | 状态 | 说明 | 检查结果 |
 |----|--------|------|------|----------|
 | A-01 | 编译通过 | ✅ | `cargo build --all` 无错误 | Finished `dev` profile |
-| A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | ok. 4 passed; 0 failed |
-| A-03 | Clippy 检查 | ❌ | `cargo clippy -- -D warnings` 无警告 | **11 errors** |
+| A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | 322 passed; 0 failed |
+| A-03 | Clippy 检查 | ✅ | `cargo clippy -- -D warnings` 无警告 | Finished `dev` profile |
 | A-04 | 格式检查 | ✅ | `cargo fmt --all -- --check` 通过 | 无格式差异 |
-| A-05 | 无 unwrap/panic | ⚠️ | 核心代码无 unwrap/panic 调用 | 609 处 unwrap (待区分) |
+| A-05 | 无 unwrap/panic | ⚠️ | 生产代码无 unwrap/panic 调用 | 详见下方统计 |
 | A-06 | 错误处理完整 | ⚠️ | 使用 SqlResult<T> 统一错误处理 | 需验证 |
 
-**A-03 Clippy 错误详情**:
-```
-error: comparison is useless due to type limits
-    --> src/executor/mod.rs:1364:17
-     |
-1364 |         assert!(result.unwrap().columns.len() >= 0);
+**A-05 unwrap 检查标准**:
 
-error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
-```
+| 分类 | 是否允许 | 说明 |
+|------|----------|------|
+| **生产代码** (`src/`) | ❌ 不允许 | 必须使用 `?` 或 `expect()` |
+| **测试代码** (`tests/`) | ✅ 允许 | 测试中 panic 是预期行为 |
+| **测试模块** (`#[cfg(test)]`) | ✅ 允许 | 同上 |
 
-**A-05 unwrap 统计**:
-| 项目 | 数量 | 说明 |
-|------|------|------|
-| `.unwrap()` 总计 | 609 处 | 全部代码 |
-| `.expect()` | 29 处 | - |
-| 生产代码 unwrap | ~511 处 | 排除测试模块 |
+**当前统计 (2026-03-05)**:
+
+| 模块 | unwrap 数量 | 状态 |
+|------|-------------|------|
+| src/network | 47 | ❌ 需修复 |
+| src/storage | 47 | ❌ 需修复 |
+| src/transaction | 66 | ❌ 需修复 |
+| src/executor | 36 | ❌ 需修复 |
+| src/parser | 19 | ❌ 需修复 |
+| src/auth | 14 | ❌ 需修复 |
+| src/planner | 9 | ❌ 需修复 |
+| src/lexer | 1 | ❌ 需修复 |
+| src/types | 1 | ❌ 需修复 |
+| **生产代码总计** | **244** | ❌ 目标: < 10 |
+| tests/ 目录 | 66 | ✅ 允许 |
+
+**修复优先级**:
+1. network/mod.rs (47 处) - 网络层
+2. storage/file_storage.rs (46 处) - 存储层
+3. transaction/manager.rs (37 处) - 事务管理
+4. executor/mod.rs (36 处) - 执行器
 
 #### B. 测试覆盖门禁
 
@@ -241,63 +291,92 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 
 ## 五、发布流程
 
-### 5.1 草稿发布流程
+### 5.1 当前阶段：draft/v1.1.0
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          v1.1.0 Draft 发布流程                               │
+│                          当前阶段：draft/v1.1.0                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   Phase 1: 准备阶段 (当前)                                                   │
-│   ├── 1.1 ✅ 完成测试覆盖率提升 (93.61%)                                     │
-│   ├── 1.2 ✅ 完成性能基准测试框架                                            │
-│   ├── 1.3 ✅ 完成安全审计                                                    │
-│   ├── 1.4 ⏳ 修复 Clippy 错误                                                │
-│   └── 1.5 ⏳ 创建 release/v1.1.0 分支                                        │
+│   Phase 1: 草稿改进阶段 (当前)                                                │
+│   ├── 1.1 ✅ 完成 draft/v1.1.0 分支创建                                      │
+│   ├── 1.2 ✅ 完成测试覆盖率提升 (93.61%)                                     │
+│   ├── 1.3 ✅ 完成性能基准测试框架                                            │
+│   ├── 1.4 ✅ 完成安全审计                                                    │
+│   ├── 1.5 ⏳ 修复 Clippy 错误                                                │
+│   ├── 1.6 ⏳ 替换 unwrap                                                     │
+│   └── 1.7 ⏳ 门禁验收通过                                                    │
 │                                                                              │
-│   Phase 2: 验证阶段                                                          │
-│   ├── 2.1 执行完整测试套件                                                  │
-│   ├── 2.2 执行性能基准测试                                                  │
-│   ├── 2.3 执行安全审计                                                      │
-│   └── 2.4 生成测试报告                                                      │
-│                                                                              │
-│   Phase 3: 发布阶段                                                          │
-│   ├── 3.1 创建 v1.1.0-draft Tag                                             │
-│   ├── 3.2 发布 GitHub Release (Draft)                                       │
-│   ├── 3.3 通知团队                                                          │
-│   └── 3.4 收集反馈                                                          │
-│                                                                              │
-│   Phase 4: 固化阶段                                                          │
-│   ├── 4.1 处理反馈问题                                                      │
-│   ├── 4.2 更新版本号 (移除 -draft 后缀)                                     │
-│   ├── 4.3 创建正式 v1.1.0 Tag                                               │
-│   └── 4.4 合并到 main 分支                                                  │
+│   ⚠️ 只有门禁全部通过后，才能进入 Phase 2                                    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 发布命令
+### 5.2 后续阶段（门禁通过后）
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          后续阶段（门禁通过后）                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Phase 2: 合并到 release/v1.1.0                                             │
+│   ├── 2.1 draft/v1.1.0 → release/v1.1.0                                     │
+│   ├── 2.2 创建 v1.1.0-alpha Tag                                             │
+│   └── 2.3 发布 GitHub Release (Pre-release)                                 │
+│                                                                              │
+│   Phase 3: 版本迭代                                                          │
+│   ├── 3.1 alpha → beta (功能冻结)                                           │
+│   ├── 3.2 beta → rc (代码冻结)                                              │
+│   └── 3.3 rc → GA (发布就绪)                                                │
+│                                                                              │
+│   Phase 4: 正式发布                                                          │
+│   ├── 4.1 创建 v1.1.0 Tag (GA)                                              │
+│   ├── 4.2 合并到 main 分支                                                  │
+│   └── 4.3 合并到 baseline 分支                                              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 5.3 当前阶段命令（draft/v1.1.0）
 
 ```bash
-# Phase 1: 创建发布分支
-git checkout develop-v1.1.0
-git pull origin develop-v1.1.0
-git checkout -b release/v1.1.0
+# 当前工作流程
+git checkout draft/v1.1.0
+git pull origin draft/v1.1.0
+
+# 创建工作分支
+git checkout -b fix/v1.1.0-xxx
+
+# 完成工作后提交
+git add .
+git commit -m "fix(xxx): description"
+git push origin fix/v1.1.0-xxx
+
+# 创建 PR 到 draft/v1.1.0
+gh pr create --base draft/v1.1.0 --head fix/v1.1.0-xxx
+```
+
+### 5.4 门禁通过后命令
+
+```bash
+# Phase 2: 合并到 release/v1.1.0
+git checkout release/v1.1.0
+git merge draft/v1.1.0
 git push origin release/v1.1.0
 
-# Phase 2: 验证
+# 验证
 cargo test --all
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo llvm-cov --all-features
 cargo bench
 
-# Phase 3: 打 Tag
-git tag -a v1.1.0-draft -m "Release v1.1.0 Draft"
-git push origin v1.1.0-draft
+# 打 Tag
+git tag -a v1.1.0-alpha -m "Release v1.1.0 Alpha"
+git push origin v1.1.0-alpha
 
-# Phase 4: 发布
-gh release create v1.1.0-draft --draft --title "v1.1.0 Draft" --notes-file RELEASE_NOTES.md
+# 发布
+gh release create v1.1.0-alpha --prerelease --title "v1.1.0 Alpha" --notes-file RELEASE_NOTES.md
 ```
 
 ---
