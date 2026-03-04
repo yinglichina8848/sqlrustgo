@@ -2,7 +2,9 @@
 //! Persists table data to JSON files
 
 use crate::executor::{TableData, TableInfo};
+use crate::storage::engine::{StorageEngine, StorageResult};
 use crate::storage::BPlusTree;
+use crate::types::error::SqlError;
 use crate::types::Value;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -371,6 +373,147 @@ impl FileStorage {
             }
         }
         Ok(())
+    }
+}
+
+impl StorageEngine for FileStorage {
+    fn get_table(&self, name: &str) -> Option<TableData> {
+        self.get_table(name).cloned()
+    }
+
+    fn table_names(&self) -> Vec<String> {
+        FileStorage::table_names(self)
+    }
+
+    fn create_table(&mut self, name: &str, info: TableInfo) -> StorageResult<()> {
+        let table_data = TableData {
+            info,
+            rows: Vec::new(),
+        };
+        self.insert_table(name.to_string(), table_data)
+            .map_err(|e| SqlError::IoError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn drop_table(&mut self, name: &str) -> StorageResult<()> {
+        FileStorage::drop_table(self, name).map_err(|e| SqlError::IoError(e.to_string()))
+    }
+
+    fn insert(&mut self, table: &str, row: Vec<Value>) -> StorageResult<()> {
+        // Find the table and add the row
+        if let Some(table_data) = self.get_table_mut(table) {
+            table_data.rows.push(row);
+            Ok(())
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn scan(&self, table: &str) -> StorageResult<Vec<Vec<Value>>> {
+        if let Some(table_data) = self.get_table(table) {
+            Ok(table_data.rows.clone())
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn update(
+        &mut self,
+        table: &str,
+        updates: Vec<(String, Value)>,
+        filter: Option<Box<dyn Fn(&Vec<Value>, &TableInfo) -> bool + Send + Sync>>,
+    ) -> StorageResult<u32> {
+        if let Some(table_data) = self.get_table_mut(table) {
+            let mut count = 0u32;
+            let columns: HashMap<String, usize> = table_data
+                .info
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (c.name.clone(), i))
+                .collect();
+
+            for row in table_data.rows.iter_mut() {
+                let should_update = match &filter {
+                    Some(f) => f(row, &table_data.info),
+                    None => true,
+                };
+
+                if should_update {
+                    for (col_name, value) in &updates {
+                        if let Some(&idx) = columns.get(col_name) {
+                            if idx < row.len() {
+                                row[idx] = value.clone();
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(count)
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn delete(
+        &mut self,
+        table: &str,
+        filter: Option<Box<dyn Fn(&Vec<Value>, &TableInfo) -> bool + Send + Sync>>,
+    ) -> StorageResult<u32> {
+        if let Some(table_data) = self.get_table_mut(table) {
+            let original_len = table_data.rows.len();
+            table_data.rows.retain(|row| {
+                match &filter {
+                    Some(f) => !f(row, &table_data.info),
+                    None => false, // Delete all if no filter
+                }
+            });
+            Ok((original_len - table_data.rows.len()) as u32)
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn get_table_info(&self, name: &str) -> Option<TableInfo> {
+        self.get_table(name).map(|t| t.info.clone())
+    }
+
+    fn has_table(&self, name: &str) -> bool {
+        self.contains_table(name)
+    }
+
+    fn row_count(&self, table: &str) -> StorageResult<usize> {
+        if let Some(table_data) = self.get_table(table) {
+            Ok(table_data.rows.len())
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn create_index(&mut self, table: &str, column: &str) -> StorageResult<()> {
+        // Find column index
+        if let Some(table_data) = self.get_table(table) {
+            let col_idx = table_data
+                .info
+                .columns
+                .iter()
+                .position(|c| c.name == column)
+                .ok_or_else(|| SqlError::ColumnNotFound(column.to_string()))?;
+
+            FileStorage::create_index(self, table, column, col_idx)
+                .map_err(|e| SqlError::IoError(e.to_string()))
+        } else {
+            Err(SqlError::TableNotFound(table.to_string()))
+        }
+    }
+
+    fn drop_index(&mut self, table: &str, column: &str) -> StorageResult<()> {
+        FileStorage::drop_index(self, table, column).map_err(|e| SqlError::IoError(e.to_string()))
+    }
+
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
+        FileStorage::search_index(self, table, column, key)
     }
 }
 
