@@ -256,10 +256,8 @@ impl FileStorage {
         // Build B+ Tree from existing rows
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
-            if let Some(value) = row.get(column_index) {
-                if let Value::Integer(key) = value {
-                    index.insert(*key, row_id as u32);
-                }
+            if let Some(Value::Integer(key)) = row.get(column_index) {
+                index.insert(*key, row_id as u32);
             }
         }
 
