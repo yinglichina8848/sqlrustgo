@@ -19,6 +19,10 @@
     clippy::needless_borrow
 )]
 
+pub mod executor;
+
+pub use executor::{Executor, ExecutorResult};
+
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
 };
