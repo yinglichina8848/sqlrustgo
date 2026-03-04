@@ -60,11 +60,12 @@ impl FileStorage {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json")
-                && let Some(table_name) = path.file_stem().and_then(|s| s.to_str())
-                && let Ok(table_data) = self.load_table(table_name)
-            {
-                self.tables.insert(table_name.to_string(), table_data);
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(table_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Ok(table_data) = self.load_table(table_name) {
+                        self.tables.insert(table_name.to_string(), table_data);
+                    }
+                }
             }
         }
 
@@ -249,10 +250,8 @@ impl FileStorage {
         // Build B+ Tree from existing rows
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
-            if let Some(value) = row.get(column_index) {
-                if let Value::Integer(key) = value {
-                    index.insert(*key, row_id as u32);
-                }
+            if let Some(Value::Integer(key)) = row.get(column_index) {
+                index.insert(*key, row_id as u32);
             }
         }
 
