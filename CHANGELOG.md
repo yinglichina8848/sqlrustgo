@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 *This changelog is maintained by yinglichina8848*
+<<<<<<< HEAD
 =======
 ## [1.0.0] - 2026-02-16
 
@@ -152,3 +153,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI 工具链配置
 - 基础项目结构
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0

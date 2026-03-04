@@ -458,6 +458,9 @@ impl NetworkHandler {
     /// Execute a query and send result
     fn execute_query(&mut self, query: &str) -> Result<(), SqlError> {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
         // Call the executor to actually execute the query
         match executor::execute(query) {
             Ok(result) => {
@@ -487,6 +490,7 @@ impl NetworkHandler {
                 };
                 self.send_error(error_code, &e.to_string())?;
             }
+<<<<<<< HEAD
 =======
         // For now, return a simple OK response
         // Full query execution would integrate with the executor
@@ -502,8 +506,57 @@ impl NetworkHandler {
         } else {
             self.send_ok("Query executed", 0)?;
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
         }
         
+        Ok(())
+    }
+
+    /// Send a result set to the client
+    fn send_result_set(&mut self, columns: &[String], rows: &[Vec<Value>]) -> Result<(), SqlError> {
+        // Column count
+        let mut buf = BytesMut::new();
+        buf.put_u8(columns.len() as u8);
+        self.send_packet(&buf)?;
+
+        // Column definitions
+        for col in columns {
+            let mut col_buf = BytesMut::new();
+            col_buf.put_slice(b"def\0"); // catalog
+            col_buf.put_slice(b"test\0"); // schema
+            col_buf.put_slice(b"\0"); // table alias
+            col_buf.put_slice(b"test\0"); // table
+            col_buf.put_slice(b"\0"); // column alias
+            col_buf.put_slice(col.as_bytes()); // column name
+            col_buf.put_u8(0); // null terminator
+            col_buf.put_u8(0x0c); // charset
+            col_buf.put_u32_le(255); // column length
+            col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG for generic)
+            col_buf.put_u8(0x00); // flags
+            col_buf.put_u8(0x00); // decimals
+            col_buf.put_u16_le(0x0000); // default
+            self.send_packet(&col_buf)?;
+        }
+
+        // EOF packet
+        let mut eof_buf = BytesMut::new();
+        eof_buf.put_u8(0xfe);
+        eof_buf.put_u16_le(0x0000);
+        eof_buf.put_u16_le(0x0000);
+        self.send_packet(&eof_buf)?;
+
+        // Row data
+        for row in rows {
+            let row_data = RowData {
+                values: row.clone(),
+            };
+            self.send_packet(&row_data.to_bytes())?;
+        }
+
+        // EOF packet (final)
+        self.send_packet(&eof_buf)?;
+
         Ok(())
     }
 
@@ -746,6 +799,9 @@ mod tests {
     fn test_network_handler_creation() {
         // Can't actually create without a real stream
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
     }
 
     #[test]

@@ -42,5 +42,8 @@ harness = false
 [[bench]]
 name = "parser_bench"
 harness = false
+<<<<<<< HEAD
 =======
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0

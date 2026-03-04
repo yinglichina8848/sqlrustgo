@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Maximum keys per node (fanout)
 const MAX_KEYS: usize = 4;
 
-/// B+ Tree index
+/// B+ Tree index - In-memory B+ Tree index with serialization support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BPlusTree {
     root: Option<Node>,
@@ -16,10 +16,7 @@ pub struct BPlusTree {
 impl BPlusTree {
     /// Create a new B+ Tree
     pub fn new() -> Self {
-        Self {
-            root: None,
-            len: 0,
-        }
+        Self { root: None, len: 0 }
     }
 
     /// Get the number of entries
@@ -32,7 +29,7 @@ impl BPlusTree {
         self.root.is_none()
     }
 
-    /// Insert a key-value pair
+    /// Insert a key-value pair. Handles node splitting when node is full.
     pub fn insert(&mut self, key: i64, value: u32) {
         if self.root.is_none() {
             let mut leaf = LeafNode::new();
@@ -123,7 +120,7 @@ impl BPlusTree {
         }
     }
 
-    /// Search for a key
+    /// Search for a key using binary search, returns value if found
     pub fn search(&self, key: i64) -> Option<u32> {
         self.search_node(self.root.as_ref()?, key)
     }
@@ -138,12 +135,13 @@ impl BPlusTree {
         }
     }
 
-    /// Range query: [start, end)
+    /// Query all values in range [start, end)
     pub fn range_query(&self, start: i64, end: i64) -> Vec<u32> {
-        if self.root.is_none() {
-            return vec![];
+        if let Some(root) = &self.root {
+            self.range_query_node(root, start, end)
+        } else {
+            vec![]
         }
-        self.range_query_node(self.root.as_ref().unwrap(), start, end)
     }
 
     fn range_query_node(&self, node: &Node, start: i64, end: i64) -> Vec<u32> {
@@ -159,7 +157,7 @@ impl BPlusTree {
         }
     }
 
-    /// Get all keys in order
+    /// Return all keys in sorted order
     pub fn keys(&self) -> Vec<i64> {
         if let Some(root) = &self.root {
             self.collect_keys(root)
@@ -188,7 +186,7 @@ impl Default for BPlusTree {
     }
 }
 
-/// Leaf node - stores actual data
+/// Leaf node - stores actual key-value pairs in sorted order, linked for efficient range scans
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LeafNode {
     keys: Vec<i64>,
@@ -225,7 +223,7 @@ impl LeafNode {
     }
 }
 
-/// Internal node - points to child nodes
+/// Internal node - guides search to correct child using separating keys
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InternalNode {
     keys: Vec<i64>,
@@ -241,7 +239,10 @@ impl InternalNode {
     }
 
     fn find_child_position(&self, key: i64) -> usize {
-        self.keys.iter().position(|k| *k > key).unwrap_or(self.keys.len())
+        self.keys
+            .iter()
+            .position(|k| *k > key)
+            .unwrap_or(self.keys.len())
     }
 
     fn child(&self, pos: usize) -> Node {
@@ -252,7 +253,7 @@ impl InternalNode {
     }
 }
 
-/// Boxed node for type erasure
+/// Type-erased node wrapper for serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum NodeBox {
     Leaf(LeafNode),
@@ -337,7 +338,6 @@ mod tests {
         assert!(tree.is_empty());
         assert_eq!(tree.search(10), None);
     }
-<<<<<<< HEAD
 
     // ==================== Additional Coverage Tests ====================
 
@@ -505,6 +505,4 @@ mod tests {
         let keys = tree.keys();
         assert_eq!(keys, vec![1, 2, 5, 8, 9]);
     }
-=======
->>>>>>> origin/main
 }

@@ -5,12 +5,20 @@
 use crate::types::Value;
 use std::fmt;
 
+<<<<<<< HEAD
 // pub mod analyzer; // Temporarily disabled - requires parser types that don't exist yet
+=======
+pub mod analyzer;
+>>>>>>> origin/develop-v1.2.0
 pub mod executor;
 pub mod logical_plan;
 pub mod physical_plan;
 
+<<<<<<< HEAD
 // pub use analyzer::*; // Temporarily disabled
+=======
+pub use analyzer::*;
+>>>>>>> origin/develop-v1.2.0
 pub use logical_plan::*;
 pub use physical_plan::*;
 

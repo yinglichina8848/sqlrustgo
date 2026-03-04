@@ -89,9 +89,12 @@ jobs:
 <<<<<<< HEAD
       - name: Checkout
         uses: actions/checkout@v6
+<<<<<<< HEAD
 =======
       - uses: actions/checkout@v4
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
       - name: Setup Rust
         run: rustup default stable
@@ -105,10 +108,13 @@ jobs:
 <<<<<<< HEAD
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
+<<<<<<< HEAD
 =======
       - name: Upload coverage
         uses: codecov/codecov-action@v4
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
         with:
           files: coverage.json
           fail_ci_if_error: false

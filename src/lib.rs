@@ -3,8 +3,10 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 
 pub mod auth;
+pub mod error;
 pub mod executor;
 pub mod lexer;
+pub mod optimizer;
 pub mod network;
 pub mod parser;
 pub mod planner;
@@ -13,6 +15,10 @@ pub mod transaction;
 pub mod types;
 
 pub use auth::{AuthError, AuthManager, Operation, Role, Session, User};
+<<<<<<< HEAD
+=======
+pub use error::{CatalogError, ExecutionError, OptimizerError, ParserError, SQLError, SQLResult, StorageError};
+>>>>>>> origin/develop-v1.2.0
 pub use executor::{execute, ExecutionEngine, ExecutionResult};
 pub use lexer::{tokenize, Lexer, Token};
 pub use network::{connect, start_server_sync, NetworkHandler};

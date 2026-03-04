@@ -1,6 +1,9 @@
 # SQLRustGo v1.1.0 发布门禁检查清单
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 > 版本：v1.1.0-draft
 > 日期：2026-03-05
 > 发布类型：Draft (草稿版本)
@@ -9,6 +12,7 @@
 > 
 > ⚠️ **重要提示**: 本版本为 Draft 状态，门禁检查存在未通过项。
 > 详见 [DeepSeek 评估报告](./DEEPSEEK_EVALUATION.md) 和 [改进计划](./IMPROVEMENT_PLAN.md)
+<<<<<<< HEAD
 =======
 > 版本：v1.1
 > 日期：2026-03-03
@@ -16,6 +20,8 @@
 > 目标成熟度：L3 产品级
 > 最后更新：2026-03-03 (基于 develop-v1.1.0 @ 09ea2f8)
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 ---
 
@@ -28,16 +34,24 @@
 | **版本号** | v1.1.0 |
 | **发布类型** | Draft (草稿) |
 <<<<<<< HEAD
+<<<<<<< HEAD
 | **当前分支** | draft/v1.1.0 |
 | **目标分支** | release/v1.1.0 (待达标后合并) |
 =======
 | **目标分支** | release/v1.1.0 |
 >>>>>>> origin/main
+=======
+| **当前分支** | draft/v1.1.0 |
+| **目标分支** | release/v1.1.0 (待达标后合并) |
+>>>>>>> origin/develop-v1.2.0
 | **开发分支** | develop-v1.1.0 |
 | **前置版本** | v1.0.0 (GA) |
 | **目标成熟度** | L3 产品级 |
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 ### 1.2 正确的分支流程
 
 ```
@@ -75,9 +89,12 @@
 - 所有 AI 的 PR 必须指向 draft/v1.1.0
 
 ### 1.4 版本目标
+<<<<<<< HEAD
 =======
 ### 1.2 版本目标
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -98,6 +115,9 @@
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 ### 1.5 各阶段门禁标准
 
 | 门禁项 | Draft | Alpha | Beta | RC | GA |
@@ -120,8 +140,11 @@
 - **RC**: 发布候选阶段，仅允许阻断性Bug修复
 - **GA**: 正式发布，仅允许Hotfix
 
+<<<<<<< HEAD
 =======
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 ---
 
 ## 二、门禁检查清单
@@ -134,6 +157,9 @@
 |----|--------|------|------|----------|
 | A-01 | 编译通过 | ✅ | `cargo build --all` 无错误 | Finished `dev` profile |
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 | A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | 322 passed; 0 failed |
 | A-03 | Clippy 检查 | ✅ | `cargo clippy -- -D warnings` 无警告 | Finished `dev` profile |
 | A-04 | 格式检查 | ✅ | `cargo fmt --all -- --check` 通过 | 无格式差异 |
@@ -169,6 +195,7 @@
 2. storage/file_storage.rs (46 处) - 存储层
 3. transaction/manager.rs (37 处) - 事务管理
 4. executor/mod.rs (36 处) - 执行器
+<<<<<<< HEAD
 =======
 | A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | ok. 4 passed; 0 failed |
 | A-03 | Clippy 检查 | ❌ | `cargo clippy -- -D warnings` 无警告 | **11 errors** |
@@ -193,6 +220,8 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | `.expect()` | 29 处 | - |
 | 生产代码 unwrap | ~511 处 | 排除测试模块 |
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 #### B. 测试覆盖门禁
 
@@ -243,12 +272,16 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 | E-01 | Release Notes | ✅ | [RELEASE_NOTES.md](./RELEASE_NOTES.md) |
 | E-02 | CHANGELOG 更新 | ✅ | [CHANGELOG.md](../../CHANGELOG.md) |
 | E-03 | API 文档 | ✅ | [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) |
 | E-04 | 架构文档 | ✅ | 2.0 架构设计文档完整 |
 | E-05 | 升级指南 | ✅ | [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md) |
 | E-06 | 用户手册 | ✅ | [USER_MANUAL.md](./USER_MANUAL.md) |
+<<<<<<< HEAD
 =======
 | E-01 | Release Notes | ❌ | 版本发布说明 |
 | E-02 | CHANGELOG 更新 | ❌ | 变更日志 |
@@ -257,16 +290,22 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | E-05 | 升级指南 | ❌ | v1.0.0 → v1.1.0 迁移指南 |
 | E-06 | 用户手册 | ⚠️ | Client-Server 使用说明 |
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 #### F. 安全门禁
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 <<<<<<< HEAD
+<<<<<<< HEAD
 | F-01 | 依赖审计 | ✅ | `cargo outdated` 通过 |
 =======
 | F-01 | 依赖审计 | ✅ | `cargo outdated` 通过，audit 网络问题 |
 >>>>>>> origin/main
+=======
+| F-01 | 依赖审计 | ✅ | `cargo outdated` 通过 |
+>>>>>>> origin/develop-v1.2.0
 | F-02 | 安全扫描 | ✅ | 无高危安全问题 |
 | F-03 | 敏感信息检查 | ✅ | 无密钥/凭证泄露 |
 | F-04 | SQL 注入测试 | ✅ | 使用参数化查询 |
@@ -284,10 +323,14 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | G-01 | CI 流程完整 | ✅ | GitHub Actions 配置完整 |
 | G-02 | 分支保护配置 | ✅ | develop-v1.1.0 保护规则已启用 |
 <<<<<<< HEAD
+<<<<<<< HEAD
 | G-03 | 代码所有者 | ✅ | [CODEOWNERS](../../CODEOWNERS) 已创建 |
 =======
 | G-03 | 代码所有者 | ❌ | CODEOWNERS 文件更新 |
 >>>>>>> origin/main
+=======
+| G-03 | 代码所有者 | ✅ | [CODEOWNERS](../../CODEOWNERS) 已创建 |
+>>>>>>> origin/develop-v1.2.0
 | G-04 | Issue 关联 | ✅ | 所有 PR 关联 Issue |
 | G-05 | Commit 规范 | ✅ | 遵循 Conventional Commits |
 
@@ -296,16 +339,22 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 | H-01 | 日志规范 | ✅ | [LOGGING_SPECIFICATION.md](./LOGGING_SPECIFICATION.md) |
 | H-02 | 错误追踪 | ⚠️ | 错误链待完善 |
 | H-03 | 性能指标 | ⚠️ | [MONITORING_SPECIFICATION.md](./MONITORING_SPECIFICATION.md) 规范已有，代码待实现 |
 | H-04 | 健康检查 | ⚠️ | [HEALTH_CHECK_SPECIFICATION.md](./HEALTH_CHECK_SPECIFICATION.md) 规范已有，代码待实现 |
+<<<<<<< HEAD
 =======
 | H-01 | 日志规范 | ⚠️ | 统一日志格式 |
 | H-02 | 错误追踪 | ⚠️ | 错误链完整 |
 | H-03 | 性能指标 | ❌ | 基础性能监控 |
 | H-04 | 健康检查 | ❌ | 服务健康检查端点 |
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 ---
 
@@ -316,6 +365,9 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 │                          门禁完成度 (更新于 2026-03-05)                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
@@ -334,6 +386,7 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 │   └── H. 可观测性    [████░░░░░░] 50%  (2/4 完成)                           │
 │                                                                              │
 │   总体完成度: [████████░░] 87% (34/38 项)                                    │
+<<<<<<< HEAD
 =======
 │                          门禁完成度 (更新于 2026-03-03)                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -354,6 +407,8 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 │                                                                              │
 │   总体完成度: [███████░░░] 75% (29/38 项)                                    │
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -365,16 +420,22 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 | 优先级 | 问题 | 影响 | 状态 | 建议措施 |
 |--------|------|------|------|----------|
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 | **P0** | A-05 unwrap 过多 (244 > 100) | 代码质量 | ❌ | 替换为 `?` 或 `expect()` |
 | **P1** | JSON 存储格式效率低 | 性能 | ⚠️ | v1.2.0 实现二进制存储 |
 | **P2** | H-02 错误追踪不完整 | 可观测性 | ⚠️ | 完善错误链 |
 | **P2** | H-03/04 监控/健康检查未实现 | 可观测性 | ⚠️ | v1.3.0 实现 |
+<<<<<<< HEAD
 =======
 | **P0** | A-03 Clippy 未通过 (11 errors) | 代码质量 | ❌ | 修复 Clippy 错误 |
 | **P1** | A-05 unwrap/panic 待验证 | 代码质量 | ⚠️ | 区分生产/测试代码 |
 | **P1** | E-01 Release Notes 缺失 | 用户无法了解变更 | ❌ | 编写发布说明 |
 | **P1** | E-02 CHANGELOG 未更新 | 变更记录缺失 | ❌ | 更新变更日志 |
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 
 ---
 
@@ -410,6 +471,9 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 ## 五、发布流程
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 ### 5.1 当前阶段：draft/v1.1.0
 
 ```
@@ -427,6 +491,7 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 │   └── 1.7 ⏳ 门禁验收通过                                                    │
 │                                                                              │
 │   ⚠️ 只有门禁全部通过后，才能进入 Phase 2                                    │
+<<<<<<< HEAD
 =======
 ### 5.1 草稿发布流程
 
@@ -460,11 +525,16 @@ error: could not compile `sqlrustgo` (lib test) due to 11 previous errors
 │   ├── 4.3 创建正式 v1.1.0 Tag                                               │
 │   └── 4.4 合并到 main 分支                                                  │
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 ### 5.2 后续阶段（门禁通过后）
 
 ```
@@ -518,6 +588,7 @@ git merge draft/v1.1.0
 git push origin release/v1.1.0
 
 # 验证
+<<<<<<< HEAD
 =======
 ### 5.2 发布命令
 
@@ -530,6 +601,8 @@ git push origin release/v1.1.0
 
 # Phase 2: 验证
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 cargo test --all
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
@@ -537,12 +610,16 @@ cargo llvm-cov --all-features
 cargo bench
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/develop-v1.2.0
 # 打 Tag
 git tag -a v1.1.0-alpha -m "Release v1.1.0 Alpha"
 git push origin v1.1.0-alpha
 
 # 发布
 gh release create v1.1.0-alpha --prerelease --title "v1.1.0 Alpha" --notes-file RELEASE_NOTES.md
+<<<<<<< HEAD
 =======
 # Phase 3: 打 Tag
 git tag -a v1.1.0-draft -m "Release v1.1.0 Draft"
@@ -551,6 +628,8 @@ git push origin v1.1.0-draft
 # Phase 4: 发布
 gh release create v1.1.0-draft --draft --title "v1.1.0 Draft" --notes-file RELEASE_NOTES.md
 >>>>>>> origin/main
+=======
+>>>>>>> origin/develop-v1.2.0
 ```
 
 ---
