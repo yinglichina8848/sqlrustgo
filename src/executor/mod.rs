@@ -523,6 +523,57 @@ fn evaluate_expression(
     }
 }
 
+/// Evaluate expression to value (supports BinaryOp arithmetic)
+fn evaluate_expression(
+    row: &[Value],
+    expr: &Expression,
+    column_indices: &std::collections::HashMap<String, usize>,
+) -> Value {
+    match expr {
+        Expression::Literal(s) => parse_sql_literal(s),
+        Expression::Identifier(name) => {
+            // Dynamic column lookup
+            column_indices
+                .get(name)
+                .and_then(|&idx| row.get(idx))
+                .cloned()
+                .unwrap_or(Value::Null)
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression(row, left, column_indices);
+            let right_val = evaluate_expression(row, right, column_indices);
+
+            match op.as_str() {
+                "+" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    _ => Value::Null,
+                },
+                "-" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    _ => Value::Null,
+                },
+                "*" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    _ => Value::Null,
+                },
+                "/" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => {
+                        if *r != 0 { Value::Integer(l / r) } else { Value::Null }
+                    }
+                    (Value::Float(l), Value::Float(r)) => {
+                        if *r != 0.0 { Value::Float(l / r) } else { Value::Null }
+                    }
+                    _ => Value::Null,
+                },
+                _ => Value::Null,
+            }
+        }
+    }
+}
+
 /// Evaluate WHERE clause for a row with dynamic column mapping
 fn evaluate_where(
     row: &[Value],
