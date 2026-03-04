@@ -1,0 +1,41 @@
+# CODEOWNERS - SQLRustGo 代码所有者
+#
+# 每个模式匹配的最后一行决定代码所有者
+# 格式: pattern @owner1 @owner2 ...
+#
+# 团队成员:
+# - @heartopen - 功能开发
+# - @openheart - 架构开发
+# - @maintainer - 代码审核
+# - @yinglichina8848 - 项目负责人
+
+# 默认所有者
+* @yinglichina8848
+
+# 核心模块
+/src/executor/ @openheart @maintainer
+/src/storage/ @heartopen @maintainer
+/src/transaction/ @heartopen @maintainer
+/src/network/ @openheart @maintainer
+/src/parser/ @openheart @maintainer
+/src/planner/ @openheart @maintainer
+/src/lexer/ @openheart @maintainer
+
+# 测试
+/tests/ @maintainer
+/benches/ @maintainer
+
+# 文档
+/docs/ @yinglichina8848 @maintainer
+/README.md @yinglichina8848
+/CHANGELOG.md @yinglichina8848
+
+# 配置
+/Cargo.toml @openheart @heartopen
+/Cargo.lock @openheart @heartopen
+
+# CI/CD
+/.github/ @maintainer @yinglichina8848
+
+# 发布
+/docs/releases/ @yinglichina8848
