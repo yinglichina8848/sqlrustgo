@@ -492,23 +492,41 @@ impl Parser {
     }
 
     /// Parse a simple expression (for WHERE clause)
+    /// Supports: comparison operators (=, !=, >, <, >=, <=)
+    /// Logical operators: AND, OR
     fn parse_expression(&mut self) -> Result<Expression, String> {
-        let left = match self.current() {
-            Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-            Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-            Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-            Some(Token::Null) => Expression::Literal("NULL".to_string()),
-            Some(Token::Minus) => {
-                self.next();
-                if let Some(Token::NumberLiteral(n)) = self.current() {
-                    Expression::Literal(format!("-{}", n))
-                } else {
-                    return Err("Expected number after -".to_string());
-                }
-            }
-            _ => return Err("Expected expression".to_string()),
-        };
-        self.next();
+        self.parse_or_expression()
+    }
+
+    /// Parse OR expression (lowest precedence)
+    fn parse_or_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_and_expression()?;
+
+        while let Some(Token::Or) = self.current() {
+            self.next(); // consume OR
+            let right = self.parse_and_expression()?;
+            left = Expression::BinaryOp(Box::new(left), "OR".to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    /// Parse AND expression (higher precedence than OR)
+    fn parse_and_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_comparison_expression()?;
+
+        while let Some(Token::And) = self.current() {
+            self.next(); // consume AND
+            let right = self.parse_comparison_expression()?;
+            left = Expression::BinaryOp(Box::new(left), "AND".to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    /// Parse comparison expression (=, !=, >, <, >=, <=)
+    fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
+        let left = self.parse_primary_expression()?;
 
         // Check for binary operator
         let op = match self.current() {
@@ -522,28 +540,57 @@ impl Parser {
         };
         self.next(); // consume operator
 
-        let right = match self.current() {
-            Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-            Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-            Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-            Some(Token::Null) => Expression::Literal("NULL".to_string()),
-            Some(Token::Minus) => {
-                self.next();
-                if let Some(Token::NumberLiteral(n)) = self.current() {
-                    Expression::Literal(format!("-{}", n))
-                } else {
-                    return Err("Expected number after -".to_string());
-                }
-            }
-            _ => return Err("Expected value in expression".to_string()),
-        };
-        self.next();
+        let right = self.parse_primary_expression()?;
 
         Ok(Expression::BinaryOp(
             Box::new(left),
             op.to_string(),
             Box::new(right),
         ))
+    }
+
+    /// Parse primary expression (identifier, literal, or parenthesized)
+    fn parse_primary_expression(&mut self) -> Result<Expression, String> {
+        match self.current() {
+            Some(Token::Identifier(name)) => {
+                let expr = Expression::Identifier(name.clone());
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::NumberLiteral(n)) => {
+                let expr = Expression::Literal(n.clone());
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::StringLiteral(s)) => {
+                let expr = Expression::Literal(format!("'{}'", s));
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::Null) => {
+                let expr = Expression::Literal("NULL".to_string());
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::Minus) => {
+                self.next();
+                if let Some(Token::NumberLiteral(n)) = self.current() {
+                    let expr = Expression::Literal(format!("-{}", n));
+                    self.next();
+                    Ok(expr)
+                } else {
+                    Err("Expected number after -".to_string())
+                }
+            }
+            Some(Token::LParen) => {
+                // Parenthesized expression
+                self.next(); // consume '('
+                let expr = self.parse_or_expression()?;
+                self.expect(Token::RParen)?;
+                Ok(expr)
+            }
+            _ => Err("Expected expression".to_string()),
+        }
     }
 
     fn parse_delete(&mut self) -> Result<Statement, String> {
