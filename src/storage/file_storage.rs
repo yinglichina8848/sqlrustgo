@@ -94,7 +94,10 @@ impl FileStorage {
                     {
                         if let Ok(index) = self.load_index(table_name, column_name) {
                             if let Ok(mut indexes) = self.indexes.write() {
-                                indexes.insert((table_name.to_string(), column_name.to_string()), index);
+                                indexes.insert(
+                                    (table_name.to_string(), column_name.to_string()),
+                                    index,
+                                );
                             }
                         }
                     }
@@ -241,10 +244,11 @@ impl FileStorage {
 
     /// Get an index for a table column (read-only)
     pub fn get_index(&self, table_name: &str, column_name: &str) -> Option<BPlusTree> {
-        self.indexes
-            .read()
-            .ok()
-            .and_then(|indexes| indexes.get(&(table_name.to_string(), column_name.to_string())).cloned())
+        self.indexes.read().ok().and_then(|indexes| {
+            indexes
+                .get(&(table_name.to_string(), column_name.to_string()))
+                .cloned()
+        })
     }
 
     /// Create or update an index for a table column from existing data
@@ -291,7 +295,9 @@ impl FileStorage {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
         // Clone the key for later use
-        let has_index = self.indexes.read()
+        let has_index = self
+            .indexes
+            .read()
             .map(|indexes| indexes.contains_key(&key_exists))
             .unwrap_or(false);
 
@@ -315,14 +321,11 @@ impl FileStorage {
 
     /// Search using index - returns row IDs matching the key
     pub fn search_index(&self, table_name: &str, column_name: &str, key: i64) -> Option<u32> {
-        self.indexes
-            .read()
-            .ok()
-            .and_then(|indexes| {
-                indexes
-                    .get(&(table_name.to_string(), column_name.to_string()))
-                    .and_then(|index| index.search(key))
-            })
+        self.indexes.read().ok().and_then(|indexes| {
+            indexes
+                .get(&(table_name.to_string(), column_name.to_string()))
+                .and_then(|index| index.search(key))
+        })
     }
 
     /// Range query using index
