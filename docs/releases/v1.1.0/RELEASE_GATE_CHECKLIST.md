@@ -95,15 +95,38 @@
 | A-02 | 测试通过 | ✅ | `cargo test --all` 全部通过 | 322 passed; 0 failed |
 | A-03 | Clippy 检查 | ✅ | `cargo clippy -- -D warnings` 无警告 | Finished `dev` profile |
 | A-04 | 格式检查 | ✅ | `cargo fmt --all -- --check` 通过 | 无格式差异 |
-| A-05 | 无 unwrap/panic | ⚠️ | 核心代码无 unwrap/panic 调用 | 609 处 unwrap (待区分) |
+| A-05 | 无 unwrap/panic | ⚠️ | 生产代码无 unwrap/panic 调用 | 详见下方统计 |
 | A-06 | 错误处理完整 | ⚠️ | 使用 SqlResult<T> 统一错误处理 | 需验证 |
 
-**A-05 unwrap 统计**:
-| 项目 | 数量 | 说明 |
-|------|------|------|
-| `.unwrap()` 总计 | 609 处 | 全部代码 |
-| `.expect()` | 29 处 | - |
-| 生产代码 unwrap | ~511 处 | 排除测试模块 |
+**A-05 unwrap 检查标准**:
+
+| 分类 | 是否允许 | 说明 |
+|------|----------|------|
+| **生产代码** (`src/`) | ❌ 不允许 | 必须使用 `?` 或 `expect()` |
+| **测试代码** (`tests/`) | ✅ 允许 | 测试中 panic 是预期行为 |
+| **测试模块** (`#[cfg(test)]`) | ✅ 允许 | 同上 |
+
+**当前统计 (2026-03-05)**:
+
+| 模块 | unwrap 数量 | 状态 |
+|------|-------------|------|
+| src/network | 47 | ❌ 需修复 |
+| src/storage | 47 | ❌ 需修复 |
+| src/transaction | 66 | ❌ 需修复 |
+| src/executor | 36 | ❌ 需修复 |
+| src/parser | 19 | ❌ 需修复 |
+| src/auth | 14 | ❌ 需修复 |
+| src/planner | 9 | ❌ 需修复 |
+| src/lexer | 1 | ❌ 需修复 |
+| src/types | 1 | ❌ 需修复 |
+| **生产代码总计** | **244** | ❌ 目标: < 10 |
+| tests/ 目录 | 66 | ✅ 允许 |
+
+**修复优先级**:
+1. network/mod.rs (47 处) - 网络层
+2. storage/file_storage.rs (46 处) - 存储层
+3. transaction/manager.rs (37 处) - 事务管理
+4. executor/mod.rs (36 处) - 执行器
 
 #### B. 测试覆盖门禁
 
