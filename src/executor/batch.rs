@@ -18,6 +18,7 @@ use crate::types::Value;
 use std::sync::Arc;
 
 /// Array reference type
+#[allow(dead_code)]
 pub type ArrayRef = Arc<dyn Array>;
 
 /// Array trait for columnar data
@@ -32,6 +33,7 @@ pub type ArrayRef = Arc<dyn Array>;
 /// - 实现 len() 返回列数据长度
 /// - 实现 is_null() 判断空值
 /// - 实现 get_value() 获取单个值
+#[allow(dead_code)]
 pub trait Array: Send + Sync {
     /// Get the length of the array
     fn len(&self) -> usize;
@@ -66,12 +68,14 @@ pub trait Array: Send + Sync {
 /// - columns: 列数据数组
 /// - row_count: 行数（所有列长度相同）
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct RecordBatch {
     schema: Arc<Schema>,
     columns: Vec<ArrayRef>,
     row_count: usize,
 }
 
+#[allow(dead_code)]
 impl RecordBatch {
     /// Create a new RecordBatch
     ///
@@ -139,7 +143,9 @@ impl RecordBatch {
 
     /// Get column by name
     pub fn column_by_name(&self, name: &str) -> Option<&ArrayRef> {
-        self.schema.field_index(name).and_then(|i| self.columns.get(i))
+        self.schema
+            .field_index(name)
+            .and_then(|i| self.columns.get(i))
     }
 
     /// Check if the batch is empty
@@ -196,7 +202,11 @@ mod tests {
         let schema = Arc::new(Schema::new(fields));
 
         let col1: ArrayRef = Arc::new(TestArray::new(
-            vec![Some(Value::Integer(1)), Some(Value::Integer(2)), Some(Value::Integer(3))],
+            vec![
+                Some(Value::Integer(1)),
+                Some(Value::Integer(2)),
+                Some(Value::Integer(3)),
+            ],
             "INTEGER",
         ));
         let col2: ArrayRef = Arc::new(TestArray::new(
@@ -212,7 +222,10 @@ mod tests {
 
         assert_eq!(batch.row_count(), 3);
         assert_eq!(batch.num_columns(), 2);
-        assert_eq!(batch.column(0).unwrap().as_ref() as *const dyn Array, col1.as_ref() as *const dyn Array);
+        assert_eq!(
+            batch.column(0).unwrap().as_ref() as *const dyn Array,
+            col1.as_ref() as *const dyn Array
+        );
     }
 
     #[test]
@@ -280,11 +293,7 @@ mod tests {
     #[test]
     fn test_array_trait() {
         let arr: ArrayRef = Arc::new(TestArray::new(
-            vec![
-                Some(Value::Integer(1)),
-                None,
-                Some(Value::Integer(3)),
-            ],
+            vec![Some(Value::Integer(1)), None, Some(Value::Integer(3))],
             "INTEGER",
         ));
 
