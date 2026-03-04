@@ -11,11 +11,16 @@
 //! - Rule trait: 优化规则接口
 //! - CostModel trait: 成本模型接口
 
-pub mod rules;
 pub mod cost;
 pub mod plan;
+pub mod rules;
+pub mod stats;
 
 pub use plan::{OptimizerError, OptimizerResult};
+pub use stats::{
+    ColumnStats, InMemoryStatisticsProvider, StatisticsProvider, StatsError, StatsResult,
+    TableStats,
+};
 
 /// Optimizer trait - main interface for query optimization
 ///
@@ -136,8 +141,12 @@ mod tests {
 
         struct NoOpRule;
         impl Rule<Vec<i32>> for NoOpRule {
-            fn name(&self) -> &str { "NoOpRule" }
-            fn apply(&self, _plan: &mut Vec<i32>) -> bool { false }
+            fn name(&self) -> &str {
+                "NoOpRule"
+            }
+            fn apply(&self, _plan: &mut Vec<i32>) -> bool {
+                false
+            }
         }
 
         rules.add_rule(Box::new(NoOpRule));
