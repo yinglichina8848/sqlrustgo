@@ -26,19 +26,19 @@ jobs:
         run: cargo build --release --benches
         
       - name: Run Lexer/Parser benchmarks
-        run: cargo run --release --benches -- lexer_parser_bench
+        run: cargo bench --bench lexer_parser_bench -- --save-baseline
         
       - name: Run Executor benchmarks
-        run: cargo run --release --benches -- executor_bench
+        run: cargo bench --bench executor_bench -- --save-baseline
         
       - name: Run Storage benchmarks
-        run: cargo run --release --benches -- storage_bench
+        run: cargo bench --bench storage_bench -- --save-baseline
         
       - name: Run Network benchmarks
-        run: cargo run --release --benches -- network_bench
+        run: cargo bench --bench network_bench -- --save-baseline
         
       - name: Run Integration benchmarks
-        run: cargo run --release --benches -- integration_bench
+        run: cargo bench --bench integration_bench -- --save-baseline
         
       - name: Upload benchmark results
         uses: benchmark-action/github-action-benchmark@v1
