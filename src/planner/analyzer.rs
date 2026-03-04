@@ -819,6 +819,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -851,6 +852,7 @@ mod tests {
                 Box::new(Expression::Literal("10".to_string())),
             )),
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -877,6 +879,7 @@ mod tests {
                 func: ParserAggFunc::Count,
                 column: None,
             }],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1078,6 +1081,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1287,6 +1291,7 @@ mod tests {
             ],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
