@@ -1,14 +1,18 @@
 # SQLRustGo v1.0 文档目录
 
-> 版本：v1.0.0-beta
-> 日期：2026-02-19
-> 状态：Beta 阶段（稳定性验证）
+> 版本：v1.0.0
+> 日期：2026-03-05
+> 状态：已发布 (GA)
 
 ---
 
 ## 一、v1.0 版本概述
 
 SQLRustGo v1.0 是一个用 Rust 从零实现的 SQL-92 子集兼容的关系型数据库系统。
+
+> **注意**: 本目录仅包含 v1.0.x 版本的开发过程文档。
+> - 正式发布文档请查看 [releases/v1.0.0](../releases/v1.0.0/)
+> - 教学材料请查看 [teaching/](../teaching/)
 
 ### 1.1 核心特性
 
@@ -84,7 +88,6 @@ docs/v1.0/
 ├── README.md                   # 本文档
 ├── 文档阅读指南.md             # v1.0 专属阅读指南
 ├── Claude对话记录.md           # Phase 0: 项目起源（最初始设计）
-├── AI增强软件工程/           # Phase 0: AI-IDE/CLI/OpenClaw 教程（移至 docs/AI增强软件工程/）
 │
 ├── 草稿计划/                   # Phase 1: 规划阶段
 │   ├── 2026-02-14-sqlrustgo-feature-completion.md
@@ -111,9 +114,17 @@ docs/v1.0/
 ├── alpha/                      # Phase 4: Alpha 阶段
 │   └── README.md
 │
+├── beta/                       # Phase 5: Beta 阶段
+│   └── ...
+│
+├── rc1/                        # Phase 6: RC1 阶段
+│   └── 验收文档/
+│
 └── dev/                        # 开发文档（持续更新）
     └── DEVELOP.md
 ```
+
+> **教学材料**: v1.1.0-beta 的教学材料已移至 [教学实践](../教学实践/) 目录。
 
 ---
 

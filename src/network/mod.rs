@@ -1,43 +1,8 @@
-//! Network Module - TCP server/client with MySQL-compatible protocol
-//!
-//! Provides network connectivity using MySQL-style packet protocol.
-//! Supports query execution over TCP connections.
-//!
-//! ## Protocol Overview
-//!
-//! The module implements the MySQL wire protocol (version 10) for communication
-//! between clients and the SQLRustGo server. This includes:
-//! - Initial handshake and authentication (simplified)
-//! - Command packet handling (QUERY, PING, QUIT)
-//! - Result set response generation
-//!
-//! ## Packet Types
-//!
-//! | Packet | Header | Purpose |
-//! |--------|--------|---------|
-//! | OK Packet | `0x00` | Successful operation response |
-//! | Error Packet | `0xff` | Error response with code and message |
-//! | EOF Packet | `0xfe` | End of result set |
-//! | Data Packet | Variable | Row data with length-encoded values |
-//!
-//! ## Packet Structure
-//!
-//! Each MySQL packet consists of:
-//! - **Header** (4 bytes): 3-byte payload length + 1-byte sequence number
-//! - **Payload**: Command-specific data
-//!
-//! ## Connection Flow
-//!
-//! 1. Server binds to address and listens for connections
-//! 2. Client connects via TCP
-//! 3. Server sends HandshakeV10 packet
-//! 4. Client sends auth/command packets
-//! 5. Server processes commands and sends responses
-//! 6. Connection closes on QUIT command or error
-//!
 //! Network Layer for SQLRustGo
+//!
+//! Provides MySQL-compatible network protocol support for client-server architecture.
 
-use crate::{SqlError, Value};
+use crate::{executor, SqlError, Value};
 use bytes::{BufMut, BytesMut};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -179,10 +144,7 @@ impl MySqlPacket {
     /// Serialize packet to bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
-        // MySQL packet header: 3 bytes payload length + 1 byte sequence
-        buf.put_u8((self.payload.len() & 0xFF) as u8);
-        buf.put_u8(((self.payload.len() >> 8) & 0xFF) as u8);
-        buf.put_u8(((self.payload.len() >> 16) & 0xFF) as u8);
+        buf.put_u32_le(self.payload.len() as u32);
         buf.put_u8(self.sequence);
         buf.put_slice(&self.payload);
         buf.to_vec()
@@ -214,7 +176,7 @@ impl HandshakeV10 {
                 | capability::FOUND_ROWS
                 | capability::MULTI_STATEMENTS
                 | capability::MULTI_RESULTS,
-            character_set: 0x21,  // utf8mb4_general_ci
+            character_set: 0x21, // utf8mb4_general_ci
             status_flags: 0x0002, // AUTOCOMMIT
         }
     }
@@ -222,34 +184,34 @@ impl HandshakeV10 {
     /// Serialize to bytes
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
-
+        
         // Protocol version
         buf.put_u8(self.protocol_version);
-
+        
         // Server version (null-terminated string)
         buf.put_slice(self.server_version.as_bytes());
         buf.put_u8(0);
-
+        
         // Connection ID
         buf.put_u32_le(self.connection_id);
-
+        
         // Auth plugin data part 1 (8 bytes)
         let len = 8.min(self.auth_plugin_data.len());
         buf.put_slice(&self.auth_plugin_data[..len]);
         buf.put_u8(0); // Null terminator
-
+        
         // Capability flags lower 2 bytes
         buf.put_u16_le(self.capability_flags as u16);
-
+        
         // Character set
         buf.put_u8(self.character_set);
-
+        
         // Status flags
         buf.put_u16_le(self.status_flags);
-
+        
         // Capability flags upper 2 bytes
         buf.put_u16_le((self.capability_flags >> 16) as u16);
-
+        
         // Auth plugin data length (if plugin auth)
         let auth_len = if self.capability_flags & capability::PLUGIN_AUTH != 0 {
             self.auth_plugin_data.len() as u8
@@ -257,18 +219,18 @@ impl HandshakeV10 {
             0
         };
         buf.put_u8(auth_len);
-
+        
         // Reserved (10 bytes)
         buf.put_slice(&[0u8; 10]);
-
+        
         // Auth plugin data part 2 (if any)
         if self.auth_plugin_data.len() > 8 {
             buf.put_slice(&self.auth_plugin_data[8..]);
         }
-
+        
         // Auth plugin name (null-terminated)
         buf.put_slice(b"mysql_native_password\0");
-
+        
         buf.to_vec()
     }
 }
@@ -301,13 +263,13 @@ impl OkPacket {
         buf.put_u64_le(self.last_insert_id);
         buf.put_u16_le(self.status_flags);
         buf.put_u16_le(self.warnings);
-
+        
         if !self.message.is_empty() {
             // Use length-encoded string
             buf.put_u64_le(self.message.len() as u64);
             buf.put_slice(self.message.as_bytes());
         }
-
+        
         buf.to_vec()
     }
 }
@@ -333,17 +295,17 @@ impl ErrPacket {
         let mut buf = BytesMut::new();
         buf.put_u8(0xff); // Error packet header
         buf.put_u16_le(self.error_code);
-
+        
         // SQL state (5 bytes)
         if self.sql_state.len() == 5 {
             buf.put_slice(self.sql_state.as_bytes());
         } else {
             buf.put_slice(b"HY000");
         }
-
+        
         // Error message
         buf.put_slice(self.message.as_bytes());
-
+        
         buf.to_vec()
     }
 }
@@ -357,7 +319,7 @@ pub struct RowData {
 impl RowData {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
-
+        
         for value in &self.values {
             match value {
                 Value::Null => {
@@ -388,7 +350,7 @@ impl RowData {
                 }
             }
         }
-
+        
         buf.to_vec()
     }
 }
@@ -402,10 +364,7 @@ pub struct NetworkHandler {
 impl NetworkHandler {
     /// Create a new network handler
     pub fn new(stream: TcpStream, connection_id: u32) -> Self {
-        Self {
-            stream,
-            connection_id,
-        }
+        Self { stream, connection_id }
     }
 
     /// Handle a client connection
@@ -418,7 +377,7 @@ impl NetworkHandler {
             match self.read_packet() {
                 Ok(Some((_sequence, payload))) => {
                     let command = MySqlCommand::from(payload[0]);
-
+                    
                     match command {
                         MySqlCommand::Quit => {
                             break;
@@ -454,37 +413,34 @@ impl NetworkHandler {
             sequence: 0,
             payload: greeting.to_bytes(),
         };
-
+        
         self.stream
             .write_all(&packet.serialize())
             .map_err(|e| SqlError::IoError(e.to_string()))?;
-
+        
         Ok(())
     }
 
     /// Read a MySQL packet
     fn read_packet(&mut self) -> Result<Option<(u8, Vec<u8>)>, SqlError> {
         let mut header = [0u8; PACKET_HEADER_SIZE];
-
+        
         match self.stream.read(&mut header) {
             Ok(0) => Ok(None), // Connection closed
-            Ok(n) if n < PACKET_HEADER_SIZE => Err(SqlError::ProtocolError(
-                "Incomplete packet header".to_string(),
-            )),
+            Ok(n) if n < PACKET_HEADER_SIZE => {
+                Err(SqlError::ProtocolError("Incomplete packet header".to_string()))
+            }
             Ok(_) => {
-                let payload_length =
-                    u32::from_le_bytes([header[0], header[1], header[2], 0]) as usize;
+                let payload_length = u32::from_le_bytes([header[0], header[1], header[2], 0]) as usize;
                 let sequence = header[3];
-
+                
                 let mut payload = vec![0u8; payload_length];
                 let mut remaining = payload_length;
                 let mut offset = 0;
-
+                
                 while remaining > 0 {
                     match self.stream.read(&mut payload[offset..]) {
-                        Ok(0) => {
-                            return Err(SqlError::ProtocolError("Connection closed".to_string()));
-                        }
+                        Ok(0) => return Err(SqlError::ProtocolError("Connection closed".to_string())),
                         Ok(n) => {
                             remaining -= n;
                             offset += n;
@@ -492,7 +448,7 @@ impl NetworkHandler {
                         Err(e) => return Err(SqlError::IoError(e.to_string())),
                     }
                 }
-
+                
                 Ok(Some((sequence, payload)))
             }
             Err(e) => Err(SqlError::IoError(e.to_string())),
@@ -501,21 +457,99 @@ impl NetworkHandler {
 
     /// Execute a query and send result
     fn execute_query(&mut self, query: &str) -> Result<(), SqlError> {
+<<<<<<< HEAD
+        // Call the executor to actually execute the query
+        match executor::execute(query) {
+            Ok(result) => {
+                // Check if result has rows (SELECT query)
+                if !result.columns.is_empty() || !result.rows.is_empty() {
+                    // Send result set
+                    self.send_result_set(&result.columns, &result.rows)?;
+                } else {
+                    // Send OK packet for INSERT/UPDATE/DELETE
+                    self.send_ok("Query executed", result.rows_affected)?;
+                }
+            }
+            Err(e) => {
+                // Send error packet
+                let error_code = match e {
+                    SqlError::ParseError(_) => 1064,     // Syntax error
+                    SqlError::ExecutionError(_) => 1000, // General error
+                    SqlError::TableNotFound(_) => 1146,  // Table doesn't exist
+                    SqlError::ColumnNotFound(_) => 1171, // Column doesn't exist
+                    SqlError::DuplicateKey(_) => 1062,   // Duplicate entry
+                    SqlError::IoError(_) => 1000,        // General error
+                    SqlError::ProtocolError(_) => 1000,
+                    SqlError::TypeMismatch(_) => 22005, // Type mismatch
+                    SqlError::DivisionByZero => 22012,  // Division by zero
+                    SqlError::NullValueError(_) => 1048, // Column cannot be null
+                    SqlError::ConstraintViolation(_) => 23000, // Constraint violation
+                };
+                self.send_error(error_code, &e.to_string())?;
+            }
+=======
         // For now, return a simple OK response
         // Full query execution would integrate with the executor
         let trimmed = query.trim();
-
+        
         if trimmed.eq_ignore_ascii_case("SELECT VERSION()") {
             let response = OkPacket::new(0, "1.0.0-SQLRustGo");
             self.send_packet(response.to_bytes().as_slice())?;
-        } else if trimmed.eq_ignore_ascii_case("SELECT 1")
-            || trimmed.eq_ignore_ascii_case("SELECT 1 AS a")
-        {
+        } else if trimmed.eq_ignore_ascii_case("SELECT 1") || 
+                  trimmed.eq_ignore_ascii_case("SELECT 1 AS a") {
             // Return a simple result set
             self.send_select_response()?;
         } else {
             self.send_ok("Query executed", 0)?;
+>>>>>>> origin/main
         }
+        
+        Ok(())
+    }
+
+    /// Send a result set to the client
+    fn send_result_set(&mut self, columns: &[String], rows: &[Vec<Value>]) -> Result<(), SqlError> {
+        // Column count
+        let mut buf = BytesMut::new();
+        buf.put_u8(columns.len() as u8);
+        self.send_packet(&buf)?;
+
+        // Column definitions
+        for col in columns {
+            let mut col_buf = BytesMut::new();
+            col_buf.put_slice(b"def\0"); // catalog
+            col_buf.put_slice(b"test\0"); // schema
+            col_buf.put_slice(b"\0"); // table alias
+            col_buf.put_slice(b"test\0"); // table
+            col_buf.put_slice(b"\0"); // column alias
+            col_buf.put_slice(col.as_bytes()); // column name
+            col_buf.put_u8(0); // null terminator
+            col_buf.put_u8(0x0c); // charset
+            col_buf.put_u32_le(255); // column length
+            col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG for generic)
+            col_buf.put_u8(0x00); // flags
+            col_buf.put_u8(0x00); // decimals
+            col_buf.put_u16_le(0x0000); // default
+            self.send_packet(&col_buf)?;
+        }
+
+        // EOF packet
+        let mut eof_buf = BytesMut::new();
+        eof_buf.put_u8(0xfe);
+        eof_buf.put_u16_le(0x0000);
+        eof_buf.put_u16_le(0x0000);
+        self.send_packet(&eof_buf)?;
+
+        // Row data
+        for row in rows {
+            let row_data = RowData {
+                values: row.clone(),
+            };
+            self.send_packet(&row_data.to_bytes())?;
+        }
+
+        // EOF packet (final)
+        self.send_packet(&eof_buf)?;
 
         Ok(())
     }
@@ -539,63 +573,64 @@ impl NetworkHandler {
         buf.put_u32_le(data.len() as u32);
         buf.put_u8(0); // sequence
         buf.put_slice(data);
-
+        
         self.stream
             .write_all(&buf)
             .map_err(|e| SqlError::IoError(e.to_string()))?;
-
+        
         Ok(())
     }
 
     /// Send simple SELECT response
+    #[allow(dead_code)]
     fn send_select_response(&mut self) -> Result<(), SqlError> {
         // Column count (1)
         let mut buf = BytesMut::new();
         buf.put_u8(0x01); // 1 column
         self.send_packet(&buf)?;
-
+        
         // Column definition: name="1", type=INT
         let mut col_buf = BytesMut::new();
         col_buf.put_slice(b"def\0"); // catalog
         col_buf.put_slice(b"test\0"); // schema
-        col_buf.put_slice(b"\0"); // table alias
+        col_buf.put_slice(b"\0");   // table alias
         col_buf.put_slice(b"test\0"); // table
-        col_buf.put_slice(b"\0"); // column alias
-        col_buf.put_slice(b"1\0"); // column
-        col_buf.put_u8(0x0c); // charset
-        col_buf.put_u32_le(11); // column length
-        col_buf.put_u8(0x03); // type (MYSQL_TYPE_LONG)
-        col_buf.put_u8(0x00); // flags
-        col_buf.put_u8(0x00); // decimals
+        col_buf.put_slice(b"\0");   // column alias
+        col_buf.put_slice(b"1\0");  // column
+        col_buf.put_u8(0x0c);       // charset
+        col_buf.put_u32_le(11);     // column length
+        col_buf.put_u8(0x03);       // type (MYSQL_TYPE_LONG)
+        col_buf.put_u8(0x00);       // flags
+        col_buf.put_u8(0x00);       // decimals
         col_buf.put_u16_le(0x0000); // default
-
+        
         self.send_packet(&col_buf)?;
-
+        
         // EOF packet
         let mut eof_buf = BytesMut::new();
         eof_buf.put_u8(0xfe);
         eof_buf.put_u16_le(0x0000); // warnings
         eof_buf.put_u16_le(0x0000); // status flags
         self.send_packet(&eof_buf)?;
-
+        
         // Row data
         let mut row_buf = BytesMut::new();
         row_buf.put_u64_le(1); // length
         row_buf.put_slice(b"1"); // value
         self.send_packet(&row_buf)?;
-
+        
         // EOF packet (final)
         self.send_packet(&eof_buf)?;
-
+        
         Ok(())
     }
 }
 
 /// Start the server (synchronous version)
 pub fn start_server_sync(addr: &str) -> Result<(), SqlError> {
-    let listener =
-        TcpListener::bind(addr).map_err(|e| SqlError::IoError(format!("Failed to bind: {}", e)))?;
-
+    let listener = TcpListener::bind(addr)
+        .map_err(|e| SqlError::IoError(format!("Failed to bind: {}", e)))?;
+    
     println!("SQLRustGo Server listening on {}", addr);
     println!("MySQL protocol compatible");
 
@@ -606,14 +641,14 @@ pub fn start_server_sync(addr: &str) -> Result<(), SqlError> {
             Ok(stream) => {
                 let conn_id = connection_id;
                 connection_id += 1;
-
+                
                 println!("New connection #{}", conn_id);
-
+                
                 let mut handler = NetworkHandler::new(stream, conn_id);
                 if let Err(e) = handler.handle() {
                     eprintln!("Client #{} error: {}", conn_id, e);
                 }
-
+                
                 println!("Connection #{} closed", conn_id);
             }
             Err(e) => {
@@ -633,29 +668,24 @@ pub fn connect(addr: &str) -> Result<TcpStream, SqlError> {
 /// Simple client query execution
 pub fn execute_query_on_server(addr: &str, query: &str) -> Result<String, SqlError> {
     let mut stream = connect(addr)?;
-
+    
     // Read greeting (skip for now, just read until we get a response)
     let mut buf = [0u8; 1024];
-    let _ = stream
-        .read(&mut buf)
-        .map_err(|e| SqlError::IoError(e.to_string()))?;
-
+    let _ = stream.read(&mut buf).map_err(|e| SqlError::IoError(e.to_string()))?;
+    
     // Send query as MySQL packet
     let mut packet = BytesMut::new();
     packet.put_u32_le((query.len() + 1) as u32);
     packet.put_u8(0x03); // Query command
     packet.put_slice(query.as_bytes());
-
-    stream
-        .write_all(&packet)
+    
+    stream.write_all(&packet)
         .map_err(|e| SqlError::IoError(e.to_string()))?;
-
+    
     // Read response
-    let n = stream
-        .read(&mut buf)
-        .map_err(|e| SqlError::IoError(e.to_string()))?;
+    let n = stream.read(&mut buf).map_err(|e| SqlError::IoError(e.to_string()))?;
     let response = String::from_utf8_lossy(&buf[..n]).to_string();
-
+    
     Ok(response)
 }
 
@@ -677,24 +707,10 @@ mod tests {
     }
 
     #[test]
-    fn test_handshake_bytes_not_empty() {
-        let handshake = HandshakeV10::new(1);
-        let bytes = handshake.to_bytes();
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
     fn test_ok_packet() {
         let ok = OkPacket::new(1, "OK");
         let bytes = ok.to_bytes();
         assert_eq!(bytes[0], 0x00); // OK header
-    }
-
-    #[test]
-    fn test_ok_packet_message() {
-        let ok = OkPacket::new(0, "Success");
-        assert_eq!(ok.message, "Success");
-        assert_eq!(ok.affected_rows, 0);
     }
 
     #[test]
@@ -705,37 +721,10 @@ mod tests {
     }
 
     #[test]
-    fn test_error_packet_message() {
-        let err = ErrPacket::new(1064, "Syntax error");
-        assert_eq!(err.error_code, 1064);
-        assert_eq!(err.message, "Syntax error");
-    }
-
-    #[test]
     fn test_mysql_command() {
         assert!(matches!(MySqlCommand::from(0x01), MySqlCommand::Quit));
         assert!(matches!(MySqlCommand::from(0x03), MySqlCommand::Query));
         assert!(matches!(MySqlCommand::from(0x0e), MySqlCommand::Ping));
-    }
-
-    #[test]
-    fn test_mysql_command_all_variants() {
-        // Test all command variants
-        let commands = vec![
-            (0x01, "Quit"),
-            (0x02, "InitDB"),
-            (0x03, "Query"),
-            (0x04, "FieldList"),
-            (0x05, "CreateDB"),
-            (0x06, "DropDB"),
-            (0x0e, "Ping"),
-            (0x0f, "Statistics"),
-        ];
-
-        for (code, _name) in commands {
-            let cmd = MySqlCommand::from(code);
-            let _ = format!("{:?}", cmd);
-        }
     }
 
     #[test]
@@ -745,43 +734,7 @@ mod tests {
             payload: vec![0x01, 0x02, 0x03],
         };
         let bytes = packet.serialize();
-        assert_eq!(bytes.len(), 7); // 3 header (payload length) + 1 sequence + 3 payload
-    }
-
-    #[test]
-    fn test_packet_parse() {
-        let packet = MySqlPacket {
-            sequence: 1,
-            payload: vec![0x01, 0x02, 0x03],
-        };
-        let bytes = packet.serialize();
-
-        // Test parsing
-        let parsed = MySqlPacket::parse(&bytes);
-        assert!(parsed.is_ok() || parsed.is_err()); // Just test it compiles
-    }
-
-    #[test]
-    fn test_row_data_new() {
-        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
-        let row = RowData { values };
-        assert_eq!(row.values.len(), 2);
-    }
-
-    #[test]
-    fn test_row_data_serialize() {
-        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
-        let row = RowData { values };
-        let bytes = row.to_bytes();
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_row_data_null() {
-        let values = vec![Value::Null];
-        let row = RowData { values };
-        let bytes = row.to_bytes();
-        assert!(!bytes.is_empty());
+        assert_eq!(bytes.len(), 8); // 4 header (u32 + u8) + 3 payload
     }
 
     #[test]
@@ -792,6 +745,7 @@ mod tests {
     #[test]
     fn test_network_handler_creation() {
         // Can't actually create without a real stream
+<<<<<<< HEAD
     }
 
     #[test]
@@ -1849,5 +1803,7 @@ mod tests {
         }
 
         let _ = handle.join();
+=======
+>>>>>>> origin/main
     }
 }

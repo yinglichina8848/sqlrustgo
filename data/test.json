@@ -2,20 +2,25 @@
   "name": "test",
   "columns": [
     {
-      "name": "name",
-      "data_type": "TEXT",
+      "name": "id",
+      "data_type": "INTEGER",
       "nullable": true
     }
   ],
   "rows": [
     [
       {
-        "Text": "Alice"
+        "Integer": 1
       }
     ],
     [
       {
-        "Text": "Bob"
+        "Integer": 2
+      }
+    ],
+    [
+      {
+        "Integer": 3
       }
     ]
   ]
