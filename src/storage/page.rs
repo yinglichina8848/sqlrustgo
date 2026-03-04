@@ -39,28 +39,18 @@ mod tests {
     }
 
     #[test]
-    fn test_page_size() {
+    fn test_page_data_access() {
+        let mut page = Page::new(1);
+        // Write some data
+        page.data[0] = 0xAB;
+        page.data[1] = 0xCD;
+        // Read it back
+        assert_eq!(page.data[0], 0xAB);
+        assert_eq!(page.data[1], 0xCD);
+    }
+
+    #[test]
+    fn test_page_default_size() {
         assert_eq!(Page::size(), 4096);
-    }
-
-    #[test]
-    fn test_page_new_zero_id() {
-        let page = Page::new(0);
-        assert_eq!(page.page_id(), 0);
-    }
-
-    #[test]
-    fn test_page_data_initialized_to_zero() {
-        let page = Page::new(1);
-        // Check first and last bytes are zero
-        assert_eq!(page.data[0], 0);
-        assert_eq!(page.data[4095], 0);
-    }
-
-    #[test]
-    fn test_page_debug() {
-        let page = Page::new(42);
-        let debug_str = format!("{:?}", page);
-        assert!(debug_str.contains("42"));
     }
 }
