@@ -5,12 +5,12 @@ on:
     branches:
       - main
       - baseline
-      - feature/v1.0.0-beta
+      - release/v1.1.0-beta
   pull_request:
     branches:
       - main
       - baseline
-      - feature/v1.0.0-beta
+      - release/v1.1.0-beta
 
 env:
   CARGO_TERM_COLOR: always

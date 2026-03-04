@@ -85,6 +85,21 @@ impl Value {
             Value::Blob(_) => "BLOB",
         }
     }
+
+    /// Convert value to index key (i64)
+    /// Used for B+Tree index key extraction
+    pub fn to_index_key(&self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => Some(*i),
+            Value::Text(s) => {
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                s.hash(&mut hasher);
+                Some(hasher.finish() as i64)
+            }
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Value {
