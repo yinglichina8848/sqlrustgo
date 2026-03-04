@@ -43,17 +43,19 @@ pub struct ExecutionEngine {
 
 impl ExecutionEngine {
     /// Create a new execution engine with file-based storage
+    #[allow(clippy::expect_used)]
     pub fn new() -> Self {
         Self::with_data_dir(std::path::PathBuf::from("data"))
+            .expect("Failed to create execution engine: data directory initialization failed")
     }
 
     /// Create a new execution engine with custom data directory
-    pub fn with_data_dir(data_dir: PathBuf) -> Self {
-        let storage = FileStorage::new(data_dir).expect("Failed to initialize file storage");
-        Self {
+    pub fn with_data_dir(data_dir: PathBuf) -> SqlResult<Self> {
+        let storage = FileStorage::new(data_dir)?;
+        Ok(Self {
             buffer_pool: BufferPool::new(100),
             storage,
-        }
+        })
     }
 
     /// Execute a SQL statement
@@ -640,7 +642,7 @@ mod tests {
     fn test_execution_engine_create() {
         // Use a unique temp directory for test isolation
         let temp_dir = env::temp_dir().join(format!("sqlrustgo_test_{}", std::process::id()));
-        let engine = ExecutionEngine::with_data_dir(temp_dir.clone());
+        let engine = ExecutionEngine::with_data_dir(temp_dir.clone()).unwrap();
         assert!(engine.storage.table_names().is_empty());
         // Clean up
         let _ = std::fs::remove_dir_all(temp_dir);
