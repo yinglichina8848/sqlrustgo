@@ -5,21 +5,17 @@
 use crate::types::Value;
 use std::fmt;
 
-<<<<<<< HEAD
 // pub mod analyzer; // Temporarily disabled - requires parser types that don't exist yet
-=======
 pub mod analyzer;
->>>>>>> origin/develop-v1.2.0
+pub mod cost;
 pub mod executor;
 pub mod logical_plan;
 pub mod optimizer;
 pub mod physical_plan;
 
-<<<<<<< HEAD
 // pub use analyzer::*; // Temporarily disabled
-=======
 pub use analyzer::*;
->>>>>>> origin/develop-v1.2.0
+pub use cost::*;
 pub use logical_plan::*;
 pub use optimizer::*;
 pub use physical_plan::*;
@@ -251,14 +247,15 @@ impl Field {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum DataType {
+    #[default]
+    Null,
     Boolean,
     Integer,
     Float,
     Text,
     Blob,
-    Null,
 }
 
 impl DataType {

@@ -196,7 +196,6 @@ mod tests {
         let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
         let err: SqlError = io_err.into();
         assert!(matches!(err, SqlError::IoError(_)));
-<<<<<<< HEAD
         assert!(err.to_string().contains("file not found"));
     }
 
@@ -207,8 +206,6 @@ mod tests {
 
         let err_result: SqlResult<i32> = Err(SqlError::TableNotFound("test".to_string()));
         assert!(err_result.is_err());
-=======
->>>>>>> origin/main
     }
 
     #[test]
@@ -216,18 +213,5 @@ mod tests {
         let err = SqlError::ParseError("test".to_string());
         let debug_str = format!("{:?}", err);
         assert!(debug_str.contains("ParseError"));
-    }
-
-    #[test]
-    fn test_sql_result_alias() {
-        fn return_result() -> SqlResult<i32> {
-            Ok(42)
-        }
-        fn return_error() -> SqlResult<i32> {
-            Err(SqlError::TableNotFound("test".to_string()))
-        }
-
-        assert_eq!(return_result().unwrap(), 42);
-        assert!(return_error().is_err());
     }
 }
