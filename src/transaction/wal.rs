@@ -47,6 +47,7 @@ impl Default for WalConfig {
 }
 
 /// WAL with group commit and buffering
+#[allow(dead_code)]
 pub struct WriteAheadLog {
     file: Mutex<File>,
     path: String,

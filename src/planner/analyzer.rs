@@ -6,8 +6,8 @@
 //! - Schema resolution
 
 use crate::parser::{
-    AggregateCall, ColumnDefinition, DeleteStatement, Expression, InsertStatement,
-    JoinClause, SelectStatement, Statement, UpdateStatement,
+    AggregateCall, ColumnDefinition, DeleteStatement, Expression, InsertStatement, JoinClause,
+    SelectStatement, Statement, UpdateStatement,
 };
 use crate::planner::{
     AggregateFunction as PlannerAggFunc, DataType, Expr, Field, LogicalPlan, Operator, Schema,
@@ -77,7 +77,9 @@ impl Analyzer {
                 let right_schema = self
                     .tables
                     .get(&join_clause.table)
-                    .ok_or_else(|| SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table)))?
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table))
+                    })?
                     .clone();
                 self.bind_column(&col.name, &left_schema, col.alias.as_deref())
                     .or_else(|_| self.bind_column(&col.name, &right_schema, col.alias.as_deref()))?
@@ -245,7 +247,10 @@ impl Analyzer {
     }
 
     /// Analyze CREATE TABLE statement
-    fn analyze_create_table(&self, create: crate::parser::CreateTableStatement) -> Result<LogicalPlan, SqlError> {
+    fn analyze_create_table(
+        &self,
+        create: crate::parser::CreateTableStatement,
+    ) -> Result<LogicalPlan, SqlError> {
         let fields: Vec<Field> = create
             .columns
             .iter()
@@ -259,7 +264,10 @@ impl Analyzer {
     }
 
     /// Analyze DROP TABLE statement
-    fn analyze_drop_table(&self, drop: crate::parser::DropTableStatement) -> Result<LogicalPlan, SqlError> {
+    fn analyze_drop_table(
+        &self,
+        drop: crate::parser::DropTableStatement,
+    ) -> Result<LogicalPlan, SqlError> {
         Ok(LogicalPlan::DropTable {
             name: drop.name,
             schema: Schema::empty(),
@@ -267,7 +275,12 @@ impl Analyzer {
     }
 
     /// Bind a column reference to a schema
-    fn bind_column(&self, name: &str, schema: &Schema, _alias: Option<&str>) -> Result<Expr, SqlError> {
+    fn bind_column(
+        &self,
+        name: &str,
+        schema: &Schema,
+        _alias: Option<&str>,
+    ) -> Result<Expr, SqlError> {
         // Check if it's a wildcard
         if name == "*" {
             return Ok(Expr::Wildcard);
@@ -285,7 +298,10 @@ impl Analyzer {
         if schema.field(name).is_some() {
             Ok(Expr::Column(crate::planner::Column::new(name.to_string())))
         } else {
-            Err(SqlError::ExecutionError(format!("Unknown column: {}", name)))
+            Err(SqlError::ExecutionError(format!(
+                "Unknown column: {}",
+                name
+            )))
         }
     }
 
@@ -294,16 +310,16 @@ impl Analyzer {
         #[allow(unreachable_patterns)]
         match expr {
             Expression::Literal(lit) => Ok(Expr::Literal(crate::types::parse_sql_literal(lit))),
-            Expression::Identifier(name) => {
-                self.bind_column(name, schema, None)
-            }
+            Expression::Identifier(name) => self.bind_column(name, schema, None),
             Expression::BinaryOp(left, op, right) => {
                 let left_bound = self.bind_expression(left, schema)?;
                 let right_bound = self.bind_expression(right, schema)?;
                 let operator = self.bind_operator(op)?;
                 Ok(Expr::binary_expr(left_bound, operator, right_bound))
             }
-            _ => Err(SqlError::ExecutionError("Unsupported expression".to_string())),
+            _ => Err(SqlError::ExecutionError(
+                "Unsupported expression".to_string(),
+            )),
         }
     }
 
@@ -317,7 +333,9 @@ impl Analyzer {
         let right_schema = self
             .tables
             .get(&join_clause.table)
-            .ok_or_else(|| SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table)))?
+            .ok_or_else(|| {
+                SqlError::ExecutionError(format!("Unknown table: {}", join_clause.table))
+            })?
             .clone();
 
         // Create right TableScan
@@ -397,7 +415,10 @@ impl Analyzer {
             "*" => Ok(Operator::Multiply),
             "/" => Ok(Operator::Divide),
             "%" => Ok(Operator::Modulo),
-            _ => Err(SqlError::ExecutionError(format!("Unknown operator: {}", op))),
+            _ => Err(SqlError::ExecutionError(format!(
+                "Unknown operator: {}",
+                op
+            ))),
         }
     }
 
@@ -407,7 +428,10 @@ impl Analyzer {
         match op.to_uppercase().as_str() {
             "NOT" => Ok(Operator::Not),
             "-" => Ok(Operator::Minus),
-            _ => Err(SqlError::ExecutionError(format!("Unknown unary operator: {}", op))),
+            _ => Err(SqlError::ExecutionError(format!(
+                "Unknown unary operator: {}",
+                op
+            ))),
         }
     }
 
@@ -417,8 +441,12 @@ impl Analyzer {
             Expression::Literal(lit) => Expr::Literal(crate::types::parse_sql_literal(lit)),
             Expression::Identifier(name) => Expr::Column(crate::planner::Column::new(name.clone())),
             Expression::BinaryOp(left, op, right) => {
-                let left_bound = self.bind_expression(left, &Schema::empty()).unwrap_or(Expr::Wildcard);
-                let right_bound = self.bind_expression(right, &Schema::empty()).unwrap_or(Expr::Wildcard);
+                let left_bound = self
+                    .bind_expression(left, &Schema::empty())
+                    .unwrap_or(Expr::Wildcard);
+                let right_bound = self
+                    .bind_expression(right, &Schema::empty())
+                    .unwrap_or(Expr::Wildcard);
                 let operator = self.bind_operator(op).unwrap_or(Operator::Eq);
                 Expr::binary_expr(left_bound, operator, right_bound)
             }
@@ -495,9 +523,10 @@ mod tests {
     #[test]
     fn test_analyzer_register_table() {
         let mut analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
         analyzer.register_table("users".to_string(), schema);
 
         assert!(analyzer.tables.contains_key("users"));
@@ -506,9 +535,10 @@ mod tests {
     #[test]
     fn test_bind_column_wildcard() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let result = analyzer.bind_column("*", &schema, None);
         assert!(matches!(result, Ok(Expr::Wildcard)));
@@ -517,9 +547,10 @@ mod tests {
     #[test]
     fn test_bind_column_qualified_wildcard() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let result = analyzer.bind_column("users.*", &schema, None);
         assert!(matches!(result, Ok(Expr::QualifiedWildcard { .. })));
@@ -528,9 +559,10 @@ mod tests {
     #[test]
     fn test_bind_column_unknown() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let result = analyzer.bind_column("unknown", &schema, None);
         assert!(result.is_err());
@@ -574,9 +606,10 @@ mod tests {
     #[test]
     fn test_bind_aggregate_count() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Count,
@@ -591,9 +624,10 @@ mod tests {
     #[test]
     fn test_bind_aggregate_sum() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("amount".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "amount".to_string(),
+            DataType::Integer,
+        )]);
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Sum,
@@ -608,9 +642,10 @@ mod tests {
     #[test]
     fn test_bind_aggregate_avg() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("price".to_string(), DataType::Float),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "price".to_string(),
+            DataType::Float,
+        )]);
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Avg,
@@ -625,9 +660,10 @@ mod tests {
     #[test]
     fn test_bind_aggregate_min_max() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("name".to_string(), DataType::Text),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "name".to_string(),
+            DataType::Text,
+        )]);
 
         let aggr_min = AggregateCall {
             func: ParserAggFunc::Min,
@@ -650,22 +686,40 @@ mod tests {
         let schema = Schema::empty();
 
         let int_lit = Expr::Literal(crate::types::Value::Integer(42));
-        assert_eq!(analyzer.infer_expression_type(&int_lit, &schema), DataType::Integer);
+        assert_eq!(
+            analyzer.infer_expression_type(&int_lit, &schema),
+            DataType::Integer
+        );
 
         let float_lit = Expr::Literal(crate::types::Value::Float(3.14));
-        assert_eq!(analyzer.infer_expression_type(&float_lit, &schema), DataType::Float);
+        assert_eq!(
+            analyzer.infer_expression_type(&float_lit, &schema),
+            DataType::Float
+        );
 
         let text_lit = Expr::Literal(crate::types::Value::Text("hello".to_string()));
-        assert_eq!(analyzer.infer_expression_type(&text_lit, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&text_lit, &schema),
+            DataType::Text
+        );
 
         let bool_lit = Expr::Literal(crate::types::Value::Boolean(true));
-        assert_eq!(analyzer.infer_expression_type(&bool_lit, &schema), DataType::Boolean);
+        assert_eq!(
+            analyzer.infer_expression_type(&bool_lit, &schema),
+            DataType::Boolean
+        );
 
         let null_lit = Expr::Literal(crate::types::Value::Null);
-        assert_eq!(analyzer.infer_expression_type(&null_lit, &schema), DataType::Null);
+        assert_eq!(
+            analyzer.infer_expression_type(&null_lit, &schema),
+            DataType::Null
+        );
 
         let blob_lit = Expr::Literal(crate::types::Value::Blob(vec![1, 2, 3]));
-        assert_eq!(analyzer.infer_expression_type(&blob_lit, &schema), DataType::Blob);
+        assert_eq!(
+            analyzer.infer_expression_type(&blob_lit, &schema),
+            DataType::Blob
+        );
     }
 
     #[test]
@@ -674,7 +728,10 @@ mod tests {
         let schema = Schema::empty();
 
         let col = Expr::Column(crate::planner::Column::new("id".to_string()));
-        assert_eq!(analyzer.infer_expression_type(&col, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&col, &schema),
+            DataType::Text
+        );
     }
 
     #[test]
@@ -687,35 +744,50 @@ mod tests {
             args: vec![],
             distinct: false,
         };
-        assert_eq!(analyzer.infer_expression_type(&count_aggr, &schema), DataType::Integer);
+        assert_eq!(
+            analyzer.infer_expression_type(&count_aggr, &schema),
+            DataType::Integer
+        );
 
         let sum_aggr = Expr::AggregateFunction {
             func: crate::planner::AggregateFunction::Sum,
             args: vec![],
             distinct: false,
         };
-        assert_eq!(analyzer.infer_expression_type(&sum_aggr, &schema), DataType::Float);
+        assert_eq!(
+            analyzer.infer_expression_type(&sum_aggr, &schema),
+            DataType::Float
+        );
 
         let avg_aggr = Expr::AggregateFunction {
             func: crate::planner::AggregateFunction::Avg,
             args: vec![],
             distinct: false,
         };
-        assert_eq!(analyzer.infer_expression_type(&avg_aggr, &schema), DataType::Float);
+        assert_eq!(
+            analyzer.infer_expression_type(&avg_aggr, &schema),
+            DataType::Float
+        );
 
         let min_aggr = Expr::AggregateFunction {
             func: crate::planner::AggregateFunction::Min,
             args: vec![],
             distinct: false,
         };
-        assert_eq!(analyzer.infer_expression_type(&min_aggr, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&min_aggr, &schema),
+            DataType::Text
+        );
 
         let max_aggr = Expr::AggregateFunction {
             func: crate::planner::AggregateFunction::Max,
             args: vec![],
             distinct: false,
         };
-        assert_eq!(analyzer.infer_expression_type(&max_aggr, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&max_aggr, &schema),
+            DataType::Text
+        );
     }
 
     #[test]
@@ -756,9 +828,10 @@ mod tests {
     #[test]
     fn test_bind_expression_identifier() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let expr = Expression::Identifier("id".to_string());
         let result = analyzer.bind_expression(&expr, &schema);
@@ -917,9 +990,10 @@ mod tests {
         let stmt = Statement::Insert(InsertStatement {
             table: "users".to_string(),
             columns: vec!["id".to_string(), "name".to_string()],
-            values: vec![
-                vec![Expression::Literal("1".to_string()), Expression::Literal("Alice".to_string())],
-            ],
+            values: vec![vec![
+                Expression::Literal("1".to_string()),
+                Expression::Literal("Alice".to_string()),
+            ]],
         });
 
         let result = analyzer.analyze(stmt);
@@ -942,10 +1016,7 @@ mod tests {
 
         let stmt = Statement::Update(UpdateStatement {
             table: "users".to_string(),
-            set_clauses: vec![(
-                "name".to_string(),
-                Expression::Literal("Bob".to_string()),
-            )],
+            set_clauses: vec![("name".to_string(), Expression::Literal("Bob".to_string()))],
             where_clause: None,
         });
 
@@ -969,10 +1040,7 @@ mod tests {
 
         let stmt = Statement::Update(UpdateStatement {
             table: "users".to_string(),
-            set_clauses: vec![(
-                "name".to_string(),
-                Expression::Literal("Bob".to_string()),
-            )],
+            set_clauses: vec![("name".to_string(), Expression::Literal("Bob".to_string()))],
             where_clause: Some(Expression::BinaryOp(
                 Box::new(Expression::Identifier("id".to_string())),
                 "=".to_string(),
@@ -1123,9 +1191,10 @@ mod tests {
         let mut schemas = HashMap::new();
         schemas.insert(
             "users".to_string(),
-            Schema::new(vec![
-                Field::new_not_null("id".to_string(), DataType::Integer),
-            ]),
+            Schema::new(vec![Field::new_not_null(
+                "id".to_string(),
+                DataType::Integer,
+            )]),
         );
         let analyzer = Analyzer::with_schemas(schemas);
 
@@ -1145,9 +1214,10 @@ mod tests {
     #[test]
     fn test_bind_expression_unknown_column() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let expr = Expression::Identifier("unknown".to_string());
         let result = analyzer.bind_expression(&expr, &schema);
@@ -1157,9 +1227,10 @@ mod tests {
     #[test]
     fn test_bind_aggregate_unknown_column() {
         let analyzer = Analyzer::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Count,
@@ -1223,7 +1294,10 @@ mod tests {
             left: Box::new(Expr::Literal(crate::types::Value::Integer(1))),
             right: Box::new(Expr::Literal(crate::types::Value::Integer(2))),
         };
-        assert_eq!(analyzer.infer_expression_type(&binary, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&binary, &schema),
+            DataType::Text
+        );
 
         // Binary expr with text should return Text
         let binary = Expr::BinaryExpr {
@@ -1231,7 +1305,10 @@ mod tests {
             left: Box::new(Expr::Literal(crate::types::Value::Text("a".to_string()))),
             right: Box::new(Expr::Literal(crate::types::Value::Text("b".to_string()))),
         };
-        assert_eq!(analyzer.infer_expression_type(&binary, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&binary, &schema),
+            DataType::Text
+        );
     }
 
     #[test]
@@ -1244,14 +1321,22 @@ mod tests {
             expr: Box::new(Expr::Literal(crate::types::Value::Integer(42))),
             name: "my_int".to_string(),
         };
-        assert_eq!(analyzer.infer_expression_type(&alias, &schema), DataType::Integer);
+        assert_eq!(
+            analyzer.infer_expression_type(&alias, &schema),
+            DataType::Integer
+        );
 
         // Test alias with text
         let alias_text = Expr::Alias {
-            expr: Box::new(Expr::Literal(crate::types::Value::Text("hello".to_string()))),
+            expr: Box::new(Expr::Literal(crate::types::Value::Text(
+                "hello".to_string(),
+            ))),
             name: "my_text".to_string(),
         };
-        assert_eq!(analyzer.infer_expression_type(&alias_text, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&alias_text, &schema),
+            DataType::Text
+        );
     }
 
     #[test]
@@ -1260,13 +1345,19 @@ mod tests {
         let schema = Schema::empty();
 
         // Test wildcard type inference
-        assert_eq!(analyzer.infer_expression_type(&Expr::Wildcard, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&Expr::Wildcard, &schema),
+            DataType::Text
+        );
 
         // Test qualified wildcard type inference
         let qualified_wildcard = Expr::QualifiedWildcard {
             qualifier: "users".to_string(),
         };
-        assert_eq!(analyzer.infer_expression_type(&qualified_wildcard, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&qualified_wildcard, &schema),
+            DataType::Text
+        );
     }
 
     #[test]
@@ -1279,7 +1370,10 @@ mod tests {
             op: Operator::Minus,
             expr: Box::new(Expr::Literal(crate::types::Value::Integer(5))),
         };
-        assert_eq!(analyzer.infer_expression_type(&unary, &schema), DataType::Text);
+        assert_eq!(
+            analyzer.infer_expression_type(&unary, &schema),
+            DataType::Text
+        );
     }
 
     #[test]

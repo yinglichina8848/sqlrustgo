@@ -82,7 +82,7 @@ impl ExecutionEngine {
         &mut self,
         stmt: crate::parser::AnalyzeStatement,
     ) -> SqlResult<ExecutionResult> {
-        let table_name = stmt.table_name.unwrap_or_else(|| "".to_string());
+        let table_name = stmt.table_name.unwrap_or_default();
 
         if table_name.is_empty() {
             return Ok(ExecutionResult {
@@ -808,9 +808,7 @@ mod tests {
 // Combines Analyzer + Optimizer + Planner + ExecutionEngine for full query execution pipeline.
 // This implements E-003 from the v1.2.0 roadmap.
 
-use crate::planner::{
-    Analyzer, DefaultOptimizer, DefaultPlanner, LogicalPlan, Optimizer, Planner,
-};
+use crate::planner::{Analyzer, DefaultOptimizer, DefaultPlanner, LogicalPlan, Optimizer, Planner};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -850,7 +848,10 @@ impl LocalExecutor {
     }
 
     /// Execute a SQL statement through the full pipeline
-    pub fn execute(&self, statement: crate::parser::Statement) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+    pub fn execute(
+        &self,
+        statement: crate::parser::Statement,
+    ) -> SqlResult<Vec<Vec<crate::types::Value>>> {
         // Step 1: Analyze statement to LogicalPlan
         let logical_plan = self.analyzer.analyze(statement)?;
 
@@ -865,7 +866,10 @@ impl LocalExecutor {
     }
 
     /// Execute with logical plan (for testing)
-    pub fn execute_plan(&self, logical_plan: LogicalPlan) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+    pub fn execute_plan(
+        &self,
+        logical_plan: LogicalPlan,
+    ) -> SqlResult<Vec<Vec<crate::types::Value>>> {
         // Handle TableScan directly to get registered table data
         if let LogicalPlan::TableScan { table_name, .. } = &logical_plan {
             if let Some(rows) = self.get_table_data(table_name) {
@@ -924,8 +928,14 @@ mod local_executor_tests {
         executor.register_table(
             "users",
             vec![
-                vec![crate::types::Value::Integer(1), crate::types::Value::Text("Alice".to_string())],
-                vec![crate::types::Value::Integer(2), crate::types::Value::Text("Bob".to_string())],
+                vec![
+                    crate::types::Value::Integer(1),
+                    crate::types::Value::Text("Alice".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(2),
+                    crate::types::Value::Text("Bob".to_string()),
+                ],
             ],
         );
 
@@ -961,9 +971,18 @@ mod local_executor_tests {
         executor.register_table(
             "users",
             vec![
-                vec![crate::types::Value::Integer(1), crate::types::Value::Text("Alice".to_string())],
-                vec![crate::types::Value::Integer(2), crate::types::Value::Text("Bob".to_string())],
-                vec![crate::types::Value::Integer(3), crate::types::Value::Text("Charlie".to_string())],
+                vec![
+                    crate::types::Value::Integer(1),
+                    crate::types::Value::Text("Alice".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(2),
+                    crate::types::Value::Text("Bob".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(3),
+                    crate::types::Value::Text("Charlie".to_string()),
+                ],
             ],
         );
 
