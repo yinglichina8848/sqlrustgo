@@ -123,6 +123,9 @@ impl Page {
         };
         offset += 1;
 
+        // Page ID (4 bytes)
+        self.data[8..12].copy_from_slice(&self.page_id.to_le_bytes());
+
         // Reserved (1 byte)
         offset += 1;
 
@@ -154,6 +157,9 @@ impl Page {
         if magic != PAGE_MAGIC {
             return;
         }
+
+        // Page ID
+        self.page_id = u32::from_le_bytes([self.data[8], self.data[9], self.data[10], self.data[11]]);
 
         let mut offset = 8;
 
