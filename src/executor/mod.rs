@@ -20,6 +20,7 @@
     clippy::module_inception
 )]
 
+pub mod benchmark;
 pub mod executor;
 
 pub use executor::{Executor, ExecutorResult};
