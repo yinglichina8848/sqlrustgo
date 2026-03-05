@@ -48,6 +48,13 @@ impl Analyzer {
             Statement::Delete(delete) => self.analyze_delete(delete),
             Statement::CreateTable(create) => self.analyze_create_table(create),
             Statement::DropTable(drop) => self.analyze_drop_table(drop),
+            Statement::Analyze(_) => {
+                // ANALYZE statement - return empty relation for now
+                Ok(LogicalPlan::EmptyRelation {
+                    produce_one_row: false,
+                    schema: Schema::empty(),
+                })
+            }
         }
     }
 
@@ -327,6 +334,8 @@ impl Analyzer {
             crate::parser::JoinType::Inner => crate::planner::JoinType::Inner,
             crate::parser::JoinType::Left => crate::planner::JoinType::Left,
             crate::parser::JoinType::Right => crate::planner::JoinType::Right,
+            crate::parser::JoinType::Full => crate::planner::JoinType::Full,
+            crate::parser::JoinType::Cross => crate::planner::JoinType::Cross,
         };
 
         // Bind ON clause expressions
@@ -350,7 +359,7 @@ impl Analyzer {
 
     /// Bind aggregate call
     fn bind_aggregate(&self, aggr: &AggregateCall, schema: &Schema) -> Result<Expr, SqlError> {
-        let func = match aggr.func {
+        let func = match &aggr.func {
             crate::parser::AggregateFunction::Count => PlannerAggFunc::Count,
             crate::parser::AggregateFunction::Sum => PlannerAggFunc::Sum,
             crate::parser::AggregateFunction::Avg => PlannerAggFunc::Avg,
@@ -358,15 +367,16 @@ impl Analyzer {
             crate::parser::AggregateFunction::Max => PlannerAggFunc::Max,
         };
 
-        let arg = match &aggr.column {
-            Some(col) => vec![self.bind_column(col, schema, None)?],
-            None => vec![],
-        };
+        let args: Vec<Expr> = aggr
+            .args
+            .iter()
+            .map(|e| self.bind_expression(e, schema))
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Expr::AggregateFunction {
             func,
-            args: arg,
-            distinct: false,
+            args,
+            distinct: aggr.distinct,
         })
     }
 
@@ -570,7 +580,8 @@ mod tests {
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Count,
-            column: Some("id".to_string()),
+            args: vec![Expression::Identifier("id".to_string())],
+            distinct: false,
         };
 
         let result = analyzer.bind_aggregate(&aggr, &schema);
@@ -586,7 +597,8 @@ mod tests {
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Sum,
-            column: Some("amount".to_string()),
+            args: vec![Expression::Identifier("amount".to_string())],
+            distinct: false,
         };
 
         let result = analyzer.bind_aggregate(&aggr, &schema);
@@ -602,7 +614,8 @@ mod tests {
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Avg,
-            column: Some("price".to_string()),
+            args: vec![Expression::Identifier("price".to_string())],
+            distinct: false,
         };
 
         let result = analyzer.bind_aggregate(&aggr, &schema);
@@ -618,11 +631,13 @@ mod tests {
 
         let aggr_min = AggregateCall {
             func: ParserAggFunc::Min,
-            column: Some("name".to_string()),
+            args: vec![Expression::Identifier("name".to_string())],
+            distinct: false,
         };
         let aggr_max = AggregateCall {
             func: ParserAggFunc::Max,
-            column: Some("name".to_string()),
+            args: vec![Expression::Identifier("name".to_string())],
+            distinct: false,
         };
 
         assert!(analyzer.bind_aggregate(&aggr_min, &schema).is_ok());
@@ -819,6 +834,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -851,6 +867,7 @@ mod tests {
                 Box::new(Expression::Literal("10".to_string())),
             )),
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -875,8 +892,10 @@ mod tests {
             where_clause: None,
             aggregates: vec![AggregateCall {
                 func: ParserAggFunc::Count,
-                column: None,
+                args: vec![],
+                distinct: false,
             }],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1078,6 +1097,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1143,7 +1163,8 @@ mod tests {
 
         let aggr = AggregateCall {
             func: ParserAggFunc::Count,
-            column: Some("unknown".to_string()),
+            args: vec![Expression::Identifier("unknown".to_string())],
+            distinct: false,
         };
 
         let result = analyzer.bind_aggregate(&aggr, &schema);
@@ -1287,6 +1308,7 @@ mod tests {
             ],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);

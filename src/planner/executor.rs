@@ -126,9 +126,10 @@ mod tests {
     #[test]
     fn test_default_execution_engine_execute() {
         let engine = DefaultExecutionEngine::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
         let rows = vec![vec![Value::Integer(1)]];
         let plan = MockPlan::new(schema, rows);
 
@@ -166,9 +167,10 @@ mod tests {
     #[test]
     fn test_engine_registry_execute() {
         let registry = EngineRegistry::new();
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new_not_null(
+            "id".to_string(),
+            DataType::Integer,
+        )]);
         let rows = vec![vec![Value::Integer(1)]];
         let plan = MockPlan::new(schema, rows);
 
@@ -199,7 +201,7 @@ mod tests {
         registry.register("engine2", Box::new(DefaultExecutionEngine::new()));
 
         let names = registry.names();
-        assert_eq!(names.len(), 3);  // default + engine1 + engine2
+        assert_eq!(names.len(), 3); // default + engine1 + engine2
     }
 
     #[test]
