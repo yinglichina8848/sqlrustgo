@@ -149,15 +149,13 @@ impl Page {
 
     /// Read page header
     fn read_header(&mut self) {
-        let mut offset = 0;
-
         // Magic number
         let magic = u32::from_le_bytes([self.data[0], self.data[1], self.data[2], self.data[3]]);
         if magic != PAGE_MAGIC {
             return;
         }
 
-        offset = 8;
+        let mut offset = 8;
 
         // Page type
         self.page_type = match self.data[offset] {
