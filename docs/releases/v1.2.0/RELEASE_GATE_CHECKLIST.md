@@ -5,6 +5,7 @@
 > **版本类型**: 🏗️ 架构重构 + 接口抽象
 > **检查日期**: 2026-03-05
 > **检查人**: yinglichina8848
+> **检查结果**: 🔴 65% (需修复)
 
 ---
 
@@ -15,24 +16,24 @@
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
 | Debug 编译 | `cargo build` | 通过 | ✅ |
-| Release 编译 | `cargo build --release` | 通过 | ⏳ |
-| 全特性编译 | `cargo build --all-features` | 通过 | ⏳ |
+| Release 编译 | `cargo build --release` | 通过 | ✅ |
+| 全特性编译 | `cargo build --all-features` | 通过 | ⚠️ 22 warnings |
 
 ### 1.2 测试检查
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| 单元测试 | `cargo test --all-features` | 全部通过 | ⏳ |
-| 集成测试 | `cargo test --test '*'` | 全部通过 | ⏳ |
-| 测试覆盖率 | `cargo tarpaulin` | ≥90% | ⏳ |
+| 单元测试 | `cargo test --all-features` | 全部通过 | ❌ 编译错误 |
+| 集成测试 | `cargo test --test '*'` | 全部通过 | ❌ 编译错误 |
+| 测试覆盖率 | `cargo tarpaulin` | ≥90% | ⏳ 未测试 |
 
 ### 1.3 代码规范
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| Clippy | `cargo clippy -- -D warnings` | 零警告 | ✅ |
-| 格式化 | `cargo fmt --check` | 通过 | ✅ |
-| 文档 | `cargo doc --no-deps` | 无警告 | ⏳ |
+| Clippy | `cargo clippy -- -D warnings` | 零警告 | ❌ 26 errors |
+| 格式化 | `cargo fmt --check` | 通过 | ⏳ 未测试 |
+| 文档 | `cargo doc --no-deps` | 无警告 | ⏳ 未测试 |
 
 ---
 
@@ -145,11 +146,11 @@
 
 ## 七、门禁统计
 
-| 分类 | 总数 | 通过 | 未通过 | 通过率 |
-|------|------|------|--------|--------|
-| A类门禁 | 25 | 19 | 0 | 76% |
+| 分类 | 总数 | 通过 | 失败 | 通过率 |
+|------|------|------|------|--------|
+| A类门禁 | 25 | 12 | 7 | 48% |
 | B类门禁 | 6 | 1 | 0 | 17% |
-| **总计** | 31 | 20 | 0 | **65%** |
+| **总计** | 31 | 13 | 7 | **42%** |
 
 ---
 
@@ -179,8 +180,10 @@
 
 | 风险 | 影响 | 缓解措施 | 状态 |
 |------|------|----------|------|
-| 性能基准测试未完成 | 无法评估性能提升 | 后续补充测试 | ⏳ |
-| Release 编译未测试 | 未知 | 执行 cargo build --release | ⏳ |
+| Clippy 26 errors | 代码无法通过门禁 | 修复 clippy 错误 | 🔴 |
+| 测试编译错误 | API 不匹配 | 修复测试中的 API 调用 | 🔴 |
+| 22 warnings | 代码质量 | 清理未使用代码 | ⚠️ |
+| 性能基准未测试 | 无法评估性能 | 补充性能测试 | ⏳ |
 
 ---
 
@@ -190,3 +193,46 @@
 |------|------|------|
 | 1.0 | 2026-03-04 | 初始版本 |
 | 1.1 | 2026-03-05 | 更新代码质量门禁状态 |
+| 1.2 | 2026-03-05 | 实际验证结果 - 42% 通过率 |
+
+---
+
+## 十一、实际验证记录
+
+### 验证执行命令及结果
+
+```bash
+# 1. 编译检查
+$ cargo build --all-features
+✅ 通过 (22 warnings)
+
+# 2. Clippy 检查
+$ cargo clippy --all-features -- -D warnings
+❌ 失败 (26 errors)
+   - if_same_then_else (需修复)
+   - or_insert_with 需改为 or_default()
+
+# 3. 测试检查
+$ cargo test --all-features
+❌ 失败 (编译错误)
+   - API 不匹配: create_index 方法参数错误
+   - 5 个编译错误
+
+# 4. Release 编译
+$ cargo build --release
+✅ 通过
+```
+
+### 待修复问题
+
+1. **Clippy 错误** (26个)
+   - `if_same_then_else` 需添加 allow 属性或重构
+   - `or_insert_with` 需改为 `or_default()`
+
+2. **测试编译错误** (5个)
+   - `storage.create_index` 方法签名不匹配 (3参数 → 2参数)
+
+3. **警告清理** (22个)
+   - 未使用的常量 MIN_KEYS
+   - 未使用的字段 path, cv
+   - 未使用的 mut 关键字
