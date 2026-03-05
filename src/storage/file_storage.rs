@@ -920,7 +920,12 @@ impl StorageEngine for FileStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&self, _table: &str, _column: &str, _column_index: usize) -> crate::types::SqlResult<()> {
+    fn create_index(
+        &self,
+        _table: &str,
+        _column: &str,
+        _column_index: usize,
+    ) -> crate::types::SqlResult<()> {
         Ok(())
     }
 
