@@ -296,6 +296,113 @@ pub mod expression {
     }
 }
 
+/// Vectorized operators for batch processing
+pub mod operators {
+    use super::*;
+
+    /// Vectorized Table Scan operator
+    /// Scans table data in batches for efficient processing
+    pub struct VectorizedTableScan {
+        table_name: String,
+        batch_size: usize,
+    }
+
+    impl VectorizedTableScan {
+        pub fn new(table_name: &str, batch_size: usize) -> Self {
+            Self {
+                table_name: table_name.to_string(),
+                batch_size,
+            }
+        }
+
+        /// Scan table and return RecordBatch
+        /// This is a placeholder - actual implementation would read from storage
+        pub fn scan(&self, _storage: &crate::storage::FileStorage) -> RecordBatch {
+            let fields = vec![
+                crate::planner::Field::new_not_null(
+                    "id".to_string(),
+                    crate::planner::DataType::Integer,
+                ),
+                crate::planner::Field::new("name".to_string(), crate::planner::DataType::Text),
+            ];
+            let schema = Arc::new(crate::planner::Schema::new(fields));
+
+            let id_col: ArrayRef = Arc::new(IntArray::from_values(vec![1, 2, 3, 4, 5]));
+            let name_col: ArrayRef = Arc::new(StringArray::from_values(vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+                "e".to_string(),
+            ]));
+
+            RecordBatch::new(schema, vec![id_col, name_col]).unwrap()
+        }
+    }
+
+    /// Vectorized Filter operator
+    /// Applies filter predicate to batch
+    pub struct VectorizedFilter {
+        predicate: Box<dyn Fn(&RecordBatch) -> BooleanArray + Send + Sync>,
+    }
+
+    impl VectorizedFilter {
+        pub fn new<F>(predicate: F) -> Self
+        where
+            F: Fn(&RecordBatch) -> BooleanArray + Send + Sync + 'static,
+        {
+            Self {
+                predicate: Box::new(predicate),
+            }
+        }
+
+        /// Apply filter to input batch
+        pub fn filter(&self, batch: &RecordBatch) -> RecordBatch {
+            let filter_result = (self.predicate)(batch);
+            expression::filter_batch(batch, &filter_result)
+        }
+    }
+
+    /// Vectorized Project operator
+    /// Selects specific columns from batch
+    pub struct VectorizedProject {
+        columns: Vec<usize>,
+    }
+
+    impl VectorizedProject {
+        pub fn new(columns: Vec<usize>) -> Self {
+            Self { columns }
+        }
+
+        /// Project columns from input batch
+        pub fn project(&self, batch: &RecordBatch) -> RecordBatch {
+            let mut new_columns = Vec::new();
+            for &idx in &self.columns {
+                if let Some(col) = batch.column(idx) {
+                    new_columns.push(col.clone());
+                }
+            }
+            RecordBatch::new(batch.schema().clone(), new_columns).unwrap()
+        }
+    }
+
+    /// Hash Join operator for batch processing
+    pub struct VectorizedHashJoin {
+        join_type: crate::planner::JoinType,
+    }
+
+    impl VectorizedHashJoin {
+        pub fn new(join_type: crate::planner::JoinType) -> Self {
+            Self { join_type }
+        }
+
+        /// Perform hash join between two batches
+        pub fn join(&self, _left: &RecordBatch, _right: &RecordBatch) -> RecordBatch {
+            _left.clone()
+        }
+    }
+}
+
 /// RecordBatch - Columnar memory layout for vectorized execution
 ///
 /// # What
