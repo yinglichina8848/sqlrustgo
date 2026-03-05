@@ -16,7 +16,8 @@
 #![allow(
     clippy::collapsible_if,
     clippy::collapsible_match,
-    clippy::needless_borrow
+    clippy::needless_borrow,
+    clippy::module_inception
 )]
 
 pub mod executor;
