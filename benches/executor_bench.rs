@@ -228,9 +228,10 @@ fn bench_executor_join(c: &mut Criterion) {
     group.bench_function("inner_join", |b| {
         b.iter(|| {
             engine.execute(
-                parse("SELECT users.name, orders.amount FROM users INNER JOIN orders ON users.id = orders.user_id")
-                    .unwrap(),
-            ).unwrap()
+                "SELECT users.name, orders.amount FROM users INNER JOIN orders ON users.id = orders.user_id"
+                    .to_string(),
+            )
+            .unwrap()
         });
     });
 

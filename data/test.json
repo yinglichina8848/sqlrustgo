@@ -5,7 +5,21 @@
       "name": "id",
       "data_type": "INTEGER",
       "nullable": true
+    },
+    {
+      "name": "value",
+      "data_type": "INTEGER",
+      "nullable": true
     }
   ],
-  "rows": []
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Integer": 20
+      }
+    ]
+  ]
 }

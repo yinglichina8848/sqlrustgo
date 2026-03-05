@@ -2,7 +2,7 @@ name: Benchmark
 
 on:
   push:
-    branches: [main, develop, release/**]
+    branches: [main, develop-v1.2.0, release/**]
   pull_request:
     branches: [main, develop, release/**]
   workflow_dispatch:
