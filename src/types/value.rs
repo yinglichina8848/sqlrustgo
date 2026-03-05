@@ -18,7 +18,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 /// SQL Value enum representing all supported SQL data types
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// NULL value
     Null,
@@ -32,6 +32,25 @@ pub enum Value {
     Text(String),
     /// Binary large object
     Blob(Vec<u8>),
+}
+
+impl Eq for Value {}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Null, Value::Null) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => {
+                // Compare by bits to handle NaN correctly
+                a.to_bits() == b.to_bits()
+            }
+            (Value::Text(a), Value::Text(b)) => a == b,
+            (Value::Blob(a), Value::Blob(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Hash for Value {

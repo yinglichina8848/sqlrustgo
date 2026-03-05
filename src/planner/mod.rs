@@ -8,10 +8,12 @@ use std::fmt;
 pub mod analyzer;
 pub mod executor;
 pub mod logical_plan;
+pub mod optimizer;
 pub mod physical_plan;
 
 pub use analyzer::*;
 pub use logical_plan::*;
+pub use optimizer::*;
 pub use physical_plan::*;
 
 #[derive(Debug, Clone, PartialEq)]

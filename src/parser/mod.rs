@@ -70,6 +70,25 @@ pub struct SelectStatement {
     pub table: String,
     pub where_clause: Option<Expression>,
     pub aggregates: Vec<AggregateCall>,
+    pub join_clause: Option<JoinClause>,
+}
+
+/// JOIN type
+#[derive(Debug, Clone, PartialEq)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
+}
+
+/// JOIN clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct JoinClause {
+    pub join_type: JoinType,
+    pub table: String,
+    pub on_clause: (Expression, Expression),
 }
 
 /// Column in SELECT
@@ -266,6 +285,7 @@ impl Parser {
             table,
             where_clause,
             aggregates,
+            join_clause: None,
         }))
     }
 

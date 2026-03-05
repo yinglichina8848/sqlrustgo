@@ -327,6 +327,8 @@ impl Analyzer {
             crate::parser::JoinType::Inner => crate::planner::JoinType::Inner,
             crate::parser::JoinType::Left => crate::planner::JoinType::Left,
             crate::parser::JoinType::Right => crate::planner::JoinType::Right,
+            crate::parser::JoinType::Full => crate::planner::JoinType::Full,
+            crate::parser::JoinType::Cross => crate::planner::JoinType::Cross,
         };
 
         // Bind ON clause expressions
@@ -819,6 +821,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -851,6 +854,7 @@ mod tests {
                 Box::new(Expression::Literal("10".to_string())),
             )),
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -877,6 +881,7 @@ mod tests {
                 func: ParserAggFunc::Count,
                 column: None,
             }],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1078,6 +1083,7 @@ mod tests {
             }],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
@@ -1287,6 +1293,7 @@ mod tests {
             ],
             where_clause: None,
             aggregates: vec![],
+            join_clause: None,
         });
 
         let result = analyzer.analyze(stmt);
