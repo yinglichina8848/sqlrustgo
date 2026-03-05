@@ -16,7 +16,10 @@ pub struct ExecutorResult {
 impl ExecutorResult {
     /// Create a new executor result
     pub fn new(rows: Vec<Vec<Value>>, affected_rows: usize) -> Self {
-        Self { rows, affected_rows }
+        Self {
+            rows,
+            affected_rows,
+        }
     }
 
     /// Create an empty result
