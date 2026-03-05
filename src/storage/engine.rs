@@ -3,6 +3,7 @@
 
 use crate::executor::TableInfo;
 use crate::types::{SqlResult, Value};
+use std::collections::HashMap;
 
 /// Record type - a single row of values
 pub type Record = Vec<Value>;
@@ -14,24 +15,24 @@ pub trait StorageEngine: Send + Sync {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
     /// Insert rows into a table
-    fn insert(&self, table: &str, records: Vec<Record>) -> SqlResult<()>;
+    fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
 
     /// Delete rows matching a filter
-    fn delete(&self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
+    fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
 
     /// Update rows matching a filter
     fn update(
-        &self,
+        &mut self,
         table: &str,
         _filters: &[Value],
         _updates: &[(usize, Value)],
     ) -> SqlResult<usize>;
 
     /// Create a new table
-    fn create_table(&self, info: &TableInfo) -> SqlResult<()>;
+    fn create_table(&mut self, info: &TableInfo) -> SqlResult<()>;
 
     /// Drop a table
-    fn drop_table(&self, table: &str) -> SqlResult<()>;
+    fn drop_table(&mut self, table: &str) -> SqlResult<()>;
 
     /// Get table metadata
     fn get_table_info(&self, table: &str) -> SqlResult<TableInfo>;
@@ -43,14 +44,100 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_index(
-        &self,
-        table: &str,
-        column: &str,
-    ) -> SqlResult<()>;
+    fn create_index(&self, table: &str, column: &str) -> SqlResult<()>;
 
     /// Drop an index from a table
     fn drop_index(&self, table: &str, column: &str) -> SqlResult<()>;
+}
+
+/// In-memory storage implementation for testing and caching
+pub struct MemoryStorage {
+    tables: HashMap<String, Vec<Record>>,
+    table_infos: HashMap<String, TableInfo>,
+}
+
+impl MemoryStorage {
+    pub fn new() -> Self {
+        Self {
+            tables: HashMap::new(),
+            table_infos: HashMap::new(),
+        }
+    }
+}
+
+impl Default for MemoryStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StorageEngine for MemoryStorage {
+    fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
+        Ok(self.tables.get(table).cloned().unwrap_or_default())
+    }
+
+    fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+        self.tables
+            .entry(table.to_string())
+            .or_insert_with(Vec::new)
+            .extend(records);
+        Ok(())
+    }
+
+    fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize> {
+        let mut count = 0;
+        if let Some(records) = self.tables.get_mut(table) {
+            count = records.len();
+            records.clear();
+        }
+        Ok(count)
+    }
+
+    fn update(
+        &mut self,
+        table: &str,
+        _filters: &[Value],
+        _updates: &[(usize, Value)],
+    ) -> SqlResult<usize> {
+        Ok(self.tables.get(table).map(|r| r.len()).unwrap_or(0))
+    }
+
+    fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
+        self.table_infos.insert(info.name.clone(), info.clone());
+        self.tables
+            .entry(info.name.clone())
+            .or_insert_with(Vec::new);
+        Ok(())
+    }
+
+    fn drop_table(&mut self, table: &str) -> SqlResult<()> {
+        self.tables.remove(table);
+        self.table_infos.remove(table);
+        Ok(())
+    }
+
+    fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
+        self.table_infos
+            .get(table)
+            .cloned()
+            .ok_or_else(|| crate::types::SqlError::TableNotFound(table.to_string()))
+    }
+
+    fn has_table(&self, table: &str) -> bool {
+        self.tables.contains_key(table)
+    }
+
+    fn list_tables(&self) -> Vec<String> {
+        self.tables.keys().cloned().collect()
+    }
+
+    fn create_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn drop_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
