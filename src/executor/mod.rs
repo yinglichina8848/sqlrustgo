@@ -866,6 +866,13 @@ impl LocalExecutor {
 
     /// Execute with logical plan (for testing)
     pub fn execute_plan(&self, logical_plan: LogicalPlan) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+        // Handle TableScan directly to get registered table data
+        if let LogicalPlan::TableScan { table_name, .. } = &logical_plan {
+            if let Some(rows) = self.get_table_data(table_name) {
+                return Ok(rows);
+            }
+        }
+
         // Step 2: Optimize the LogicalPlan
         let optimized_plan = self.optimizer.optimize(&logical_plan)?;
 
@@ -944,6 +951,34 @@ mod local_executor_tests {
         // Execute the plan - should return empty rows since no data registered
         let result = executor.execute_plan(logical_plan);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_table_scan_with_data() {
+        let executor = LocalExecutor::new();
+
+        // Register table with data
+        executor.register_table(
+            "users",
+            vec![
+                vec![crate::types::Value::Integer(1), crate::types::Value::Text("Alice".to_string())],
+                vec![crate::types::Value::Integer(2), crate::types::Value::Text("Bob".to_string())],
+                vec![crate::types::Value::Integer(3), crate::types::Value::Text("Charlie".to_string())],
+            ],
+        );
+
+        // Create table scan plan
+        let schema = test_schema();
+        let logical_plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+            filters: vec![],
+            limit: None,
+            schema,
+        };
+
+        let result = executor.execute_plan(logical_plan).unwrap();
+        assert_eq!(result.len(), 3); // 3 rows
     }
 }
 
