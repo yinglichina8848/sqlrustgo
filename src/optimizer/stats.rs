@@ -10,10 +10,12 @@
 //! - StatisticsProvider trait: 统计信息提供者接口
 //! - TableStats: 表级统计信息结构
 //! - ColumnStats: 列级统计信息结构
+//! - StatsCollector: 统计信息收集器
 
 use std::collections::HashMap;
 use thiserror::Error;
 
+use crate::storage::StorageEngine;
 use crate::types::Value;
 
 /// Statistics provider error types
@@ -227,6 +229,204 @@ impl StatisticsProvider for InMemoryStatisticsProvider {
         }
         // In-memory provider doesn't persist, so we just validate
         Ok(())
+    }
+}
+
+/// StatsCollector trait - for collecting statistics from tables
+///
+/// # What
+/// 统计信息收集器接口，从表中收集统计信息
+///
+/// # Why
+/// CBO 需要实时的表统计信息来估算查询成本
+///
+/// # How
+/// - collect_table_stats 方法收集表的完整统计信息
+/// - collect_row_count 方法只收集行数
+/// - collect_column_stats 方法收集列级统计信息
+pub trait StatsCollector: Send + Sync {
+    /// Collect statistics for a table
+    fn collect_table_stats(
+        &self,
+        storage: &dyn StorageEngine,
+        table: &str,
+    ) -> StatsResult<TableStats>;
+
+    /// Collect row count for a table
+    fn collect_row_count(&self, storage: &dyn StorageEngine, table: &str) -> StatsResult<u64>;
+
+    /// Collect column statistics
+    fn collect_column_stats(
+        &self,
+        storage: &dyn StorageEngine,
+        table: &str,
+        column: &str,
+        column_index: usize,
+    ) -> StatsResult<ColumnStats>;
+}
+
+/// Default statistics collector implementation
+#[derive(Debug, Clone, Default)]
+pub struct DefaultStatsCollector;
+
+impl DefaultStatsCollector {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl StatsCollector for DefaultStatsCollector {
+    fn collect_table_stats(
+        &self,
+        storage: &dyn StorageEngine,
+        table: &str,
+    ) -> StatsResult<TableStats> {
+        let records = storage
+            .scan(table)
+            .map_err(|e| StatsError::UpdateFailed(e.to_string()))?;
+        let row_count = records.len() as u64;
+
+        let mut column_stats = HashMap::new();
+
+        if let Ok(table_info) = storage.get_table_info(table) {
+            for (idx, col_meta) in table_info.columns.iter().enumerate() {
+                let col_stats = self.collect_column_stats(storage, table, &col_meta.name, idx)?;
+                column_stats.insert(col_meta.name.clone(), col_stats);
+            }
+        }
+
+        Ok(TableStats::new(table)
+            .with_row_count(row_count)
+            .with_last_updated(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            )
+            .with_column_stats(column_stats))
+    }
+
+    fn collect_row_count(&self, storage: &dyn StorageEngine, table: &str) -> StatsResult<u64> {
+        let records = storage
+            .scan(table)
+            .map_err(|e| StatsError::UpdateFailed(e.to_string()))?;
+        Ok(records.len() as u64)
+    }
+
+    fn collect_column_stats(
+        &self,
+        storage: &dyn StorageEngine,
+        _table: &str,
+        column: &str,
+        column_index: usize,
+    ) -> StatsResult<ColumnStats> {
+        let records = storage
+            .scan(_table)
+            .map_err(|e| StatsError::UpdateFailed(e.to_string()))?;
+
+        let mut null_count: u64 = 0;
+        let mut distinct_values: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut min_value: Option<Value> = None;
+        let mut max_value: Option<Value> = None;
+        let mut sum: f64 = 0.0;
+        let mut numeric_count: u64 = 0;
+
+        for record in &records {
+            if let Some(value) = record.get(column_index) {
+                // Count nulls
+                if matches!(value, Value::Null) {
+                    null_count += 1;
+                    continue;
+                }
+
+                // Track distinct values
+                distinct_values.insert(value.to_string());
+
+                // Track min/max
+                match value {
+                    Value::Integer(i) => {
+                        let v = *i as f64;
+                        sum += v;
+                        numeric_count += 1;
+                        match min_value {
+                            None => min_value = Some(value.clone()),
+                            Some(Value::Integer(min_i)) if *i < min_i => {
+                                min_value = Some(value.clone())
+                            }
+                            _ => {}
+                        }
+                        match max_value {
+                            None => max_value = Some(value.clone()),
+                            Some(Value::Integer(max_i)) if *i > max_i => {
+                                max_value = Some(value.clone())
+                            }
+                            _ => {}
+                        }
+                    }
+                    Value::Float(f) => {
+                        sum += *f;
+                        numeric_count += 1;
+                        match min_value {
+                            None => min_value = Some(value.clone()),
+                            Some(Value::Float(min_f)) if *f < min_f => {
+                                min_value = Some(value.clone())
+                            }
+                            _ => {}
+                        }
+                        match max_value {
+                            None => max_value = Some(value.clone()),
+                            Some(Value::Float(max_f)) if *f > max_f => {
+                                max_value = Some(value.clone())
+                            }
+                            _ => {}
+                        }
+                    }
+                    Value::Text(_) | Value::Blob(_) => {
+                        // For non-numeric types, just track min/max lexicographically
+                        match &min_value {
+                            None => min_value = Some(value.clone()),
+                            Some(Value::Text(_)) | Some(Value::Blob(_)) => {
+                                if value.to_string() < min_value.as_ref().unwrap().to_string() {
+                                    min_value = Some(value.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                        match &max_value {
+                            None => max_value = Some(value.clone()),
+                            Some(Value::Text(_)) | Some(Value::Blob(_)) => {
+                                if value.to_string() > max_value.as_ref().unwrap().to_string() {
+                                    max_value = Some(value.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let avg_value = if numeric_count > 0 {
+            Some(sum / numeric_count as f64)
+        } else {
+            None
+        };
+
+        Ok(ColumnStats::new(column)
+            .with_distinct_count(distinct_values.len() as u64)
+            .with_null_count(null_count)
+            .with_range(min_value, max_value)
+            .with_average(avg_value.unwrap_or(0.0)))
+    }
+}
+
+impl TableStats {
+    /// Add multiple column stats at once
+    pub fn with_column_stats(mut self, stats: HashMap<String, ColumnStats>) -> Self {
+        self.column_stats = stats;
+        self
     }
 }
 
