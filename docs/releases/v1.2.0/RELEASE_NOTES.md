@@ -1,22 +1,59 @@
 # SQLRustGo v1.2.0 Release Notes
 
-> **版本**: v1.2.0  
-> **代号**: Vector Engine  
-> **发布日期**: 待定  
+> **版本**: v1.2.0
+> **代号**: Vector Engine
+> **发布日期**: 待定
 > **状态**: 🔄 开发中
+> **版本类型**: 🏗️ 架构重构 + 接口抽象
 
 ---
 
 ## 版本亮点
 
-v1.2.0 是性能优化版本，核心目标是支持 100万行级数据处理。
+v1.2.0 是**架构重构和接口抽象版本**，核心目标是为 v2.0 分布式架构打基础，同时提升性能到百万行级。
 
 ### 🚀 核心特性
 
-- **向量化执行**: RecordBatch + ColumnarArray 列式内存布局
-- **统计信息**: TableStats + ColumnStats 支持成本估算
-- **简化 CBO**: 基础成本优化器
-- **网络层增强**: 异步服务器完善
+- **🏗️ 架构重构**: 抽象存储引擎、执行器、统计信息接口，为分布式做准备
+- **📐 接口抽象**: 定义 RecordBatch、Array、Operator、CostModel 等核心 trait
+- **🚀 性能提升**: 向量化执行优化，支持百万行数据处理
+- **🔄 向后兼容**: 现有 API 保持兼容，平滑升级
+
+---
+
+## 架构变更说明
+
+### 架构演进
+
+```
+v1.1.x 架构                    v1.2.0 架构 (抽象化)
+┌─────────────┐               ┌─────────────────────┐
+│ FileStorage │               │ StorageEngine trait │
+└─────────────┘               │   ├── FileStorage   │
+                              │   └── MemoryStorage │
+┌─────────────┐               └─────────────────────┘
+│ RowExecutor │               ┌─────────────────────┐
+└─────────────┘               │  VectorizedExecutor │
+                              │  (基于 RecordBatch) │
+┌─────────────┐               └─────────────────────┘
+│ SimpleStats │               ┌─────────────────────┐
+└─────────────┘               │  CostModel trait    │
+                              │  + StatsCollector   │
+┌─────────────┐               └─────────────────────┐
+│ Hardcoded   │               ┌─────────────────────┐
+│ Optimizer   │               │ Optimizer (Memo)    │
+└─────────────┘               └─────────────────────┘
+```
+
+### 接口抽象层
+
+| 模块 | v1.1.0 | v1.2.0 | 变化类型 |
+|------|--------|--------|----------|
+| 存储 | FileStorage (具体实现) | StorageEngine trait | 抽象化 |
+| 执行 | RowExecutor (行式) | VectorizedExecutor + RecordBatch | 重构 |
+| 统计 | 简单计数器 | TableStats + ColumnStats + StatsCollector | 新增 |
+| 优化 | 硬编码规则 | CostModel trait + Memo 结构 | 抽象化 |
+| 网络 | 同步处理 | 异步框架预留 | 预留 |
 
 ---
 
@@ -26,40 +63,39 @@ v1.2.0 是性能优化版本，核心目标是支持 100万行级数据处理。
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| RecordBatch | 列式内存布局 | 📝 计划中 |
-| ColumnarArray trait | 列式数组抽象 | 📝 计划中 |
-| 向量化表达式 | 批量表达式计算 | 📝 计划中 |
-| 向量化 Filter | 批量过滤 | 📝 计划中 |
-| 向量化 Projection | 批量投影 | 📝 计划中 |
-| 向量化聚合 | 批量聚合 | 📝 计划中 |
+| RecordBatch | 列式内存布局 + 网络传输支持 | ✅ 已完成 |
+| ColumnarArray trait | 列式数组抽象 | ✅ 已完成 |
+| 向量化表达式 | 批量表达式计算 | ✅ 已完成 |
+| 向量化 Filter | 批量过滤 | ✅ 已完成 |
+| 向量化 Projection | 批量投影 | ✅ 已完成 |
+| 向量化聚合 | 批量聚合 | ✅ 已完成 |
 
 ### 统计信息 (P0)
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| TableStats | 表级统计信息 | 📝 计划中 |
-| ColumnStats | 列级统计信息 | 📝 计划中 |
-| 统计信息收集器 | 自动收集统计 | 📝 计划中 |
-| 统计信息持久化 | 存储到磁盘 | 📝 计划中 |
-| ANALYZE 命令 | 手动收集统计 | 📝 计划中 |
+| TableStats | 表级统计信息 | ✅ 已完成 |
+| ColumnStats | 列级统计信息 | ✅ 已完成 |
+| 统计信息收集器 | 自动收集统计 | ✅ 已完成 |
+| 统计信息持久化 | 存储到磁盘 | ✅ 已完成 |
+| ANALYZE 命令 | 手动收集统计 | ✅ 已完成 |
 
 ### 简化 CBO (P1)
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| CostModel | 成本模型接口 | 📝 计划中 |
-| 基础成本估算 | 扫描/过滤成本 | 📝 计划中 |
-| Join 选择优化 | Join 顺序优化 | 📝 计划中 |
-| 索引选择优化 | 索引使用决策 | 📝 计划中 |
+| CostModel | 成本模型接口 | ✅ 已完成 |
+| 基础成本估算 | 扫描/过滤成本 | ✅ 已完成 |
+| Join 选择优化 | Join 顺序优化 | ✅ 已完成 |
+| 索引选择优化 | 索引使用决策 | ⏳ 待完善 |
 
-### 网络层增强 (P1)
+### 存储抽象 (P1)
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| 会话管理完善 | 连接状态管理 | 📝 计划中 |
-| 交互模式 (REPL) | 命令行交互 | 📝 计划中 |
-| 配置文件支持 | 外部配置 | 📝 计划中 |
-| 认证机制完善 | 用户认证 | 📝 计划中 |
+| StorageEngine trait | 存储引擎抽象接口 | ✅ 已完成 |
+| FileStorage | 文件存储实现 | ✅ 已完成 |
+| MemoryStorage | 内存存储实现 | ✅ 已完成 |
 
 ---
 
@@ -79,6 +115,13 @@ v1.2.0 是性能优化版本，核心目标是支持 100万行级数据处理。
 ### 新增 API
 
 ```rust
+// Storage Engine Trait
+pub trait StorageEngine {
+    fn read(&self, table: &str) -> Result<Vec<Record>>;
+    fn write(&self, table: &str, records: Vec<Record>) -> Result<()>;
+    fn scan(&self, table: &str, filter: Option<Filter>) -> Result<Vec<Record>>;
+}
+
 // RecordBatch
 pub struct RecordBatch {
     schema: Arc<Schema>,
@@ -113,6 +156,21 @@ pub struct CostModel {
 
 - ✅ 向后兼容 v1.1.0 API
 - ✅ 现有代码无需修改
+- ✅ 存储引擎可替换
+
+---
+
+## 为 v2.0 做准备
+
+v1.2.0 的接口抽象为 v2.0 分布式架构打基础：
+
+| 接口 | v2.0 扩展方向 |
+|------|--------------|
+| StorageEngine | 可扩展为分布式存储 (Sharding) |
+| RecordBatch | 适合网络传输 (Serialization) |
+| CostModel | 可扩展网络成本计算 |
+| Memo | 支持分布式优化 |
+| Operator | 可转换为远程执行 |
 
 ---
 
@@ -123,6 +181,7 @@ pub struct CostModel {
 1. 更新依赖版本
 2. 无需修改现有代码
 3. 可选：使用新的向量化 API
+4. 可选：使用 StorageEngine trait 切换存储实现
 
 详见 [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md)
 
@@ -158,3 +217,4 @@ v1.3.0 计划：
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-03-04 | 初始版本（计划中） |
+| 1.1 | 2026-03-05 | 添加架构重构说明 |
