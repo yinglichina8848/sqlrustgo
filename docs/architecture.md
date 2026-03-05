@@ -1,337 +1,155 @@
 # SQLRustGo 架构设计文档
 
-## 1. 系统概览
+## 概述
 
-SQLRustGo 是一个用 Rust 从零实现的轻量级关系型数据库，支持 SQL-92 子集。专为学习和研究数据库内核设计，同时具备生产级别的代码质量。
+SQLRustGo 是一个用 Rust 实现的 SQL-92 数据库管理系统，采用分层架构设计。
 
-### 设计目标
+## 系统架构图
 
-- **简洁性**: 代码结构清晰，易于理解和学习
-- **完整性**: 实现数据库核心功能（解析、执行、存储、事务）
-- **可扩展性**: 模块化设计，便于功能扩展
-- **性能**: 合理的性能表现，支持索引优化
-
----
-
-## 2. 架构图
-
-### 2.1 整体架构
-
-```mermaid
-graph TB
-    subgraph Client
-        REPL[REPL CLI]
-        Network[Network Server]
-    end
-
-    subgraph QueryProcessing
-        Lexer
-        Parser
-    end
-
-    subgraph Execution
-        Executor
-    end
-
-    subgraph Storage
-        BufferPool
-        FileStorage
-        BPlusTree
-    end
-
-    subgraph Transaction
-        TxManager
-        WAL
-    end
-
-    REPL --> Lexer
-    Network --> Lexer
-    Lexer --> Parser
-    Parser --> Executor
-    Executor --> BufferPool
-    Executor --> TxManager
-    BufferPool --> FileStorage
-    BufferPool --> BPlusTree
+```
+┌─────────────────────────────────────┐
+│           main.rs (REPL)             │
+├─────────────────────────────────────┤
+│           executor/                 │  ← 查询执行引擎
+├─────────────────────────────────────┤
+│           parser/                    │  ← SQL → AST
+│           lexer/                    │  ← SQL → Tokens
+├─────────────────────────────────────┤
+│           storage/                   │  ← Page, BufferPool, B+ Tree
+├─────────────────────────────────────┤
+│         transaction/                 │  ← WAL, TxManager
+├─────────────────────────────────────┤
+│           network/                   │  ← TCP 服务器/客户端
+├─────────────────────────────────────┤
+│           types/                     │  ← Value, SqlError
+└─────────────────────────────────────┘
 ```
 
-### 2.2 查询处理流程
+## 核心模块
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Lexer
-    participant Parser
-    participant Executor
-    participant Storage
-    participant BufferPool
-    participant FileStorage
+### 1. Lexer (词法分析器)
 
-    Client->>Lexer: SQL String
-    Lexer-->>Parser: Token Stream
-    Parser-->>Executor: AST (Statement)
-    Executor->>Storage: get_table()
-    Storage->>BufferPool: request page
-    BufferPool->>FileStorage: read page
-    FileStorage-->>BufferPool: Page data
-    BufferPool-->>Storage: Page
-    Storage-->>Executor: Table data
-    Executor-->>Client: ExecutionResult
+**What (是什么)**: Lexer 将原始 SQL 字符串分解为 Token 序列，是编译器的第一阶段。
+
+**Why (为什么)**: Parser 需要结构化的 Token 而不是原始字符串，Lexer 负责这项转换工作。
+
+**How (如何实现)**:
+- 逐字符扫描输入
+- 识别关键字、标识符、字面量、运算符
+- 跳过空白字符
+- 使用有限状态机处理不同 token 类型
+
+### 2. Parser (解析器)
+
+**What (是什么)**: Parser 将 Lexer 输出的 Token 序列转换为抽象语法树 (AST)。
+
+**Why (为什么)**: Token 序列只是单词的列表，无法表达 SQL 语句的层级结构。AST 将单词组织成有意义的树结构，表示查询的语义。
+
+**How (如何实现)**:
+- 递归下降解析器：自顶向下处理 SQL 语句
+- 每个 Statement 类型有对应的 parse_xxx 方法
+- 支持：SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE
+- 表达式解析支持基本二元运算
+
+### 3. Executor (执行器)
+
+**What (是什么)**: Executor 负责执行 Parser 生成的 AST，调用存储层完成数据操作。
+
+**Why (为什么)**: AST 只是查询的抽象表示，需要执行器将其转化为具体的数据库操作。
+
+**How (如何实现)**:
+- 遍历 AST 节点
+- 调用 Storage 层 API 完成数据读写
+- 返回执行结果 (影响的行数、结果集等)
+
+### 4. Storage (存储层)
+
+**What (是什么)**: Storage 层负责数据的持久化和检索，包含 Page 管理、BufferPool 缓存和 B+ Tree 索引。
+
+**Why (为什么)**: 数据库需要高效地存储和检索大量数据，Storage 层提供这一核心能力。
+
+**How (如何实现)**:
+- **Page**: 固定大小的数据块 (4096 字节)
+- **BufferPool**: 内存缓存池，使用 LRU 策略
+- **B+ Tree**: 磁盘友好的索引结构，支持高效范围查询
+- **FileStorage**: 基于文件的数据持久化
+
+### 5. Transaction (事务管理)
+
+**What (是什么)**: Transaction 模块提供 ACID 事务支持，通过 Write-Ahead Log (WAL) 实现。
+
+**Why (为什么)**: 事务是数据库的核心特性，保证数据一致性。
+
+**How (如何实现)**:
+- **WAL**: 写前日志，所有修改先记录日志
+- **TxManager**: 事务状态管理，支持 BEGIN/COMMIT/ROLLBACK
+- 崩溃恢复时重放 WAL 日志
+
+### 6. Network (网络层)
+
+**What (是什么)**: 网络通信模块，支持客户端-服务器架构。
+
+**Why (为什么)**: 单一进程数据库只能单机使用，网络支持让数据库可以服务多个客户端。
+
+**How (如何实现)**:
+- TCP 服务器监听连接
+- MySQL 协议兼容 (部分)
+- 每个连接一个 Handler 处理
+
+### 7. Types (类型系统)
+
+**What (是什么)**: Types 模块定义 SQL 数据类型的运行时表示。
+
+**Why (为什么)**: SQL 有多种数据类型，需要统一的内部表示。
+
+**How (如何实现)**:
+- Value 枚举: NULL, Boolean, Integer, Float, Text, Blob
+- SqlError 枚举: 统一的错误类型
+- 支持类型转换和序列化
+
+## SQL 执行数据流
+
+```
+用户输入 SQL
+     ↓
+Lexer: "SELECT * FROM users" → [SELECT, STAR, FROM, IDENTIFIER(users)]
+     ↓
+Parser: Tokens → Statement::Select { table: "users", columns: [*], where_clause: None }
+     ↓
+Executor: 根据 Statement 类型调用 Storage 层
+     ↓
+Storage: 读取数据、构建结果
+     ↓
+返回 ExecutionResult { rows: [...], columns: [...], rows_affected: n }
 ```
 
-### 2.3 事务处理流程
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant TxManager
-    participant WAL
-    participant Storage
-
-    Client->>TxManager: BEGIN
-    TxManager->>WAL: Log BEGIN
-    WAL-->>Storage: Flush
-    Client->>TxManager: COMMIT
-    TxManager->>WAL: Log COMMIT
-    WAL-->>Storage: Flush
-    Storage-->>Client: Success
-```
-
----
-
-## 3. 模块说明
-
-### 3.1 Lexer（词法分析器）
-
-**位置**: `src/lexer/`
-
-**功能**: 将 SQL 字符串转换为 Token 流
-
-**核心结构**:
-- `Lexer`: 主词法分析器
-- `Token`: Token 类型枚举
-
-**支持的 Token 类型**:
-| 类型 | 说明 |
-|------|------|
-| Keywords | SQL 保留字 (SELECT, FROM, WHERE...) |
-| Identifiers | 表名/列名 |
-| Literals | 字面量 (数字、字符串) |
-| Operators | 运算符 (=, >, <...) |
-| Punctuation | 标点符号 ((), ,, ;) |
-
-### 3.2 Parser（语法分析器）
-
-**位置**: `src/parser/`
-
-**功能**: 将 Token 流转换为抽象语法树 (AST)
-
-**核心结构**:
-- `Parser`: 主解析器
-- `Statement`: SQL 语句枚举
-- `Expression`: 表达式枚举
-
-**支持的语句**:
-| 语句 | 说明 |
-|------|------|
-| SELECT | 查询数据 |
-| INSERT | 插入数据 |
-| UPDATE | 更新数据 |
-| DELETE | 删除数据 |
-| CREATE TABLE | 创建表 |
-| DROP TABLE | 删除表 |
-
-### 3.3 Executor（执行引擎）
-
-**位置**: `src/executor/`
-
-**功能**: 执行 SQL 语句，返回结果
-
-**核心结构**:
-- `ExecutionEngine`: 执行引擎
-- `ExecutionResult`: 执行结果
-
-**执行流程**:
-1. 接收解析后的 Statement
-2. 根据语句类型分发到对应处理函数
-3. 通过 Storage 层读取/写入数据
-4. 支持索引优化（WHERE 子句）
-5. 返回 ExecutionResult
-
-### 3.4 Storage（存储层）
-
-**位置**: `src/storage/`
-
-**子模块**:
-
-#### BufferPool
-- 内存缓冲池，缓存磁盘页
-- LRU 淘汰策略
-- 减少磁盘 I/O
-
-#### FileStorage
-- 文件持久化存储
-- 表数据的序列化/反序列化
-- 支持 JSON 格式
-
-#### BPlusTree
-- B+ 树索引结构
-- O(log n) 查找复杂度
-- 支持范围查询
-
-### 3.5 Transaction（事务管理）
-
-**位置**: `src/transaction/`
-
-**子模块**:
-
-#### WAL (Write-Ahead Log)
-- 预写日志
-- 记录事务操作
-- 保证持久性
-
-#### TransactionManager
-- 事务生命周期管理
-- 状态机: Active → Committed/Aborted
-
-### 3.6 Network（网络层）
-
-**位置**: `src/network/`
-
-**功能**: MySQL 风格协议支持
-
-**协议特性**:
-- TCP 连接
-- MySQL Wire Protocol (版本 10)
-- 支持查询执行
-
-**包类型**:
-| 类型 | 说明 |
-|------|------|
-| OK Packet | 成功响应 |
-| Error Packet | 错误响应 |
-| EOF Packet | 结果集结束 |
-| Data Packet | 行数据 |
-
-### 3.7 Types（类型系统）
-
-**位置**: `src/types/`
-
-**SQL 数据类型**:
-| SQL 类型 | Rust 类型 | 说明 |
-|----------|-----------|------|
-| NULL | Null | 空值 |
-| BOOLEAN | bool | 布尔值 |
-| INTEGER | i64 | 64位整数 |
-| FLOAT | f64 | 64位浮点 |
-| TEXT | String | 字符串 |
-| BLOB | Vec<u8> | 二进制数据 |
-
----
-
-## 4. 数据流
-
-### 4.1 SELECT 查询流程
-
-```mermaid
-flowchart TD
-    A[SQL: SELECT * FROM users WHERE id = 1] --> B[Lexer: Tokenize]
-    B --> C[Parser: Parse to AST]
-    C --> D[Executor: Execute SELECT]
-    D --> E{Use Index?}
-    E -->|Yes| F[B+ Tree Search]
-    E -->|No| G[Full Table Scan]
-    F --> H[Filter by WHERE]
-    G --> H
-    H --> I[Project Columns]
-    I --> J[Return Result]
-```
-
-### 4.2 INSERT 流程
-
-```mermaid
-flowchart TD
-    A[SQL: INSERT INTO users VALUES...] --> B[Lexer + Parser]
-    B --> C[Executor: Execute INSERT]
-    C --> D[Storage: Get Table]
-    D --> E[Add Row to Table]
-    E --> F{Update Index?}
-    F -->|Yes| G[B+ Tree Insert]
-    F -->|No| H[Skip]
-    G --> I[Persist to Disk]
-    H --> I
-    I --> J[Return Result]
-```
-
----
-
-## 5. 关键设计决策
-
-### 5.1 存储格式
-
-使用 JSON 格式进行持久化，简化实现，便于调试。
-
-**优点**:
-- 人类可读
-- 便于调试
-- 无需额外依赖
-
-**缺点**:
-- 性能不如二进制格式
-- 文件体积较大
-
-### 5.2 索引策略
-
-使用 B+ 树作为索引结构，叶子节点通过链表连接，支持高效范围查询。
-
-**设计**:
-- MAX_KEYS = 4 (小阶B+树)
-- 支持等值查询和范围查询
-- 自动更新索引
-
-### 5.3 事务日志
-
-采用 Write-Ahead Log (WAL) 机制，保证事务持久性。
-
-**记录类型**:
-- BEGIN: 事务开始
-- COMMIT: 事务提交
-- ROLLBACK: 事务回滚
-
----
-
-## 6. 限制与已知问题
-
-- 不支持 JOIN 操作
-- 不支持子查询
-- 不支持事务嵌套
-- 不支持约束（外键、唯一键等）
-- 索引优化有限
-- 并发控制简化
-
----
-
-## 7. 未来规划
-
-### 短期
-- [ ] 完善测试覆盖率
-- [ ] 性能优化
-- [ ] 错误处理增强
-
-### 中期
-- [ ] JOIN 支持
-- [ ] 子查询支持
-- [ ] 约束支持
-
-### 长期
-- [ ] 完整 SQL-92 支持
-- [ ] 查询优化器
-- [ ] MVCC 并发控制
-
----
-
-## 8. 参考资料
-
-- 《Database System Concepts》- Silberschatz
-- 《Architecture of a Database System》- Stonebraker
-- MySQL Wire Protocol Documentation
-- SQL-92 Standard
+## 错误处理机制
+
+- **ParseError**: SQL 语法错误
+- **ExecutionError**: 查询执行错误
+- **TypeMismatch**: 类型不匹配
+- **TableNotFound**: 表不存在
+- **ColumnNotFound**: 列不存在
+- **IoError**: I/O 错误
+
+所有错误都实现 `std::error::Error` trait，支持 `Display` 输出。
+
+## 扩展点
+
+1. **新增 SQL 语句**: 在 Parser 添加新的 `parse_xxx` 方法，在 Executor 添加对应处理
+2. **新增数据类型**: 在 Types 模块添加新的 Value 变体
+3. **新存储引擎**: 实现 Storage trait
+4. **新网络协议**: 在 Network 模块添加协议处理
+
+## 测试覆盖
+
+| 模块 | 行覆盖率 | 函数覆盖率 |
+|------|---------|-----------|
+| lexer/token.rs | 100% | 100% |
+| types/error.rs | 100% | 100% |
+| storage/file_storage.rs | 98.94% | 95.65% |
+| storage/buffer_pool.rs | 97.96% | 100% |
+| transaction/manager.rs | 93.69% | 80% |
+| executor/mod.rs | 86.14% | 92.31% |
+| parser/mod.rs | 78.74% | 96.15% |
+| **总体** | **82.24%** | **84.73%** |
