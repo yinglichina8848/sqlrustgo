@@ -232,6 +232,7 @@ impl<'a> Lexer<'a> {
                     "ROLLBACK" => Token::Rollback,
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
+                    "ANALYZE" => Token::Analyze,
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
                     "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
