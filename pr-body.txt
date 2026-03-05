@@ -1,0 +1,20 @@
+## Summary
+
+Resolve all Clippy warnings to pass code quality gate for v1.2.0 release.
+
+### Changes
+
+1. **engine.rs**: Replace `or_insert_with(Vec::new)` with `or_default()`
+2. **mod.rs**: Replace `unwrap_or_else` with `unwrap_or_default()`
+3. **benchmark.rs**: Move `use std::time::Instant` inside `#[cfg(test)]` module
+4. **page.rs**: Fix unused `offset` variable initialization
+5. **tree.rs**: Fix identical if blocks, add `#[allow(dead_code)]` for constants
+6. **wal.rs**: Add `#[allow(dead_code)]` for unused fields
+7. **batch.rs**: Add `#[allow(dead_code)]` for v1.2.0 vectorization types
+
+### Verification
+
+- cargo clippy passes
+- cargo build passes
+
+Refs: #177
