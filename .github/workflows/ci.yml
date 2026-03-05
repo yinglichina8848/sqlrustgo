@@ -5,14 +5,16 @@ on:
     branches:
       - main
       - baseline
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - release/alpha/**
+      - release/beta/**
+      - release/*-rc*
   pull_request:
     branches:
       - main
       - baseline
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - release/alpha/**
+      - release/beta/**
+      - release/*-rc*
 
 env:
   CARGO_TERM_COLOR: always
