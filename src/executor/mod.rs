@@ -19,6 +19,10 @@
     clippy::needless_borrow
 )]
 
+pub mod executor;
+
+pub use executor::{Executor, ExecutorResult};
+
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
 };
@@ -161,10 +165,7 @@ impl ExecutionEngine {
 
         // Get indexed columns before mutating
         let indexed_columns: Vec<(usize, String)> = {
-            let table_data = self
-                .storage
-                .get_table(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
             table_data
                 .info
                 .columns
@@ -180,10 +181,7 @@ impl ExecutionEngine {
         let mut index_updates: Vec<(String, i64, u32)> = Vec::new(); // (column_name, key, row_id)
 
         {
-            let table_data = self
-                .storage
-                .get_table_mut(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
             for row_expr in &stmt.values {
                 let row: Vec<Value> = row_expr
                     .iter()
@@ -238,10 +236,7 @@ impl ExecutionEngine {
 
         // Build column index map from table schema
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self
-                .storage
-                .get_table(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
             table_data
                 .info
                 .columns
@@ -252,10 +247,7 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self
-                .storage
-                .get_table_mut(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
             let mut count = 0;
 
             // Evaluate WHERE clause if present
@@ -302,10 +294,7 @@ impl ExecutionEngine {
 
         // Build column index map for WHERE clause evaluation
         let column_indices: std::collections::HashMap<String, usize> = {
-            let table_data = self
-                .storage
-                .get_table(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table(&stmt.table).unwrap();
             table_data
                 .info
                 .columns
@@ -316,10 +305,7 @@ impl ExecutionEngine {
         };
 
         let rows_affected = {
-            let table_data = self
-                .storage
-                .get_table_mut(&stmt.table)
-                .ok_or_else(|| SqlError::TableNotFound(stmt.table.clone()))?;
+            let table_data = self.storage.get_table_mut(&stmt.table).unwrap();
             let original_count = table_data.rows.len();
 
             // If WHERE clause is present, filter rows; otherwise delete all
@@ -786,3 +772,5 @@ mod tests {
         assert_eq!(table.rows.len(), 0);
     }
 }
+
+mod batch;
