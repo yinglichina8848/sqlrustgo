@@ -8,6 +8,6 @@ pub mod page;
 
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
-pub use engine::StorageEngine;
+pub use engine::{MemoryStorage, StorageEngine};
 pub use file_storage::FileStorage;
 pub use page::Page;
