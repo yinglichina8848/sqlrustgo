@@ -44,7 +44,7 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_index(&self, table: &str, column: &str) -> SqlResult<()>;
+    fn create_index(&self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
     /// Drop an index from a table
     fn drop_index(&self, table: &str, column: &str) -> SqlResult<()>;
@@ -131,7 +131,7 @@ impl StorageEngine for MemoryStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn create_index(&self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
         Ok(())
     }
 
