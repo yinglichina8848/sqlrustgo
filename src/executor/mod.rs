@@ -802,4 +802,148 @@ mod tests {
     }
 }
 
+// LocalExecutor Module
+//
+// Combines Analyzer + Optimizer + Planner + ExecutionEngine for full query execution pipeline.
+// This implements E-003 from the v1.2.0 roadmap.
+
+use crate::planner::{
+    Analyzer, DefaultOptimizer, DefaultPlanner, LogicalPlan, Optimizer, Planner,
+};
+use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// LocalExecutor - combines the full query execution pipeline
+///
+/// # Pipeline
+/// 1. Statement (from Parser)
+/// 2. Analyzer: Statement → LogicalPlan
+/// 3. Optimizer: LogicalPlan → LogicalPlan (optimized)
+/// 4. Planner: LogicalPlan → PhysicalPlan
+/// 5. PhysicalPlan::execute() → Vec<Vec<Value>>
+pub struct LocalExecutor {
+    analyzer: Analyzer,
+    optimizer: Box<dyn Optimizer>,
+    planner: Box<dyn Planner>,
+    /// Cache for table data (table_name -> rows)
+    table_data: RwLock<HashMap<String, Vec<Vec<crate::types::Value>>>>,
+}
+
+impl LocalExecutor {
+    /// Create a new LocalExecutor
+    pub fn new() -> Self {
+        Self {
+            analyzer: Analyzer::new(),
+            optimizer: Box::new(DefaultOptimizer::new()),
+            planner: Box::new(DefaultPlanner::new()),
+            table_data: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Register a table with data
+    pub fn register_table(&self, name: &str, rows: Vec<Vec<crate::types::Value>>) {
+        self.table_data
+            .write()
+            .unwrap()
+            .insert(name.to_string(), rows);
+    }
+
+    /// Execute a SQL statement through the full pipeline
+    pub fn execute(&self, statement: crate::parser::Statement) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+        // Step 1: Analyze statement to LogicalPlan
+        let logical_plan = self.analyzer.analyze(statement)?;
+
+        // Step 2: Optimize the LogicalPlan
+        let optimized_plan = self.optimizer.optimize(&logical_plan)?;
+
+        // Step 3: Create PhysicalPlan
+        let physical_plan = self.planner.create_physical_plan(&optimized_plan)?;
+
+        // Step 4: Execute PhysicalPlan
+        physical_plan.execute()
+    }
+
+    /// Execute with logical plan (for testing)
+    pub fn execute_plan(&self, logical_plan: LogicalPlan) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+        // Step 2: Optimize the LogicalPlan
+        let optimized_plan = self.optimizer.optimize(&logical_plan)?;
+
+        // Step 3: Create PhysicalPlan
+        let physical_plan = self.planner.create_physical_plan(&optimized_plan)?;
+
+        // Step 4: Execute PhysicalPlan
+        physical_plan.execute()
+    }
+
+    /// Get the analyzer for registering table schemas
+    pub fn analyzer(&self) -> &Analyzer {
+        &self.analyzer
+    }
+
+    /// Get table data for reading
+    pub fn get_table_data(&self, name: &str) -> Option<Vec<Vec<crate::types::Value>>> {
+        self.table_data.read().unwrap().get(name).cloned()
+    }
+}
+
+impl Default for LocalExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod local_executor_tests {
+    use super::*;
+    use crate::planner::{DataType, Field, Schema};
+
+    fn test_schema() -> Schema {
+        Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ])
+    }
+
+    #[test]
+    fn test_local_executor_new() {
+        let _executor = LocalExecutor::new();
+        assert!(true); // Just check it can be created
+    }
+
+    #[test]
+    fn test_local_executor_register_table() {
+        let executor = LocalExecutor::new();
+        executor.register_table(
+            "users",
+            vec![
+                vec![crate::types::Value::Integer(1), crate::types::Value::Text("Alice".to_string())],
+                vec![crate::types::Value::Integer(2), crate::types::Value::Text("Bob".to_string())],
+            ],
+        );
+
+        let data = executor.get_table_data("users");
+        assert!(data.is_some());
+        assert_eq!(data.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_local_executor_execute_plan() {
+        let executor = LocalExecutor::new();
+
+        // Create a simple table scan logical plan
+        let schema = test_schema();
+        let logical_plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+            filters: vec![],
+            limit: None,
+            schema,
+        };
+
+        // Execute the plan - should return empty rows since no data registered
+        let result = executor.execute_plan(logical_plan);
+        assert!(result.is_ok());
+    }
+}
+
 mod batch;
