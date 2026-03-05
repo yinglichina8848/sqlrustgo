@@ -10,11 +10,14 @@ pub mod executor;
 pub mod logical_plan;
 pub mod optimizer;
 pub mod physical_plan;
+#[allow(clippy::module_inception)]
+pub mod planner;
 
 pub use analyzer::Analyzer;
 pub use logical_plan::*;
 pub use optimizer::*;
 pub use physical_plan::*;
+pub use planner::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinType {
