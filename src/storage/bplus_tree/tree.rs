@@ -7,9 +7,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Maximum keys per node (fanout) - increased from 4 to 64 for better performance
+#[allow(dead_code)]
 const MAX_KEYS: usize = 64;
 
 /// Minimum keys per node before merge/redistribute
+#[allow(dead_code)]
 const MIN_KEYS: usize = 16;
 
 /// B+ Tree index - In-memory B+ Tree index with serialization support
@@ -190,8 +192,6 @@ impl BPlusTree {
         match &mut internal.children[pos] {
             NodeBoxString::StringLeaf(child) => {
                 if child.keys.len() < MAX_KEYS {
-                    child.insert_sorted(key, value);
-                } else {
                     child.insert_sorted(key, value);
                 }
             }

@@ -79,7 +79,7 @@ impl StorageEngine for MemoryStorage {
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
         self.tables
             .entry(table.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(records);
         Ok(())
     }
@@ -106,7 +106,7 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.insert(info.name.clone(), info.clone());
         self.tables
             .entry(info.name.clone())
-            .or_insert_with(Vec::new);
+            .or_default();
         Ok(())
     }
 

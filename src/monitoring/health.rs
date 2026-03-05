@@ -124,7 +124,8 @@ impl HealthChecker {
             let health = component.check();
             if health.status == HealthStatus::Unhealthy {
                 overall_status = HealthStatus::Unhealthy;
-            } else if health.status == HealthStatus::Degraded && overall_status == HealthStatus::Healthy
+            } else if health.status == HealthStatus::Degraded
+                && overall_status == HealthStatus::Healthy
             {
                 overall_status = HealthStatus::Degraded;
             }
