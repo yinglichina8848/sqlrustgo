@@ -18,8 +18,8 @@ pub mod stats;
 
 pub use plan::{OptimizerError, OptimizerResult};
 pub use stats::{
-    ColumnStats, InMemoryStatisticsProvider, StatisticsProvider, StatsError, StatsResult,
-    TableStats,
+    ColumnStats, FileStatisticsProvider, InMemoryStatisticsProvider, StatisticsProvider,
+    StatsError, StatsResult, TableStats,
 };
 
 /// Optimizer trait - main interface for query optimization
