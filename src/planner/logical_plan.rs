@@ -185,7 +185,10 @@ impl fmt::Display for LogicalPlan {
                 write!(f, "Union: {} inputs", inputs.len())
             }
             LogicalPlan::Update { set_exprs, .. } => {
-                let set_str: Vec<String> = set_exprs.iter().map(|(c, e)| format!("{}={}", c, e)).collect();
+                let set_str: Vec<String> = set_exprs
+                    .iter()
+                    .map(|(c, e)| format!("{}={}", c, e))
+                    .collect();
                 write!(f, "Update: {}", set_str.join(", "))
             }
             LogicalPlan::Delete { .. } => {
