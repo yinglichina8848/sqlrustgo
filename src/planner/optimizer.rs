@@ -51,7 +51,11 @@ pub mod rules {
     impl PredicatePushdown {
         pub fn optimize_recursive(&self, plan: LogicalPlan) -> LogicalPlan {
             match plan {
-                LogicalPlan::Projection { input, expr, schema } => {
+                LogicalPlan::Projection {
+                    input,
+                    expr,
+                    schema,
+                } => {
                     let new_input = Box::new(self.optimize_recursive(*input));
                     LogicalPlan::Projection {
                         input: new_input,
@@ -135,7 +139,11 @@ pub mod rules {
     impl ProjectionPruning {
         fn optimize_recursive(&self, plan: LogicalPlan) -> LogicalPlan {
             match plan {
-                LogicalPlan::Projection { input, expr, schema } => {
+                LogicalPlan::Projection {
+                    input,
+                    expr,
+                    schema,
+                } => {
                     let new_input = Box::new(self.optimize_recursive(*input));
                     LogicalPlan::Projection {
                         input: new_input,
@@ -255,8 +263,13 @@ pub mod rules {
 
         fn fold_plan(&self, plan: LogicalPlan) -> LogicalPlan {
             match plan {
-                LogicalPlan::Projection { input, expr, schema } => {
-                    let folded_exprs: Vec<Expr> = expr.into_iter().map(|e| self.fold_expr(e)).collect();
+                LogicalPlan::Projection {
+                    input,
+                    expr,
+                    schema,
+                } => {
+                    let folded_exprs: Vec<Expr> =
+                        expr.into_iter().map(|e| self.fold_expr(e)).collect();
                     let new_input = Box::new(self.fold_plan(*input));
                     LogicalPlan::Projection {
                         input: new_input,
@@ -332,7 +345,12 @@ pub mod rules {
             }
         }
 
-        fn eval_binary_op(&self, left: &crate::types::Value, op: &Operator, right: &crate::types::Value) -> Option<crate::types::Value> {
+        fn eval_binary_op(
+            &self,
+            left: &crate::types::Value,
+            op: &Operator,
+            right: &crate::types::Value,
+        ) -> Option<crate::types::Value> {
             use crate::types::Value::*;
             use Operator::*;
 
@@ -357,7 +375,11 @@ pub mod rules {
             }
         }
 
-        fn eval_unary_op(&self, value: &crate::types::Value, op: &Operator) -> Option<crate::types::Value> {
+        fn eval_unary_op(
+            &self,
+            value: &crate::types::Value,
+            op: &Operator,
+        ) -> Option<crate::types::Value> {
             use crate::types::Value::*;
             use Operator::*;
 
@@ -418,9 +440,7 @@ impl Optimizer for NoOpOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::planner::{
-        Column, DataType, Field, Schema,
-    };
+    use crate::planner::{Column, DataType, Field, Schema};
     use crate::types::Value;
 
     fn test_schema() -> Schema {
@@ -454,8 +474,7 @@ mod tests {
         let plan = test_table_scan();
         let optimizer = DefaultOptimizer::new();
         let result = optimizer.optimize(&plan).unwrap();
-        assert!(!format!("{}",
-result).is_empty());
+        assert!(!format!("{}", result).is_empty());
     }
 
     #[test]
