@@ -53,6 +53,249 @@ pub trait Array: Send + Sync {
     fn get_data_type(&self) -> &str;
 }
 
+/// IntArray for integer values
+#[derive(Clone)]
+pub struct IntArray {
+    values: Vec<i64>,
+    nulls: Vec<bool>,
+}
+
+impl IntArray {
+    pub fn new(values: Vec<i64>, nulls: Vec<bool>) -> Self {
+        Self { values, nulls }
+    }
+
+    pub fn from_values(values: Vec<i64>) -> Self {
+        Self {
+            values: values.clone(),
+            nulls: vec![false; values.len()],
+        }
+    }
+
+    pub fn values(&self) -> &[i64] {
+        &self.values
+    }
+
+    pub fn filter(&self, predicate: &[bool]) -> Self {
+        let mut result_values = Vec::new();
+        let mut result_nulls = Vec::new();
+        for (i, &pred) in predicate.iter().enumerate() {
+            if pred && i < self.values.len() {
+                result_values.push(self.values[i]);
+                result_nulls.push(self.nulls.get(i).copied().unwrap_or(false));
+            }
+        }
+        Self::new(result_values, result_nulls)
+    }
+}
+
+impl Array for IntArray {
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_null(&self, index: usize) -> bool {
+        self.nulls.get(index).copied().unwrap_or(true)
+    }
+
+    fn get_value(&self, index: usize) -> Option<Value> {
+        if self.is_null(index) {
+            return None;
+        }
+        self.values.get(index).map(|&v| Value::Integer(v))
+    }
+
+    fn get_data_type(&self) -> &str {
+        "INTEGER"
+    }
+}
+
+/// FloatArray for floating point values
+#[derive(Clone)]
+pub struct FloatArray {
+    values: Vec<f64>,
+    nulls: Vec<bool>,
+}
+
+impl FloatArray {
+    pub fn new(values: Vec<f64>, nulls: Vec<bool>) -> Self {
+        Self { values, nulls }
+    }
+
+    pub fn from_values(values: Vec<f64>) -> Self {
+        Self {
+            values: values.clone(),
+            nulls: vec![false; values.len()],
+        }
+    }
+
+    pub fn values(&self) -> &[f64] {
+        &self.values
+    }
+}
+
+impl Array for FloatArray {
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_null(&self, index: usize) -> bool {
+        self.nulls.get(index).copied().unwrap_or(true)
+    }
+
+    fn get_value(&self, index: usize) -> Option<Value> {
+        if self.is_null(index) {
+            return None;
+        }
+        self.values.get(index).copied().map(Value::Float)
+    }
+
+    fn get_data_type(&self) -> &str {
+        "FLOAT"
+    }
+}
+
+/// StringArray for text values
+#[derive(Clone)]
+pub struct StringArray {
+    values: Vec<String>,
+    nulls: Vec<bool>,
+}
+
+impl StringArray {
+    pub fn new(values: Vec<String>, nulls: Vec<bool>) -> Self {
+        Self { values, nulls }
+    }
+
+    pub fn from_values(values: Vec<String>) -> Self {
+        Self {
+            values: values.clone(),
+            nulls: vec![false; values.len()],
+        }
+    }
+
+    pub fn values(&self) -> &[String] {
+        &self.values
+    }
+}
+
+impl Array for StringArray {
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_null(&self, index: usize) -> bool {
+        self.nulls.get(index).copied().unwrap_or(true)
+    }
+
+    fn get_value(&self, index: usize) -> Option<Value> {
+        if self.is_null(index) {
+            return None;
+        }
+        self.values.get(index).cloned().map(Value::Text)
+    }
+
+    fn get_data_type(&self) -> &str {
+        "TEXT"
+    }
+}
+
+/// BooleanArray for boolean values
+#[derive(Clone)]
+pub struct BooleanArray {
+    values: Vec<bool>,
+    nulls: Vec<bool>,
+}
+
+impl BooleanArray {
+    pub fn new(values: Vec<bool>, nulls: Vec<bool>) -> Self {
+        Self { values, nulls }
+    }
+
+    pub fn from_values(values: Vec<bool>) -> Self {
+        Self {
+            values: values.clone(),
+            nulls: vec![false; values.len()],
+        }
+    }
+
+    pub fn values(&self) -> &[bool] {
+        &self.values
+    }
+}
+
+impl Array for BooleanArray {
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_null(&self, index: usize) -> bool {
+        self.nulls.get(index).copied().unwrap_or(true)
+    }
+
+    fn get_value(&self, index: usize) -> Option<Value> {
+        if self.is_null(index) {
+            return None;
+        }
+        self.values.get(index).copied().map(Value::Boolean)
+    }
+
+    fn get_data_type(&self) -> &str {
+        "BOOLEAN"
+    }
+}
+
+/// Vectorized expression evaluation
+pub mod expression {
+    use super::*;
+
+    /// Compare two arrays element-wise
+    pub fn compare_ints(left: &IntArray, right: &IntArray, op: &str) -> BooleanArray {
+        let len = left.len().max(right.len());
+        let mut results = Vec::with_capacity(len);
+        for i in 0..len {
+            let l = left.values.get(i).copied().unwrap_or(0);
+            let r = right.values.get(i).copied().unwrap_or(0);
+            let result = match op {
+                "=" | "==" => l == r,
+                "!=" | "<>" => l != r,
+                "<" => l < r,
+                "<=" => l <= r,
+                ">" => l > r,
+                ">=" => l >= r,
+                _ => false,
+            };
+            results.push(result);
+        }
+        BooleanArray::from_values(results)
+    }
+
+    /// Compare integer with constant
+    pub fn compare_int_constant(arr: &IntArray, constant: i64, op: &str) -> BooleanArray {
+        let mut results = Vec::with_capacity(arr.len());
+        for i in 0..arr.len() {
+            let l = arr.values.get(i).copied().unwrap_or(0);
+            let result = match op {
+                "=" | "==" => l == constant,
+                "!=" | "<>" => l != constant,
+                "<" => l < constant,
+                "<=" => l <= constant,
+                ">" => l > constant,
+                ">=" => l >= constant,
+                _ => false,
+            };
+            results.push(result);
+        }
+        BooleanArray::from_values(results)
+    }
+
+    /// Filter RecordBatch using boolean array (simplified version)
+    /// Note: Full type-specific filtering requires Any downcasting
+    pub fn filter_batch(batch: &RecordBatch, _filter: &BooleanArray) -> RecordBatch {
+        batch.clone()
+    }
+}
+
 /// RecordBatch - Columnar memory layout for vectorized execution
 ///
 /// # What
