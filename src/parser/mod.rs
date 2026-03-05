@@ -27,12 +27,50 @@ pub enum Statement {
     DropTable(DropTableStatement),
 }
 
+/// Join type
+#[derive(Debug, Clone, PartialEq)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
+}
+
+/// Aggregate function
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregateFunction {
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+}
+
+/// Join clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct JoinClause {
+    pub join_type: JoinType,
+    pub table: String,
+    pub on_clause: (Expression, Expression),
+}
+
+/// Aggregate function call
+#[derive(Debug, Clone, PartialEq)]
+pub struct AggregateCall {
+    pub func: AggregateFunction,
+    pub args: Vec<Expression>,
+    pub distinct: bool,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
     pub columns: Vec<SelectColumn>,
     pub table: String,
     pub where_clause: Option<Expression>,
+    pub join_clause: Option<JoinClause>,
+    pub aggregates: Vec<AggregateCall>,
 }
 
 /// Column in SELECT
@@ -197,6 +235,8 @@ impl Parser {
             columns,
             table,
             where_clause,
+            join_clause: None,
+            aggregates: vec![],
         }))
     }
 
