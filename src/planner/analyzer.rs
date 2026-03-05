@@ -327,6 +327,8 @@ impl Analyzer {
             crate::parser::JoinType::Inner => crate::planner::JoinType::Inner,
             crate::parser::JoinType::Left => crate::planner::JoinType::Left,
             crate::parser::JoinType::Right => crate::planner::JoinType::Right,
+            crate::parser::JoinType::Full => crate::planner::JoinType::Full,
+            crate::parser::JoinType::Cross => crate::planner::JoinType::Cross,
         };
 
         // Bind ON clause expressions
