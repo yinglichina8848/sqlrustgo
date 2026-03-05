@@ -29,6 +29,7 @@ pub enum Token {
     Rollback,
     Grant,
     Revoke,
+    Analyze,
 
     // Data Types
     Integer,
@@ -106,6 +107,7 @@ impl fmt::Display for Token {
             Token::Rollback => write!(f, "ROLLBACK"),
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
+            Token::Analyze => write!(f, "ANALYZE"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),

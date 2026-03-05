@@ -25,6 +25,13 @@ pub enum Statement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
+    Analyze(AnalyzeStatement),
+}
+
+/// ANALYZE statement for collecting statistics
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnalyzeStatement {
+    pub table_name: Option<String>,
 }
 
 /// Join type
@@ -182,6 +189,7 @@ impl Parser {
             Some(Token::Delete) => self.parse_delete(),
             Some(Token::Create) => self.parse_create_table(),
             Some(Token::Drop) => self.parse_drop_table(),
+            Some(Token::Analyze) => self.parse_analyze(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -622,6 +630,22 @@ impl Parser {
         };
 
         Ok(Statement::DropTable(DropTableStatement { name }))
+    }
+
+    fn parse_analyze(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Analyze)?;
+
+        let table_name = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let n = name.clone();
+                self.next();
+                Some(n)
+            }
+            Some(Token::Semicolon) | None => None,
+            _ => return Err("Expected table name or semicolon".to_string()),
+        };
+
+        Ok(Statement::Analyze(AnalyzeStatement { table_name }))
     }
 }
 
