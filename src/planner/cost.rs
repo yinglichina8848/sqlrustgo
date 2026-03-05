@@ -385,7 +385,8 @@ impl DefaultCostModel {
             };
 
             let row_count = group_count;
-            let cpu_cost = input_cost.row_count * (group_expr.len() as f64 + aggr_expr.len() as f64) * 0.01;
+            let cpu_cost =
+                input_cost.row_count * (group_expr.len() as f64 + aggr_expr.len() as f64) * 0.01;
             let memory_cost = input_cost.memory_cost * 0.5; // Aggregates reduce memory
 
             Ok(Cost {
@@ -441,10 +442,7 @@ impl DefaultCostModel {
             let input_cost = self.estimate_cost(input)?;
             let row_count = (*n as f64).min(input_cost.row_count);
             let cost = input_cost.multiply(row_count / input_cost.row_count.max(1.0));
-            Ok(Cost {
-                row_count,
-                ..cost
-            })
+            Ok(Cost { row_count, ..cost })
         } else {
             Ok(Cost::default())
         }
@@ -466,31 +464,47 @@ impl DefaultCostModel {
         match expr {
             BinaryExpr { left, op, right } => {
                 let left_selectivity = match &**left {
-                    Column(col) => self.stats_provider.estimate_selectivity(table_name, &col.name),
+                    Column(col) => self
+                        .stats_provider
+                        .estimate_selectivity(table_name, &col.name),
                     _ => 0.5,
                 };
                 let right_selectivity = match &**right {
-                    Column(col) => self.stats_provider.estimate_selectivity(table_name, &col.name),
+                    Column(col) => self
+                        .stats_provider
+                        .estimate_selectivity(table_name, &col.name),
                     _ => 0.5,
                 };
                 match op {
                     super::Operator::Eq => (left_selectivity + right_selectivity) / 2.0 * 0.1,
-                    super::Operator::NotEq => 1.0 - (left_selectivity + right_selectivity) / 2.0 * 0.1,
-                    super::Operator::Lt | super::Operator::LtEq |
-                    super::Operator::Gt | super::Operator::GtEq => 0.25,
+                    super::Operator::NotEq => {
+                        1.0 - (left_selectivity + right_selectivity) / 2.0 * 0.1
+                    }
+                    super::Operator::Lt
+                    | super::Operator::LtEq
+                    | super::Operator::Gt
+                    | super::Operator::GtEq => 0.25,
                     super::Operator::And => left_selectivity * right_selectivity,
-                    super::Operator::Or => left_selectivity + right_selectivity
-                        - left_selectivity * right_selectivity,
+                    super::Operator::Or => {
+                        left_selectivity + right_selectivity - left_selectivity * right_selectivity
+                    }
                     _ => 0.1,
                 }
             }
-            UnaryExpr { op: super::Operator::Not, .. } => 0.5,
+            UnaryExpr {
+                op: super::Operator::Not,
+                ..
+            } => 0.5,
             _ => 0.1,
         }
     }
 
     /// Estimate join selectivity
-    fn estimate_join_selectivity(&self, join_type: &JoinType, on: &[(super::Expr, super::Expr)]) -> f64 {
+    fn estimate_join_selectivity(
+        &self,
+        join_type: &JoinType,
+        on: &[(super::Expr, super::Expr)],
+    ) -> f64 {
         if on.is_empty() {
             return match join_type {
                 JoinType::Cross => 1.0, // Cartesian product
@@ -527,7 +541,9 @@ impl CostModel for DefaultCostModel {
                 row_count: values.len() as f64,
                 ..Default::default()
             }),
-            LogicalPlan::EmptyRelation { produce_one_row, .. } => Ok(Cost {
+            LogicalPlan::EmptyRelation {
+                produce_one_row, ..
+            } => Ok(Cost {
                 row_count: if *produce_one_row { 1.0 } else { 0.0 },
                 ..Default::default()
             }),
@@ -542,9 +558,7 @@ impl CostModel for DefaultCostModel {
             LogicalPlan::Update { input, .. } | LogicalPlan::Delete { input, .. } => {
                 Ok(self.estimate_cost(input)?)
             }
-            LogicalPlan::CreateTable { .. } | LogicalPlan::DropTable { .. } => {
-                Ok(Cost::default())
-            }
+            LogicalPlan::CreateTable { .. } | LogicalPlan::DropTable { .. } => Ok(Cost::default()),
         }
     }
 }
@@ -649,5 +663,97 @@ mod tests {
         let cost = cost_model.estimate_cost(&plan).unwrap();
         assert_eq!(cost.cpu_cost, 0.0);
         assert_eq!(cost.io_cost, 0.0);
+    }
+
+    // ============ Additional CostModel Tests ============
+
+    #[test]
+    fn test_cost_default() {
+        let cost = Cost::default();
+        assert_eq!(cost.cpu_cost, 0.0);
+        assert_eq!(cost.io_cost, 0.0);
+        assert_eq!(cost.memory_cost, 0.0);
+    }
+
+    #[test]
+    fn test_cost_clone() {
+        let cost1 = Cost::new(100.0, 50.0, 25.0, 1000.0);
+        let cost2 = cost1.clone();
+        assert_eq!(cost1.cpu_cost, cost2.cpu_cost);
+    }
+
+    #[test]
+    fn test_cost_compare() {
+        let cheap = Cost::new(10.0, 10.0, 10.0, 100.0);
+        let expensive = Cost::new(100.0, 100.0, 100.0, 1000.0);
+        assert!(cheap.total(1.0, 1.0, 1.0) < expensive.total(1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn test_default_cost_model_filter() {
+        let provider = Box::new(DefaultStatisticsProvider::new());
+        let cost_model = DefaultCostModel::new(provider);
+        let plan = LogicalPlan::Filter {
+            input: Box::new(test_table_scan()),
+            predicate: Expr::Literal(Value::Boolean(true)),
+        };
+        let cost = cost_model.estimate_cost(&plan).unwrap();
+        assert!(cost.row_count > 0.0);
+    }
+
+    #[test]
+    fn test_default_cost_model_projection() {
+        let provider = Box::new(DefaultStatisticsProvider::new());
+        let cost_model = DefaultCostModel::new(provider);
+        let plan = LogicalPlan::Projection {
+            input: Box::new(test_table_scan()),
+            expr: vec![],
+            schema: Schema::new(vec![]),
+        };
+        let cost = cost_model.estimate_cost(&plan).unwrap();
+        assert!(cost.row_count >= 0.0);
+    }
+
+    #[test]
+    fn test_default_cost_model_join() {
+        let provider = Box::new(DefaultStatisticsProvider::new());
+        let cost_model = DefaultCostModel::new(provider);
+        let plan = LogicalPlan::Join {
+            left: Box::new(test_table_scan()),
+            right: Box::new(test_table_scan()),
+            join_type: JoinType::Inner,
+            on: vec![],
+            filter: None,
+            schema: Schema::new(vec![]),
+        };
+        let cost = cost_model.estimate_cost(&plan).unwrap();
+        assert!(cost.cpu_cost > 0.0);
+    }
+
+    #[test]
+    fn test_cost_model_with_statistics() {
+        let provider = Box::new(DefaultStatisticsProvider::new());
+        let cost_model = DefaultCostModel::new(provider);
+
+        // Get table stats from provider
+        let stats = provider.get_table_stats("users");
+        assert!(stats.is_some());
+
+        // Estimate cost with stats
+        let plan = test_table_scan();
+        let cost = cost_model.estimate_cost(&plan).unwrap();
+        assert!(cost.row_count > 0.0);
+    }
+
+    #[test]
+    fn test_cost_estimate_with_limit() {
+        let provider = Box::new(DefaultStatisticsProvider::new());
+        let cost_model = DefaultCostModel::new(provider);
+        let plan = LogicalPlan::Limit {
+            input: Box::new(test_table_scan()),
+            n: 100,
+        };
+        let cost = cost_model.estimate_cost(&plan).unwrap();
+        assert!(cost.row_count <= 100.0);
     }
 }
