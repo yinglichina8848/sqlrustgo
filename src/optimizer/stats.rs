@@ -528,4 +528,67 @@ mod tests {
         let selectivity = provider.selectivity("users", "age");
         assert!((selectivity - 0.02).abs() < 0.001);
     }
+
+    // ============ Additional Tests ============
+
+    #[test]
+    fn test_column_stats_default() {
+        let stats = ColumnStats::new("id");
+        assert_eq!(stats.column_name, "id");
+        assert_eq!(stats.distinct_count, 0);
+        assert_eq!(stats.null_count, 0);
+    }
+
+    #[test]
+    fn test_column_stats_range() {
+        let stats = ColumnStats::new("price")
+            .with_range(Some(Value::Float(0.0)), Some(Value::Float(999.99)));
+
+        assert_eq!(stats.min_value, Some(Value::Float(0.0)));
+        assert_eq!(stats.max_value, Some(Value::Float(999.99)));
+    }
+
+    #[test]
+    fn test_column_stats_eq_selectivity() {
+        let stats = ColumnStats::new("age").with_distinct_count(100);
+        let selectivity = stats.eq_selectivity();
+        assert!(selectivity > 0.0 && selectivity < 1.0);
+    }
+
+    #[test]
+    fn test_table_stats_default() {
+        let stats = TableStats::new("test");
+        assert_eq!(stats.table_name, "test");
+        assert_eq!(stats.row_count, 0);
+        assert!(stats.column_stats.is_empty());
+    }
+
+    #[test]
+    fn test_table_stats_column_not_found() {
+        let stats = TableStats::new("users");
+        assert!(stats.column("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_stats_result() {
+        let ok_result: StatsResult<i32> = Ok(42);
+        assert!(ok_result.is_ok());
+
+        let err_result: StatsResult<i32> = Err(StatsError::TableNotFound("test".to_string()));
+        assert!(err_result.is_err());
+    }
+
+    #[test]
+    fn test_provider_update_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+
+        // First add the stats
+        let stats = TableStats::new("users").with_row_count(100);
+        provider.add_stats(stats);
+
+        // Now try to update
+        let updated_stats = TableStats::new("users").with_row_count(200);
+        let result = provider.update_stats("users", updated_stats);
+        assert!(result.is_ok());
+    }
 }
