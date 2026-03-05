@@ -6,10 +6,9 @@
 //! - Aggregation: < 500ms
 //! - Memory usage: < 500MB
 
-use std::time::Instant;
-
 #[cfg(test)]
 mod benchmarks {
+    use std::time::Instant;
     use super::*;
 
     // ============ Mock Data Generators ============
