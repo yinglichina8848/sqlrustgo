@@ -849,3 +849,82 @@ mod tests {
         let _ = remove_dir_all(&temp_dir);
     }
 }
+
+use crate::storage::engine::{Record, StorageEngine};
+
+impl StorageEngine for FileStorage {
+    fn scan(&self, table: &str) -> crate::types::SqlResult<Vec<Record>> {
+        Ok(self
+            .get_table(table)
+            .map(|data| data.rows.clone())
+            .unwrap_or_default())
+    }
+
+    fn insert(&mut self, table: &str, records: Vec<Record>) -> crate::types::SqlResult<()> {
+        if let Some(ref mut data) = self.tables.get_mut(table) {
+            data.rows.extend(records);
+            let table_data = data.clone();
+            self.save_table(table, &table_data)?;
+        }
+        Ok(())
+    }
+
+    fn delete(&mut self, table: &str, _filters: &[Value]) -> crate::types::SqlResult<usize> {
+        if let Some(ref mut data) = self.tables.get_mut(table) {
+            let count = data.rows.len();
+            data.rows.clear();
+            let table_data = data.clone();
+            self.save_table(table, &table_data)?;
+            Ok(count)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn update(
+        &mut self,
+        table: &str,
+        _filters: &[Value],
+        _updates: &[(usize, Value)],
+    ) -> crate::types::SqlResult<usize> {
+        Ok(self.get_table(table).map(|d| d.rows.len()).unwrap_or(0))
+    }
+
+    fn create_table(&mut self, info: &TableInfo) -> crate::types::SqlResult<()> {
+        let table_data = TableData {
+            info: info.clone(),
+            rows: Vec::new(),
+        };
+        self.insert_table(info.name.clone(), table_data)
+            .map_err(|e| crate::types::SqlError::ExecutionError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn drop_table(&mut self, table: &str) -> crate::types::SqlResult<()> {
+        self.drop_table(table)
+            .map_err(|e| crate::types::SqlError::ExecutionError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn get_table_info(&self, table: &str) -> crate::types::SqlResult<TableInfo> {
+        self.get_table(table)
+            .map(|t| t.info.clone())
+            .ok_or_else(|| crate::types::SqlError::TableNotFound(table.to_string()))
+    }
+
+    fn has_table(&self, table: &str) -> bool {
+        self.tables.contains_key(table)
+    }
+
+    fn list_tables(&self) -> Vec<String> {
+        self.tables.keys().cloned().collect()
+    }
+
+    fn create_index(&self, _table: &str, _column: &str) -> crate::types::SqlResult<()> {
+        Ok(())
+    }
+
+    fn drop_index(&self, _table: &str, _column: &str) -> crate::types::SqlResult<()> {
+        Ok(())
+    }
+}
