@@ -147,7 +147,54 @@ mod tests {
     /// Test that StorageEngine trait is defined correctly
     #[test]
     fn test_storage_engine_trait_exists() {
-        // Verify the trait is defined and has the expected methods
         fn _check_trait(_engine: &dyn StorageEngine) {}
+    }
+
+    #[test]
+    fn test_memory_storage_new() {
+        let storage = MemoryStorage::new();
+        assert!(storage.list_tables().is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_has_table() {
+        let storage = MemoryStorage::new();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_memory_storage_list_tables() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let tables = storage.list_tables();
+        assert!(tables.contains(&"users".to_string()));
+    }
+
+    #[test]
+    fn test_memory_storage_scan_empty() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let result = storage.scan("users").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_insert_and_scan() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![
+                vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            ],
+        );
+        let result = storage.scan("users").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_storage_engine_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        _check::<MemoryStorage>();
     }
 }
