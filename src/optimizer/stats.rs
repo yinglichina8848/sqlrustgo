@@ -189,6 +189,16 @@ pub trait StatisticsProvider: Send + Sync {
             .map(|s| s.estimate_selectivity(column))
             .unwrap_or(0.1)
     }
+
+    /// Get column statistics for a specific column
+    fn column_stats(&self, table: &str, column: &str) -> Option<ColumnStats> {
+        self.table_stats(table)?.column_stats.get(column).cloned()
+    }
+
+    /// Check if statistics exist for a table
+    fn has_stats(&self, table: &str) -> bool {
+        self.table_stats(table).is_some()
+    }
 }
 
 /// In-memory statistics provider implementation
