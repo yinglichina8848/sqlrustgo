@@ -656,4 +656,166 @@ mod tests {
         assert_eq!(arr.get_value(1), None);
         assert_eq!(arr.get_data_type(), "INTEGER");
     }
+
+    // ============ IntArray Tests ============
+
+    #[test]
+    fn test_int_array_creation() {
+        let arr = IntArray::new(vec![1, 2, 3], vec![false, false, false]);
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.values(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn test_int_array_from_values() {
+        let arr = IntArray::from_values(vec![10, 20, 30]);
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.values(), &[10, 20, 30]);
+    }
+
+    #[test]
+    fn test_int_array_nulls() {
+        let arr = IntArray::new(vec![1, 2, 3], vec![false, true, false]);
+        assert!(!arr.is_null(0));
+        assert!(arr.is_null(1));
+        assert!(!arr.is_null(2));
+    }
+
+    #[test]
+    fn test_int_array_get_value() {
+        let arr = IntArray::new(vec![100, 200, 300], vec![false, false, false]);
+        assert_eq!(arr.get_value(0), Some(Value::Integer(100)));
+        assert_eq!(arr.get_value(2), Some(Value::Integer(300)));
+    }
+
+    #[test]
+    fn test_int_array_filter() {
+        let arr = IntArray::from_values(vec![1, 2, 3, 4, 5]);
+        let filtered = arr.filter(&[true, false, true, false, true]);
+        assert_eq!(filtered.values(), &[1, 3, 5]);
+    }
+
+    // ============ FloatArray Tests ============
+
+    #[test]
+    fn test_float_array_creation() {
+        let arr = FloatArray::new(vec![1.0, 2.0, 3.0], vec![false, false, false]);
+        assert_eq!(arr.len(), 3);
+    }
+
+    #[test]
+    fn test_float_array_from_values() {
+        let arr = FloatArray::from_values(vec![1.5, 2.5, 3.5]);
+        assert_eq!(arr.len(), 3);
+    }
+
+    #[test]
+    fn test_float_array_nulls() {
+        let arr = FloatArray::new(vec![1.0, 2.0, 3.0], vec![false, true, false]);
+        assert!(!arr.is_null(0));
+        assert!(arr.is_null(1));
+    }
+
+    #[test]
+    fn test_float_array_get_value() {
+        let arr = FloatArray::from_values(vec![1.1, 2.2, 3.3]);
+        assert_eq!(arr.get_value(0), Some(Value::Float(1.1)));
+    }
+
+    // ============ StringArray Tests ============
+
+    #[test]
+    fn test_string_array_creation() {
+        let arr = StringArray::new(vec!["a".to_string(), "b".to_string()], vec![false, false]);
+        assert_eq!(arr.len(), 2);
+    }
+
+    #[test]
+    fn test_string_array_from_values() {
+        let arr = StringArray::from_values(vec!["hello".to_string(), "world".to_string()]);
+        assert_eq!(arr.len(), 2);
+    }
+
+    #[test]
+    fn test_string_array_nulls() {
+        let arr = StringArray::new(vec!["a".to_string()], vec![true]);
+        assert!(arr.is_null(0));
+    }
+
+    #[test]
+    fn test_string_array_get_value() {
+        let arr = StringArray::from_values(vec!["test".to_string()]);
+        assert_eq!(arr.get_value(0), Some(Value::Text("test".to_string())));
+    }
+
+    // ============ BooleanArray Tests ============
+
+    #[test]
+    fn test_boolean_array_creation() {
+        let arr = BooleanArray::new(vec![true, false, true], vec![false, false, false]);
+        assert_eq!(arr.len(), 3);
+    }
+
+    #[test]
+    fn test_boolean_array_from_values() {
+        let arr = BooleanArray::from_values(vec![true, false, true]);
+        assert_eq!(arr.len(), 3);
+    }
+
+    #[test]
+    fn test_boolean_array_nulls() {
+        let arr = BooleanArray::new(vec![true, false], vec![false, true]);
+        assert!(!arr.is_null(0));
+        assert!(arr.is_null(1));
+    }
+
+    #[test]
+    fn test_boolean_array_get_value() {
+        let arr = BooleanArray::from_values(vec![true, false]);
+        assert_eq!(arr.get_value(0), Some(Value::Boolean(true)));
+        assert_eq!(arr.get_value(1), Some(Value::Boolean(false)));
+    }
+
+    // ============ RecordBatch Additional Tests ============
+
+    #[test]
+    fn test_record_batch_clone() {
+        let fields = vec![Field::new_not_null("id".to_string(), DataType::Integer)];
+        let schema = Arc::new(Schema::new(fields));
+        let col: ArrayRef = Arc::new(IntArray::from_values(vec![1, 2, 3]));
+        let batch = RecordBatch::new(schema, vec![col]).unwrap();
+
+        let cloned = batch.clone();
+        assert_eq!(cloned.row_count(), 3);
+        assert_eq!(cloned.num_columns(), 1);
+    }
+
+    #[test]
+    fn test_record_batch_column_index() {
+        let fields = vec![
+            Field::new_not_null("a".to_string(), DataType::Integer),
+            Field::new_not_null("b".to_string(), DataType::Integer),
+            Field::new_not_null("c".to_string(), DataType::Integer),
+        ];
+        let schema = Arc::new(Schema::new(fields));
+        let col1: ArrayRef = Arc::new(IntArray::from_values(vec![1]));
+        let col2: ArrayRef = Arc::new(IntArray::from_values(vec![2]));
+        let col3: ArrayRef = Arc::new(IntArray::from_values(vec![3]));
+        let batch = RecordBatch::new(schema, vec![col1, col2, col3]).unwrap();
+
+        assert!(batch.column(0).is_some());
+        assert!(batch.column(2).is_some());
+        assert!(batch.column(3).is_none());
+    }
+
+    #[test]
+    fn test_record_batch_with_nulls() {
+        let fields = vec![Field::new_not_null("id".to_string(), DataType::Integer)];
+        let schema = Arc::new(Schema::new(fields));
+        let col: ArrayRef = Arc::new(IntArray::new(vec![1, 2, 3], vec![false, true, false]));
+        let batch = RecordBatch::new(schema, vec![col]).unwrap();
+
+        assert!(!batch.column(0).unwrap().is_null(0));
+        assert!(batch.column(0).unwrap().is_null(1));
+    }
 }
