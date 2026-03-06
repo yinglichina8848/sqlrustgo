@@ -273,3 +273,29 @@ sqlrustgo/
 ## 参与贡献
 
 欢迎提交 PR！请参考 GitHub 上的 Issue 和 PR 列表。
+
+---
+
+## 分支结构 (v1.2.0 Alpha)
+
+```
+main                    - 最终发布版本
+alpha/v1.2.0           - Alpha 开发版本 (当前)
+beta/v1.1.0            - Beta 测试版本 (冻结)
+release/v1.1.0         - 发布版本 (冻结)
+develop/v1.2.0         - 开发分支 (当前)
+```
+
+详细分支规范见 [BRANCH_GOVERNANCE.md](docs/BRANCH_GOVERNANCE.md)
+
+## 版本阶段状态
+
+| 阶段 | 版本 | 状态 |
+|------|------|------|
+| Draft | v1.0.x | ✅ 已完成 |
+| Alpha | v1.1.x | ✅ 已完成 |
+| Craft | v1.2.0 | ✅ 已完成 |
+| Alpha | v1.2.0 | 🔄 进行中 |
+| Beta | v1.2.x | ⏳ 待启动 |
+
+**注意**: 项目正处于 Alpha 阶段，API 可能有变更。
