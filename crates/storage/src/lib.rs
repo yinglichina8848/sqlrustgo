@@ -1,13 +1,15 @@
 // SQLRustGo storage module
 
+pub mod binary_format;
+pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod engine;
+pub mod file_storage;
 pub mod page;
-// pub mod file_storage; // TODO: migrate after resolving dependencies
-pub mod binary_format;
 
-pub use buffer_pool::BufferPool;
-pub use engine::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
-pub use page::Page;
-// pub use file_storage::FileStorage; // TODO: migrate after resolving dependencies
 pub use binary_format::BinaryFormat;
+pub use bplus_tree::BPlusTree;
+pub use buffer_pool::BufferPool;
+pub use engine::{ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo};
+pub use file_storage::FileStorage;
+pub use page::Page;
