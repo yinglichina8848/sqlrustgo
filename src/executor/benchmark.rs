@@ -8,8 +8,9 @@
 
 #[cfg(test)]
 mod benchmarks {
-    use std::time::Instant;
+    #[allow(unused_imports)]
     use super::*;
+    use std::time::Instant;
 
     // ============ Mock Data Generators ============
 

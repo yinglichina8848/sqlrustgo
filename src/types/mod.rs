@@ -30,6 +30,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_parse_sql_literal() {
         assert_eq!(parse_sql_literal("NULL"), Value::Null);
         assert_eq!(parse_sql_literal("TRUE"), Value::Boolean(true));

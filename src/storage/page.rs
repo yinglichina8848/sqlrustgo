@@ -488,7 +488,7 @@ mod tests {
     #[test]
     fn test_page_to_from_bytes() {
         let mut page = Page::new_data(1, 100);
-        page.write_row(&vec![Value::Integer(42)]);
+        page.write_row(&[Value::Integer(42)]);
 
         let bytes = page.to_bytes();
         assert_eq!(bytes.len(), PAGE_SIZE);

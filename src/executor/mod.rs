@@ -917,6 +917,7 @@ mod local_executor_tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_local_executor_new() {
         let _executor = LocalExecutor::new();
         assert!(true); // Just check it can be created
