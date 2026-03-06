@@ -393,7 +393,7 @@ mod tests {
     fn test_memory_pool_wrong_size() {
         let pool = MemoryPool::new(1024);
 
-        let mut buf = vec![0u8; 2048];
+        let buf = vec![0u8; 2048];
         pool.free(buf); // Wrong size, should not be pooled
 
         assert_eq!(pool.free_count(), 0);

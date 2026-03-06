@@ -231,6 +231,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::assertions_on_constants,
+        unused_comparisons,
+        clippy::absurd_extreme_comparisons
+    )]
     fn test_health_checker_new() {
         let checker = HealthChecker::new("1.0.0");
         assert_eq!(checker.version(), "1.0.0");

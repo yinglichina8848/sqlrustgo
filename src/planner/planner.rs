@@ -308,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_default_planner_new() {
         let _planner = DefaultPlanner::new();
         assert!(true); // Just check it can be created
