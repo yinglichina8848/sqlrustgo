@@ -110,6 +110,10 @@ impl Page {
         self.data[offset..offset + 4].copy_from_slice(&PAGE_MAGIC.to_le_bytes());
         offset += 4;
 
+        // Page ID (4 bytes)
+        self.data[offset..offset + 4].copy_from_slice(&self.page_id.to_le_bytes());
+        offset += 4;
+
         // Version (2 bytes)
         self.data[offset..offset + 2].copy_from_slice(&PAGE_VERSION.to_le_bytes());
         offset += 2;
@@ -122,9 +126,6 @@ impl Page {
             PageType::Meta => 3,
         };
         offset += 1;
-
-        // Page ID (4 bytes)
-        self.data[8..12].copy_from_slice(&self.page_id.to_le_bytes());
 
         // Reserved (1 byte)
         offset += 1;
@@ -159,18 +160,21 @@ impl Page {
         }
 
         // Page ID
-        self.page_id = u32::from_le_bytes([self.data[8], self.data[9], self.data[10], self.data[11]]);
+        self.page_id = u32::from_le_bytes([self.data[4], self.data[5], self.data[6], self.data[7]]);
 
         let mut offset = 8;
 
-        // Page type
+        // Version (2 bytes) - skip
+        offset += 2;
+
+        // Page type (1 byte)
         self.page_type = match self.data[offset] {
             1 => PageType::Data,
             2 => PageType::Index,
             3 => PageType::Meta,
             _ => PageType::Free,
         };
-        offset += 2;
+        offset += 2; // page_type (1) + reserved (1)
 
         offset += 4; // skip checksum
         offset += 4; // skip prev page
