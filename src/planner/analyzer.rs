@@ -691,6 +691,7 @@ mod tests {
             DataType::Integer
         );
 
+        #[allow(clippy::approx_constant)]
         let float_lit = Expr::Literal(crate::types::Value::Float(3.14));
         assert_eq!(
             analyzer.infer_expression_type(&float_lit, &schema),

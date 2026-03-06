@@ -550,7 +550,7 @@ mod tests {
         }
 
         fn is_null(&self, index: usize) -> bool {
-            self.data.get(index).map_or(true, |v| v.is_none())
+            self.data.get(index).is_none_or(|v| v.is_none())
         }
 
         fn get_value(&self, index: usize) -> Option<Value> {
