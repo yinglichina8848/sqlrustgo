@@ -5,10 +5,38 @@ All notable changes to SQLRustGo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<<<<<<< HEAD
 ## [Unreleased]
 
-## [1.1.0-draft] - 2026-03-05
+## [1.2.0] - TBD
+
+### Added
+
+- **Architecture**: Vectorized execution engine with RecordBatch
+- **Architecture**: StorageEngine trait for pluggable storage backends
+- **Architecture**: FileStorage and MemoryStorage implementations
+- **Architecture**: Cost-based optimizer (CBO) with statistics
+- **Feature**: ANALYZE command for statistics collection
+- **Feature**: Simplified CBO with table/column statistics
+- **Feature**: LocalExecutor for embedded usage
+- **Testing**: LocalExecutor tests (T-005)
+
+### Changed
+
+- **Refactor**: Storage layer abstraction
+- **Refactor**: Statistics infrastructure
+
+### Security
+
+- **Audit**: Dependency audit passed (no high-severity vulnerabilities)
+
+### Documentation
+
+- **New**: v1.2.0 Release Notes
+- **New**: v1.2.0 Upgrade Guide
+- **New**: v1.2.0 Maturity Assessment
+- **New**: v1.2.0 Test Plan (target 85%+ coverage)
+
+## [1.1.0] - 2026-03-05
 
 ### Added
 
@@ -72,22 +100,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Maturity | Notes |
 |---------|------|----------|-------|
-| v1.1.0-draft | 2026-03-05 | L3 Draft | Architecture upgrade, Clippy passed |
+| v1.2.0 | TBD | L3+ | Vectorization, CBO, Storage abstraction |
+| v1.1.0 | 2026-03-05 | L3 | Architecture upgrade, Clippy passed |
 | v1.0.0 | 2026-02-22 | L3 GA | Initial release |
 
 ---
 
 ## Roadmap
 
-- **v1.1.0**: Draft → Alpha → Beta → RC → GA
-- **v1.2.0**: Performance optimization (vectorization, CBO)
+- **v1.2.0**: Development in progress (vectorization, CBO)
+- **v1.1.0**: Released (architecture upgrade)
 - **v1.3.0**: Enterprise features (observability, MVCC)
 - **v2.0**: Distributed architecture
 
 ---
 
 *This changelog is maintained by yinglichina8848*
-<<<<<<< HEAD
 =======
 ## [1.0.0] - 2026-02-16
 

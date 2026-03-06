@@ -124,7 +124,8 @@ impl HealthChecker {
             let health = component.check();
             if health.status == HealthStatus::Unhealthy {
                 overall_status = HealthStatus::Unhealthy;
-            } else if health.status == HealthStatus::Degraded && overall_status == HealthStatus::Healthy
+            } else if health.status == HealthStatus::Degraded
+                && overall_status == HealthStatus::Healthy
             {
                 overall_status = HealthStatus::Degraded;
             }
@@ -230,6 +231,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::assertions_on_constants,
+        unused_comparisons,
+        clippy::absurd_extreme_comparisons
+    )]
     fn test_health_checker_new() {
         let checker = HealthChecker::new("1.0.0");
         assert_eq!(checker.version(), "1.0.0");

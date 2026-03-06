@@ -2,69 +2,10 @@
 //! Supports multiple storage implementations (File, Memory, etc.)
 
 use serde::{Deserialize, Serialize};
+pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
-use thiserror::Error;
 
-/// Storage error type
-#[derive(Error, Debug)]
-pub enum SqlError {
-    #[error("Table not found: {0}")]
-    TableNotFound(String),
-    #[error("IO error: {0}")]
-    IoError(String),
-    #[error("Parse error: {0}")]
-    ParseError(String),
-    #[error("Execution error: {0}")]
-    ExecutionError(String),
-}
-
-pub type SqlResult<T> = Result<T, SqlError>;
-
-impl From<std::io::Error> for SqlError {
-    fn from(e: std::io::Error) -> Self {
-        SqlError::IoError(e.to_string())
-    }
-}
-
-/// SQL Value enum - minimal version for storage crate
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Value {
-    Null,
-    Boolean(bool),
-    Integer(i64),
-    Float(f64),
-    Text(String),
-    Blob(Vec<u8>),
-}
-
-impl Value {
-    pub fn type_name(&self) -> &'static str {
-        match self {
-            Value::Null => "NULL",
-            Value::Boolean(_) => "BOOLEAN",
-            Value::Integer(_) => "INTEGER",
-            Value::Float(_) => "FLOAT",
-            Value::Text(_) => "TEXT",
-            Value::Blob(_) => "BLOB",
-        }
-    }
-
-    /// Convert value to index key (i64)
-    pub fn to_index_key(&self) -> Option<i64> {
-        match self {
-            Value::Integer(i) => Some(*i),
-            Value::Text(s) => {
-                use std::hash::{Hash, Hasher};
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                s.hash(&mut hasher);
-                Some(hasher.finish() as i64)
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Column definition
+/// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
     pub name: String,
@@ -72,23 +13,14 @@ pub struct ColumnDefinition {
     pub nullable: bool,
 }
 
-/// Table information
+/// Table metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableInfo {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
 }
 
-impl TableInfo {
-    pub fn new(name: impl Into<String>, columns: Vec<ColumnDefinition>) -> Self {
-        Self {
-            name: name.into(),
-            columns,
-        }
-    }
-}
-
-/// Table data with rows
+/// Table data - combines metadata and rows
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableData {
     pub info: TableInfo,
@@ -134,7 +66,7 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_index(&self, table: &str, column: &str, _column_index: usize) -> SqlResult<()>;
+    fn create_index(&self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
     /// Drop an index from a table
     fn drop_index(&self, table: &str, column: &str) -> SqlResult<()>;
@@ -169,7 +101,7 @@ impl StorageEngine for MemoryStorage {
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
         self.tables
             .entry(table.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(records);
         Ok(())
     }
@@ -194,9 +126,7 @@ impl StorageEngine for MemoryStorage {
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
         self.table_infos.insert(info.name.clone(), info.clone());
-        self.tables
-            .entry(info.name.clone())
-            .or_insert_with(Vec::new);
+        self.tables.entry(info.name.clone()).or_default();
         Ok(())
     }
 
@@ -210,7 +140,7 @@ impl StorageEngine for MemoryStorage {
         self.table_infos
             .get(table)
             .cloned()
-            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+            .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound(table.to_string()))
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -241,23 +171,50 @@ mod tests {
     }
 
     #[test]
-    fn test_value_type_name() {
-        assert_eq!(Value::Null.type_name(), "NULL");
-        assert_eq!(Value::Boolean(true).type_name(), "BOOLEAN");
-        assert_eq!(Value::Integer(42).type_name(), "INTEGER");
+    fn test_memory_storage_new() {
+        let storage = MemoryStorage::new();
+        assert!(storage.list_tables().is_empty());
     }
 
     #[test]
-    fn test_table_info_new() {
-        let cols = vec![
-            ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-            },
-        ];
-        let info = TableInfo::new("users", cols);
-        assert_eq!(info.name, "users");
-        assert_eq!(info.columns.len(), 1);
+    fn test_memory_storage_has_table() {
+        let storage = MemoryStorage::new();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_memory_storage_list_tables() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let tables = storage.list_tables();
+        assert!(tables.contains(&"users".to_string()));
+    }
+
+    #[test]
+    fn test_memory_storage_scan_empty() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let result = storage.scan("users").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_insert_and_scan() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![
+                vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            ],
+        );
+        let result = storage.scan("users").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_storage_engine_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        _check::<MemoryStorage>();
     }
 }

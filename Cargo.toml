@@ -1,6 +1,14 @@
 [workspace]
 members = [
+    "crates/common",
+    "crates/parser",
+    "crates/planner",
+    "crates/optimizer",
+    "crates/executor",
     "crates/storage",
+    "crates/catalog",
+    "crates/transaction",
+    "crates/server",
 ]
 
 [workspace.package]
@@ -10,21 +18,19 @@ authors = ["SQLRustGo Team"]
 license = "MIT"
 
 [workspace.dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-log = "0.4"
-tempfile = "3.25.0"
-
-[package]
-name = "sqlrustgo"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
+# Crates
+sqlrustgo-common = { path = "crates/common" }
+sqlrustgo-types = { path = "crates/types" }
+sqlrustgo-parser = { path = "crates/parser" }
+sqlrustgo-planner = { path = "crates/planner" }
+sqlrustgo-optimizer = { path = "crates/optimizer" }
+sqlrustgo-executor = { path = "crates/executor" }
 sqlrustgo-storage = { path = "crates/storage" }
+sqlrustgo-catalog = { path = "crates/catalog" }
+sqlrustgo-transaction = { path = "crates/transaction" }
+sqlrustgo-server = { path = "crates/server" }
+
+# External dependencies
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 anyhow = "1.0"
@@ -37,11 +43,43 @@ bytes = "1.0"
 lru-cache = "0.1.2"
 ctrlc = "3.5.2"
 serde_json = "1.0"
+tempfile = "3.25.0"
+criterion = "0.5"
 
 [dev-dependencies]
 criterion = "0.5"
-serde_json = "1.0"
 tempfile = "3.25.0"
+
+[package]
+name = "sqlrustgo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo-common.workspace = true
+sqlrustgo-types.workspace = true
+sqlrustgo-parser.workspace = true
+sqlrustgo-planner.workspace = true
+sqlrustgo-optimizer.workspace = true
+sqlrustgo-executor.workspace = true
+sqlrustgo-storage.workspace = true
+sqlrustgo-catalog.workspace = true
+sqlrustgo-transaction.workspace = true
+sqlrustgo-server.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+log.workspace = true
+env_logger.workspace = true
+hex.workspace = true
+bytes.workspace = true
+lru-cache.workspace = true
+ctrlc.workspace = true
+serde_json.workspace = true
 
 [[test]]
 name = "project_test"
