@@ -428,7 +428,7 @@ impl ExecutionEngine {
 
         // Create index
         self.storage
-            .create_index(table_name, column_name, column_index)
+            .create_index_internal(table_name, column_name, column_index)
             .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
 
         Ok(())
@@ -917,6 +917,7 @@ mod local_executor_tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_local_executor_new() {
         let _executor = LocalExecutor::new();
         assert!(true); // Just check it can be created
