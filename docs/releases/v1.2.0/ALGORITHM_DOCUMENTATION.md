@@ -1,5 +1,8 @@
 # v1.2.0 核心算法文档
 
+> ⚠️ **重要更新**: 代码已迁移到 crates/ workspace 结构，以下路径可能已变更。
+> 实际位置请参考 crates/ 目录下的对应模块。
+
 本文档记录 v1.2.0 中核心数据结构和算法的实现细节，基于实际代码。
 
 ---
@@ -8,7 +11,7 @@
 
 ### 1.1 数据结构
 
-**位置**: `src/storage/bplus_tree/tree.rs`
+**位置**: `crates/storage/src/bplus_tree/tree.rs`
 
 ```rust
 pub struct BPlusTree {
