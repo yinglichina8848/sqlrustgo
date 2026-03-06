@@ -1,26 +1,22 @@
-name: CI
+name: Benchmark
 
 on:
   push:
     branches:
       - main
-      - baseline
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - develop
+      - 'develop-*'
   pull_request:
     branches:
       - main
-      - baseline
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - develop
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  bench:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         run: |
@@ -32,16 +28,6 @@ jobs:
         run: |
           rustup install stable
           rustup default stable
-          rustup component add clippy rustfmt
 
-      - name: Format Check
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Build
-        run: cargo build --all
-
-      - name: Test
-        run: cargo test --all
+      - name: Run Benchmarks
+        run: cargo bench
