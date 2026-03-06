@@ -5,6 +5,5 @@
 pub mod health;
 
 pub use health::{
-    ComponentHealth, ComponentReport, HealthChecker, HealthComponent, HealthReport,
-    HealthStatus,
+    ComponentHealth, ComponentReport, HealthChecker, HealthComponent, HealthReport, HealthStatus,
 };

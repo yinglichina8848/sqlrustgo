@@ -1,6 +1,6 @@
 //! Buffer Pool Manager with LRU cache, prefetch, and memory pool optimization
 
-use super::page::Page;
+use crate::page::Page;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -96,7 +96,7 @@ impl BufferPool {
 
         // Load page
         let page = loader(page_id);
-        self.insert(page.clone());
+        self.insert(Arc::clone(&page));
         page
     }
 

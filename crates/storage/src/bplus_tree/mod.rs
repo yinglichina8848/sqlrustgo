@@ -40,10 +40,7 @@ impl BPlusTree {
 
     /// Query all values in range [start, end)
     pub fn range_query(&self, start: i64, end: i64) -> Vec<u32> {
-        self.map
-            .range(start..end)
-            .map(|(_, &v)| v)
-            .collect()
+        self.map.range(start..end).map(|(_, &v)| v).collect()
     }
 
     /// Return all keys in sorted order

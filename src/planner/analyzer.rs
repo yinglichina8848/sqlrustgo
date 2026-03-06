@@ -48,24 +48,14 @@ impl Analyzer {
             Statement::Delete(delete) => self.analyze_delete(delete),
             Statement::CreateTable(create) => self.analyze_create_table(create),
             Statement::DropTable(drop) => self.analyze_drop_table(drop),
-            Statement::Analyze(analyze) => self.analyze_analyze(analyze),
+            Statement::Analyze(_) => {
+                // ANALYZE statement - return empty relation for now
+                Ok(LogicalPlan::EmptyRelation {
+                    produce_one_row: false,
+                    schema: Schema::empty(),
+                })
+            }
         }
-    }
-
-    /// Analyze ANALYZE statement
-    fn analyze_analyze(
-        &self,
-        analyze: crate::parser::AnalyzeStatement,
-    ) -> Result<LogicalPlan, SqlError> {
-        let table_name = analyze.table_name.unwrap_or_default();
-        let schema = Schema::new(vec![]);
-        Ok(LogicalPlan::TableScan {
-            table_name,
-            projection: None,
-            filters: vec![],
-            limit: None,
-            schema,
-        })
     }
 
     /// Analyze SELECT statement into LogicalPlan
@@ -701,6 +691,7 @@ mod tests {
             DataType::Integer
         );
 
+        #[allow(clippy::approx_constant)]
         let float_lit = Expr::Literal(crate::types::Value::Float(3.14));
         assert_eq!(
             analyzer.infer_expression_type(&float_lit, &schema),

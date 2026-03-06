@@ -7,8 +7,8 @@ pub mod error;
 pub mod executor;
 pub mod lexer;
 pub mod monitoring;
-pub mod optimizer;
 pub mod network;
+pub mod optimizer;
 pub mod parser;
 pub mod planner;
 pub mod storage;
@@ -16,7 +16,9 @@ pub mod transaction;
 pub mod types;
 
 pub use auth::{AuthError, AuthManager, Operation, Role, Session, User};
-pub use error::{CatalogError, ExecutionError, OptimizerError, ParserError, SQLError, SQLResult, StorageError};
+pub use error::{
+    CatalogError, ExecutionError, OptimizerError, ParserError, SQLError, SQLResult, StorageError,
+};
 pub use executor::{execute, ExecutionEngine, ExecutionResult};
 pub use lexer::{tokenize, Lexer, Token};
 pub use monitoring::{HealthChecker, HealthReport, HealthStatus};
