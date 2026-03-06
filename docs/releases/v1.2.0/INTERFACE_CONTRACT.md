@@ -1,22 +1,33 @@
 # v1.2.0 接口契约文档
 
+> ⚠️ **重要更新**: 代码已迁移到 crates/ workspace 结构，以下路径可能已变更。
+> 实际位置请参考各 crate 的 Cargo.toml 和 src/lib.rs。
+> 
+> 新路径对应关系:
+> - `src/query/` → `crates/server/`
+> - `src/catalog/` → `crates/catalog/`
+> - `src/optimizer/` → `crates/optimizer/`
+> - `src/executor/` → `crates/executor/`
+> - `src/storage/` → `crates/storage/`
+> - `src/planner/` → `crates/planner/`
+
 本文档记录 v1.2.0 中所有核心接口 (trait) 的契约定义，基于实际代码。
 
 ---
 
 ## 一、核心接口总览
 
-| 接口 | 位置 | 状态 | 说明 |
-|------|------|------|------|
-| `QueryService` | `src/query/mod.rs` | ✅ | 查询服务入口 |
-| `Catalog` | `src/catalog/mod.rs` | ✅ | 元数据管理 |
-| `Optimizer` | `src/optimizer/mod.rs` | ✅ | 查询优化 |
-| `Rule` | `src/optimizer/mod.rs` | ✅ | 优化规则 |
-| `CostModel` | `src/optimizer/mod.rs` | ✅ | 成本模型 |
-| `StatisticsProvider` | `src/optimizer/stats.rs` | ✅ | 统计信息 |
-| `Executor` | `src/executor/mod.rs` | ✅ | 执行器 |
-| `StorageEngine` | `src/storage/engine.rs` | ✅ | 存储引擎 |
-| `PhysicalPlan` | `src/planner/physical_plan.rs` | ✅ | 物理计划 |
+| 接口 | 原位置 | 新位置 | 状态 |
+|------|--------|--------|------|
+| `QueryService` | `src/query/mod.rs` | `crates/server/` | ✅ |
+| `Catalog` | `src/catalog/mod.rs` | `crates/catalog/` | ✅ |
+| `Optimizer` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
+| `Rule` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
+| `CostModel` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
+| `StatisticsProvider` | `src/optimizer/stats.rs` | `crates/types/` | ✅ |
+| `Executor` | `src/executor/mod.rs` | `crates/executor/` | ✅ |
+| `StorageEngine` | `src/storage/engine.rs` | `crates/storage/` | ✅ |
+| `PhysicalPlan` | `src/planner/physical_plan.rs` | `crates/planner/` | ✅ |
 
 ---
 

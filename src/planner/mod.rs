@@ -13,7 +13,7 @@ pub mod physical_plan;
 #[allow(clippy::module_inception)]
 pub mod planner;
 
-pub use analyzer::Analyzer;
+pub use analyzer::*;
 pub use logical_plan::*;
 pub use optimizer::*;
 pub use physical_plan::*;
