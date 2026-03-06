@@ -208,6 +208,7 @@ mod tests {
 
     #[test]
     fn test_value_to_bytes_float() {
+        #[allow(clippy::approx_constant)]
         let value = Value::Float(3.14);
         let bytes = value.to_bytes();
         assert!(!bytes.is_empty());
@@ -248,6 +249,7 @@ mod tests {
 
     #[test]
     fn test_value_roundtrip_float() {
+        #[allow(clippy::approx_constant)]
         let original = Value::Float(2.71828);
         let bytes = original.to_bytes();
         let restored = Value::from_bytes(&bytes).unwrap();
