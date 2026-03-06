@@ -162,6 +162,18 @@
 | Benchmark 编译错误 | 1 | 🔴 阻塞 | maintainer | 待修复 |
 | Warnings | 22 | ⚠️ 警告 | maintainer | 待清理 |
 
+### 阶段门禁规则
+
+详见 [BRANCH_STAGE_GOVERNANCE.md](./BRANCH_STAGE_GOVERNANCE.md)
+
+| 阶段 | 门禁要求 | 允许提交类型 |
+|------|----------|--------------|
+| **Draft** | 编译通过 | 架构、目录、接口设计 |
+| **Alpha** | 测试通过率 ≥ 80% | 新功能、新模块 |
+| **Beta** | 测试通过率 ≥ 95%、Clippy 零警告 | Bug 修复、性能优化 |
+| **RC** | 测试 100% 通过、CI 全绿 | 仅 Critical Bug 修复 |
+| **GA** | 所有门禁通过 | 禁止修改 |
+
 ---
 
 ## 八、v2.0 准备度评估

@@ -33,6 +33,20 @@
 | Benchmark 编译错误 | 1 | maintainer | 2026-03-07 |
 | Warnings 清理 | 22 | maintainer | 2026-03-08 |
 
+### 分支管理规则
+
+详见 [BRANCH_STAGE_GOVERNANCE.md](./BRANCH_STAGE_GOVERNANCE.md)
+
+**核心原则**: 分支不关，但"门禁"越来越严格
+
+| 阶段 | 允许提交 | 禁止提交 |
+|------|----------|----------|
+| Draft | 架构、目录、接口设计 | 无 |
+| Alpha | 新功能、新模块 | 架构变化 |
+| Beta | Bug 修复、性能优化 | 架构变化、API 变化 |
+| RC | 仅 Critical Bug 修复 | 新代码、重构 |
+| GA | 禁止修改 | 所有提交 |
+
 ---
 
 ## 一、版本概述
