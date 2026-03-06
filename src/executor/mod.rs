@@ -428,7 +428,7 @@ impl ExecutionEngine {
 
         // Create index
         self.storage
-            .create_index(table_name, column_name, column_index)
+            .create_index_internal(table_name, column_name, column_index)
             .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
 
         Ok(())
