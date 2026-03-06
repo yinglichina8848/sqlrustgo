@@ -158,7 +158,7 @@ impl BinaryFormat for Value {
             }
             Value::Blob(b) => {
                 let mut result = vec![5u8]; // type indicator
-                // Write blob as length-prefixed bytes
+                                            // Write blob as length-prefixed bytes
                 let len = b.len() as u64;
                 result.extend_from_slice(&helpers::write_u64(len));
                 result.extend_from_slice(b);

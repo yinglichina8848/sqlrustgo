@@ -118,9 +118,7 @@ impl StorageEngine for MemoryStorage {
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
         self.table_infos.insert(info.name.clone(), info.clone());
-        self.tables
-            .entry(info.name.clone())
-            .or_default();
+        self.tables.entry(info.name.clone()).or_default();
         Ok(())
     }
 

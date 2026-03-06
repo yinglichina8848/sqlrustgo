@@ -43,9 +43,7 @@ impl SimpleCostModel {
     /// Estimate cost for join operation
     pub fn join_cost(&self, left_rows: u64, right_rows: u64, join_method: &str) -> f64 {
         match join_method {
-            "nested_loop" => {
-                (left_rows * right_rows) as f64 * self.cpu_cost_per_row
-            }
+            "nested_loop" => (left_rows * right_rows) as f64 * self.cpu_cost_per_row,
             "hash_join" => {
                 let build_cost = left_rows as f64 * self.cpu_cost_per_row;
                 let probe_cost = right_rows as f64 * self.cpu_cost_per_row;
