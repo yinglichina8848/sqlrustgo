@@ -1,0 +1,42 @@
+name: SQLRustGo Release Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'develop-*'
+      - 'release/*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  gate:
+    name: Release Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        run: |
+          git clone https://github.com/minzuuniversity/sqlrustgo.git .
+          git fetch origin ${{ github.ref }}
+          git checkout ${{ github.ref }}
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+      - name: Run Tests
+        run: cargo test --workspace --all-features

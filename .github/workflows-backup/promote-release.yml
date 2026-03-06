@@ -1,0 +1,16 @@
+name: Promote Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote
+        run: |
+          echo "Promoting release ${{ github.event.inputs.version }}"
