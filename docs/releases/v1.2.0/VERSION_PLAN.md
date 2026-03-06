@@ -26,12 +26,22 @@
 
 详见 [DRAFT_COMPLETION_TASKS.md](./DRAFT_COMPLETION_TASKS.md)
 
-| 问题类型 | 数量 | 负责人 | 截止日期 |
-|----------|------|--------|----------|
-| Clippy 错误 | 15 | maintainer | 2026-03-07 |
-| 测试编译错误 | 1 | maintainer | 2026-03-07 |
-| Benchmark 编译错误 | 1 | maintainer | 2026-03-07 |
-| Warnings 清理 | 22 | maintainer | 2026-03-08 |
+> ⚠️ **更新**: 2026-03-06 已完成以下修复:
+
+| 问题类型 | 数量 | 状态 |
+|----------|------|------|
+| Clippy 错误 | 15 | ✅ 已修复 |
+| 测试编译错误 | 1 | ✅ 已修复 |
+| Benchmark 编译错误 | 1 | ✅ 已修复 |
+| Warnings 清理 | 22 | ✅ 已修复 |
+
+**已完成PR**:
+- PR #302: 修复 clippy 警告
+- PR #303: 合并 clippy 修复
+- PR #304: 修复 index 测试编译错误
+- PR #305: 目录重构 (crates/ workspace)
+- PR #306: 修复 Cargo.toml 重复定义
+- PR #307: 修复格式化问题
 
 ### 分支管理规则
 
