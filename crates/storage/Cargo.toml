@@ -9,6 +9,7 @@ license.workspace = true
 sqlrustgo-common.workspace = true
 sqlrustgo-types.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 log.workspace = true
 async-trait.workspace = true
