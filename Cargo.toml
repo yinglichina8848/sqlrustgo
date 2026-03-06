@@ -11,11 +11,6 @@ members = [
     "crates/server",
 ]
 
-[package]
-name = "sqlrustgo"
-version = "1.2.0-draft"
-edition = "2021"
-
 [workspace.package]
 version = "1.2.0"
 edition = "2021"
