@@ -1,0 +1,1 @@
+// SQLRustGo catalog module
