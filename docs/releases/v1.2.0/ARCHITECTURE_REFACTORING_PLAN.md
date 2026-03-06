@@ -265,75 +265,59 @@ struct Group {
 
 ## 五、目标目录结构
 
-### 5.1 推荐目录结构
+### 5.1 当前实际目录结构 (crates/ workspace)
+
+> ⚠️ **重要**: v1.2.0 已通过 PR #305 实施 workspace 结构，以下是实际结构:
 
 ```
-src/
-├── parser/              # SQL 解析
-├── logical/             # 逻辑计划
-│   └── plan.rs
-├── optimizer/            # 优化器 ⭐ 新增
-│   ├── mod.rs
-│   ├── rule/            # 优化规则
-│   │   ├── predicate_pushdown.rs
-│   │   ├── projection_pruning.rs
-│   │   └── constant_folding.rs
-│   ├── cost/            # 成本模型
-│   │   └── basic_cost.rs
-│   └── memo.rs          # Memo 结构
-├── physical/            # 物理计划
-├── execution/           # 执行器
-│   ├── mod.rs
-│   ├── local.rs         # 本地执行 ⭐
-│   └── pipeline.rs      # Pipeline 模型 ⭐
-├── catalog/             # Catalog 系统 ⭐ 新增
-│   ├── mod.rs
-│   ├── table.rs
-│   ├── schema.rs
-│   └── error.rs
-├── statistics/          # 统计信息 ⭐ 新增
-│   ├── mod.rs
-│   ├── table_stats.rs
-│   └── column_stats.rs
-├── storage/             # 存储层
-│   ├── trait.rs         # StorageEngine trait ⭐
-│   └── file_storage.rs
-├── error/               # 错误域 ⭐ 新增
-│   ├── mod.rs
-│   ├── parser.rs
-│   ├── optimizer.rs
-│   ├── execution.rs
-│   └── storage.rs
-├── network/             # 网络层
-└── main.rs
+crates/
+├── common/              # 通用错误类型 (SqlError)
+├── types/              # 类型系统 (Value, DataType, error types)
+├── parser/             # SQL 解析 (Lexer, Parser, Token)
+├── planner/            # 逻辑计划 (占位)
+├── optimizer/          # 优化器 (Rule, Cost, Memo)
+├── executor/           # 执行器 (Operator, RecordBatch)
+├── storage/            # 存储引擎 (StorageEngine trait, FileStorage)
+├── catalog/            # 元数据管理
+├── transaction/        # 事务 (WAL, TransactionManager)
+└── server/             # 网络服务 (REPL, QueryService)
 ```
 
-### 5.2 新增目录说明
+### 5.2 目录说明
 
-| 目录 | 目的 | 优先级 |
-|------|------|--------|
-| `optimizer/` | CBO 优化框架 | P0 |
-| `catalog/` | 元数据管理 | P0 |
-| `statistics/` | 统计信息系统 | P0 |
-| `error/` | 错误域分离 | P1 |
-| `execution/pipeline.rs` | 向量化执行 | P1 |
+| 目录 | 目的 | 优先级 | 状态 |
+|------|------|--------|------|
+| `optimizer/` | CBO 优化框架 | P0 | ✅ 已实现 |
+| `catalog/` | 元数据管理 | P0 | ✅ 已实现 |
+| `executor/` | 执行器抽象 | P0 | ✅ 已实现 |
+| `storage/` | 存储引擎抽象 | P0 | ✅ 已实现 |
+| `transaction/` | 事务管理 | P0 | ✅ 已实现 |
+| `types/` | 类型系统 | P0 | ✅ 已实现 |
+| `common/` | 通用错误 | P1 | ✅ 已实现 |
+| `planner/` | 逻辑计划 | P1 | 🔄 开发中 |
 
 ---
 
-## 六、v1.2.0 完成后能力评估
+## 六、v1.2.0 当前能力评估
 
-| 能力 | 是否具备 | 说明 |
-|------|----------|------|
-| CBO 可扩展 | ✅ | Optimizer trait + Rule + CostModel |
-| 多优化器支持 | ✅ | 可插拔优化框架 |
-| 执行层替换 | ✅ | Executor trait |
-| 统计独立 | ✅ | StatisticsProvider trait |
-| Catalog 可共享 | ✅ | Catalog trait + 可序列化 |
-| 为 2.0 预留接口 | ✅ | 所有核心 trait 已定义 |
+> ⚠️ **更新**: 截至 v1.2.0-draft 阶段，以下接口已完成:
+
+| 能力 | 是否具备 | 实现位置 | 说明 |
+|------|----------|----------|------|
+| CBO 可扩展 | ✅ | crates/optimizer/ | Optimizer trait + Rule + CostModel |
+| 多优化器支持 | ✅ | crates/optimizer/ | 可插拔优化框架 |
+| 执行层替换 | ✅ | crates/executor/ | Executor trait |
+| 统计独立 | ✅ | crates/types/ | StatisticsProvider trait |
+| Catalog 可共享 | ✅ | crates/catalog/ | Catalog trait + 可序列化 |
+| 为 2.0 预留接口 | ✅ | 各 crate | 所有核心 trait 已定义 |
+| 存储抽象 | ✅ | crates/storage/ | StorageEngine trait |
+| 事务管理 | ✅ | crates/transaction/ | WAL + TransactionManager |
 
 ---
 
 ## 七、v1.3.0 演进路径
+
+> ⚠️ **重要**: 根据 TASK_MATRIX.md，向量化执行已延后到 v1.3.0
 
 ### 如果 1.2.0 做好，1.3.0 只需：
 
@@ -374,13 +358,15 @@ src/
 
 ## 九、与现有 v1.2.0 任务的整合
 
-### 现有任务 → 新架构
+### 现有任务 → 新架构 (实际完成状态)
 
-| 现有任务 | 对应重构 |
-|----------|----------|
-| V-001~V-007 (向量化) | R-005 + R-006 + Pipeline |
-| S-001~S-006 (统计信息) | R-003 (Statistics) |
-| C-001~C-006 (CBO) | R-002 (Optimizer 框架) |
+| 现有任务 | 对应重构 | 状态 |
+|----------|----------|------|
+| V-001~V-007 (向量化) | R-005 + R-006 + Pipeline | ⚠️ 延后到 v1.3.0 |
+| S-001~S-006 (统计信息) | crates/types/ | ✅ 已实现 |
+| C-001~C-006 (CBO) | crates/optimizer/ | ✅ 已实现 |
+| R-001~R-007 (核心接口) | 各 crate trait | ✅ 已实现 |
+| 目录重构 | crates/ workspace | ✅ 已完成 (PR #305) |
 
 ---
 
@@ -555,6 +541,8 @@ fn main() {
 ---
 
 ## 十五、Cascades Optimizer 架构设计
+
+> ⚠️ **当前状态**: v1.2.0 实现了简化版 CBO，完整 Cascades 优化器是 v1.3.0 目标
 
 ### 核心思想
 
