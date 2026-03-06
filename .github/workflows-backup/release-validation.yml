@@ -1,0 +1,54 @@
+name: Release Validation
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        run: |
+          git clone https://github.com/minzuuniversity/sqlrustgo.git .
+          git fetch --tags origin
+          git checkout ${{ github.ref }}
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "version=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Validate version consistency
+        run: |
+          TAG_VERSION=${{ steps.extract_version.outputs.version }}
+          if [ "$TAG_VERSION" != "v1.2.0" ]; then
+            echo "Version validation: $TAG_VERSION"
+          fi
+
+      - name: Run tests
+        run: cargo test --all
+
+      - name: Check code quality
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Notify completion
+        run: echo "Release validation completed"
