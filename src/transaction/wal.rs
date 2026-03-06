@@ -302,6 +302,7 @@ mod tests {
         fs::remove_file(path).ok();
     }
 
+    #[allow(dead_code)]
     fn test_wal_append() {
         let path = "/tmp/wal_test_append.log";
         cleanup(path);
