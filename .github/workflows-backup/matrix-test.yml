@@ -1,0 +1,29 @@
+name: Matrix Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable]
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout repository
+        run: |
+          git clone https://github.com/minzuuniversity/sqlrustgo.git .
+          git fetch origin ${{ github.ref }}
+          git checkout ${{ github.ref }}
+
+      - name: Setup Rust
+        run: |
+          rustup install ${{ matrix.rust }}
+          rustup default ${{ matrix.rust }}
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Build release
+        run: cargo build --release
