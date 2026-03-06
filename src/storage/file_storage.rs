@@ -252,7 +252,8 @@ impl FileStorage {
     }
 
     /// Create or update an index for a table column from existing data
-    pub fn create_index(
+    #[allow(dead_code)]
+    pub fn create_index_internal(
         &mut self,
         table_name: &str,
         column_name: &str,
@@ -382,6 +383,7 @@ struct StoredTableData {
     rows: Vec<Vec<Value>>,
 }
 
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -540,7 +542,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TBD: index tests failing - trait method conflict"]
     fn test_file_storage_index() {
         let temp_dir = std::env::temp_dir().join("sqlrustgo_test_index");
         let _ = remove_dir_all(&temp_dir);
@@ -574,7 +575,7 @@ mod tests {
             .unwrap();
 
         // Create index on id column (column_index = 0)
-        storage.create_index("idx_test", "id", 0).unwrap();
+        storage.create_index_internal("idx_test", "id", 0).unwrap();
 
         // Test has_index
         assert!(storage.has_index("idx_test", "id"));
@@ -602,7 +603,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TBD: index tests failing - trait method conflict"]
     fn test_file_storage_index_search() {
         let temp_dir = std::env::temp_dir().join("sqlrustgo_test_idx_search");
         let _ = remove_dir_all(&temp_dir);
@@ -624,7 +624,9 @@ mod tests {
         storage
             .insert_table("search_test".to_string(), table_data)
             .unwrap();
-        storage.create_index("search_test", "id", 0).unwrap();
+        storage
+            .create_index_internal("search_test", "id", 0)
+            .unwrap();
 
         // Insert with index
         storage
@@ -648,7 +650,6 @@ mod tests {
     // ==================== Additional Coverage Tests ====================
 
     #[test]
-    #[ignore = "TBD: index tests failing - trait method conflict"]
     fn test_file_storage_get_index() {
         let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_index");
         let _ = remove_dir_all(&temp_dir);
@@ -669,7 +670,9 @@ mod tests {
         storage
             .insert_table("get_idx_test".to_string(), table_data)
             .unwrap();
-        storage.create_index("get_idx_test", "id", 0).unwrap();
+        storage
+            .create_index_internal("get_idx_test", "id", 0)
+            .unwrap();
 
         // Test get_index
         let index = storage.get_index("get_idx_test", "id");
@@ -706,7 +709,9 @@ mod tests {
             .unwrap();
 
         // Create index - this will work but won't have any entries
-        storage.create_index("text_table", "name", 0).unwrap();
+        storage
+            .create_index_internal("text_table", "name", 0)
+            .unwrap();
 
         // search_index should return None for TEXT column (no Integer keys)
         let result = storage.search_index("text_table", "name", 1);
@@ -769,7 +774,9 @@ mod tests {
         storage
             .insert_table("range_test".to_string(), table_data)
             .unwrap();
-        storage.create_index("range_test", "id", 0).unwrap();
+        storage
+            .create_index_internal("range_test", "id", 0)
+            .unwrap();
 
         // Add some data
         storage.insert_with_index("range_test", "id", 5, 0).unwrap();
@@ -829,7 +836,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_no");
         let _ = remove_dir_all(&temp_dir);
 
-        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
 
         // Try to drop index from non-existent table - should return Ok (no-op)
         let result = storage.drop_index("nonexistent", "id");
@@ -929,6 +936,8 @@ impl StorageEngine for FileStorage {
         _column: &str,
         _column_index: usize,
     ) -> crate::types::SqlResult<()> {
+        // Note: This trait method cannot call &mut self inherent methods.
+        // Use FileStorage::create_index_internal directly for full functionality.
         Ok(())
     }
 
