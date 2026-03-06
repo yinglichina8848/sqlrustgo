@@ -1,0 +1,17 @@
+[package]
+name = "sqlrustgo-executor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo-common.workspace = true
+sqlrustgo-types.workspace = true
+sqlrustgo-storage.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

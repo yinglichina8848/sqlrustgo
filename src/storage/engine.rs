@@ -44,7 +44,7 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_index(&self, table: &str, column: &str) -> SqlResult<()>;
+    fn create_index(&self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
     /// Drop an index from a table
     fn drop_index(&self, table: &str, column: &str) -> SqlResult<()>;
@@ -79,7 +79,7 @@ impl StorageEngine for MemoryStorage {
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
         self.tables
             .entry(table.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(records);
         Ok(())
     }
@@ -104,9 +104,7 @@ impl StorageEngine for MemoryStorage {
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
         self.table_infos.insert(info.name.clone(), info.clone());
-        self.tables
-            .entry(info.name.clone())
-            .or_insert_with(Vec::new);
+        self.tables.entry(info.name.clone()).or_default();
         Ok(())
     }
 
@@ -131,7 +129,7 @@ impl StorageEngine for MemoryStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn create_index(&self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
         Ok(())
     }
 
@@ -147,7 +145,54 @@ mod tests {
     /// Test that StorageEngine trait is defined correctly
     #[test]
     fn test_storage_engine_trait_exists() {
-        // Verify the trait is defined and has the expected methods
         fn _check_trait(_engine: &dyn StorageEngine) {}
+    }
+
+    #[test]
+    fn test_memory_storage_new() {
+        let storage = MemoryStorage::new();
+        assert!(storage.list_tables().is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_has_table() {
+        let storage = MemoryStorage::new();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_memory_storage_list_tables() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let tables = storage.list_tables();
+        assert!(tables.contains(&"users".to_string()));
+    }
+
+    #[test]
+    fn test_memory_storage_scan_empty() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        let result = storage.scan("users").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_insert_and_scan() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![
+                vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            ],
+        );
+        let result = storage.scan("users").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_storage_engine_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        _check::<MemoryStorage>();
     }
 }
