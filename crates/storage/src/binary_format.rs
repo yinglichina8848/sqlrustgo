@@ -3,7 +3,7 @@
 //! This module provides binary serialization/deserialization interfaces
 //! for future distributed storage (v2.0).
 
-use crate::engine::Value;
+use sqlrustgo_types::Value;
 
 /// BinaryFormat trait - defines interface for binary serialization
 ///

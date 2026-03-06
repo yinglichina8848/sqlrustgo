@@ -1,0 +1,26 @@
+[package]
+name = "sqlrustgo-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo-common.workspace = true
+sqlrustgo-parser.workspace = true
+sqlrustgo-planner.workspace = true
+sqlrustgo-optimizer.workspace = true
+sqlrustgo-executor.workspace = true
+sqlrustgo-storage.workspace = true
+sqlrustgo-catalog.workspace = true
+sqlrustgo-transaction.workspace = true
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger.workspace = true
+ctrlc.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

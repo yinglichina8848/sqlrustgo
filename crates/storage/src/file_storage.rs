@@ -1,8 +1,9 @@
 //! File-based table storage
 //! Persists table data to JSON files
 
-use crate::engine::{TableData, TableInfo, Record, Value, ColumnDefinition};
 use crate::bplus_tree::BPlusTree;
+use crate::engine::{ColumnDefinition, Record, StorageEngine, TableData, TableInfo};
+use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Write};
@@ -848,8 +849,6 @@ mod tests {
         let _ = remove_dir_all(&temp_dir);
     }
 }
-
-use crate::engine::{StorageEngine, SqlResult, SqlError};
 
 impl StorageEngine for FileStorage {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {

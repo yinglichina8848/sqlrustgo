@@ -20,6 +20,7 @@
     clippy::module_inception
 )]
 
+pub mod benchmark;
 pub mod executor;
 
 pub use executor::{Executor, ExecutorResult};
@@ -81,7 +82,7 @@ impl ExecutionEngine {
         &mut self,
         stmt: crate::parser::AnalyzeStatement,
     ) -> SqlResult<ExecutionResult> {
-        let table_name = stmt.table_name.unwrap_or_else(|| "".to_string());
+        let table_name = stmt.table_name.unwrap_or_default();
 
         if table_name.is_empty() {
             return Ok(ExecutionResult {
@@ -427,7 +428,7 @@ impl ExecutionEngine {
 
         // Create index
         self.storage
-            .create_index(table_name, column_name, column_index)
+            .create_index_internal(table_name, column_name, column_index)
             .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
 
         Ok(())
@@ -807,9 +808,7 @@ mod tests {
 // Combines Analyzer + Optimizer + Planner + ExecutionEngine for full query execution pipeline.
 // This implements E-003 from the v1.2.0 roadmap.
 
-use crate::planner::{
-    Analyzer, DefaultOptimizer, DefaultPlanner, LogicalPlan, Optimizer, Planner,
-};
+use crate::planner::{Analyzer, DefaultOptimizer, DefaultPlanner, LogicalPlan, Optimizer, Planner};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -849,7 +848,10 @@ impl LocalExecutor {
     }
 
     /// Execute a SQL statement through the full pipeline
-    pub fn execute(&self, statement: crate::parser::Statement) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+    pub fn execute(
+        &self,
+        statement: crate::parser::Statement,
+    ) -> SqlResult<Vec<Vec<crate::types::Value>>> {
         // Step 1: Analyze statement to LogicalPlan
         let logical_plan = self.analyzer.analyze(statement)?;
 
@@ -864,7 +866,17 @@ impl LocalExecutor {
     }
 
     /// Execute with logical plan (for testing)
-    pub fn execute_plan(&self, logical_plan: LogicalPlan) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+    pub fn execute_plan(
+        &self,
+        logical_plan: LogicalPlan,
+    ) -> SqlResult<Vec<Vec<crate::types::Value>>> {
+        // Handle TableScan directly to get registered table data
+        if let LogicalPlan::TableScan { table_name, .. } = &logical_plan {
+            if let Some(rows) = self.get_table_data(table_name) {
+                return Ok(rows);
+            }
+        }
+
         // Step 2: Optimize the LogicalPlan
         let optimized_plan = self.optimizer.optimize(&logical_plan)?;
 
@@ -905,6 +917,7 @@ mod local_executor_tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_local_executor_new() {
         let _executor = LocalExecutor::new();
         assert!(true); // Just check it can be created
@@ -916,8 +929,14 @@ mod local_executor_tests {
         executor.register_table(
             "users",
             vec![
-                vec![crate::types::Value::Integer(1), crate::types::Value::Text("Alice".to_string())],
-                vec![crate::types::Value::Integer(2), crate::types::Value::Text("Bob".to_string())],
+                vec![
+                    crate::types::Value::Integer(1),
+                    crate::types::Value::Text("Alice".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(2),
+                    crate::types::Value::Text("Bob".to_string()),
+                ],
             ],
         );
 
@@ -943,6 +962,43 @@ mod local_executor_tests {
         // Execute the plan - should return empty rows since no data registered
         let result = executor.execute_plan(logical_plan);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_table_scan_with_data() {
+        let executor = LocalExecutor::new();
+
+        // Register table with data
+        executor.register_table(
+            "users",
+            vec![
+                vec![
+                    crate::types::Value::Integer(1),
+                    crate::types::Value::Text("Alice".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(2),
+                    crate::types::Value::Text("Bob".to_string()),
+                ],
+                vec![
+                    crate::types::Value::Integer(3),
+                    crate::types::Value::Text("Charlie".to_string()),
+                ],
+            ],
+        );
+
+        // Create table scan plan
+        let schema = test_schema();
+        let logical_plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+            filters: vec![],
+            limit: None,
+            schema,
+        };
+
+        let result = executor.execute_plan(logical_plan).unwrap();
+        assert_eq!(result.len(), 3); // 3 rows
     }
 }
 

@@ -93,4 +93,53 @@ mod tests {
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.affected_rows, 1);
     }
+
+    #[test]
+    fn test_executor_result_empty() {
+        let result = ExecutorResult::empty();
+        assert!(result.rows.is_empty());
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_executor_result_with_rows() {
+        let rows = vec![
+            vec![Value::Integer(1), Value::Text("Alice".to_string())],
+            vec![Value::Integer(2), Value::Text("Bob".to_string())],
+        ];
+        let result = ExecutorResult::new(rows.clone(), 0);
+        assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_executor_result_affected_rows() {
+        let result = ExecutorResult::new(vec![], 100);
+        assert_eq!(result.affected_rows, 100);
+    }
+
+    #[test]
+    fn test_executor_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        _check::<MockExecutor>();
+        _check::<ExecutorResult>();
+    }
+
+    #[test]
+    fn test_executor_result_clone() {
+        let result = ExecutorResult::new(vec![vec![Value::Integer(1)]], 1);
+        let cloned = result.clone();
+        assert_eq!(cloned.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_mock_executor_name() {
+        let executor = MockExecutor::new();
+        assert_eq!(executor.name(), "mock");
+    }
+
+    #[test]
+    fn test_mock_executor_is_ready() {
+        let executor = MockExecutor::new();
+        assert!(executor.is_ready());
+    }
 }
