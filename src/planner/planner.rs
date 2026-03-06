@@ -4,8 +4,8 @@
 
 use super::logical_plan::LogicalPlan;
 use super::physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec,
-    SeqScanExec, SortExec,
+    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
+    SortExec,
 };
 use crate::types::SqlResult;
 use std::sync::Arc;
@@ -59,9 +59,17 @@ impl DefaultPlanner {
                 )))
             }
 
-            LogicalPlan::Projection { input, expr, schema } => {
+            LogicalPlan::Projection {
+                input,
+                expr,
+                schema,
+            } => {
                 let input_plan = self.plan_recursive(input)?;
-                Ok(Arc::new(ProjectionExec::new(input_plan, expr.clone(), schema.clone())))
+                Ok(Arc::new(ProjectionExec::new(
+                    input_plan,
+                    expr.clone(),
+                    schema.clone(),
+                )))
             }
 
             LogicalPlan::Filter { input, predicate } => {
@@ -160,9 +168,7 @@ impl DefaultPlanner {
                 )))
             }
 
-            LogicalPlan::Subquery { subquery, .. } => {
-                self.plan_recursive(subquery)
-            }
+            LogicalPlan::Subquery { subquery, .. } => self.plan_recursive(subquery),
 
             LogicalPlan::Union { inputs, schema } => {
                 // Union - execute all inputs and concatenate results
@@ -182,7 +188,11 @@ impl DefaultPlanner {
                 )))
             }
 
-            LogicalPlan::Update { input, set_exprs: _, schema: _ } => {
+            LogicalPlan::Update {
+                input,
+                set_exprs: _,
+                schema: _,
+            } => {
                 let input_plan = self.plan_recursive(input)?;
                 // For UPDATE, we need a special operator - for now, use input as is
                 Ok(input_plan)
@@ -231,7 +241,10 @@ impl DefaultPlanner {
                     args,
                     distinct: _,
                 } => {
-                    let arg = args.first().cloned().unwrap_or(super::Expr::Literal(crate::types::Value::Null));
+                    let arg = args
+                        .first()
+                        .cloned()
+                        .unwrap_or(super::Expr::Literal(crate::types::Value::Null));
                     result.push((func.clone(), arg));
                 }
                 _ => {
@@ -295,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_default_planner_new() {
         let _planner = DefaultPlanner::new();
         assert!(true); // Just check it can be created
@@ -358,7 +372,9 @@ mod tests {
                     "id".to_string(),
                 ))),
                 op: super::super::Operator::Gt,
-                right: Box::new(super::super::Expr::Literal(crate::types::Value::Integer(10))),
+                right: Box::new(super::super::Expr::Literal(crate::types::Value::Integer(
+                    10,
+                ))),
             },
         };
 

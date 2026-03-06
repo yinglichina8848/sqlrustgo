@@ -1,18 +1,15 @@
-// SQLRustGo Storage Module
+// SQLRustGo storage module
 
+pub mod binary_format;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod engine;
-pub mod page;
 pub mod file_storage;
-pub mod binary_format;
+pub mod page;
 
+pub use binary_format::BinaryFormat;
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
-pub use engine::{MemoryStorage, StorageEngine};
-pub use page::Page;
+pub use engine::{ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo};
 pub use file_storage::FileStorage;
-pub use binary_format::BinaryFormat;
-
-// Re-export types for convenience
-pub use engine::{Record, TableInfo, ColumnDefinition, TableData};
+pub use page::Page;

@@ -1,0 +1,304 @@
+# SQLRustGo 权限矩阵
+
+> **版本**: 1.0
+> **制定日期**: 2026-03-06
+> **制定人**: yinglichina8848
+
+---
+
+## 一、角色定义
+
+### 1.1 角色层级
+
+```
+┌─────────────────────────────────────────────┐
+│                 Owner                        │
+│            (yinglichina8848)                 │
+│         完全控制、架构决策                    │
+├─────────────────────────────────────────────┤
+│              Maintainer                      │
+│         代码审核、版本发布                    │
+├─────────────────────────────────────────────┤
+│              AI Developer                    │
+│         功能开发、测试编写                    │
+├─────────────────────────────────────────────┤
+│              Contributor                     │
+│         提交 PR、文档贡献                     │
+└─────────────────────────────────────────────┘
+```
+
+### 1.2 角色职责
+
+| 角色 | 职责 | 限制 |
+|------|------|------|
+| **Owner** | 架构决策、版本发布、权限管理 | 无 |
+| **Maintainer** | 代码审核、CI 维护、文档管理 | 不能修改保护规则 |
+| **AI Developer** | 功能开发、测试编写、Bug 修复 | 不能合并 PR |
+| **Contributor** | 提交 PR、文档贡献、问题反馈 | 不能直接 push |
+
+---
+
+## 二、权限矩阵
+
+### 2.1 代码仓库权限
+
+| 操作 | Owner | Maintainer | AI Developer | Contributor |
+|------|:-----:|:----------:|:------------:|:-----------:|
+| Push to main | ❌ | ❌ | ❌ | ❌ |
+| Push to develop | ❌ | ❌ | ❌ | ❌ |
+| Push to feature/* | ✅ | ✅ | ✅ | ✅ |
+| Create branch | ✅ | ✅ | ✅ | ✅ |
+| Delete branch | ✅ | ⚠️ | ❌ | ❌ |
+| Force push | ❌ | ❌ | ❌ | ❌ |
+| Open PR | ✅ | ✅ | ✅ | ✅ |
+| Review PR | ✅ | ✅ | ❌ | ⚠️ |
+| Approve PR | ✅ | ✅ | ❌ | ❌ |
+| Merge PR | ✅ | ✅ | ❌ | ❌ |
+| Close PR | ✅ | ✅ | ⚠️ | ⚠️ |
+
+### 2.2 版本发布权限
+
+| 操作 | Owner | Maintainer | AI Developer | Contributor |
+|------|:-----:|:----------:|:------------:|:-----------:|
+| Create tag | ✅ | ⚠️ | ❌ | ❌ |
+| Delete tag | ✅ | ❌ | ❌ | ❌ |
+| Create release | ✅ | ✅ | ❌ | ❌ |
+| Publish to crates.io | ✅ | ⚠️ | ❌ | ❌ |
+| Modify VERSION file | ✅ | ✅ | ❌ | ❌ |
+
+### 2.3 CI/CD 权限
+
+| 操作 | Owner | Maintainer | AI Developer | Contributor |
+|------|:-----:|:----------:|:------------:|:-----------:|
+| Trigger CI | ✅ | ✅ | ✅ | ✅ |
+| Cancel workflow | ✅ | ✅ | ⚠️ | ❌ |
+| Re-run workflow | ✅ | ✅ | ❌ | ❌ |
+| Modify CI config | ✅ | ⚠️ | ❌ | ❌ |
+| Access secrets | ✅ | ⚠️ | ❌ | ❌ |
+
+### 2.4 项目管理权限
+
+| 操作 | Owner | Maintainer | AI Developer | Contributor |
+|------|:-----:|:----------:|:------------:|:-----------:|
+| Create issue | ✅ | ✅ | ✅ | ✅ |
+| Close issue | ✅ | ✅ | ⚠️ | ⚠️ |
+| Assign issue | ✅ | ✅ | ⚠️ | ❌ |
+| Create milestone | ✅ | ✅ | ❌ | ❌ |
+| Modify labels | ✅ | ✅ | ❌ | ❌ |
+| Modify project | ✅ | ✅ | ❌ | ❌ |
+
+### 2.5 安全权限
+
+| 操作 | Owner | Maintainer | AI Developer | Contributor |
+|------|:-----:|:----------:|:------------:|:-----------:|
+| View security alerts | ✅ | ✅ | ❌ | ❌ |
+| Modify branch protection | ✅ | ❌ | ❌ | ❌ |
+| Manage deploy keys | ✅ | ❌ | ❌ | ❌ |
+| Manage webhooks | ✅ | ⚠️ | ❌ | ❌ |
+
+---
+
+## 三、权限说明
+
+### 3.1 符号说明
+
+| 符号 | 含义 |
+|------|------|
+| ✅ | 允许 |
+| ⚠️ | 限制 (需要条件) |
+| ❌ | 禁止 |
+
+### 3.2 限制条件说明
+
+| 操作 | 限制条件 |
+|------|----------|
+| Delete branch | 仅限 feature 分支 |
+| Review PR (Contributor) | 可以评论，不能批准 |
+| Close PR (AI/Contributor) | 仅限自己创建的 PR |
+| Create tag (Maintainer) | 需要 Owner 确认 |
+| Publish (Maintainer) | 需要 Owner 确认 |
+| Modify CI (Maintainer) | 需要通过 PR |
+| Access secrets (Maintainer) | 仅限特定 secrets |
+| Cancel workflow (AI) | 仅限自己触发的 |
+| Close issue (AI/Contributor) | 仅限自己创建的 |
+| Assign issue (AI) | 仅限分配给自己 |
+| Manage webhooks (Maintainer) | 仅限非安全关键 |
+
+---
+
+## 四、GitHub 团队配置
+
+### 4.1 团队结构
+
+```
+sqlrustgo-org/
+│
+├── owners/                 # Owner 团队
+│   └── yinglichina8848
+│
+├── maintainers/            # Maintainer 团队
+│   └── (待添加)
+│
+├── ai-developers/          # AI Developer 团队
+│   └── (AI 账号)
+│
+└── contributors/           # Contributor 团队
+    └── (所有贡献者)
+```
+
+### 4.2 团队权限设置
+
+| 团队 | 仓库权限 |
+|------|----------|
+| owners | Admin |
+| maintainers | Maintain |
+| ai-developers | Write |
+| contributors | Read |
+
+---
+
+## 五、CODEOWNERS 配置
+
+```github
+# SQLRustGo CODEOWNERS
+
+# 默认所有者
+* @yinglichina8848
+
+# 核心代码需要架构师审核
+/src/ @yinglichina8848 @maintainers
+
+# 存储引擎
+/src/storage/ @yinglichina8848
+
+# 优化器
+/src/optimizer/ @yinglichina8848
+
+# 分布式模块
+/src/distributed/ @yinglichina8848
+
+# CI/CD 配置
+/.github/ @yinglichina8848 @maintainers
+
+# 文档
+/docs/ @maintainers
+
+# 发布相关
+/RELEASE* @yinglichina8848
+/VERSION @yinglichina8848
+/Cargo.toml @yinglichina8848
+```
+
+---
+
+## 六、AI 开发者特殊规则
+
+### 6.1 必须遵守
+
+1. **所有修改必须通过 PR**
+2. **PR 必须关联 Issue**
+3. **必须等待 CI 通过**
+4. **必须等待人工审核**
+
+### 6.2 禁止操作
+
+| 操作 | 原因 |
+|------|------|
+| 直接 push 到保护分支 | 绕过审核流程 |
+| 合并自己的 PR | 缺少审核 |
+| 创建/删除 tag | 版本控制 |
+| 修改 CI 配置 | 安全风险 |
+| 访问 secrets | 安全风险 |
+| 修改保护规则 | 安全风险 |
+
+### 6.3 AI 开发流程
+
+```
+AI Developer
+     │
+     ├── 1. 创建 feature 分支
+     │
+     ├── 2. 开发功能
+     │
+     ├── 3. 创建 PR
+     │
+     ├── 4. 等待 CI 通过
+     │
+     ├── 5. 等待 Maintainer 审核
+     │
+     └── 6. Maintainer 合并
+```
+
+---
+
+## 七、权限申请流程
+
+### 7.1 成为 Contributor
+
+1. Fork 仓库
+2. 提交有效 PR
+3. PR 被合并
+4. 自动加入 contributors 团队
+
+### 7.2 成为 AI Developer
+
+1. 由 Owner 邀请
+2. 签署贡献者协议
+3. 加入 ai-developers 团队
+
+### 7.3 成为 Maintainer
+
+1. 持续贡献 3 个月以上
+2. 由 Owner 提名
+3. 现有 Maintainer 投票
+4. 加入 maintainers 团队
+
+---
+
+## 八、违规处理
+
+### 8.1 违规类型
+
+| 级别 | 违规类型 | 处理方式 |
+|------|----------|----------|
+| 🔴 严重 | 绕过门禁、恶意代码 | 立即禁用权限 |
+| 🟠 中等 | 违反开发流程 | 警告 + 培训 |
+| 🟡 轻微 | 文档不规范 | 提醒修正 |
+
+### 8.2 处理流程
+
+```
+发现违规
+    │
+    ├── 评估严重程度
+    │
+    ├── 记录违规行为
+    │
+    ├── 执行处理措施
+    │
+    ├── 通知当事人
+    │
+    └── 更新权限规则
+```
+
+---
+
+## 九、相关文档
+
+| 文档 | 说明 |
+|------|------|
+| [RELEASE_GOVERNANCE.md](./RELEASE_GOVERNANCE.md) | 版本治理模型 |
+| [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md) | AI 协作安全规则 |
+| [BRANCH_PROTECTION.md](./.github/BRANCH_PROTECTION.md) | 分支保护配置 |
+
+---
+
+## 十、变更历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.0 | 2026-03-06 | 初始版本，定义权限矩阵 |
+
+---
+
+*本文档由 yinglichina8848 制定*

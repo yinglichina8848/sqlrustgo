@@ -16,7 +16,7 @@
 //! | Data Area (>= 4032 bytes)                                    |
 //! +----------------+----------------+----------------+----------------+
 
-use crate::engine::Value;
+use sqlrustgo_types::Value;
 use std::io::{Read, Write};
 
 /// Page size constant (4KB)
@@ -110,6 +110,10 @@ impl Page {
         self.data[offset..offset + 4].copy_from_slice(&PAGE_MAGIC.to_le_bytes());
         offset += 4;
 
+        // Page ID (4 bytes)
+        self.data[offset..offset + 4].copy_from_slice(&self.page_id.to_le_bytes());
+        offset += 4;
+
         // Version (2 bytes)
         self.data[offset..offset + 2].copy_from_slice(&PAGE_VERSION.to_le_bytes());
         offset += 2;
@@ -149,24 +153,28 @@ impl Page {
 
     /// Read page header
     fn read_header(&mut self) {
-        let mut offset = 0;
-
         // Magic number
         let magic = u32::from_le_bytes([self.data[0], self.data[1], self.data[2], self.data[3]]);
         if magic != PAGE_MAGIC {
             return;
         }
 
-        offset = 8;
+        // Page ID
+        self.page_id = u32::from_le_bytes([self.data[4], self.data[5], self.data[6], self.data[7]]);
 
-        // Page type
+        let mut offset = 8;
+
+        // Version (2 bytes) - skip
+        offset += 2;
+
+        // Page type (1 byte)
         self.page_type = match self.data[offset] {
             1 => PageType::Data,
             2 => PageType::Index,
             3 => PageType::Meta,
             _ => PageType::Free,
         };
-        offset += 2;
+        offset += 2; // page_type (1) + reserved (1)
 
         offset += 4; // skip checksum
         offset += 4; // skip prev page
