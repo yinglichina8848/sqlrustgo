@@ -15,7 +15,7 @@
 │                                                                              │
 │   v1.2.0 (当前)                                                             │
 │   └── 架构: 接口抽象化 + CBO 基础                                           │
-│   └── 状态: Draft → Alpha → Beta → RC → GA                                 │
+│   └── 状态: Alpha (当前) → Beta → RC → GA                                  │
 │                                                                              │
 │   v1.3.0 (规划中)                                                           │
 │   └── 架构: 向量化执行 + 可观测性                                            │
@@ -45,6 +45,10 @@
 | **核心目标** | 架构重构 + 接口抽象 + 简化 CBO |
 | **成熟度** | L3+ 产品级 |
 | **目录结构** | crates/ workspace |
+
+> 当前版本状态：`alpha/v1.2.0`
+> 当前开发分支：`develop/v1.2.0`
+> 历史标识 `v1.2.0-draft` 仅作为追溯信息保留。
 
 **已完成的核心 Trait**:
 - ✅ Executor trait (执行层抽象)
@@ -167,18 +171,18 @@ v1.2.0 GA
 
 | 类型 | 命名格式 | 示例 |
 |------|----------|------|
-| 开发分支 | `develop-v1.x.0` | `develop-v1.2.0` |
+| 开发分支 | `develop/v1.x.0` | `develop/v1.2.0` |
 | 功能分支 | `feature/v1.x.0-<功能名>` | `feature/v1.2.0-vector-execution` |
 | 修复分支 | `fix/v1.x.0-<问题描述>` | `fix/v1.2.0-index-tests` |
 | 文档分支 | `docs/v1.x.0-<文档类型>` | `docs/v1.2.0-release-notes` |
-| 维护分支 | `release/x.x` | `release/1.2` |
+| 维护分支 | `release/vx.y.z` | `release/v1.2.0` |
 
 ### 5.2 分支保护规则
 
 | 分支 | 保护规则 |
 |------|----------|
 | `main` | 禁止直接 push，必须通过 PR + 2人审核 |
-| `develop-x.x.x` | 禁止直接 push，必须通过 PR + 1人审核 |
+| `develop/vx.y.z` | 禁止直接 push，必须通过 PR + 1人审核 |
 | `feature/*`, `fix/*` | 允许直接 push，但需要 CI 通过 |
 
 ---

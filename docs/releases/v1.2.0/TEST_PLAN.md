@@ -3,7 +3,8 @@
 > **版本**: v1.2.0
 > **代号**: Vector Engine
 > **目标**: 测试覆盖率 ≥85%
-> **日期**: 2026-03-05
+> **日期**: 2026-03-07
+> **当前阶段**: alpha/v1.2.0
 
 ---
 
@@ -25,7 +26,8 @@
 
 ### 1.2 已知问题
 
-- **develop-v1.2.0 分支编译错误**: 存在模块依赖冲突，需要修复
+- **PR #326 待合并**: `crates/executor/src/executor.rs` 恢复修复仍处于 OPEN，且 `mergeStateStatus=DIRTY`。
+- **历史记录保留**: Draft 阶段曾出现编译/依赖冲突，已作为历史信息保留，不删除。
 
 ---
 
@@ -239,7 +241,7 @@ cargo test --lib storage
 
 ### Phase 1: 编译修复 (第1天)
 
-- [ ] 修复 develop-v1.2.0 编译错误
+- [ ] 修复 develop/v1.2.0 编译错误
 - [ ] 确保 cargo build 通过
 - [ ] 确保 cargo test 通过
 
