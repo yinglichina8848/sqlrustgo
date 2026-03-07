@@ -2,8 +2,12 @@
 
 > **版本**: 1.0
 > **制定日期**: 2026-03-06
+> **更新日期**: 2026-03-07
 > **制定人**: yinglichina8848
 > **适用范围**: 所有版本开发
+
+> 当前执行口径：`alpha/v1.2.0` 阶段使用 `develop/v1.2.0` 作为主开发分支。
+> 历史命名（如 `develop-v1.2.0`、`develop-1.2.0`）保留为兼容记录，不删除历史信息。
 
 ---
 
@@ -13,12 +17,12 @@
 
 **核心思想：分支不关，但"门禁"越来越严格**
 
-开发分支 (`develop-x.x.x`) 从创建到 GA 发布一直存在，不会在 Alpha/Beta/RC 阶段关闭。但在不同阶段，允许的提交类型会逐渐收紧。
+开发分支 (`develop/vx.y.z`) 从创建到 GA 发布一直存在，不会在 Alpha/Beta/RC 阶段关闭。但在不同阶段，允许的提交类型会逐渐收紧。
 
 ### 1.2 版本阶段流程
 
 ```
-develop-x.x.x
+develop/vx.y.z
     │
     ├── Draft (草稿)
     │   └── 允许：架构、目录、接口设计
@@ -48,12 +52,12 @@ main
  │
  ├─ develop                    # 下一个版本开发
  │
- ├─ develop-1.2.0              # 当前版本开发
+ ├─ develop/v1.2.0             # 当前版本开发
  │    ├─ feature/*             # 功能分支
  │    ├─ fix/*                # 修复分支 (推荐)
  │    └─ bugfix/*             # 修复分支 (别名)
  │
- └─ develop-1.3.0              # 下一版本预研
+ └─ develop/v1.3.0             # 下一版本预研
 ```
 
 ### 2.2 分支命名规范
@@ -72,11 +76,11 @@ main
 |------|------|----------|
 | `main` | 稳定版本，只接受 release merge | 🔴 最高 |
 | `develop` | 下一个版本开发 | 🟡 中等 |
-| `develop-x.x.x` | 当前版本开发 | 🟡 中等 |
+| `develop/vx.y.z` | 当前版本开发 | 🟡 中等 |
 | `feature/*` | 新功能开发 | 🟢 低 |
 | `fix/*` | Bug 修复 (推荐) | 🟢 低 |
 | `bugfix/*` | Bug 修复 (别名) | 🟢 低 |
-| `release/x.x` | 维护分支 | 🔴 高 |
+| `release/vx.y.z` | 维护分支 | 🔴 高 |
 
 ---
 
@@ -169,12 +173,12 @@ git push origin v1.2.0
 
 # 2. 合并到 main
 git checkout main
-git merge develop-1.2.0
+git merge develop/v1.2.0
 git push origin main
 
 # 3. 创建维护分支
-git checkout -b release/1.2
-git push origin release/1.2
+git checkout -b release/v1.2.0
+git push origin release/v1.2.0
 ```
 
 ---
@@ -229,7 +233,7 @@ RC → GA
 | 分支 | 保护规则 |
 |------|----------|
 | `main` | 禁止直接 push，必须通过 PR + 2人审核 |
-| `develop-x.x.x` | 禁止直接 push，必须通过 PR + 1人审核 |
+| `develop/vx.y.z` | 禁止直接 push，必须通过 PR + 1人审核 |
 | `feature/*` | 允许直接 push，但需要 CI 通过 |
 
 ### 5.2 PR 合并规则
@@ -247,10 +251,10 @@ RC → GA
 
 ### 6.1 维护分支创建时机
 
-GA 发布后，`develop-x.x.x` 转换为 `release/x.x` 维护分支：
+GA 发布后，`develop/vx.y.z` 转换为 `release/vx.y.z` 维护分支：
 
 ```
-develop-1.2.0  →  release/1.2
+develop/v1.2.0  →  release/v1.2.0
 ```
 
 ### 6.2 维护分支规则
@@ -265,11 +269,11 @@ develop-1.2.0  →  release/1.2
 
 ## 七、常见问题
 
-### Q1: 什么时候关闭 develop-x.x.x？
+### Q1: 什么时候关闭 develop/vx.y.z？
 
 **答案**: 只有两种情况：
 
-1. **版本发布**: GA 后转换为 `release/x.x` 维护分支
+1. **版本发布**: GA 后转换为 `release/vx.y.z` 维护分支
 2. **版本取消**: 项目决定取消该版本开发
 
 ### Q2: 可以同时存在多个 develop 分支吗？
@@ -277,18 +281,18 @@ develop-1.2.0  →  release/1.2
 **答案**: 可以，推荐结构：
 
 ```
-develop-1.2.0  # 当前版本
-develop-1.3.0  # 下一版本预研
+develop/v1.2.0  # 当前版本
+develop/v1.3.0  # 下一版本预研
 develop        # 未来版本
 ```
 
 ### Q3: Hotfix 如何处理？
 
-**答案**: 在 `release/x.x` 分支上修复，然后：
+**答案**: 在 `release/vx.y.z` 分支上修复，然后：
 
 ```bash
 # 1. 在 release 分支修复
-git checkout release/1.2
+git checkout release/v1.2.0
 # ... fix ...
 git commit -m "fix: critical bug"
 
@@ -297,7 +301,7 @@ git tag v1.2.1
 
 # 3. 合并回 main
 git checkout main
-git merge release/1.2
+git merge release/v1.2.0
 ```
 
 ---
@@ -325,7 +329,7 @@ v1.1.0 (已完成)
 └── main: v1.1.0
 
 v1.2.0 (进行中)
-├── develop-1.2.0 (Draft 阶段)
+├── develop/v1.2.0 (Draft 阶段)
 └── 目标: GA 发布
 ```
 
