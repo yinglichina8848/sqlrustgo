@@ -56,21 +56,21 @@
 ### main 分支
 
 **必须开启：**
-- Require pull request
-- Require approvals (≥1)
-- Require status checks
-- Require conversation resolution
-- Require signed commits
-- Require linear history
-- Include administrators
-- Disable force push
-- Disable deletion
+- 需要拉取请求
+- 需要批准（≥1）
+- 需要状态检查
+- 需要对话解决
+- 需要签名提交
+- 需要线性历史
+- 包括管理员
+- 禁用强制推送
+- 禁用删除
 
 ### rc/*
 
 同 main。
 
-### release/*
+＃＃＃ 发布/*
 
 同 main。
 
@@ -82,20 +82,20 @@
 **必须：**
 - 禁止删除
 - 禁止重建
-- Include administrators
+- 包括管理员
 
 ## 🛡️ 权限边界
 
-| 操作 | Owner | Maintainer | Developer | CI Bot |
+| 操作 | Owner |维护者|开发商| CI Bot |
 |------|-------|------------|-----------|--------|
 | 修改仓库设置 | ✅ | ❌ | ❌ | ❌ |
 | 修改权限 | ✅ | ❌ | ❌ | ❌ |
 | 配置分支保护 | ✅ | ❌ | ❌ | ❌ |
-| 直接 push main | ❌ | ❌ | ❌ | ❌ |
-| Merge PR | ✅ | ✅ | ❌ | ❌ |
+|直接 push main| ❌ | ❌ | ❌ | ❌ |
+|合并公关| ✅ | ✅ | ❌ | ❌ |
 | 提交 PR | ✅ | ✅ | ✅ | ❌ |
 | 创建 tag | ❌ | ❌ | ❌ | ✅ |
-| 发布 release | ❌ | ❌ | ❌ | ✅ |
+|发布 release| ❌ | ❌ | ❌ | ✅ |
 | 删除 tag | ❌ | ❌ | ❌ | ❌ |
 
 ## 📋 身份迁移步骤

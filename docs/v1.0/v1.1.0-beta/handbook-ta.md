@@ -30,8 +30,8 @@ gh pr view <PR_NUMBER> --comments
 |---|--------|------|
 | 1 | **代码质量** | 无明显错误、逻辑合理 |
 | 2 | **测试覆盖** | 新功能有对应测试 |
-| 3 | **Clippy 检查** | `cargo clippy --all-features -- -D warnings` |
-| 4 | **格式化检查** | `cargo fmt --check` |
+| 3 |**Clippy 检查**|__代码0__|
+| 4 | **格式化检查** |__代码0__|
 | 5 | **门禁验证** | 所有检查通过才能合并 |
 
 ---
@@ -133,9 +133,9 @@ cargo llvm-cov --all-features
 **基本信息**
 | 项目 | 内容 |
 |------|------|
-| 分支 | feature/unwrap-error-handling → feature/v1.1.0-beta |
-| 作者 | yinglichina8848 |
-| 状态 | MERGED |
+| 分支 |功能/展开错误处理 → 功能/v1.1.0-beta|
+| 作者 |英利china8848|
+| 状态 |合并|
 | 审核人 | 高小药 |
 
 **变更内容**
@@ -147,10 +147,10 @@ cargo llvm-cov --all-features
 **验证证据**
 | 检查项 | 结果 |
 |--------|------|
-| cargo build | ✅ 通过 |
-| cargo test | ✅ 297 通过 |
-| cargo clippy | ✅ 零警告 |
-| cargo fmt | ✅ 通过 |
+|货物建造| ✅ 通过 |
+|货物测试| ✅ 297 通过 |
+|夹杂货物| ✅ 零警告 |
+|快速充电| ✅ 通过 |
 
 **风险评估**
 - **风险级别**: 中
@@ -164,9 +164,9 @@ cargo llvm-cov --all-features
 **基本信息**
 | 项目 | 内容 |
 |------|------|
-| 分支 | feature/network-coverage-improvement → feature/v1.1.0-beta |
-| 作者 | yinglichina8848 |
-| 状态 | MERGED |
+| 分支 |功能/网络覆盖范围改进→功能/v1.1.0-beta|
+| 作者 |英利china8848|
+| 状态 |合并|
 | 审核人 | 高小药 |
 
 **变更内容**
@@ -176,11 +176,11 @@ cargo llvm-cov --all-features
 **验证证据**
 | 检查项 | 结果 |
 |--------|------|
-| cargo build | ✅ 通过 |
-| cargo test | ✅ 297 通过 |
-| cargo clippy | ✅ 零警告 |
-| cargo fmt | ✅ 通过 |
-| coverage | ✅ 90.94% |
+|货物建造| ✅ 通过 |
+|货物测试| ✅ 297 通过 |
+|夹杂货物| ✅ 零警告 |
+|快速充电| ✅ 通过 |
+|覆盖范围| ✅ 90.94% |
 
 **风险评估**
 - **风险级别**: 低

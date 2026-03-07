@@ -1,0 +1,21 @@
+name: Release Notes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        run: |
+          git clone https://github.com/minzuuniversity/sqlrustgo.git .
+          git fetch origin main
+
+      - name: Generate notes
+        run: |
+          echo "# Release Notes" > RELEASE_NOTES.md
+          git log --pretty=format:"- %s" main...HEAD >> RELEASE_NOTES.md
+          cat RELEASE_NOTES.md

@@ -149,7 +149,7 @@ Step 2: 评论领取 → gh issue comment <ISSUE_ID> --body "🤖 AI-CLI 领取�
 Step 3: 创建分支 → git checkout -b feature/<模块>-<功能>
 Step 4: 推送分支 → git push origin <branch>
 Step 5: 开始编码 → 实现 + 测试
-Step 6: 提交 PR → gh pr create --base develop-v1.1.0 --head <branch>
+步骤6：提交 PR → gh pr create --basedevelop-v1.1.0 --head <branch>
 ```
 
 ### 6.2 定期进展报告
@@ -174,10 +174,10 @@ gh issue comment <ISSUE_ID> --body "📊 进展报告
 ### 6.3 代码提交规范
 
 ```
-<type>(<scope>): <subject>
+<类型>（<范围>）：<主题>
 
-Task: <TASK_ID>
-Issue: #<ISSUE_ID>
+任务：<TASK_ID>
+问题：#<ISSUE_ID>
 ```
 
 ## 七、性能目标

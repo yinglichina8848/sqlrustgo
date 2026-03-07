@@ -60,11 +60,11 @@ SQLRustGo 1.2 是**架构重构和接口抽象版本**，核心目标是为 v2.0
 
 | 模块 | 1.2 目标 |
 |------|----------|
-| Parser | SQL → Logical Plan |
-| Optimizer | 基础规则优化 + Memo 结构 |
-| Statistics | TableStats + ColumnStats |
+|解析器|SQL → 逻辑计划|
+|优化器| 基础规则优化 + Memo 结构 |
+|统计数据|表统计 + 列统计|
 | CBO | 简化成本优化器 |
-| Execution | 向量化执行框架 (RecordBatch) |
+|执行| 向量化执行框架 (RecordBatch) |
 
 ---
 
@@ -72,7 +72,7 @@ SQLRustGo 1.2 是**架构重构和接口抽象版本**，核心目标是为 v2.0
 
 ### 4.1 SQL 支持
 
-- SELECT, FROM, WHERE, JOIN, LIMIT, ORDER BY, GROUP BY
+- 选择、来自、何处、连接、限制、排序、分组
 
 ### 4.2 执行模型
 
@@ -86,7 +86,7 @@ pub trait Operator: Send {
 }
 ```
 
-### 4.3 Statistics
+### 4.3 统计
 
 ```rust
 pub struct TableStats {
@@ -134,7 +134,7 @@ v1.1.x                    v1.2.0
 |------|------|------|
 | 1.0 | SQL 执行原型 | ✅ 已发布 |
 | 1.1 | 基础执行引擎 | ✅ 已发布 |
-| **1.2** | **CBO + Statistics + 向量化** | 🔄 开发中 |
+| **1.2** |**CBO + Statistics + 向量化**| 🔄 开发中 |
 | 2.0 | 分布式执行 | 📋 计划中 |
 
 ---
@@ -144,4 +144,4 @@ v1.1.x                    v1.2.0
 - @yinglichina8848
 - @openheart-openheart
 - @sonaheartopen
-- @TRAE AI Assistant
+- @TRAE人工智能助手

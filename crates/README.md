@@ -1,19 +1,19 @@
-# Workspace Members
+# 工作区成员
 
-This directory contains the modular crate structure for SQLRustGo v1.2.0+.
+该目录包含 SQLRustGo v1.2.0+ 的模块化 crate 结构。
 
-## Current Status
+## 目前状态
 
-The crates/ directory is being migrated from the monolithic src/ structure.
+crates/ 目录正在从整体 src/ 结构迁移。
 
-### Migration Progress
+### 迁移进度
 
-- [x] Phase 1: Create workspace structure
-- [ ] Phase 2: Migrate types module
-- [ ] Phase 3: Migrate parser module
-- [ ] Phase 4: Migrate other modules
+- [x] 第 1 阶段：创建工作区结构
+- [ ] 第 2 阶段：迁移类型模块
+- [ ] 第 3 阶段：迁移解析器模块
+- [ ] 第 4 阶段：迁移其他模块
 
-### Crate Dependencies
+### 板条箱依赖项
 
 ```
 sqlrustgo-server (depends on all)
@@ -29,7 +29,7 @@ sqlrustgo-server (depends on all)
 └── sqlrustgo-transaction
 ```
 
-### Migration Commands
+### 迁移命令
 
 ```bash
 # Build workspace

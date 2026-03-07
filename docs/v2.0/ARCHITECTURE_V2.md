@@ -224,8 +224,8 @@
 | 项目 | 参考点 |
 |------|--------|
 | TiDB | 分布式 SQL 执行 |
-| Cockroach Labs | 分布式事务 |
-| Apache Spark | Plan Fragment |
+|蟑螂实验室| 分布式事务 |
+|阿帕奇火花|计划片段|
 
 ### 3.3 ExecutionContext 设计
 
@@ -236,7 +236,7 @@
 pub struct NodeId(pub u64);
 ```
 
-#### ExecutionMode
+#### 执行模式
 
 ```rust
 #[derive(Clone, Debug)]
@@ -246,7 +246,7 @@ pub enum ExecutionMode {
 }
 ```
 
-#### ExecutionContext Trait
+#### ExecutionContext 特征
 
 ```rust
 pub trait ExecutionContext: Send + Sync {
@@ -305,7 +305,7 @@ pub trait Executor: Send {
 - 所有算子必须接收 ExecutionContext
 - 支持未来分布式、远程数据拉取、统计信息收集
 
-### 3.5 Plan Fragment
+### 3.5 计划片段
 
 ```rust
 #[derive(Clone, Debug)]
@@ -374,10 +374,10 @@ pub trait StorageEngine: Send + Sync {
 
 | 实现 | 说明 |
 |------|------|
-| MemoryStorage | 内存存储 |
-| RocksDBStorage | RocksDB 存储 |
-| RemoteStorage | 远程存储 |
-| DistributedKVStorage | 分布式 KV 存储 |
+|内存存储| 内存存储 |
+|RocksDB存储|RocksDB 存储|
+|远程存储| 远程存储 |
+|分布式KV存储| 分布式 KV 存储 |
 
 ---
 
@@ -418,12 +418,12 @@ pub trait StorageEngine: Send + Sync {
 
 | 版本 | 接口 | 状态 |
 |------|------|------|
-| 2.0 | Executor trait | ✅ 冻结 |
-| 2.0 | StorageEngine trait | ✅ 冻结 |
-| 2.0 | ExecutionContext trait | ✅ 冻结 |
-| 2.0 | RecordBatch | ✅ 冻结 |
-| 3.0 | DataExchange trait | 📝 新增 |
-| 3.0 | PlanFragment | 📝 新增 |
+| 2.0 |执行者特质| ✅ 冻结 |
+| 2.0 |存储引擎特征| ✅ 冻结 |
+| 2.0 |执行上下文特征| ✅ 冻结 |
+| 2.0 |记录批次| ✅ 冻结 |
+| 3.0 |数据交换特征| 📝 新增 |
+| 3.0 |计划片段| 📝 新增 |
 
 ---
 
@@ -436,17 +436,17 @@ pub trait StorageEngine: Send + Sync {
 | 单机执行 | 本地执行引擎 |
 | Volcano 执行模型 | 拉取式数据流 |
 | 规则优化器 | 基于规则的查询优化 |
-| Client/Server 架构 | MySQL 协议支持 |
-| 可插拔存储基础 | Storage trait 抽象 |
+|Client/Server 架构| MySQL 协议支持 |
+| 可插拔存储基础 |Storage trait 抽象|
 
 ### 5.2 安全演进到 3.0
 
 | 演进点 | 说明 |
 |--------|------|
-| Fragment 分布式执行 | PlanFragment 拆分 |
-| 数据交换算子 | DataExchange 接口 |
-| 多节点协调 | ExecutionContext 扩展 |
-| 存储接口抽象 | StorageEngine 实现 |
+| Fragment 分布式执行 |PlanFragment 拆分|
+| 数据交换算子 |DataExchange 接口|
+| 多节点协调 |ExecutionContext 扩展|
+| 存储接口抽象 |StorageEngine 实现|
 
 ### 5.3 核心原则
 
