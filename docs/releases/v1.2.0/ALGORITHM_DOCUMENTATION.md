@@ -55,9 +55,9 @@ pub struct LeafNode {
 
 | 方法 | 说明 | 时间复杂度 |
 |------|------|-----------|
-|__代码0__| 插入键值对 | O(log n) |
-|__代码0__| 单点查询 | O(log n) |
-|__代码0__| 范围查询 |O(log n + k)|
+| `insert(key, value)` | 插入键值对 | O(log n) |
+| `search(key)` | 单点查询 | O(log n) |
+| `range_query(start, end)` | 范围查询 | O(log n + k) |
 
 #### 1.2.2 分裂算法
 
@@ -161,8 +161,8 @@ Probe Phase (左表):
 
 | 阶段 | 时间复杂度 | 空间复杂度 |
 |------|-----------|-----------|
-|构建阶段| O(n) | O(n) |
-|探测阶段| O(m) | - |
+| Build Phase | O(n) | O(n) |
+| Probe Phase | O(m) | - |
 | Total | O(n + m) | O(n) |
 
 其中 n = 右表行数, m = 左表行数
@@ -233,10 +233,10 @@ Join Cost = build_cost + probe_cost + output_cost
 
 | 规则 | 说明 | 状态 |
 |------|------|------|
-|谓词下推| 谓词下推到存储层 | 待实现 (C-003) |
-|投影剪枝| 裁剪不需要的列 | 待实现 (C-004) |
-|常量折叠| 常量折叠 | 待实现 |
-|加入重新排序| Join 重排序 | 待实现 (C-002) |
+| PredicatePushdown | 谓词下推到存储层 | 待实现 (C-003) |
+| ProjectionPruning | 裁剪不需要的列 | 待实现 (C-004) |
+| ConstantFolding | 常量折叠 | 待实现 |
+| JoinReordering | Join 重排序 | 待实现 (C-002) |
 
 ### 3.4 当前实现状态
 
@@ -256,13 +256,13 @@ Join Cost = build_cost + probe_cost + output_cost
 
 | 算子 | 说明 | 实现状态 |
 |------|------|----------|
-|__代码0__| 全表扫描 | ✅ |
-|__代码0__| 过滤 | ✅ |
-|__代码0__| 投影 | ✅ |
-|__代码0__| Hash 连接 | ✅ |
-|__代码0__| 聚合 | ✅ |
-|__代码0__| 排序 | ✅ |
-|__代码0__| 限制数量 | ✅ |
+| `SeqScanExec` | 全表扫描 | ✅ |
+| `FilterExec` | 过滤 | ✅ |
+| `ProjectionExec` | 投影 | ✅ |
+| `HashJoinExec` | Hash 连接 | ✅ |
+| `AggregateExec` | 聚合 | ✅ |
+| `SortExec` | 排序 | ✅ |
+| `LimitExec` | 限制数量 | ✅ |
 
 ### 4.2 算子接口
 
@@ -286,7 +286,7 @@ execute():
 └─────────────────────────────────────────────────┘
 ```
 
-### 4.4 记录批次
+### 4.4 RecordBatch
 
 ```rust
 pub struct RecordBatch {
@@ -309,15 +309,15 @@ pub struct RecordBatch {
 | 模块 | 算法 | 状态 |
 |------|------|------|
 | B+Tree | 插入、分裂、搜索 | ✅ |
-|哈希连接|构建/探测| ✅ |
+| Hash Join | Build/Probe | ✅ |
 | 执行器 | 物理算子 | ✅ |
-| 统计信息 |Provider 接口| ✅ |
+| 统计信息 | Provider 接口 | ✅ |
 
 ### 待实现算法
 
 | 模块 | 算法 | Issue |
 |------|------|-------|
-| 统计信息 |ANALYZE 命令| S-005 |
+| 统计信息 | ANALYZE 命令 | S-005 |
 | 统计信息 | 持久化 | S-004 |
 | CBO | 谓词下推 | C-003 |
 | CBO | 投影裁剪 | C-004 |
