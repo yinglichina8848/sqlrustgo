@@ -38,12 +38,12 @@
 **操作位置**: GitHub → Settings → Branch protection rules → main
 
 **配置要求**:
-- ✅ Require pull request
+- ✅ 需要拉取请求
 - ✅ Require approvals（至少 1）
-- ✅ Require status checks
-- ✅ Require conversation resolution
-- ✅ Require signed commits
-- ✅ Require linear history
+- ✅ 需要状态检查
+- ✅ 需要对话解决
+- ✅ 需要签名提交
+- ✅ 需要线性历史
 - ❌ Allow force push（必须关闭）
 - ❌ Allow deletions（必须关闭）
 - ✅ Include administrators（关键）
@@ -60,14 +60,14 @@
 
 **配置要求**:
 - **规则模式**: `release/*`
-- ✅ Require pull request
+- ✅ 需要拉取请求
 - ✅ Require approvals（至少 1）
-- ✅ Require status checks
-- ✅ Require conversation resolution
-- ✅ Require linear history
-- ❌ Allow force push
-- ❌ Allow deletions
-- ✅ Include administrators
+- ✅ 需要状态检查
+- ✅ 需要对话解决
+- ✅ 需要线性历史
+- ❌ 允许强力推动
+- ❌允许删除
+- ✅ 包括管理员
 
 **验证步骤**:
 - 尝试直接 push 到 release 分支
@@ -116,22 +116,22 @@
 | 角色 | 权限 | 说明 |
 |------|------|------|
 | Owner | 管理仓库设置 | 不参与日常合并 |
-| Maintainer | Merge PR | 不能绕过保护 |
-| Developer | 提交 PR | 无 push 权限 |
-| CI Bot | 写入 Release | 仅 workflow 使用 |
+|维护者|合并公关| 不能绕过保护 |
+|开发商| 提交 PR | 无 push 权限 |
+| CI Bot |写入 Release|仅 workflow 使用|
 
 ### 分支保护矩阵
 
-| 分支类型 | PR 要求 | 审批要求 | CI 要求 | 签名要求 | 线性历史 | Force Push | 删除 |
+| 分支类型 | PR 要求 | 审批要求 | CI 要求 | 签名要求 | 线性历史 |强力推| 删除 |
 |---------|---------|---------|---------|---------|---------|-----------|------|
 | main | ✅ | ✅ (1+) | ✅ | ✅ | ✅ | ❌ | ❌ |
-| release/* | ✅ | ✅ (1+) | ✅ | ✅ | ✅ | ❌ | ❌ |
+|发布/*| ✅ | ✅ (1+) | ✅ | ✅ | ✅ | ❌ | ❌ |
 | rc/* | ✅ | ⚠ (可选) | ✅ | ⚠ (可选) | ⚠ (可选) | ❌ | ❌ |
-| develop | ✅ | ⚠ (可选) | ✅ | ❌ | ❌ | ❌ | ❌ |
+|发展| ✅ | ⚠ (可选) | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ### CI 权限最小化
 
-| Workflow | 权限 | 说明 |
+|工作流程| 权限 | 说明 |
 |---------|------|------|
 | 测试 | read | 只读权限 |
 | 构建 | read | 只读权限 |
@@ -204,12 +204,12 @@
 
 | 步骤 | 时间 | 负责人 | 状态 |
 |------|------|--------|------|
-| 开启 Tag 保护 | 2026-02-21 | @yinglichina8848 | ⏳ |
-| 锁死 main 分支 | 2026-02-21 | @yinglichina8848 | ⏳ |
-| 配置 release/* 保护 | 2026-02-21 | @yinglichina8848 | ⏳ |
-| CI 增加 tag 校验 | 2026-02-22 | @yinglichina8848 | ⏳ |
-| 测试模拟发布 | 2026-02-22 | @yinglichina8848 | ⏳ |
-| 验证不可变状态 | 2026-02-23 | @yinglichina8848 | ⏳ |
+| 开启 Tag 保护 | 2026-02-21 |@yinglichina8848| ⏳ |
+| 锁死 main 分支 | 2026-02-21 |@yinglichina8848| ⏳ |
+| 配置 release/* 保护 | 2026-02-21 |@yinglichina8848| ⏳ |
+| CI 增加 tag 校验 | 2026-02-22 |@yinglichina8848| ⏳ |
+| 测试模拟发布 | 2026-02-22 |@yinglichina8848| ⏳ |
+| 验证不可变状态 | 2026-02-23 |@yinglichina8848| ⏳ |
 
 ## 风险评估
 

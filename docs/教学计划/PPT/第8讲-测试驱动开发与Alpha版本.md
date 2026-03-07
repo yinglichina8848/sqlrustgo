@@ -1,12 +1,12 @@
 ---
-marp: true
-theme: gaia
-paginate: true
-backgroundColor: #fff
+马尔普：真实
+主题：盖亚
+页面：真实
+背景颜色：#fff
 color: #333
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 第八讲：测试驱动开发与Alpha版本
 
@@ -276,7 +276,7 @@ fn test_addition() {
 
 ## 3.2 assert! 宏系列
 
-### assert!(expr)
+### 断言！(expr)
 
 ```rust
 #[test]
@@ -285,7 +285,7 @@ fn test_true() {
 }
 ```
 
-### assert_eq!(left, right)
+###断言_eq！（左，右）
 
 ```rust
 #[test]
@@ -294,7 +294,7 @@ fn test_equality() {
 }
 ```
 
-### assert_ne!(left, right)
+###断言_ne！（左，右）
 
 ```rust
 #[test]
@@ -360,13 +360,13 @@ pub fn add(a: i32, b: i32) -> i32 {
 
 ## 3.4 测试覆盖率工具
 
-### cargo-tarpaulin
+### 货物防水布
 
 ```bash
 cargo tarpaulin --out Html
 ```
 
-### cargo-llvm-cov
+### 货物-llvm-cov
 
 ```bash
 cargo llvm-cov --html
@@ -436,11 +436,11 @@ cargo llvm-cov --html
 
 | 检查项 | 命令 | 状态要求 |
 |--------|------|---------|
-| 编译 | `cargo build` | 通过 |
-| 测试 | `cargo test` | 全部通过 |
-| Clippy | `cargo clippy` | 无警告 |
-| 格式化 | `cargo fmt --check` | 通过 |
-| 覆盖率 | `cargo tarpaulin` | ≥ 70% |
+| 编译 |__代码0__| 通过 |
+| 测试 |__代码0__| 全部通过 |
+|剪辑|__代码0__| 无警告 |
+| 格式化 |__代码0__| 通过 |
+| 覆盖率 |__代码0__| ≥ 70% |
 
 ---
 
@@ -520,7 +520,7 @@ git push origin v0.1.0-alpha
 | 周次 | 理论知识 | 实践技能 | 项目产出 |
 |------|----------|----------|----------|
 | 1 | 软件工程发展历史、Greenfield/Brownfield、AI局限性 | 环境搭建 | 开发环境 |
-| 2 | 结构化设计、UML概述、用例图 | PlantUML使用 | 用例图文档 |
+| 2 | 结构化设计、UML概述、用例图 |PlantUML使用| 用例图文档 |
 | 3 | 面向对象设计、SOLID原则、类图 | 类图绘制 | 类图文档 |
 | 4 | 顺序图、状态图、架构图、快速原型法 | UML综合实践 | 设计文档 |
 | 5 | 架构设计原理、SQLRustGo架构 | 架构图绘制 | 架构文档 |
@@ -548,7 +548,7 @@ git push origin v0.1.0-alpha
 
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 谢谢！
 

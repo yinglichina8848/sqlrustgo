@@ -1,12 +1,12 @@
 ---
-marp: true
-theme: gaia
-paginate: true
-backgroundColor: #fff
+马尔普：真实
+主题：盖亚
+页面：真实
+背景颜色：#fff
 color: #333
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 第二讲：结构化设计与UML基础
 
@@ -37,7 +37,7 @@ color: #333
 
 ### Dijkstra的贡献
 
-- **"Go To Statement Considered Harmful"**（1968）
+- **“转到被认为有害的声明”**（1968）
 - 提出结构化编程的概念
 - 奠定了现代软件工程的基础
 
@@ -173,7 +173,7 @@ class User {
 ### 其他工具
 
 - **Draw.io / diagrams.net**
-- **StarUML / Enterprise Architect**
+- **StarUML / 企业架构师**
 - **AI辅助UML绘图**
 
 ---
@@ -189,7 +189,7 @@ class User {
 - **用户角色**：管理员、普通用户
 - **外部系统**：支付系统、消息队列
 
-### 用例（Use Case）
+### 用例
 
 - **功能描述**：系统提供的功能
 - **命名规范**：动词+名词（如"创建订单"）
@@ -375,7 +375,7 @@ Admin --> UC4
 
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 谢谢！
 

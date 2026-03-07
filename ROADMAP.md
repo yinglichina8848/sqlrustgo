@@ -35,7 +35,7 @@ SQLRustGo
 - Basic SQL Support (基础 SQL 支持)
 
 **技术栈**:
-- Rust 2021 Edition
+- Rust 2021 版
 - 手写 Lexer
 - 递归下降 Parser
 - 简单火山模型执行器
@@ -59,7 +59,9 @@ SQLRustGo
 
 ### 2.3 v1.2 - 架构重构 🔄 进行中
 
-**当前阶段**: Draft
+**当前阶段**: Alpha (alpha/v1.2.0)
+
+> 2026-03-07 口径更新：当前主开发分支为 `develop-v1.2.0`；`v1.2.0-draft` 与旧分支命名作为历史信息保留。
 
 **核心功能**:
 - Crate 模块化
@@ -72,15 +74,15 @@ SQLRustGo
 - 模块化架构
 - Trait 抽象层
 - RecordBatch 向量化
-- Cost Model
+- 成本模型
 
 ### 2.4 v1.3 - 高级优化 ⏳ 计划中
 
 **预计发布**: 2026-04
 
 **核心功能**:
-- Cascades Optimizer
-- Vector Execution
+- 级联优化器
+- 矢量执行
 - 完整统计信息
 - 高级索引
 - 查询缓存
@@ -89,7 +91,7 @@ SQLRustGo
 - Cascades 框架
 - Volcano 向量化
 - Histogram 统计
-- Hash Index
+- 哈希索引
 
 ---
 
@@ -100,8 +102,8 @@ SQLRustGo
 **预计发布**: 2026-Q3
 
 **核心功能**:
-- Distributed Query
-- Query Router
+- 分布式查询
+- 查询路由器
 - 分布式优化器
 - 数据分片感知
 
@@ -115,8 +117,8 @@ SQLRustGo
 **预计发布**: 2026-Q4
 
 **核心功能**:
-- Sharding
-- Replication
+- 分片
+- 复制
 - 分布式事务
 - 一致性协议
 
@@ -131,7 +133,7 @@ SQLRustGo
 **预计发布**: 2027-Q1
 
 **核心功能**:
-- Query Scheduler
+- 查询调度程序
 - 资源管理
 - 负载均衡
 - 故障恢复
@@ -151,7 +153,7 @@ SQLRustGo
 **预计发布**: 2027-Q2
 
 **核心功能**:
-- Database OS
+- 数据库操作系统
 - 资源隔离
 - 多租户基础
 - 安全增强
@@ -159,7 +161,7 @@ SQLRustGo
 **技术栈**:
 - 容器化部署
 - 资源配额
-- Tenant Isolation
+- 租户隔离
 - RBAC
 
 ### 4.2 v3.1 - 多租户
@@ -167,7 +169,7 @@ SQLRustGo
 **预计发布**: 2027-Q3
 
 **核心功能**:
-- Tenant Isolation
+- 租户隔离
 - 资源配额
 - 计费系统
 - 监控告警
@@ -175,24 +177,24 @@ SQLRustGo
 **技术栈**:
 - Schema 隔离
 - 资源限制
-- Usage Tracking
-- Prometheus
+- 使用情况追踪
+- 普罗米修斯
 
 ### 4.3 v3.2 - Serverless 执行
 
 **预计发布**: 2027-Q4
 
 **核心功能**:
-- Serverless Engine
+- 无服务器引擎
 - 自动扩缩容
 - 按需计费
 - 冷启动优化
 
 **技术栈**:
 - Function 计算
-- Auto-scaling
-- Usage-based Billing
-- Warm Pool
+- 自动缩放
+- 基于使用情况的计费
+- 温水泳池
 
 ---
 
@@ -203,48 +205,48 @@ SQLRustGo
 **预计发布**: 2028-Q1
 
 **核心功能**:
-- AI-native Storage
+- AI原生存储
 - 向量索引
 - 语义查询
 - 知识图谱
 
 **技术栈**:
-- Vector Database
+- 矢量数据库
 - HNSW/IVF 索引
-- Embedding
-- Graph DB
+- 嵌入
+- 图数据库
 
 ### 5.2 v4.1 - 查询代理
 
 **预计发布**: 2028-Q2
 
 **核心功能**:
-- Query Agent
+- 查询代理
 - 自然语言查询
 - 智能推荐
 - 自动调优
 
 **技术栈**:
-- LLM Integration
-- Text-to-SQL
-- Query Suggestion
-- Auto-tuning
+- 法学硕士整合
+- 文本到SQL
+- 查询建议
+- 自动调整
 
 ### 5.3 v4.2 - 自主优化器
 
 **预计发布**: 2028-Q3
 
 **核心功能**:
-- Autonomous Optimizer
+- 自主优化器
 - 自学习索引
 - 智能调优
 - 预测性维护
 
 **技术栈**:
-- Reinforcement Learning
-- Learned Index
-- ML-based Tuning
-- Predictive Analytics
+- 强化学习
+- 学习索引
+- 基于机器学习的调优
+- 预测分析
 
 ---
 
@@ -294,7 +296,7 @@ graph TB
 
 | 问题 | 影响 | 计划版本 |
 |------|------|----------|
-| unwrap 过多 | 稳定性 | v1.2 |
+|unwrap 过多| 稳定性 | v1.2 |
 | 测试覆盖率不足 | 质量 | v1.2 |
 | 文档不完整 | 可维护性 | v1.3 |
 | 性能未优化 | 性能 | v1.3 |

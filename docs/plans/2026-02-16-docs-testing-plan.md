@@ -1,6 +1,6 @@
 # SQLRustGo 测试补全与文档完善计划
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **对于克劳德：** 所需的子技能：使用超能力：执行计划来逐个任务地实施该计划。
 
 **Goal:** 为 SQLRustGo 数据库项目补充测试至 80% 覆盖率，并添加充分的 What-Why-How 注释，帮助大二学生理解如何从零开始设计开发数据库软件。
 
@@ -540,10 +540,10 @@ git commit -m "test: 补充测试至 80% 覆盖率，添加 What-Why-How 注释"
 
 ---
 
-**Plan complete. Two execution options:**
+**计划完成。两种执行选项：**
 
-**1. Subagent-Driven (this session)** - I dispatch fresh subagent per task, review between tasks, fast iteration
+**1.子代理驱动（本次会议）** - 我为每个任务分配新的子代理，在任务之间进行审查，快速迭代
 
-**2. Parallel Session (separate)** - Open new session with executing-plans, batch execution with checkpoints
+**2.并行会话（单独）** - 使用执行计划打开新会话，使用检查点批量执行
 
-Which approach?
+哪种方法？

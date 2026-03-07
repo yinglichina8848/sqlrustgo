@@ -15,8 +15,8 @@
 |------|-----|
 | **版本号** | v1.3.0 |
 | **发布类型** | 规划中 |
-| **目标分支** | release/v1.3.0 |
-| **开发分支** | develop-v1.3.0 |
+| **目标分支** |发布/v1.3.0|
+| **开发分支** |开发-v1.3.0|
 | **前置版本** | v1.2.0 (GA) |
 | **目标成熟度** | L4 企业级 |
 
@@ -51,11 +51,11 @@
 
 | ID | 检查项 | 状态 | 说明 | 检查结果 |
 |----|--------|------|------|----------|
-| A-01 | 编译通过 | ⏳ | `cargo build --all` 无错误 | - |
-| A-02 | 测试通过 | ⏳ | `cargo test --all` 全部通过 | - |
-| A-03 | Clippy 检查 | ⏳ | `cargo clippy -- -D warnings` 无警告 | - |
-| A-04 | 格式检查 | ⏳ | `cargo fmt --all -- --check` 通过 | - |
-| A-05 | 无 unwrap/panic | ⏳ | 核心代码无 unwrap/panic 调用 | - |
+| A-01 | 编译通过 | ⏳ |`cargo build --all` 无错误| - |
+| A-02 | 测试通过 | ⏳ |`cargo test --all` 全部通过| - |
+| A-03 |Clippy 检查| ⏳ |`cargo clippy -- -D warnings` 无警告| - |
+| A-04 | 格式检查 | ⏳ |`cargo fmt --all -- --check` 通过| - |
+| A-05 |无 unwrap/panic| ⏳ | 核心代码无 unwrap/panic 调用 | - |
 | A-06 | 错误处理完整 | ⏳ | 使用 SqlResult<T> 统一错误处理 | - |
 
 #### B. 测试覆盖门禁
@@ -65,20 +65,20 @@
 | B-01 | 行覆盖率 | ⏳ | - | ≥90% | - |
 | B-02 | 函数覆盖率 | ⏳ | - | ≥85% | - |
 | B-03 | 区域覆盖率 | ⏳ | - | ≥85% | - |
-| B-04 | 核心模块覆盖率 | ⏳ | - | ≥80% | plugin/executor/transaction |
+| B-04 | 核心模块覆盖率 | ⏳ | - | ≥80% |插件/执行器/交易|
 | B-05 | 新增代码覆盖率 | ⏳ | - | ≥80% | v1.3.0 新增代码 |
 
 #### C. 功能完整性门禁
 
-| ID | 检查项 | 状态 | 说明 | Issue/PR |
+| ID | 检查项 | 状态 | 说明 |问题/公关|
 |----|--------|------|------|----------|
-| C-01 | 插件系统 | ⏳ | Plugin trait + 加载器 | #106 |
+| C-01 | 插件系统 | ⏳ |Plugin trait + 加载器| #106 |
 | C-02 | CBO 完善 | ⏳ | 成本模型 + 优化器 | #109 |
-| C-03 | SortMergeJoin | ⏳ | 新 Join 算法 | #110 |
-| C-04 | 事务隔离级别 | ⏳ | Read Committed/Repeatable Read | - |
+| C-03 |排序合并连接| ⏳ | 新 Join 算法 | #110 |
+| C-04 | 事务隔离级别 | ⏳ |读已提交/可重复读| - |
 | C-05 | MVCC 基础 | ⏳ | 快照隔离 | - |
-| C-06 | 性能监控 | ⏳ | Metrics 系统 | - |
-| C-07 | 健康检查 | ⏳ | Health 端点 | - |
+| C-06 | 性能监控 | ⏳ |Metrics 系统| - |
+| C-07 | 健康检查 | ⏳ |Health 端点| - |
 
 ---
 
@@ -88,19 +88,19 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| D-01 | /health/live 端点 | ⏳ | 存活探针 |
-| D-02 | /health/ready 端点 | ⏳ | 就绪探针 |
-| D-03 | /health 端点 | ⏳ | 综合健康检查 |
-| D-04 | /metrics 端点 | ⏳ | Prometheus 格式 |
-| D-05 | 核心指标 ≥ 20 个 | ⏳ | BufferPool/Executor/Network |
-| D-06 | Grafana Dashboard | ⏳ | 可视化模板 |
+| D-01 |/health/live 端点| ⏳ | 存活探针 |
+| D-02 |/health/ready 端点| ⏳ | 就绪探针 |
+| D-03 |/health 端点| ⏳ | 综合健康检查 |
+| D-04 |/metrics 端点| ⏳ |Prometheus 格式|
+| D-05 | 核心指标 ≥ 20 个 | ⏳ |缓冲池/执行器/网络|
+| D-06 |Grafana 仪表板| ⏳ | 可视化模板 |
 
 #### E. 性能门禁
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 | E-01 | 性能基准测试 | ⏳ | 继承 v1.2.0 基准 |
-| E-02 | Join 性能测试 | ⏳ | SortMergeJoin vs HashJoin |
+| E-02 | Join 性能测试 | ⏳ |SortMergeJoin 与 HashJoin|
 | E-03 | 事务性能测试 | ⏳ | 并发事务吞吐量 |
 | E-04 | 无性能退化 | ⏳ | 与 v1.2.0 对比 |
 
@@ -108,8 +108,8 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| F-01 | Release Notes | ⏳ | 版本发布说明 |
-| F-02 | CHANGELOG 更新 | ⏳ | 变更日志 |
+| F-01 |发行说明| ⏳ | 版本发布说明 |
+| F-02 |CHANGELOG 更新| ⏳ | 变更日志 |
 | F-03 | API 文档 | ⏳ | 公共 API 文档注释 |
 | F-04 | 可观测性指南 | ⏳ | 监控和健康检查使用说明 |
 | F-05 | 升级指南 | ⏳ | v1.2.0 → v1.3.0 迁移指南 |
@@ -118,7 +118,7 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| G-01 | 依赖审计 | ⏳ | `cargo audit` 通过 |
+| G-01 | 依赖审计 | ⏳ |`cargo audit` 通过|
 | G-02 | 安全扫描 | ⏳ | 无高危安全问题 |
 | G-03 | 敏感信息检查 | ⏳ | 无密钥/凭证泄露 |
 
@@ -130,11 +130,11 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| H-01 | CI 流程完整 | ⏳ | GitHub Actions 配置完整 |
+| H-01 | CI 流程完整 | ⏳ |GitHub Actions 配置完整|
 | H-02 | 分支保护配置 | ⏳ | develop-v1.3.0 保护规则 |
-| H-03 | 代码所有者 | ⏳ | CODEOWNERS 文件更新 |
+| H-03 | 代码所有者 | ⏳ |CODEOWNERS 文件更新|
 | H-04 | Issue 关联 | ⏳ | 所有 PR 关联 Issue |
-| H-05 | Commit 规范 | ⏳ | 遵循 Conventional Commits |
+| H-05 |Commit 规范| ⏳ |遵循 Conventional Commits|
 
 ---
 
@@ -144,22 +144,22 @@
 
 | 端点 | 请求 | 预期响应 | 状态码 |
 |------|------|----------|--------|
-| `/health/live` | GET | `{"status": "alive"}` | 200 |
-| `/health/ready` | GET | `{"status": "ready", "checks": {...}}` | 200/503 |
-| `/health` | GET | 详细健康报告 | 200/503 |
+|__代码0__| GET |__代码0__| 200 |
+|__代码0__| GET |__代码0__| 200/503 |
+|__代码0__| GET | 详细健康报告 | 200/503 |
 
 ### 3.2 性能指标
 
 | 指标类别 | 指标名称 | 类型 | 说明 |
 |----------|----------|------|------|
-| BufferPool | sqlrustgo_buffer_pool_hits | Counter | 缓存命中次数 |
-| BufferPool | sqlrustgo_buffer_pool_misses | Counter | 缓存未命中次数 |
-| BufferPool | sqlrustgo_buffer_pool_evictions | Counter | 页面淘汰次数 |
-| Executor | sqlrustgo_queries_total | Counter | 查询总数 |
-| Executor | sqlrustgo_queries_failed | Counter | 失败查询数 |
-| Executor | sqlrustgo_query_duration_seconds | Histogram | 查询延迟 |
-| Network | sqlrustgo_connections_active | Gauge | 活跃连接数 |
-| Network | sqlrustgo_connections_total | Counter | 连接总数 |
+|缓冲池|sqlrustgo_buffer_pool_hits|柜台| 缓存命中次数 |
+|缓冲池|sqlrustgo_buffer_pool_misses|柜台| 缓存未命中次数 |
+|缓冲池|sqlrustgo_buffer_pool_evictions|柜台| 页面淘汰次数 |
+|执行者|sqlrustgo_queries_total|柜台| 查询总数 |
+|执行者|sqlrustgo_queries_failed|柜台| 失败查询数 |
+|执行者|sqlrustgo_query_duration_秒|直方图| 查询延迟 |
+|网络|sqlrustgo_connections_active| Gauge | 活跃连接数 |
+|网络|sqlrustgo_connections_total|柜台| 连接总数 |
 
 ---
 

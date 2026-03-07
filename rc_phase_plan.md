@@ -6,7 +6,7 @@
 
 ##### 具体内容
 1. **SQL 解析器**
-   - 支持的 SQL 语法：SELECT、INSERT、UPDATE、DELETE、CREATE TABLE、DROP TABLE
+- 支持的 SQL 语法：SELECT、INSERT、UPDATE、DELETE、CREATE TABLE、DROP TABLE
    - 错误处理：提供清晰的错误信息
    - 边界情况：空查询、语法错误、大查询
 
@@ -16,7 +16,7 @@
    - 边界情况：复杂查询、嵌套子查询
 
 3. **执行引擎**
-   - 支持的执行算子：SeqScan、IndexScan、NestedLoopJoin、HashJoin
+- 支持的执行算子：SeqScan、IndexScan、NestedLoopJoin、HashJoin
    - 并发控制：基本的并发执行模型
    - 错误处理：统一的错误处理机制
 
