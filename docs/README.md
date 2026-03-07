@@ -1,7 +1,7 @@
 # SQLRustGo 文档索引
 
-> **最后更新**: 2026-03-05  
-> **当前版本**: v1.1.0-draft (L3 产品级)
+> **最后更新**: 2026-03-07
+> **当前版本**: v1.2.0-alpha (Alpha 阶段)
 
 ---
 
@@ -11,8 +11,8 @@
 docs/
 ├── releases/                    # 版本发布文档
 │   ├── v1.0.0/                 # v1.0.0 发布文档
-│   ├── v1.1.0/                 # v1.1.0 发布文档 (当前)
-│   ├── v1.2.0/                 # v1.2.0 版本计划
+│   ├── v1.1.0/                 # v1.1.0 发布文档
+│   ├── v1.2.0/                 # v1.2.0 发布文档 (当前 Alpha)
 │   └── v1.3.0/                 # v1.3.0 版本计划
 │
 ├── v1.0/                        # v1.0 开发过程文档
@@ -41,30 +41,23 @@ docs/
 
 ## 二、版本发布文档
 
-### v1.1.0 (当前版本)
+### v1.2.0 (当前 Alpha 阶段)
+
+| 文档 | 说明 |
+|------|------|
+| [版本计划](releases/v1.2.0/VERSION_PLAN.md) | v1.2.0 版本计划 |
+| [门禁检查清单](releases/v1.2.0/RELEASE_GATE_CHECKLIST.md) | 发布门禁 |
+| [阶段切换声明](releases/v1.2.0/PHASE_TRANSITION_ANNOUNCEMENT.md) | Alpha 阶段切换 |
+| [目录重构报告](releases/v1.2.0/DIRECTORY_AND_BRANCH_GOVERNANCE_REPORT.md) | 目录和分支治理 |
+| [分支管理计划](releases/v1.2.0/BRANCH_MANAGEMENT_PLAN.md) | 分支管理计划 |
+
+### v1.1.0 (已完成)
 
 | 文档 | 说明 |
 |------|------|
 | [Release Notes](releases/v1.1.0/RELEASE_NOTES.md) | 版本发布说明 |
 | [门禁检查清单](releases/v1.1.0/RELEASE_GATE_CHECKLIST.md) | 发布门禁 |
 | [成熟度评估](releases/v1.1.0/MATURITY_ASSESSMENT.md) | L3 成熟度评估 |
-| [性能报告](releases/v1.1.0/PERFORMANCE_REPORT.md) | 性能测试分析 |
-| [API 文档](releases/v1.1.0/API_DOCUMENTATION.md) | API 参考 |
-| [升级指南](releases/v1.1.0/UPGRADE_GUIDE.md) | v1.0.0 → v1.1.0 |
-| [安全审计](releases/v1.1.0/SECURITY_AUDIT.md) | 安全审计报告 |
-| [代码质量审计](releases/v1.1.0/CODE_QUALITY_AUDIT.md) | 代码质量报告 |
-| [日志规范](releases/v1.1.0/LOGGING_SPECIFICATION.md) | 日志格式规范 |
-| [监控规范](releases/v1.1.0/MONITORING_SPECIFICATION.md) | 性能监控规范 |
-| [健康检查规范](releases/v1.1.0/HEALTH_CHECK_SPECIFICATION.md) | 健康检查端点 |
-| [DeepSeek 评估报告](releases/v1.1.0/DEEPSEEK_EVALUATION.md) | DeepSeek 评估 |
-| [改进计划](releases/v1.1.0/IMPROVEMENT_PLAN.md) | v1.1.0-draft 改进计划 |
-
-### v1.2.0 (计划中)
-
-| 文档 | 说明 |
-|------|------|
-| [版本计划](releases/v1.2.0/VERSION_PLAN.md) | v1.2.0 版本计划 |
-| [门禁检查清单](releases/v1.2.0/RELEASE_GATE_CHECKLIST.md) | 发布门禁 |
 
 ### v1.3.0 (计划中)
 
