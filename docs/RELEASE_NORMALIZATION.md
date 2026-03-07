@@ -104,11 +104,11 @@ git push origin v1.0.0
 | 分支类型 | 格式 | 示例 |
 |---------|------|------|
 | RC 分支 | `rc/v<版本号>-<序号>` | `rc/v1.0.0-1` |
-| 正式版分支 |__代码0__|__代码0__|
-| 功能分支 |__代码0__|__代码0__|
-| 修复分支 |__代码0__|__代码0__|
-| 紧急修复分支 |__代码0__|__代码0__|
-| 文档分支 | `docs/<描述>` |__代码0__|
+| 正式版分支 | `release/v<版本号>` | `release/v1.0.0` |
+| 功能分支 | `feature/<描述>` | `feature/query-optimizer` |
+| 修复分支 | `bugfix/<描述>` | `bugfix/null-join` |
+| 紧急修复分支 | `hotfix/<问题ID>` | `hotfix/issue-42` |
+| 文档分支 | `docs/<描述>` | `docs/version-planning` |
 
 ### 5.2 版本号格式
 
@@ -141,21 +141,21 @@ main
 ### 6.2 工程系统规则
 
 1. **分支保护**：
-- `main`、`alpha`、`beta`、`rc`、`release/*` 分支开启保护
+   - `main`、`alpha`、`beta`、`rc`、`release/*` 分支开启保护
    - 强制 PR 审核
    - 要求状态检查通过
    - 禁止直接推送
 
 2. **CI/CD 流程**：
-- 自动版本推进（beta → rc → release）
-- 自动生成 Release Notes
+   - 自动版本推进（beta → rc → release）
+   - 自动生成 Release Notes
    - RC 分支保护（禁止 feature 合并）
    - 多版本矩阵测试
 
 3. **版本控制**：
    - 语义化版本号
    - 自动版本计算
-- 统一 CHANGELOG 更新
+   - 统一 CHANGELOG 更新
 
 ## 7. 执行时间表
 
