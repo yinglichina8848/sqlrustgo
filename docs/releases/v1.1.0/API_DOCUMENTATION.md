@@ -9,7 +9,7 @@
 
 ### 1.1 执行器模块 (executor)
 
-#### 执行引擎
+#### ExecutionEngine
 
 主执行引擎，负责执行物理查询计划。
 
@@ -30,13 +30,13 @@ let result = engine.execute(physical_plan)?;
 
 | 方法 | 说明 | 返回类型 |
 |------|------|----------|
-| `new()` | 创建内存模式执行引擎 |__代码0__|
-|__代码0__| 创建持久化模式执行引擎 |__代码0__|
-|__代码0__| 执行物理查询计划 |__代码0__|
-|__代码0__| 获取表引用 |__代码0__|
-|__代码0__| 创建索引 |__代码0__|
+| `new()` | 创建内存模式执行引擎 | `ExecutionEngine` |
+| `with_data_dir(path)` | 创建持久化模式执行引擎 | `SqlResult<ExecutionEngine>` |
+| `execute(plan)` | 执行物理查询计划 | `SqlResult<QueryResult>` |
+| `get_table(name)` | 获取表引用 | `Option<&Table>` |
+| `create_index(table, column)` | 创建索引 | `SqlResult<()>` |
 
-#### 查询结果
+#### QueryResult
 
 查询执行结果。
 
@@ -56,7 +56,7 @@ pub struct QueryResult {
 
 ### 1.2 规划器模块 (planner)
 
-#### 逻辑计划
+#### LogicalPlan
 
 逻辑查询计划，表示查询的逻辑结构。
 
@@ -77,14 +77,14 @@ let optimized = logical_plan.optimize()?;
 
 | 类型 | 说明 |
 |------|------|
-|__代码0__|SELECT 查询|
-|__代码0__|INSERT 语句|
-|__代码0__|UPDATE 语句|
-|__代码0__|DELETE 语句|
-|__代码0__| 创建表 |
-|__代码0__| 删除表 |
+| `Select` | SELECT 查询 |
+| `Insert` | INSERT 语句 |
+| `Update` | UPDATE 语句 |
+| `Delete` | DELETE 语句 |
+| `CreateTable` | 创建表 |
+| `DropTable` | 删除表 |
 
-#### 物理计划
+#### PhysicalPlan
 
 物理查询计划，表示查询的执行方式。
 
@@ -135,7 +135,7 @@ pub enum ParseResult {
 
 ### 1.4 存储模块 (storage)
 
-#### 文件存储
+#### FileStorage
 
 文件存储引擎。
 
@@ -162,21 +162,21 @@ storage.create_index("users", "id")?;
 
 | 方法 | 说明 |
 |------|------|
-|__代码0__| 创建存储实例 |
-|__代码0__| 创建表 |
-|__代码0__| 删除表 |
-|__代码0__| 插入数据 |
-|__代码0__| 删除数据 |
-|__代码0__| 更新数据 |
-|__代码0__| 扫描表 |
-|__代码0__| 创建索引 |
-|__代码0__| 删除索引 |
+| `new(path)` | 创建存储实例 |
+| `create_table(name, columns)` | 创建表 |
+| `drop_table(name)` | 删除表 |
+| `insert(table, row)` | 插入数据 |
+| `delete(table, predicate)` | 删除数据 |
+| `update(table, updates, predicate)` | 更新数据 |
+| `scan(table, predicate)` | 扫描表 |
+| `create_index(table, column)` | 创建索引 |
+| `drop_index(table, column)` | 删除索引 |
 
 ---
 
 ### 1.5 网络模块 (network)
 
-＃＃＃＃ 服务器
+#### Server
 
 MySQL 协议服务器。
 
@@ -204,7 +204,7 @@ pub struct ServerConfig {
 }
 ```
 
-＃＃＃＃ 客户
+#### Client
 
 MySQL 协议客户端。
 
@@ -249,7 +249,7 @@ pub enum Value {
 }
 ```
 
-#### sql错误
+#### SqlError
 
 错误类型。
 
@@ -292,7 +292,7 @@ pub type SqlResult<T> = Result<T, SqlError>;
 
 ## 二、事务模块
 
-### 2.1 事务管理器
+### 2.1 TransactionManager
 
 事务管理器。
 
@@ -312,7 +312,7 @@ tm.commit(tx_id)?;
 tm.rollback(tx_id)?;
 ```
 
-### 2.2 预写日志
+### 2.2 WriteAheadLog
 
 预写日志。
 
@@ -336,7 +336,7 @@ wal.truncate()?;
 
 ## 三、认证模块
 
-### 3.1 验证管理器
+### 3.1 AuthManager
 
 认证管理器。
 
@@ -365,7 +365,7 @@ auth.logout(&session.id)?;
 |------|------|
 | `Admin` | 完全访问权限 |
 | `User` | 读写权限 |
-|__代码0__| 只读权限 |
+| `Readonly` | 只读权限 |
 
 ---
 
