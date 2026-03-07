@@ -1,16 +1,14 @@
 # SQLRustGo
 
-<<<<<<< HEAD
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/version-1.1.0--draft-blue" alt="Version">
-  <img src="https://img.shields.io/badge/coverage-94.18%25-brightgreen" alt="Coverage">
-  <img src="https://img.shields.io/badge/maturity-L3%20Product%20Ready-green" alt="Maturity">
+  <img src="https://img.shields.io/badge/version-1.2.0--alpha-blue" alt="Version">
+  <img src="https://img.shields.io/badge/coverage-94%25-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/maturity-Alpha-green" alt="Maturity">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
-=======
+
 Rust 实现的关系型数据库系统，支持 SQL-92 子集。
->>>>>>> origin/main
 
 ## 核心特性
 
