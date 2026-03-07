@@ -16,11 +16,11 @@
 - `main`
 - `beta`
 - `rc`
-- __代码0__
+- `release/*`
 
 所有分支必须开启：
-- ✅ 需要 PR
-- ✅ 需要状态检查
+- ✅ Require PR
+- ✅ Require status checks
 - ✅ 禁止 direct push
 
 ### 2.3 自动创建 RC 分支
@@ -110,9 +110,9 @@ jobs:
 ### 3.1 规范要求
 
 采用 **Conventional Commits** 规范，例如：
-- __代码0__
-- __代码0__
-- __代码0__
+- `feat: add vector filter`
+- `fix: null join bug`
+- `refactor: optimizer cleanup`
 
 ### 3.2 自动生成 CHANGELOG
 
@@ -150,9 +150,9 @@ jobs:
 ```
 
 **生成内容**：
-- 贡献者
-- 合并公关
-- 变化
+- Contributors
+- Merged PR
+- Changes
 
 ### 3.3 自动创建 GitHub Release
 
@@ -234,7 +234,7 @@ ai-runtime  →  integration  ← os-kernel
 - `main`
 - `beta`
 - `rc`
-- __代码0__
+- `release/*`
 
 **版本策略**：
 - 锁定具体 tag
@@ -292,9 +292,9 @@ vMAJOR.MINOR.PATCH
 ```
 
 **示例**：
-- __代码0__
-- __代码0__
-- __代码0__
+- `core-engine v1.2.0`
+- `ai-runtime v1.2.0`
+- `os-kernel v1.2.0`
 
 **集成版本**：
 - `platform v1.2.0`（由 integration 仓库决定）
@@ -341,7 +341,7 @@ GitHub Release
 ## 9. 工程等级说明
 
 这套体系相当于以下项目采用的标准模式：
-- 库伯内特斯
+- Kubernetes
 - Rust
 - PostgreSQL
 - 大型 SaaS 公司
@@ -357,14 +357,14 @@ GitHub Release
    - `rc-guard.yml`
 
 2. **配置分支保护规则**：
-- 为 main、beta、rc、release/* 开启保护
+   - 为 main、beta、rc、release/* 开启保护
    - 配置 PR 要求和状态检查
 
 3. **测试自动化流程**：
    - 测试 RC 分支创建
    - 测试 Release 推进
    - 测试 RC 分支保护
-- 测试 Release Notes 生成
+   - 测试 Release Notes 生成
 
 ### 10.2 阶段二：多仓库准备（2-4 周）
 
@@ -377,7 +377,7 @@ GitHub Release
    - 实现集成测试
 
 3. **实现跨仓库触发**：
-- 配置 repository_dispatch
+   - 配置 repository_dispatch
    - 测试跨仓库自动化
 
 ### 10.3 阶段三：高级功能（长期）
@@ -406,11 +406,11 @@ GitHub Release
 ### 11.2 规范要求
 
 **强制使用 Conventional Commits 规范**：
-- `feat: add vector engine` → 次要
-- `fix: null pointer bug` → 补丁
+- `feat: add vector engine` → MINOR
+- `fix: null pointer bug` → PATCH
 - `refactor: planner cleanup` → 无版本变化
-- `feat!: redesign storage layer` → 主要
-- `BREAKING CHANGE: change API` → 主要
+- `feat!: redesign storage layer` → MAJOR
+- `BREAKING CHANGE: change API` → MAJOR
 
 ### 11.3 推荐工具
 
@@ -443,11 +443,11 @@ jobs:
 
 ### 11.5 版本计算逻辑
 
-|Commit 类型| 版本变化 | 示例 |
+| Commit 类型 | 版本变化 | 示例 |
 |------------|----------|------|
 | `fix` | PATCH | 1.0.0 → 1.0.1 |
 | `feat` | MINOR | 1.0.0 → 1.1.0 |
-|`feat!` 或 `BREAKING CHANGE`| MAJOR | 1.0.0 → 2.0.0 |
+| `feat!` 或 `BREAKING CHANGE` | MAJOR | 1.0.0 → 2.0.0 |
 
 ### 11.6 效果
 
@@ -760,13 +760,13 @@ Mermaid evolution graph updated
 **典型问题**：
 - PR A CI 通过
 - PR B CI 通过
-- 合并
+- A 先 merge
 - B 直接 merge → 基于旧 main → main 变红
 
 **方案 1：使用 GitHub 原生 Merge Queue（推荐）**
 
 在 GitHub 仓库设置中：
-- __代码0__
+- `Settings → Branches → main`
 - 勾选：`Require merge queue`
 
 **效果**：
@@ -921,17 +921,17 @@ strategy:
 **目标**：解决多仓库版本漂移问题。
 
 **典型问题**：
-- 核心引擎 v1.2
-- ai-运行时 v1.1
-- cli-工具 v1.0
+- core-engine v1.2
+- ai-runtime v1.1
+- cli-tool v1.0
 
 **推荐模型：Integration Hub 仓库**
 
 **仓库结构**：
-- __代码0__
-- __代码0__
-- __代码0__
-- __代码0__
+- `core-engine`
+- `ai-runtime`
+- `os-kernel`
+- `cli-tool`
 - `integration-platform`（集成中心）
 
 **Integration Hub 职责**：
@@ -998,12 +998,12 @@ platform release
 
 | 层级 | 控制机制 |
 |------|----------|
-| PR 层 |审核+守护|
-| Merge 层 |合并队列|
-|Version 层|请释放|
-|依赖层|翻新|
-|Runtime 层|矩阵CI|
-|Platform 层|整合中心|
+| PR 层 | Review + Guard |
+| Merge 层 | Merge Queue |
+| Version 层 | release-please |
+| Dependency 层 | Renovate |
+| Runtime 层 | Matrix CI |
+| Platform 层 | Integration Hub |
 
 ## 17. 工程体系等级
 
@@ -1037,19 +1037,19 @@ platform release
 #### 🟡 5–15 人（小型技术公司）
 - **状态**：非常合适
 - **覆盖的核心功能**：
-- 合并队列
+  - Merge Queue
   - 语义版本自动化
   - RC 隔离
   - 多仓库锁定
--矩阵CI
+  - Matrix CI
 - **定位**：有产品线的创业公司的标准配置
 
 #### 🟠 20–50 人（中型工程团队）
 - **状态**：依然适用，但需要增强
 - **增强项**：
-- 更细的 CODEOWNERS
-- 更严格的 review policy
-- 专职 Release Manager
+  - 更细的 CODEOWNERS
+  - 更严格的 review policy
+  - 专职 Release Manager
 
 #### 🔴 100+ 人
 - **状态**：需要显著增强
@@ -1084,7 +1084,7 @@ platform release
 - main / beta / rc 分层
 - PR 强制 review
 - 语义版本自动化
-- RC 禁止功能
+- RC 禁止 feature
 - 基本 CI
 
 **可以暂时不用**：
@@ -1124,13 +1124,13 @@ platform release
 
 #### 🔴 风险 1：模块边界不清
 - **表现**：
-- AI runtime 和 core engine 强耦合
+  - AI runtime 和 core engine 强耦合
   - Planner 和 Storage 没有清晰接口
   - OS 抽象层和执行层混杂
 - **后果**：
   - 改一个模块，其他模块跟着改
   - Feature 开发越来越慢
-- PR diff 变大
+  - PR diff 变大
 - **严重性**：如果 3.0 结束时仍然这样，4.0 会爆炸
 
 #### 🔴 风险 2：接口过早固化
@@ -1143,7 +1143,7 @@ platform release
 #### 🟠 风险 3：AI 与内核耦合方向错误
 - **表现**：
   - AI 直接干预执行层
-- AI 绕过 planner
+  - AI 绕过 planner
   - AI 修改底层数据结构
 - **后果**：4.0 会失去可预测性
 
@@ -1151,7 +1151,7 @@ platform release
 - **表现**：
   - 没有 end-to-end 流程测试
   - 没有回归测试
-- 没有 planner → execution 全链路验证
+  - 没有 planner → execution 全链路验证
 - **后果**：后续演进会变成“黑箱修改”
 
 #### 🟡 风险 5：抽象层级混乱

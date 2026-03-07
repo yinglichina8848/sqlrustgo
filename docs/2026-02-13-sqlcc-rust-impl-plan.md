@@ -1,6 +1,6 @@
 # SQLRustGo 项目实施计划
 
-> **对于克劳德：** 所需的子技能：使用超能力：执行计划来逐个任务地实施该计划。
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **目标:** 从零开始构建 Rust 数据库系统，实现 SQL-92 子集支持，具备现代化架构和 AI 工具链集成
 
@@ -47,8 +47,8 @@ fn main() {
 
 **Step 3: 编译验证**
 
-运行：`cd sqlrustgo && cargo build`
-预期：成功
+Run: `cd sqlrustgo && cargo build`
+Expected: SUCCESS
 
 **Step 4: 提交**
 
@@ -62,7 +62,7 @@ git commit -m "feat: 初始化 Rust 项目结构"
 ### Task 2: 配置 AI 工具链和 CI/CD
 
 **文件:**
-- 创建：`sqlrustgo/.claude/claude_desktop_config.json`
+- Create: `sqlrustgo/.claude/claude_desktop_config.json`
 - Create: `sqlrustgo/.github/workflows/ci.yml`
 - Create: `sqlrustgo/cargo-toolchain.toml`
 
@@ -968,14 +968,14 @@ cargo test
 
 ### 阶段六：事务管理器 ✅ 完成
 - Task 9: 事务管理 - ✅
-- 预写日志 (WAL)
-- 事务管理器（开始/提交/回滚）
+  - Write-Ahead Log (WAL)
+  - TransactionManager (BEGIN/COMMIT/ROLLBACK)
   - 支持事务快照
 
 ### 阶段七：网络层 ✅ 完成
 - Task 10: 网络协议 - ✅
-- NetworkHandler 协议处理器
-- 启动服务器（）/连接（）
+  - NetworkHandler 协议处理器
+  - start_server() / connect()
   - MySQL 风格协议支持
 
 ---
@@ -1009,14 +1009,14 @@ cargo test
 
 | 测试 | 说明 |
 |------|------|
-|__代码0__| SELECT 完整流程 |
-|__代码0__| INSERT 完整流程 |
-|__代码0__|事务 BEGIN/COMMIT|
-|__代码0__|创建+选择|
-|__代码0__| 多语句 DDL |
-|__代码0__| 词法+语法解析集成 |
-|__代码0__| 错误处理 |
-|__代码0__| 类型转换 |
+| `test_full_select_flow` | SELECT 完整流程 |
+| `test_full_insert_flow` | INSERT 完整流程 |
+| `test_full_transaction_flow` | 事务 BEGIN/COMMIT |
+| `test_create_and_select` | CREATE + SELECT |
+| `test_multiple_statements` | 多语句 DDL |
+| `test_lexer_parser_integration` | 词法+语法解析集成 |
+| `test_error_handling` | 错误处理 |
+| `test_value_type_conversion` | 类型转换 |
 
 ---
 
@@ -1043,7 +1043,7 @@ cargo test
 | Task 6: 存储引擎 | ✅ | `f05308e` |
 | Task 7: B+ 树索引 | ✅ | 已集成 |
 | Task 8: 执行器框架 | ✅ | `67f1f77` |
-|Task 9: REPL 和 CLI| ✅ | `1e118db` |
+| Task 9: REPL 和 CLI | ✅ | `1e118db` |
 | Task 10: 事务管理 | ✅ | `584b3a7` |
 | Task 11: 网络协议 | ✅ | `1f74e18` |
 | **Task 12**: **集成测试** | ✅ | `c737cda` |
