@@ -10,7 +10,7 @@
 
 ### 初始创建
 - **时间**: 2026-02-21
-- **Commit**: 2d191aaaaffa3799865ef6989e40cdc9137598a7
+- **提交**：2d191aaaaffa3799865ef6989e40cdc9137598a7
 - **操作**: 从 rc/v1.0.0-1 分支创建正式 GA Tag
 - **状态**: 当前有效
 
@@ -19,20 +19,20 @@
 #### 2026-02-21 Tag 重建
 - **原因**: 解决与 alpha 阶段 Tag 冲突问题
 - **操作**: 
-  - 删除旧 Tag: `git tag -d v1.0.0`
-  - 删除远程 Tag: `git push origin --delete v1.0.0`
-  - 重建 Tag: `git tag -a v1.0.0 -m "Release v1.0.0"`
-  - 推送 Tag: `git push origin v1.0.0`
+- 删除旧 Tag: `git tag -d v1.0.0`
+- 删除远程 Tag: `git push origin --delete v1.0.0`
+- 重建 Tag: `git tag -a v1.0.0 -m "Release v1.0.0"`
+- 推送 Tag: `git push origin v1.0.0`
 - **影响**: 
-  - Tag 指向新的 commit
-  - GitHub Release 页面自动更新
+- Tag 指向新的 commit
+- GitHub Release 页面自动更新
   - 构建产物重新生成
 
 ## 审计信息
 
 ### 当前 Tag 状态
 - **Tag**: v1.0.0
-- **Commit**: 2d191aaaaffa3799865ef6989e40cdc9137598a7
+- **提交**：2d191aaaaffa3799865ef6989e40cdc9137598a7
 - **分支**: release/v1.0.0
 - **GitHub Release**: https://github.com/minzuuniversity/sqlrustgo/releases/tag/v1.0.0
 
@@ -67,7 +67,7 @@
    - 保持分支历史清晰可追溯
 
 3. **版本同步**:
-   - 建立 RC → release → main 的 fast-forward 流程
+- 建立 RC → release → main 的 fast-forward 流程
    - 避免 main 分支在冻结期间产生独立历史
    - 定期进行版本状态体检
 

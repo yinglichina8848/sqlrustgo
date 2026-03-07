@@ -2,7 +2,7 @@
 
 > **版本**: v1.2.0
 > **代号**: Vector Engine
-> **状态**: 🔄 开发中
+> **状态**: 🔄 Alpha 阶段开发中 (`alpha/v1.2.0`)
 > **目标成熟度**: L3 → L4 准备
 > **版本类型**: 🏗️ 架构重构 + 接口抽象
 
@@ -12,12 +12,17 @@
 
 v1.2.0 是**架构重构和接口抽象版本**，核心目标是为 v2.0 分布式架构打基础，同时提升性能到百万行级。
 
+> 阶段说明：
+> - 历史阶段：`v1.2.0-draft`（已完成收尾）
+> - 当前阶段：`alpha/v1.2.0`
+> - 当前主开发分支：`develop/v1.2.0`
+
 ### 版本类型说明
 
 | 特性 | 说明 |
 |------|------|
 | 🏗️ 架构重构 | 抽象存储引擎、执行器、统计信息接口，为分布式做准备 |
-| 📐 接口抽象 | 定义 RecordBatch、Array、Operator、CostModel 等核心 trait |
+| 📐 接口抽象 |定义 RecordBatch、Array、Operator、CostModel 等核心 trait|
 | 🚀 性能提升 | 向量化执行优化，支持百万行数据处理 |
 | 🔄 向后兼容 | 现有 API 保持兼容，平滑升级 |
 
@@ -25,10 +30,10 @@ v1.2.0 是**架构重构和接口抽象版本**，核心目标是为 v2.0 分布
 
 | 目标 | 说明 | 优先级 |
 |------|------|--------|
-| 向量化执行 | RecordBatch + ColumnarArray 接口抽象 | P0 |
-| 统计信息 | TableStats + ColumnStats 接口定义 | P0 |
+| 向量化执行 |RecordBatch + ColumnarArray 接口抽象| P0 |
+| 统计信息 |TableStats + ColumnStats 接口定义| P0 |
 | 简化 CBO | CostModel 接口 + 基础实现 | P1 |
-| 存储抽象 | StorageEngine trait 定义 | P1 |
+| 存储抽象 |StorageEngine trait 定义| P1 |
 
 ### 成功标准
 
@@ -100,6 +105,12 @@ v1.2.0 是**架构重构和接口抽象版本**，核心目标是为 v2.0 分布
 
 ## 架构重构说明
 
+### 目录重构进展 (新增)
+
+- 已完成 `src/` 向 `crates/` workspace 的核心迁移。
+- 已建立 executor / optimizer / planner / storage 等 crate 的模块化边界。
+- 目录重构相关改进作为 v1.2.0 Alpha 阶段基础设施保留，不删除历史记录。
+
 ### v1.2.0 架构变化
 
 ```
@@ -126,10 +137,10 @@ v1.1.x 架构                    v1.2.0 架构 (抽象化)
 
 | 模块 | v1.1.0 | v1.2.0 |
 |------|--------|--------|
-| 存储 | FileStorage (具体实现) | StorageEngine trait |
-| 执行 | RowExecutor (行式) | VectorizedExecutor (列式) + RecordBatch |
-| 统计 | 简单计数器 | TableStats + ColumnStats + StatsCollector |
-| 优化 | 硬编码规则 | CostModel trait + Memo 结构 |
+| 存储 |FileStorage (具体实现)|存储引擎特征|
+| 执行 |RowExecutor (行式)|VectorizedExecutor（列式）+ RecordBatch|
+| 统计 | 简单计数器 |表统计 + 列统计 + 统计收集器|
+| 优化 | 硬编码规则 |CostModel trait + Memo 结构|
 | 网络 | 同步处理 | 异步框架预留 |
 
 ### 为 v2.0 做准备
@@ -147,10 +158,10 @@ v1.2.0 的接口抽象为 v2.0 分布式架构打基础：
 
 | 负责人 | 角色 | 任务范围 |
 |--------|------|----------|
-| **openheart** | 架构开发 | 向量化基础、统计信息、CBO 设计 |
-| **heartopen** | 功能开发 | 向量化执行器、存储抽象 |
-| **maintainer** | 审核 | 测试、文档、代码审核 |
-| **yinglichina8848** | 调度 | 计划制定、发布控制 |
+|**敞开心扉**| 架构开发 | 向量化基础、统计信息、CBO 设计 |
+|**心敞开**| 功能开发 | 向量化执行器、存储抽象 |
+|**维护者**| 审核 | 测试、文档、代码审核 |
+|**英利中国8848**| 调度 | 计划制定、发布控制 |
 
 ---
 

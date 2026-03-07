@@ -1,9 +1,5 @@
 # sqlrustgo 2.0 路线图
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> origin/develop-v1.2.0
 > 版本：v2.0
 > 日期：2026-03-05
 > 目标：从"项目代码"升级为"数据库内核架构"，支持 Client-Server 模式
@@ -44,28 +40,15 @@
 
 | 接口 | 2.0 状态 | 3.0 扩展 |
 |------|----------|----------|
-| ExecutionContext | Local 实现 | Distributed 实现 |
-| DataExchange | Noop 实现 | 真实网络传输 |
-| PlanFragment | 不使用 | 分布式调度 |
-| StorageEngine | 单机存储 | 分布式存储 |
+|执行上下文| Local 实现 |Distributed 实现|
+|数据交换| Noop 实现 | 真实网络传输 |
+|计划片段| 不使用 | 分布式调度 |
+|存储引擎| 单机存储 | 分布式存储 |
 
 ---
 
 ## 一、开发轨道概览
 
-<<<<<<< HEAD
-=======
-> 版本：v1.1
-> 日期：2026-03-02
-> 目标：从"项目代码"升级为"数据库内核架构"，支持 Client-Server 模式
-
----
-
-## 一、开发轨道概览
-
->>>>>>> origin/main
-=======
->>>>>>> origin/develop-v1.2.0
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          2.0 双轨道开发                                      │
@@ -105,22 +88,22 @@
 | 模块 | 说明 |
 |:-----|:-----|
 | Arrow 列式内存 | 高效内存布局 |
-| LogicalPlan / PhysicalPlan 分离 | 清晰的执行层次 |
+|LogicalPlan / PhysicalPlan 分离| 清晰的执行层次 |
 | 向量化执行 | 批量处理 |
 | CBO（部分实现） | 成本优化 |
 | 插件式数据源 | 可扩展存储 |
 
 ### 2.2 对比分析
 
-| 模块 | sqlrustgo | DataFusion |
+| 模块 |sqlrustgo|数据融合|
 |:-----|:----------|:-----------|
-| Parser | ✅ | ✅ |
-| LogicalPlan | 部分 | ✅ |
+|解析器| ✅ | ✅ |
+|逻辑计划| 部分 | ✅ |
 | CBO | ❌ | 部分 |
 | 向量化 | ❌ | ✅ |
 | 插件 | 基础 | ✅ |
-| 分布式 | ❌ | 通过 Ballista |
-| **Client-Server** | ⚠️ 基础 | ✅ |
+| 分布式 | ❌ |通过 Ballista|
+|**客户端-服务器**| ⚠️ 基础 | ✅ |
 
 ---
 
@@ -132,10 +115,10 @@
 
 | 任务 | 说明 |
 |:-----|:-----|
-| LogicalPlan 独立模块 | 清晰的逻辑计划 |
-| PhysicalPlan trait 化 | 可扩展的物理计划 |
-| Executor 插件化 | 可替换执行器 |
-| HashJoin 实现 | 解决 Join 性能 |
+|LogicalPlan 独立模块| 清晰的逻辑计划 |
+|PhysicalPlan trait 化| 可扩展的物理计划 |
+|Executor 插件化| 可替换执行器 |
+|HashJoin 实现| 解决 Join 性能 |
 
 **结果**：L3 → L4
 
@@ -159,10 +142,10 @@
 | 任务 | 说明 |
 |:-----|:-----|
 | 完整 CBO | 成本优化器 |
-| Join reorder | Join 重排序 |
+|加入再订购| Join 重排序 |
 | 插件动态加载 | 运行时扩展 |
-| Memory pool | 内存管理 |
-| Spill to disk | 磁盘溢出 |
+|内存池| 内存管理 |
+|溢出到磁盘| 磁盘溢出 |
 
 **结果**：可商用级内核
 
@@ -261,7 +244,7 @@ pub struct CostBasedOptimizer {
 }
 ```
 
-### 5.2 Memory Pool
+### 5.2 内存池
 
 ```rust
 pub trait MemoryPool: Send + Sync {
@@ -271,7 +254,7 @@ pub trait MemoryPool: Send + Sync {
 }
 ```
 
-### 5.3 Spill to Disk
+### 5.3 溢出到磁盘
 
 ```rust
 pub trait SpillManager: Send + Sync {
@@ -396,7 +379,7 @@ pub trait TransactionManager: Send + Sync {
 | ID | 任务 | 预估时间 |
 |----|------|----------|
 | N-019 | 认证机制实现 | 4h |
-| N-020 | SSL/TLS 支持 | 4h |
+| N-020 |SSL/TLS 支持| 4h |
 | N-021 | 性能测试和优化 | 4h |
 | N-022 | 文档编写 | 3h |
 
@@ -407,7 +390,7 @@ pub trait TransactionManager: Send + Sync {
 ### 9.1 如果不做这些会怎样？
 
 **3 年后**：
-- Executor 2000 行
+- 执行者2000行
 - Join 逻辑混乱
 - 性能不可控
 - 插件难以插入
