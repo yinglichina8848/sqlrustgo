@@ -55,14 +55,14 @@ crates/
 | ARCHITECTURE_REFACTORING_PLAN.md | 更新目标目录为 crates/ |
 | INTERFACE_CONTRACT.md | 添加新路径映射表 |
 | ARCHITECTURE_DIAGRAM.md | 添加路径说明 |
-| ALGORITHM_DOCUMENTATION.md |更新路径为 crates/storage/|
+| ALGORITHM_DOCUMENTATION.md | 更新路径为 crates/storage/ |
 
 ### 2.3 目录结构评估
 
 | 指标 | 评分 | 说明 |
 |------|------|------|
 | 模块化程度 | ⭐⭐⭐⭐⭐ | 10 个独立 crate |
-| 依赖管理 | ⭐⭐⭐⭐⭐ |workspace 统一管理|
+| 依赖管理 | ⭐⭐⭐⭐⭐ | workspace 统一管理 |
 | 接口清晰度 | ⭐⭐⭐⭐ | trait 定义完整 |
 | 可扩展性 | ⭐⭐⭐⭐⭐ | 新增 crate 简单 |
 | 文档一致性 | ⭐⭐⭐⭐⭐ | 已修复所有矛盾 |
@@ -112,11 +112,11 @@ release/v1.1.0-to-main-v2
 
 | 问题类型 | 数量 | 示例 |
 |----------|------|------|
-| 废弃分支 | 8 |__代码0__，__代码1__|
-| 重复分支 | 3 |`develop-v1.2.0` 与 `develop-v1.2.0-fixed`|
-| 临时分支 | 4 |__代码0__，__代码1__|
-| 合并分支 | 4 |__代码0__，__代码1__|
-| 无版本号 | 2 |`feature/v1.0.0-alpha` (应改为 feature/v1.0.0-*)|
+| 废弃分支 | 8 | `draft/v1.1.0`, `draft/v1.2.0` |
+| 重复分支 | 3 | `develop-v1.2.0` vs `develop-v1.2.0-fixed` |
+| 临时分支 | 4 | `pr/147`, `pr-148-test` |
+| 合并分支 | 4 | `merge/main-to-baseline`, `release/merge-v1.1.0-to-main` |
+| 无版本号 | 2 | `feature/v1.0.0-alpha` (应改为 feature/v1.0.0-*) |
 
 ### 3.3 改进措施
 
@@ -124,19 +124,19 @@ release/v1.1.0-to-main-v2
 
 | 分支类型 | 命名格式 | 示例 |
 |----------|----------|------|
-| 开发分支 |__代码0__|__代码0__|
-| 功能分支 |__代码0__|__代码0__|
-| 修复分支 | `fix/v1.x.0-<问题描述>` |__代码0__|
-| 文档分支 | `docs/v1.x.0-<文档类型>` |__代码0__|
-| 维护分支 |__代码0__|__代码0__|
+| 开发分支 | `develop-v1.x.0` | `develop-v1.2.0` |
+| 功能分支 | `feature/v1.x.0-<功能名>` | `feature/v1.2.0-vector-execution` |
+| 修复分支 | `fix/v1.x.0-<问题描述>` | `fix/v1.2.0-index-tests` |
+| 文档分支 | `docs/v1.x.0-<文档类型>` | `docs/v1.2.0-release-notes` |
+| 维护分支 | `release/x.x` | `release/1.2` |
 
 #### 分支保护规则
 
 | 分支 | 保护级别 | 要求 |
 |------|----------|------|
 | `main` | 🔴 最高 | PR + 2 人审核 |
-|__代码0__| 🟡 中等 | PR + 1 人审核 |
-|__代码0__，__代码1__| 🟢 低 | CI 通过 |
+| `develop-x.x.x` | 🟡 中等 | PR + 1 人审核 |
+| `feature/*`, `fix/*` | 🟢 低 | CI 通过 |
 
 ### 3.4 分支治理评估
 
@@ -155,7 +155,7 @@ release/v1.1.0-to-main-v2
 
 | 矛盾点 | 文档A | 文档B |
 |--------|-------|-------|
-| 目录结构 | ARCHITECTURE_REFACTORING_PLAN.md (src/) |PR #305（板条箱/）|
+| 目录结构 | ARCHITECTURE_REFACTORING_PLAN.md (src/) | PR #305 (crates/) |
 | 向量化时间 | VERSION_PLAN.md (v1.2.0 Week 1-4) | TASK_MATRIX.md (延后到 v1.3.0) |
 | 分支命名 | BRANCH_STAGE_GOVERNANCE.md (feature/*, bugfix/*) | 实际 (fix/v1.2.0-*) |
 
@@ -187,29 +187,29 @@ release/v1.1.0-to-main-v2
 
 | 建议删除 | 原因 |
 |----------|------|
-|__代码0__| 已废弃，v1.1.0 已发布 |
-|__代码0__| 已废弃，使用 develop-v1.2.0 |
-|__代码0__，__代码1__| 临时分支 |
-|__代码0__| 一次性合并分支 |
+| `draft/v1.1.0` | 已废弃，v1.1.0 已发布 |
+| `draft/v1.2.0` | 已废弃，使用 develop-v1.2.0 |
+| `pr/147`, `pr-148-test` | 临时分支 |
+| `merge/main-to-baseline` | 一次性合并分支 |
 | `rc/v1.0.0-1` | 已废弃 |
-|__代码0__| 一次性合并分支 |
-|__代码0__| 已废弃 |
-|__代码0__| 已废弃 |
-|__代码0__| 已废弃 |
-|__代码0__| 一次性合并分支 |
-|__代码0__|与 develop-v1.2.0 重复|
+| `release/merge-v1.1.0-to-main` | 一次性合并分支 |
+| `release/v1.1.0-alpha` | 已废弃 |
+| `release/v1.1.0-beta` | 已废弃 |
+| `release/v1.1.0-rc` | 已废弃 |
+| `release/v1.1.0-to-main-v2` | 一次性合并分支 |
+| `develop-v1.2.0-fixed` | 与 develop-v1.2.0 重复 |
 
 ### 5.2 保留分支
 
 | 分支 | 用途 |
 |------|------|
 | `main` | 稳定版本 |
-|__代码0__| 下一版本开发 |
-|__代码0__| v1.1.0 维护 (创建 release/1.1) |
-|__代码0__| v1.2.0 当前开发 |
-|__代码0__| v1.0.0 维护 |
-|__代码0__| v1.1.0 维护 |
-|__代码0__| v1.1.0 最终发布 |
+| `develop` | 下一版本开发 |
+| `develop-v1.1.0` | v1.1.0 维护 (创建 release/1.1) |
+| `develop-v1.2.0` | v1.2.0 当前开发 |
+| `release/v1.0.0` | v1.0.0 维护 |
+| `release/v1.1.0` | v1.1.0 维护 |
+| `release/v1.1.0-final` | v1.1.0 最终发布 |
 
 ---
 
@@ -219,11 +219,11 @@ release/v1.1.0-to-main-v2
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| Build | ✅ 通过 |货物构建——所有功能|
-|剪辑| ✅ 通过 |货物夹 -- -D 警告|
-|格式| ✅ 通过 |货物 fmt --检查|
-|测试编译| ✅ 通过 |货物测试--no-run|
-|测试执行| ⏳ CI验证中 |等待 GitHub Actions|
+| Build | ✅ 通过 | cargo build --all-features |
+| Clippy | ✅ 通过 | cargo clippy -- -D warnings |
+| Format | ✅ 通过 | cargo fmt --check |
+| Test Compilation | ✅ 通过 | cargo test --no-run |
+| Test Execution | ⏳ CI验证中 | 等待 GitHub Actions |
 
 ### 6.2 已合并 PR
 
@@ -256,7 +256,7 @@ release/v1.1.0-to-main-v2
 | 改进项 | 改进前 | 改进后 |
 |--------|--------|--------|
 | 模块组织 | 单体 src/ | 10 个独立 crate |
-| 依赖管理 | 手动管理 |workspace 统一管理|
+| 依赖管理 | 手动管理 | workspace 统一管理 |
 | 文档一致性 | 引用旧路径 | 完全同步 |
 | 扩展性 | 困难 | 简单 |
 
@@ -314,7 +314,7 @@ release/v1.1.0-to-main-v2
 
 | 领域 | 改进前 | 改进后 | 评估 |
 |------|--------|--------|------|
-| 目录结构 | src/ 单体 |板条箱/工作区| ⭐⭐⭐⭐⭐ |
+| 目录结构 | src/ 单体 | crates/ workspace | ⭐⭐⭐⭐⭐ |
 | 分支治理 | 混乱 | 规范明确 | ⭐⭐⭐⭐ |
 | 文档一致性 | 多处矛盾 | 完全统一 | ⭐⭐⭐⭐⭐ |
 | 门禁状态 | 52% | 80%+ (CI后) | ⭐⭐⭐⭐ |

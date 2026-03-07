@@ -44,23 +44,23 @@
 
 | # | 错误类型 | 原文件位置 | 修复状态 |
 |---|----------|------------|----------|
-| 1 |__代码0__| `src/executor/benchmark.rs` | ✅ 已修复 |
-| 2 |__代码0__| `src/storage/buffer_pool.rs` | ✅ 已修复 |
-| 3 |__代码0__| `src/storage/file_storage.rs` | ✅ 已修复 |
-| 4 |__代码0__| `src/transaction/wal.rs` | ✅ 已修复 |
-| 5 |__代码0__| `src/monitoring/health.rs` | ✅ 已修复 |
+| 1 | `unused_import` | `src/executor/benchmark.rs` | ✅ 已修复 |
+| 2 | `unused_mut` | `src/storage/buffer_pool.rs` | ✅ 已修复 |
+| 3 | `unused_mut` | `src/storage/file_storage.rs` | ✅ 已修复 |
+| 4 | `dead_code` | `src/transaction/wal.rs` | ✅ 已修复 |
+| 5 | `useless_comparison` | `src/monitoring/health.rs` | ✅ 已修复 |
 
 ### 2.2 测试编译错误 (已修复)
 
 | # | 错误类型 | 原文件 | 修复状态 |
 |---|----------|--------|----------|
-| 1 |__代码0__| `tests/integration_test.rs` | ✅ 已修复 (PR #304) |
+| 1 | `mismatched_types` | `tests/integration_test.rs` | ✅ 已修复 (PR #304) |
 
 ### 2.3 Benchmark 编译错误 (已修复)
 
 | # | 错误类型 | 原文件 | 修复状态 |
 |---|----------|--------|----------|
-| 1 |__代码0__| `benches/executor_bench.rs` | ✅ 已修复 |
+| 1 | `mismatched_types` | `benches/executor_bench.rs` | ✅ 已修复 |
 
 ---
 
@@ -91,21 +91,21 @@
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-|剪辑|__代码0__| ✅ 零错误 | ✅ 通过 |
-| 测试编译 |__代码0__| ✅ 编译通过 | ✅ 通过 |
-| 测试执行 |__代码0__| ✅ 全部通过 | ⏳ CI验证中 |
-| 格式化 |__代码0__| ✅ 通过 | ✅ 通过 |
-| Build |__代码0__| ✅ 通过 | ✅ 通过 |
+| Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 零错误 | ✅ 通过 |
+| 测试编译 | `cargo test --no-run` | ✅ 编译通过 | ✅ 通过 |
+| 测试执行 | `cargo test` | ✅ 全部通过 | ⏳ CI验证中 |
+| 格式化 | `cargo fmt --check` | ✅ 通过 | ✅ 通过 |
+| Build | `cargo build --all-features` | ✅ 通过 | ✅ 通过 |
 
 ### 4.2 当前门禁状态
 
 | 检查项 | 状态 |
 |--------|------|
 | Build | ✅ 通过 |
-|剪辑| ✅ 通过 |
-|格式| ✅ 通过 |
-|测试编译| ✅ 通过 |
-|测试执行| ⏳ 待 CI 验证 |
+| Clippy | ✅ 通过 |
+| Format | ✅ 通过 |
+| Test Compilation | ✅ 通过 |
+| Test Execution | ⏳ 待 CI 验证 |
 
 完成上述任务后，执行以下操作：
 
@@ -122,10 +122,10 @@ cargo fmt --check
 
 | 任务 | 预计时间 | 截止日期 | 状态 |
 |------|----------|----------|------|
-|任务 A (Clippy)| 2h | 2026-03-07 | ✅ 已完成 |
+| 任务 A (Clippy) | 2h | 2026-03-07 | ✅ 已完成 |
 | 任务 B (测试) | 2h | 2026-03-07 | ✅ 已完成 |
-|任务 C (Benchmark)| 1h | 2026-03-07 | ✅ 已完成 |
-|任务 D (Warnings)| 1h | 2026-03-08 | ✅ 已完成 |
+| 任务 C (Benchmark) | 1h | 2026-03-07 | ✅ 已完成 |
+| 任务 D (Warnings) | 1h | 2026-03-08 | ✅ 已完成 |
 | **总计** | **6h** | **2026-03-08** | ✅ 已完成 |
 
 ---
