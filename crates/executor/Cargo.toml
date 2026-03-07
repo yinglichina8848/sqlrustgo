@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 sqlrustgo-common.workspace = true
 sqlrustgo-types.workspace = true
+sqlrustgo-planner.workspace = true
 sqlrustgo-storage.workspace = true
 serde.workspace = true
 thiserror.workspace = true

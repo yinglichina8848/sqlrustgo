@@ -47,7 +47,7 @@ pub trait Executor: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_planner::{Schema, Field, DataType};
+    use sqlrustgo_planner::PhysicalPlan;
 
     /// Mock executor for testing
     pub struct MockExecutor;
@@ -143,4 +143,6 @@ mod tests {
         let executor = MockExecutor::new();
         assert!(executor.is_ready());
     }
+=======
+>>>>>>> origin/develop-v1.2.0
 }

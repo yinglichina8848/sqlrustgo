@@ -1,4 +1,4 @@
-# SQLRustGo System Architecture
+# SQLRustGo 系统架构
 
 > **版本**: 1.2
 > **更新日期**: 2026-03-05

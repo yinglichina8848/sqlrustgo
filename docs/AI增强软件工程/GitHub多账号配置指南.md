@@ -14,16 +14,16 @@
 ### 账号规划
 | 账号 | 角色 | 权限 | 用途 |
 |------|------|------|------|
-| yinglichina8848 | Owner（人类） | Admin | main 分支控制、最终发布 |
-| sonaopenheart | AI Dev A | Write | 开发、创建 PR |
-| sonaheartopen | AI Review B | Write | Review、合并 develop |
+|英利china8848| Owner（人类） | Admin | main 分支控制、最终发布 |
+|索纳开放之心|人工智能开发A| Write | 开发、创建 PR |
+|索纳心顶|人工智能评论B| Write |Review、合并 develop|
 
 ### AI-CLI 工具分配
 | 身份 | 主要工具 | 备注 |
 |------|----------|------|
-| yinglichina8848 | Codex CLI + Claude Code | 最强交互能力，适合复杂设计 |
-| sonaopenheart | OpenCode + Claude Code | 自动生成代码、写 feature |
-| sonaheartopen | Codex CLI + OpenCode | 自动 review + QA 检查 |
+|英利china8848|Codex CLI + 克劳德代码| 最强交互能力，适合复杂设计 |
+|索纳开放之心|OpenCode + 克劳德代码| 自动生成代码、写 feature |
+|索纳心顶|Codex CLI + OpenCode| 自动 review + QA 检查 |
 
 ## 核心原则
 
@@ -59,7 +59,7 @@ ssh-keygen -t ed25519 -C "yinglichina@main" -f ~/.ssh/id_ed25519
 ### 第二阶段：上传公钥到 GitHub
 
 登录对应 GitHub 账号：
-- Settings → SSH and GPG Keys → New SSH key
+- 设置 → SSH 和 GPG 密钥 → 新的 SSH 密钥
 - 分别添加对应的公钥
 
 ### 第三阶段：配置 SSH config
@@ -171,7 +171,7 @@ gh pr review --approve
 gh pr merge --squash
 ```
 
-### Owner 流程（yinglichina）
+### Owner 流程​​（yinglichina）
 
 ```bash
 cd ~/workspace/yinglichina/sqlrustgo
@@ -182,13 +182,13 @@ git pull
 ## 分支保护规则
 
 ### main 分支
-- Require pull request
-- Require 1 approval
+- 需要拉取请求
+- 需要 1 次批准
 - Restrict who can push → 只选 yinglichina8848
 
 ### develop 分支
-- Require pull request
-- Require 1 approval
+- 需要拉取请求
+- 需要 1 次批准
 - 不限制 push 人
 
 ## 常见问题排查

@@ -1,12 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+此文件为 Claude Code (claude.ai/code) 提供使用此存储库中的代码时的指导。
 
-## Project Overview
+## 项目概述
 
-SQLRustGo is a Rust implementation of a relational database system supporting SQL-92 subset. Built from scratch with a modern layered architecture.
+SQLRustGo 是支持 SQL-92 子集的关系数据库系统的 Rust 实现。采用现代分层架构从头开始构建。
 
-## Common Commands
+## 常用命令
 
 ```bash
 # Build
@@ -31,7 +31,7 @@ cargo test --doc
 cargo run --bin sqlrustgo
 ```
 
-## Architecture
+＃＃ 建筑学
 
 ```
 ┌─────────────────────────────────────┐
@@ -52,17 +52,17 @@ cargo run --bin sqlrustgo
 └─────────────────────────────────────┘
 ```
 
-## Key Modules
+## 关键模块
 
-| Module | Purpose |
+|模块|目的|
 |--------|---------|
-| `lexer` | Tokenizes SQL input |
-| `parser` | Parses tokens into Statement AST |
-| `storage` | Page management, BufferPool (LRU), B+ Tree indexing |
-| `executor` | Executes SQL statements |
-| `transaction` | Write-Ahead Log, BEGIN/COMMIT/ROLLBACK |
-| `network` | TCP server/client with MySQL-style protocol |
+| `lexer` |对 SQL 输入进行标记|
+|__代码0__|将 token 解析为语句 AST|
+|__代码0__|页面管理、BufferPool (LRU)、B+ Tree 索引|
+|__代码0__|执行 SQL 语句|
+|__代码0__|预写日志，开始/提交/回滚|
+|__代码0__|采用 MySQL 风格协议的 TCP 服务器/客户端|
 
-## Rust Edition
+## 铁锈版
 
-Uses Rust edition 2024 with Tokio async runtime.
+将 Rust 版本 2024 与 Tokio 异步运行时结合使用。

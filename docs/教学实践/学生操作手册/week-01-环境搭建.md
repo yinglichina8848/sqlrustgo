@@ -18,7 +18,7 @@
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS / Linux / Windows 10+ |
+| 操作系统 |macOS / Linux / Windows 10+|
 | 网络环境 | 能够访问GitHub |
 | 硬件要求 | 8GB+ 内存，20GB+ 硬盘空间 |
 
@@ -93,7 +93,7 @@ cat ~/.ssh/id_ed25519.pub
 #### 2.4 添加SSH密钥到GitHub
 
 1. 复制公钥内容
-2. 访问 GitHub → Settings → SSH and GPG keys
+2. 访问 GitHub → 设置 → SSH 和 GPG 密钥
 3. 点击 "New SSH key"
 4. 粘贴公钥内容，保存
 
@@ -210,8 +210,8 @@ cargo fmt
    - TRAE IDE界面截图
 
 2. **项目运行截图**
-   - cargo build 成功截图
-   - cargo test 通过截图
+- cargo build 成功截图
+- cargo test 通过截图
 
 3. **问题记录**
    - 遇到的问题

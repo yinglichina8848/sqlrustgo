@@ -18,10 +18,10 @@ SQLRustGo v1.0 是一个用 Rust 从零实现的 SQL-92 子集兼容的关系型
 
 | 特性 | 说明 |
 |------|------|
-| **SQL 支持** | SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE |
-| **存储引擎** | Buffer Pool + FileStorage 持久化存储 |
+| **SQL 支持** |选择、插入、更新、删除、创建表、删除表|
+| **存储引擎** |Buffer Pool + FileStorage 持久化存储|
 | **索引结构** | B+ Tree 索引支持 |
-| **事务机制** | Write-Ahead Log (WAL) 保障事务安全 |
+| **事务机制** |Write-Ahead Log (WAL) 保障事务安全|
 | **网络协议** | MySQL 风格协议支持 TCP 连接 |
 | **交互式 REPL** | 支持交互式 SQL 命令行 |
 
@@ -138,7 +138,7 @@ docs/v1.0/
 | 文档 | 说明 |
 |:-----|:-----|
 | [Claude对话记录.md](Claude对话记录.md) | ⭐ 项目最初始的设计对话，是理解项目设计思想的起点 |
-| [AI协作开发教程.md](../AI增强软件工程/AI协作开发教程.md) | ⭐ AI-IDE、AI-CLI、OpenClaw 多 Agent 协作开发教程 |
+| [AI协作开发教程.md](../AI增强软件工程/AI协作开发教程.md) |⭐ AI-IDE、AI-CLI、OpenClaw 多 Agent 协作开发教程|
 
 ### Phase 1: 草稿计划（规划阶段）
 
@@ -230,7 +230,7 @@ docs/v1.0/
 
 ## 六、版本状态
 
-| 指标 | 当前值 | Beta 目标 | Release 目标 |
+| 指标 | 当前值 | Beta 目标 |Release 目标|
 |:-----|:-------|:----------|:-------------|
 | 测试覆盖率 | ~82% | 85% | 90% |
 | 功能完整度 | 基础 SQL | SQL-92 子集 | 完整支持 |
