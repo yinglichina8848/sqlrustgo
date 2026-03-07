@@ -108,7 +108,7 @@
   - Git 安装与配置
   - TRAE IDE 安装与配置
 - 项目克隆与运行
-  - 克隆 SQLRustGo 项目
+- 克隆 SQLRustGo 项目
   - 运行测试用例
   - 理解项目结构
 
@@ -128,7 +128,7 @@
   - 数据流图（DFD）
 - UML概述
   - UML 2.0 分类
-  - UML工具介绍（PlantUML）
+- UML工具介绍（PlantUML）
 - 用例图
   - 参与者、用例、系统边界
   - 包含、扩展、泛化关系
@@ -160,7 +160,7 @@
   - 类之间的关系
   - PlantUML类图语法
 - SQLRustGo类图设计
-  - 核心类：Value, Token, Statement, Page, ExecutionEngine
+- 核心类：Value, Token, Statement, Page, ExecutionEngine
   - 类关系分析
 
 **实训课（2学时）**：
@@ -186,7 +186,7 @@
   - 状态、转换、事件、动作
   - 事务状态图
 - 架构图与部署图
-  - SQLRustGo四层架构
+- SQLRustGo四层架构
 - 快速原型法
   - 原型类型：抛弃型 vs 演化型
   - SQLRustGo草稿版本分析
@@ -294,7 +294,7 @@
 
 **理论课（2学时）**：
 - 测试驱动开发（TDD）
-  - Red-Green-Refactor循环
+- Red-Green-Refactor循环
   - 测试先行的好处
 - AI辅助测试生成
   - 使用AI生成测试用例
@@ -316,7 +316,7 @@
 - Alpha版本发布
   - 修复发现的问题
   - Git提交Alpha版本
-  - 编写Alpha版本Release Notes
+- 编写Alpha版本Release Notes
 
 **课后作业**：
 - 补充单元测试
@@ -332,11 +332,11 @@
   - 分布式版本控制的概念
   - 分布式开发的挑战
 - Git分支策略
-  - Git Flow / GitHub Flow / TBD
-  - SQLRustGo分支策略
+- Git 流程 / GitHub 流程 / 待定
+- SQLRustGo分支策略
 - 版本号管理
   - 语义化版本（SemVer）
-  - 预发布版本（alpha/beta/rc）
+- 预发布版本（alpha/beta/rc）
 - 分支保护规则
   - GitHub分支保护配置
 
@@ -394,8 +394,8 @@
   - 持续集成、持续交付、持续部署
   - CI/CD的价值
 - GitHub Actions基础
-  - Workflow配置
-  - Job和Step
+- 工作流程安排
+- Job和Step
   - 环境变量与Secrets
 - SQLRustGo CI配置
   - 测试自动化
@@ -404,7 +404,7 @@
 
 **实训课（2学时）**：
 - CI/CD配置实践
-  - 创建GitHub Actions配置
+- 创建GitHub Actions配置
   - 配置测试自动化
   - 配置代码检查
   - 配置覆盖率报告
@@ -457,8 +457,8 @@
   - 安全测试方法
 - 依赖安全扫描
   - 依赖漏洞风险
-  - cargo audit 使用
-  - Dependabot配置
+- cargo audit 使用
+- Dependabot配置
 - 代码安全扫描
   - 静态分析工具
   - 敏感信息检测
@@ -466,8 +466,8 @@
 
 **实训课（2学时）**：
 - 安全扫描实践
-  - 运行cargo audit
-  - 配置Dependabot
+- 运行cargo audit
+- 配置Dependabot
   - 执行代码安全扫描
   - 生成安全报告
 
@@ -519,8 +519,8 @@
   - Git标签类型
   - 标签命名规范
 - Release创建
-  - GitHub Release
-  - Release Notes编写
+- GitHub 发布
+- Release Notes编写
   - 发布产物管理
 - 发布后活动
   - 发布监控
@@ -533,8 +533,8 @@
   - 执行RC1门禁检查清单
   - 创建RC1版本标签
   - 执行最终验收
-  - 创建v1.0.0 Release
-  - 编写Release Notes
+- 创建v1.0.0 Release
+- 编写Release Notes
 
 **课后作业**：
 - 执行RC1门禁检查清单
@@ -608,7 +608,7 @@
 | PR流程实践 | 10% | PR创建、审核、合并流程 |
 | CI/CD配置 | 10% | 流水线完整性、自动化程度 |
 | Beta版本 | 10% | 用户文档、安装程序、测试计划 |
-| RC1/Release | 10% | 门禁检查、安全扫描、发布流程 |
+|RC1/发布| 10% | 门禁检查、安全扫描、发布流程 |
 | 项目演示 | 10% | 演示质量、问题回答 |
 
 ---
@@ -625,9 +625,9 @@
 - 项目文档: docs/AI增强软件工程/
 
 ### AI 工具
-- TRAE IDE
-- Claude Code
-- GitHub Copilot
+- 带来IDE
+——克劳德·代码
+- GitHub 副驾驶
 
 ---
 
