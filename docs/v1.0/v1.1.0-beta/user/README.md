@@ -70,12 +70,12 @@ QUIT;
 
 | 语句 | 示例 |
 |------|------|
-|创建表|__代码0__|
-|插入|__代码0__|
-|选择|__代码0__|
-|更新|__代码0__|
-|删除|__代码0__|
-|掉落表|__代码0__|
+| CREATE TABLE | `CREATE TABLE t (id INTEGER, name TEXT);` |
+| INSERT | `INSERT INTO t VALUES (1, 'text');` |
+| SELECT | `SELECT * FROM t WHERE id > 0;` |
+| UPDATE | `UPDATE t SET name = 'new' WHERE id = 1;` |
+| DELETE | `DELETE FROM t WHERE id = 1;` |
+| DROP TABLE | `DROP TABLE t;` |
 
 ### 3.2 支持的数据类型
 

@@ -37,9 +37,9 @@
 
 | 组件 | 用途 | 版本 |
 |------|------|------|
-|普罗米修斯| 指标收集和存储 | ≥2.40 |
-|格拉法纳| 可视化仪表盘 | ≥10.0 |
-|警报管理器| 告警管理 | ≥0.25 |
+| Prometheus | 指标收集和存储 | ≥2.40 |
+| Grafana | 可视化仪表盘 | ≥10.0 |
+| AlertManager | 告警管理 | ≥0.25 |
 
 ---
 
@@ -49,37 +49,37 @@
 
 | 指标名称 | 类型 | 说明 | 标签 |
 |----------|------|------|------|
-|__代码0__|柜台| 请求总数 |__代码0__，__代码1__|
-|__代码0__|直方图| 请求延迟 |__代码0__|
-|__代码0__| Gauge | 活跃连接数 | - |
-|__代码0__|柜台| 查询总数 | `type` |
+| `sqlrustgo_requests_total` | Counter | 请求总数 | `method`, `status` |
+| `sqlrustgo_request_duration_seconds` | Histogram | 请求延迟 | `method` |
+| `sqlrustgo_active_connections` | Gauge | 活跃连接数 | - |
+| `sqlrustgo_queries_total` | Counter | 查询总数 | `type` |
 
 ### 2.2 执行器指标
 
 | 指标名称 | 类型 | 说明 | 标签 |
 |----------|------|------|------|
-|__代码0__|直方图| 查询执行时间 |__代码0__|
-|__代码0__|柜台| 处理行数 | `table` |
-|__代码0__|柜台| 索引命中次数 |__代码0__，__代码1__|
-|__代码0__|柜台| 索引未命中次数 | `table` |
+| `sqlrustgo_query_duration_seconds` | Histogram | 查询执行时间 | `query_type` |
+| `sqlrustgo_rows_processed` | Counter | 处理行数 | `table` |
+| `sqlrustgo_index_hits_total` | Counter | 索引命中次数 | `table`, `index` |
+| `sqlrustgo_index_misses_total` | Counter | 索引未命中次数 | `table` |
 
 ### 2.3 存储指标
 
 | 指标名称 | 类型 | 说明 | 标签 |
 |----------|------|------|------|
-|__代码0__|柜台| 读取字节数 | `table` |
-|__代码0__|柜台| 写入字节数 | `table` |
-|__代码0__| Gauge | 表行数 | `table` |
-|__代码0__| Gauge | 表大小 | `table` |
+| `sqlrustgo_storage_read_bytes` | Counter | 读取字节数 | `table` |
+| `sqlrustgo_storage_write_bytes` | Counter | 写入字节数 | `table` |
+| `sqlrustgo_table_rows` | Gauge | 表行数 | `table` |
+| `sqlrustgo_table_size_bytes` | Gauge | 表大小 | `table` |
 
 ### 2.4 网络指标
 
 | 指标名称 | 类型 | 说明 | 标签 |
 |----------|------|------|------|
-|__代码0__|柜台| 连接总数 |__代码0__|
-|__代码0__|直方图| 连接持续时间 | - |
-|__代码0__|柜台| 接收字节数 | - |
-|__代码0__|柜台| 发送字节数 | - |
+| `sqlrustgo_connections_total` | Counter | 连接总数 | `status` |
+| `sqlrustgo_connection_duration_seconds` | Histogram | 连接持续时间 | - |
+| `sqlrustgo_network_bytes_received` | Counter | 接收字节数 | - |
+| `sqlrustgo_network_bytes_sent` | Counter | 发送字节数 | - |
 
 ---
 
@@ -230,11 +230,11 @@ pub async fn metrics() -> impl Responder {
 
 | 面板名称 | 指标 | 说明 |
 |----------|------|------|
-| 请求速率 |__代码0__| 每秒请求数 |
-| 请求延迟 P99 |__代码0__| 99% 请求延迟 |
-| 活跃连接数 |__代码0__| 当前连接数 |
-| 查询执行时间 |__代码0__| 查询延迟分布 |
-| 索引命中率 |__代码0__| 索引效率 |
+| 请求速率 | `rate(sqlrustgo_requests_total[5m])` | 每秒请求数 |
+| 请求延迟 P99 | `histogram_quantile(0.99, ...)` | 99% 请求延迟 |
+| 活跃连接数 | `sqlrustgo_active_connections` | 当前连接数 |
+| 查询执行时间 | `sqlrustgo_query_duration_seconds` | 查询延迟分布 |
+| 索引命中率 | `hits / (hits + misses)` | 索引效率 |
 
 ---
 

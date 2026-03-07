@@ -9,9 +9,9 @@
 ### 测试 1：绕过 main 分支保护
 
 **步骤：**
-1.__代码0__
-2.__代码0__
-3.__代码0__
+1. `git checkout main`
+2. `git commit --allow-empty -m "test bypass"`
+3. `git push origin main`
 
 **预期结果：**
 - 被拒绝，提示需要通过 PR
@@ -19,9 +19,9 @@
 ### 测试 2：force push 保护
 
 **步骤：**
-1.__代码0__
-2.__代码0__
-3.__代码0__
+1. `git checkout main`
+2. `git commit --allow-empty -m "test force push"`
+3. `git push --force origin main`
 
 **预期结果：**
 - 被拒绝，提示 force push 被禁用
@@ -29,10 +29,10 @@
 ### 测试 3：删除 tag 保护
 
 **步骤：**
-1.__代码0__
-2.__代码0__
-3.__代码0__
-4.__代码0__
+1. `git tag v1.0.0-test`
+2. `git push origin v1.0.0-test`
+3. `git tag -d v1.0.0-test`
+4. `git push origin :refs/tags/v1.0.0-test`
 
 **预期结果：**
 - 被拒绝，提示 tag 删除被禁用
@@ -77,10 +77,10 @@
 
 **步骤：**
 1. 手动创建 tag `v1.0.1-test`
-2.__代码0__
+2. `git push origin v1.0.1-test`
 
 **预期结果：**
-- 触发发布验证工作流程
+- 触发 release-validation workflow
 - 如果 CI 失败，release 不会创建
 
 ### 测试 9：分支删除保护
@@ -137,7 +137,7 @@
 | 测试项 | 预期结果 | 实际结果 | 状态 | 备注 |
 |--------|----------|----------|------|------|
 | 绕过 main 分支 | 被拒绝 | | | |
-|force push 保护| 被拒绝 | | | |
+| force push 保护 | 被拒绝 | | | |
 | 删除 tag 保护 | 被拒绝 | | | |
 | Owner 绕过测试 | 被拒绝 | | | |
 | GitHub UI 直接编辑 | 强制 PR | | | |
@@ -153,11 +153,11 @@
 
 | 条件 | 必须 | 状态 |
 |------|------|------|
-|Owner 不能直接 push main| ✅ | |
+| Owner 不能直接 push main | ✅ | |
 | Owner 不能删除 tag | ✅ | |
 | 发布必须 CI 触发 | ✅ | |
 | 所有 commit 必须 PR | ✅ | |
-|main 只能 fast-forward| ✅ | |
+| main 只能 fast-forward | ✅ | |
 | release 分支不可变 | ✅ | |
 | 构建产物带 Hash | ✅ | |
 

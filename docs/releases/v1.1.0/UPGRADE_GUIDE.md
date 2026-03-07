@@ -12,11 +12,11 @@
 
 | 项目 | v1.0.0 | v1.1.0 |
 |------|--------|--------|
-| 架构模式 | 单体嵌入式 |Client-Server + 嵌入式|
-| 执行器 | 单一实现 |插件化 ExecutionEngine|
-| 查询计划 | 无分离 |LogicalPlan/PhysicalPlan 分离|
+| 架构模式 | 单体嵌入式 | Client-Server + 嵌入式 |
+| 执行器 | 单一实现 | 插件化 ExecutionEngine |
+| 查询计划 | 无分离 | LogicalPlan/PhysicalPlan 分离 |
 | 网络协议 | 基础实现 | 异步 MySQL 协议 |
-| Join 算法 |嵌套循环|HashJoin + 嵌套循环|
+| Join 算法 | Nested Loop | HashJoin + Nested Loop |
 | 测试覆盖率 | 84% | 94.18% |
 
 ### 1.2 升级收益
@@ -35,7 +35,7 @@
 | 要求 | v1.0.0 | v1.1.0 |
 |------|--------|--------|
 | Rust 版本 | ≥1.75 | ≥1.85 |
-| 操作系统 |Linux/macOS/Windows|Linux/macOS/Windows|
+| 操作系统 | Linux/macOS/Windows | Linux/macOS/Windows |
 | 依赖项 | 基础 | + Tokio 异步运行时 |
 
 ### 2.2 备份数据
@@ -190,9 +190,9 @@ enable_optimizer = true
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-|__代码0__| 服务器绑定地址 | `0.0.0.0:3306` |
-|__代码0__| 最大连接数 | `100` |
-|__代码0__| 日志级别 | `info` |
+| `SQLRUSTGO_BIND` | 服务器绑定地址 | `0.0.0.0:3306` |
+| `SQLRUSTGO_MAX_CONN` | 最大连接数 | `100` |
+| `SQLRUSTGO_LOG_LEVEL` | 日志级别 | `info` |
 
 ---
 
