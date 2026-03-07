@@ -27,7 +27,7 @@
 
 ## 二、向量化执行 API
 
-### 2.1 RecordBatch
+### 2.1 记录批次
 
 列式内存布局，支持批量数据处理。
 
@@ -48,7 +48,7 @@ impl RecordBatch {
 }
 ```
 
-### 2.2 Array Trait
+### 2.2 数组特征
 
 列式数组抽象接口。
 
@@ -96,7 +96,7 @@ impl Float64Array {
 }
 ```
 
-#### StringArray
+#### 字符串数组
 
 ```rust
 pub struct StringArray {
@@ -140,7 +140,7 @@ impl VectorizedProjection {
 
 ## 三、统计信息 API
 
-### 3.1 TableStats
+### 3.1 表格统计
 
 表级统计信息。
 
@@ -159,7 +159,7 @@ impl TableStats {
 }
 ```
 
-### 3.2 ColumnStats
+### 3.2 列统计
 
 列级统计信息。
 
@@ -180,7 +180,7 @@ impl ColumnStats {
 }
 ```
 
-### 3.3 StatisticsCollector
+### 3.3 统计收集器
 
 统计信息收集器。
 
@@ -201,7 +201,7 @@ impl StatisticsCollector {
 
 ## 四、CBO API
 
-### 4.1 CostModel
+### 4.1 成本模型
 
 成本模型接口。
 
@@ -241,7 +241,7 @@ impl Cost {
 }
 ```
 
-### 4.3 Optimizer
+### 4.3 优化器
 
 查询优化器。
 
@@ -263,7 +263,7 @@ impl Optimizer {
 
 ## 五、网络层 API
 
-### 5.1 Server
+### 5.1 服务器
 
 异步服务器。
 
@@ -280,7 +280,7 @@ impl Server {
 }
 ```
 
-### 5.2 Session
+### 5.2 会议
 
 会话管理。
 

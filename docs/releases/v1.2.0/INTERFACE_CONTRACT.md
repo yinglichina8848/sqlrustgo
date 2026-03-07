@@ -4,12 +4,12 @@
 > 实际位置请参考各 crate 的 Cargo.toml 和 src/lib.rs。
 > 
 > 新路径对应关系:
-> - `src/query/` → `crates/server/`
-> - `src/catalog/` → `crates/catalog/`
-> - `src/optimizer/` → `crates/optimizer/`
-> - `src/executor/` → `crates/executor/`
-> - `src/storage/` → `crates/storage/`
-> - `src/planner/` → `crates/planner/`
+> - __代码0__ → __代码1__
+> - __代码0__ → __代码1__
+> - __代码0__ → __代码1__
+> - __代码0__ → __代码1__
+> - __代码0__ → __代码1__
+> - __代码0__ → __代码1__
 
 本文档记录 v1.2.0 中所有核心接口 (trait) 的契约定义，基于实际代码。
 
@@ -19,21 +19,21 @@
 
 | 接口 | 原位置 | 新位置 | 状态 |
 |------|--------|--------|------|
-| `QueryService` | `src/query/mod.rs` | `crates/server/` | ✅ |
-| `Catalog` | `src/catalog/mod.rs` | `crates/catalog/` | ✅ |
-| `Optimizer` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
-| `Rule` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
-| `CostModel` | `src/optimizer/mod.rs` | `crates/optimizer/` | ✅ |
-| `StatisticsProvider` | `src/optimizer/stats.rs` | `crates/types/` | ✅ |
-| `Executor` | `src/executor/mod.rs` | `crates/executor/` | ✅ |
-| `StorageEngine` | `src/storage/engine.rs` | `crates/storage/` | ✅ |
-| `PhysicalPlan` | `src/planner/physical_plan.rs` | `crates/planner/` | ✅ |
+|__代码0__| `src/query/mod.rs` |__代码0__| ✅ |
+|__代码0__| `src/catalog/mod.rs` |__代码0__| ✅ |
+|__代码0__| `src/optimizer/mod.rs` |__代码0__| ✅ |
+| `Rule` | `src/optimizer/mod.rs` |__代码0__| ✅ |
+|__代码0__| `src/optimizer/mod.rs` |__代码0__| ✅ |
+|__代码0__| `src/optimizer/stats.rs` |__代码0__| ✅ |
+|__代码0__| `src/executor/mod.rs` |__代码0__| ✅ |
+|__代码0__| `src/storage/engine.rs` |__代码0__| ✅ |
+|__代码0__| `src/planner/physical_plan.rs` |__代码0__| ✅ |
 
 ---
 
 ## 二、接口详细定义
 
-### 2.1 QueryService
+### 2.1 查询服务
 
 **文件**: `src/query/mod.rs`
 
@@ -46,10 +46,10 @@ pub trait QueryService: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `execute_query` | SQL 字符串 | RecordSet | 执行查询 |
-| `get_catalog` | - | Arc\<dyn Catalog\> | 获取目录服务 |
+|__代码0__| SQL 字符串 |记录集| 执行查询 |
+|__代码0__| - |弧\<动态目录\>| 获取目录服务 |
 
-### 2.2 Catalog
+### 2.2 目录
 
 **文件**: `src/catalog/mod.rs`
 
@@ -64,12 +64,12 @@ pub trait Catalog: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `list_tables` | - | Vec\<String\> | 列出所有表 |
-| `get_table` | 表名 | TableMeta | 获取表元数据 |
-| `create_table` | Schema | () | 创建表 |
-| `drop_table` | 表名 | () | 删除表 |
+|__代码0__| - |Vec\<字符串\>| 列出所有表 |
+|__代码0__| 表名 |表元| 获取表元数据 |
+|__代码0__|模式| () | 创建表 |
+|__代码0__| 表名 | () | 删除表 |
 
-### 2.3 Optimizer
+### 2.3 优化器
 
 **文件**: `src/optimizer/mod.rs`
 
@@ -81,7 +81,7 @@ pub trait Optimizer<Plan> {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `optimize` | LogicalPlan | OptimizerResult\<PhysicalPlan\> | 执行优化 |
+|__代码0__|逻辑计划|OptimizerResult\<物理计划\>| 执行优化 |
 
 ### 2.4 Rule
 
@@ -107,10 +107,10 @@ pub trait Rule<Plan>: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `apply` | Plan | Option\<Plan\> | 应用规则 |
+| `apply` | Plan |选项\<计划\>| 应用规则 |
 | `name` | - | &str | 规则名称 |
 
-### 2.5 CostModel
+### 2.5 成本模型
 
 **文件**: `src/optimizer/mod.rs`
 
@@ -122,9 +122,9 @@ pub trait CostModel<Plan>: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `estimate_cost` | PhysicalPlan | Cost | 估算执行成本 |
+|__代码0__|物理计划| Cost | 估算执行成本 |
 
-### 2.6 StatisticsProvider
+### 2.6 统计提供者
 
 **文件**: `src/optimizer/stats.rs`
 
@@ -137,10 +137,10 @@ pub trait StatisticsProvider: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `get_table_stats` | 表名 | Option\<TableStats\> | 获取表统计 |
-| `get_column_stats` | 表名, 列名 | Option\<ColumnStats\> | 获取列统计 |
+|__代码0__| 表名 |选项\<表统计\>| 获取表统计 |
+|__代码0__| 表名, 列名 |选项\<列统计\>| 获取列统计 |
 
-### 2.7 Executor
+### 2.7 执行者
 
 **文件**: `src/executor/mod.rs`
 
@@ -152,9 +152,9 @@ pub trait Executor: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `execute` | PhysicalPlan | RecordBatch | 执行物理计划 |
+|__代码0__|物理计划|记录批次| 执行物理计划 |
 
-### 2.8 StorageEngine
+### 2.8 存储引擎
 
 **文件**: `src/storage/engine.rs`
 
@@ -171,14 +171,14 @@ pub trait StorageEngine: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `scan` | 表名 | Iterator | 扫描表 |
-| `insert` | 表名, Row | () | 插入行 |
-| `delete` | 表名, Key | () | 删除行 |
-| `update` | 表名, Key, Row | () | 更新行 |
-| `create_table` | Schema | () | 创建表 |
-| `drop_table` | 表名 | () | 删除表 |
+| `scan` | 表名 |迭代器| 扫描表 |
+|__代码0__| 表名, Row | () | 插入行 |
+|__代码0__| 表名, Key | () | 删除行 |
+|__代码0__|表名、键、行| () | 更新行 |
+|__代码0__|模式| () | 创建表 |
+|__代码0__| 表名 | () | 删除表 |
 
-### 2.9 PhysicalPlan
+### 2.9 物理计划
 
 **文件**: `src/planner/physical_plan.rs`
 
@@ -192,15 +192,15 @@ pub trait PhysicalPlan: Send + Sync {
 
 | 方法 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| `schema` | - | &Schema | 获取输出 Schema |
-| `children` | - | Vec\<PhysicalPlan\> | 获取子计划 |
-| `execute` | - | RecordBatch | 执行计划 |
+|__代码0__| - |架构(&S)| 获取输出 Schema |
+|__代码0__| - |Vec\<物理计划\>| 获取子计划 |
+|__代码0__| - |记录批次| 执行计划 |
 
 ---
 
 ## 三、返回类型说明
 
-### SqlError
+### sql错误
 
 **文件**: `src/error/mod.rs`
 
@@ -215,7 +215,7 @@ pub enum SqlError {
 }
 ```
 
-### RecordSet / RecordBatch
+### 记录集/记录批处理
 
 ```rust
 pub struct RecordBatch {
@@ -263,15 +263,15 @@ QueryService
 
 | 接口 | 状态 | 说明 |
 |------|------|------|
-| QueryService | ✅ 稳定 | 已定义并实现 |
-| Catalog | ✅ 稳定 | SimpleCatalog 实现 |
-| Optimizer | ✅ 稳定 | NoOpOptimizer 基础实现 |
+|查询服务| ✅ 稳定 | 已定义并实现 |
+|目录| ✅ 稳定 |SimpleCatalog 实现|
+|优化器| ✅ 稳定 |NoOpOptimizer 基础实现|
 | Rule | ✅ 稳定 | 接口定义 |
-| CostModel | ✅ 稳定 | 接口定义 |
-| StatisticsProvider | ✅ 稳定 | InMemory 实现 |
-| Executor | ✅ 稳定 | 接口定义 |
-| StorageEngine | ✅ 稳定 | 接口定义 |
-| PhysicalPlan | ✅ 稳定 | 7 个算子实现 |
+|成本模型| ✅ 稳定 | 接口定义 |
+|统计提供者| ✅ 稳定 |InMemory 实现|
+|执行者| ✅ 稳定 | 接口定义 |
+|存储引擎| ✅ 稳定 | 接口定义 |
+|物理计划| ✅ 稳定 | 7 个算子实现 |
 
 ---
 

@@ -10,12 +10,12 @@
 3. **点击 "New pull request" 按钮**
 
 4. **设置分支**：
-   - **base**: `rc/v1.0.0-1`
-   - **compare**: `feature/2.0-engineering-setup-rc`
+- **基础**：`rc/v1.0.0-1`
+- **比较**：`feature/2.0-engineering-setup-rc`
 
 5. **填写 PR 信息**：
-   - **Title**: "Setup engineering system rules for 2.0 development"
-   - **Description**:
+- **标题**：《设置2.0开发的工程系统规则》
+- **描述**：
      ```
      This PR sets up the engineering system rules for 2.0 development, including:
      
@@ -49,17 +49,17 @@
 2. **点击 "Add branch protection rule"**
 
 3. **设置分支规则**：
-   - **Branch name pattern**: `rc/*`
+- **分支名称模式**：`rc/*`
 
 4. **启用保护选项**：
-   - ✅ **Require a pull request before merging**
-   - ✅ **Require approvals** (至少 1 个批准)
-   - ✅ **Require status checks to pass before merging**
-   - ✅ **Require branches to be up to date before merging**
-   - ✅ **Restrict who can push to matching branches** (可选)
-   - ✅ **Do not allow bypassing the above settings**
-   - ✅ **Do not allow force pushes**
-   - ✅ **Do not allow deletions**
+- ✅ **合并前需要拉取请求**
+- ✅ **Require approvals** (至少 1 个批准)
+- ✅ **合并前需要通过状态检查**
+- ✅ **要求分支在合并之前保持最新**
+- ✅ **限制谁可以推送到匹配的分支** (可选)
+- ✅ **不允许绕过上述设置**
+- ✅ **不允许用力推动**
+- ✅ **不允许删除**
 
 5. **点击 "Create" 按钮**
 
@@ -67,14 +67,14 @@
 
 | 规则 | 说明 | 原因 |
 |------|------|------|
-| **Require PR** | 禁止直接提交，必须通过 PR | 确保代码经过审核 |
-| **Require approvals** | 至少 1 个非作者的批准 | 避免自我审核 |
-| **Require status checks** | 确保 CI 通过 | 保证代码质量 |
-| **Up to date before merging** | 确保分支基于最新代码 | 减少合并冲突 |
-| **Restrict pushes** | 限制直接推送权限 | 强化分支保护 |
-| **No bypass** | 不允许绕过规则 | 确保规则强制执行 |
-| **No force pushes** | 禁止强制推送 | 保护分支历史 |
-| **No deletions** | 禁止删除分支 | 防止意外删除 |
+|**需要公关**| 禁止直接提交，必须通过 PR | 确保代码经过审核 |
+|**需要批准**| 至少 1 个非作者的批准 | 避免自我审核 |
+|**需要状态检查**| 确保 CI 通过 | 保证代码质量 |
+|**合并前最新**| 确保分支基于最新代码 | 减少合并冲突 |
+|**限制推送**| 限制直接推送权限 | 强化分支保护 |
+|**无旁路**| 不允许绕过规则 | 确保规则强制执行 |
+|**无强力推动**| 禁止强制推送 | 保护分支历史 |
+|**没有删除**| 禁止删除分支 | 防止意外删除 |
 
 ## 3. 后续步骤
 

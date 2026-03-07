@@ -1,6 +1,6 @@
 # v1.1.0-draft 改进计划
 
-> **版本**: v1.1.0-draft  
+> **版本**: v1.1.0-draft
 > **创建日期**: 2026-03-05  
 > **基于**: DeepSeek 评估报告  
 > **当前分支**: draft/v1.1.0
@@ -26,9 +26,9 @@ main                → 主分支（稳定版本）
 
 | AI 身份 | 工作分支 | PR 目标分支 |
 |---------|----------|-------------|
-| heartopen | fix/v1.1.0-* | **draft/v1.1.0** |
-| openheart | feat/v1.1.0-* | **draft/v1.1.0** |
-| maintainer | fix/v1.1.0-* | **draft/v1.1.0** |
+|敞开心扉| fix/v1.1.0-* |**草案/v1.1.0**|
+|开放的心| feat/v1.1.0-* |**草案/v1.1.0**|
+|维护者| fix/v1.1.0-* |**草案/v1.1.0**|
 
 **⚠️ 禁止事项**:
 - 不要直接提交到 release/v1.1.0
@@ -73,20 +73,20 @@ main                → 主分支（稳定版本）
 
 #### P0-2: 替换 unwrap
 
-| 模块 | 文件 | unwrap 数量 | 状态 |
+| 模块 | 文件 |unwrap 数量| 状态 |
 |------|------|-------------|------|
-| executor | mod.rs | ~50 | ⏳ |
-| storage | file_storage.rs | ~30 | ⏳ |
-| storage | bplus_tree | ~20 | ⏳ |
-| transaction | mod.rs | ~10 | ⏳ |
+|执行人| mod.rs | ~50 | ⏳ |
+|贮存| file_storage.rs | ~30 | ⏳ |
+|贮存|bplus_tree| ~20 | ⏳ |
+|交易| mod.rs | ~10 | ⏳ |
 
 #### P0-3: 添加并发保护
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| P0-3.1 | Page 添加 RwLock | ⏳ |
+| P0-3.1 |Page 添加 RwLock| ⏳ |
 | P0-3.2 | BPlusTree 添加锁保护 | ⏳ |
-| P0-3.3 | TransactionManager 添加锁 | ⏳ |
+| P0-3.3 |TransactionManager 添加锁| ⏳ |
 
 ### 2.2 P1 - 短期改进
 
@@ -102,7 +102,7 @@ main                → 主分支（稳定版本）
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| P1-2.1 | 实现 BufferPool LRU | ⏳ |
+| P1-2.1 |实现 BufferPool LRU| ⏳ |
 | P1-2.2 | 完善 B+ 树分裂逻辑 | ⏳ |
 | P1-2.3 | 预编译表达式求值 | ⏳ |
 
@@ -110,9 +110,9 @@ main                → 主分支（稳定版本）
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| P1-3.1 | executor 与 storage 解耦 | ⏳ |
+| P1-3.1 |executor 与 storage 解耦| ⏳ |
 | P1-3.2 | 抽象 catalog 服务 | ⏳ |
-| P1-3.3 | 完善 LogicalPlan/PhysicalPlan 转换 | ⏳ |
+| P1-3.3 |完善 LogicalPlan/PhysicalPlan 转换| ⏳ |
 
 ### 2.3 P2 - 长期规划
 
@@ -258,8 +258,8 @@ impl BPlusTree {
 
 | 检查项 | 标准 |
 |--------|------|
-| Clippy | 零警告 |
-| unwrap 数量 | 生产代码 < 10 处 |
+|剪辑| 零警告 |
+|unwrap 数量| 生产代码 < 10 处 |
 | 并发测试 | 通过多线程测试 |
 | 文档一致性 | 门禁清单与实际一致 |
 

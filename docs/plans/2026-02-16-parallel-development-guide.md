@@ -36,10 +36,10 @@
 | 分支 | 用途 | 开发者 |
 |------|------|--------|
 | `main` | 主分支，锁定，只能通过 PR 合并 | - |
-| `baseline` | 基线版本，所有功能分支基于此创建 | - |
-| `feature/index-executor` | 索引优化 + 执行引擎 | 本地 Claude (你) |
-| `feature/network-protocol` | 网络协议 + MySQL 兼容 | MacBookPro Claude |
-| `feature/docs-testing` | 测试补全 + 文档完善 | 本地另一个 Claude |
+|__代码0__| 基线版本，所有功能分支基于此创建 | - |
+|__代码0__| 索引优化 + 执行引擎 | 本地 Claude (你) |
+|__代码0__| 网络协议 + MySQL 兼容 |MacBookPro 克劳德|
+|__代码0__| 测试补全 + 文档完善 | 本地另一个 Claude |
 
 ## 开发流程
 
@@ -73,9 +73,9 @@ git push origin feature/xxx
 ### 评审要求
 | PR 来源 | 评审者要求 |
 |---------|------------|
-| feature/index-executor | 需要 network-protocol **或** docs-testing 评审 |
-| feature/network-protocol | 需要 index-executor **或** docs-testing 评审 |
-| feature/docs-testing | 需要 index-executor **或** network-protocol 评审 |
+|功能/索引执行器|需要 network-protocol **或** docs-testing 评审|
+|功能/网络协议|需要 index-executor **或** docs-testing 评审|
+|功能/文档测试|需要 index-executor **或** network-protocol 评审|
 
 ### 评审要点
 - [ ] 代码逻辑正确性
@@ -95,7 +95,7 @@ git push origin feature/xxx
 - Volcano 执行引擎优化
 - 查询优化
 
-### feature/network-protocol (MacBookPro)
+### 功能/网络协议 (MacBookPro)
 - MySQL 协议解析
 - TCP 服务器/客户端
 - 连接管理

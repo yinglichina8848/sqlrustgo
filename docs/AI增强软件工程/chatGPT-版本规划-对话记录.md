@@ -6,27 +6,27 @@
   ┌─────┬─────────────────────────────────────────────────────┬─────────────────────┬─────────────────┐                  
   │  #  │                        标题                         │      目标分支       │      作者       │                    
   ├─────┼─────────────────────────────────────────────────────┼─────────────────────┼─────────────────┤                    
-  │ 45  │ refactor: replace unwrap with proper error handling │ feature/v1.0.0-beta │ yinglichina8848 │
+│ 45 │ 重构：用适当的错误处理替换 unwrap │ feature/v1.0.0-beta │ yinglichina8848 │
   ├─────┼─────────────────────────────────────────────────────┼─────────────────────┼─────────────────┤
-  │ 44  │ fix: 修复认证测试编译错误和unwrap问题               │ feature/v1.0.0-beta │ yinglichina8848 │
+│ 44  │ fix: 修复认证测试编译错误和unwrap问题               │ feature/v1.0.0-beta │ yinglichina8848 │
   └─────┴─────────────────────────────────────────────────────┴─────────────────────┴─────────────────┘
   已合并 (20)
   ┌─────┬─────────────────────────────────────────────────┬─────────────────────┐
   │  #  │                      标题                       │      目标分支       │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ 42  │ feat(auth): 实现基础认证机制                    │ feature/v1.0.0-beta │
+│ 42  │ feat(auth): 实现基础认证机制                    │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
   │ 40  │ feat: add benchmark framework with Criterion.rs │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ 36  │ test: parser coverage improvement to 83.9%      │ feature/v1.0.0-beta │
+│ 36 │ 测试：解析器覆盖率提高至 83.9% │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ 35  │ test: executor coverage improvement to 86.4%    │ feature/v1.0.0-beta │
+│ 35 │ 测试：执行器覆盖率提升至 86.4% │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ 34  │ feat: implement aggregate functions             │ feature/v1.0.0-beta │
+│ 34 │ feat：实现聚合函数 │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ 33  │ test: network coverage improvement to 90.94%    │ feature/v1.0.0-beta │
+│ 33 │ 测试：网络覆盖率提升至90.94% │ feature/v1.0.0-beta │
   ├─────┼─────────────────────────────────────────────────┼─────────────────────┤
-  │ ... │ 其他                                            │ main/baseline       │
+│ ... │ 其他                                            │ main/baseline       │
   └─────┴─────────────────────────────────────────────────┴─────────────────────┘
   ---
   分支状态
@@ -39,25 +39,25 @@
   ├──────────────────────┼───────────────────┤
   │ baseline             │ 基准分支          │
   ├──────────────────────┼───────────────────┤
-  │ feature/v1.0.0-alpha │ Alpha 开发        │
+│ feature/v1.0.0-alpha │ Alpha 开发        │
   ├──────────────────────┼───────────────────┤
-  │ feature/v1.0.0-beta  │ Beta 开发 (活跃)  │
+│ feature/v1.0.0-beta  │ Beta 开发 (活跃)  │
   └──────────────────────┴───────────────────┘
   已完成/废弃分支 (可清理)
   ┌─────────────────────────────┬──────────────┐
   │            分支             │     说明     │
   ├─────────────────────────────┼──────────────┤
-  │ feature/aggregate-functions │ 已合并到 #34 │
+│ feature/aggregate-functions │ 已合并到 #34 │
   ├─────────────────────────────┼──────────────┤
-  │ feature/auth-impl-beta      │ 已合并到 #42 │
+│ feature/auth-impl-beta      │ 已合并到 #42 │
   ├─────────────────────────────┼──────────────┤
-  │ feature/clippy-fixes        │ 已合并       │
+│ feature/clippy-fixes        │ 已合并       │
   ├─────────────────────────────┼──────────────┤
-  │ feature/coverage-*          │ 已合并       │
+│ feature/coverage-*          │ 已合并       │
   ├─────────────────────────────┼──────────────┤
-  │ feature/unwrap-*            │ PR #45, #44  │
+│ 功能/展开-* │ PR #45, #44 │
   ├─────────────────────────────┼──────────────┤
-  │ feature/phase1-coverage     │ 已合并       │
+│ feature/phase1-coverage     │ 已合并       │
   └─────────────────────────────┴──────────────┘
   需要清理废弃分支吗？
 
@@ -87,12 +87,12 @@ ChatGPT 说：
 1️⃣ 防止分支爆炸
 你现在已经出现：
 
-feature/aggregate-functions
-feature/auth-impl-beta
-feature/clippy-fixes
-feature/coverage-*
-feature/unwrap-*
-feature/phase1-coverage
+特征/聚合函数
+功能/auth-impl-beta
+功能/剪辑修复
+功能/覆盖范围-*
+功能/展开-*
+功能/第一阶段覆盖范围
 如果不删：
 
 半年后你会有 200 个 feature 分支。
@@ -100,7 +100,7 @@ feature/phase1-coverage
 2️⃣ 防止错误基线开发
 如果开发者误从旧 feature 分支继续开发：
 
-feature/aggregate-functions
+特征/聚合函数
     ↑
     基于 3 周前代码
 然后再开 PR —— 你会遇到：
@@ -122,7 +122,7 @@ diff
 
 讨论记录
 
-commit
+犯罪
 
 一切都还在。
 
@@ -131,12 +131,12 @@ commit
 
 活跃分支
 main
-baseline
-feature/v1.0.0-alpha
-feature/v1.0.0-beta
+基线
+功能/v1.0.0-alpha
+功能/v1.0.0-beta
 建议结构（更干净）
 main
-baseline
+基线
 feature/v1.0.0-beta   ← 当前开发主干
 Alpha 如果已经历史阶段，可以：
 
@@ -147,18 +147,18 @@ Alpha 如果已经历史阶段，可以：
 四、对“已合并分支”的建议
 你这批：
 
-feature/aggregate-functions
-feature/auth-impl-beta
-feature/clippy-fixes
-feature/coverage-*
-feature/phase1-coverage
+特征/聚合函数
+功能/auth-impl-beta
+功能/剪辑修复
+功能/覆盖范围-*
+功能/第一阶段覆盖范围
 ✅ 全部可以删除
 
 五、对当前未合并分支
 你现在开放 PR：
 
-#45 refactor: replace unwrap
-#44 fix: unwrap
+#45 重构：替换 unwrap
+#44 修复：解开包装
 这两个：
 
 合并
@@ -177,16 +177,16 @@ feature/v1.0.0-beta ← 当前开发主干
 
 从 beta 拉分支
   ↓
-feature/xxx
+特征/xxx
   ↓
-PR → beta
+公关 → 测试版
   ↓
 合并
   ↓
 删除 feature/xxx
 当 beta 稳定：
 
-beta → main
+测试版 → 主要
 打 tag v1.0.0
 七、你现在要不要清理废弃分支？
 答案：
@@ -199,17 +199,17 @@ beta → main
 
 八、删除命令（标准）
 删除远程分支
-git push origin --delete feature/aggregate-functions
+git push origin --删除功能/聚合函数
 删除本地分支
-git branch -d feature/aggregate-functions
+git 分支 -d 功能/聚合函数
 九、一个更成熟的建议（高级一点）
 在 GitHub 设置里：
 
 开启
-Automatically delete head branches
+自动删除头部分支
 路径：
 
-Settings → General → Pull Requests
+设置 → 常规 → 拉取请求
 这样：
 
 PR 合并后自动删除远程分支。
@@ -293,7 +293,7 @@ PR 在大型项目中承担的是：
 
 回滚时查变更
 
-生成 Release Note
+一代发行说明
 
 比如：
 
@@ -323,9 +323,9 @@ PR 永久保留
 
 Rust Foundation 维护的 Rust
 
-Kubernetes
+库伯内斯
 
-Apache Software Foundation
+阿帕奇软件基金会
 
 它们都有成千上万 PR，但不会删。
 
@@ -431,14 +431,14 @@ ChatGPT 说：
 可区分功能 / 修复 / 重构 / 性能
 
 1️⃣ 标准格式
-<type>(<scope>): <summary>
+<类型>（<范围>）：<摘要>
 示例（结合你当前仓库）
-feat(auth): implement basic authentication
-fix(executor): resolve unwrap panic in pipeline
-refactor(network): replace unwrap with proper error handling
-perf(parser): optimize token scanning
-test(parser): increase coverage to 85%
-chore(ci): update workflow for coverage report
+feat(auth)：实现基本身份验证
+修复（执行器）：解决管道中的解包恐慌
+重构（网络）：用正确的错误处理替换 unwrap
+perf(parser)：优化令牌扫描
+测试（解析器）：将覆盖率提高到 85%
+Chore(ci)：更新覆盖率报告的工作流程
 2️⃣ type 规范（必须限制）
 type	含义	是否进入 Release Note
 feat	新功能	✅
@@ -451,13 +451,13 @@ docs	文档	❌
 3️⃣ scope 规范（必须来自模块）
 建议 scope 只允许：
 
-parser
-executor
-planner
-network
+解析器
+执行人
+规划师
+网络
 auth
-storage
-optimizer
+贮存
+优化器
 ci
 这样你以后可以统计：
 
@@ -466,10 +466,10 @@ ci
 哪个模块最不稳定
 
 4️⃣ 禁止的 PR 标题
-❌ fix bug
-❌ update
-❌ refactor
-❌ improve code
+❌修复bug
+❌更新
+❌重构
+❌改进代码
 
 这些都必须拒绝。
 
@@ -477,19 +477,19 @@ ci
 你现在已经有部分语义 commit，但要彻底规范。
 
 1️⃣ 单个 commit 格式
-type(scope): short summary
+类型（范围）：简短摘要
 
-(optional body)
+（可选本体）
 
-(optional footer)
+（可选页脚）
 示例：
 
-fix(executor): remove unwrap in result handling
+修复（执行器）：在结果处理中删除展开
 
-Replace unwrap() with proper error propagation using Result.
-This prevents panic during network failure.
+使用 Result 将 unwrap() 替换为正确的错误传播。
+这可以防止网络故障期间出现恐慌。
 
-Closes #45
+关闭 #45
 2️⃣ 关键规则
 一次 commit 只做一件事
 
@@ -500,7 +500,7 @@ PR 可以多个 commit
 但每个 commit 必须独立可理解
 
 3️⃣ 强烈建议启用
-Commit Lint
+提交 Lint
 使用：
 
 conventional commits 校验
@@ -519,25 +519,25 @@ GitHub Action 校验 commit message
 1️⃣ 推荐方案（Rust 项目）
 使用：
 
-git-cliff
+吉特克利夫
 它是 Rust 生态最常用 changelog 生成器。
 
 Release 流程：
-git tag v1.0.0-beta.1
+git 标签 v1.0.0-beta.1
 git cliff -o CHANGELOG.md
-git push --tags
+git push --标签
 自动生成：
 
 ## v1.0.0-beta.1
 
-### Features
-- feat(auth): implement authentication
+＃＃＃ 特征
+- feat(auth)：实现身份验证
 
 ### Fixes
-- fix(executor): remove unwrap panic
+- 修复（执行程序）：删除展开恐慌
 
-### Performance
-- perf(parser): optimize scanning
+＃＃＃ 表现
+- perf(parser)：优化扫描
 2️⃣ 版本号策略（Beta 阶段）
 v1.0.0-beta.1
 v1.0.0-beta.2
@@ -584,8 +584,8 @@ benchmark 不能明显退化
 现在你有：
 
 main
-baseline
-feature/v1.0.0-beta
+基线
+功能/v1.0.0-beta
 建议：
 
 Beta 作为唯一活跃开发主干
@@ -676,7 +676,7 @@ ChatGPT 说：
 按你现在的 v1.0.0-beta 阶段设计，适合 Rust 数据库内核项目。
 
 📜 一、CONTRIBUTING.md（可直接复制）
-# Contributing Guide
+# 贡献指南
 
 感谢你对本项目的贡献！
 
@@ -705,34 +705,34 @@ ChatGPT 说：
 
 格式：
 
-type(scope): summary
+类型（范围）：摘要
 
 
 示例：
 
-- `feat(auth): implement basic authentication`
-- `fix(executor): remove unwrap panic`
-- `perf(parser): optimize tokenizer`
-- `refactor(network): improve error handling`
+- __代码0__
+- __代码0__
+- __代码0__
+- __代码0__
 
 ### type 允许值
 
 - feat
 - fix
 - perf
-- refactor
+- 重构
 - test
 - docs
 - chore
 
 ### scope 允许值
 
-- parser
-- executor
-- planner
-- optimizer
-- storage
-- network
+- 解析器
+- 执行人
+- 规划师
+- 优化器
+- 贮存
+- 网络
 - auth
 - ci
 
@@ -742,9 +742,9 @@ type(scope): summary
 
 格式：
 
-type(scope): short summary
+类型（范围）：简短摘要
 
-(optional body)
+（可选本体）
 
 
 规则：
@@ -764,9 +764,9 @@ type(scope): short summary
 
 运行以下命令必须通过：
 
-cargo fmt --all
-cargo clippy --all-targets -- -D warnings
-cargo test
+货物 fmt --全部
+货物 Clippy --all-targets -- -D 警告
+货物测试
 
 
 ---
@@ -782,7 +782,7 @@ cargo test
 
 性能相关 PR 必须提供 benchmark 对比。
 
-cargo bench
+货物长凳
 
 
 ---
@@ -808,43 +808,43 @@ cargo bench
 文件路径：
 
 .github/workflows/ci.yml
-name: CI
+名称：CI
 
 on:
-  pull_request:
-    branches:
-      - feature/v1.0.0-beta
+拉请求：
+分支机构：
+- 功能/v1.0.0-beta
   push:
-    branches:
-      - feature/v1.0.0-beta
+分支机构：
+- 功能/v1.0.0-beta
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+运行：ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+- 使用：actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+- 名称：安装 Rust
+使用：dtolnay/rust-toolchain@stable
 
-      - name: Cache
-        uses: Swatinem/rust-cache@v2
+- 名称：缓存
+使用：Swatinem/rust-cache@v2
 
-      - name: Format Check
-        run: cargo fmt --all -- --check
+- 名称：格式检查
+运行：cargo fmt --all -- --check
 
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+- 名称：Clippy
+运行：cargo Clippy --all-targets -- -D 警告
 
-      - name: Build
-        run: cargo build --all
+- 名称：构建
+运行：cargo build --all
 
-      - name: Test
-        run: cargo test --all
+- 名称：测试
+运行：货物测试--全部
 
-      - name: Benchmark (optional)
-        run: cargo bench --no-run
+- 名称：基准（可选）
+运行：货物长凳--no-run
 🧱 三、v1.0.0 正式发布路线图
 你当前阶段：
 
@@ -878,9 +878,9 @@ API 稳定
 
 操作：
 
-git checkout main
-merge beta
-git tag v1.0.0-rc.1
+git checkout 主要
+合并测试版
+git 标签 v1.0.0-rc.1
 只允许：
 
 fix
@@ -898,7 +898,7 @@ CI 全绿
 
 发布：
 
-git tag v1.0.0
+git标签 v1.0.0
 然后：
 
 发布 GitHub Release
@@ -1088,11 +1088,11 @@ CI 修复
 2️⃣ 错误模型统一
 定义：
 
-pub enum DbError {
-    ParserError(String),
-    ExecutionError(String),
-    NetworkError(String),
-    AuthError(String),
+pub 枚举 DbError {
+解析器错误（字符串），
+执行错误（字符串），
+网络错误（字符串），
+验证错误（字符串），
 }
 统一 Result<T, DbError>
 
@@ -1104,7 +1104,7 @@ pub enum DbError {
 4️⃣ CI 必须全绿
 fmt
 
-clippy -D warnings
+Clippy -D 警告
 
 test
 
@@ -1114,7 +1114,7 @@ build
 1️⃣ 文档补齐
 必须包含：
 
-README
+自述文件
 
 架构图
 
@@ -1129,16 +1129,16 @@ README
 2️⃣ CHANGELOG 生成
 建议使用：
 
-git-cliff
+吉特克利夫
 生成：
 
 v1.0.0-rc.1
 3️⃣ 打 RC
-git tag v1.0.0-rc.1
+git 标签 v1.0.0-rc.1
 运行 3~5 天。
 
 4️⃣ 正式发布
-git tag v1.0.0
+git标签 v1.0.0
 🧠 四、v1.0 结构完成标准
 发布前必须满足：
 
@@ -1245,7 +1245,7 @@ ChatGPT 说：
 📘 一、v1.0 发布检查清单（逐条勾选版）
 把这段直接放到 RELEASE_CHECKLIST.md。
 
-# v1.0.0 Release Checklist
+# v1.0.0 发布清单
 
 ## 1. 稳定性
 
@@ -1288,9 +1288,9 @@ ChatGPT 说：
 ## 5. 版本
 
 - [ ] 更新 Cargo.toml 版本为 1.0.0
-- [ ] git tag v1.0.0-rc.1
+- [ ] git 标签 v1.0.0-rc.1
 - [ ] RC 测试 ≥ 3 天
-- [ ] git tag v1.0.0
+- [ ] git 标签 v1.0.0
 - [ ] 发布 GitHub Release
 
 ---
@@ -1304,66 +1304,66 @@ ChatGPT 说：
 🧾 二、GitHub Release 模板
 发布 v1.0.0 时使用：
 
-# v1.0.0 – Initial Stable Release
+# v1.0.0 – 初始稳定版本
 
-## 🎯 Overview
+## 🎯 概述
 
-This is the first stable release of the project.
+这是该项目的第一个稳定版本。
 
-The goal of v1.0.0 is engineering completeness and stability,
-not performance optimization.
-
----
-
-## ✨ Features
-
-- Basic SQL parsing
-- Execution engine
-- Aggregate functions
-- Network layer
-- Authentication
-- Benchmark framework
+v1.0.0的目标是工程完整性和稳定性，
+不是性能优化。
 
 ---
 
-## 🛠 Stability Improvements
+## ✨ 特点
 
-- Removed all unwrap() in production code
-- Unified error handling model
-- Improved test coverage
-- CI fully enforced
-
----
-
-## 📊 Coverage
-
-Core modules coverage ≥ 80%
+- 基本的SQL解析
+- 执行引擎
+- 聚合函数
+- 网络层
+- 验证
+- 基准框架
 
 ---
 
-## ⚠️ Known Limitations
+## 🛠 稳定性改进
 
-- No cost-based optimizer
-- No vectorized execution
-- No parallel execution
-- Limited SQL support
-
-These will be addressed in v2.0.
+- 删除了生产代码中的所有 unwrap()
+- 统一的错误处理模型
+- 提高测试覆盖率
+- CI 全面执行
 
 ---
 
-## 🔮 Roadmap
+## 📊 覆盖范围
 
-v2.0 will focus on:
-
-- Query optimizer (CBO)
-- Vectorized execution
-- Performance improvements
-- Architecture upgrade
+核心模块覆盖率≥80%
 
 ---
 
-Thank you for using this project.
+## ⚠️ 已知限制
+
+- 没有基于成本的优化器
+- 无矢量化执行
+- 没有并行执行
+- 有限的 SQL 支持
+
+这些将在 v2.0 中解决。
+
+---
+
+## 🔮 路线图
+
+v2.0将重点关注：
+
+- 查询优化器（CBO）
+- 矢量化执行
+- 性能改进
+- 架构升级
+
+---
+
+感谢您使用这个项目。
 📊 三、项目成熟度评估模型
 这是你判断“是否真的可以发 1.0”的标准。
 
@@ -1425,37 +1425,37 @@ v2.0 才动。
 1️⃣ 执行模型升级
 从：
 
-Row-based iterator
+基于行的迭代器
 升级到：
 
-Vectorized batch execution
+矢量化批量执行
 2️⃣ 优化器升级
 从：
 
-Rule-based
+基于规则的
 升级到：
 
-Cost-Based Optimizer (CBO)
+基于成本的优化器 (CBO)
 3️⃣ 存储抽象层
 引入：
 
-StorageEngine trait
+存储引擎特征
 支持：
 
-InMemory
+内存中
 
-Disk-based
+基于磁盘
 
 LSM
 
 4️⃣ 并行执行
 阶段 1：
 
-Operator-level parallelism
+操作员级并行性
 
 阶段 2：
 
-Pipeline parallelism
+管道并行性
 
 2.0 技术战略图
 1.0 = 稳定
@@ -1511,9 +1511,9 @@ ChatGPT 说：
 
 🔍 一、unwrap 批量清理策略（安全替换法）
 1️⃣ 第一步：定位
-rg "unwrap\(" -n src
-rg "expect\(" -n src
-rg "panic!" -n src
+rg“展开\(”-n src
+rg "期望\(" -n src
+rg“恐慌！” -n 源代码
 分类：
 
 A 类：可安全传播错误
@@ -1526,74 +1526,74 @@ C 类：测试代码（保留）
 ✅ 模式 1：Option → Result
 原：
 
-let value = map.get(key).unwrap();
+让 value = map.get(key).unwrap();
 改：
 
-let value = map
-    .get(key)
-    .ok_or(DbError::ExecutionError("key not found".into()))?;
+让值=地图
+.get(键)
+.ok_or(DbError::ExecutionError("找不到密钥".into()))?;
 ✅ 模式 2：Result unwrap
 原：
 
-let parsed = parse(input).unwrap();
+让解析=解析(输入).unwrap();
 改：
 
-let parsed = parse(input)?;
+让解析=解析（输入）？；
 前提：函数返回 Result<T, DbError>
 
 ✅ 模式 3：构造错误
-fn parse_sql(sql: &str) -> Result<Ast, DbError> {
-    parser::parse(sql)
-        .map_err(|e| DbError::ParserError(e.to_string()))
+fn parse_sql(sql: &str) -> 结果<Ast, DbError> {
+解析器::解析(sql)
+.map_err(|e| DbError::ParserError(e.to_string()))
 }
 3️⃣ 强制防回归
 CI 加入：
 
-- name: Forbid unwrap in src
+- name: 禁止在 src 中解包
   run: |
-    if grep -R "unwrap(" src; then
-      echo "unwrap found in production code"
+如果 grep -R "unwrap(" src; 那么
+echo“在生产代码中发现解包”
       exit 1
     fi
 🧱 二、错误模型统一改造模板
 1️⃣ 定义统一错误
-use thiserror::Error;
+使用这个错误::错误；
 
-#[derive(Debug, Error)]
-pub enum DbError {
-    #[error("Parser error: {0}")]
-    ParserError(String),
+#[导出（调试，错误）]
+pub 枚举 DbError {
+#[error("解析器错误：{0}")]
+解析器错误（字符串），
 
-    #[error("Execution error: {0}")]
-    ExecutionError(String),
+#[error("执行错误：{0}")]
+执行错误（字符串），
 
-    #[error("Network error: {0}")]
-    NetworkError(String),
+#[error("网络错误：{0}")]
+网络错误（字符串），
 
-    #[error("Auth error: {0}")]
-    AuthError(String),
+#[error("验证错误：{0}")]
+验证错误（字符串），
 }
 2️⃣ 所有模块改为：
-type DbResult<T> = Result<T, DbError>;
+类型 DbResult<T> = Result<T, DbError>;
 3️⃣ 传播模式
-fn execute(plan: Plan) -> DbResult<RowSet> {
-    let result = executor::run(plan)?;
-    Ok(result)
+fn 执行（计划：计划）-> DbResult<RowSet> {
+让结果 = 执行者::运行(计划)?;
+好的（结果）
 }
 4️⃣ 禁止字符串错误
 ❌ 不允许：
 
-Result<T, String>
+结果<T，字符串>
 必须统一为：
 
-Result<T, DbError>
+结果<T, 数据库错误>
 📈 三、覆盖率提升优先级图
 优先级排序：
 
-1. parser
-2. executor
-3. planner
-4. network
+1.解析器
+2. 执行人
+3. 策划师
+4、网络
 5. auth
 提升策略
 1️⃣ 边界测试优先
@@ -1612,15 +1612,15 @@ NULL 值
 
 #[test]
 fn test_invalid_sql() {
-    let result = parse("INVALID");
-    assert!(result.is_err());
+让结果=解析（“无效”）；
+断言！(结果.is_err());
 }
 3️⃣ 覆盖 panic 风险点
 Option 访问
 
 Vec 索引
 
-HashMap get
+HashMap 获取
 
 目标：
 
@@ -1656,11 +1656,11 @@ README 完整
 API 示例
 
 Day 6：打 RC
-git tag v1.0.0-rc.1
+git 标签 v1.0.0-rc.1
 运行 48 小时。
 
 Day 7：正式发布
-git tag v1.0.0
+git标签 v1.0.0
 发布 GitHub Release。
 
 🔥 关键心理策略
@@ -1694,10 +1694,10 @@ git tag v1.0.0
 
 从今天开始：
 
-No new feature.
-No refactor.
-No performance work.
-Only stabilization.
+没有新功能。
+没有重构。
+没有表演工作。
+只有稳定。
 如果你愿意，我可以下一步给你：
 
 📜 API 冻结策略
@@ -1767,7 +1767,7 @@ CLI 参数
 4️⃣ 强制工具
 CI 增加：
 
-cargo semver-checks
+货物服务检查
 检测破坏性 API。
 
 🔐 二、1.x 分支长期维护模型
@@ -1781,7 +1781,7 @@ develop       ← 2.0 架构升级
 feature/*     ← 从 develop 拉
 hotfix/*      ← 从 main 拉
 1.x 允许内容
-bug fix
+错误修复
 
 文档修复
 
@@ -1799,25 +1799,25 @@ bug fix
 Hotfix 流程
 main
   ↓
-hotfix/1.0.1
+修补程序/1.0.1
   ↓
-PR → main
+公关→主要
   ↓
 tag v1.0.1
 📦 三、Cargo 发布策略（如果上 crates.io）
 1️⃣ Cargo.toml 规范
-[package]
-name = "your-db"
-version = "1.0.0"
-edition = "2021"
-license = "MIT"
+[包裹]
+名称=“你的数据库”
+版本=“1.0.0”
+版本=“2021”
+许可证=“我的”
 repository = "https://github.com/..."
-description = "A minimal SQL database engine written in Rust"
+描述 =“用 Rust 编写的最小 SQL 数据库引擎”
 2️⃣ 发布前检查
-cargo publish --dry-run
-cargo package
+货物发布--dry-run
+货物包裹
 3️⃣ 版本升级规则
-1.0.1 → bugfix
+1.0.1 → 错误修复
 
 1.1.0 → 新增非破坏 API
 
@@ -1829,26 +1829,26 @@ cargo package
 第一阶段：执行模型升级
 从：
 
-Row iterator
+行迭代器
 升级到：
 
-Batch execution (Vec<Row>)
+批量执行（Vec<Row>）
 第二阶段：CBO
 实现：
 
-Logical Plan
+逻辑计划
   ↓
-Cost Estimation
+成本估算
   ↓
-Physical Plan
+物理计划
 第三阶段：并行化
 Operator 并行
 
 Pipeline 并行
 
 第四阶段：存储抽象
-trait StorageEngine {
-    fn scan(&self, table: &str) -> DbResult<RowSet>;
+特征存储引擎{
+fn scan(&self, 表: &str) -> DbResult<RowSet>;
 }
 🧠 五、纪律执行模型（最重要）
 建立四条铁律：
@@ -1865,9 +1865,9 @@ PR 不允许：
 
 fmt 错误
 
-clippy warning
+剪辑警告
 
-unwrap
+展开
 
 覆盖率下降
 
@@ -1902,7 +1902,7 @@ Level 5：有架构规划
 
 你现在正在进入：
 
-Level 4 → Level 5
+4 级 → 5 级
 
 🚀 七、你现在的行动清单
 立即执行：
@@ -1967,7 +1967,7 @@ ChatGPT 说：
 
 📘 一、《项目治理手册》目录结构（可直接建 docs/governance/）
 docs/
- └── governance/
+└── 治理/
       ├── 01-vision.md
       ├── 02-branching-model.md
       ├── 03-pr-rules.md
@@ -1982,7 +1982,7 @@ docs/
 下面是每个文件的核心内容概要。
 
 01-vision.md
-# Project Vision
+# 项目愿景
 
 v1.x 目标：稳定、规范、可维护。
 v2.x 目标：性能跃迁、架构升级。
@@ -1993,7 +1993,7 @@ v2.x 目标：性能跃迁、架构升级。
 - 纪律优先于速度
 - 发布优先于重构
 02-branching-model.md
-# Branching Model
+# 分支模型
 
 main → 1.x 稳定线
 develop → 2.0 开发线
@@ -2003,11 +2003,11 @@ hotfix/* 从 main 创建
 
 禁止直接 push main。
 03-pr-rules.md
-# PR Rules
+# 公关规则
 
 PR 标题必须符合：
 
-type(scope): summary
+类型（范围）：摘要
 
 单 PR 改动 ≤ 400 行。
 
@@ -2017,48 +2017,48 @@ type(scope): summary
 - 无测试的逻辑变更
 - 性能与功能混合提交
 04-commit-standard.md
-# Commit Standard
+# 提交标准
 
 格式：
 
-type(scope): summary
+类型（范围）：摘要
 
 禁止：
 
-- update
-- fix bug
-- minor change
+- 更新
+- 修复错误
+- 小改动
 05-api-freeze-policy.md
-# API Freeze Policy
+# API 冻结政策
 
 1.x 期间：
 
 禁止修改 public API。
 允许新增 API。
 06-release-process.md
-# Release Process
+# 发布流程
 
 1. 合并到 main
 2. 更新版本号
 3. 生成 CHANGELOG
 4. 打 tag
-5. GitHub Release
+5.GitHub发布
 
 RC 必须运行 ≥ 3 天。
 07-ci-policy.md
-# CI Policy
+#CI政策
 
 必须通过：
 
-- cargo fmt
-- cargo clippy -D warnings
-- cargo test
+- fmt充电
+- 货物夹 -D 警告
+- 货物测试
 - 禁止 unwrap
 - 覆盖率不得下降
 08-technical-debt-policy.md
 这是非常关键的一部分。
 
-# Technical Debt Policy
+# 技术债务政策
 
 技术债分三类：
 
@@ -2071,7 +2071,7 @@ C 类：优化类（延后到 2.0）
 - 带着 A 类债发布
 - 在 1.x 期间做大规模重构
 09-versioning-policy.md
-# Versioning Policy
+# 版本控制策略
 
 1.0.0 → 初始稳定版
 1.0.1 → Bug 修复
@@ -2080,24 +2080,24 @@ C 类：优化类（延后到 2.0）
 
 遵循 SemVer。
 10-2.0-roadmap.md
-# v2.0 Roadmap
+# v2.0 路线图
 
-- Vectorized execution
-- Cost-based optimizer
-- Parallel execution
-- Storage abstraction
+- 矢量化执行
+- 基于成本的优化器
+- 并行执行
+- 存储抽象
 🧱 三、技术债管理制度（执行级）
 建立一个：
 
 TECH_DEBT.md
 格式：
 
-# Technical Debt Log
+# 技术债务日志
 
 | ID | 类型 | 模块 | 描述 | 等级 | 计划版本 |
 |----|------|------|------|------|----------|
-| 1  | 架构 | executor | row-based execution | C | 2.0 |
-| 2  | 错误 | parser | 错误信息不统一 | B | 1.1 |
+| 1  | 架构 |执行人|基于行的执行| C | 2.0 |
+| 2  | 错误 |解析器| 错误信息不统一 | B | 1.1 |
 规则：
 
 每个 PR 如引入 debt 必须登记
@@ -2135,7 +2135,7 @@ on:
 RFC 文档
 放在：
 
-docs/rfcs/
+文档/rfc/
 3️⃣ 纪律升级阶段
 阶段 1：无 panic
 阶段 2：API 冻结
@@ -2260,7 +2260,7 @@ docs/roadmap/v2-strategy.md
 
 核心方向
 1️⃣ 执行模型革命
-Row-based → Vectorized
+基于行→矢量化
 
 引入 Batch Operator
 
@@ -2271,13 +2271,13 @@ SIMD 支持
 
 SQL
  ↓
-Logical Plan
+逻辑计划
  ↓
-Rule Rewriter
+规则重写器
  ↓
-Cost Estimator
+成本估算器
  ↓
-Physical Plan
+物理计划
 3️⃣ 并行执行
 阶段 1：
 
@@ -2290,8 +2290,8 @@ Pipeline 并行
 4️⃣ 存储抽象层
 引入：
 
-trait StorageEngine {
-    fn scan(&self, table: &str) -> DbResult<Batch>;
+特征存储引擎{
+fn scan(&self, 表: &str) -> DbResult<Batch>;
 }
 🏗 三、数据库内核 3 年技术路线图
 第一年：工程稳定 + 核心架构升级
@@ -2432,51 +2432,51 @@ ChatGPT 说：
 🔹 架构层级
 SQL
  ↓
-Parser
+解析器
  ↓
-LogicalPlan
+逻辑计划
  ↓
-Rule Rewriter
+规则重写器
  ↓
-Cost Estimator
+成本估算器
  ↓
-PhysicalPlan
+物理计划
  ↓
-Executor
+执行者
 🔹 核心数据结构
-1️⃣ Logical Plan
+1️⃣ 逻辑计划
 pub enum LogicalPlan {
-    Scan { table: String },
-    Filter { predicate: Expr, input: Box<LogicalPlan> },
-    Projection { columns: Vec<String>, input: Box<LogicalPlan> },
+扫描{表：字符串}，
+过滤器 { 谓词：Expr，输入：Box<LogicalPlan> },
+投影 { 列：Vec<String>，输入：Box<LogicalPlan> },
     Join {
-        left: Box<LogicalPlan>,
-        right: Box<LogicalPlan>,
-        on: Expr,
+左：框<逻辑计划>，
+右：框<逻辑计划>，
+上：Expr，
     },
 }
-2️⃣ Physical Plan
+2️⃣ 物理计划
 pub enum PhysicalPlan {
-    SeqScan { table: String },
-    FilterExec { predicate: Expr, input: Box<PhysicalPlan> },
-    ProjectionExec { columns: Vec<String>, input: Box<PhysicalPlan> },
-    HashJoinExec {
-        left: Box<PhysicalPlan>,
-        right: Box<PhysicalPlan>,
-        on: Expr,
+SeqScan {表：字符串}，
+FilterExec { 谓词：Expr，输入：Box<PhysicalPlan> },
+ProjectionExec { 列：Vec<String>，输入：Box<PhysicalPlan> },
+HashJoinExec {
+左：框<物理计划>，
+右：框<物理计划>，
+上：Expr，
     },
 }
 3️⃣ 成本模型（最小实现）
-pub trait CostModel {
-    fn estimate(&self, plan: &LogicalPlan) -> f64;
+酒吧特质 CostModel {
+fn 估计(&self, 计划: &LogicalPlan) -> f64;
 }
 最简单：
 
-cost = rows * cpu_factor
+成本 = 行数 * cpu_factor
 🔹 优化器流程
-pub fn optimize(plan: LogicalPlan) -> PhysicalPlan {
-    let candidates = rewrite(plan);
-    choose_lowest_cost(candidates)
+pub fn 优化（计划：逻辑计划）-> 物理计划 {
+让候选人=重写（计划）；
+选择最低成本（候选人）
 }
 第一版可以只做：
 
@@ -2491,31 +2491,31 @@ Scan 方式选择
 升级为 Batch 处理
 
 🔹 数据结构
-pub struct Batch {
-    pub columns: Vec<Vec<Value>>,
-    pub row_count: usize,
+pub 结构批处理 {
+pub 列： Vec<Vec<Value>>,
+pub row_count：使用，
 }
 🔹 执行 trait
-pub trait Operator {
-    fn next_batch(&mut self) -> DbResult<Option<Batch>>;
+pub 特征运算符 {
+fn next_batch(&mut self) -> DbResult<Option<Batch>>;
 }
 🔹 Filter 示例
-impl Operator for FilterExec {
-    fn next_batch(&mut self) -> DbResult<Option<Batch>> {
-        let input_batch = self.input.next_batch()?;
+FilterExec 的 impl 运算符 {
+fn next_batch(&mut self) -> DbResult<Option<Batch>> {
+让 input_batch = self.input.next_batch()?;
 
-        if let Some(batch) = input_batch {
-            let mut selected = vec![];
+if let Some(batch) = input_batch {
+让 mut selected = vec![];
 
-            for i in 0..batch.row_count {
-                if evaluate(&self.predicate, &batch, i) {
-                    selected.push(i);
+对于我在 0..batch.row_count {
+if 评估(&self.predicate, &batch, i) {
+选定的.push(i);
                 }
             }
 
-            Ok(Some(batch.select(&selected)))
+好的(一些(batch.select(&selected)))
         } else {
-            Ok(None)
+好的（无）
         }
     }
 }
@@ -2529,14 +2529,14 @@ SIMD 可扩展
 📊 三、查询执行性能评估体系
 建立：
 
-benchmarks/
+基准/
 使用 Criterion。
 
 🔹 必测三类查询
 1️⃣ Scan
-SELECT * FROM table
-2️⃣ Filter
-SELECT * FROM table WHERE col > 100
+从表中选择 *
+2️⃣ 过滤器
+SELECT * FROM 表，其中列 > 100
 3️⃣ Join
 SELECT * FROM A JOIN B ON A.id = B.id
 🔹 性能指标
@@ -2560,32 +2560,32 @@ benchmark-report.md
 
 🔹 推荐分层结构
 src/
- ├── parser/
- ├── logical/
- ├── optimizer/
- ├── physical/
- ├── executor/
- ├── storage/
- ├── network/
- └── common/
+├── 解析器/
+├── 逻辑/
+├── 优化器/
+├── 物理/
+├── 执行者/
+├── 储存/
+├── 网络/
+└── 常见/
 🔹 依赖规则
-parser → logical
-logical → optimizer
-optimizer → physical
-physical → executor
-executor → storage
+解析器 → 逻辑
+逻辑→优化器
+优化器 → 物理
+物理 → 执行者
+执行者→存储
 禁止反向依赖。
 
 🔹 common 模块
 放：
 
-DbError
+数据库错误
 
 Value
 
-Schema
+模式
 
-Result
+结果
 
 🧠 最关键的战略理解
 你现在要做的是：
@@ -2643,7 +2643,7 @@ ChatGPT 说：
 一、🔥 PR 命名规范（强制执行）
 格式：
 
-<type>(<scope>): <short-description>
+<类型>（<范围>）：<简短描述>
 ✅ type 只允许：
 类型	说明
 feat	新功能
@@ -2657,35 +2657,35 @@ perf	性能相关（2.0 才允许）
 ✅ scope 必填
 示例：
 
-feat(storage): add basic page manager
-fix(parser): resolve identifier parsing bug
-docs(readme): clarify build steps
-refactor(exec): simplify executor pipeline
+壮举（存储）：添加基本页面管理器
+修复（解析器）：解决标识符解析错误
+文档（自述文件）：阐明构建步骤
+refactor(exec)：简化执行器管道
 二、📘 Commit 语义化规范
 Commit 格式：
-type(scope): message
+类型（范围）：消息
 
-[optional body]
+[可选本体]
 
-[optional footer]
+[可选页脚]
 示例：
-feat(storage): implement basic page allocation
+feat(storage)：实现基本的页面分配
 
-Add simple in-memory page manager
-No persistence yet (planned for 2.0)
+添加简单的内存页面管理器
+还没有持久化（计划2.0）
 三、📊 Release Note 自动生成策略
 使用：
 
-Conventional Commits
+常规提交
 
 自动 changelog 生成工具（如 git-cliff）
 
 Release 分类：
 
-## ✨ Features
-## 🐛 Bug Fixes
-## 📚 Documentation
-## 🔧 Maintenance
+## ✨ 特点
+## 🐛 错误修复
+## 📚 文档
+## 🔧 维护
 四、🧠 Beta 阶段 PR 收敛策略
 目标：
 1.0 发布前两周：
@@ -2697,7 +2697,7 @@ Release 分类：
 
 ✅ 只允许：
 
-bug fix
+错误修复
 
 test 增强
 
@@ -2706,75 +2706,75 @@ test 增强
 CI 修复
 
 五、📜 CONTRIBUTING.md（可直接复制）
-# Contributing
+# 贡献
 
-Thank you for contributing!
+感谢您的贡献！
 
-## Branch Strategy
+## 分支策略
 
-- main → stable
-- dev → active development
-- feature/* → new features
-- fix/* → bug fixes
+- 主要→稳定
+- 开发 → 积极开发
+- 功能/* → 新功能
+- 修复/* → 错误修复
 
-## Commit Convention
+## 提交约定
 
-We follow Conventional Commits:
+我们遵循常规承诺：
 
-feat(scope): description
-fix(scope): description
-docs(scope): description
+壮举（范围）：描述
+修复（范围）：描述
+文档（范围）：描述
 
-## Pull Request Process
+## 拉取请求流程
 
 1. Fork
-2. Create feature branch
-3. Ensure `cargo fmt` and `cargo clippy` pass
-4. Add tests if needed
-5. Open PR to `dev`
+2. 创建功能分支
+3.确保`cargo fmt`和`cargo clippy`通过
+4. 如果需要添加测试
+5. 打开 PR 到 `dev`
 
-## Code Style
+## 代码风格
 
 - Rust 2021
-- Clippy clean
-- No unwrap() in production logic
-- Explicit error types preferred
+- 干净整洁
+- 生产逻辑中没有 unwrap()
+- 首选显式错误类型
 
-## CI Requirements
+## CI 要求
 
-All checks must pass before merge.
+合并之前必须通过所有检查。
 六、⚙️ GitHub Actions CI 模板
 .github/workflows/ci.yml
 
-name: CI
+名称：CI
 
 on:
   push:
-    branches: [ main, dev ]
-  pull_request:
-    branches: [ main, dev ]
+分支：[ 主要，开发 ]
+拉请求：
+分支：[ 主要，开发 ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+运行：ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+- 使用：actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+- 名称：安装 Rust
+使用：dtolnay/rust-toolchain@stable
 
-      - name: Format Check
-        run: cargo fmt --all -- --check
+- 名称：格式检查
+运行：cargo fmt --all -- --check
 
-      - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+- 名称：Clippy
+运行：cargo Clippy --all-targets --all-features -- -D 警告
 
-      - name: Build
-        run: cargo build --verbose
+- 名称：构建
+运行：cargo build --verbose
 
-      - name: Test
-        run: cargo test --verbose
+- 名称：测试
+运行：货物测试--verbose
 七、🚀 v1.0.0 快速发布路线图
 目标：2–3 周
 
@@ -2797,7 +2797,7 @@ ChatGPT 说：
 
 🧠 一、CBO 成本模型详细数学设计
 目标：
-从 Rule-Based → Cost-Based → Stats-Driven Optimizer
+从基于规则→基于成本→统计驱动优化器
 
 1️⃣ 基础符号定义
 设：
@@ -2843,7 +2843,7 @@ M
 M = 可用内存页数
 
 2️⃣ 单表扫描成本
-Full Table Scan
+全表扫描
 C
 o
 s
@@ -2876,7 +2876,7 @@ seq
 cpu
 ​
  
-Index Scan
+索引扫描
 设 index height = h
 
 C
@@ -2929,7 +2929,7 @@ cpu
 ​
  
 3️⃣ Join 成本模型
-Nested Loop Join
+嵌套循环连接
 C
 o
 s
@@ -2977,7 +2977,7 @@ outer
 inner
 ​
  
-Block Nested Loop
+块嵌套循环
 C
 o
 s
@@ -3026,8 +3026,8 @@ outer
 inner
 ​
  
-Hash Join
-Build + Probe：
+哈希连接
+构建+探测：
 
 C
 o
@@ -3113,7 +3113,7 @@ b
 e
 )
 Cost 
-hash_spill
+散列溢出
 ​
  =3(B 
 build
@@ -3122,7 +3122,7 @@ build
 probe
 ​
  )
-Sort-Merge Join
+排序合并连接
 C
 o
 s
@@ -3230,7 +3230,7 @@ n
 c
 t
 s= 
-distinct
+清楚的
 1
 ​
  
@@ -3253,49 +3253,49 @@ m
 i
 n
 s= 
-max−min
-high−low
+最大−最小
+高−低
 ​
  
 5️⃣ CBO 框架设计（Rust 结构）
-struct Stats {
-    row_count: u64,
-    pages: u64,
-    distinct: HashMap<String, u64>,
+结构统计数据{
+行数：u64，
+页面：u64，
+不同：HashMap <String，u64>，
 }
 
-trait CostModel {
-    fn scan_cost(&self, stats: &Stats) -> f64;
-    fn join_cost(&self, left: &Stats, right: &Stats) -> f64;
+特征成本模型{
+fn scan_cost(&self, stats: &Stats) -> f64;
+fn join_cost(&self, 左: &Stats, 右: &Stats) -> f64;
 }
 ⚡ 二、向量化执行 SIMD 优化策略
 目标：
-Tuple-at-a-time → Vector-at-a-time
+一次元组→一次向量
 
 1️⃣ 执行模型演进
 Volcano 模型（当前）
-next() -> one tuple
+next() -> 一个元组
 向量化模型
-next_batch() -> &[Vector]
+next_batch() -> &[矢量]
 2️⃣ 列式批处理结构
-struct VectorBatch {
-    columns: Vec<ColumnVector>,
-    size: usize,
+结构体VectorBatch {
+列：Vec<ColumnVector>，
+尺寸：使用，
 }
 3️⃣ SIMD 过滤示例
 标量版本：
 
-for i in 0..n {
-    if col[i] > 10 {
+对于 0..n 中的 i {
+如果列[i] > 10 {
         ...
     }
 }
 SIMD（使用 std::simd）：
 
-use std::simd::Simd;
+使用 std::simd::Simd；
 
-let chunk = Simd::<i32, 8>::from_slice(&col[i..]);
-let mask = chunk.simd_gt(Simd::splat(10));
+让 chunk = Simd::<i32, 8>::from_slice(&col[i..]);
+让 mask = chunk.simd_gt(Simd::splat(10));
 4️⃣ 优化关键点
 批大小：1024–4096
 
@@ -3324,8 +3324,8 @@ O(N)
 
 架构：
 
-struct HashTable {
-    buckets: Vec<Vec<Row>>,
+结构体哈希表{
+桶：Vec<Vec<Row>>,
 }
 阶段 3️⃣ Sort-Merge Join（大数据）
 适合：
@@ -3334,7 +3334,7 @@ struct HashTable {
 
 分布式场景
 
-pipeline merge
+管道合并
 
 阶段 4️⃣ 自适应 Join（3.0）
 根据运行时统计切换
@@ -3345,7 +3345,7 @@ pipeline merge
 
 🏗 四、单机 → 分布式演进路线
 阶段 1️⃣ 单机存储
-Buffer Pool
+缓冲池
 
 WAL
 
@@ -3354,7 +3354,7 @@ B+Tree
 阶段 2️⃣ Shared-Nothing 架构
 类似：
 
-Apache Spark
+阿帕奇火花
 
 Google 的 Spanner 思路（分片）
 
@@ -3362,18 +3362,18 @@ Google 的 Spanner 思路（分片）
 
 数据分区（hash/range）
 
-Coordinator + Worker
+协调员+工人
 
 阶段 3️⃣ 分布式查询规划
 新增：
 
-Remote Scan
+远程扫描
 
-Exchange Operator
+交易所运营商
 
 逻辑计划：
 
-Scan → Filter → Exchange → Hash Join → Aggregate
+扫描→过滤→交换→哈希连接→聚合
 阶段 4️⃣ 分布式事务
 2PC
 
@@ -3383,7 +3383,7 @@ MVCC
 
 可参考：
 
-Cockroach Labs
+蟑螂实验室
 
 TiDB
 
@@ -3409,7 +3409,7 @@ TiDB
 
 顺序扫描
 
-Nested Loop
+嵌套循环
 
 基本 parser
 
@@ -3453,36 +3453,36 @@ ChatGPT 说：
 这是分层 + 解耦 + 可演进结构，不是教学版。
 
 ┌──────────────────────────────────────┐
-│              SQL Frontend            │
-│  Parser | Binder | Logical Planner   │
+│ SQL 前端 │
+│ 解析器 |活页夹|逻辑规划师 │
 └──────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────┐
-│         Logical Optimization         │
-│  Rule Engine | CBO | Rewriter       │
+│ 逻辑优化 │
+│ 规则引擎 |国会预算办公室 |重写器 │
 └──────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────┐
-│         Physical Planner             │
-│  Operator Selection | Costing       │
+│ 身体规划师 │
+│ 运营商选择 |成本核算 │
 └──────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────┐
-│           Execution Engine           │
-│  Volcano / Vectorized / Pipeline    │
+│ 执行引擎 │
+│ 火山/矢量化/管道 │
 └──────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────┐
-│             Storage Engine           │
-│  BufferPool | PageMgr | Index | WAL │
+│ 存储引擎 │
+│ 缓冲池 |页面管理 |索引 |沃尔 │
 └──────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────┐
-│           OS / Filesystem            │
+│ 操作系统/文件系统 │
 └──────────────────────────────────────┘
 🔹 关键工程拆分（真正可落地）
 1️⃣ Catalog 模块（独立）
-catalog/
+目录/
     schema.rs
     table.rs
     stats.rs
@@ -3500,132 +3500,132 @@ catalog/
 CBO 依赖它，而不是 storage。
 
 2️⃣ Optimizer 分层
-optimizer/
-    logical/
-    physical/
+优化器/
+逻辑/
+身体的/
     cost_model.rs
     rule_engine.rs
 逻辑计划和物理计划必须完全分离。
 
 3️⃣ 执行引擎必须 trait 化
-trait Executor {
-    fn open(&mut self);
-    fn next(&mut self) -> Option<Tuple>;
-    fn close(&mut self);
+特质执行者 {
+fn 打开(&mut self);
+fn next(&mut self) -> Option<元组>;
+fn 关闭(&mut self);
 }
 之后可替换为：
 
-trait VectorExecutor {
-    fn next_batch(&mut self) -> Option<VectorBatch>;
+特征 VectorExecutor {
+fn next_batch(&mut self) -> Option<VectorBatch>;
 }
 🧠 二、CBO Rust 最小可运行版本（真正能跑）
 这个版本可以算 join 顺序。
 
 1️⃣ 基础结构
-use std::collections::HashMap;
+使用 std::collections::HashMap；
 
-#[derive(Clone)]
-struct Stats {
+#[派生（克隆）]
+结构统计数据{
     rows: f64,
-    pages: f64,
-    distinct: HashMap<String, f64>,
+页面：f64，
+不同：HashMap <String，f64>，
 }
 2️⃣ 成本模型
-struct CostModel {
-    seq_page_cost: f64,
-    cpu_tuple_cost: f64,
+结构成本模型{
+seq_page_cost：f64，
+cpu_tuple_cost：f64，
 }
 
-impl CostModel {
-    fn scan_cost(&self, stats: &Stats) -> f64 {
-        stats.pages * self.seq_page_cost
-            + stats.rows * self.cpu_tuple_cost
+实现成本模型{
+fn scan_cost(&self, stats: &Stats) -> f64 {
+stats.pages * self.seq_page_cost
++ stats.rows * self.cpu_tuple_cost
     }
 
-    fn hash_join_cost(&self, left: &Stats, right: &Stats) -> f64 {
-        self.scan_cost(left)
-            + self.scan_cost(right)
-            + right.rows * self.cpu_tuple_cost
+fn hash_join_cost(&self, 左: &Stats, 右: &Stats) -> f64 {
+self.scan_cost（左）
++ self.scan_cost（右）
++ right.rows * self.cpu_tuple_cost
     }
 }
 3️⃣ 两表 Join 选择器
-fn choose_join(
-    model: &CostModel,
-    a: &Stats,
-    b: &Stats,
+fn 选择_加入（
+模型：&成本模型，
+a：统计数据，
+b：统计数据，
 ) {
-    let cost_ab = model.hash_join_cost(a, b);
-    let cost_ba = model.hash_join_cost(b, a);
+让cost_ab = model.hash_join_cost(a, b);
+让cost_ba = model.hash_join_cost(b, a);
 
-    if cost_ab < cost_ba {
-        println!("Choose A as build side");
+如果成本_ab < 成本_ba {
+println!("选择 A 作为构建方");
     } else {
-        println!("Choose B as build side");
+println!("选择 B 作为构建方");
     }
 }
 4️⃣ main 示例
-fn main() {
-    let model = CostModel {
-        seq_page_cost: 1.0,
-        cpu_tuple_cost: 0.01,
+fn 主() {
+让模型=成本模型{
+seq_page_cost：1.0，
+cpu_tuple_cost：0.01，
     };
 
-    let mut distinct = HashMap::new();
-    distinct.insert("id".to_string(), 1000.0);
+让 mut 不同 = HashMap::new();
+不同的.插入(“id”.to_string(),1000.0);
 
-    let table_a = Stats {
+让 table_a = 统计信息 {
         rows: 100000.0,
         pages: 1000.0,
-        distinct: distinct.clone(),
+不同：distinct.clone(),
     };
 
-    let table_b = Stats {
+让 table_b = 统计信息 {
         rows: 1000.0,
         pages: 50.0,
-        distinct,
+清楚的，
     };
 
-    choose_join(&model, &table_a, &table_b);
+select_join(&model, &table_a, &table_b);
 }
 这是一个真正可运行的 CBO 核心骨架。
 
 ⚡ 三、向量化 Filter 完整代码（生产级结构）
-使用 Rust nightly SIMD。
+使用 Rust 每晚 SIMD。
 
 1️⃣ 向量批结构
-use std::simd::{Simd, SimdPartialOrd};
+使用 std::simd::{Simd, SimdPartialOrd}；
 
-const LANES: usize = 8;
+常量车道：usize = 8；
 
-pub struct IntVector {
-    pub data: Vec<i32>,
+pub 结构 IntVector {
+发布数据：Vec<i32>，
 }
 
-impl IntVector {
-    pub fn filter_gt(&self, value: i32) -> Vec<i32> {
-        let mut result = Vec::new();
+实现 IntVector {
+pub fn filter_gt(&self, 值: i32) -> Vec<i32> {
+让 mut 结果 = Vec::new();
 
-        let chunks = self.data.chunks_exact(LANES);
-        let remainder = chunks.remainder();
+让 chunks = self.data.chunks_exact(LANES);
+让余数 = chunks.remainder();
 
-        for chunk in chunks {
-            let simd = Simd::<i32, LANES>::from_slice(chunk);
-            let mask = simd.simd_gt(Simd::splat(value));
+对于块中的块{
+让 simd = Simd::<i32, LANES>::from_slice(chunk);
+让 mask = simd.simd_gt(Simd::splat(value));
 
-            for i in 0..LANES {
-                if mask.test(i) {
-                    result.push(chunk[i]);
+对于我在 0..LANES {
+if mask.test(i) {
+结果.push(chunk[i]);
                 }
             }
         }
 
-        for &r in remainder {
-            if r > value {
-                result.push(r);
+for &r 取余数 {
+如果 r > 值 {
+结果.push(r);
             }
         }
 
-        result
+结果
     }
 }
 📊 四、3 年技术演进时间线（现实工程路线）
@@ -3643,7 +3643,7 @@ WAL
 目标：成为一个可用数据库
 
 Year 2
-Hash Join
+哈希连接
 
 向量化执行
 
@@ -3676,19 +3676,19 @@ Year 3
 🧠 五、查询执行流水线重写策略（Pipeline Breaker 识别）
 关键概念：
 
-Filter = Pipeline
+过滤器 = 管道
 
-Hash Join Build = Breaker
+哈希连接构建=断路器
 
-Sort = Breaker
+排序 = 断路器
 
-Aggregate = Breaker
+骨料 = 破碎机
 
 执行计划中必须标记：
 
-enum OperatorKind {
-    Pipeline,
-    Breaker,
+枚举运算符种类 {
+管道，
+断路器，
 }
 这会决定未来并行执行结构。
 
@@ -3697,17 +3697,17 @@ enum OperatorKind {
 
 从 1.0 开始加入：
 
-metrics/
+指标/
     latency.rs
     operator_stats.rs
     memory_usage.rs
 每个 operator 输出：
 
-input rows
+输入行
 
-output rows
+输出行
 
-execution time
+执行时间
 
 这是未来 CBO 进化的基础。
 
@@ -3722,14 +3722,14 @@ HashMap 抖动
 
 查询级 Arena
 
-Page cache slab allocator
+页缓存板分配器
 
 🧠 八、错误系统设计（必须现在定型）
-#[derive(Debug)]
-pub enum DbError {
-    ParserError(String),
-    StorageError(String),
-    ExecutionError(String),
+#[导出（调试）]
+pub 枚举 DbError {
+解析器错误（字符串），
+存储错误（字符串），
+执行错误（字符串），
 }
 统一 Result<T, DbError>
 
@@ -3791,20 +3791,20 @@ ChatGPT 说：
 不再是“数据库”，而是“数据库执行平台”。
 
 🧠 3.0 执行模型演进总图
-Volcano → Pipeline → Vector
+火山 → 管道 → 矢量
 ① Volcano Model（Iterator 模型）
 经典来源：
 
 University of Wisconsin–Madison Volcano 项目
 
-PostgreSQL Global Development Group
+PostgreSQL 全球开发小组
 
 执行方式
-parent.next()
-    → child.next()
-        → child.next()
+父级.next()
+→ 子进程.next()
+→ 子进程.next()
 特点
-Tuple-at-a-time
+一次一个元组
 
 虚函数频繁调用
 
@@ -3824,48 +3824,48 @@ Cache miss 多
 
 解释器开销
 
-② Pipeline Model（Operator Fusion）
+② 管道模型（算子融合）
 灵感来自：
 
-Apache Spark
+阿帕奇火花
 
-Google Dremel
+谷歌琢美
 
 结构
-Scan → Filter → Project → HashJoin → Output
+扫描 → 过滤器 → 项目 → HashJoin → 输出
 转化为：
 
-while batch:
-    fused_function(batch)
+同时批处理：
+fused_function（批处理）
 关键点
-Operator Fusion
+算子融合
 
 消除虚调用
 
 编译期 inline
 
-Pipeline Breaker
-Hash Build
+管道破碎机
+哈希构建
 
 Sort
 
-Aggregate (blocking)
+聚合（阻塞）
 
 ③ Vectorized Model（3.0 主力）
 代表系统：
 
-DuckDB Labs
+DuckDB实验室
 
-Snowflake Inc.
+雪花公司
 
 模型
-next_batch() → ColumnarBatch(1024 rows)
+next_batch() → ColumnarBatch（1024 行）
 执行单位
 1024–4096 rows
 
 列式存储
 
-SIMD friendly
+SIMD友好
 
 优势
 Cache line 利用率高
@@ -3883,21 +3883,21 @@ Vector	默认执行引擎
 目标：
 执行引擎插件化。
 
-1️⃣ Operator Registry
-trait PhysicalOperator {
-    fn create(&self) -> Box<dyn Executor>;
+1️⃣ 运营商注册表
+特质PhysicalOperator {
+fn create(&self) -> Box<dyn 执行器>;
 }
 
-struct OperatorRegistry {
-    map: HashMap<String, Box<dyn PhysicalOperator>>,
+结构操作符注册表{
+映射： HashMap<String, Box<dyn PhysicalOperator>>,
 }
 2️⃣ 注册机制
 registry.register("hash_join", Box::new(HashJoinFactory));
 3️⃣ 动态选择
 优化器只输出：
 
-PhysicalPlan {
-    operator: "hash_join"
+物理计划{
+运算符：“hash_join”
 }
 执行时查 registry。
 
@@ -3912,37 +3912,37 @@ PhysicalPlan {
 ① 基础结构
 采用：
 
-Work-Stealing
+偷工减料
 
 NUMA 感知
 
 灵感来自：
 
-Intel TBB
+英特尔TBB
 
-Ray Project
+射线计划
 
 ② 线程模型
-Coordinator
+协调员
    ↓
-Task Scheduler
+任务调度程序
    ↓
-Worker Threads
+工作线程
 ③ 任务抽象
-trait Task {
-    fn execute(&self);
+特质任务{
+fn 执行(&self);
 }
-④ Exchange Operator
+④ 交易所运营商
 并行核心：
 
-Producer → Exchange → Consumer
+生产者 → 交易所 → 消费者
 Exchange 负责：
 
 分区
 
-shuffle
+随机播放
 
-backpressure
+背压
 
 ⑤ NUMA 优化
 每个 worker 绑定 CPU core
@@ -3955,43 +3955,43 @@ backpressure
 ① 从树到 DAG
 单机：
 
-Scan → Join → Agg
+扫描 → 加入 → 聚合
 分布式：
 
-Scan_A  Scan_B
+扫描_A 扫描_B
     ↓      ↓
-  Shuffle  Shuffle
+随机播放 随机播放
        ↓
-     HashJoin
+哈希连接
        ↓
-     Aggregate
+总计的
 ② 组件划分
-Coordinator
-Worker Nodes
-Shuffle Service
-Metadata Service
+协调员
+工作节点
+随机播放服务
+元数据服务
 ③ 执行阶段
-Logical Plan
+逻辑计划
 
-Fragmentation
+碎片化
 
-DAG Build
+有向无环图构建
 
-Task Scheduling
+任务调度
 
-Shuffle
+随机播放
 
-Result Merge
+结果合并
 
 ④ 数据分区策略
-Hash Partition
+哈希分区
 
-Range Partition
+范围划分
 
-Broadcast
+播送
 
 📈 3.0 性能基准体系设计
-① Micro Benchmark
+① 微基准
 单算子性能
 
 Filter 吞吐
@@ -4000,21 +4000,21 @@ Hash 构建速度
 
 内存分配速度
 
-② Operator Benchmark
-Hash Join TPS
+② 运营商基准
+哈希连接TPS
 
-Sort Throughput
+排序吞吐量
 
-③ Query Benchmark
+③ 查询基准
 TPC-H
 
 TPC-DS
 
 组织来源：
 
-Transaction Processing Performance Council
+事务处理性能委员会
 
-④ Regression Benchmark
+④ 回归基准
 CI 自动跑：
 
 每次 PR 比较性能
@@ -4023,16 +4023,16 @@ CI 自动跑：
 
 🧪 3.0 内核测试分层体系
 ① 单元测试
-Parser
+解析器
 
-Cost Model
+成本模型
 
-Hash Table
+哈希表
 
 ② Operator 测试
-HashJoin correctness
+哈希连接正确性
 
-Spill correctness
+溢出正确性
 
 ③ Plan 测试
 给定 SQL → 输出计划结构
@@ -4040,7 +4040,7 @@ Spill correctness
 ④ 随机 SQL 测试（Fuzz）
 灵感来自：
 
-SQLite Consortium
+SQLite联盟
 
 ⑤ Crash Recovery 测试
 WAL 重放
@@ -4120,17 +4120,17 @@ ChatGPT 说：
 
 PostgreSQL Global Development Group（执行统计反馈）
 
-Oracle Corporation（Adaptive Query Optimization）
+Oracle公司（自适应查询优化）
 
 1️⃣ 问题背景
 CBO 依赖：
 
-row_count
-selectivity
-histogram
+行数
+选择性
+直方图
 但真实执行时：
 
-estimated_rows ≠ actual_rows
+估计行数 ≠ 实际行数
 严重时会：
 
 选错 Join 顺序
@@ -4141,43 +4141,43 @@ estimated_rows ≠ actual_rows
 
 2️⃣ 3.0 解决方案：运行时反馈框架
 执行节点增加统计接口
-struct ExecStats {
-    input_rows: u64,
-    output_rows: u64,
-    elapsed_ms: u128,
+结构ExecStats {
+输入行：u64，
+输出行：u64，
+elapsed_ms：u128，
 }
 每个算子必须实现：
 
-trait Instrumented {
-    fn stats(&self) -> ExecStats;
+特质仪表化{
+fn stats(&self) -> ExecStats;
 }
 3️⃣ 动态阈值触发重规划
 例：
 
-if actual_rows > estimated_rows * 5 {
-    trigger_replan();
+如果实际行数 > 估计行数 * 5 {
+触发重新计划（）；
 }
 4️⃣ Re-Optimization 模式
 模式 A：Join 侧交换
-HashJoin(A,B)
-→ HashJoin(B,A)
+哈希连接（A，B）
+→ 哈希连接(B,A)
 模式 B：Hash → Nested Loop
 适用于 build side 过大。
 
 模式 C：Pipeline 分裂
 当 spill 发生：
 
-Pipeline → Materialize → Resume
+管道 → 实现 → 恢复
 5️⃣ 架构设计
-Optimizer
+优化器
    ↓
-Executor
+执行者
    ↓
-Stats Collector
+统计收集器
    ↓
-Adaptive Controller
+自适应控制器
    ↺
-Replan
+重新规划
 🧱 二、3.0 列式存储引擎设计
 目标：
 
@@ -4185,9 +4185,9 @@ Replan
 
 参考思想：
 
-DuckDB Labs
+DuckDB实验室
 
-Snowflake Inc.
+雪花公司
 
 1️⃣ 行存 vs 列存
 行存	列存
@@ -4198,36 +4198,36 @@ OLTP 优	OLAP 优
 混合存储（Hybrid）
 
 2️⃣ 列块结构
-struct ColumnBlock<T> {
-    values: Vec<T>,
-    null_bitmap: Vec<u8>,
+结构列块<T> {
+值：Vec<T>，
+null_bitmap: Vec<u8>,
 }
 3️⃣ 数据组织
-Segment
+部分
    ↓
-Column Chunk (1MB)
+列块 (1MB)
    ↓
-Vector (1024 rows)
+矢量（1024 行）
 4️⃣ 编码策略
 RLE
 
-Dictionary
+字典
 
-Delta Encoding
+增量编码
 
-Bit-Packing
+位打包
 
 5️⃣ 元数据结构
-struct ColumnMeta {
-    min: Value,
-    max: Value,
-    distinct: u64,
+结构ColumnMeta {
+分钟：值，
+最大值：值，
+独特：u64，
 }
 支持：
 
-Zone Map
+区域地图
 
-Predicate Pushdown
+谓词下推
 
 ⚡ 三、向量化 Hash Join 内部结构
 这是 3.0 性能核心。
@@ -4235,39 +4235,39 @@ Predicate Pushdown
 1️⃣ 批量构建
 Build 阶段：
 
-for batch in build_input {
-    for key in batch.keys {
-        hash_table.insert(key, row_id);
+对于 build_input 中的批次{
+对于batch.keys中的密钥{
+hash_table.insert(key, row_id);
     }
 }
 2️⃣ Hash 表结构
 推荐：
 
-Bucket Array
+桶阵列
     ↓
-Entry Array
-struct HashEntry {
+条目数组
+结构体HashEntry {
     hash: u64,
     key: i64,
-    payload: RowId,
+有效负载：RowId，
 }
-3️⃣ SIMD Probe
-let hashes = hash(keys_batch);
-let mask = compare_simd(hashes, bucket_hashes);
+3️⃣ SIMD 探针
+让哈希=哈希（keys_batch）；
+让掩码=compare_simd（散列，bucket_hashes）；
 4️⃣ 批量探测流程
 Batch
   ↓
-Compute Hash
+计算哈希值
   ↓
-Locate Bucket
+定位桶
   ↓
-SIMD Compare
+SIMD比较
   ↓
-Output Vector
+输出向量
 5️⃣ Spill 设计
 分区：
 
-hash(key) % P
+哈希（键） % P
 内存不足时：
 
 Partition → 写磁盘
@@ -4281,22 +4281,22 @@ Partition → 写磁盘
 
 参考方向：
 
-Cockroach Labs
+蟑螂实验室
 
 Google Spanner 架构思想
 
 1️⃣ 组件划分
-SQL Gateway
-Coordinator
-Worker Nodes
-Metadata Service
-Storage Service
+SQL网关
+协调员
+工作节点
+元数据服务
+仓储服务
 2️⃣ 部署方式
-Kubernetes StatefulSet
+Kubernetes 有状态集
 
 Pod 亲和性
 
-Persistent Volume
+持久量
 
 3️⃣ 云原生能力
 自动扩缩容
@@ -4306,9 +4306,9 @@ Persistent Volume
 Operator 管理
 
 4️⃣ 分层服务模型
-Compute Layer
-Storage Layer
-Metadata Layer
+计算层
+存储层
+元数据层
 支持：
 
 计算存储分离
@@ -4329,9 +4329,9 @@ Metadata Layer
 
 竞争对象：
 
-Snowflake Inc.
+雪花公司
 
-ClickHouse Inc.
+克利克豪斯公司
 
 路线 B：混合 HTAP
 方向：
@@ -4357,16 +4357,16 @@ TiDB
 
 竞争对象：
 
-DuckDB Labs
+DuckDB实验室
 
 技术分叉图
-3.0 Core Engine
+3.0核心引擎
       ↓
-  Column Engine
+列引擎
       ↓
  ┌───────────────┬───────────────┬───────────────┐
- │ Analytical    │ HTAP          │ Embedded      │
- │ Distributed   │ Hybrid        │ Local         │
+│ 分析型 │ HTAP │ 嵌入式 │
+│ 分布式 │ 混合 │ 本地 │
 🎯 3.0 本质定位
 3.0 不是“版本升级”。
 
@@ -4376,15 +4376,15 @@ DuckDB Labs
 
 核心特征：
 
-Vector First
+矢量优先
 
-Adaptive Enabled
+自适应启用
 
-Parallel Native
+并行原生
 
-Cloud Ready
+云就绪
 
-Benchmark Driven
+基准驱动
 
 如果你愿意继续，我可以给你：
 
@@ -4429,7 +4429,7 @@ ChatGPT 说：
 
 参考趋势（思想层面）：
 
-Google Learned Index 方向
+Google 学习索引方向
 
 Microsoft 自动调优研究
 
@@ -4438,26 +4438,26 @@ Carnegie Mellon University 数据库自调优研究
 1️⃣ 架构层级
 Query
   ↓
-Logical Plan
+逻辑计划
   ↓
-Classical CBO
+古典国会预算办公室
   ↓
-AI Optimizer Layer
+AI优化层
   ↓
-Plan Selection
+方案选择
 2️⃣ 三层智能结构
-Layer 1 — Learned Cost Model
+第一层——学习成本模型
 替代：
 
-cost = page_cost + cpu_cost
+成本 = page_cost + cpu_cost
 变成：
 
-cost = ML(plan_features)
+成本 = ML(计划特征)
 输入特征：
 
 表大小
 
-distinct 数
+不同的数字
 
 谓词类型
 
@@ -4465,7 +4465,7 @@ join 数量
 
 历史执行时间
 
-Layer 2 — Plan Ranking Model
+第 2 层 — 计划排名模型
 多个候选计划：
 
 Plan A
@@ -4473,23 +4473,23 @@ Plan B
 Plan C
 AI 负责排序。
 
-Layer 3 — Runtime Reinforcement
+第 3 层 — 运行时强化
 执行后反馈：
 
-reward = -execution_time
+奖励 = -执行时间
 持续在线训练。
 
 3️⃣ 关键技术
-Feature Encoding
+特征编码
 
-Online Learning
+在线学习
 
-Plan Embedding
+计划嵌入
 
-Query Template Clustering
+查询模板聚类
 
 4️⃣ 4.0 优化闭环
-Plan → Execute → Collect Metrics → Retrain → Update Model
+计划→执行→收集指标→重新训练→更新模型
 真正实现：
 
 数据库越跑越聪明
@@ -4506,19 +4506,19 @@ NVIDIA RAPIDS
 OmniSci（GPU 数据库）
 
 1️⃣ 执行层结构
-Planner
+规划师
    ↓
-Device Selector
+设备选择器
    ↓
-CPU Operator / GPU Operator
+CPU操作员/GPU操作员
 2️⃣ GPU 适合算子
-Filter
+筛选
 
-Projection
+投影
 
-Aggregation
+聚合
 
-Hash Join
+哈希连接
 
 不适合：
 
@@ -4527,22 +4527,22 @@ Hash Join
 复杂分支
 
 3️⃣ GPU Hash Join 结构
-Batch → Transfer → GPU Hash Build → GPU Probe → Return
+批量 → 传输 → GPU 哈希构建 → GPU 探测 → 返回
 关键挑战：
 
 PCIe 传输成本
 
 显存限制
 
-Kernel launch overhead
+内核启动开销
 
 4️⃣ 异构调度策略
 决策模型：
 
-if data_size > threshold && gpu_available:
-    use_gpu()
+如果 data_size > 阈值 && gpu_available:
+使用_gpu()
 else:
-    use_cpu()
+使用_cpu()
 未来可交给 AI 决策。
 
 🧱 三、列式存储压缩算法对比
@@ -4550,7 +4550,7 @@ else:
 
 减少 IO + 提高扫描速度
 
-1️⃣ RLE（Run Length Encoding）
+1️⃣ RLE（游程编码）
 优点：
 
 极高压缩率（低基数列）
@@ -4559,8 +4559,8 @@ else:
 
 高基数效果差
 
-2️⃣ Dictionary Encoding
-value → id
+2️⃣ 字典编码
+值 → id
 优点：
 
 字符串极有效
@@ -4569,30 +4569,30 @@ value → id
 
 更新成本高
 
-3️⃣ Delta Encoding
+3️⃣ 增量编码
 适合：
 
 时间戳
 
 单调递增列
 
-4️⃣ Bit-Packing
+4️⃣ 位打包
 适合：
 
 小整数范围
 
-5️⃣ Frame-of-Reference
-value - base
+5️⃣ 参考系
+价值基础
 减少 bit 宽度。
 
 6️⃣ 综合策略（4.0 推荐）
-Column
+柱子
    ↓
-Sample
+样本
    ↓
-Choose Best Encoding
+选择最佳编码
    ↓
-Store Encoding Metadata
+存储编码元数据
 自适应编码选择。
 
 📈 四、十年技术演进路线图
@@ -4660,16 +4660,16 @@ LTS 版本
 
 类似策略可参考：
 
-Elastic NV
+弹性NV
 
-MongoDB Inc.
+MongoDB 公司
 
 4️⃣ 商业模型分层
-Open Core
+开放核心
    ↓
-Enterprise Extensions
+企业扩展
    ↓
-Managed Cloud
+托管云
 🎯 4.0 定位总结
 4.0 是：
 
@@ -4731,7 +4731,7 @@ ChatGPT 说：
 1️⃣ 问题定义
 传统 B+Tree：
 
-key → page
+键 → 页
 时间复杂度：
 
 O
@@ -4741,7 +4741,7 @@ log
 N
 )
 O(logN)
-Learned Index：
+学习指数：
 
 将索引视为一个函数
 
@@ -4760,7 +4760,7 @@ t
 i
 o
 n
-f(key)≈position
+f(键)≈位置
 2️⃣ CDF 模型（核心数学思想）
 设：
 
@@ -4800,7 +4800,7 @@ k
 e
 y
 )
-pos=N⋅F(key)
+pos=N⋅F(关键)
 其中：
 
 F
@@ -4818,7 +4818,7 @@ k
 e
 y
 )
-F(key)=CDF(key)
+F(键)=CDF(键)
 即累积分布函数。
 
 3️⃣ 简单线性模型
@@ -4858,10 +4858,10 @@ i
 2
  
 4️⃣ 两级模型（RMI）
-Recursive Model Index：
+递归模型索引：
 
-Level 1: coarse model
-Level 2: fine model
+Error 500 (Server Error)!!1500.That’s an error.There was an error. Please try again later.That’s all we know.
+2级：精品模型
 数学表达：
 
 p
@@ -4911,12 +4911,12 @@ u
 a
 l
 ∣
-ϵ=max∣predicted−actual∣
+ϵ=max∣预测−实际∣
 查找变成：
 
-binary search in [pos-ε, pos+ε]
+[pos-ε, pos+ε] 中的二分查找
 6️⃣ 与 B+Tree 对比
-B+Tree	Learned
+B+树学习
 O(logN)	O(1) 预测
 page IO	顺序 IO
 结构固定	数据驱动
@@ -4932,33 +4932,33 @@ page IO	顺序 IO
 
 使用：
 
-Open Addressing
-Linear Probing
+开放式寻址
+线性探测
 结构：
 
-struct Entry {
-    uint64_t hash;
-    int key;
-    int payload;
+结构体入口{
+uint64_t 哈希；
+int 键；
+int 有效负载；
 }
 2️⃣ Kernel 设计
-Build Kernel
-for each thread:
-    idx = thread_id
-    hash = hash(key[idx])
-    insert_atomic(hash_table, hash, key)
+构建内核
+对于每个线程：
+idx = 线程 ID
+哈希 = 哈希（键[idx]）
+insert_atomic（哈希表，哈希，键）
 必须：
 
-atomicCAS
+原子CAS
 
-warp-aware design
+扭曲感知设计
 
-3️⃣ Probe Kernel
-for each probe_key:
-    compute hash
-    locate bucket
-    compare in parallel
-    emit result
+3️⃣ 探测内核
+对于每个probe_key：
+计算哈希值
+定位桶
+并行比较
+发出结果
 4️⃣ Warp 优化
 一个 warp 负责：
 
@@ -4968,16 +4968,16 @@ for each probe_key:
 
 减少 divergence。
 
-5️⃣ Shared Memory 使用
+5️⃣ 使用共享内存
 热点 bucket 放入 shared memory：
 
-global → shared → register
+全局 → 共享 → 注册
 6️⃣ Spill 设计
 若 GPU memory 不足：
 
-Partition on CPU
-Transfer partition
-Recursive join
+CPU 上的分区
+转移隔断
+递归连接
 🧱 三、AI + CBO 混合决策系统详细公式
 这是未来数据库的核心。
 
@@ -5001,7 +5001,7 @@ O
 C
 P
 U
-Cost(plan)=∑IO+∑CPU
+成本(计划)=ΣIO+ΣCPU
 2️⃣ AI 预测模型
 设：
 
@@ -5060,7 +5060,7 @@ T
 ^
 A
 I
-Score(plan)=α⋅Cost 
+分数(计划)=α⋅成本
 CBO
 ​
  +β⋅ 
@@ -5107,11 +5107,11 @@ t
 e
 d
 ∣
-error=∣T 
-actual
+误差=∣T
+实际的
 ​
  −T 
-predicted
+预测的
 ​
  ∣
 动态更新：
@@ -5154,7 +5154,7 @@ u
 a
 l
 R=−T 
-actual
+实际的
 ​
  
 目标：
@@ -5173,7 +5173,7 @@ maxE[R]
 1–3年: Engine稳定
 3–5年: AI+GPU
 5–7年: Serverless
-7–10年: Self-driving DB
+7-10年：自动驾驶数据库
 组织演进
 阶段 1：Founder-Driven
 核心架构控制
@@ -5206,11 +5206,11 @@ maxE[R]
 🏗 五、从开源项目到商业公司的演化模型
 参考路径可观察：
 
-MongoDB Inc.
+MongoDB 公司
 
-Elastic NV
+弹性NV
 
-Cockroach Labs
+蟑螂实验室
 
 阶段 1：纯开源
 社区驱动
@@ -5223,11 +5223,11 @@ Cockroach Labs
 企业特性闭源
 
 阶段 3：Cloud First
-Engine
+引擎
    ↓
-Managed Service
+托管服务
    ↓
-SaaS Revenue
+SaaS 收入
 阶段 4：生态平台
 插件市场
 
@@ -5308,15 +5308,15 @@ ChatGPT 说：
 控制论思想来源于 Norbert Wiener。
 
 1️⃣ 系统闭环结构
-Workload
+工作量
    ↓
-Execution Engine
+执行引擎
    ↓
-Telemetry Layer
+遥测层
    ↓
-Learning System
+学习系统
    ↓
-Optimizer Update
+优化器更新
    ↺
 2️⃣ 数学抽象
 设：
@@ -5439,10 +5439,10 @@ Layer 3：物理结构控制
 训练数据从哪里来？
 
 1️⃣ 数据类型
-Query Features
+查询功能
 表大小
 
-distinct 数
+不同的数字
 
 join 数
 
@@ -5450,7 +5450,7 @@ join 数
 
 估计成本
 
-Execution Metrics
+执行指标
 实际耗时
 
 实际行数
@@ -5460,24 +5460,24 @@ Execution Metrics
 spill 次数
 
 2️⃣ 数据采集结构
-Executor
+执行者
    ↓
-Operator Stats
+操作员统计
    ↓
-Metrics Aggregator
+指标聚合器
    ↓
-Feature Encoder
+特征编码器
    ↓
-Training Dataset Store
+训练数据集存储
 3️⃣ 数据格式示例
 {
-  "features": {
-    "tables": 3,
+“特征”： {
+“表”：3，
     "rows_A": 1000000,
     "rows_B": 20000,
-    "join_type": "hash"
+“join_type”：“哈希”
   },
-  "actual_time": 142.3
+“实际时间”：142.3
 }
 4️⃣ 在线与离线训练
 在线：小幅权重更新
@@ -5506,13 +5506,13 @@ SQL 重写
 2️⃣ 协同结构
 User
   ↓
-LLM Interface
+法学硕士接口
   ↓
-Logical Plan
+逻辑计划
   ↓
-Optimizer
+优化器
   ↓
-Execution
+执行
 3️⃣ 典型流程
 Step 1：LLM 解析复杂自然语言
 “找出最近 3 个月销量增长最快的地区”
@@ -5556,7 +5556,7 @@ LLM 不直接执行物理计划。
 阶段 2（3–5 年）
 成立公司
 
-Open Core
+开放核心
 
 企业支持
 
@@ -5583,7 +5583,7 @@ SaaS 模式
 
 🏗 五、全球开源竞争格局分析
 1️⃣ 分布式数据库阵营
-Cockroach Labs
+蟑螂实验室
 
 TiDB
 
@@ -5594,9 +5594,9 @@ TiDB
 云原生
 
 2️⃣ 分析型阵营
-Snowflake Inc.
+雪花公司
 
-ClickHouse Inc.
+克利克豪斯公司
 
 特点：
 
@@ -5605,7 +5605,7 @@ ClickHouse Inc.
 向量化
 
 3️⃣ 嵌入式阵营
-DuckDB Labs
+DuckDB实验室
 
 特点：
 
@@ -5616,7 +5616,7 @@ DuckDB Labs
 4️⃣ AI 方向
 大厂正在尝试：
 
-Learned Index
+学习索引
 
 自动优化
 
@@ -5820,11 +5820,11 @@ plan
 ​
  
 S 
-resource
+资源
 ​
  
 S 
-workload
+工作量
 ​
  
 ​
@@ -5943,12 +5943,12 @@ r
 u= 
 ​
   
-PlanChoice
-JoinStrategy
-DegreeOfParallelism
-MemoryQuota
-IndexPolicy
-ReOptimizationTrigger
+计划选择
+加入策略
+并行度
+内存配额
+指数政策
+重新优化触发器
 ​
   
 ​
@@ -5975,11 +5975,11 @@ y
 t
 ​
  
-Query latency
+查询延迟
 
-Throughput
+吞吐量
 
-Resource efficiency
+资源效率
 
 2️⃣ 目标函数
 多目标优化：
@@ -6012,7 +6012,7 @@ a
 n
 c
 e
-minJ=αLatency+βCost+γVariance
+minJ=α延迟+β成本+γ方差
 加入稳定性约束：
 
 ∥
@@ -6039,7 +6039,7 @@ t
 三层控制环：
 
 快环（毫秒级）
-Runtime Re-Optimization
+运行时重新优化
 
 中环（分钟级）
 统计信息 + Plan Rebuild
@@ -6066,7 +6066,7 @@ R
 状态 S
 统计特征向量
 
-Query Graph embedding
+查询图嵌入
 
 硬件状态
 
@@ -6207,26 +6207,26 @@ RL
 Agent 的状态引擎。
 
 结构
-Agent Layer
+代理层
    ↓
-Semantic Planner
+语义规划器
    ↓
-Query Generator
+查询生成器
    ↓
-Adaptive DB Kernel
+自适应数据库内核
    ↓
-Feedback to Agent
+反馈给代理
 关键模块
-1️⃣ Query Intent Encoding
+1️⃣ 查询意图编码
 LLM 输出：
 
 SQL
 
-Logical plan
+逻辑计划
 
 或 Operator graph
 
-2️⃣ Cost Feedback API
+2️⃣ 成本反馈API
 数据库向 Agent 提供：
 
 计划成本
@@ -6237,7 +6237,7 @@ Logical plan
 
 Agent 反向优化。
 
-3️⃣ Self-Reflection Loop
+3️⃣自我反思循环
 Agent 可以：
 
 自动创建索引
@@ -6267,9 +6267,9 @@ AI 优化器成熟
 
 对标：
 
-Snowflake
+雪花
 
-Databricks
+数据块
 
 第三阶段（6–10 年）
 数据库成为：
@@ -6282,11 +6282,11 @@ Agent 内存核心
 
 真正竞争对手变为：
 
-OpenAI
+开放人工智能
 
-Google
+谷歌
 
-Microsoft
+微软
 
 博弈核心：
 
@@ -6295,13 +6295,13 @@ Microsoft
 🏗 技术-组织-资本三维耦合模型
 三轴模型
 X 轴：技术成熟度
-Kernel
+核心
 
-AI Optimizer
+人工智能优化器
 
-GPU Engine
+GPU引擎
 
-Distributed DAG
+分布式有向无环图
 
 Y 轴：组织复杂度
 5 人核心组
@@ -6356,7 +6356,7 @@ s
 V 
 t
 ​
- =f(TeamSkill,Capital,Focus)
+=f(团队技能、资本、焦点)
 组织熵：
 
 H
@@ -6384,7 +6384,7 @@ t
 H 
 org
 ​
- =g(Size,Alignment)
+=g(大小,对齐方式)
 成功条件：
 
 V
@@ -6409,7 +6409,7 @@ g
 V 
 t
 ​
- >MarketSpeed+H 
+>市场速度+H
 org
 ​
  
@@ -6481,47 +6481,47 @@ ChatGPT 说：
 
 核心抽象：
 
-Process
+过程
 
-Thread
+线
 
 File
 
-Memory page
+内存页
 
-Socket
+插座
 
 调度单位：线程
 
 2️⃣ 8.0 抽象
 新的核心抽象：
 
-Data Partition
+数据分区
 
-Execution Graph Node
+执行图节点
 
-Resource Token
+资源令牌
 
-Consistency Scope
+一致性范围
 
-Optimization Policy
+优化策略
 
 调度单位：
 
 DAG 片段
 
 3️⃣ 分层结构
-Application / Agent
+申请/代理
         ↓
-Intent Layer
+意图层
         ↓
-Semantic Planner
+语义规划器
         ↓
-Global DAG Runtime
+全局 DAG 运行时
         ↓
-Resource Orchestrator
+资源协调器
         ↓
-Storage + Compute Fabric
+存储+计算结构
 数据库不再是“服务”。
 
 它是：
@@ -6597,7 +6597,7 @@ NET
 i
 ​
  
-Energy 
+活力
 i
 ​
  
@@ -6631,7 +6631,7 @@ o
 s
 t
 )
-min∑(Latency+Energy+Cost)
+minΣ(延迟+能量+成本)
 2️⃣ 调度问题
 这变成一个：
 
@@ -6674,7 +6674,7 @@ Kubernetes（容器调度）
 8.0 统一模型：
 
 数据扫描 = 特征提取
-Join = Feature Merge
+加入=功能合并
 Aggregation = Loss 统计
 DAG = 训练计算图
 
@@ -6682,26 +6682,26 @@ DAG = 训练计算图
 统一 Operator IR：
 
 Scan
-Filter
-Project
+筛选
+项目
 Join
-Aggregate
-MatrixMul
-Attention
-Reduce
-Shuffle
+总计的
+矩阵乘法
+注意力
+减少
+随机播放
 数据库算子 + 深度学习算子共存。
 
 执行后端
 CPU 向量化
 
-GPU Kernel
+GPU内核
 
 分布式 Shuffle
 
 类似：
 
-Apache Spark
+阿帕奇火花
 
 TensorFlow
 
@@ -6814,7 +6814,7 @@ AI 也不会吞掉操作系统
 我们把 8.0 修正为现实版本
 不是：
 
-❌ Database = OS
+❌数据库=操作系统
 ❌ AI = OS
 
 而是：
@@ -6836,22 +6836,22 @@ AI 是决策增强层
 
 🧱 一、分层架构（现实可实现）
 ┌──────────────────────┐
-│ Applications / Agents│
+│ 应用/代理│
 ├──────────────────────┤
-│ AI Runtime Layer     │
+│ AI运行层 │
 ├──────────────────────┤
-│ Embedded DB Engine   │
+│ 嵌入式数据库引擎 │
 ├──────────────────────┤
-│ OS Kernel            │
+│ 操作系统内核 │
 ├──────────────────────┤
-│ Hardware             │
+│ 硬件 │
 └──────────────────────┘
 1️⃣ OS Kernel（核心）
 仍然类似：
 
 Linux
 
-Android
+安卓
 
 负责：
 
@@ -6952,7 +6952,7 @@ r
 g
 y
 )
-C=(Compute,Memory,Storage,Network,Energy)
+C=(计算、内存、存储、网络、能源)
 不同设备：
 
 嵌入式
@@ -6983,14 +6983,14 @@ GPU
 🧠 三、能力分层而不是统一核心
 我们建立三个等级：
 
-Level 1 — Edge OS
+1 级 — 边缘操作系统
 内嵌 KV 数据引擎
 
 轻量 AI Runtime
 
 不支持复杂查询
 
-Level 2 — Personal OS
+2 级 — 个人操作系统
 嵌入列式数据库
 
 本地 AI 推理
@@ -6999,7 +6999,7 @@ Level 2 — Personal OS
 
 本地知识库
 
-Level 3 — Infrastructure OS
+第 3 级 — 基础设施操作系统
 分布式数据库
 
 GPU 调度
@@ -7027,9 +7027,9 @@ DB 提供“数据一致性和优化能力”
 
 CPU
 
-Memory
+记忆
 
-Storage
+贮存
 
 一样共存。
 
@@ -7076,8 +7076,8 @@ Storage
 🎯 关键战略转折
 你现在目标应该是：
 
-Build an AI-Ready Operating Environment
-Not Replace Operating Systems.
+构建人工智能就绪的操作环境
+不更换操作系统。
 
 我们是否一致？
 如果你的目标是：

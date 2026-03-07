@@ -431,10 +431,10 @@ pub trait StoragePlugin: Send + Sync {
 
 | 版本 | 目标 | 核心特性 | 预计时间 |
 |------|------|----------|----------|
-| v1.1.0 | 内核架构 L4 | LogicalPlan/PhysicalPlan/Executor 插件化 | 2026-04 |
-| v1.1.1 | 基础 C/S | server/client 可执行程序 | 2026-03 |
+| v1.1.0 | 内核架构 L4 |LogicalPlan/PhysicalPlan/Executor 插件化| 2026-04 |
+| v1.1.1 | 基础 C/S |server/client 可执行程序| 2026-03 |
 | v1.2.0 | 100万行级 | 向量化执行、统计信息、简化 CBO | 2026-06 |
-| v2.0.0 | 商用级内核 | 完整 CBO、Memory Pool、Spill to Disk | 2026-09 |
+| v2.0.0 | 商用级内核 |完整 CBO、Memory Pool、Spill to Disk| 2026-09 |
 | v3.0.0 | 企业级 | 分布式执行、事务支持、高可用 | 2027+ |
 
 ---

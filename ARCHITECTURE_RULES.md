@@ -66,7 +66,7 @@
 
 | 操作 | 权限 | 说明 |
 |------|------|------|
-| Critical Bug 修复 | ✅ 允许 | 仅限关键 Bug |
+|Critical Bug 修复| ✅ 允许 | 仅限关键 Bug |
 | 其他 Bug 修复 | ❌ 禁止 | 推迟到下一版本 |
 | 性能优化 | ❌ 禁止 | 代码已冻结 |
 | 重构 | ❌ 禁止 | 代码已冻结 |
@@ -173,10 +173,10 @@ pub struct TransactionManager {
 
 | 操作 | 原因 |
 |------|------|
-| 直接 Push 到 main | 绕过 PR 流程 |
-| Force Push | 破坏历史记录 |
+|直接 Push 到 main| 绕过 PR 流程 |
+|强力推| 破坏历史记录 |
 | 删除分支 | 可能丢失代码 |
-| 修改 Branch Protection | 安全风险 |
+|修改 Branch Protection| 安全风险 |
 | 创建/删除 Tag | 需要人工确认 |
 | 合并 PR (无审核) | 绕过审核流程 |
 | 修改 CI 配置 | 安全风险 |
@@ -189,7 +189,7 @@ pub struct TransactionManager {
 | 操作 | 确认方式 |
 |------|----------|
 | 合并 PR | 等待审核通过 |
-| 创建 Release | 人工批准 |
+|创建 Release| 人工批准 |
 | 修改依赖版本 | 评估影响 |
 | 修改 API 签名 | 架构评审 |
 | 添加新模块 | 功能评审 |
