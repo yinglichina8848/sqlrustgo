@@ -24,31 +24,31 @@
 ### ✅ RC/v1.0.0-1 分支保护规则已修复
 
 **修复前**:
-- __代码0__ ❌
-- __代码0__ ❌
-- __代码0__ ❌
+- `enforce_admins: false` ❌
+- `required_signatures: false` ❌
+- `required_linear_history: false` ❌
 
 **修复后**:
-- __代码0__ ✅
-- __代码0__ ✅
-- __代码0__ ✅
-- __代码0__ ✅
-- __代码0__ ✅
-- __代码0__ ✅
+- `enforce_admins: true` ✅
+- `required_signatures: true` ✅
+- `required_linear_history: true` ✅
+- `required_approving_review_count: 1` ✅
+- `allows_force_pushes: false` ✅
+- `allows_deletions: false` ✅
 
 ---
 
 ## 📋 当前分支保护规则状态
 
-| 分支模式 |批准|管理员强制执行|签名|线性历史| 评估 |
+| 分支模式 | Approvals | Admin Enforced | Signatures | Linear History | 评估 |
 |----------|-----------|----------------|------------|----------------|------|
 | main | 2 | ✅ | ✅ | ❌ | 🟢 |
-|发布/v1.0.0| 1 | ✅ | ✅ | ❌ | 🟢 |
+| release/v1.0.0 | 1 | ✅ | ✅ | ❌ | 🟢 |
 | rc/v1.0.0-1 | 1 | ✅ | ✅ | ✅ | 🟢 |
-|基线| 1 | ✅ | ❌ | ❌ | 🟡 |
-|功能/v1.0.0-评估| 1 | ✅ | ✅ | ❌ | 🟢 |
-|功能/v1.0.0-alpha| 1 | ✅ | ❌ | ❌ | 🟡 |
-|功能/v1.0.0-beta| 1 | ✅ | ❌ | ❌ | 🟡 |
+| baseline | 1 | ✅ | ❌ | ❌ | 🟡 |
+| feature/v1.0.0-evaluation | 1 | ✅ | ✅ | ❌ | 🟢 |
+| feature/v1.0.0-alpha | 1 | ✅ | ❌ | ❌ | 🟡 |
+| feature/v1.0.0-beta | 1 | ✅ | ❌ | ❌ | 🟡 |
 
 ---
 
@@ -63,9 +63,9 @@
 2. 进入仓库 Settings → Tags
 3. 点击 "New rule"
 4. 配置:
-- **模式**：`v*`
-- **Prevent deletion of tags**: ✅ 启用
-- **Include administrators**: ✅ 启用
+   - **Pattern**: `v*`
+   - **Prevent deletion of tags**: ✅ 启用
+   - **Include administrators**: ✅ 启用
 5. 点击 "Create"
 
 ### 🟡 中优先级：通配符分支保护规则
@@ -75,24 +75,24 @@
 **建议在 GitHub UI 中创建以下规则**:
 
 #### rc/* 通配符规则
-- 模式：`rc/*`
-- 需要PR： ✅
-- 所需批准：1
-- 需要提交签名：✅
-- 包括管理员：✅
-- 允许用力推动：❌
-- 允许删除：❌
-- 所需 CI：CI、矩阵测试
+- Pattern: `rc/*`
+- Require PR: ✅
+- Required Approvals: 1
+- Require Commit Signatures: ✅
+- Include Administrators: ✅
+- Allow Force Pushes: ❌
+- Allow Deletions: ❌
+- Required CI: CI, Matrix Test
 
 #### release/* 通配符规则
-- 模式：`release/*`
-- 需要PR： ✅
-- 所需批准：1
-- 需要提交签名：✅
-- 包括管理员：✅
-- 允许用力推动：❌
-- 允许删除：❌
-- 所需 CI：ci
+- Pattern: `release/*`
+- Require PR: ✅
+- Required Approvals: 1
+- Require Commit Signatures: ✅
+- Include Administrators: ✅
+- Allow Force Pushes: ❌
+- Allow Deletions: ❌
+- Required CI: ci
 
 ---
 
@@ -104,7 +104,7 @@
 | Tag 保护 | 0% | 0% | 需手动配置 |
 | 身份分离 | 100% | 100% | 已完成 |
 | 签名要求 | 60% | 85% | RC 分支已启用 |
-|管理员强制执行| 85% | 100% | 全部启用 |
+| Admin Enforced | 85% | 100% | 全部启用 |
 | **总体成熟度** | **66%** | **76%** | 显著提升 |
 
 ---
@@ -127,10 +127,10 @@
 
 | 账号 | 类型 | 权限 | 状态 |
 |------|------|------|------|
-|英利china8848| Owner | admin | 冷却状态 ✅ |
-|Error 500 (Server Error)!!1500.That’s an error.There was an error. Please try again later.That’s all we know.|维护者|维持| 日常使用 ✅ |
-|索纳心顶|开发商| push | 已配置 ✅ |
-|索纳开放之心|开发商| push | 已配置 ✅ |
+| yinglichina8848 | Owner | admin | 冷却状态 ✅ |
+| yinglichina163 | Maintainer | maintain | 日常使用 ✅ |
+| sonaheartopen | Developer | push | 已配置 ✅ |
+| sonaopenheart | Developer | push | 已配置 ✅ |
 
 ---
 
