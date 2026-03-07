@@ -50,7 +50,7 @@
 | 版本区间 | 风险 | 影响 |
 |----------|------|------|
 | 1.2 → 1.3 | 向量化接口设计不当 | 执行器需重写 |
-| 1.3 → 2.0 | PlanNode 不支持分布式 | Planner 需重写 |
+| 1.3 → 2.0 | PlanNode 不支持分布式 |Planner 需重写|
 | 2.0 → 3.0 | 调度层设计不当 | 整个系统需重构 |
 
 ---
@@ -61,10 +61,10 @@
 
 | 风险项 | 影响程度 | 概率 | 缓解措施 |
 |--------|----------|------|----------|
-| Execution API 变化 | 🔴 极高 | 中 | 1.2 已冻结接口 |
-| Optimizer API 变化 | 🔴 高 | 低 | Memo 结构预留 |
-| Catalog API 变化 | 🟡 中 | 低 | Trait 设计稳定 |
-| Storage API 变化 | 🟡 中 | 低 | StorageEngine trait |
+|Execution API 变化| 🔴 极高 | 中 | 1.2 已冻结接口 |
+|Optimizer API 变化| 🔴 高 | 低 | Memo 结构预留 |
+|Catalog API 变化| 🟡 中 | 低 | Trait 设计稳定 |
+|Storage API 变化| 🟡 中 | 低 |存储引擎特征|
 
 ### 3.2 架构级风险
 
@@ -72,7 +72,7 @@
 |--------|----------|------|----------|
 | 向量化执行不达标 | 🔴 高 | 中 | 1.2 基础已验证 |
 | 分布式调度复杂 | 🔴 高 | 高 | 预留 Exchange 接口 |
-| 事务一致性 | 🔴 高 | 中 | 预留 TxnManager |
+| 事务一致性 | 🔴 高 | 中 |预留 TxnManager|
 
 ---
 
@@ -82,10 +82,10 @@
 
 | 债务项 | 解决方案 |
 |--------|----------|
-| 存储紧耦合 | StorageEngine trait 抽象 |
-| 执行器无抽象 | Operator trait + RecordBatch |
-| 统计信息缺失 | TableStats + ColumnStats |
-| 优化器硬编码 | Memo 结构 + CostModel |
+| 存储紧耦合 |StorageEngine trait 抽象|
+| 执行器无抽象 |操作员特征 + RecordBatch|
+| 统计信息缺失 |表统计 + 列统计|
+| 优化器硬编码 |Memo 结构 + CostModel|
 
 ### 4.2 待解决
 
@@ -103,9 +103,9 @@
 
 | 风险 | 描述 | 缓解 |
 |------|------|------|
-| 数据倾斜 | Join 数据不均匀 | 预留 Hash Distribution |
-| 网络瓶颈 | Shuffle 性能 | 预留 Broadcast 优化 |
-| 节点失效 | Worker 崩溃 | 预留 Fault Tolerance |
+| 数据倾斜 | Join 数据不均匀 |预留 Hash Distribution|
+| 网络瓶颈 |随机播放性能|预留 Broadcast 优化|
+| 节点失效 |Worker 崩溃|预留 Fault Tolerance|
 
 ### 5.2 接口兼容性
 
