@@ -82,10 +82,6 @@ ctrlc.workspace = true
 serde_json.workspace = true
 
 [[test]]
-name = "project_test"
-path = "tests/project_test.rs"
-
-[[test]]
 name = "ci_test"
 path = "tests/ci_test.rs"
 

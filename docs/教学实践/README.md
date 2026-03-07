@@ -63,11 +63,11 @@ docs/教学实践/
 
 | 检查项 | 命令 | 要求 |
 |--------|------|------|
-| 编译 | `cargo build --all-features` | 通过 |
-| 测试 | `cargo test --all-features` | 全部通过 |
-| Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| 格式化 | `cargo fmt --check` | 通过 |
-| 覆盖率 | `cargo tarpaulin` 或 `cargo llvm-cov` | ≥ 80% |
+| 编译 |__代码0__| 通过 |
+| 测试 |__代码0__| 全部通过 |
+|剪辑|__代码0__| 零警告 |
+| 格式化 |__代码0__| 通过 |
+| 覆盖率 |`cargo tarpaulin` 或 `cargo llvm-cov`| ≥ 80% |
 
 ---
 

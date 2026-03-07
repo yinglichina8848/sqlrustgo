@@ -37,62 +37,62 @@
 
 | 分支 | PR 状态 | 删除原因 |
 |------|---------|----------|
-| `docs/changelog-v1.0.0-rc1` | MERGED | 已合并 |
-| `docs/rc1-plan-merge` | MERGED | 已合并 |
-| `docs/v1.0-governance-update` | MERGED | 已合并 |
-| `docs/v1.0.0-rc1-security-report` | MERGED | 已合并 |
-| `docs/version-planning-docs` | MERGED | 已合并 |
-| `feature/2.0-engineering-setup-rc` | MERGED | 已合并 |
-| `feature/install-script` | MERGED | 已合并 |
-| `feature/phase1-coverage` | MERGED | 已合并 |
-| `feature/rc1-docs-improvement` | MERGED | 已合并 |
-| `feature/rc1-gates-documentation` | MERGED | 已合并 |
-| `fix/beta-fmt` | MERGED | 已合并 |
-| `fix/let-chains-compatibility` | MERGED | 已合并 |
-| `pr-45` | MERGED | 已合并 |
-| `test/install-test` | MERGED | 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+|__代码0__|合并| 已合并 |
+| `pr-45` |合并| 已合并 |
+|__代码0__|合并| 已合并 |
 
 ### 第二批（已合并/关闭，未合并到 release/v1.0.0）
 
 | 分支 | PR 状态 | 删除原因 |
 |------|---------|----------|
-| `ci/local-check-test` | PR #55 MERGED | 已合并 |
-| `docs/rc1-acceptance-docs-reorg` | PR #66 MERGED | 已合并 |
-| `docs/rc1-checklist-update` | PR #67 MERGED | 已合并 |
-| `docs/v1.0.0-rc1-security-report-v2` | PR #56 CLOSED | 已关闭 |
-| `feature/rc1-acceptance-documentation` | PR #65 MERGED | 已合并 |
-| `feature/security-scan-improvement` | PR #51 CLOSED | 已关闭 |
-| `feature/unwrap-error-handling-v2` | PR #45 CLOSED | 已关闭 |
-| `feature/unwrap-fix-beta` | PR #44 CLOSED | 已关闭 |
-| `fix/ci-rust-version` | PR #57 MERGED | 已合并 |
-| `fix/ci-rust-version-v2` | PR #58 MERGED | 已合并 |
-| `fix/format-issues` | PR #46 MERGED | 已合并 |
+|__代码0__|PR #55 已合并| 已合并 |
+|__代码0__|PR #66 已合并| 已合并 |
+|__代码0__|PR #67 已合并| 已合并 |
+|__代码0__|PR #56 已关闭| 已关闭 |
+|__代码0__|PR #65 已合并| 已合并 |
+|__代码0__|PR #51 已关闭| 已关闭 |
+|__代码0__|PR #45 已关闭| 已关闭 |
+|__代码0__|PR #44 已关闭| 已关闭 |
+|__代码0__|PR #57 已合并| 已合并 |
+|__代码0__|PR #58 已合并| 已合并 |
+|__代码0__|PR #46 已合并| 已合并 |
 | `pr-46` | 无 PR | 临时分支 |
 
 ### 自动清理（git fetch --prune）
 
 | 分支 | 说明 |
 |------|------|
-| `feature/aggregate-functions` | 远程已删除 |
-| `feature/auth-impl-beta` | 远程已删除 |
-| `feature/beta-docs` | 远程已删除 |
-| `feature/beta-network-improvement` | 远程已删除 |
-| `feature/clippy-fixes` | 远程已删除 |
-| `feature/clippy-v2` | 远程已删除 |
-| `feature/clippy-v3` | 远程已删除 |
-| `feature/coverage-network-integration` | 远程已删除 |
-| `feature/docs-completion` | 远程已删除 |
-| `feature/executor-coverage-improvement` | 远程已删除 |
-| `feature/network-coverage-improvement` | 远程已删除 |
-| `feature/network-mock-integration` | 远程已删除 |
-| `feature/network-mock-v3` | 远程已删除 |
-| `feature/parser-coverage-improvement` | 远程已删除 |
-| `feature/unwrap-error-handling` | 远程已删除 |
-| `feature/v1.0.0-review-protocol` | 远程已删除 |
-| `fix/pr11-rebase` | 远程已删除 |
-| `fix/types-value-tosql` | 远程已删除 |
-| `pr/feature-index-executor-v2` | 远程已删除 |
-| `test-system` | 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
 
 ---
 
@@ -100,18 +100,18 @@
 
 | 分支 | 说明 |
 |------|------|
-| `docs/v1.0.0-rc1-security-report` | 已合并 |
-| `feature/2.0-engineering-setup-rc` | 已合并 |
-| `feature/install-script` | 已合并 |
-| `feature/network-mock-integration-v2` | 已合并 |
-| `feature/rc1-docs-improvement` | 已合并 |
-| `feature/rc1-gates-documentation` | 已合并 |
-| `feature/v1.0.0-beta` | 已合并 |
-| `feature/rc1-acceptance-documentation` | 远程已删除 |
-| `feature/security-scan-improvement` | 远程已删除 |
-| `feature/unwrap-error-handling-v2` | 远程已删除 |
-| `feature/unwrap-fix-beta` | 远程已删除 |
-| `fix/ci-rust-version` | 远程已删除 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 已合并 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
+|__代码0__| 远程已删除 |
 
 ---
 
@@ -122,27 +122,27 @@
 | 分支 | 类型 | 保护状态 | 说明 |
 |------|------|----------|------|
 | `main` | 主分支 | ✅ 已锁定 | 主分支，已冻结 |
-| `baseline` | 基线 | ✅ 受保护 | 历史基线分支 |
+|__代码0__| 基线 | ✅ 受保护 | 历史基线分支 |
 | `rc/v1.0.0-1` | RC | ✅ 受保护 | RC1 分支 |
-| `release/v1.0.0` | 发布 | ✅ 受保护 | v1.0.0 发布分支 |
+|__代码0__| 发布 | ✅ 受保护 | v1.0.0 发布分支 |
 
 ### 开发分支
 
 | 分支 | PR 状态 | 说明 |
 |------|---------|------|
-| `develop` | 无 PR | 开发分支 |
-| `feature/2.0-engineering-setup` | 无 PR | 2.0 工程设置 |
-| `feature/ga-release-preparation` | PR #69 OPEN | GA 发布准备 |
-| `feature/main-v1.0.0-ga` | PR #71 MERGED | GA 发布到 main |
-| `docs/doc-build-report` | PR #68 OPEN | 文档构建报告 |
+|__代码0__| 无 PR | 开发分支 |
+|__代码0__| 无 PR | 2.0 工程设置 |
+|__代码0__|公关 #69 开放| GA 发布准备 |
+|__代码0__|PR #71 已合并| GA 发布到 main |
+|__代码0__|公关 #68 开放| 文档构建报告 |
 
 ### 受保护分支（无法删除）
 
 | 分支 | 说明 | 处理建议 |
 |------|------|----------|
-| `feature/v1.0.0-alpha` | Alpha 分支 | 在 GitHub UI 中移除保护后删除 |
-| `feature/v1.0.0-beta` | Beta 分支 | 在 GitHub UI 中移除保护后删除 |
-| `feature/v1.0.0-evaluation` | Evaluation 分支 | 在 GitHub UI 中移除保护后删除 |
+|__代码0__| Alpha 分支 | 在 GitHub UI 中移除保护后删除 |
+|__代码0__| Beta 分支 | 在 GitHub UI 中移除保护后删除 |
+|__代码0__|Evaluation 分支| 在 GitHub UI 中移除保护后删除 |
 
 ---
 
@@ -151,19 +151,19 @@
 | 分支 | 说明 |
 |------|------|
 | `main` | 当前分支 |
-| `baseline` | 基线分支 |
-| `develop` | 开发分支 |
+|__代码0__| 基线分支 |
+|__代码0__| 开发分支 |
 | `rc/v1.0.0-1` | RC 分支 |
-| `release/v1.0.0` | 发布分支 |
-| `feature/2.0-engineering-setup` | 2.0 工程 |
-| `feature/auth-implementation` | 认证实现 |
-| `feature/beta-network-improvement` | 网络改进 |
-| `feature/ga-release-preparation` | GA 准备 |
-| `feature/main-v1.0.0-ga` | GA 发布 |
-| `feature/network-coverage-improvement` | 覆盖率改进 |
-| `feature/network-mock-v3` | Mock 测试 |
-| `feature/p1-alpha-network-mock-tests` | Alpha 测试 |
-| `feature/phase1-maintainer-automation` | 自动化 |
+|__代码0__| 发布分支 |
+|__代码0__| 2.0 工程 |
+|__代码0__| 认证实现 |
+|__代码0__| 网络改进 |
+|__代码0__| GA 准备 |
+|__代码0__| GA 发布 |
+|__代码0__| 覆盖率改进 |
+|__代码0__| Mock 测试 |
+|__代码0__| Alpha 测试 |
+|__代码0__| 自动化 |
 
 ---
 
@@ -219,9 +219,9 @@ git fetch --prune
 
 以下分支有分支保护规则，无法通过命令行删除：
 
-- `feature/v1.0.0-alpha`
-- `feature/v1.0.0-beta`
-- `feature/v1.0.0-evaluation`
+- __代码0__
+- __代码0__
+- __代码0__
 
 **处理步骤**:
 1. 登录 GitHub（使用 Owner 账号）
@@ -255,8 +255,8 @@ git branch -d <branch-name>
 ### 2. 配置 GitHub 自动删除
 
 在 GitHub 仓库设置中启用：
-- Settings → General → Pull Requests
-- ✅ Automatically delete head branches
+- 设置 → 常规 → 拉取请求
+- ✅自动删除头部分支
 
 ### 3. 分支命名规范
 

@@ -35,9 +35,9 @@
 
 | 分支 | 可修改内容 | 不可修改 |
 |------|-----------|----------|
-| feature/index-executor | 索引、执行器代码 | 网络协议代码 |
-| feature/network-protocol | 网络协议代码 | 索引、执行器代码 |
-| feature/docs-testing | **仅测试和文档** | 核心代码 |
+|功能/索引执行器| 索引、执行器代码 | 网络协议代码 |
+|功能/网络协议| 网络协议代码 | 索引、执行器代码 |
+|功能/文档测试| **仅测试和文档** | 核心代码 |
 
 ## 使用 Git Worktree 隔离开发
 
@@ -86,9 +86,9 @@ cd ../sqlrustgo-docs
 
 | PR 作者 | 评审者 |
 |---------|--------|
-| index-executor | network-protocol 或 docs-testing |
-| network-protocol | index-executor 或 docs-testing |
-| docs-testing | index-executor 或 network-protocol |
+|索引执行器|网络协议或文档测试|
+|网络协议|索引执行器或文档测试|
+|文档测试|索引执行器或网络协议|
 
 ## 沟通渠道
 

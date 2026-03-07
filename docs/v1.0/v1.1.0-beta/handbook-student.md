@@ -15,7 +15,7 @@
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS / Linux / Windows (WSL2) |
+| 操作系统 |macOS / Linux / Windows (WSL2)|
 | Rust | 1.75+ |
 | 内存 | 4GB+ |
 | 磁盘 | 1GB+ |
@@ -90,7 +90,7 @@ sql>
 | 命令 | 说明 |
 |------|------|
 | `help` | 显示帮助 |
-| `exit` / `quit` | 退出 |
+|__代码0__ / __代码1__| 退出 |
 
 ---
 
@@ -180,10 +180,10 @@ ROLLBACK;
 
 | 检查项 | 命令 | 预期结果 |
 |--------|------|----------|
-| 编译 | `cargo build --all-features` | 成功 |
-| 测试 | `cargo test --all-features` | 全部通过 |
-| Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| 格式化 | `cargo fmt --check` | 通过 |
+| 编译 |__代码0__| 成功 |
+| 测试 |__代码0__| 全部通过 |
+|剪辑|__代码0__| 零警告 |
+| 格式化 |__代码0__| 通过 |
 
 ### 6.2 覆盖率检查（可选）
 
