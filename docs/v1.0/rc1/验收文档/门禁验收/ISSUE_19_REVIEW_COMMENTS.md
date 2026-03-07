@@ -24,7 +24,7 @@
    cargo audit
    ```
 
-4. **CHANGELOG 生成**: 
+4. **CHANGELOG 生成**:
    ```bash
    git cliff -o CHANGELOG.md --tag v1.0.0-beta..
    ```
@@ -54,11 +54,11 @@
 
 | 检查项 | 命令 | 状态 |
 |:-------|:-----|:-----|
-| GPG 签名检查 | git verify-commit <commit> | ⏳ |
-| 分支保护状态检查 | gh api repos/minzuuniversity/sqlrustgo/branches/v1.0.0-rc1/protection | ⏳ |
-| 安全扫描 | cargo audit | ⏳ |
-| CHANGELOG 生成 | git cliff -o CHANGELOG.md --tag v1.0.0-beta.. | ⏳ |
-| RC 标签创建 (Annotated) | git tag -a v1.0.0-rc1 -m "Release Candidate 1" | ⏳ |
+| GPG 签名检查 |git verify-commit <提交>| ⏳ |
+| 分支保护状态检查 |gh api repos/minzuuniversity/sqlrustgo/branches/v1.0.0-rc1/protection| ⏳ |
+| 安全扫描 |货物审核| ⏳ |
+|CHANGELOG 生成| git cliff -o CHANGELOG.md --tag v1.0.0-beta.. | ⏳ |
+|RC 标签创建 (Annotated)|git tag -a v1.0.0-rc1 -m "发布候选版本 1"| ⏳ |
 | 自动化 CI 监控 | 配置 CI 监控 | ⏳ |
 | 问题反馈模板 | 创建模板 | ⏳ |
 

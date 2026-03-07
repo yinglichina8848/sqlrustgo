@@ -1,6 +1,6 @@
-# CURRENT_VERSION
+# 当前版本状态
 
-alpha/v1.2.0
+阿尔法/v1.2.0
 
 ## 阶段信息
 

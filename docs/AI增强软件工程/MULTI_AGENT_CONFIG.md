@@ -32,8 +32,8 @@
 | 配置项 | 说明 |
 |--------|------|
 | 目录结构 | 4 个独立工作目录 |
-| Git 配置 | 4 套独立 local config |
-| GitHub Token | 4 个独立 PAT |
+| Git 配置 |4 套独立 local config|
+|GitHub 令牌| 4 个独立 PAT |
 | GPG 签名 | 4 套独立签名密钥 |
 
 ### 1.3 架构图
@@ -77,9 +77,9 @@
 
 | 要求 | 说明 |
 |------|------|
-| 操作系统 | macOS / Linux |
+| 操作系统 |macOS/Linux|
 | Git | ≥ 2.30 |
-| GitHub CLI | ≥ 2.0 |
+|GitHub CLI| ≥ 2.0 |
 | GPG | ≥ 2.2 |
 
 ### 2.2 安装依赖
@@ -158,7 +158,7 @@ git config init.defaultBranch main
 git config --local --list | grep user
 ```
 
-### 4.2 openheart Git 配置
+### 4.2 openheart Git部署
 
 ```bash
 cd ~/workspace/dev/openheart/sqlrustgo
@@ -226,12 +226,12 @@ git config --global --unset user.email
 
 ### 5.1 创建 PAT
 
-1. 登录 GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+1.登录GitHub→设置→开发者设置→个人访问令牌→令牌（经典）
 2. 点击 "Generate new token (classic)"
 3. 设置 Token 名称和权限：
    - `repo` (完整仓库访问)
-   - `workflow` (GitHub Actions)
-   - `write:packages` (包发布)
+- `workflow`（GitHub 操作）
+- `write:packages` (包发布)
 4. 生成并保存 Token
 
 ### 5.2 存储 PAT
@@ -589,7 +589,7 @@ chmod 600 ~/workspace/identities/*/PAT.txt
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| AI Agent 提示词 | [AI_AGENT_PROMPTS.md](./AI_AGENT_PROMPTS.md) | 4 Agent 提示词体系 |
+|AI Agent 提示词| [AI_AGENT_PROMPTS.md](./AI_AGENT_PROMPTS.md) | 4 Agent 提示词体系 |
 | 多身份隔离开发模式 | [../MULTI_IDENTITY_DEVELOPMENT_MODEL.md](../MULTI_IDENTITY_DEVELOPMENT_MODEL.md) | 完整配置规范 |
 | 权限模型 | [../GIT_PERMISSION_MODEL.md](../GIT_PERMISSION_MODEL.md) | 2.0 权限模型 |
 

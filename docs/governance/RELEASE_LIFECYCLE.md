@@ -154,7 +154,7 @@ develop-v1.2.0
 
 ## 三、阶段转换检查点
 
-### 3.1 Draft → Alpha
+### 3.1 草案 → 阿尔法
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
@@ -162,7 +162,7 @@ develop-v1.2.0
 | 接口定义完整 | ✅ | |
 | 编译通过 | ✅ | |
 
-### 3.2 Alpha → Beta
+### 3.2 阿尔法 → 贝塔
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
@@ -170,7 +170,7 @@ develop-v1.2.0
 | 无 P0 Bug | ✅ | |
 | 功能评审通过 | ✅ | |
 
-### 3.3 Beta → RC
+### 3.3 测试版 → RC
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
@@ -201,11 +201,11 @@ v{MAJOR}.{MINOR}.{PATCH}-{phase}{number}
 
 | 阶段 | Tag 格式 | 示例 |
 |------|----------|------|
-| Alpha | vX.Y.Z-alpha{N} | v1.2.0-alpha1 |
-| Beta | vX.Y.Z-beta{N} | v1.2.0-beta1 |
-| RC | vX.Y.Z-rc{N} | v1.2.0-rc1 |
+| Alpha |vX.Y.Z-alpha{N}|v1.2.0-alpha1|
+| Beta |vX.Y.Z-beta{N}| v1.2.0-beta1 |
+| RC |vX.Y.Z-rc{N}| v1.2.0-rc1 |
 | GA | vX.Y.Z | v1.2.0 |
-| Patch | vX.Y.Z-patch{N} | v1.2.1-patch1 |
+| Patch |vX.Y.Z-补丁{N}|v1.2.1-补丁1|
 
 ---
 

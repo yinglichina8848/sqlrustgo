@@ -23,9 +23,9 @@
 |:-----|:-----|:---------------|:---------------|
 | **alpha** | 当前功能开发阶段 | ✅ | ✅ |
 | **beta** | 稳定性验证阶段 | ⚠️ 仅已规划功能 | ✅ |
-| **release** | 发布候选阶段 | ❌ | 仅阻断性 Bug |
-| **release/vX.Y.Z** | 正式稳定版本 | ❌ | 仅 hotfix |
-| **baseline** | 历史参考版本 | ❌ | 仅 hotfix |
+|**发布**| 发布候选阶段 | ❌ | 仅阻断性 Bug |
+|**发布/vX.Y.Z**| 正式稳定版本 | ❌ |仅 hotfix|
+|**基线**| 历史参考版本 | ❌ |仅 hotfix|
 
 > **注**：Beta 阶段允许实现"Alpha 阶段已规划的功能"，禁止"新增未规划功能"
 > **注**：从 v1.0.0 开始，正式稳定版本使用 `release/vX.Y.Z` 格式命名，`baseline` 分支保留作为历史参考
@@ -95,7 +95,7 @@ git merge --no-ff feature/vX.Y.Z-alpha
 git push origin feature/vX.Y.Z-beta
 ```
 
-打 Beta Tag：
+“测试日：
 
 ```bash
 git tag vX.Y.Z-beta
@@ -264,7 +264,7 @@ git merge release/vX.Y.Z
 
 | 阶段 | 示例 |
 |:-----|:-----|
-| Alpha | v1.0.0-alpha |
+| Alpha |v1.0.0-alpha|
 | Beta | v1.0.0-beta |
 | RC | v1.0.0-rc.1 |
 | 正式版 | v1.0.0 |
@@ -311,11 +311,11 @@ alpha
 
 | 分支 | 定义 |
 |:-----|:-----|
-| **release/vX.Y.Z** | 唯一正式可发布版本 |
-| **release** | 发布候选 |
+|**发布/vX.Y.Z**| 唯一正式可发布版本 |
+|**发布**| 发布候选 |
 | **beta** | 稳定验证 |
 | **alpha** | 功能开发 |
-| **baseline** | 历史参考版本 |
+|**基线**| 历史参考版本 |
 
 ---
 
