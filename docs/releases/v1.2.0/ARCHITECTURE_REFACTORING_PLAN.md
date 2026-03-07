@@ -25,15 +25,15 @@
 | 问题 | 严重程度 | 说明 |
 |------|----------|------|
 | 版本信息不一致 | 严重 | README 显示 v1.1.0，代码输出 v1.0.0 |
-| REPL 与内核耦合过高 | 高 |直接实例化 ExecutionEngine|
-|ExecutionEngine 单实例内存模型| 高 | 无可替换执行层 |
+| REPL 与内核耦合过高 | 高 | 直接实例化 ExecutionEngine |
+| ExecutionEngine 单实例内存模型 | 高 | 无可替换执行层 |
 
 #### ⚠️ 必须改进
 
 | 问题 | 影响 | 说明 |
 |------|------|------|
-| 事务与存储边界未隔离 | 高 |TransactionManager 与 WAL 耦合|
-| Catalog 尚未实现 | 高 |无系统表、无 schema registry|
+| 事务与存储边界未隔离 | 高 | TransactionManager 与 WAL 耦合 |
+| Catalog 尚未实现 | 高 | 无系统表、无 schema registry |
 | 执行层未接口化 | 高 | 无法注入远程执行代理 |
 
 ---
@@ -256,8 +256,8 @@ struct Group {
 
 | 阶段 | 类型 | 说明 |
 |------|------|------|
-| 第一阶段 |基于规则的重写| 谓词下推、投影裁剪 |
-| 第二阶段 |基于成本的选择| Join 顺序、索引选择 |
+| 第一阶段 | Rule-based rewrite | 谓词下推、投影裁剪 |
+| 第二阶段 | Cost-based selection | Join 顺序、索引选择 |
 
 **不要混在一起。**
 
@@ -287,14 +287,14 @@ crates/
 
 | 目录 | 目的 | 优先级 | 状态 |
 |------|------|--------|------|
-|__代码0__| CBO 优化框架 | P0 | ✅ 已实现 |
-|__代码0__| 元数据管理 | P0 | ✅ 已实现 |
-|__代码0__| 执行器抽象 | P0 | ✅ 已实现 |
-|__代码0__| 存储引擎抽象 | P0 | ✅ 已实现 |
-|__代码0__| 事务管理 | P0 | ✅ 已实现 |
+| `optimizer/` | CBO 优化框架 | P0 | ✅ 已实现 |
+| `catalog/` | 元数据管理 | P0 | ✅ 已实现 |
+| `executor/` | 执行器抽象 | P0 | ✅ 已实现 |
+| `storage/` | 存储引擎抽象 | P0 | ✅ 已实现 |
+| `transaction/` | 事务管理 | P0 | ✅ 已实现 |
 | `types/` | 类型系统 | P0 | ✅ 已实现 |
-|__代码0__| 通用错误 | P1 | ✅ 已实现 |
-|__代码0__| 逻辑计划 | P1 | 🔄 开发中 |
+| `common/` | 通用错误 | P1 | ✅ 已实现 |
+| `planner/` | 逻辑计划 | P1 | 🔄 开发中 |
 
 ---
 
@@ -304,14 +304,14 @@ crates/
 
 | 能力 | 是否具备 | 实现位置 | 说明 |
 |------|----------|----------|------|
-| CBO 可扩展 | ✅ |板条箱/优化器/|优化器特征+规则+成本模型|
-| 多优化器支持 | ✅ |板条箱/优化器/| 可插拔优化框架 |
-| 执行层替换 | ✅ |板条箱/执行者/|执行者特质|
-| 统计独立 | ✅ |板条箱/类型/|统计提供者特征|
-|Catalog 可共享| ✅ |板条箱/目录/|Catalog trait + 可序列化|
+| CBO 可扩展 | ✅ | crates/optimizer/ | Optimizer trait + Rule + CostModel |
+| 多优化器支持 | ✅ | crates/optimizer/ | 可插拔优化框架 |
+| 执行层替换 | ✅ | crates/executor/ | Executor trait |
+| 统计独立 | ✅ | crates/types/ | StatisticsProvider trait |
+| Catalog 可共享 | ✅ | crates/catalog/ | Catalog trait + 可序列化 |
 | 为 2.0 预留接口 | ✅ | 各 crate | 所有核心 trait 已定义 |
-| 存储抽象 | ✅ |板条箱/存储/|存储引擎特征|
-| 事务管理 | ✅ |板条箱/交易/|WAL + 事务管理器|
+| 存储抽象 | ✅ | crates/storage/ | StorageEngine trait |
+| 事务管理 | ✅ | crates/transaction/ | WAL + TransactionManager |
 
 ---
 
@@ -336,23 +336,23 @@ crates/
 
 | 任务 | 依赖 | 负责人 |
 |------|------|--------|
-| R-001: 错误域重构 | - |开放的心|
-|R-002: Optimizer 框架| - |开放的心|
-|R-003: Statistics 子系统| R-002 |开放的心|
-|R-004: Catalog 系统| - |敞开心扉|
-|R-005：执行者特质| - |敞开心扉|
-|R-006：存储引擎特征| - |敞开心扉|
+| R-001: 错误域重构 | - | openheart |
+| R-002: Optimizer 框架 | - | openheart |
+| R-003: Statistics 子系统 | R-002 | openheart |
+| R-004: Catalog 系统 | - | heartopen |
+| R-005: Executor trait | - | heartopen |
+| R-006: StorageEngine trait | - | heartopen |
 
 ### 轨道 B: 功能开发 (P1)
 
 | 任务 | 依赖 | 负责人 |
 |------|------|--------|
-|V-001：记录批次| R-005 |开放的心|
-|V-002：柱状阵列| V-001 |开放的心|
-| V-003: 向量化表达式 | V-002 |开放的心|
-| V-004: 执行器重构 | R-005, V-003 |敞开心扉|
-| C-001: CBO 成本模型 | R-002, R-003 |开放的心|
-| C-002: 谓词下推 | R-002 |敞开心扉|
+| V-001: RecordBatch | R-005 | openheart |
+| V-002: ColumnarArray | V-001 | openheart |
+| V-003: 向量化表达式 | V-002 | openheart |
+| V-004: 执行器重构 | R-005, V-003 | heartopen |
+| C-001: CBO 成本模型 | R-002, R-003 | openheart |
+| C-002: 谓词下推 | R-002 | heartopen |
 
 ---
 
@@ -362,11 +362,11 @@ crates/
 
 | 现有任务 | 对应重构 | 状态 |
 |----------|----------|------|
-| V-001~V-007 (向量化) |R-005 + R-006 + 管道| ⚠️ 延后到 v1.3.0 |
-| S-001~S-006 (统计信息) |板条箱/类型/| ✅ 已实现 |
-| C-001~C-006 (CBO) |板条箱/优化器/| ✅ 已实现 |
-| R-001~R-007 (核心接口) |各 crate trait| ✅ 已实现 |
-| 目录重构 |板条箱/工作区| ✅ 已完成 (PR #305) |
+| V-001~V-007 (向量化) | R-005 + R-006 + Pipeline | ⚠️ 延后到 v1.3.0 |
+| S-001~S-006 (统计信息) | crates/types/ | ✅ 已实现 |
+| C-001~C-006 (CBO) | crates/optimizer/ | ✅ 已实现 |
+| R-001~R-007 (核心接口) | 各 crate trait | ✅ 已实现 |
+| 目录重构 | crates/ workspace | ✅ 已完成 (PR #305) |
 
 ---
 
@@ -481,12 +481,12 @@ fn main() {
 
 | 风险点 | 如果 1.2 没做会怎样 | 影响 |
 |--------|---------------------|------|
-|无 Catalog| 无法做分布式元数据 | 🔴 高 |
+| 无 Catalog | 无法做分布式元数据 | 🔴 高 |
 | 无 Stats 接口 | 无法做全局优化 | 🔴 高 |
-|无 Executor trait| 无法远程执行 | 🔴 高 |
-|无 Storage trait| 无法做复制 | 🔴 高 |
+| 无 Executor trait | 无法远程执行 | 🔴 高 |
+| 无 Storage trait | 无法做复制 | 🔴 高 |
 | 无错误分域 | 分布式错误爆炸 | 🟠 中 |
-|无 Pipeline 模型| 无法向量化 | 🟠 中 |
+| 无 Pipeline 模型 | 无法向量化 | 🟠 中 |
 
 ### 安全线
 
@@ -510,23 +510,23 @@ fn main() {
 | Day | 任务 |
 |-----|------|
 | Day 1-2 | 抽离 Executor trait，移除 main.rs 中硬编码依赖 |
-| Day 3-4 |创建 optimizer/ 目录，定义 Rule trait|
-| Day 5-7 |定义 CostModel trait，定义 Optimizer trait，写 NoOpOptimizer|
+| Day 3-4 | 创建 optimizer/ 目录，定义 Rule trait |
+| Day 5-7 | 定义 CostModel trait，定义 Optimizer trait，写 NoOpOptimizer |
 
 ### 第 2 周：Statistics + Catalog
 
 | Day | 任务 |
 |-----|------|
-| Day 8-10 |创建 statistics 模块，实现 TableStats|
-| Day 11-12 |创建 catalog trait，实现 InMemoryCatalog|
+| Day 8-10 | 创建 statistics 模块，实现 TableStats |
+| Day 11-12 | 创建 catalog trait，实现 InMemoryCatalog |
 | Day 13-14 | 优化器改为依赖 StatsProvider |
 
 ### 第 3 周：CBO 最小实现
 
 | Day | 任务 |
 |-----|------|
-| Day 15-16 |实现 JoinCostModel|
-| Day 17-18 |实现 Join Reorder Rule|
+| Day 15-16 | 实现 JoinCostModel |
+| Day 17-18 | 实现 Join Reorder Rule |
 | Day 19-21 | 实现两阶段优化流程 |
 
 ### 第 4 周：工程化稳定
@@ -589,8 +589,8 @@ pub enum PhysicalExpr {
 
 | 类型 | 作用 | 示例 |
 |------|------|------|
-|变换规则| 逻辑等价变换 |连接重新排序、谓词下推|
-|实施细则| 物理实现生成 |连接 → 哈希连接|
+| Transformation Rule | 逻辑等价变换 | Join Reorder, Predicate Pushdown |
+| Implementation Rule | 物理实现生成 | Join → HashJoin |
 
 ```rust
 pub trait TransformationRule {
@@ -606,9 +606,9 @@ pub trait ImplementationRule {
 
 | 扩展能力 | 如何支持 |
 |----------|----------|
-| 新 Join 算法 |新增 ImplementationRule|
-| 分布式 Join |新增 PhysicalExpr 变种|
-| GPU 执行 |新增 CostModel 分支|
+| 新 Join 算法 | 新增 ImplementationRule |
+| 分布式 Join | 新增 PhysicalExpr 变种 |
+| GPU 执行 | 新增 CostModel 分支 |
 | 列存支持 | 新增 Scan 物理实现 |
 
 ---
@@ -649,10 +649,10 @@ distributed/
 
 | 接口 | 作用 |
 |------|------|
-|执行者特质| 可替换执行 |
-|贮藏性状| 可远程复制 |
-|统计特征| 全局优化 |
-|目录线| 元数据共享 |
+| Executor trait | 可替换执行 |
+| Storage trait | 可远程复制 |
+| Statistics trait | 全局优化 |
+| Catalog trait | 元数据共享 |
 
 ---
 
@@ -705,7 +705,7 @@ distributed/
 | 实现 |
 |------|
 | 查询计划自学习 |
-|Workload 预测|
+| Workload 预测 |
 | 成本模型自动调参 |
 | 智能数据分布 |
 
