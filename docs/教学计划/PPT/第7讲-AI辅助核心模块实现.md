@@ -1,12 +1,12 @@
 ---
-marp: true
-theme: gaia
-paginate: true
-backgroundColor: #fff
+马尔普：真实
+主题：盖亚
+页面：真实
+背景颜色：#fff
 color: #333
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 第七讲：AI辅助核心模块实现
 
@@ -47,7 +47,7 @@ color: #333
 
 ### AI辅助开发工具
 
-- **AI-IDE**：Cursor、TRAE IDE、Claude Code
+- **AI-IDE**：光标、TRAE IDE、克劳德代码
 - **AI编程助手**：GitHub Copilot、TabNine
 - **AI聊天机器人**：ChatGPT、Claude、Gemini
 - **AI代码审查**：SonarQube AI、DeepCode
@@ -472,7 +472,7 @@ fn test_buffer_pool() {
 
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 谢谢！
 

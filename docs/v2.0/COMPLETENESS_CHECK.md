@@ -12,7 +12,7 @@
 | 目录 | 文档数 | Issue 覆盖 | 遗漏 |
 |------|--------|------------|------|
 | 架构设计/ | 5 | 部分 | 插件系统、数据结构 |
-| 重构计划/ | 5 | 部分 | Storage trait、技术债务 |
+| 重构计划/ | 5 | 部分 |Storage trait、技术债务|
 | 性能优化/ | 8 | ❌ 无 | 向量化、CBO |
 | 成熟度评估/ | 4 | ❌ 无 | 架构治理 |
 | 网络设计/ | 1 | ✅ #86 | - |
@@ -37,8 +37,8 @@
 
 | 任务 | 相关文档 | 说明 | 建议 Issue |
 |------|----------|------|------------|
-| **Storage trait 化** | REFACTORING_PRIORITY.md | P2 优先级，多后端支持 | #102 |
-| **Optimizer 规则系统** | PLUGIN_ARCHITECTURE.md | 谓词下推、投影裁剪 | #103 |
+|**储存性状化**| REFACTORING_PRIORITY.md | P2 优先级，多后端支持 | #102 |
+|**Optimizer 规则系统**| PLUGIN_ARCHITECTURE.md | 谓词下推、投影裁剪 | #103 |
 | **向量化执行** | VECTORIZED_*.md | 性能提升关键 | #104 |
 
 ### 2.2 🟠 中优先级遗漏
@@ -60,7 +60,7 @@
 
 ## 三、建议新增的 Issue
 
-### Issue #102: Storage trait 化
+### Issue #102：存储特性化
 
 ```markdown
 ## 概述

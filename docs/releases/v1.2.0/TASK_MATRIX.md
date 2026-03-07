@@ -79,7 +79,7 @@ pub struct Cost {
 }
 ```
 
-#### 5. Optimizer Trait
+#### 5. 优化器特征
 
 ```rust
 pub trait Optimizer {
@@ -89,7 +89,7 @@ pub trait Optimizer {
 
 ⚠️ 不要再使用: `fn optimize(plan: LogicalPlan)`
 
-#### 6. Executor Trait
+#### 6. 执行者特质
 
 ```rust
 pub trait Executor: Send + Sync {
@@ -99,7 +99,7 @@ pub trait Executor: Send + Sync {
 
 必须接受 PlanNode，而不是 PhysicalPlan。
 
-#### 7. Catalog Trait
+#### 7. 目录特征
 
 ```rust
 pub trait Catalog: Send + Sync {
@@ -113,22 +113,22 @@ pub struct TableMeta {
 }
 ```
 
-#### 8. StatisticsProvider
+#### 8. 统计提供程序
 
 ```rust
 pub trait StatisticsProvider: Send + Sync {
     fn table_stats(&self, table: &str) -> Option<TableStats>;
 }
 ```rust
-pub struct TableStats {
-    pub row_count: usize,
-    pub source: StatsSource,
+pub 结构 TableStats {
+pub row_count：使用，
+发布来源：StatsSource，
 }
 
-#[derive(Clone, Debug)]
-pub enum StatsSource {
+#[派生（克隆，调试）]
+pub 枚举 StatsSource {
     Local,
-    Global,
+全球的，
 }
 ```
 
@@ -147,19 +147,19 @@ pub enum StatsSource {
 ### Phase 1: 核心接口稳定（Week 1-2）
 
 ```
-Week 1                              Week 2
+第 1 周 第 2 周
 ┌─────────────────────────────┬─────────────────────────────┐
 │ R-001 错误域重构              │ R-005 Executor trait       │
-│ R-002 Optimizer trait        │ R-006 StorageEngine trait  │
-│ R-003 Statistics trait       │ R-007 QueryService trait  │
-│ R-004 Catalog trait          │                             │
+│ R-002 优化器特性 │ R-006 存储引擎特性 │
+│ R-003 统计特征 │ R-007 QueryService 特征 │
+│ R-004 目录特征 │ │
 └─────────────────────────────┴─────────────────────────────┘
 ```
 
 ### Phase 2: 执行模型定型（Week 3-4）
 
 ```
-Week 3                              Week 4
+第 3 周 第 4 周
 ┌─────────────────────────────┬─────────────────────────────┐
 │ E-001 RecordBatch 结构        │ E-003 LocalExecutor 实现   │
 │ E-002 Operator trait         │ E-004 执行器集成            │
@@ -181,7 +181,7 @@ Week 5
 ### Phase 4: CBO 框架（Week 6-7）
 
 ```
-Week 6                              Week 7
+第 6 周 第 7 周
 ┌─────────────────────────────┬─────────────────────────────┐
 │ O-001 Memo 结构               │ O-005 Join 重排序          │
 │ O-002 谓词下推规则            │ O-006 成本模型             │
@@ -308,12 +308,12 @@ Week 8
 ### 4.1 DistributedPlan 占位
 
 ```rust
-pub enum PlanNode {
-    Local(PhysicalPlan),
-    Distributed(DistributedPlan),  // 1.2 空壳，2.0 实现
+pub 枚举 PlanNode {
+本地（物理计划），
+Distributed(DistributedPlan),  // 1.2 空壳，2.0 实现
 }
 
-pub struct DistributedPlan {
+pub 结构分布式计划 {
     // 1.2 为空
 }
 ```
@@ -321,47 +321,47 @@ pub struct DistributedPlan {
 ### 4.2 Catalog 预留分布式字段
 
 ```rust
-pub struct TableMeta {
-    pub name: String,
-    pub schema: Schema,
-    pub distribution: Option<DistributionInfo>,  // 预留
+pub 结构 TableMeta {
+酒吧名称：字符串，
+酒吧时间表： 时间表，
+pub distribution: Option<DistributionInfo>, // 工件
 }
 
-pub struct DistributionInfo {
-    pub partition_key: Vec<String>,
-    pub replicas: usize,
+pub 结构分布信息 {
+pub 分区键：Vec<String>,
+酒吧副本：使用，
 }
 ```
 
 ### 4.3 Cost 预留网络成本
 
 ```rust
-pub struct Cost {
-    pub cpu: f64,
-    pub io: f64,
-    pub network: f64,  // 1.2 为 0
+酒吧结构成本{
+酒吧CPU：f64，
+酒吧io：f64，
+pub network: f64,  // 1.2 为 0
 }
 ```
 
 ### 4.4 Executor 预留远程实现
 
 ```rust
-trait Executor {
-    fn execute(&self, plan: PlanNode) -> Result<ResultSet>;
+特质执行者 {
+fnexecute(&self, plan: PlanNode) -> Result<ResultSet>;
 }
 
 // 未来实现:
-// - LocalExecutor
-// - RemoteExecutor
-// - DistributedExecutor
+// - 本地执行器
+// - 远程执行器
+// - 分布式执行器
 ```
 
 ### 4.5 RecordBatch 预留序列化
 
 ```rust
-impl RecordBatch {
-    pub fn to_bytes(&self) -> Vec<u8>;      // 预留
-    pub fn from_bytes(bytes: &[u8]) -> Self; // 预留
+实现 RecordBatch {
+pub fn to_bytes(&self) -> Vec<u8>;      // 预留
+pub fn from_bytes(字节: &[u8]) -> Self; // 前期准备
 }
 ```
 
@@ -384,10 +384,10 @@ impl RecordBatch {
 ## 六、版本发布流程
 
 ```
-Week 1-2 → Week 3-4 → Week 5 → Week 6-7 → Week 8
+第 1-2 周 → 第 3-4 周 → 第 5 周 → 第 6-7 周 → 第 8 周
    接口        执行       统计      CBO       收尾
     ↓           ↓          ↓         ↓          ↓
-v1.2.0-draft → alpha → beta → rc → GA
+v1.2.0-草案 → alpha → beta → rc → GA
 ```
 
 ---

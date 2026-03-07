@@ -1,84 +1,84 @@
 ---
-name: "code-reviewer"
-description: "Reviews code changes, runs checks, analyzes code quality, and merges PRs. Invoke when user asks for code review, PR review, or to merge a PR."
+名称：“代码审查员”
+描述：“审查代码更改、运行检查、分析代码质量并合并 PR。当用户请求代码审查、PR 审查或合并 PR 时调用。”
 ---
 
-# Code Reviewer
+# 代码审查员
 
-This skill provides comprehensive code review and PR management capabilities.
+该技能提供全面的代码审查和 PR 管理能力。
 
-## Features
+＃＃ 特征
 
 ### 1. 查看PR详情 (View PR Details)
-- Get PR information including title, description, author, status
-- View file changes and diffs
-- Check PR comments and reviews
-- View CI/CD status
+- 获取 PR 信息，包括标题、描述、作者、状态
+- 查看文件更改和差异
+- 检查公关评论和评论
+- 查看 CI/CD 状态
 
 ### 2. 运行检查 (Run Checks)
-- Run project linters (cargo clippy, rustfmt, etc.)
-- Execute test suites
-- Run security checks
-- Verify code formatting
+- 运行项目 linter（cargo Clippy、rustfmt 等）
+- 执行测试套件
+- 运行安全检查
+- 验证代码格式
 
 ### 3. 代码分析 (Code Analysis)
-- Analyze code changes for potential issues
-- Identify code smells
-- Check for common bugs
-- Review code complexity
-- Verify best practices adherence
+- 分析代码更改是否存在潜在问题
+- 识别代码气味
+- 检查常见错误
+- 检查代码复杂性
+- 验证最佳实践的遵守情况
 
 ### 4. 合并PR (Merge PR)
-- Squash and merge
-- Create merge commit
-- Rebase and merge
-- Handle merge conflicts
+- 挤压并合并
+- 创建合并提交
+- 变基和合并
+- 处理合并冲突
 
 ## Usage
 
-### Manual Trigger
-When user asks:
-- "Review this PR"
+### 手动触发
+当用户询问：
+- “查看此公关”
 - "审核这个PR"
-- "Check this pull request"
-- "Merge this PR"
+-“检查此拉取请求”
+- “合并此 PR”
 - "合并PR"
-- Or any similar request
+- 或任何类似的要求
 
-### Automatic Trigger
+### 自动触发
 When:
-- A new PR is created
-- New commits are pushed to an existing PR
-- A PR is marked as ready for review
+- 创建了一个新的 PR
+- 新的提交被推送到现有的 PR
+- PR 被标记为可供审核
 
-## Workflow
+## 工作流程
 
-1. **Fetch PR Information**
+1. **获取公关信息**
    ```bash
    gh pr view <pr-number> --json title,body,state,author,files,comments
    ```
 
-2. **Run Checks**
+2. **运行检查**
    ```bash
    cargo clippy -- -D warnings
    cargo fmt --check
    cargo test
    ```
 
-3. **Review Changes**
-   - Analyze the diff
-   - Check for issues
-   - Add review comments if needed
+3. **查看更改**
+- 分析差异
+- 检查问题
+- 如果需要添加评论评论
 
-4. **Merge (if approved)**
+4. **合并（如果获得批准）**
    ```bash
    gh pr merge <pr-number> --admin --squash
    ```
 
-## Configuration
+＃＃ 配置
 
-The skill can be configured with:
-- Preferred merge method (squash/rebase/merge)
-- Required checks before merge
-- Auto-approve patterns
-- Review comment templates
+该技能可以配置为：
+- 首选合并方法（squash/rebase/merge）
+- 合并前所需的检查
+- 自动批准模式
+- 审核评论模板
