@@ -69,8 +69,8 @@
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
-|__代码0__| trait | 查询服务抽象，解耦 REPL 和执行引擎 |
-|__代码0__|结构体| 本地查询服务实现 |
+| `QueryService` | trait | 查询服务抽象，解耦 REPL 和执行引擎 |
+| `LocalQueryService` | struct | 本地查询服务实现 |
 
 **职责**:
 - 接收 SQL 字符串
@@ -83,10 +83,10 @@
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
-|__代码0__| trait | 元数据管理抽象接口 |
-|__代码0__|结构体| 内存目录实现 |
-|__代码0__|结构体| 表元数据 |
-|__代码0__|结构体| 列元数据 |
+| `Catalog` | trait | 元数据管理抽象接口 |
+| `SimpleCatalog` | struct | 内存目录实现 |
+| `TableMeta` | struct | 表元数据 |
+| `ColumnMeta` | struct | 列元数据 |
 
 **职责**:
 - 管理数据库表结构
@@ -98,10 +98,10 @@
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
-|__代码0__| trait | 查询优化抽象 |
-|__代码0__| trait | 统计信息提供者 |
-| `Plan` |结构体| 优化后的执行计划 |
-| `Cost` |结构体| 成本估算模型 |
+| `Optimizer` | trait | 查询优化抽象 |
+| `StatisticsProvider` | trait | 统计信息提供者 |
+| `Plan` | struct | 优化后的执行计划 |
+| `Cost` | struct | 成本估算模型 |
 | `Rule` | trait | 优化规则抽象 |
 
 **职责**:
@@ -115,9 +115,9 @@
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
-|__代码0__| trait | 执行器抽象 |
-|__代码0__|结构体| 执行引擎 |
-|__代码0__|结构体| 执行结果 |
+| `Executor` | trait | 执行器抽象 |
+| `ExecutionEngine` | struct | 执行引擎 |
+| `ExecutionResult` | struct | 执行结果 |
 
 **职责**:
 - 执行物理计划
@@ -129,10 +129,10 @@
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
-|__代码0__| trait | 存储引擎抽象 |
-|__代码0__|结构体| 文件存储实现 |
-|__代码0__|结构体| 缓冲池 |
-|__代码0__|结构体| B+ 树索引 |
+| `StorageEngine` | trait | 存储引擎抽象 |
+| `FileStorage` | struct | 文件存储实现 |
+| `BufferPool` | struct | 缓冲池 |
+| `BPlusTree` | struct | B+ 树索引 |
 
 **职责**:
 - 数据持久化
@@ -203,13 +203,13 @@ SQL String
 
 | Issue | 模块 | 状态 | 说明 |
 |-------|------|------|------|
-| R-001 | 错误域 | ✅ |`src/error/` 模块|
-| R-002 |优化器特征| ✅ | `src/optimizer/mod.rs` |
-| R-003 |统计提供者| ✅ | `src/optimizer/stats.rs` |
-| R-004 |目录线| ✅ | `src/catalog/mod.rs` |
-| R-005 |执行者特质| ✅ | `src/executor/mod.rs` |
-| R-006 |存储引擎特征| ✅ | `src/storage/engine.rs` |
-| R-007 |查询服务特征| ✅ | `src/query/mod.rs` |
+| R-001 | 错误域 | ✅ | `src/error/` 模块 |
+| R-002 | Optimizer trait | ✅ | `src/optimizer/mod.rs` |
+| R-003 | StatisticsProvider | ✅ | `src/optimizer/stats.rs` |
+| R-004 | Catalog trait | ✅ | `src/catalog/mod.rs` |
+| R-005 | Executor trait | ✅ | `src/executor/mod.rs` |
+| R-006 | StorageEngine trait | ✅ | `src/storage/engine.rs` |
+| R-007 | QueryService trait | ✅ | `src/query/mod.rs` |
 
 ### 待实现 (v1.2.0 S/C 系列)
 
@@ -228,12 +228,12 @@ SQL String
 2. `RecordBatch` 结构
 3. `PlanNode` 抽象
 4. `Cost` 结构
-5. `Optimizer` 特征
-6. `Executor` 特征
-7. __​​CODE0__ 特征
-8. `StatisticsProvider` 特征
-9. `StorageEngine` 特征
-10. `QueryService` 特征
+5. `Optimizer` trait
+6. `Executor` trait
+7. `Catalog` trait
+8. `StatisticsProvider` trait
+9. `StorageEngine` trait
+10. `QueryService` trait
 
 ---
 
