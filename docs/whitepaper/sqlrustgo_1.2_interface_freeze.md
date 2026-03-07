@@ -55,7 +55,7 @@ pub trait Operator: Send {
 
 ---
 
-## 3.RecordBatch
+## 3. RecordBatch
 
 向量化执行的核心数据结构：
 
@@ -86,16 +86,16 @@ pub trait Array: Send + Sync {
 
 具体实现：
 
-- __代码0__
-- __代码0__
-- __代码0__
-- __代码0__
-- __代码0__
-- __代码0__
+- `Int32Array`
+- `Int64Array`
+- `FloatArray`
+- `DoubleArray`
+- `StringArray`
+- `BooleanArray`
 
 ---
 
-## 4. 计划节点
+## 4. PlanNode
 
 物理计划节点：
 
@@ -125,7 +125,7 @@ pub struct DistributedPlan {
 
 ---
 
-## 5. 优化器
+## 5. Optimizer
 
 优化器接口：
 
@@ -159,7 +159,7 @@ pub struct Group {
 
 ---
 
-## 6. 执行者
+## 6. Executor
 
 执行器接口：
 
@@ -187,7 +187,7 @@ Executor::execute()
 
 ---
 
-## 7. 目录
+## 7. Catalog
 
 目录接口：
 
@@ -216,7 +216,7 @@ pub enum Distribution {
 
 ---
 
-## 8. 存储引擎
+## 8. StorageEngine
 
 存储引擎抽象：
 
@@ -240,13 +240,13 @@ pub trait StorageEngine {
 
 | 接口 | 1.2 | 2.0 扩展 |
 |------|-----|----------|
-|操作员| ✅ 冻结 | + async |
-|记录批次| ✅ 冻结 | + 分片支持 |
-|计划节点| ✅ 冻结 |+ 分布式|
-|优化器| ✅ 冻结 |+ 级联|
-|执行者| ✅ 冻结 |+ 分布式|
-|目录| ✅ 冻结 |+ 远程|
-|存储引擎| ✅ 冻结 |+ 分片|
+| Operator | ✅ 冻结 | + async |
+| RecordBatch | ✅ 冻结 | + 分片支持 |
+| PlanNode | ✅ 冻结 | + Distributed |
+| Optimizer | ✅ 冻结 | + Cascades |
+| Executor | ✅ 冻结 | + Distributed |
+| Catalog | ✅ 冻结 | + Remote |
+| StorageEngine | ✅ 冻结 | + Sharding |
 
 ---
 
