@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0-alpha] - 2026-03-07
+
+### Added
+
+- **Architecture**: Crates workspace modular architecture (10 crates)
+- **Architecture**: Vectorized execution engine with RecordBatch
+- **Architecture**: StorageEngine trait for pluggable storage backends
+- **Architecture**: FileStorage and MemoryStorage implementations
+- **Architecture**: Cost-based optimizer (CBO) with statistics
+- **Feature**: ANALYZE command for statistics collection
+- **Feature**: Simplified CBO with table/column statistics
+- **Feature**: LocalExecutor for embedded usage
+- **Testing**: LocalExecutor tests (T-005)
+- **Refactor**: Storage layer abstraction
+- **Refactor**: Statistics infrastructure
+
+### Changed
+
+- **Migration**: Complete directory restructuring from src/ to crates/
+- **Branches**: New branch naming convention adopted
+
+### Security
+
+- **Audit**: Dependency audit passed (no high-severity vulnerabilities)
+
+### Documentation
+
+- **New**: v1.2.0 Release Notes
+- **New**: v1.2.0 Phase Transition Announcement
+- **New**: v1.2.0 Branch Governance Documentation
+
 ## [1.2.0] - TBD
 
 ### Added
