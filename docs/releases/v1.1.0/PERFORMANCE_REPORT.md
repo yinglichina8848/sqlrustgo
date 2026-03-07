@@ -19,23 +19,23 @@
 
 | 项目 | 配置 |
 |------|------|
-| 操作系统 | macOS (Apple Silicon) |
+| 操作系统 |macOS（苹果芯片）|
 | CPU | ARM64 |
 | Rust 版本 | 1.93.0 |
-| 编译模式 | release |
-| 基准测试框架 | Criterion 0.5 |
+| 编译模式 |发布|
+| 基准测试框架 |标准0.5|
 
 ### 1.3 测试范围
 
 | 模块 | 基准测试文件 | 测试数量 |
 |------|-------------|----------|
 | Lexer | lexer_bench.rs | 3 |
-| Parser | parser_bench.rs | 3 |
-| Executor | executor_bench.rs | 3 |
-| Storage | storage_bench.rs | 1 |
-| Network | network_bench.rs | 1 |
-| Integration | integration_bench.rs | 2 |
-| SQL Operations | sql_operations.rs | 4 |
+|解析器| parser_bench.rs | 3 |
+|执行者| executor_bench.rs | 3 |
+|贮存| storage_bench.rs | 1 |
+|网络| network_bench.rs | 1 |
+|一体化| integration_bench.rs | 2 |
+|SQL操作| sql_operations.rs | 4 |
 
 ---
 
@@ -45,9 +45,9 @@
 
 | 测试项 | 平均时间 | 标准差 | 说明 |
 |--------|----------|--------|------|
-| `lex_simple_select` | ~1.8 µs | 低 | 简单 SELECT 语句 |
-| `lex_complex_query` | ~5.2 µs | 低 | 复杂查询语句 |
-| `lex_keywords` | ~0.8 µs | 低 | 关键字识别 |
+|__代码0__| ~1.8 µs | 低 | 简单 SELECT 语句 |
+|__代码0__| ~5.2 µs | 低 | 复杂查询语句 |
+|__代码0__| ~0.8 µs | 低 | 关键字识别 |
 
 ### 2.2 分析
 
@@ -63,9 +63,9 @@
 
 | 测试项 | 平均时间 | 标准差 | 说明 |
 |--------|----------|--------|------|
-| `parse_simple_select` | ~1.88 µs | 低 | SELECT * FROM table |
-| `parse_join_query` | ~8.5 µs | 中 | JOIN 查询解析 |
-| `parse_complex_where` | ~12.3 µs | 中 | 复杂 WHERE 条件 |
+|__代码0__| ~1.88 µs | 低 |从表中选择 *|
+|__代码0__| ~8.5 µs | 中 | JOIN 查询解析 |
+|__代码0__| ~12.3 µs | 中 | 复杂 WHERE 条件 |
 
 ### 3.2 分析
 
@@ -81,9 +81,9 @@
 
 | 测试项 | 平均时间 | 标准差 | 说明 |
 |--------|----------|--------|------|
-| `execute_select_all` | ~2.0 µs | 低 | 全表扫描 |
-| `execute_insert_single` | ~2.0 ms | 中 | 单行插入 |
-| `execute_count` | ~2.16 µs | 低 | COUNT 聚合 |
+|__代码0__| ~2.0 µs | 低 | 全表扫描 |
+|__代码0__| ~2.0 ms | 中 | 单行插入 |
+|__代码0__| ~2.16 µs | 低 | COUNT 聚合 |
 
 ### 4.2 分析
 
@@ -108,10 +108,10 @@ execute_count           time:   [2.1543 µs 2.1575 µs 2.1608 µs]
 
 | 测试项 | 异常值比例 | 类型 |
 |--------|------------|------|
-| parse_simple_select | 5.00% | 1 low mild, 4 high mild |
-| execute_select_all | 4.00% | 1 low mild, 1 high mild, 2 high severe |
-| execute_insert_single | 1.00% | 1 high severe |
-| execute_count | 7.00% | 5 low severe, 1 high mild, 1 high severe |
+|解析简单选择| 5.00% |1 个低温和，4 个高温和|
+|执行全选| 4.00% |1 级轻度，1 级轻度，2 级严重|
+|执行插入单| 1.00% |1 高 严重|
+|执行次数| 7.00% |5 个低严重，1 个高轻度，1 个高严重|
 
 ---
 
@@ -148,7 +148,7 @@ execute_count           time:   [2.1543 µs 2.1575 µs 2.1608 µs]
 
 | 优化项 | 预期收益 | 复杂度 |
 |--------|----------|--------|
-| 批量 INSERT | 50%+ 写入提升 | 中 |
+|批量 INSERT| 50%+ 写入提升 | 中 |
 | 索引优化 | 80%+ 查询提升 | 高 |
 | 查询缓存 | 90%+ 重复查询提升 | 中 |
 
@@ -181,7 +181,7 @@ execute_count           time:   [2.1543 µs 2.1575 µs 2.1608 µs]
 | 空闲状态 | ~5 MB | 基础内存 |
 | 100 表 | ~15 MB | 表元数据 |
 | 10,000 行数据 | ~50 MB | 数据存储 |
-| HashJoin (大表) | ~100 MB | 哈希表构建 |
+|HashJoin (大表)| ~100 MB | 哈希表构建 |
 
 ### 9.2 内存优化建议
 

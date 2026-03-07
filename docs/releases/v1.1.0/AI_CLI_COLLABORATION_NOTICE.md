@@ -1,7 +1,7 @@
 # v1.1.0-draft AI-CLI 协作声明
 
 > **发布日期**: 2026-03-05  
-> **版本**: v1.1.0-draft  
+> **版本**: v1.1.0-draft
 > **状态**: 🔄 改进中
 
 ---
@@ -14,9 +14,9 @@ v1.1.0-draft 版本经 DeepSeek AI 评估，发现以下问题：
 
 | 问题类型 | 数量/状态 | 严重程度 |
 |----------|-----------|----------|
-| Clippy 错误 | 11 个 | 🔴 高 |
-| unwrap 使用 | 511 处 | 🔴 高 |
-| WHERE AND/OR | 未实现 | 🔴 高 |
+|Clippy 错误| 11 个 | 🔴 高 |
+|unwrap 使用| 511 处 | 🔴 高 |
+|哪里和/或| 未实现 | 🔴 高 |
 | 表达式求值 | 不完整 | 🔴 高 |
 | 并发安全 | 无保护 | 🟡 中 |
 | 网络-执行器 | 未连接 | 🟡 中 |
@@ -35,11 +35,11 @@ v1.1.0-draft 版本经 DeepSeek AI 评估，发现以下问题：
 
 ### 2.2 任务分配
 
-| AI Agent | 任务 | 优先级 |
+|人工智能代理| 任务 | 优先级 |
 |----------|------|--------|
-| **heartopen** | Clippy 错误修复、executor unwrap 替换 | P0 |
-| **openheart** | WHERE AND/OR、表达式求值、多列索引 | P0 |
-| **maintainer** | 代码审核、测试验证 | P1 |
+|**心敞开**|Clippy 错误修复、executor unwrap 替换| P0 |
+|**敞开心扉**| WHERE AND/OR、表达式求值、多列索引 | P0 |
+|**维护者**| 代码审核、测试验证 | P1 |
 
 ### 2.3 协作规范
 
@@ -58,18 +58,18 @@ AI-CLI 工具参与协作时，请遵循：
 
 | ID | 任务 | 负责人 | 状态 |
 |----|------|--------|------|
-| P0-1 | Clippy 错误 (11 个) | heartopen | ⏳ |
-| P0-2 | unwrap 替换 (511 处) | heartopen | ⏳ |
-| P0-3 | WHERE AND/OR 支持 | openheart | ⏳ |
-| P0-4 | 表达式求值 BinaryOp | openheart | ⏳ |
+| P0-1 | Clippy 错误 (11 个) |敞开心扉| ⏳ |
+| P0-2 | unwrap 替换 (511 处) |敞开心扉| ⏳ |
+| P0-3 |哪里和/或支持|开放的心| ⏳ |
+| P0-4 | 表达式求值 BinaryOp |开放的心| ⏳ |
 
 ### P1 - 短期改进
 
 | ID | 任务 | 负责人 | 状态 |
 |----|------|--------|------|
-| P1-1 | 网络层-执行器连接 | openheart | ⏳ |
-| P1-2 | 并发安全保护 | heartopen | ⏳ |
-| P1-3 | 多列索引支持 | openheart | ⏳ |
+| P1-1 | 网络层-执行器连接 |开放的心| ⏳ |
+| P1-2 | 并发安全保护 |敞开心扉| ⏳ |
+| P1-3 | 多列索引支持 |开放的心| ⏳ |
 
 ---
 
@@ -79,8 +79,8 @@ AI-CLI 工具参与协作时，请遵循：
 
 | 检查项 | 标准 |
 |--------|------|
-| Clippy | 零警告 |
-| unwrap | 生产代码 < 10 处 |
+|剪辑| 零警告 |
+|展开| 生产代码 < 10 处 |
 | 测试覆盖率 | ≥ 90% |
 
 ### 4.2 功能完整性
@@ -88,7 +88,7 @@ AI-CLI 工具参与协作时，请遵循：
 | 功能 | 标准 |
 |------|------|
 | WHERE 子句 | 支持 AND/OR 组合 |
-| 表达式求值 | 完整 BinaryOp |
+| 表达式求值 |完整 BinaryOp|
 | 并发安全 | 通过并发测试 |
 
 ---
@@ -100,7 +100,7 @@ AI-CLI 工具参与协作时，请遵循：
 | DeepSeek 评估报告 | [DEEPSEEK_EVALUATION.md](./DEEPSEEK_EVALUATION.md) |
 | 改进计划 | [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md) |
 | 门禁检查清单 | [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) |
-| AI Agent 提示词 | [AI_AGENT_PROMPTS.md](../AI增强软件工程/AI_AGENT_PROMPTS.md) |
+|AI Agent 提示词| [AI_AGENT_PROMPTS.md](../AI增强软件工程/AI_AGENT_PROMPTS.md) |
 | Issue #152 | 改进任务追踪 |
 
 ---
