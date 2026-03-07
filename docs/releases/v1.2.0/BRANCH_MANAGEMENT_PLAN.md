@@ -4,6 +4,8 @@
 > **制定日期**: 2026-03-06
 > **制定人**: yinglichina8848
 > **适用阶段**: Draft 阶段
+>
+> **当前执行口径（2026-03-07）**: 当前主开发分支统一为 `develop-v1.2.0`；`develop/v1.2.0`、`develop-1.2.0` 仅作历史兼容记录。
 
 ---
 
@@ -50,7 +52,7 @@ main ─────────────────────────
   │   │
   │   └── (下一版本开发)
   │
-  ├── develop-1.2.0 ──────────────────────────────────────►
+  ├── develop-v1.2.0 ──────────────────────────────────────►
   │   │
   │   ├── refactor/directory-*   (目录重构)
   │   ├── feature/v1.2.0-*       (功能开发)
@@ -67,13 +69,13 @@ main ─────────────────────────
 | 分支类型 | 命名规则 | 生命周期 | 用途 |
 |----------|----------|----------|------|
 | `main` | `main` | 永久 | 稳定版本 |
-|__代码0__|__代码0__| 永久 | 下一版本开发 |
-|__代码0__|__代码0__| 版本周期 | 版本开发 |
-|__代码0__|__代码0__| 长期 | 版本维护 |
-|__代码0__|__代码0__| 短期 | 功能开发 |
-| `fix/*` |__代码0__| 短期 | Bug 修复 |
-|__代码0__|__代码0__| 短期 | 重构 |
-| `docs/*` |__代码0__| 短期 | 文档 |
+| `develop` | `develop` | 永久 | 下一版本开发 |
+| `develop-x.y.z` | `develop-{version}` | 版本周期 | 版本开发 |
+| `release/x.y` | `release/{major.minor}` | 长期 | 版本维护 |
+| `feature/*` | `feature/{version}-{name}` | 短期 | 功能开发 |
+| `fix/*` | `fix/{version}-{name}` | 短期 | Bug 修复 |
+| `refactor/*` | `refactor/{name}` | 短期 | 重构 |
+| `docs/*` | `docs/{version}-{name}` | 短期 | 文档 |
 
 ---
 
@@ -84,15 +86,15 @@ main ─────────────────────────
 ```bash
 # 创建新版本开发分支
 git checkout main
-git checkout -b develop-1.2.0
-git push origin develop-1.2.0
+git checkout -b develop-v1.2.0
+git push origin develop-v1.2.0
 ```
 
 ### 3.2 功能分支
 
 ```bash
 # 从版本分支创建功能分支
-git checkout develop-1.2.0
+git checkout develop-v1.2.0
 git checkout -b feature/v1.2.0-cascades
 git push origin feature/v1.2.0-cascades
 ```
@@ -101,7 +103,7 @@ git push origin feature/v1.2.0-cascades
 
 ```bash
 # 从版本分支创建修复分支
-git checkout develop-1.2.0
+git checkout develop-v1.2.0
 git checkout -b fix/v1.2.0-page-bug
 git push origin fix/v1.2.0-page-bug
 ```
@@ -110,7 +112,7 @@ git push origin fix/v1.2.0-page-bug
 
 ```bash
 # 从版本分支创建重构分支
-git checkout develop-1.2.0
+git checkout develop-v1.2.0
 git checkout -b refactor/directory-phase1
 git push origin refactor/directory-phase1
 ```
@@ -123,11 +125,11 @@ git push origin refactor/directory-phase1
 
 | 源分支 | 目标分支 | 说明 |
 |--------|----------|------|
-|__代码0__|__代码0__| 功能合并到版本开发 |
-| `fix/v1.2.0-*` |__代码0__| 修复合并到版本开发 |
-|__代码0__|__代码0__| 重构合并到版本开发 |
-| `docs/v1.2.0-*` |__代码0__| 文档合并到版本开发 |
-|__代码0__| `main` | 版本发布时合并 |
+| `feature/v1.2.0-*` | `develop-v1.2.0` | 功能合并到版本开发 |
+| `fix/v1.2.0-*` | `develop-v1.2.0` | 修复合并到版本开发 |
+| `refactor/*` | `develop-v1.2.0` | 重构合并到版本开发 |
+| `docs/v1.2.0-*` | `develop-v1.2.0` | 文档合并到版本开发 |
+| `develop-v1.2.0` | `main` | 版本发布时合并 |
 
 ### 4.2 合并条件
 
@@ -145,7 +147,7 @@ git push origin refactor/directory-phase1
 ### 5.1 目录重构分支
 
 ```
-develop-1.2.0 (Draft)
+develop-v1.2.0 (Draft)
     │
     ├── refactor/directory-phase1
     │   │
@@ -185,10 +187,10 @@ develop-1.2.0 (Draft)
 
 | 分支 | 创建日期 | 合并日期 | 负责人 |
 |------|----------|----------|--------|
-|__代码0__| Day 1 | Day 2 |开放的心|
-|__代码0__| Day 3 | Day 7 |心胸开阔，心胸开阔|
-|__代码0__| Day 8 | Day 10 |敞开心扉|
-|__代码0__| Day 11 | Day 12 |维护者|
+| `refactor/directory-phase1` | Day 1 | Day 2 | openheart |
+| `refactor/directory-phase2` | Day 3 | Day 7 | openheart, heartopen |
+| `refactor/directory-phase3` | Day 8 | Day 10 | heartopen |
+| `refactor/directory-phase4` | Day 11 | Day 12 | maintainer |
 
 ---
 
@@ -211,7 +213,7 @@ develop-1.2.0 (Draft)
 }
 ```
 
-### 6.2 develop-1.2.0 分支
+### 6.2 develop-v1.2.0 分支
 
 ```json
 {
@@ -242,10 +244,10 @@ git push origin --delete feature/v1.2.0-cascades
 
 | 分支类型 | 过期时间 | 处理方式 |
 |----------|----------|----------|
-|__代码0__| 合并后立即 | 自动删除 |
+| `feature/*` | 合并后立即 | 自动删除 |
 | `fix/*` | 合并后立即 | 自动删除 |
-|__代码0__| 合并后立即 | 自动删除 |
-|__代码0__| GA 发布后 |转为 release/x.y|
+| `refactor/*` | 合并后立即 | 自动删除 |
+| `develop-x.y.z` | GA 发布后 | 转为 release/x.y |
 
 ---
 
