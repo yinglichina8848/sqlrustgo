@@ -21,33 +21,33 @@
 
 1. **进入仓库设置**：
    - 打开 GitHub 仓库
-- 点击 Settings
+   - 点击 Settings
    - 左侧选择 Branches
-- 点击 Add branch protection rule
+   - 点击 Add branch protection rule
 
 2. **创建保护规则**：
 
    | 分支模式 | 保护选项 |
    |---------|----------|
-   | `main` |✅ 需要 PR<br>✅ 需要审核 (1)<br>✅ 需要状态检查<br>✅ 禁用强制推送<br>✅ 禁用删除|
-   | `alpha` |✅ 需要 PR<br>✅ 需要审核 (1)<br>✅ 需要状态检查<br>✅ 禁用强制推送<br>✅ 禁用删除|
-   | `beta` |✅ 需要 PR<br>✅ 需要审核 (1)<br>✅ 需要状态检查<br>✅ 禁用强制推送<br>✅ 禁用删除|
-   | `rc` |✅ 需要 PR<br>✅ 需要审核 (1)<br>✅ 需要状态检查<br>✅ 禁用强制推送<br>✅ 禁用删除|
-   |__代码0__|✅ 需要 PR<br>✅ 需要审核 (1)<br>✅ 需要状态检查<br>✅ 禁用强制推送<br>✅ 禁用删除|
-   |__代码0__| ❌ 不强制 review |
+   | `main` | ✅ Require PR<br>✅ Require review (1)<br>✅ Require status check<br>✅ Disable force push<br>✅ Disable delete |
+   | `alpha` | ✅ Require PR<br>✅ Require review (1)<br>✅ Require status check<br>✅ Disable force push<br>✅ Disable delete |
+   | `beta` | ✅ Require PR<br>✅ Require review (1)<br>✅ Require status check<br>✅ Disable force push<br>✅ Disable delete |
+   | `rc` | ✅ Require PR<br>✅ Require review (1)<br>✅ Require status check<br>✅ Disable force push<br>✅ Disable delete |
+   | `release/*` | ✅ Require PR<br>✅ Require review (1)<br>✅ Require status check<br>✅ Disable force push<br>✅ Disable delete |
+   | `feature/*` | ❌ 不强制 review |
    | `docs/*` | ❌ 不强制 review |
-   |__代码0__| ❌ 不强制 review |
+   | `hotfix/*` | ❌ 不强制 review |
 
 3. **推荐开启的选项**：
-- ✅ 合并前需要拉取请求
-- ✅ 需要批准 (1 个)
-- ✅ 驳回过时的拉取请求批准
-- ✅ 合并前需要通过状态检查
-- ✅ 要求分支在合并前保持最新
-- ✅ 限制谁可以推送到匹配的分支（仅限管理员或发布经理）
-- ✅ 不允许绕过上述设置
-- ✅ 禁用强力推送
-- ✅ 禁用删除
+   - ✅ Require a pull request before merging
+   - ✅ Require approvals (1 个)
+   - ✅ Dismiss stale pull request approvals
+   - ✅ Require status checks to pass before merging
+   - ✅ Require branches to be up to date before merging
+   - ✅ Restrict who can push to matching branches (仅 admin 或 Release Manager)
+   - ✅ Do not allow bypassing the above settings
+   - ✅ Disable force pushes
+   - ✅ Disable deletions
 
 ## 3. 分支命名规范
 
@@ -75,12 +75,12 @@
 | `alpha` | 内部开发集成 | `alpha` | ✅ |
 | `beta` | 测试稳定分支 | `beta` | ✅ |
 | `rc` | 候选版本 | `rc/v1.0.0-1` | ✅ |
-|__代码0__| 发布版本 |__代码0__| ✅ |
-|__代码0__| 功能开发 |__代码0__| ❌ |
-|__代码0__| 普通修复 |__代码0__| ❌ |
-|__代码0__| 紧急修复 |__代码0__| ❌ |
-| `docs/*` | 文档 |__代码0__| ❌ |
-|__代码0__| 实验 |__代码0__| ❌ |
+| `release/*` | 发布版本 | `release/v1.0.0` | ✅ |
+| `feature/*` | 功能开发 | `feature/vector-engine` | ❌ |
+| `bugfix/*` | 普通修复 | `bugfix/join-null-check` | ❌ |
+| `hotfix/*` | 紧急修复 | `hotfix/memory-leak` | ❌ |
+| `docs/*` | 文档 | `docs/version-planning` | ❌ |
+| `experiment/*` | 实验 | `experiment/new-optimizer` | ❌ |
 
 ### 3.4 命名示例
 
@@ -144,7 +144,7 @@ git push origin --delete old-name
 | 分支 | 稳定级别 | 作用 |
 |------|----------|------|
 | `main` | ⭐⭐⭐⭐⭐ | 最终发布版本 |
-| `rc` | ⭐⭐⭐⭐ |发布候选版本|
+| `rc` | ⭐⭐⭐⭐ | Release Candidate |
 | `beta` | ⭐⭐⭐ | 集成测试 |
 | `alpha` | ⭐⭐ | 内部开发集成 |
 
@@ -161,9 +161,9 @@ docs/<topic>
 ```
 
 示例：
-- __代码0__
-- __代码0__
-- __代码0__
+- `feature/vector-engine`
+- `feature/cbo-planner`
+- `bugfix/join-null-check`
 
 ### 5.4 版本推进流程
 
@@ -295,8 +295,8 @@ feature/* → beta → rc → release/* → main
 | **Alpha** | ⭐⭐ | 功能开发开始 | 内部测试通过，可集成到 beta |
 | **Beta** | ⭐⭐⭐ | Alpha 集成完成 | 稳定性测试通过，无严重 Bug |
 | **RC** | ⭐⭐⭐⭐ | Beta 达到稳定 | 无阻断性 Bug，所有测试通过 |
-|**发布**| ⭐⭐⭐⭐⭐ | RC 测试通过 | 准备发布，文档完整 |
-| **Main** | ⭐⭐⭐⭐⭐ |Release 完成| 正式发布，可部署生产 |
+| **Release** | ⭐⭐⭐⭐⭐ | RC 测试通过 | 准备发布，文档完整 |
+| **Main** | ⭐⭐⭐⭐⭐ | Release 完成 | 正式发布，可部署生产 |
 
 ### 6.4 版本并行策略
 
@@ -320,15 +320,15 @@ feature/* → beta → rc → release/* → main
 ### 7.2 实践建议
 
 1. **创建专用 Agent 账号**：
-- __代码0__
-- __代码0__
+   - `sqlrustgo-bot`
+   - `reviewer-bot`
 
 2. **配置 CODEOWNERS**：
    - 明确各模块的负责人
    - 确保关键模块有专人审查
 
 3. **自动化工具**：
-- GitHub Actions 自动检查 PR 合规性
+   - GitHub Actions 自动检查 PR 合规性
    - 禁止 PR 作者给自己 approve 的 bot
    - 自动标记需要审查的 PR
 
@@ -461,7 +461,7 @@ feature/* → beta → rc → release/* → main
 
 | 日期 | 版本 | 变更内容 | 作者 |
 |------|------|----------|------|
-| 2026-02-20 | v1.0 | 初始版本 |SQLRustGo 团队|
+| 2026-02-20 | v1.0 | 初始版本 | SQLRustGo 团队 |
 
 ## 13. 结语
 

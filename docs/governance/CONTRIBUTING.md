@@ -44,11 +44,11 @@ SQLRustGo 是一个开源的 Rust SQL 数据库执行引擎，我们欢迎所有
 
 | 类型 | 描述 | 审核要求 |
 |------|------|----------|
-| **Bug 修复** | 修复已知问题 |1人评论|
-| **新功能** | 添加新功能 |1 人 Review + CI 通过|
-| **重构** | 代码优化 |1人评论|
-| **文档** | 文档更新 |1人评论|
-| **热修复** | 紧急修复 |2人点评|
+| **Bug 修复** | 修复已知问题 | 1 人 Review |
+| **新功能** | 添加新功能 | 1 人 Review + CI 通过 |
+| **重构** | 代码优化 | 1 人 Review |
+| **文档** | 文档更新 | 1 人 Review |
+| **热修复** | 紧急修复 | 2 人 Review |
 
 ### 3.2 开发流程
 
@@ -85,11 +85,11 @@ SQLRustGo 是一个开源的 Rust SQL 数据库执行引擎，我们欢迎所有
 
 | 前缀 | 用途 | 示例 |
 |------|------|------|
-|__代码0__| 新功能 |功能/v1.2.0-级联|
-| `fix/` | Bug 修复 |修复/v1.2.0-index-bug|
-|__代码0__| 重构 |重构/v1.2.0-存储|
-| `docs/` | 文档更新 |文档/v1.2.0-api-doc|
-|__代码0__| 热修复 |修补程序/v1.2.1-安全性|
+| `feature/` | 新功能 | feature/v1.2.0-cascades |
+| `fix/` | Bug 修复 | fix/v1.2.0-index-bug |
+| `refactor/` | 重构 | refactor/v1.2.0-storage |
+| `docs/` | 文档更新 | docs/v1.2.0-api-doc |
+| `hotfix/` | 热修复 | hotfix/v1.2.1-security |
 
 ### 4.2 命名规则
 
@@ -117,13 +117,13 @@ SQLRustGo 是一个开源的 Rust SQL 数据库执行引擎，我们欢迎所有
 
 | Type | 说明 | 示例 |
 |------|------|------|
-| `feat` | 新功能 |壮举：添加级联优化器|
-| `fix` | Bug 修复 |修复：解决索引越界问题|
-|__代码0__| 重构 |重构：优化查询规划器|
-| `docs` | 文档 |docs：更新API文档|
-| `test` | 测试 |测试：添加集成测试|
-| `chore` | 维护 |杂务：更新依赖项|
-| `perf` | 性能 |perf：改进连接算法|
+| `feat` | 新功能 | feat: add cascades optimizer |
+| `fix` | Bug 修复 | fix: resolve index out of bounds |
+| `refactor` | 重构 | refactor: optimize query planner |
+| `docs` | 文档 | docs: update API documentation |
+| `test` | 测试 | test: add integration tests |
+| `chore` | 维护 | chore: update dependencies |
+| `perf` | 性能 | perf: improve join algorithm |
 
 ### 5.3 提交示例
 
