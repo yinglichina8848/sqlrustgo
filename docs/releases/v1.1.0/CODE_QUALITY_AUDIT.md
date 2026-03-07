@@ -39,16 +39,16 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 ## A-03: 静态扫描
 
 ### 检查项
-- [x] cargo clippy
-- [x] cargo fmt
-- [x] cargo check
+- [x] 货物剪辑
+- [x] fmt 费用
+- [x] 货物检查
 
 ### 结果
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| cargo clippy | ✅ 通过 | 无警告 |
-| cargo fmt | ✅ 通过 | 无格式问题 |
-| cargo check | ✅ 通过 | 类型检查通过 |
+|夹杂货物| ✅ 通过 | 无警告 |
+|快速充电| ✅ 通过 | 无格式问题 |
+|货物检查| ✅ 通过 | 类型检查通过 |
 
 ---
 
@@ -62,7 +62,7 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 ### 结果
 | 项目 | 状态 |
 |------|------|
-| unsafe 代码 | ✅ 无 |
+|unsafe 代码| ✅ 无 |
 | 已知安全漏洞模式 | ✅ 无 |
 | SQL 注入风险 | ✅ 无 |
 
@@ -77,7 +77,7 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 ### 结果
 | 项目 | 状态 | 说明 |
 |------|------|------|
-| unwrap() | ✅ 无 | 仅测试代码使用 |
+|展开()| ✅ 无 | 仅测试代码使用 |
 | panic!() | ✅ 无 | 仅测试代码使用 |
 
 ---
@@ -91,8 +91,8 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 ### 结果
 | 项目 | 状态 | 说明 |
 |------|------|------|
-| cargo outdated | ✅ 通过 | 依赖版本正常 |
-| cargo audit | ⚠️ | 网络问题无法执行 |
+|货物过时| ✅ 通过 | 依赖版本正常 |
+|货物审核| ⚠️ | 网络问题无法执行 |
 | 安全漏洞 | ✅ 无 | 无已知漏洞 |
 
 ---
@@ -104,8 +104,8 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 | A-02: 代码清洁 | ⚠️ 1 TODO | 建议修复 |
 | A-03: 静态扫描 | ✅ 通过 | |
 | A-04: 安全漏洞 | ✅ 通过 | |
-| A-05: 无 unwrap/panic | ✅ 通过 | |
-| A-06: 依赖安全 | ✅ 通过 | cargo audit 网络问题 |
+|A-05: 无 unwrap/panic| ✅ 通过 | |
+| A-06: 依赖安全 | ✅ 通过 |cargo audit 网络问题|
 
 ---
 
@@ -117,4 +117,4 @@ Expression::BinaryOp(_, _, _) => Value::Null, // TODO: evaluate expression
 ---
 
 ## 审计人
-OpenCode
+开放代码

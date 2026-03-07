@@ -32,9 +32,9 @@
 | 角色 | 职责 | 限制 |
 |------|------|------|
 | **Owner** | 架构决策、版本发布、权限管理 | 无 |
-| **Maintainer** | 代码审核、CI 维护、文档管理 | 不能修改保护规则 |
-| **AI Developer** | 功能开发、测试编写、Bug 修复 | 不能合并 PR |
-| **Contributor** | 提交 PR、文档贡献、问题反馈 | 不能直接 push |
+|**维护者**| 代码审核、CI 维护、文档管理 | 不能修改保护规则 |
+|**人工智能开发者**| 功能开发、测试编写、Bug 修复 | 不能合并 PR |
+|**贡献者**| 提交 PR、文档贡献、问题反馈 | 不能直接 push |
 
 ---
 
@@ -42,59 +42,59 @@
 
 ### 2.1 代码仓库权限
 
-| 操作 | Owner | Maintainer | AI Developer | Contributor |
+| 操作 | Owner |维护者|人工智能开发者|贡献者|
 |------|:-----:|:----------:|:------------:|:-----------:|
-| Push to main | ❌ | ❌ | ❌ | ❌ |
-| Push to develop | ❌ | ❌ | ❌ | ❌ |
-| Push to feature/* | ✅ | ✅ | ✅ | ✅ |
-| Create branch | ✅ | ✅ | ✅ | ✅ |
-| Delete branch | ✅ | ⚠️ | ❌ | ❌ |
-| Force push | ❌ | ❌ | ❌ | ❌ |
-| Open PR | ✅ | ✅ | ✅ | ✅ |
-| Review PR | ✅ | ✅ | ❌ | ⚠️ |
-| Approve PR | ✅ | ✅ | ❌ | ❌ |
-| Merge PR | ✅ | ✅ | ❌ | ❌ |
-| Close PR | ✅ | ✅ | ⚠️ | ⚠️ |
+|推送到主程序| ❌ | ❌ | ❌ | ❌ |
+|推动发展| ❌ | ❌ | ❌ | ❌ |
+|推送至功能/*| ✅ | ✅ | ✅ | ✅ |
+|创建分支| ✅ | ✅ | ✅ | ✅ |
+|删除分支| ✅ | ⚠️ | ❌ | ❌ |
+|强力推| ❌ | ❌ | ❌ | ❌ |
+|公开公关| ✅ | ✅ | ✅ | ✅ |
+|审查公关| ✅ | ✅ | ❌ | ⚠️ |
+|批准公关| ✅ | ✅ | ❌ | ❌ |
+|合并公关| ✅ | ✅ | ❌ | ❌ |
+|关闭公关| ✅ | ✅ | ⚠️ | ⚠️ |
 
 ### 2.2 版本发布权限
 
-| 操作 | Owner | Maintainer | AI Developer | Contributor |
+| 操作 | Owner |维护者|人工智能开发者|贡献者|
 |------|:-----:|:----------:|:------------:|:-----------:|
-| Create tag | ✅ | ⚠️ | ❌ | ❌ |
-| Delete tag | ✅ | ❌ | ❌ | ❌ |
-| Create release | ✅ | ✅ | ❌ | ❌ |
+|创建标签| ✅ | ⚠️ | ❌ | ❌ |
+|删除标签| ✅ | ❌ | ❌ | ❌ |
+|创建版本| ✅ | ✅ | ❌ | ❌ |
 | Publish to crates.io | ✅ | ⚠️ | ❌ | ❌ |
-| Modify VERSION file | ✅ | ✅ | ❌ | ❌ |
+|修改版本文件| ✅ | ✅ | ❌ | ❌ |
 
 ### 2.3 CI/CD 权限
 
-| 操作 | Owner | Maintainer | AI Developer | Contributor |
+| 操作 | Owner |维护者|人工智能开发者|贡献者|
 |------|:-----:|:----------:|:------------:|:-----------:|
-| Trigger CI | ✅ | ✅ | ✅ | ✅ |
-| Cancel workflow | ✅ | ✅ | ⚠️ | ❌ |
-| Re-run workflow | ✅ | ✅ | ❌ | ❌ |
-| Modify CI config | ✅ | ⚠️ | ❌ | ❌ |
-| Access secrets | ✅ | ⚠️ | ❌ | ❌ |
+|触发CI| ✅ | ✅ | ✅ | ✅ |
+|取消工作流程| ✅ | ✅ | ⚠️ | ❌ |
+|重新运行工作流程| ✅ | ✅ | ❌ | ❌ |
+|修改CI配置| ✅ | ⚠️ | ❌ | ❌ |
+|访问秘密| ✅ | ⚠️ | ❌ | ❌ |
 
 ### 2.4 项目管理权限
 
-| 操作 | Owner | Maintainer | AI Developer | Contributor |
+| 操作 | Owner |维护者|人工智能开发者|贡献者|
 |------|:-----:|:----------:|:------------:|:-----------:|
-| Create issue | ✅ | ✅ | ✅ | ✅ |
-| Close issue | ✅ | ✅ | ⚠️ | ⚠️ |
-| Assign issue | ✅ | ✅ | ⚠️ | ❌ |
-| Create milestone | ✅ | ✅ | ❌ | ❌ |
-| Modify labels | ✅ | ✅ | ❌ | ❌ |
-| Modify project | ✅ | ✅ | ❌ | ❌ |
+|创建问题| ✅ | ✅ | ✅ | ✅ |
+|关闭问题| ✅ | ✅ | ⚠️ | ⚠️ |
+|分配问题| ✅ | ✅ | ⚠️ | ❌ |
+|创造里程碑| ✅ | ✅ | ❌ | ❌ |
+|修改标签| ✅ | ✅ | ❌ | ❌ |
+|修改项目| ✅ | ✅ | ❌ | ❌ |
 
 ### 2.5 安全权限
 
-| 操作 | Owner | Maintainer | AI Developer | Contributor |
+| 操作 | Owner |维护者|人工智能开发者|贡献者|
 |------|:-----:|:----------:|:------------:|:-----------:|
-| View security alerts | ✅ | ✅ | ❌ | ❌ |
-| Modify branch protection | ✅ | ❌ | ❌ | ❌ |
-| Manage deploy keys | ✅ | ❌ | ❌ | ❌ |
-| Manage webhooks | ✅ | ⚠️ | ❌ | ❌ |
+|查看安全警报| ✅ | ✅ | ❌ | ❌ |
+|修改分支保护| ✅ | ❌ | ❌ | ❌ |
+|管理部署密钥| ✅ | ❌ | ❌ | ❌ |
+|管理网络钩子| ✅ | ⚠️ | ❌ | ❌ |
 
 ---
 
@@ -112,17 +112,17 @@
 
 | 操作 | 限制条件 |
 |------|----------|
-| Delete branch | 仅限 feature 分支 |
-| Review PR (Contributor) | 可以评论，不能批准 |
-| Close PR (AI/Contributor) | 仅限自己创建的 PR |
-| Create tag (Maintainer) | 需要 Owner 确认 |
-| Publish (Maintainer) | 需要 Owner 确认 |
-| Modify CI (Maintainer) | 需要通过 PR |
-| Access secrets (Maintainer) | 仅限特定 secrets |
-| Cancel workflow (AI) | 仅限自己触发的 |
-| Close issue (AI/Contributor) | 仅限自己创建的 |
-| Assign issue (AI) | 仅限分配给自己 |
-| Manage webhooks (Maintainer) | 仅限非安全关键 |
+|删除分支| 仅限 feature 分支 |
+|审查公关（贡献者）| 可以评论，不能批准 |
+|关闭 PR（AI/贡献者）| 仅限自己创建的 PR |
+|创建标签（维护者）| 需要 Owner 确认 |
+|发布（维护者）| 需要 Owner 确认 |
+|修改 CI（维护者）| 需要通过 PR |
+|访问机密（维护者）| 仅限特定 secrets |
+|取消工作流程 (AI)| 仅限自己触发的 |
+|关闭问题（AI/贡献者）| 仅限自己创建的 |
+|分配问题（AI）| 仅限分配给自己 |
+|管理 webhook（维护者）| 仅限非安全关键 |
 
 ---
 
@@ -150,10 +150,10 @@ sqlrustgo-org/
 
 | 团队 | 仓库权限 |
 |------|----------|
-| owners | Admin |
-| maintainers | Maintain |
-| ai-developers | Write |
-| contributors | Read |
+|业主| Admin |
+|维护者|维持|
+|人工智能开发者| Write |
+|贡献者| Read |
 
 ---
 
@@ -208,7 +208,7 @@ sqlrustgo-org/
 | 合并自己的 PR | 缺少审核 |
 | 创建/删除 tag | 版本控制 |
 | 修改 CI 配置 | 安全风险 |
-| 访问 secrets | 安全风险 |
+|访问 secrets| 安全风险 |
 | 修改保护规则 | 安全风险 |
 
 ### 6.3 AI 开发流程

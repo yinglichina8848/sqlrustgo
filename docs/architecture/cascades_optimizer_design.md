@@ -1,4 +1,4 @@
-# Cascades Optimizer Design
+# 级联优化器设计
 
 > **版本**: 2.x (规划中)
 > **更新日期**: 2026-03-05
@@ -13,14 +13,14 @@ Cascades 是现代数据库优化器的主流架构，被以下系统采用：
 
 | 数据库 | 架构 |
 |--------|------|
-| SQL Server | Cascades |
-| Greenplum | Cascades |
-| CockroachDB | Cascades |
-| Apache ORC | Cascades |
+|SQL服务器|瀑布|
+|绿梅|瀑布|
+|蟑螂数据库|瀑布|
+|阿帕奇兽人|瀑布|
 
 ### 传统优化器 vs Cascades
 
-| 特性 | 传统优化器 | Cascades |
+| 特性 | 传统优化器 |瀑布|
 |------|------------|----------|
 | 搜索空间 | 有限 | 完整 |
 | 规则扩展 | 困难 | 容易 |
@@ -146,7 +146,7 @@ flowchart TB
 
 ---
 
-## 5. Transformation Rules
+## 5. 转换规则
 
 示例规则：
 
@@ -182,7 +182,7 @@ pub trait TransformRule {
 
 ---
 
-## 6. Cost Model
+## 6. 成本模型
 
 成本函数：
 
@@ -219,7 +219,7 @@ Network_Cost = transfer_bytes * network_bandwidth
 
 ---
 
-## 7. Search Strategy
+## 7. 搜索策略
 
 ### 7.1 搜索方向
 
@@ -252,10 +252,10 @@ flowchart TB
 
 | 阶段 | 功能 | 目标版本 |
 |------|------|----------|
-| Phase 1 | Memo Engine | 2.0 |
-| Phase 2 | Rule Engine | 2.1 |
-| Phase 3 | Cost Model | 2.2 |
-| Phase 4 | Search Strategy | 2.3 |
+| Phase 1 |备忘录引擎| 2.0 |
+| Phase 2 |规则引擎| 2.1 |
+| Phase 3 |成本模型| 2.2 |
+| Phase 4 |搜索策略| 2.3 |
 
 ### 8.1 实现计划
 
@@ -293,13 +293,13 @@ gantt
 
 ## 10. 与其他系统的对标
 
-| 数据库 | 优化器架构 | SQLRustGo |
+| 数据库 | 优化器架构 |SQLRustGo|
 |--------|------------|-----------|
-| SQL Server | Cascades | ✅ 目标 |
-| Greenplum | Cascades | ✅ 目标 |
-| CockroachDB | Cascades | ✅ 目标 |
-| PostgreSQL | Heuristic | ❌ 已超越 |
-| MySQL | Heuristic | ❌ 已超越 |
+|SQL服务器|瀑布| ✅ 目标 |
+|绿梅|瀑布| ✅ 目标 |
+|蟑螂数据库|瀑布| ✅ 目标 |
+|PostgreSQL|启发式| ❌ 已超越 |
+| MySQL |启发式| ❌ 已超越 |
 
 ---
 

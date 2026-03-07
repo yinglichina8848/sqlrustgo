@@ -1,4 +1,4 @@
-# SQLRustGo 2.0 Distributed Execution
+# SQLRustGo 2.0 分布式执行
 
 > **版本**: 1.0
 > **更新日期**: 2026-03-07
@@ -12,7 +12,7 @@ SQLRustGo 2.0 将支持 **分布式查询执行**。
 
 目标：
 
-- MPP 架构 (Massively Parallel Processing)
+- MPP 架构（大规模并行处理）
 - 分布式 SQL
 - 弹性扩展
 - 故障容错
@@ -73,29 +73,29 @@ SQLRustGo 2.0 引入新的物理算子：
 
 | 算子 | 描述 |
 |------|------|
-| **ShuffleExchange** | 数据重分布 |
-| **BroadcastExchange** | 数据广播 |
-| **CollectExchange** | 数据收集 |
+|**随机交换**| 数据重分布 |
+|**广播交换**| 数据广播 |
+|**收集兑换**| 数据收集 |
 
 ## 3.2 分布式访问算子
 
 | 算子 | 描述 |
 |------|------|
-| **DistributedScan** | 分布式扫描 |
-| **PartitionedScan** | 分区扫描 |
-| **RemoteScan** | 远程节点扫描 |
+|**分布式扫描**| 分布式扫描 |
+|**分区扫描**| 分区扫描 |
+|**远程扫描**| 远程节点扫描 |
 
 ## 3.3 分布式聚合算子
 
 | 算子 | 描述 |
 |------|------|
-| **DistributedAggregate** | 分布式聚合 |
-| **HashAggregate** | 哈希聚合 |
-| **SortAggregate** | 排序聚合 |
+|**分布式聚合**| 分布式聚合 |
+|**哈希聚合**| 哈希聚合 |
+|**排序聚合**| 排序聚合 |
 
 ---
 
-# 4. Task Scheduler
+# 4. 任务调度程序
 
 调度器负责：
 
@@ -166,7 +166,7 @@ Scheduler --> Failover[Failover Manager]
 
 # 7. 核心结构设计
 
-## 7.1 Coordinator
+## 7.1 协调员
 
 ```rust
 pub struct Coordinator {
@@ -196,7 +196,7 @@ impl Coordinator {
 }
 ```
 
-## 7.2 Worker
+## 7.2 工人
 
 ```rust
 pub struct Worker {
@@ -248,9 +248,9 @@ Hash --> Partition3[Partition 3<br/>key % 3 = 2]
 
 | 策略 | 适用场景 |
 |------|----------|
-| **Hash** | Join, Aggregate |
-| **Range** | Range Query, Time Series |
-| **Round Robin** | Load Balancing |
+| **Hash** |加入、聚合|
+| **Range** |范围查询、时间序列|
+|**循环赛**|负载均衡|
 
 ---
 
@@ -292,10 +292,10 @@ end
 
 | 消息 | 方向 | 描述 |
 |------|------|------|
-| SubmitQuery | Client → Coordinator | 提交查询 |
-| CreateTasks | Coordinator → Worker | 创建任务 |
-| TaskResult | Worker → Coordinator | 任务结果 |
-| ShuffleData | Worker → Worker | Shuffle 数据 |
+|提交查询|客户→协调员| 提交查询 |
+|创建任务|协调员 → 工人| 创建任务 |
+|任务结果|工人 → 协调员| 任务结果 |
+|随机数据|工人 → 工人|Shuffle 数据|
 
 ---
 
@@ -333,7 +333,7 @@ end
 | 版本 | 特性 |
 |------|------|
 | **1.x** | 单机 SQL 执行引擎、Cascades 优化器、向量化执行 |
-| **2.0** | 分布式 MPP、Shuffle Exchange、故障容错 |
+| **2.0** |分布式 MPP、Shuffle Exchange、故障容错|
 | **3.0** | 云原生、Kubernetes 集成、弹性伸缩 |
 
 ---
@@ -343,7 +343,7 @@ end
 | 文档 | 说明 |
 |------|------|
 | [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) | 架构总览 |
-| [CASCADES_OPTIMIZER.md](./CASCADES_OPTIMIZER.md) | Cascades 优化器 |
+| [CASCADES_OPTIMIZER.md](./CASCADES_OPTIMIZER.md) |Cascades 优化器|
 | [DIRECTORY_STRUCTURE.md](./DIRECTORY_STRUCTURE.md) | 目录结构 |
 
 ---

@@ -1,6 +1,6 @@
 # SQLRustGo 功能补全实现计划
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **对于克劳德：** 所需的子技能：使用超能力：执行计划来逐个任务地实施该计划。
 
 **目标:** 补全 SQLRustGo 缺失的核心功能，实现完整的 DML 操作和数据存储
 
@@ -35,7 +35,7 @@ pub struct TableData {
 
 **Step 2: 运行测试验证**
 
-Run: `cargo test --lib`
+运行：`cargo test --lib`
 Expected: PASS (现有测试应该仍然通过)
 
 **Step 3: 提交**
@@ -158,8 +158,8 @@ fn test_evaluate_binary_op() {
 
 **Step 3: 运行测试**
 
-Run: `cargo test --lib evaluate`
-Expected: PASS
+运行：`cargo test --lib evaluate`
+预期：通过
 
 **Step 4: 提交**
 
@@ -256,8 +256,8 @@ fn test_filter_by_where() {
 
 **Step 3: 运行测试**
 
-Run: `cargo test --lib filter_by_where`
-Expected: PASS
+运行：`cargo test --lib filter_by_where`
+预期：通过
 
 **Step 4: 提交**
 
@@ -361,8 +361,8 @@ fn test_execute_insert_with_data() {
 
 **Step 4: 运行测试**
 
-Run: `cargo test --lib insert`
-Expected: PASS
+运行：`cargo test --lib insert`
+预期：通过
 
 **Step 5: 提交**
 
@@ -458,8 +458,8 @@ fn test_execute_update() {
 
 **Step 4: 运行测试**
 
-Run: `cargo test --lib update`
-Expected: PASS
+运行：`cargo test --lib update`
+预期：通过
 
 **Step 5: 提交**
 
@@ -539,8 +539,8 @@ fn test_execute_delete() {
 
 **Step 3: 运行测试**
 
-Run: `cargo test --lib delete`
-Expected: PASS
+运行：`cargo test --lib delete`
+预期：通过
 
 **Step 4: 提交**
 
@@ -644,8 +644,8 @@ fn test_parse_insert_values() {
 
 **Step 3: 运行测试**
 
-Run: `cargo test --lib parse_insert`
-Expected: PASS
+运行：`cargo test --lib parse_insert`
+预期：通过
 
 **Step 4: 提交**
 
@@ -754,8 +754,8 @@ fn parse_where_clause(&mut self) -> Result<Expression, String> {
 **Step 2: 添加 Token 变体**
 
 需要在 `lexer/token.rs` 中添加:
-- NotEqual
-- Greater
+- 不等于
+- 更大
 - Less
 
 **Step 3: 添加测试**
@@ -778,8 +778,8 @@ fn test_parse_update_set() {
 
 **Step 4: 运行测试**
 
-Run: `cargo test --lib parse_update`
-Expected: PASS
+运行：`cargo test --lib parse_update`
+预期：通过
 
 **Step 5: 提交**
 
@@ -826,7 +826,7 @@ fn parse_select(&mut self) -> Result<Statement, String> {
 }
 ```
 
-**Step 2: 解析 DELETE WHERE**
+**第2步：解析DELETE WHERE**
 
 ```rust
 fn parse_delete(&mut self) -> Result<Statement, String> {
@@ -883,8 +883,8 @@ fn test_parse_delete_where() {
 
 **Step 4: 运行测试**
 
-Run: `cargo test --lib where`
-Expected: PASS
+运行：`cargo test --lib where`
+预期：通过
 
 **Step 5: 提交**
 
@@ -986,8 +986,8 @@ fn test_select_with_where() {
 
 **Step 4: 运行测试**
 
-Run: `cargo test --lib select`
-Expected: PASS
+运行：`cargo test --lib select`
+预期：通过
 
 **Step 5: 提交**
 
@@ -1061,8 +1061,8 @@ fn test_full_dml_workflow() {
 
 **Step 2: 运行集成测试**
 
-Run: `cargo test --test integration_test`
-Expected: PASS
+运行：`cargo test --test integration_test`
+预期：通过
 
 **Step 3: 提交**
 

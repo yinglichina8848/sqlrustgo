@@ -1,4 +1,4 @@
-# SQLRustGo 2.0 Distributed Scheduler Design
+# SQLRustGo 2.0 分布式调度器设计
 
 > **版本**: 2.0 (规划中)
 > **更新日期**: 2026-03-05
@@ -242,7 +242,7 @@ graph TB
     end
 ```
 
-### 7.1 Shuffle
+### 7.1 随机播放
 
 ```mermaid
 flowchart LR
@@ -271,7 +271,7 @@ flowchart LR
     S --> N3
 ```
 
-### 7.2 Broadcast
+### 7.2 广播
 
 ```mermaid
 flowchart LR
@@ -302,9 +302,9 @@ flowchart LR
 | 策略 | 说明 | 适用场景 |
 |------|------|----------|
 | **Hash** | 按 key 分区 | 等值 Join |
-| **Broadcast** | 小表广播 | 小表 Join |
+|**播送**| 小表广播 | 小表 Join |
 | **Local** | 本地执行 | 本地数据 |
-| **Random** | 随机分配 | 负载均衡 |
+|**随机的**| 随机分配 | 负载均衡 |
 
 ### 8.1 策略选择
 
@@ -329,7 +329,7 @@ flowchart TB
 
 ---
 
-## 9. Fault Tolerance
+## 9. 容错
 
 ### 9.1 容错机制
 
@@ -358,7 +358,7 @@ flowchart TB
 |----------|----------|----------|
 | Worker 节点宕机 | 心跳检测 | 任务重新调度 |
 | 网络分区 | 超时检测 | 重新执行 |
-| 数据丢失 | Checksum | 重新获取 |
+| 数据丢失 |校验和| 重新获取 |
 
 ---
 
@@ -411,10 +411,10 @@ sequenceDiagram
 
 | 优化手段 | 效果 |
 |----------|------|
-| Predicate Pushdown | 减少网络传输 |
-| Columnar Transfer | 减少序列化开销 |
-| Data Locality | 减少跨节点访问 |
-| Pipelining | 减少等待时间 |
+|谓词下推| 减少网络传输 |
+|柱状传输| 减少序列化开销 |
+|数据局部性| 减少跨节点访问 |
+|流水线| 减少等待时间 |
 
 ### 11.2 性能目标
 
@@ -431,17 +431,17 @@ sequenceDiagram
 如果以下三件事做对：
 
 - 执行接口 ✅
-- Cascades Optimizer ✅
+- 级联优化器✅
 - 分布式调度 ✅
 
 SQLRustGo 的技术路线将与这些系统一致：
 
 | 数据库 | 架构 |
 |--------|------|
-| CockroachDB | Cascades + DAG |
-| Greenplum | Cascades + DAG |
-| SQL Server | Cascades + DAG |
-| Trino | DAG Execution |
+|蟑螂数据库|瀑布+白天|
+|绿梅|瀑布+白天|
+|SQL服务器|瀑布+白天|
+| Trino |有向无环图执行|
 
 ---
 
