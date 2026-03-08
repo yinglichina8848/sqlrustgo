@@ -63,10 +63,10 @@
 
 | Agent | 角色 | 权限层 | 核心职责 |
 |-------|------|--------|----------|
-| **heartopen** | 功能开发 | L1 | 实现功能、修复 bug、编写测试 |
-| **openheart** | 架构开发 | L1 | 优化架构、技术债清理、重构模块 |
-| **maintainer** | 审核 | L2 | 审核 PR、评估代码质量 |
-| **yinglichina8848** | 调度/发布 | L3 | 制定计划、批准合并、执行发布 |
+|**心敞开**| 功能开发 | L1 | 实现功能、修复 bug、编写测试 |
+|**敞开心扉**| 架构开发 | L1 | 优化架构、技术债清理、重构模块 |
+|**维护者**| 审核 | L2 | 审核 PR、评估代码质量 |
+|**英利中国8848**| 调度/发布 | L3 | 制定计划、批准合并、执行发布 |
 
 ---
 
@@ -119,9 +119,9 @@
 
 | 项目 | 值 |
 |------|-----|
-| 角色名称 | heartopen |
-| 工作目录 | workspace/dev/heartopen/sqlrustgo |
-| Git 用户名 | heartopen |
+| 角色名称 |敞开心扉|
+| 工作目录 |工作区/dev/heartopen/sqlrustgo|
+| Git 用户名 |敞开心扉|
 | Git 邮箱 | heartopen@guizhouminzuuniversity.edu.cn |
 | 权限层 | L1 (开发层) |
 
@@ -129,7 +129,7 @@
 
 | 职责 | 说明 |
 |------|------|
-| 创建功能分支 | feature/<topic>, fix/<issue>, refactor/<module> |
+| 创建功能分支 |功能/<主题>、修复/<问题>、重构/<模块>|
 | 实现功能 | 根据需求实现新功能 |
 | 修复 bug | 根据 issue 修复问题 |
 | 编写单元测试 | 保证测试覆盖率 |
@@ -139,10 +139,10 @@
 
 | 禁止 | 原因 |
 |------|------|
-| 直接 push main/baseline | 权限不足 |
+|直接 push main/baseline| 权限不足 |
 | 合并 PR | 需要审核后由 L3 执行 |
 | 审核自己 PR | 防止自审 |
-| 发布 release | 权限不足 |
+|发布 release| 权限不足 |
 
 #### 开发规则
 
@@ -227,9 +227,9 @@ feature/<topic> 或 fix/<issue>
 
 | 项目 | 值 |
 |------|-----|
-| 角色名称 | openheart |
-| 工作目录 | workspace/dev/openheart/sqlrustgo |
-| Git 用户名 | openheart |
+| 角色名称 |开放的心|
+| 工作目录 |工作区/dev/openheart/sqlrustgo|
+| Git 用户名 |开放的心|
 | Git 邮箱 | openheart@guizhouminzuuniversity.edu.cn |
 | 权限层 | L1 (开发层) |
 
@@ -322,9 +322,9 @@ refactor/<module> 或 architecture/<topic>
 
 | 项目 | 值 |
 |------|-----|
-| 角色名称 | maintainer |
-| 工作目录 | workspace/maintainer/sqlrustgo |
-| Git 用户名 | maintainer |
+| 角色名称 |维护者|
+| 工作目录 |工作区/维护者/sqlrustgo|
+| Git 用户名 |维护者|
 | Git 邮箱 | maintainer@guizhouminzuuniversity.edu.cn |
 | 权限层 | L2 (审核层) |
 
@@ -334,19 +334,19 @@ refactor/<module> 或 architecture/<topic>
 |------|------|
 | 审核 PR | 代码审核、质量评估 |
 | 评估代码质量 | 检查代码规范、测试覆盖率 |
-| 控制分支安全 | 确保 baseline/release 安全 |
-| 输出审核结论 | Approve / Request Changes |
+| 控制分支安全 |确保 baseline/release 安全|
+| 输出审核结论 |批准/请求更改|
 
 #### 审核标准
 
 | 检查项 | 标准 |
 |--------|------|
-| unwrap 使用 | 禁止使用 unwrap |
+|unwrap 使用| 禁止使用 unwrap |
 | 测试覆盖率 | ≥ 80% |
 | 错误传播 | 必须正确传播错误 |
 | 分支命名 | 符合命名规范 |
-| 代码格式 | 符合 rustfmt |
-| Clippy | 无警告 |
+| 代码格式 |符合 rustfmt|
+|剪辑| 无警告 |
 
 #### 输出模板
 
@@ -418,9 +418,9 @@ refactor/<module> 或 architecture/<topic>
 
 | 项目 | 值 |
 |------|-----|
-| 角色名称 | yinglichina8848 |
-| 工作目录 | workspace/yinglichina/sqlrustgo |
-| Git 用户名 | yinglichina8848 |
+| 角色名称 |英利china8848|
+| 工作目录 |工作区/yinglichina/sqlrustgo|
+| Git 用户名 |英利china8848|
 | Git 邮箱 | yinglichina8848@guizhouminzuuniversity.edu.cn |
 | 权限层 | L3 (发布层) |
 
@@ -430,9 +430,9 @@ refactor/<module> 或 architecture/<topic>
 |------|------|
 | 制定版本计划 | 版本目标、里程碑、任务分配 |
 | 分解任务 | 将任务下发给开发 Agent |
-| 控制 release gate | 确保发布质量 |
+|控制 release gate| 确保发布质量 |
 | 批准合并 PR | 最终审核和合并决策 |
-| 执行发布 | 创建 tag、发布 release |
+| 执行发布 |创建 tag、发布 release|
 
 #### 流程规范
 
@@ -508,10 +508,10 @@ refactor/<module> 或 architecture/<topic>
 
 | Agent | 开发 | 审核 | 合并 | 发布 |
 |-------|------|------|------|------|
-| heartopen | ✅ | ❌ | ❌ | ❌ |
-| openheart | ✅ | ❌ | ❌ | ❌ |
-| maintainer | ❌ | ✅ | ❌ | ❌ |
-| yinglichina8848 | ❌ | ✅ | ✅ | ✅ |
+|敞开心扉| ✅ | ❌ | ❌ | ❌ |
+|开放的心| ✅ | ❌ | ❌ | ❌ |
+|维护者| ❌ | ✅ | ❌ | ❌ |
+|英利china8848| ❌ | ✅ | ✅ | ✅ |
 
 ### 6.3 流程强制
 
@@ -520,7 +520,7 @@ refactor/<module> 或 architecture/<topic>
 | 所有变更必须 PR 驱动 | 禁止直接 push |
 | 禁止自审 | 作者不能批准自己的 PR |
 | 禁止越权 | 每个 Agent 只能执行其权限内的操作 |
-| 禁止 force push | 保护分支历史 |
+|禁止 force push| 保护分支历史 |
 
 ### 6.4 自检机制
 

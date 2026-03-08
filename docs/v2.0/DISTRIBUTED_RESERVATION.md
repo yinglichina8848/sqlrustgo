@@ -549,11 +549,11 @@ pub trait FailureDetector: Send + Sync {
 
 ### 7.2 接口兼容性
 
-| 版本 | ExecutionEngine | StorageEngine | 新增接口 |
+| 版本 |执行引擎|存储引擎| 新增接口 |
 |------|-----------------|---------------|----------|
-| v2.0 | execute() | scan/insert/delete | - |
-| v2.5 | + execute_distributed() | + scan_distributed() | Coordinator |
-| v3.0 | 同上 | + batch_write() | TransactionManager, ReplicaManager |
+| v2.0 |执行（）|扫描/插入/删除| - |
+| v2.5 |+ 执行分布式()|+ scan_distributed()|协调员|
+| v3.0 | 同上 |+ 批处理写入()|事务管理器、副本管理器|
 
 ---
 
@@ -561,13 +561,13 @@ pub trait FailureDetector: Send + Sync {
 
 | 优先级 | 接口 | 版本 | 说明 |
 |--------|------|------|------|
-| P0 | ExecutionEngine trait | v2.0 | 核心接口 |
-| P0 | StorageEngine trait | v2.0 | 核心接口 |
-| P1 | execute_distributed() | v2.5 | 分布式执行 |
-| P1 | scan_distributed() | v2.5 | 分布式扫描 |
-| P2 | TransactionManager | v3.0 | 事务支持 |
-| P2 | ReplicaManager | v3.0 | 高可用 |
-| P3 | MVCCStorage | v3.0 | MVCC |
+| P0 |执行引擎特征| v2.0 | 核心接口 |
+| P0 |存储引擎特征| v2.0 | 核心接口 |
+| P1 |执行分布式()| v2.5 | 分布式执行 |
+| P1 |扫描_分布式()| v2.5 | 分布式扫描 |
+| P2 |事务管理器| v3.0 | 事务支持 |
+| P2 |副本管理器| v3.0 | 高可用 |
+| P3 |MVCC存储| v3.0 | MVCC |
 
 ---
 

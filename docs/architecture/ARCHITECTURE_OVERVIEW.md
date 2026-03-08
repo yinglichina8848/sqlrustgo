@@ -1,4 +1,4 @@
-# SQLRustGo Architecture
+# SQLRustGo 架构
 
 > **版本**: 1.0
 > **更新日期**: 2026-03-07
@@ -9,10 +9,10 @@
 ## 核心目标
 
 - 高性能 SQL 执行
-- Cascades Query Optimizer
+- 级联查询优化器
 - 向量化执行引擎
 - 分布式扩展能力
-- AI Native Software Engineering
+- AI原生软件工程
 
 ---
 
@@ -54,11 +54,11 @@ SQLRustGo 分为五个核心层：
 
 | 层级 | 描述 |
 |------|------|
-| **SQL Layer** | SQL 解析与绑定 |
-| **Query Optimization Layer** | Cascades 优化器 |
-| **Execution Layer** | 向量化执行引擎 |
-| **Storage Layer** | 存储引擎 |
-| **Distributed Layer** | 分布式执行 (2.0) |
+|**SQL层**| SQL 解析与绑定 |
+|**查询优化层**|Cascades 优化器|
+|**执行层**| 向量化执行引擎 |
+|**存储层**| 存储引擎 |
+|**分布式层**| 分布式执行 (2.0) |
 
 ---
 
@@ -251,7 +251,7 @@ end
 | 版本 | 特性 |
 |------|------|
 | **1.x** | SQL 执行原型、Cascades 优化器、向量化执行 |
-| **2.0** | 分布式 MPP、Shuffle Exchange、故障容错 |
+| **2.0** |分布式 MPP、Shuffle Exchange、故障容错|
 | **3.0** | 云原生、Kubernetes 集成、弹性伸缩 |
 
 ---
@@ -262,11 +262,11 @@ end
 |------|------|
 | **语言** | Rust |
 | **解析** | nom |
-| **优化器** | Cascades Framework |
-| **执行** | Vectorized / Pipeline |
-| **存储** | B+ Tree / Buffer Pool |
-| **网络** | Tokio / Tower |
-| **测试** | Cargo Test / Criterion |
+| **优化器** |级联框架|
+| **执行** |矢量化/管道化|
+| **存储** |B+树/缓冲池|
+| **网络** |东京 / 塔|
+| **测试** |货物测试/标准|
 
 ---
 

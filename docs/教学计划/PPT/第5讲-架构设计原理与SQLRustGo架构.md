@@ -1,12 +1,12 @@
 ---
-marp: true
-theme: gaia
-paginate: true
-backgroundColor: #fff
+马尔普：真实
+主题：盖亚
+页面：真实
+背景颜色：#fff
 color: #333
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 第五讲：架构设计原理与SQLRustGo架构
 
@@ -135,8 +135,8 @@ color: #333
 
 ### 架构评估方法
 
-- **ATAM**（Architecture Tradeoff Analysis Method）
-- **SAAM**（Software Architecture Analysis Method）
+- **ATAM**（架构权衡分析方法）
+- **SAAM**（软件架构分析方法）
 - **架构权衡**：性能 vs 可扩展性 vs 复杂度
 
 ### AI辅助架构设计
@@ -299,7 +299,7 @@ color: #333
 - 页式存储（Page-based Storage）
 - 缓冲区管理（Buffer Management）
 - B+树索引（B+ Tree Indexing）
-- WAL日志（Write-Ahead Logging）
+- WAL日志（预写式日志记录）
 - 并发控制（Concurrency Control）
 
 ---
@@ -410,7 +410,7 @@ package "Storage Layer" {
 
 ## 2. SQLRustGo四层架构
 
-- **Parser Layer**：SQL解析
+- **解析器层**：SQL解析
 - **Planner Layer**：查询优化
 - **Executor Layer**：查询执行
 - **Storage Layer**：数据存储
@@ -440,7 +440,7 @@ package "Storage Layer" {
 
 ---
 
-<!-- _class: lead -->
+<!-- _class: 领导 -->
 
 # 谢谢！
 
