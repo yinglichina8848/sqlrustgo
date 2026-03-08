@@ -5,7 +5,7 @@
 > **制定人**: yinglichina8848
 > **适用阶段**: Draft 阶段
 >
-> **当前执行口径（2026-03-07）**: 当前主开发分支统一为 `develop-v1.2.0`；`develop/v1.2.0`、`develop-1.2.0` 仅作历史兼容记录。
+> **当前执行口径（2026-03-07）**: 当前主开发分支统一为 `develop/v1.2.0`；`develop/v1.2.0`、`develop-1.2.0` 仅作历史兼容记录。
 
 ---
 
@@ -15,7 +15,7 @@
 
 ```
 main                    # 稳定版本 (v1.0.0)
-develop-v1.2.0          # 当前开发分支
+develop/v1.2.0          # 当前开发分支
 fix/v1.2.0-index-v2     # 当前修复分支
 docs/v1.3.0-*           # 文档分支
 ```
@@ -52,7 +52,7 @@ main ─────────────────────────
   │   │
   │   └── (下一版本开发)
   │
-  ├── develop-v1.2.0 ──────────────────────────────────────►
+  ├── develop/v1.2.0 ──────────────────────────────────────►
   │   │
   │   ├── refactor/directory-*   (目录重构)
   │   ├── feature/v1.2.0-*       (功能开发)
@@ -86,15 +86,15 @@ main ─────────────────────────
 ```bash
 # 创建新版本开发分支
 git checkout main
-git checkout -b develop-v1.2.0
-git push origin develop-v1.2.0
+git checkout -b develop/v1.2.0
+git push origin develop/v1.2.0
 ```
 
 ### 3.2 功能分支
 
 ```bash
 # 从版本分支创建功能分支
-git checkout develop-v1.2.0
+git checkout develop/v1.2.0
 git checkout -b feature/v1.2.0-cascades
 git push origin feature/v1.2.0-cascades
 ```
@@ -103,7 +103,7 @@ git push origin feature/v1.2.0-cascades
 
 ```bash
 # 从版本分支创建修复分支
-git checkout develop-v1.2.0
+git checkout develop/v1.2.0
 git checkout -b fix/v1.2.0-page-bug
 git push origin fix/v1.2.0-page-bug
 ```
@@ -112,7 +112,7 @@ git push origin fix/v1.2.0-page-bug
 
 ```bash
 # 从版本分支创建重构分支
-git checkout develop-v1.2.0
+git checkout develop/v1.2.0
 git checkout -b refactor/directory-phase1
 git push origin refactor/directory-phase1
 ```
@@ -125,11 +125,11 @@ git push origin refactor/directory-phase1
 
 | 源分支 | 目标分支 | 说明 |
 |--------|----------|------|
-| `feature/v1.2.0-*` | `develop-v1.2.0` | 功能合并到版本开发 |
-| `fix/v1.2.0-*` | `develop-v1.2.0` | 修复合并到版本开发 |
-| `refactor/*` | `develop-v1.2.0` | 重构合并到版本开发 |
-| `docs/v1.2.0-*` | `develop-v1.2.0` | 文档合并到版本开发 |
-| `develop-v1.2.0` | `main` | 版本发布时合并 |
+| `feature/v1.2.0-*` | `develop/v1.2.0` | 功能合并到版本开发 |
+| `fix/v1.2.0-*` | `develop/v1.2.0` | 修复合并到版本开发 |
+| `refactor/*` | `develop/v1.2.0` | 重构合并到版本开发 |
+| `docs/v1.2.0-*` | `develop/v1.2.0` | 文档合并到版本开发 |
+| `develop/v1.2.0` | `main` | 版本发布时合并 |
 
 ### 4.2 合并条件
 
@@ -147,7 +147,7 @@ git push origin refactor/directory-phase1
 ### 5.1 目录重构分支
 
 ```
-develop-v1.2.0 (Draft)
+develop/v1.2.0 (Draft)
     │
     ├── refactor/directory-phase1
     │   │
@@ -213,7 +213,7 @@ develop-v1.2.0 (Draft)
 }
 ```
 
-### 6.2 develop-v1.2.0 分支
+### 6.2 develop/v1.2.0 分支
 
 ```json
 {

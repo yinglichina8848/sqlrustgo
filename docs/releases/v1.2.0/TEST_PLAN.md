@@ -241,7 +241,7 @@ cargo test --lib storage
 
 ### Phase 1: 编译修复 (第1天)
 
-- [ ] 修复 develop-v1.2.0 编译错误
+- [ ] 修复 develop/v1.2.0 编译错误
 - [ ] 确保 cargo build 通过
 - [ ] 确保 cargo test 通过
 
