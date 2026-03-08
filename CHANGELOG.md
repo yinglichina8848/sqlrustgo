@@ -26,16 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **功能**：用于嵌入式使用的 LocalExecutor
 - **测试**：LocalExecutor 测试 (T-005)
 
-### 已更改
+### Changed
 
 - **重构**：存储层抽象
 - **重构**：统计基础设施
 
-＃＃＃ 安全
+### Security
 
 - **审核**：依赖审核已通过（无高严重性漏洞）
 
-### 文档
+### Documentation
 
 - **新**：v1.2.0 发行说明
 - **新增**：v1.2.0 升级指南
@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **测试**：使用 Criterion 的性能基准框架
 - **测试**：测试覆盖率提高至 90.66%
 
-### 已更改
+### Changed
 
 - **重构**：用执行器中正确的错误传播替换了 unwrap
 - **重构**：改进了 SqlResult<T> 的错误处理
@@ -70,12 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **修复**：Rust 2021 兼容性（let 链语法）
 - **修复**：代码格式问题
 
-＃＃＃ 安全
+### Security
 
 - **审核**：依赖审核已通过
 - **审计**：无敏感信息泄露
 
-### 文档
+### Documentation
 
 - **新**：DeepSeek 评估报告
 - **新**：v1.1.0-draft 的改进计划
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **测试**：单元测试框架
 - **文档**：初始文档
 
-### 已更改
+### Changed
 
 - 初始版本
 
@@ -104,11 +104,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 版本历史
 
-|版本| Date |到期| Notes |
-|---------|------|----------|-------|
-| v1.2.0 | TBD | L3+ |矢量化、CBO、存储抽象|
-| v1.1.0 | 2026-03-05 | L3 |架构升级，Clippy通过|
-| v1.0.0 | 2026-02-22 | L3 GA |初次发布|
+| 版本 | 日期 | 截止日期 | 备注 |
+|------|------|----------|------|
+| v1.2.0 | TBD | L3+ | 矢量化、CBO、存储抽象 |
+| v1.1.0 | 2026-03-05 | L3 | 架构升级，Clippy通过 |
+| v1.0.0 | 2026-02-22 | L3 GA | 初次发布 |
 
 ---
 
