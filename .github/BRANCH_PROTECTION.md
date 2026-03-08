@@ -11,10 +11,10 @@
 | 分支 | 保护级别 | 审核人数 | CI 要求 | 签名要求 |
 |------|----------|----------|---------|----------|
 | `main` | 🔴 最高 | 2 | 全部通过 | 必须 |
-| `release/*` | 🔴 高 | 2 | 全部通过 | 必须 |
-| `develop-*` | 🟡 中等 | 1 | 编译+测试 | 推荐 |
-| `develop` | 🟡 中等 | 1 | 编译+测试 | 推荐 |
-| `feature/*` | 🟢 低 | 可选 | 无 | 推荐 |
+|__代码0__| 🔴 高 | 2 | 全部通过 | 必须 |
+|__代码0__| 🟡 中等 | 1 | 编译+测试 | 推荐 |
+|__代码0__| 🟡 中等 | 1 | 编译+测试 | 推荐 |
+|__代码0__| 🟢 低 | 可选 | 无 | 推荐 |
 
 ---
 
@@ -157,7 +157,7 @@ gh api -X PUT repos/{owner}/{repo}/branches/develop/protection \
 
 ### 5.1 文件位置
 
-`.github/CODEOWNERS`
+__代码0__
 
 ### 5.2 配置内容
 
@@ -198,9 +198,9 @@ gh api -X PUT repos/{owner}/{repo}/branches/develop/protection \
 |--------|--------|------|
 | `build` | ci.yml | 编译检查 |
 | `test` | ci.yml | 测试检查 |
-| `lint` | ci.yml | Clippy 检查 |
-| `security-scan` | ci.yml | 安全扫描 |
-| `coverage` | ci.yml | 覆盖率检查 |
+| `lint` | ci.yml |Clippy 检查|
+|__代码0__| ci.yml | 安全扫描 |
+|__代码0__| ci.yml | 覆盖率检查 |
 
 ### 6.2 CI 工作流配置
 

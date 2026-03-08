@@ -33,10 +33,10 @@
 
 | 模块 | 职责 | 关键组件 |
 |------|------|----------|
-| Parser | SQL 解析 | Lexer, AST |
-| Optimizer | 查询优化 | Memo, Rule, CostModel |
-| Executor | 查询执行 | Operator, RecordBatch |
-| Storage | 数据存储 | StorageEngine, FileStorage |
+|解析器| SQL 解析 |词法分析器，AST|
+|优化器| 查询优化 |备忘录、规则、成本模型|
+|执行者| 查询执行 |操作员，RecordBatch|
+|贮存| 数据存储 |存储引擎、文件存储|
 
 ---
 
@@ -61,11 +61,11 @@
 
 | 阶段 | 输入 | 输出 | 说明 |
 |------|------|------|------|
-| Parser | SQL 文本 | AST | 词法分析 + 语法分析 |
-| Logical Plan | AST | LogicalPlan | 关系代数表达式 |
-| Optimizer | LogicalPlan | PhysicalPlan | 规则优化 + 成本优化 |
-| Planner | PhysicalPlan | ExecutionPlan | 物理执行计划 |
-| Executor | ExecutionPlan | ResultSet | 数据处理 |
+|解析器| SQL 文本 | AST | 词法分析 + 语法分析 |
+|逻辑计划| AST |逻辑计划| 关系代数表达式 |
+|优化器|逻辑计划|物理计划| 规则优化 + 成本优化 |
+|规划师|物理计划|执行计划| 物理执行计划 |
+|执行者|执行计划|结果集| 数据处理 |
 
 ---
 
@@ -186,7 +186,7 @@ pub trait Operator: Send {
 
 ## 4. 数据结构
 
-### 4.1 RecordBatch
+### 4.1 记录批次
 
 ```rust
 pub struct RecordBatch {
@@ -206,7 +206,7 @@ pub trait Array: Send + Sync {
 }
 ```
 
-### 4.3 Statistics
+### 4.3 统计
 
 ```rust
 pub struct TableStats {
@@ -290,7 +290,7 @@ src/
 
 ## 7. 关键接口
 
-### 7.1 Operator Trait
+### 7.1 操作员特质
 
 ```rust
 pub trait Operator: Send {
@@ -300,7 +300,7 @@ pub trait Operator: Send {
 }
 ```
 
-### 7.2 StorageEngine Trait
+### 7.2 存储引擎特征
 
 ```rust
 pub trait StorageEngine {
@@ -311,7 +311,7 @@ pub trait StorageEngine {
 }
 ```
 
-### 7.3 Optimizer Trait
+### 7.3 优化器特征
 
 ```rust
 pub trait Optimizer {
@@ -327,12 +327,12 @@ pub trait Optimizer {
 
 | 接口 | 扩展方式 | 用途 |
 |------|----------|------|
-| StorageEngine | 实现 trait | 支持新存储后端 |
-| Operator | 实现 trait | 添加新算子 |
-| Optimizer | 添加规则 | 新优化策略 |
-| Catalog | 实现 trait | 新数据源 |
+|存储引擎| 实现 trait | 支持新存储后端 |
+|操作员| 实现 trait | 添加新算子 |
+|优化器| 添加规则 | 新优化策略 |
+|目录| 实现 trait | 新数据源 |
 
-### 8.2 Feature Flags
+### 8.2 功能标志
 
 ```toml
 [features]
