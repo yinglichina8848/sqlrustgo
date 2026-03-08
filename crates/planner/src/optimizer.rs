@@ -3,7 +3,6 @@
 //! Provides query optimization through rule-based transformations.
 
 use crate::logical_plan::LogicalPlan;
-use std::any::Any;
 use thiserror::Error;
 
 /// Optimizer errors
@@ -39,7 +38,7 @@ impl OptimizerRule for PredicatePushdown {
         "PredicatePushdown"
     }
 
-    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
         // Placeholder implementation - push predicates down in the plan tree
         // In a full implementation, this would traverse the tree and push
         // filter conditions as close to the table scan as possible
@@ -55,7 +54,7 @@ impl OptimizerRule for ProjectionPruning {
         "ProjectionPruning"
     }
 
-    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
         // Placeholder implementation - remove unused columns from projections
         false
     }
@@ -69,7 +68,7 @@ impl OptimizerRule for ConstantFolding {
         "ConstantFolding"
     }
 
-    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
         // Placeholder implementation - evaluate constant expressions at compile time
         false
     }

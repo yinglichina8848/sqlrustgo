@@ -48,6 +48,7 @@ impl Optimizer for NoOpOptimizer {
 }
 
 /// RuleSet - collection of optimization rules
+#[allow(clippy::type_complexity)]
 pub struct RuleSet {
     rules: Vec<Box<dyn Fn(&mut dyn std::any::Any) -> bool>>,
 }
