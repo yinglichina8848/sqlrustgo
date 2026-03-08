@@ -3,7 +3,7 @@
 //! Benchmarks for SQL tokenization performance.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::lexer::tokenize;
+use sqlrustgo::tokenize;
 
 // Simple SQL queries for benchmarking
 const SQL_SIMPLE: &str = "SELECT id FROM users WHERE id = 1";
