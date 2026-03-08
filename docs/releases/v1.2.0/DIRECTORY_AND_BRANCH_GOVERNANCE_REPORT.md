@@ -79,8 +79,8 @@ crates/
 baseline
 develop
 develop-v1.1.0
-develop-v1.2.0-fixed
-develop-v1.2.0          ← 当前开发分支
+develop/v1.2.0-fixed
+develop/v1.2.0          ← 当前开发分支
 docs/v1.2.0-consistency-fix  ← 文档修复
 docs/v1.2.0-design-docs
 docs/v1.3.0-development-plan-discussion
@@ -113,7 +113,7 @@ release/v1.1.0-to-main-v2
 | 问题类型 | 数量 | 示例 |
 |----------|------|------|
 | 废弃分支 | 8 | `draft/v1.1.0`, `draft/v1.2.0` |
-| 重复分支 | 3 | `develop-v1.2.0` vs `develop-v1.2.0-fixed` |
+| 重复分支 | 3 | `develop/v1.2.0` vs `develop/v1.2.0-fixed` |
 | 临时分支 | 4 | `pr/147`, `pr-148-test` |
 | 合并分支 | 4 | `merge/main-to-baseline`, `release/merge-v1.1.0-to-main` |
 | 无版本号 | 2 | `feature/v1.0.0-alpha` (应改为 feature/v1.0.0-*) |
@@ -124,7 +124,7 @@ release/v1.1.0-to-main-v2
 
 | 分支类型 | 命名格式 | 示例 |
 |----------|----------|------|
-| 开发分支 | `develop-v1.x.0` | `develop-v1.2.0` |
+| 开发分支 | `develop-v1.x.0` | `develop/v1.2.0` |
 | 功能分支 | `feature/v1.x.0-<功能名>` | `feature/v1.2.0-vector-execution` |
 | 修复分支 | `fix/v1.x.0-<问题描述>` | `fix/v1.2.0-index-tests` |
 | 文档分支 | `docs/v1.x.0-<文档类型>` | `docs/v1.2.0-release-notes` |
@@ -188,7 +188,7 @@ release/v1.1.0-to-main-v2
 | 建议删除 | 原因 |
 |----------|------|
 | `draft/v1.1.0` | 已废弃，v1.1.0 已发布 |
-| `draft/v1.2.0` | 已废弃，使用 develop-v1.2.0 |
+| `draft/v1.2.0` | 已废弃，使用 develop/v1.2.0 |
 | `pr/147`, `pr-148-test` | 临时分支 |
 | `merge/main-to-baseline` | 一次性合并分支 |
 | `rc/v1.0.0-1` | 已废弃 |
@@ -197,7 +197,7 @@ release/v1.1.0-to-main-v2
 | `release/v1.1.0-beta` | 已废弃 |
 | `release/v1.1.0-rc` | 已废弃 |
 | `release/v1.1.0-to-main-v2` | 一次性合并分支 |
-| `develop-v1.2.0-fixed` | 与 develop-v1.2.0 重复 |
+| `develop/v1.2.0-fixed` | 与 develop/v1.2.0 重复 |
 
 ### 5.2 保留分支
 
@@ -206,7 +206,7 @@ release/v1.1.0-to-main-v2
 | `main` | 稳定版本 |
 | `develop` | 下一版本开发 |
 | `develop-v1.1.0` | v1.1.0 维护 (创建 release/1.1) |
-| `develop-v1.2.0` | v1.2.0 当前开发 |
+| `develop/v1.2.0` | v1.2.0 当前开发 |
 | `release/v1.0.0` | v1.0.0 维护 |
 | `release/v1.1.0` | v1.1.0 维护 |
 | `release/v1.1.0-final` | v1.1.0 最终发布 |

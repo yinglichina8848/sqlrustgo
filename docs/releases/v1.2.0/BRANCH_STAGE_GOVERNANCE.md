@@ -4,6 +4,8 @@
 > **制定日期**: 2026-03-06
 > **制定人**: yinglichina8848
 > **适用范围**: 所有版本开发
+>
+> **当前执行口径（2026-03-07）**: v1.2.0 当前主开发分支为 `develop/v1.2.0`。`develop/v1.2.0`、`develop-1.2.0` 作为历史兼容命名保留。
 
 ---
 
@@ -48,7 +50,7 @@ main
  │
  ├─ develop                    # 下一个版本开发
  │
- ├─ develop-1.2.0              # 当前版本开发
+ ├─ develop/v1.2.0              # 当前版本开发
  │    ├─ feature/*             # 功能分支
  │    ├─ fix/*                # 修复分支 (推荐)
  │    └─ bugfix/*             # 修复分支 (别名)
@@ -169,7 +171,7 @@ git push origin v1.2.0
 
 # 2. 合并到 main
 git checkout main
-git merge develop-1.2.0
+git merge develop/v1.2.0
 git push origin main
 
 # 3. 创建维护分支
@@ -250,7 +252,7 @@ RC → GA
 GA 发布后，`develop-x.x.x` 转换为 `release/x.x` 维护分支：
 
 ```
-develop-1.2.0  →  release/1.2
+develop/v1.2.0  →  release/1.2
 ```
 
 ### 6.2 维护分支规则
@@ -277,7 +279,7 @@ develop-1.2.0  →  release/1.2
 **答案**: 可以，推荐结构：
 
 ```
-develop-1.2.0  # 当前版本
+develop/v1.2.0  # 当前版本
 develop-1.3.0  # 下一版本预研
 develop        # 未来版本
 ```
@@ -325,7 +327,7 @@ v1.1.0 (已完成)
 └── main: v1.1.0
 
 v1.2.0 (进行中)
-├── develop-1.2.0 (Draft 阶段)
+├── develop/v1.2.0 (Draft 阶段)
 └── 目标: GA 发布
 ```
 

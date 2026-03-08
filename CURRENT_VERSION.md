@@ -1,34 +1,26 @@
-# CURRENT_VERSION
+# 当前版本状态
 
-v1.2.0-alpha
+alpha/v1.2.0
 
 ## 阶段信息
 
-- **阶段**: Alpha (内部开发集成)
-- **开始日期**: 2026-03-07
-- **门禁通过率**: 待测试
+- **阶段**: Alpha (内测)
+- **开始日期**: 2026-03-06
+- **开发分支**: develop/v1.2.0
 
-## 版本历史
+## 当前执行口径（2026-03-07）
 
-| 阶段 | 版本 | 日期 | 状态 |
-|------|------|------|------|
-| Draft | v1.0.x | 2026-02 | ✅ 完成 |
-| Alpha | v1.1.x | 2026-02 | ✅ 完成 |
-| Craft | v1.2.0 | 2026-03-07 | ✅ 完成 |
-| Alpha | v1.2.0 | 2026-03-07 | 🔄 进行中 |
+- 当前阶段统一为 `alpha/v1.2.0`。
+- 当前主开发分支统一为 `develop/v1.2.0`。
+- 历史口径（如 `v1.2.0-draft`、`develop/v1.2.0`）仅用于追溯，不作为当前状态字段。
 
-## 分支结构
+## 待解决问题
 
-```
-main                    - 最终发布版本
-alpha/v1.2.0           - Alpha 开发版本 (当前)
-beta/v1.1.0            - Beta 测试版本 (冻结)
-release/v1.1.0         - 发布版本 (冻结)
-develop/v1.2.0         - 开发分支 (当前)
-```
+详见 Issue #329 (Alpha 阶段任务与门禁要求) 与 PR #326 (待合并修复项)
 
 ## 相关文档
 
-- [PHASE_TRANSITION_ANNOUNCEMENT.md](docs/releases/v1.2.0/PHASE_TRANSITION_ANNOUNCEMENT.md)
-- [BRANCH_GOVERNANCE.md](docs/BRANCH_GOVERNANCE.md)
-- [Alpha 阶段任务 ISSUE #329](https://github.com/minzuuniversity/sqlrustgo/issues/329)
+- [VERSION_PLAN.md](docs/releases/v1.2.0/VERSION_PLAN.md)
+- [RELEASE_GATE_CHECKLIST.md](docs/releases/v1.2.0/RELEASE_GATE_CHECKLIST.md)
+- [BRANCH_STAGE_GOVERNANCE.md](docs/releases/v1.2.0/BRANCH_STAGE_GOVERNANCE.md)
+- [DRAFT_COMPLETION_TASKS.md](docs/releases/v1.2.0/DRAFT_COMPLETION_TASKS.md) (历史阶段记录)

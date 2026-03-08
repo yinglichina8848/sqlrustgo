@@ -1,7 +1,7 @@
 # DeepSeek 项目评估报告
 
 > **评估日期**: 2026-03-05  
-> **评估工具**: DeepSeek AI  
+> **评估工具**: DeepSeek AI
 > **评估版本**: v1.1.0-draft  
 > **评估范围**: 源代码 + 文档全面分析
 
@@ -30,16 +30,16 @@
 
 | 问题 | 说明 | 严重程度 |
 |------|------|----------|
-| Clippy 检查 | A-03 有 11 个 Clippy 错误，文档却宣称 L3 产品级 | 🔴 高 |
+|Clippy 检查| A-03 有 11 个 Clippy 错误，文档却宣称 L3 产品级 | 🔴 高 |
 | TODO 残留 | src/executor/mod.rs:655 的 TODO 未完成 | 🔴 高 |
-| unwrap 数量 | 生产代码有 511 处 unwrap | 🔴 高 |
+|unwrap 数量| 生产代码有 511 处 unwrap | 🔴 高 |
 
 ### 2.2 功能与实际实现不符
 
 | 功能 | 文档宣称 | 实际实现 | 差距 |
 |------|----------|----------|------|
-| HashJoin | ✅ 已实现 | 仅内存操作，未利用索引 | 🟡 中 |
-| 事务隔离级别 | ✅ 支持 | 仅基础 BEGIN/COMMIT，无 MVCC/锁 | 🔴 高 |
+|哈希连接| ✅ 已实现 | 仅内存操作，未利用索引 | 🟡 中 |
+| 事务隔离级别 | ✅ 支持 |仅基础 BEGIN/COMMIT，无 MVCC/锁| 🔴 高 |
 | 网络模块 | ✅ 完整查询 | 仅模拟响应，未调用执行引擎 | 🔴 高 |
 | 索引支持 | ✅ 多列/唯一 | 仅单列 INTEGER，未在优化中使用 | 🟡 中 |
 
@@ -75,9 +75,9 @@ lock().unwrap()  // 多线程环境下可能 panic
 
 | 问题 | 说明 |
 |------|------|
-| BufferPool | Page 内部数据未保护，可能导致数据竞争 |
-| TransactionManager | 事务内部操作无锁保护 |
-| BPlusTree | 插入操作未加锁，多线程可能破坏树结构 |
+|缓冲池| Page 内部数据未保护，可能导致数据竞争 |
+|事务管理器| 事务内部操作无锁保护 |
+|BPlus树| 插入操作未加锁，多线程可能破坏树结构 |
 
 ### 3.3 内存与性能问题
 
@@ -92,8 +92,8 @@ lock().unwrap()  // 多线程环境下可能 panic
 | 问题 | 说明 |
 |------|------|
 | 注释质量不均衡 | types/value.rs 详细，executor 无注释 |
-| 重复代码 | evaluate_where 和 evaluate_predicate 重叠 |
-| 硬编码值 | buffer_pool 淘汰策略直接 remove(&0) |
+| 重复代码 |evaluate_where 和 evaluate_predicate 重叠|
+| 硬编码值 |buffer_pool 淘汰策略直接 remove(&0)|
 
 ### 3.5 测试覆盖盲点
 
@@ -108,8 +108,8 @@ lock().unwrap()  // 多线程环境下可能 panic
 
 | 问题 | 说明 |
 |------|------|
-| executor 与 storage 耦合 | executor 直接操作 TableData |
-| catalog 未抽象 | analyzer 通过 HashMap 传递表信息 |
+|executor 与 storage 耦合|executor 直接操作 TableData|
+|catalog 未抽象|analyzer 通过 HashMap 传递表信息|
 
 ### 4.2 LogicalPlan/PhysicalPlan 分离
 
@@ -122,8 +122,8 @@ lock().unwrap()  // 多线程环境下可能 panic
 
 | 问题 | 说明 |
 |------|------|
-| 仅一个实现 | 只有 DefaultExecutionEngine |
-| 执行模型错误 | plan.execute() 导致 plan 包含数据 |
+| 仅一个实现 |只有 DefaultExecutionEngine|
+| 执行模型错误 |plan.execute() 导致 plan 包含数据|
 
 ### 4.4 存储引擎
 
@@ -171,7 +171,7 @@ lock().unwrap()  // 多线程环境下可能 panic
 |------|--------|
 | 全局替换 unwrap() | P0 |
 | 为 Page 添加读写锁 | P0 |
-| 实现 BufferPool LRU | P1 |
+|实现 BufferPool LRU| P1 |
 | 统一表达式求值逻辑 | P1 |
 
 ### 6.3 功能完善
@@ -239,7 +239,7 @@ P2 (长期规划):
 |------|------|----------|
 | 密码哈希 | 使用 DefaultHasher，不适合生产环境 | 🟡 中 |
 | 会话 ID | 使用时间戳十六进制，存在冲突风险 | 🟡 中 |
-| Operation 枚举 | 未在代码中定义 | 🟢 低 |
+|Operation 枚举| 未在代码中定义 | 🟢 低 |
 
 ### 8.2 lib.rs
 
@@ -275,12 +275,12 @@ P2 (长期规划):
 
 | 问题 | 说明 | 严重程度 |
 |------|------|----------|
-| unwrap 滥用 | execute_insert 中多次 unwrap | 🔴 高 |
-| 错误处理不统一 | 部分返回 SqlError，部分 panic | 🔴 高 |
+|unwrap 滥用|execute_insert 中多次 unwrap| 🔴 高 |
+| 错误处理不统一 |部分返回 SqlError，部分 panic| 🔴 高 |
 | 索引支持有限 | 仅支持 INTEGER 列 | 🟡 中 |
 | WHERE 求值不完整 | 未处理 AND/OR 组合 | 🔴 高 |
-| 表达式求值缺失 | BinaryOp 返回 Value::Null | 🔴 高 |
-| 存储耦合 | TableData 在 executor 中定义 | 🟡 中 |
+| 表达式求值缺失 |BinaryOp 返回 Value::Null| 🔴 高 |
+| 存储耦合 |TableData 在 executor 中定义| 🟡 中 |
 
 ---
 

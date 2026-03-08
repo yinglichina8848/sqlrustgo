@@ -102,7 +102,7 @@
   - 每日运行 `cargo outdated` 检查依赖更新
   - 问题反馈模板
 - **反馈渠道**: 
-  - GitHub Issues
+- GitHub 问题
   - 团队沟通工具
 
 ## 5. 风险与应对

@@ -1,124 +1,124 @@
-# Changelog
+# 变更日志
 
-All notable changes to SQLRustGo will be documented in this file.
+SQLRustGo 的所有显着更改都将记录在此文件中。
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [未发布]
 
 ### Added
 
-- **Governance**: Unified active development branch to `develop/v1.2.0` for v1.2.0 Alpha phase.
-- **Documentation**: Added explicit `alpha/v1.2.0` status markers across top-level release docs.
-- **Architecture**: Added directory refactor progress notes for crates workspace migration.
+- **治理**：将 v1.2.0 Alpha 阶段的活动开发分支统一到 `develop/v1.2.0`。
+- **文档**：在顶级发布文档中添加了明确的 `alpha/v1.2.0` 状态标记。
+- **架构**：添加了 crates 工作区迁移的目录重构进度说明。
 
 ## [1.2.0] - TBD
 
 ### Added
 
-- **Architecture**: Vectorized execution engine with RecordBatch
-- **Architecture**: StorageEngine trait for pluggable storage backends
-- **Architecture**: FileStorage and MemoryStorage implementations
-- **Architecture**: Cost-based optimizer (CBO) with statistics
-- **Feature**: ANALYZE command for statistics collection
-- **Feature**: Simplified CBO with table/column statistics
-- **Feature**: LocalExecutor for embedded usage
-- **Testing**: LocalExecutor tests (T-005)
+- **架构**：带有 RecordBatch 的矢量化执行引擎
+- **架构**：可插拔存储后端的 StorageEngine 特征
+- **架构**：文件存储和内存存储实现
+- **架构**：带有统计信息的基于成本的优化器（CBO）
+- **功能**：用于统计收集的 ANALYZE 命令
+- **功能**：带有表/列统计信息的简化 CBO
+- **功能**：用于嵌入式使用的 LocalExecutor
+- **测试**：LocalExecutor 测试 (T-005)
 
-### Changed
+### 已更改
 
-- **Refactor**: Storage layer abstraction
-- **Refactor**: Statistics infrastructure
+- **重构**：存储层抽象
+- **重构**：统计基础设施
 
-### Security
+＃＃＃ 安全
 
-- **Audit**: Dependency audit passed (no high-severity vulnerabilities)
+- **审核**：依赖审核已通过（无高严重性漏洞）
 
-### Documentation
+### 文档
 
-- **New**: v1.2.0 Release Notes
-- **New**: v1.2.0 Upgrade Guide
-- **New**: v1.2.0 Maturity Assessment
-- **New**: v1.2.0 Test Plan (target 85%+ coverage)
+- **新**：v1.2.0 发行说明
+- **新增**：v1.2.0 升级指南
+- **新**：v1.2.0 成熟度评估
+- **新**：v1.2.0 测试计划（目标覆盖率超过 85%）
 
 ## [1.1.0] - 2026-03-05
 
 ### Added
 
-- **Architecture**: LogicalPlan/PhysicalPlan separation for query execution
-- **Architecture**: ExecutionEngine trait for pluggable executors
-- **Architecture**: Client-Server architecture with async network layer
-- **Feature**: HashJoin implementation for efficient join operations
-- **Feature**: Connection pool support for multiple clients
-- **Feature**: WHERE clause AND/OR logical operators support
-- **Feature**: Expression evaluation for BinaryOp (+, -, *, /)
-- **Feature**: TEXT column index support (hash-based)
-- **Testing**: Performance benchmark framework with Criterion
-- **Testing**: Test coverage improved to 90.66%
+- **架构**：查询执行的逻辑计划/物理计划分离
+- **架构**：可插入执行器的 ExecutionEngine 特征
+- **架构**：具有异步网络层的客户端-服务器架构
+- **功能**：HashJoin 实现高效的连接操作
+- **功能**：连接池支持多个客户端
+- **功能**：WHERE 子句 AND/OR 逻辑运算符支持
+- **功能**：BinaryOp 的表达式评估（+、-、*、/）
+- **功能**：TEXT 列索引支持（基于哈希）
+- **测试**：使用 Criterion 的性能基准框架
+- **测试**：测试覆盖率提高至 90.66%
 
-### Changed
+### 已更改
 
-- **Refactor**: Replaced unwrap with proper error propagation in executor
-- **Refactor**: Improved error handling with SqlResult<T>
-- **Docs**: Updated gate checklist with correct branch workflow
-- **Docs**: Reorganized teaching materials (student/TA separation)
+- **重构**：用执行器中正确的错误传播替换了 unwrap
+- **重构**：改进了 SqlResult<T> 的错误处理
+- **文档**：使用正确的分支工作流程更新了门检查表
+- **文档**：重新整理教材（学生/助教分离）
 
 ### Fixed
 
-- **Fix**: Clippy warnings resolved (zero warnings)
-- **Fix**: Rust 2021 compatibility (let chains syntax)
-- **Fix**: Code formatting issues
+- **修复**：已解决 Clippy 警告（零警告）
+- **修复**：Rust 2021 兼容性（let 链语法）
+- **修复**：代码格式问题
 
-### Security
+＃＃＃ 安全
 
-- **Audit**: Dependency audit passed
-- **Audit**: No sensitive information leakage
+- **审核**：依赖审核已通过
+- **审计**：无敏感信息泄露
 
-### Documentation
+### 文档
 
-- **New**: DeepSeek evaluation report
-- **New**: Improvement plan for v1.1.0-draft
-- **New**: AI-CLI collaboration notice
-- **New**: v1.3.0 version plan with observability track
-- **New**: 2.0 architecture design documents
-- **New**: Distributed interface design (3.0 preview)
-- **New**: Teaching practice materials (student/TA handbooks)
+- **新**：DeepSeek 评估报告
+- **新**：v1.1.0-draft 的改进计划
+- **新**：AI-CLI 协作通知
+- **新**：v1.3.0 版本计划，带有可观察性轨道
+- **新增**：2.0架构设计文档
+- **新**：分布式界面设计（3.0预览版）
+- **新**：教学实践材料（学生/助教手册）
 
 ## [1.0.0] - 2026-02-22
 
 ### Added
 
-- **Core**: SQL parser supporting SELECT, INSERT, UPDATE, DELETE
-- **Core**: B+ tree storage engine
-- **Core**: Transaction support with WAL
-- **Core**: Basic query execution
-- **Testing**: Unit test framework
-- **Docs**: Initial documentation
+- **核心**：支持 SELECT、INSERT、UPDATE、DELETE 的 SQL 解析器
+- **核心**：B+树存储引擎
+- **核心**：WAL 事务支持
+- **核心**：基本查询执行
+- **测试**：单元测试框架
+- **文档**：初始文档
 
-### Changed
+### 已更改
 
-- Initial release
+- 初始版本
 
 ---
 
-## Version History
+## 版本历史
 
-| Version | Date | Maturity | Notes |
+|版本| Date |到期| Notes |
 |---------|------|----------|-------|
-| v1.2.0 | TBD | L3+ | Vectorization, CBO, Storage abstraction |
-| v1.1.0 | 2026-03-05 | L3 | Architecture upgrade, Clippy passed |
-| v1.0.0 | 2026-02-22 | L3 GA | Initial release |
+| v1.2.0 | TBD | L3+ |矢量化、CBO、存储抽象|
+| v1.1.0 | 2026-03-05 | L3 |架构升级，Clippy通过|
+| v1.0.0 | 2026-02-22 | L3 GA |初次发布|
 
 ---
 
-## Roadmap
+## 路线图
 
-- **v1.2.0**: Development in progress (vectorization, CBO)
-- **v1.1.0**: Released (architecture upgrade)
-- **v1.3.0**: Enterprise features (observability, MVCC)
-- **v2.0**: Distributed architecture
+- **v1.2.0**：开发正在进行中（矢量化，CBO）
+- **v1.1.0**：发布（架构升级）
+- **v1.3.0**：企业功能（可观察性、MVCC）
+- **v2.0**：分布式架构
 
 ---
 
-*This changelog is maintained by yinglichina8848*
+*此变更日志由 yinglichina8848 维护*
