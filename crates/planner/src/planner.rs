@@ -4,10 +4,7 @@
 
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
-use crate::physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
-    SortExec,
-};
+use crate::physical_plan::{AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec, SortExec};
 use crate::Schema;
 use thiserror::Error;
 
@@ -26,10 +23,7 @@ pub type PlannerResult<T> = Result<T, PlannerError>;
 /// Planner trait - converts logical plans to physical plans
 pub trait Planner {
     /// Create a physical plan from a logical plan
-    fn create_physical_plan(
-        &self,
-        logical_plan: &LogicalPlan,
-    ) -> PlannerResult<Box<dyn PhysicalPlan>>;
+    fn create_physical_plan(&self, logical_plan: &LogicalPlan) -> PlannerResult<Box<dyn PhysicalPlan>>;
 
     /// Optimize and create physical plan
     fn optimize(&mut self, logical_plan: LogicalPlan) -> PlannerResult<Box<dyn PhysicalPlan>>;
@@ -63,17 +57,9 @@ impl DefaultPlanner {
                 }
                 Ok(Box::new(exec))
             }
-            LogicalPlan::Projection {
-                input,
-                expr,
-                schema,
-            } => {
+            LogicalPlan::Projection { input, expr, schema } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
-                Ok(Box::new(ProjectionExec::new(
-                    input_plan,
-                    expr.clone(),
-                    schema.clone(),
-                )))
+                Ok(Box::new(ProjectionExec::new(input_plan, expr.clone(), schema.clone())))
             }
             LogicalPlan::Filter { predicate, input } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
@@ -138,8 +124,10 @@ impl DefaultPlanner {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
-            LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
-            LogicalPlan::Union { left, right: _ } => {
+            LogicalPlan::Subquery { subquery, .. } => {
+                self.create_physical_plan_internal(subquery)
+            }
+            LogicalPlan::Union { left, .. } => {
                 // Union - use left plan as base (simplified)
                 self.create_physical_plan_internal(left)
             }
@@ -206,8 +194,8 @@ impl Planner for NoOpPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DataType;
     use crate::Field;
+    use crate::DataType;
 
     #[test]
     fn test_default_planner_creation() {
