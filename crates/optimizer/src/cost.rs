@@ -4,6 +4,7 @@ use super::*;
 
 /// SimpleCostModel - basic cost estimation implementation
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct SimpleCostModel {
     /// CPU cost per row
     cpu_cost_per_row: f64,
@@ -77,13 +78,13 @@ impl SimpleCostModel {
         } else {
             // External sort - I/O bound
             let pages = (row_count as f64 * avg_row_size as f64) / 4096.0;
-            pages as f64 * self.io_cost_per_page * 2.0
+            pages * self.io_cost_per_page * 2.0
         }
     }
 }
 
 impl CostModel for SimpleCostModel {
-    fn estimate_cost(&self, plan: &dyn std::any::Any) -> f64 {
+    fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
         // Simplified - just return a default cost for now
         100.0
     }
