@@ -19,6 +19,7 @@ pub trait PhysicalPlan: Send + Sync {
 
 /// Sequential scan execution operator
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SeqScanExec {
     table_name: String,
     schema: Schema,
@@ -55,6 +56,7 @@ impl PhysicalPlan for SeqScanExec {
 }
 
 /// Projection execution operator
+#[allow(dead_code)]
 pub struct ProjectionExec {
     input: Box<dyn PhysicalPlan>,
     expr: Vec<Expr>,
@@ -63,7 +65,11 @@ pub struct ProjectionExec {
 
 impl ProjectionExec {
     pub fn new(input: Box<dyn PhysicalPlan>, expr: Vec<Expr>, schema: Schema) -> Self {
-        Self { input, expr, schema }
+        Self {
+            input,
+            expr,
+            schema,
+        }
     }
 }
 
@@ -82,6 +88,7 @@ impl PhysicalPlan for ProjectionExec {
 }
 
 /// Filter execution operator
+#[allow(dead_code)]
 pub struct FilterExec {
     input: Box<dyn PhysicalPlan>,
     predicate: Expr,
@@ -108,6 +115,7 @@ impl PhysicalPlan for FilterExec {
 }
 
 /// Aggregate execution operator
+#[allow(dead_code)]
 pub struct AggregateExec {
     input: Box<dyn PhysicalPlan>,
     group_expr: Vec<Expr>,
@@ -146,6 +154,7 @@ impl PhysicalPlan for AggregateExec {
 }
 
 /// Hash join execution operator
+#[allow(dead_code)]
 pub struct HashJoinExec {
     left: Box<dyn PhysicalPlan>,
     right: Box<dyn PhysicalPlan>,
@@ -187,6 +196,7 @@ impl PhysicalPlan for HashJoinExec {
 }
 
 /// Sort execution operator
+#[allow(dead_code)]
 pub struct SortExec {
     input: Box<dyn PhysicalPlan>,
     sort_expr: Vec<crate::SortExpr>,
@@ -213,6 +223,7 @@ impl PhysicalPlan for SortExec {
 }
 
 /// Limit execution operator
+#[allow(dead_code)]
 pub struct LimitExec {
     input: Box<dyn PhysicalPlan>,
     limit: usize,
