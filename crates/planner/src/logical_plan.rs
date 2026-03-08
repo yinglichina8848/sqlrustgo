@@ -86,10 +86,7 @@ pub enum LogicalPlan {
         if_not_exists: bool,
     },
     /// Drop table
-    DropTable {
-        table_name: String,
-        if_exists: bool,
-    },
+    DropTable { table_name: String, if_exists: bool },
 }
 
 impl LogicalPlan {
