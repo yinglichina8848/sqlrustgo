@@ -143,6 +143,4 @@ mod tests {
         let executor = MockExecutor::new();
         assert!(executor.is_ready());
     }
-=======
->>>>>>> origin/develop-v1.2.0
 }
