@@ -1,0 +1,52 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main, develop, release/**]
+  pull_request:
+    branches: [main, develop, release/**]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Build benchmarks
+        run: cargo build --release --benches
+        
+      - name: Run Lexer/Parser benchmarks
+        run: cargo bench --bench lexer_parser_bench -- --save-baseline
+        
+      - name: Run Executor benchmarks
+        run: cargo bench --bench executor_bench -- --save-baseline
+        
+      - name: Run Storage benchmarks
+        run: cargo bench --bench storage_bench -- --save-baseline
+        
+      - name: Run Network benchmarks
+        run: cargo bench --bench network_bench -- --save-baseline
+        
+      - name: Run Integration benchmarks
+        run: cargo bench --bench integration_bench -- --save-baseline
+        
+      - name: Upload benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          output-file-path: ./benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: true

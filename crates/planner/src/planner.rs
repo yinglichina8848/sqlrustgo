@@ -3,9 +3,8 @@
 //! Converts logical plans to physical execution plans.
 
 use crate::logical_plan::LogicalPlan;
-use crate::optimizer::{DefaultOptimizer, Optimizer, OptimizerError, OptimizerResult};
+use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec, SortExec};
-use crate::Expr;
 use crate::Schema;
 use thiserror::Error;
 
@@ -128,7 +127,7 @@ impl DefaultPlanner {
             LogicalPlan::Subquery { subquery, .. } => {
                 self.create_physical_plan_internal(subquery)
             }
-            LogicalPlan::Union { left, right } => {
+            LogicalPlan::Union { left, .. } => {
                 // Union - use left plan as base (simplified)
                 self.create_physical_plan_internal(left)
             }
