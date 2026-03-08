@@ -9,8 +9,8 @@
 | 身份 | 类型 | 权限级别 | 用途 |
 |------|------|----------|------|
 | Owner | 冷账户 | 最高 | 仅用于配置和紧急操作 |
-| Maintainer | 日常使用 | 中等 | 开发和PR合并 |
-| Developer | 未来扩展 | 低 | 仅提交PR |
+|维护者| 日常使用 | 中等 | 开发和PR合并 |
+|开发商| 未来扩展 | 低 | 仅提交PR |
 | CI Bot | 自动化 | 特殊 | 仅用于CI/CD操作 |
 
 ## 🔄 实施步骤
@@ -63,7 +63,7 @@ cat ~/.ssh/id_ed25519_maintainer.pub
 #### 4.2 添加 SSH 密钥到 GitHub
 
 1. 使用新账号登录 GitHub
-2. 进入 settings → SSH and GPG keys
+2.进入设置→SSH和GPG密钥
 3. 点击 "New SSH key"
 4. 粘贴公钥内容
 5. 保存
@@ -226,7 +226,7 @@ git config user.email "specific@example.com"
 
 | 步骤 | 状态 | 完成时间 | 负责人 |
 |------|------|----------|--------|
-| 创建 Maintainer 账号 | | | |
+|创建 Maintainer 账号| | | |
 | 邀请到仓库 | | | |
 | 配置 SSH 密钥 | | | |
 | 更新本地配置 | | | |

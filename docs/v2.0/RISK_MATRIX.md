@@ -22,7 +22,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| **风险** | Executor/Storage trait 接口频繁变更 |
+| **风险** |Executor/Storage trait 接口频繁变更|
 | **概率** | 中 |
 | **影响** | 高 - 影响所有实现 |
 | **应对策略** | Phase0 阶段冻结核心 Trait |
@@ -287,10 +287,10 @@ pub enum SqlError {
 
 | 风险类型 | 负责人 |
 |----------|--------|
-| Trait 设计 | openheart |
-| 内存管理 | heartopen |
-| 网络协议 | openheart |
-| 并发安全 | maintainer |
+| Trait 设计 |开放的心|
+| 内存管理 |敞开心扉|
+| 网络协议 |开放的心|
+| 并发安全 |维护者|
 
 ---
 

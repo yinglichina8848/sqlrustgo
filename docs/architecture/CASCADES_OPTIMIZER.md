@@ -1,4 +1,4 @@
-# Cascades Optimizer Design
+# 级联优化器设计
 
 > **版本**: 1.0
 > **更新日期**: 2026-03-07
@@ -8,16 +8,16 @@
 
 ## 概述
 
-SQLRustGo 使用 **Cascades Query Optimizer**。
+SQLRustGo 使用**级联查询优化器**。
 
 Cascades 是现代数据库优化器的主流架构。
 
 典型实现：
 
-- SQL Server
-- Greenplum
+- SQL服务器
+- 格林梅
 - CockroachDB
-- Oracle
+- 甲骨文
 
 ---
 
@@ -78,19 +78,19 @@ Group3 --> PhysExpr4[PhysicalExpr<br/>HashAggregate]
 
 | 类型 | 描述 | 示例 |
 |------|------|------|
-| **Logical Rewrite** | 逻辑表达式变换 | Filter Pushdown |
-| **Physical Implementation** | 物理实现选择 | Join 算法选择 |
-| **Exploration** | 等价探索 | Join Commutativity |
+|**逻辑重写**| 逻辑表达式变换 |滤波器下推|
+|**物理实现**| 物理实现选择 | Join 算法选择 |
+|**勘探**| 等价探索 |加入交换律|
 
 ## 3.2 规则示例
 
-### Join Commutativity
+### 连接交换律
 
 ```
 A ⋈ B  →  B ⋈ A
 ```
 
-### Filter Pushdown
+### 过滤器下推
 
 ```
 σ(A.x > 10)(A ⋈ B) → σ(A.x > 10)(A) ⋈ B
@@ -125,20 +125,20 @@ Cost = CPU × CPU_Cost + IO × IO_Cost + Network × Network_Cost
 
 ## 5.1 Join 算法成本
 
-### Hash Join Cost
+### 哈希连接成本
 
 ```
 Cost = build_cost + probe_cost
      = |inner| + |outer| × match_ratio
 ```
 
-### Nested Loop Join Cost
+### 嵌套循环连接成本
 
 ```
 Cost = |outer| + |outer| × |inner|
 ```
 
-### Sort Merge Join Cost
+### 排序合并连接成本
 
 ```
 Cost = sort_outer + sort_inner + merge
@@ -148,9 +148,9 @@ Cost = sort_outer + sort_inner + merge
 
 | 算法 | 成本公式 |
 |------|----------|
-| **Table Scan** | rows × row_size |
-| **Index Scan** | index_cost + lookup_cost |
-| **Index Only Scan** | index_cost |
+|**表扫描**|行 × 行大小|
+|**索引扫描**|索引成本 + 查找成本|
+|**仅索引扫描**|索引成本|
 
 ---
 
@@ -202,7 +202,7 @@ pub enum Operator {
 }
 ```
 
-## 6.3 Rule Trait
+## 6.3 规则特征
 
 ```rust
 pub trait Rule: Send {
@@ -216,7 +216,7 @@ pub trait Rule: Send {
 
 ---
 
-# 7. Cascades Optimizer Pipeline
+# 7.级联优化器管道
 
 ```mermaid
 flowchart LR
@@ -237,7 +237,7 @@ Cost2 --> Best[Best Plan<br/>Selection]
 
 # 8. 优化规则实现
 
-## 8.1 Filter Pushdown
+## 8.1 过滤器下推
 
 ```rust
 pub struct FilterPushdownRule;
@@ -254,7 +254,7 @@ impl Rule for FilterPushdownRule {
 }
 ```
 
-## 8.2 Join Reorder
+## 8.2 加入重新排序
 
 ```rust
 pub struct JoinReorderRule;
@@ -267,7 +267,7 @@ impl Rule for JoinReorderRule {
 }
 ```
 
-## 8.3 Index Selection
+## 8.3 索引选择
 
 ```rust
 pub struct IndexSelectionRule;

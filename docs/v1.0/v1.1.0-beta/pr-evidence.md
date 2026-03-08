@@ -6,8 +6,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 分支 | feature/network-coverage-improvement → feature/v1.1.0-beta |
-| 作者 | yinglichina8848 |
+| 分支 |功能/网络覆盖范围改进→功能/v1.1.0-beta|
+| 作者 |英利china8848|
 | 状态 | OPEN |
 | 审核 | 高小药 (2026-02-20) |
 
@@ -20,10 +20,10 @@
 
 | 检查项 | 结果 |
 |--------|------|
-| cargo test | ✅ 297 通过 |
-| cargo clippy | ✅ 零警告 |
-| cargo fmt | ✅ 通过 |
-| coverage | ✅ 90.94% |
+|货物测试| ✅ 297 通过 |
+|夹杂货物| ✅ 零警告 |
+|快速充电| ✅ 通过 |
+|覆盖范围| ✅ 90.94% |
 
 ### 风险评估
 
@@ -39,8 +39,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 分支 | feature/unwrap-error-handling → feature/v1.1.0-beta |
-| 作者 | yinglichina8848 |
+| 分支 |功能/展开错误处理 → 功能/v1.1.0-beta|
+| 作者 |英利china8848|
 | 状态 | OPEN |
 | 审核 | 高小药 (2026-02-20) |
 
@@ -59,9 +59,9 @@
 
 | 检查项 | 结果 |
 |--------|------|
-| cargo build | ✅ 通过 |
-| cargo test | ✅ 全部通过 |
-| cargo clippy | ✅ 零警告 |
+|货物建造| ✅ 通过 |
+|货物测试| ✅ 全部通过 |
+|夹杂货物| ✅ 零警告 |
 
 ### 风险评估
 
@@ -77,8 +77,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 分支 | fix/types-value-tosql → feature/v1.1.0-beta |
-| 作者 | yinglichina8848 |
+| 分支 |修复/types-value-tosql → feature/v1.1.0-beta|
+| 作者 |英利china8848|
 | 状态 | OPEN |
 
 ### 变更内容
@@ -89,8 +89,8 @@
 
 | 检查项 | 结果 |
 |--------|------|
-| cargo fmt | ✅ |
-| cargo clippy | ✅ |
+|快速充电| ✅ |
+|夹杂货物| ✅ |
 
 ### 风险评估
 
@@ -103,18 +103,18 @@
 
 ### 预期内容
 
-- COUNT(*), COUNT(col)
-- SUM(col), AVG(col)
-- MIN(col), MAX(col)
+- 计数（*）、计数（列）
+- SUM(列), AVG(列)
+- 最小（列），最大（列）
 
 ### 验证要求
 
 | 检查项 | 要求 |
 |--------|------|
-| cargo build | 通过 |
-| cargo test | 全部通过 |
-| cargo clippy | 零警告 |
-| cargo fmt | 通过 |
+|货物建造| 通过 |
+|货物测试| 全部通过 |
+|夹杂货物| 零警告 |
+|快速充电| 通过 |
 | 示例 SQL | 在 Issue 评论中留痕 |
 
 ---
