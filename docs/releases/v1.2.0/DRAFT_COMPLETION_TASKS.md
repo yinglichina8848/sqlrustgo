@@ -71,7 +71,7 @@
 #### 任务 A: 修复 Clippy 错误 ✅ 已完成
 
 - PR #302: 修复 clippy 警告
-- PR #303: 合并 clippy 修复到 develop-v1.2.0
+- PR #303: 合并 clippy 修复到 develop/v1.2.0
 
 #### 任务 B: 修复测试编译错误 ✅ 已完成
 
