@@ -2,6 +2,7 @@
 
 > 版本：v1.0
 > 日期：2026-03-02
+> **当前执行口径（2026-03-07）**: v1.2.0 当前开发分支为 `develop/v1.2.0`；v1.1.0 已进入维护阶段。
 
 ---
 
@@ -14,8 +15,10 @@
 │                                                                              │
 │   main                → 主分支（稳定发布版本）                               │
 │   release/v1.0.0      → v1.0.0 稳定版本 🔒 已锁定                           │
-│   develop-v1.1.0      → 2.0 开发分支（当前开发）                            │
-│   feature/*           → 功能分支（基于 develop-v1.1.0）                      │
+│   release/v1.1.0      → v1.1.0 稳定版本 🔒 维护中                           │
+│   develop/v1.2.0      → v1.2.0 开发分支（当前开发）                            │
+│   develop-v1.1.0      → v1.1.0 维护分支                                      │
+│   feature/*           → 功能分支（基于 develop/v1.2.0）                      │
 │   fix/*               → 修复分支                                             │
 │   docs/*              → 文档分支                                             │
 │                                                                              │
@@ -41,15 +44,21 @@
 - **直接推送**: ❌ 禁止
 - **PR 合并**: ❌ 需要 2 人审批 + 代码所有者审批
 
-**锁定原因**: v1.0.0 已正式发布，不应再接收任何修改。所有新开发应在 develop-v1.1.0 进行。
+**锁定原因**: v1.0.0 已正式发布，不应再接收任何修改。所有新开发应在 develop/v1.2.0 进行。
 
-### 2.3 develop-v1.1.0 分支
+### 2.3 develop/v1.2.0 分支 (当前开发)
 
-- **用途**: 2.0 版本开发
+- **用途**: v1.2.0 版本开发 (Alpha 阶段)
 - **保护级别**: 中等
 - **合并来源**: feature/*, fix/*, docs/*
 - **直接推送**: ❌ 禁止
 - **PR 合并**: ✅ 需要 1 人审批
+
+### 2.4 develop-v1.1.0 分支 (维护中)
+
+- **用途**: v1.1.0 维护分支
+- **保护级别**: 高
+- **状态**: 仅接受 Bug 修复
 
 ---
 
@@ -58,9 +67,9 @@
 ### 3.1 功能开发流程
 
 ```
-1. 从 develop-v1.1.0 创建功能分支
-   git checkout develop-v1.1.0
-   git pull origin develop-v1.1.0
+1. 从 develop/v1.2.0 创建功能分支
+   git checkout develop/v1.2.0
+   git pull origin develop/v1.2.0
    git checkout -b feature/<功能名>
 
 2. 开发和测试
@@ -74,8 +83,8 @@
 4. 推送分支
    git push origin feature/<功能名>
 
-5. 创建 PR 到 develop-v1.1.0
-   gh pr create --base develop-v1.1.0 --head feature/<功能名>
+5. 创建 PR 到 develop/v1.2.0
+   gh pr create --base develop/v1.2.0 --head feature/<功能名>
 
 6. 等待审批和合并
 ```
@@ -83,11 +92,11 @@
 ### 3.2 发布流程
 
 ```
-develop-v1.1.0 → release/v1.1.0 → main
+develop/v1.2.0 → release/v1.2.0 → main
 
-1. develop-v1.1.0 测试稳定后，创建 release/v1.1.0
-2. release/v1.1.0 进行最终测试和修复
-3. release/v1.1.0 合并到 main 并打 tag
+1. develop/v1.2.0 测试稳定后，创建 release/v1.2.0
+2. release/v1.2.0 进行最终测试和修复
+3. release/v1.2.0 合并到 main 并打 tag
 ```
 
 ---
@@ -106,7 +115,7 @@ develop-v1.1.0 → release/v1.1.0 → main
 | 对话解决 | 必须 |
 | 管理员限制 | ✅ 启用 |
 
-### 4.2 develop-v1.1.0 保护规则
+### 4.2 develop/v1.2.0 保护规则
 
 | 规则 | 设置 |
 |------|------|
@@ -128,7 +137,7 @@ develop-v1.1.0 → release/v1.1.0 → main
 
 ### ✅ 正确做法
 
-1. **所有新开发在 develop-v1.1.0 进行**
+1. **所有新开发在 develop/v1.2.0 进行**
 2. **通过 PR 流程合并代码**
 3. **遵循代码审查流程**
 
@@ -138,9 +147,9 @@ develop-v1.1.0 → release/v1.1.0 → main
 
 AI-CLI 工具必须遵循以下规则：
 
-1. **开发分支**: 必须使用 `develop-v1.1.0`
-2. **PR 目标**: 必须指向 `develop-v1.1.0`
-3. **禁止操作**: 不要尝试修改 `release/v1.0.0`
+1. **开发分支**: 必须使用 `develop/v1.2.0`
+2. **PR 目标**: 必须指向 `develop/v1.2.0`
+3. **禁止操作**: 不要尝试修改 `release/v1.0.0` 或 `release/v1.1.0`
 
 ---
 
