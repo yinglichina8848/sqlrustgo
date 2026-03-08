@@ -151,7 +151,7 @@
    - 结构化 → 面向对象 → 敏捷 → AI增强
    - AI是新的生产力工具，不是替代
 
-2. **Greenfield vs Brownfield**
+2. **格林菲尔德 vs 布朗菲尔德**
    - Greenfield：新项目，自由度高，AI效果好
    - Brownfield：遗留系统，认知负荷高，AI需更多上下文
    - 本课程项目属于Greenfield类型
@@ -455,10 +455,10 @@
 2. **类图**
    - 类的组成：属性、方法
    - 六种关系：关联、聚合、组合、依赖、泛化、实现
-   - PlantUML语法
+- PlantUML语法
 
 3. **SQLRustGo类设计**
-   - 核心类：Value, Token, Statement, Page, ExecutionEngine
+- 核心类：Value, Token, Statement, Page, ExecutionEngine
    - 类关系分析
    - AI辅助类图生成
 
@@ -621,7 +621,7 @@
 
 3. **架构设计**
    - 分层架构
-   - SQLRustGo四层架构
+- SQLRustGo四层架构
    - 部署图
 
 4. **快速原型法**
@@ -885,10 +885,10 @@
    - How：架构设计流程、架构风格选择、架构评估方法、AI辅助设计
 
 2. **SQLRustGo四层架构**
-   - Parser Layer：SQL解析
-   - Planner Layer：查询优化
-   - Executor Layer：查询执行
-   - Storage Layer：数据存储
+- 解析器层：SQL分析
+- Planner Layer：查询优化
+- Executor Layer：查询执行
+- Storage Layer：数据存储
 
 3. **架构设计实践**
    - PlantUML绘制架构图
@@ -1176,7 +1176,7 @@
    - How：划分方法、划分流程、评估方法、AI辅助划分
 
 2. **SQLRustGo模块划分**
-   - Parser模块、Planner模块、Executor模块、Storage模块、Common模块
+- Parser模块、Planner模块、Executor模块、Storage模块、Common模块
    - 模块依赖关系
    - 模块接口设计
 
@@ -1423,12 +1423,12 @@
 
 3. **AI辅助实现语法分析器**
    - AST定义
-   - Parser实现
+- Parser实现
    - 测试验证
 
 4. **AI辅助实现存储引擎**
    - Page结构
-   - BufferPool实现
+- BufferPool实现
    - 测试验证
 
 ### 课堂互动
@@ -1569,7 +1569,7 @@
 ### 核心知识点
 
 1. **测试驱动开发**
-   - Red-Green-Refactor循环
+- Red-Green-Refactor循环
    - 测试先行的好处
    - TDD实践技巧
 
@@ -1580,7 +1580,7 @@
 
 3. **Rust测试框架**
    - #[test]属性
-   - assert!宏
+- assert!宏
    - 测试组织
    - 覆盖率工具
 
@@ -1611,7 +1611,7 @@
 | 周次 | 理论知识 | 实践技能 | 项目产出 |
 |------|----------|----------|----------|
 | 1 | 软件工程发展历史、Greenfield/Brownfield、AI局限性 | 环境搭建 | 开发环境 |
-| 2 | 结构化设计、UML概述、用例图 | PlantUML使用 | 用例图文档 |
+| 2 | 结构化设计、UML概述、用例图 |PlantUML使用| 用例图文档 |
 | 3 | 面向对象设计、SOLID原则、类图 | 类图绘制 | 类图文档 |
 | 4 | 顺序图、状态图、架构图、快速原型法 | UML综合实践 | 设计文档 |
 | 5 | AI辅助需求分析、提示词工程 | 提示词设计 | 设计文档 |

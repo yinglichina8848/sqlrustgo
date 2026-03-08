@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/version-alpha%2Fv1.2.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/branch-develop%2Fv1.2.0-green" alt="Branch">
+  <img src="https://img.shields.io/badge/branch-develop--v1.2.0-green" alt="Branch">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
@@ -55,8 +55,8 @@ cargo clippy --all-targets -- -D warnings
   - [分支阶段治理](docs/releases/v1.2.0/BRANCH_STAGE_GOVERNANCE.md)
   - [测试计划](docs/releases/v1.2.0/TEST_PLAN.md)
 - 已发布版本
-  - [v1.1.0 文档](docs/releases/v1.1.0/)
-  - [v1.0.0 文档](docs/releases/v1.0.0/)
+- [v1.1.0 文档](docs/releases/v1.1.0/)
+- [v1.0.0 文档](docs/releases/v1.0.0/)
 - 中长期规划
   - [长期路线图](docs/releases/LONG_TERM_ROADMAP.md)
   - [2.0 路线图](docs/v2.0/SQLRUSTGO_2_0_ROADMAP.md)
@@ -75,4 +75,4 @@ cargo clippy --all-targets -- -D warnings
 
 - 历史阶段口径 `v1.2.0-draft` 保留在版本文档历史记录中，用于追溯 Draft 阶段治理与门禁演进。
 - v1.2.0 已完成目录重构（`src/` 到 `crates/` workspace）并进入 Alpha 阶段持续开发。
-- 分支治理已统一到 `develop/v1.2.0` 主开发分支，旧命名保留为历史兼容信息。
+- 分支治理已统一到 `develop/v1.2.0` 主开发分支，旧命名（如 `develop/v1.2.0`、`develop-1.2.0`）保留为历史兼容信息。

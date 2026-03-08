@@ -12,10 +12,10 @@
 1. [设计目标](#一设计目标)
 2. [参考项目](#二参考项目)
 3. [ExecutionContext 设计](#三executioncontext-设计)
-4. [Executor Trait](#四executor-trait)
-5. [Plan Fragment](#五plan-fragment)
+4. [执行者特质](#四执行者特质)
+5. [计划片段](#五plan-fragment)
 6. [DataExchange 接口](#六dataexchange-接口)
-7. [Storage Trait](#七storage-trait)
+7. [存储特征](#七storage-trait)
 8. [分布式架构预览](#八分布式架构预览)
 
 ---
@@ -43,25 +43,25 @@
 
 | 设计点 | 参考内容 |
 |--------|----------|
-| 分布式执行 | Coprocessor 模型 |
+| 分布式执行 |Coprocessor 模型|
 | 数据交换 | Chunk 流式传输 |
 | 调度模型 | DAG 调度 |
 
-### 2.2 Cockroach Labs
+### 2.2 蟑螂实验室
 
 | 设计点 | 参考内容 |
 |--------|----------|
-| 分布式事务 | MVCC + 2PC |
+| 分布式事务 |MVCC+2PC|
 | 数据复制 | Raft 共识 |
 | 节点通信 | gRPC |
 
-### 2.3 Apache Spark
+### 2.3 阿帕奇火花
 
 | 设计点 | 参考内容 |
 |--------|----------|
-| 执行模型 | Stage/Task 划分 |
-| 数据交换 | Shuffle 机制 |
-| 容错机制 | Lineage 重算 |
+| 执行模型 |Stage/Task 划分|
+| 数据交换 |Shuffle 机制|
+| 容错机制 |Lineage 重算|
 
 ---
 
@@ -88,7 +88,7 @@ impl NodeId {
 }
 ```
 
-### 3.2 ExecutionMode
+### 3.2 执行模式
 
 ```rust
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,7 +98,7 @@ pub enum ExecutionMode {
 }
 ```
 
-### 3.3 ExecutionContext Trait
+### 3.3 ExecutionContext 特征
 
 ```rust
 pub trait ExecutionContext: Send + Sync {
@@ -508,7 +508,7 @@ impl DataExchange for NetworkExchange {
 
 ---
 
-## 七、Storage Trait
+## 七、存储特性
 
 ### 7.1 Trait 定义
 
@@ -542,11 +542,11 @@ pub trait StorageEngine: Send + Sync {
 
 | 实现 | 版本 | 说明 |
 |------|------|------|
-| MemoryStorage | 2.0 | 内存存储 |
-| FileStorage | 2.0 | 文件存储 |
-| RocksDBStorage | 2.0+ | RocksDB 存储 |
-| RemoteStorage | 3.0 | 远程存储 |
-| DistributedKVStorage | 3.0 | 分布式 KV 存储 |
+|内存存储| 2.0 | 内存存储 |
+|文件存储| 2.0 | 文件存储 |
+|RocksDB存储| 2.0+ |RocksDB 存储|
+|远程存储| 3.0 | 远程存储 |
+|分布式KV存储| 3.0 | 分布式 KV 存储 |
 
 ---
 

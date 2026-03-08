@@ -20,7 +20,7 @@ MAJOR.MINOR.PATCH[-prerelease][+build]
 | **MAJOR** | 不兼容的 API 变更 | 1.0.0 → 2.0.0 |
 | **MINOR** | 向后兼容的新功能 | 1.2.0 → 1.3.0 |
 | **PATCH** | 向后兼容的 Bug 修复 | 1.2.0 → 1.2.1 |
-| **prerelease** | 预发布版本 | alpha, beta, rc |
+|**预发布**| 预发布版本 |阿尔法、贝塔、RC|
 | **build** | 构建元数据 | +build.123 |
 
 ### 1.2 内部版本号
@@ -67,10 +67,10 @@ Draft → Alpha → Beta → RC → GA
 
 | 检查点 | 触发条件 | 审核人 |
 |--------|----------|--------|
-| **Draft Gate** | 进入 Alpha 前 | 架构委员会 |
-| **Alpha Gate** | 进入 Beta 前 | Maintainer |
-| **Beta Gate** | 进入 RC 前 | Maintainer + 1 Reviewer |
-| **Release Gate** | 进入 GA 前 | 完整评审 |
+|**吃水门**| 进入 Alpha 前 | 架构委员会 |
+|**阿尔法门**| 进入 Beta 前 |维护者|
+|**贝塔门**| 进入 RC 前 |维护者 + 1 审阅者|
+|**释放门**| 进入 GA 前 | 完整评审 |
 
 ### 3.2 发布前检查清单
 
