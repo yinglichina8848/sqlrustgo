@@ -26,7 +26,7 @@ git pull origin baseline
 ```
 
 **记录**:
-- Commit hash: 
+- 提交哈希：
 - CI 状态: 
 - 覆盖率: 
 - 安全扫描: 
@@ -65,13 +65,13 @@ git push origin v1.0.0
 **构建内容**:
 - [ ] 构建 release binary
 - [ ] 构建 docker image
-- [ ] 生成 checksum
-- [ ] 保存 build log
+- [ ] 生成校验和
+- [ ] 保存构建日志
 
 **记录**:
 - 构建环境: 
 - 构建时间: 
-- commit hash: 
+- 提交哈希：
 - 构建机器: 
 
 ### 🕐 13:00 — 生成发布证据目录
@@ -115,7 +115,7 @@ git push origin baseline
 ### 🕓 16:00 — 宣布 GA
 
 **更新内容**:
-- [ ] 更新 README Badge
+- [ ] 更新自述文件徽章
 - [ ] 更新 CURRENT_VERSION
 - [ ] 发布公告
 - [ ] 通知团队
@@ -142,7 +142,7 @@ Commit: abcdef123456
 Type: GA (General Availability)
 ```
 
-### 🎯 Overview
+### 🎯 概述
 ```
 This is the first stable General Availability release of SQLRustGo.
 
@@ -153,7 +153,7 @@ This release completes:
 - RC validation cycle
 ```
 
-### ✨ New Features
+### ✨ 新功能
 ```
 - SQL 解析引擎
 - 查询执行引擎
@@ -167,33 +167,33 @@ This release completes:
 - Fix performance regression in X
 ```
 
-### 🔒 Security
+### 🔒 安全
 ```
 - Dependency audit passed
 - No critical vulnerabilities detected
 ```
 
-### 📊 Quality Metrics
+### 📊 质量指标
 ```
 - Test Coverage: 84%
 - All CI checks passed
 - Security scan: 0 Critical / 0 High
 ```
 
-### 📦 Artifacts
+### 📦 文物
 ```
 - sqlrustgo-v1.0.0-darwin-amd64.tar.gz
 - sqlrustgo-v1.0.0-linux-amd64.tar.gz
 - docker image: sqlrustgo:1.0.0
 ```
 
-### 📝 Upgrade Notes
+### 📝 升级说明
 ```
 - No breaking changes
 - Compatible with previous RC1
 ```
 
-### ⚠ Known Issues
+### ⚠ 已知问题
 ```
 - Minor logging inconsistency (non-blocking)
 ```
@@ -307,16 +307,16 @@ echo "Version check passed: $TAG"
 
 | 阶段 | 状态 | 开始时间 | 完成时间 | 负责人 |
 |------|------|----------|----------|--------|
-| 准备阶段 | ⏳ | | | yinglichina8848 |
-| 冻结确认 | ⏳ | | | yinglichina8848 |
-| 版本确认 | ⏳ | | | yinglichina8848 |
-| 打 Tag | ⏳ | | | yinglichina8848 |
-| 构建发布 | ⏳ | | | yinglichina8848 |
-| 证据归档 | ⏳ | | | yinglichina8848 |
-| GitHub Release | ⏳ | | | yinglichina8848 |
-| 验证发布 | ⏳ | | | yinglichina8848 |
-| 宣布 GA | ⏳ | | | yinglichina8848 |
-| 锁定发布 | ⏳ | | | yinglichina8848 |
+| 准备阶段 | ⏳ | | |英利china8848|
+| 冻结确认 | ⏳ | | |英利china8848|
+| 版本确认 | ⏳ | | |英利china8848|
+| 打 Tag | ⏳ | | |英利china8848|
+| 构建发布 | ⏳ | | |英利china8848|
+| 证据归档 | ⏳ | | |英利china8848|
+|GitHub 发布| ⏳ | | |英利china8848|
+| 验证发布 | ⏳ | | |英利china8848|
+| 宣布 GA | ⏳ | | |英利china8848|
+| 锁定发布 | ⏳ | | |英利china8848|
 
 ---
 

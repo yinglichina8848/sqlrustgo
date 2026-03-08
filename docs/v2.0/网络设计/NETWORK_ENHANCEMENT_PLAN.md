@@ -12,9 +12,9 @@
 
 | 组件 | 状态 | 说明 |
 |------|------|------|
-| MySQL 协议 | ✅ 已实现 | HandshakeV10, OK/Error Packet, Result Set |
-| 同步服务器 | ⚠️ 基础 | `start_server_sync()` 单连接处理 |
-| 客户端连接 | ⚠️ 基础 | `execute_query_on_server()` 简单查询 |
+| MySQL 协议 | ✅ 已实现 |HandshakeV10、OK/Error 数据包、结果集|
+| 同步服务器 | ⚠️ 基础 |`start_server_sync()` 单连接处理|
+| 客户端连接 | ⚠️ 基础 |`execute_query_on_server()` 简单查询|
 | 独立可执行程序 | ❌ 缺失 | 无 `bin/server.rs` 和 `bin/client.rs` |
 | 异步处理 | ❌ 缺失 | 无异步服务器实现 |
 | 连接池 | ❌ 缺失 | 无多连接管理 |
@@ -102,10 +102,10 @@ async fn main() -> anyhow::Result<()> {
 
 | 功能 | 说明 | 优先级 |
 |------|------|--------|
-| 命令行参数解析 | addr, data-dir, config, verbose | P0 |
+| 命令行参数解析 |地址、数据目录、配置、详细| P0 |
 | 配置文件加载 | TOML 格式配置文件 | P1 |
 | 存储引擎初始化 | 数据目录创建和初始化 | P0 |
-| 信号处理 | SIGINT/SIGTERM 优雅关闭 | P0 |
+| 信号处理 |SIGINT/SIGTERM 优雅关闭| P0 |
 | 日志输出 | 访问日志、错误日志 | P1 |
 
 #### 2.1.2 Client 可执行程序
@@ -158,7 +158,7 @@ async fn main() -> anyhow::Result<()> {
 
 | 功能 | 说明 | 优先级 |
 |------|------|--------|
-| 命令行参数解析 | host, port, user, password, database | P0 |
+| 命令行参数解析 |主机、端口、用户、密码、数据库| P0 |
 | 单次查询执行 | 执行一条SQL并输出结果 | P0 |
 | 交互模式 (REPL) | 持续读取和执行SQL | P1 |
 | SQL文件执行 | 执行文件中的多条SQL | P1 |
@@ -487,7 +487,7 @@ src/
 |----|------|--------|----------|------|
 | N-019 | 认证机制实现 | AI-CLI | 4h | N-013 |
 | N-020 | 用户权限管理 | AI-CLI | 3h | N-019 |
-| N-021 | SSL/TLS 支持 | AI-CLI | 4h | N-011 |
+| N-021 |SSL/TLS 支持| AI-CLI | 4h | N-011 |
 | N-022 | 连接超时和重连 | AI-CLI | 2h | N-012 |
 | N-023 | 访问日志和查询日志 | AI-CLI | 2h | N-011 |
 | N-024 | 性能测试和优化 | AI-CLI | 4h | N-023 |

@@ -88,7 +88,7 @@ engine.execute(parse(&format!("INSERT INTO test VALUES ({})", i)).unwrap())
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
 | F-01: 依赖审计 | ⚠️ 部分通过 | 网络问题无法完整审计 |
-| F-02: 安全扫描 | ✅ 通过 | clippy/build 无问题 |
+| F-02: 安全扫描 | ✅ 通过 |clippy/build 无问题|
 | F-03: 敏感信息检查 | ✅ 通过 | 无敏感信息泄露 |
 | F-04: SQL 注入测试 | ✅ 通过 | 使用参数化查询 |
 
@@ -103,4 +103,4 @@ engine.execute(parse(&format!("INSERT INTO test VALUES ({})", i)).unwrap())
 ---
 
 ## 审计人
-OpenCode
+开放代码
