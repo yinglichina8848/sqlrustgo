@@ -398,4 +398,157 @@ mod tests {
 
         assert_eq!(pool.free_count(), 0);
     }
+
+    #[test]
+    fn test_buffer_pool_clear() {
+        let pool = BufferPool::new(10);
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+
+        assert_eq!(pool.len(), 2);
+        pool.clear();
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn test_buffer_pool_allocate() {
+        let pool = BufferPool::new(10);
+        let page = pool.allocate(1);
+
+        assert_eq!(page.page_id(), 1);
+        assert!(pool.get(1).is_some());
+    }
+
+    #[test]
+    fn test_buffer_pool_get_or_load() {
+        let pool = BufferPool::new(10);
+        let load_count = std::sync::atomic::AtomicUsize::new(0);
+
+        let page = pool.get_or_load(1, |_| {
+            load_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Arc::new(Page::new(1))
+        });
+
+        assert_eq!(page.page_id(), 1);
+        assert_eq!(load_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+        let page2 = pool.get_or_load(1, |_| {
+            load_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Arc::new(Page::new(1))
+        });
+
+        assert_eq!(page2.page_id(), 1);
+        assert_eq!(load_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_buffer_pool_reset_stats() {
+        let pool = BufferPool::new(10);
+        pool.insert(Arc::new(Page::new(1)));
+        let _ = pool.get(1);
+        let _ = pool.get(999);
+
+        pool.reset_stats();
+
+        let stats = pool.stats();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+    }
+
+    #[test]
+    fn test_buffer_pool_len() {
+        let pool = BufferPool::new(10);
+        assert_eq!(pool.len(), 0);
+
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+
+        assert_eq!(pool.len(), 2);
+    }
+
+    #[test]
+    fn test_buffer_pool_insert_existing() {
+        let pool = BufferPool::new(10);
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(1)));
+
+        assert_eq!(pool.len(), 1);
+    }
+
+    #[test]
+    fn test_buffer_pool_prefetch_loader() {
+        let pool = BufferPool::with_prefetch(10, 2);
+
+        pool.prefetch(&[100, 101, 102], |page_id| Arc::new(Page::new(page_id)));
+
+        assert!(pool.get(100).is_some());
+        assert!(pool.get(101).is_some());
+    }
+
+    #[test]
+    fn test_buffer_pool_stats_evictions() {
+        let pool = BufferPool::new(2);
+
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+        pool.insert(Arc::new(Page::new(3)));
+
+        let stats = pool.stats();
+        assert!(stats.evictions >= 1);
+    }
+
+    #[test]
+    fn test_buffer_pool_with_prefetch() {
+        let pool = BufferPool::with_prefetch(10, 5);
+        assert_eq!(pool.capacity(), 10);
+    }
+
+    #[test]
+    fn test_memory_pool_multiple_allocations() {
+        let pool = MemoryPool::new(1024);
+
+        let buf1 = pool.allocate();
+        let buf2 = pool.allocate();
+
+        assert_eq!(buf1.len(), 1024);
+        assert_eq!(buf2.len(), 1024);
+    }
+
+    #[test]
+    fn test_memory_pool_block_size() {
+        let pool = MemoryPool::new(2048);
+        assert_eq!(pool.block_size(), 2048);
+    }
+
+    #[test]
+    fn test_memory_pool_default() {
+        let pool = MemoryPool::default();
+        assert_eq!(pool.block_size(), 4096);
+    }
+
+    #[test]
+    fn test_buffer_pool_stats_default() {
+        let stats = BufferPoolStats::default();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+        assert_eq!(stats.evictions, 0);
+        assert_eq!(stats.prefetch_hits, 0);
+    }
+
+    #[test]
+    fn test_buffer_pool_stats_hit_rate_zero() {
+        let stats = BufferPoolStats::default();
+        assert_eq!(stats.hit_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_buffer_pool_stats_hit_rate_full() {
+        let stats = BufferPoolStats {
+            hits: 10,
+            misses: 0,
+            evictions: 0,
+            prefetch_hits: 0,
+        };
+        assert_eq!(stats.hit_rate(), 1.0);
+    }
 }
