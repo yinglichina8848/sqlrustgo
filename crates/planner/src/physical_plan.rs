@@ -65,7 +65,11 @@ pub struct ProjectionExec {
 
 impl ProjectionExec {
     pub fn new(input: Box<dyn PhysicalPlan>, expr: Vec<Expr>, schema: Schema) -> Self {
-        Self { input, expr, schema }
+        Self {
+            input,
+            expr,
+            schema,
+        }
     }
 }
 
