@@ -1,20 +1,22 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build (for manual trigger)'
+        required: false
+        type: string
   push:
     branches:
       - main
-      - baseline
-      - develop/v1.2.0
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - rc/*
+      - ga/*
   pull_request:
     branches:
       - main
-      - baseline
-      - develop/v1.2.0
-      - develop-v1.2.0
-      - release/v1.1.0-beta
+      - rc/*
+      - ga/*
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,10 +27,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        run: |
-          git clone https://github.com/minzuuniversity/sqlrustgo.git .
-          git fetch origin ${{ github.ref }}
-          git checkout ${{ github.ref }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Rust
         run: |
