@@ -2,6 +2,8 @@
 //!
 //! Defines the physical execution representation of query plans.
 
+#![allow(dead_code)]
+
 use crate::Expr;
 use crate::Schema;
 
