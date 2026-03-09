@@ -203,4 +203,153 @@ mod tests {
         let text = Value::Text("hello world".to_string());
         assert_eq!(text.to_sql_string(), "hello world");
     }
+
+    #[test]
+    fn test_value_partial_eq() {
+        assert_eq!(Value::Null, Value::Null);
+        assert_eq!(Value::Boolean(true), Value::Boolean(true));
+        assert_eq!(Value::Integer(42), Value::Integer(42));
+        assert_eq!(Value::Float(3.14), Value::Float(3.14));
+        assert_eq!(
+            Value::Text("hello".to_string()),
+            Value::Text("hello".to_string())
+        );
+        assert_eq!(Value::Blob(vec![1, 2, 3]), Value::Blob(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn test_value_partial_eq_not_equal() {
+        assert_ne!(Value::Null, Value::Integer(1));
+        assert_ne!(Value::Boolean(true), Value::Boolean(false));
+        assert_ne!(Value::Integer(1), Value::Integer(2));
+        assert_ne!(Value::Float(1.0), Value::Float(2.0));
+        assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
+        assert_ne!(Value::Blob(vec![1]), Value::Blob(vec![2]));
+    }
+
+    #[test]
+    fn test_value_eq() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v1 = Value::Integer(42);
+        let v2 = Value::Integer(42);
+        assert_eq!(v1, v2);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        v1.hash(&mut h1);
+        v2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_hash_null() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Null;
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_boolean() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Boolean(true);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_text() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Text("test".to_string());
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_blob() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Blob(vec![1, 2, 3]);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_float_nan() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Float(f64::NAN);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_to_index_key_integer() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+    }
+
+    #[test]
+    fn test_value_to_index_key_text() {
+        let key = Value::Text("test".to_string()).to_index_key();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    fn test_value_to_index_key_null() {
+        assert_eq!(Value::Null.to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_index_key_float() {
+        assert_eq!(Value::Float(3.14).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_index_key_blob() {
+        assert_eq!(Value::Blob(vec![1, 2]).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_clone() {
+        let v1 = Value::Text("hello".to_string());
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+    }
+
+    #[test]
+    fn test_value_debug() {
+        let v = Value::Integer(42);
+        let debug = format!("{:?}", v);
+        assert!(debug.contains("42"));
+    }
+
+    #[test]
+    fn test_value_blob_hex_encoding() {
+        let blob = Value::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        let s = blob.to_sql_string();
+        assert!(s.contains("deadbeef"));
+    }
+
+    #[test]
+    fn test_value_float_infinity() {
+        let pos_inf = Value::Float(f64::INFINITY);
+        let neg_inf = Value::Float(f64::NEG_INFINITY);
+        assert_eq!(pos_inf.to_sql_string(), "inf");
+        assert_eq!(neg_inf.to_sql_string(), "-inf");
+    }
 }
