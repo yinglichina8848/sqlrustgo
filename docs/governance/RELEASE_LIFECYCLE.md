@@ -37,7 +37,7 @@ Draft → Alpha → Beta → RC → GA
 
 **Git 实现**:
 ```
-develop-v1.2.0
+develop/v1.2.0
 ```
 
 **产出**:
@@ -138,7 +138,7 @@ v1.2.0
 
 **流程**:
 ```
-develop-v1.2.0
+develop/v1.2.0
     │
     └── GA
         ├── Tag v1.2.0
