@@ -496,4 +496,98 @@ mod tests {
         let restored = Page::from_bytes(bytes).unwrap();
         assert_eq!(restored.page_id(), 1);
     }
+
+    #[test]
+    fn test_page_constants() {
+        assert_eq!(PAGE_SIZE, 4096);
+        assert_eq!(PAGE_HEADER_SIZE, 64);
+        assert_eq!(PAGE_DATA_SIZE, 4032);
+    }
+
+    #[test]
+    fn test_page_debug() {
+        let page = Page::new(1);
+        let debug = format!("{:?}", page);
+        assert!(debug.contains("Page"));
+    }
+
+    #[test]
+    fn test_page_size() {
+        assert_eq!(Page::size(), PAGE_SIZE);
+    }
+
+    #[test]
+    fn test_page_new_data() {
+        let page = Page::new_data(1, 100);
+        assert_eq!(page.page_id(), 1);
+        assert_eq!(page.page_type(), PageType::Data);
+        assert_eq!(page.row_count(), 0);
+        assert_eq!(page.free_space(), PAGE_DATA_SIZE as u32);
+    }
+
+    #[test]
+    fn test_page_write_read_row_full() {
+        let mut page = Page::new_data(1, 100);
+
+        let row1 = vec![Value::Integer(1), Value::Text("test1".to_string())];
+        let row2 = vec![Value::Integer(2), Value::Text("test2".to_string())];
+
+        assert!(page.write_row(&row1));
+        assert!(page.write_row(&row2));
+        assert_eq!(page.row_count(), 2);
+
+        let rows = page.read_rows();
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn test_page_free_space_after_write() {
+        let mut page = Page::new_data(1, 100);
+
+        let row = vec![Value::Integer(42)];
+        page.write_row(&row);
+
+        let free = page.free_space();
+        assert!(free < PAGE_DATA_SIZE as u32);
+    }
+
+    #[test]
+    fn test_page_clone() {
+        let page = Page::new(1);
+        let cloned = page.clone();
+        assert_eq!(cloned.page_id(), 1);
+    }
+
+    #[test]
+    fn test_value_to_bytes_integer() {
+        let bytes = value_to_bytes(&Value::Integer(100));
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_value_to_bytes_text() {
+        let bytes = value_to_bytes(&Value::Text("hello".to_string()));
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_bytes_to_value_integer() {
+        let bytes = value_to_bytes(&Value::Integer(42));
+        let value = bytes_to_value(&bytes);
+        assert!(value.is_some());
+    }
+
+    #[test]
+    fn test_bytes_to_value_text() {
+        let bytes = value_to_bytes(&Value::Text("test".to_string()));
+        let value = bytes_to_value(&bytes);
+        assert!(value.is_some());
+    }
+
+    #[test]
+    fn test_page_type_copy() {
+        let pt = PageType::Data;
+        let pt2 = pt;
+        assert_eq!(pt, pt2);
+    }
 }
