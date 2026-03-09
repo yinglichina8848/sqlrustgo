@@ -171,7 +171,7 @@ v1.2.0 GA
 
 | 类型 | 命名格式 | 示例 |
 |------|----------|------|
-| 开发分支 | `develop/v1.x.0` | `develop/v1.2.0` |
+| 开发分支 | `develop-v1.x.0` | `develop/v1.2.0` |
 | 功能分支 | `feature/v1.x.0-<功能名>` | `feature/v1.2.0-vector-execution` |
 | 修复分支 | `fix/v1.x.0-<问题描述>` | `fix/v1.2.0-index-tests` |
 | 文档分支 | `docs/v1.x.0-<文档类型>` | `docs/v1.2.0-release-notes` |
