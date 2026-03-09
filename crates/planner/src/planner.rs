@@ -207,6 +207,7 @@ impl Planner for NoOpPlanner {
 mod tests {
     use super::*;
     use crate::DataType;
+    use crate::Expr;
     use crate::Field;
 
     #[test]
