@@ -343,4 +343,448 @@ mod tests {
         // Semicolon is at index 2
         assert!(matches!(&tokens[2], Token::Semicolon));
     }
+
+    #[test]
+    fn test_lexer_position() {
+        let mut lexer = Lexer::new("SELECT 1");
+        assert_eq!(lexer.position(), 0);
+        lexer.next_token();
+        assert_eq!(lexer.position(), 6);
+    }
+
+    #[test]
+    fn test_lexer_peek_char() {
+        let lexer = Lexer::new("SELECT");
+        assert_eq!(lexer.peek_char(), 'S');
+    }
+
+    #[test]
+    fn test_lexer_next_char() {
+        let mut lexer = Lexer::new("SELECT");
+        assert_eq!(lexer.next_char(), 'S');
+        assert_eq!(lexer.position(), 1);
+    }
+
+    #[test]
+    fn test_lexer_is_eof() {
+        let mut lexer = Lexer::new("S");
+        assert!(!lexer.is_eof());
+        lexer.next_token();
+        assert!(lexer.is_eof());
+    }
+
+    #[test]
+    fn test_lexer_skip_whitespace() {
+        let mut lexer = Lexer::new("   SELECT");
+        lexer.skip_whitespace();
+        assert_eq!(lexer.position(), 3);
+    }
+
+    #[test]
+    fn test_lexer_read_identifier() {
+        let mut lexer = Lexer::new("users123");
+        let ident = lexer.read_identifier();
+        assert_eq!(ident, "users123");
+    }
+
+    #[test]
+    fn test_lexer_read_number_integer() {
+        let mut lexer = Lexer::new("12345");
+        let num = lexer.read_number();
+        assert_eq!(num, "12345");
+    }
+
+    #[test]
+    fn test_lexer_read_number_decimal() {
+        let mut lexer = Lexer::new("123.45");
+        let num = lexer.read_number();
+        assert_eq!(num, "123.45");
+    }
+
+    #[test]
+    fn test_lexer_read_string() {
+        let mut lexer = Lexer::new("'test'");
+        let s = lexer.read_string();
+        assert_eq!(s, "test");
+    }
+
+    #[test]
+    fn test_lexer_string_escaped_quote() {
+        let mut lexer = Lexer::new("'it''s a test'");
+        let s = lexer.read_string();
+        assert_eq!(s, "it''s a test");
+    }
+
+    #[test]
+    fn test_lexer_parens() {
+        let tokens = Lexer::new("( )").tokenize();
+        assert!(matches!(tokens[0], Token::LParen));
+        assert!(matches!(tokens[1], Token::RParen));
+    }
+
+    #[test]
+    fn test_lexer_comma() {
+        let tokens = Lexer::new(",").tokenize();
+        assert!(matches!(tokens[0], Token::Comma));
+    }
+
+    #[test]
+    fn test_lexer_semicolon() {
+        let tokens = Lexer::new(";").tokenize();
+        assert!(matches!(tokens[0], Token::Semicolon));
+    }
+
+    #[test]
+    fn test_lexer_star() {
+        let tokens = Lexer::new("*").tokenize();
+        assert!(matches!(tokens[0], Token::Star));
+    }
+
+    #[test]
+    fn test_lexer_plus() {
+        let tokens = Lexer::new("+").tokenize();
+        assert!(matches!(tokens[0], Token::Plus));
+    }
+
+    #[test]
+    fn test_lexer_minus() {
+        let tokens = Lexer::new("-").tokenize();
+        assert!(matches!(tokens[0], Token::Minus));
+    }
+
+    #[test]
+    fn test_lexer_slash() {
+        let tokens = Lexer::new("/").tokenize();
+        assert!(matches!(tokens[0], Token::Slash));
+    }
+
+    #[test]
+    fn test_lexer_percent() {
+        let tokens = Lexer::new("%").tokenize();
+        assert!(matches!(tokens[0], Token::Percent));
+    }
+
+    #[test]
+    fn test_lexer_dot() {
+        let tokens = Lexer::new(".").tokenize();
+        assert!(matches!(tokens[0], Token::Dot));
+    }
+
+    #[test]
+    fn test_lexer_colon() {
+        let tokens = Lexer::new(":").tokenize();
+        assert!(matches!(tokens[0], Token::Colon));
+    }
+
+    #[test]
+    fn test_lexer_greater() {
+        let tokens = Lexer::new(">").tokenize();
+        assert!(matches!(tokens[0], Token::Greater));
+    }
+
+    #[test]
+    fn test_lexer_less() {
+        let tokens = Lexer::new("<").tokenize();
+        assert!(matches!(tokens[0], Token::Less));
+    }
+
+    #[test]
+    fn test_lexer_not() {
+        let tokens = Lexer::new("!").tokenize();
+        assert!(matches!(tokens[0], Token::Not));
+    }
+
+    #[test]
+    fn test_lexer_not_equal() {
+        let tokens = Lexer::new("!=").tokenize();
+        assert!(matches!(tokens[0], Token::NotEqual));
+    }
+
+    #[test]
+    fn test_lexer_less_equal() {
+        let tokens = Lexer::new("<=").tokenize();
+        assert!(matches!(tokens[0], Token::LessEqual));
+    }
+
+    #[test]
+    fn test_lexer_greater_equal() {
+        let tokens = Lexer::new(">=").tokenize();
+        assert!(matches!(tokens[0], Token::GreaterEqual));
+    }
+
+    #[test]
+    fn test_lexer_not_equal_alt() {
+        let tokens = Lexer::new("<>").tokenize();
+        assert!(matches!(tokens[0], Token::NotEqual));
+    }
+
+    #[test]
+    fn test_lexer_boolean_true() {
+        let tokens = tokenize("TRUE");
+        assert!(matches!(tokens[0], Token::BooleanLiteral(true)));
+    }
+
+    #[test]
+    fn test_lexer_boolean_false() {
+        let tokens = tokenize("FALSE");
+        assert!(matches!(tokens[0], Token::BooleanLiteral(false)));
+    }
+
+    #[test]
+    fn test_lexer_null() {
+        let tokens = tokenize("NULL");
+        assert!(matches!(tokens[0], Token::Null));
+    }
+
+    #[test]
+    fn test_lexer_and() {
+        let tokens = tokenize("AND");
+        assert!(matches!(tokens[0], Token::And));
+    }
+
+    #[test]
+    fn test_lexer_or() {
+        let tokens = tokenize("OR");
+        assert!(matches!(tokens[0], Token::Or));
+    }
+
+    #[test]
+    fn test_lexer_not_keyword() {
+        let tokens = tokenize("NOT");
+        assert!(matches!(tokens[0], Token::Not));
+    }
+
+    #[test]
+    fn test_lexer_into() {
+        let tokens = tokenize("INTO");
+        assert!(matches!(tokens[0], Token::Into));
+    }
+
+    #[test]
+    fn test_lexer_values() {
+        let tokens = tokenize("VALUES");
+        assert!(matches!(tokens[0], Token::Values));
+    }
+
+    #[test]
+    fn test_lexer_set() {
+        let tokens = tokenize("SET");
+        assert!(matches!(tokens[0], Token::Set));
+    }
+
+    #[test]
+    fn test_lexer_alter() {
+        let tokens = tokenize("ALTER");
+        assert!(matches!(tokens[0], Token::Alter));
+    }
+
+    #[test]
+    fn test_lexer_index() {
+        let tokens = tokenize("INDEX");
+        assert!(matches!(tokens[0], Token::Index));
+    }
+
+    #[test]
+    fn test_lexer_on() {
+        let tokens = tokenize("ON");
+        assert!(matches!(tokens[0], Token::On));
+    }
+
+    #[test]
+    fn test_lexer_primary() {
+        let tokens = tokenize("PRIMARY");
+        assert!(matches!(tokens[0], Token::Primary));
+    }
+
+    #[test]
+    fn test_lexer_key() {
+        let tokens = tokenize("KEY");
+        assert!(matches!(tokens[0], Token::Key));
+    }
+
+    #[test]
+    fn test_lexer_begin() {
+        let tokens = tokenize("BEGIN");
+        assert!(matches!(tokens[0], Token::Begin));
+    }
+
+    #[test]
+    fn test_lexer_commit() {
+        let tokens = tokenize("COMMIT");
+        assert!(matches!(tokens[0], Token::Commit));
+    }
+
+    #[test]
+    fn test_lexer_rollback() {
+        let tokens = tokenize("ROLLBACK");
+        assert!(matches!(tokens[0], Token::Rollback));
+    }
+
+    #[test]
+    fn test_lexer_grant() {
+        let tokens = tokenize("GRANT");
+        assert!(matches!(tokens[0], Token::Grant));
+    }
+
+    #[test]
+    fn test_lexer_revoke() {
+        let tokens = tokenize("REVOKE");
+        assert!(matches!(tokens[0], Token::Revoke));
+    }
+
+    #[test]
+    fn test_lexer_analyze() {
+        let tokens = tokenize("ANALYZE");
+        assert!(matches!(tokens[0], Token::Analyze));
+    }
+
+    #[test]
+    fn test_lexer_integer_types() {
+        let tokens = tokenize("INTEGER");
+        assert!(matches!(tokens[0], Token::Integer));
+        let tokens2 = tokenize("INT");
+        assert!(matches!(tokens2[0], Token::Integer));
+    }
+
+    #[test]
+    fn test_lexer_text_types() {
+        let tokens = tokenize("TEXT");
+        assert!(matches!(tokens[0], Token::Text));
+        let tokens2 = tokenize("VARCHAR");
+        assert!(matches!(tokens2[0], Token::Text));
+        let tokens3 = tokenize("CHAR");
+        assert!(matches!(tokens3[0], Token::Text));
+    }
+
+    #[test]
+    fn test_lexer_float_types() {
+        let tokens = tokenize("FLOAT");
+        assert!(matches!(tokens[0], Token::Float));
+        let tokens2 = tokenize("DOUBLE");
+        assert!(matches!(tokens2[0], Token::Float));
+        let tokens3 = tokenize("REAL");
+        assert!(matches!(tokens3[0], Token::Float));
+    }
+
+    #[test]
+    fn test_lexer_boolean_types() {
+        let tokens = tokenize("BOOLEAN");
+        assert!(matches!(tokens[0], Token::Boolean));
+        let tokens2 = tokenize("BOOL");
+        assert!(matches!(tokens2[0], Token::Boolean));
+    }
+
+    #[test]
+    fn test_lexer_blob() {
+        let tokens = tokenize("BLOB");
+        assert!(matches!(tokens[0], Token::Blob));
+    }
+
+    #[test]
+    fn test_lexer_identifier_with_underscore() {
+        let tokens = tokenize("user_name");
+        assert!(matches!(&tokens[0], Token::Identifier(s) if s == "user_name"));
+    }
+
+    #[test]
+    fn test_lexer_mixed_case_keywords() {
+        let tokens = tokenize("SeLeCt");
+        assert!(matches!(tokens[0], Token::Select));
+    }
+
+    #[test]
+    fn test_lexer_empty_string() {
+        let tokens = Lexer::new("''").tokenize();
+        assert!(matches!(&tokens[0], Token::StringLiteral(s) if s.is_empty()));
+    }
+
+    #[test]
+    fn test_lexer_number_only() {
+        let tokens = tokenize("42");
+        assert!(matches!(&tokens[0], Token::NumberLiteral(n) if n == "42"));
+    }
+
+    #[test]
+    fn test_lexer_complex_sql() {
+        let sql = "SELECT id, name FROM users WHERE age > 18 AND status = 'active'";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Select));
+        assert!(matches!(tokens[1], Token::Identifier(_)));
+        assert!(matches!(tokens[2], Token::Comma));
+        assert!(matches!(tokens[3], Token::Identifier(_)));
+        assert!(matches!(tokens[4], Token::From));
+        assert!(matches!(tokens[5], Token::Identifier(_)));
+        assert!(matches!(tokens[6], Token::Where));
+        assert!(matches!(tokens[7], Token::Identifier(_)));
+        assert!(matches!(tokens[8], Token::Greater));
+        assert!(matches!(tokens[9], Token::NumberLiteral(_)));
+        assert!(matches!(tokens[10], Token::And));
+    }
+
+    #[test]
+    fn test_lexer_insert_statement() {
+        let sql = "INSERT INTO users (name, age) VALUES ('John', 25)";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Insert));
+        assert!(matches!(tokens[1], Token::Into));
+        assert!(matches!(tokens[2], Token::Identifier(_)));
+        assert!(matches!(tokens[3], Token::LParen));
+    }
+
+    #[test]
+    fn test_lexer_update_statement() {
+        let sql = "UPDATE users SET name = 'Jane' WHERE id = 1";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Update));
+        assert!(matches!(tokens[1], Token::Identifier(_)));
+        assert!(matches!(tokens[2], Token::Set));
+    }
+
+    #[test]
+    fn test_lexer_delete_statement() {
+        let sql = "DELETE FROM users WHERE id = 1";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Delete));
+        assert!(matches!(tokens[1], Token::From));
+    }
+
+    #[test]
+    fn test_lexer_create_table() {
+        let sql = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Create));
+        assert!(matches!(tokens[1], Token::Table));
+    }
+
+    #[test]
+    fn test_lexer_drop_table() {
+        let sql = "DROP TABLE users";
+        let tokens = tokenize(sql);
+        assert!(matches!(tokens[0], Token::Drop));
+        assert!(matches!(tokens[1], Token::Table));
+    }
+
+    #[test]
+    fn test_lexer_whitespace_tabs() {
+        let tokens = Lexer::new("\t\n\r SELECT").tokenize();
+        assert!(matches!(tokens[0], Token::Select));
+    }
+
+    #[test]
+    fn test_lexer_multiple_spaces() {
+        let tokens = Lexer::new("   SELECT   ").tokenize();
+        assert!(matches!(tokens[0], Token::Select));
+    }
+
+    #[test]
+    fn test_lexer_eof_token() {
+        let tokens = tokenize("SELECT");
+        assert!(matches!(tokens[1], Token::Eof));
+    }
+
+    #[test]
+    fn test_lexer_unknown_char() {
+        let tokens = tokenize("@");
+        assert!(matches!(&tokens[0], Token::Identifier(s) if s == "@"));
+    }
 }

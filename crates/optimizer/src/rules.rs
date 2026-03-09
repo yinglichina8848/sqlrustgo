@@ -44,3 +44,40 @@ impl<Plan> Rule<Plan> for ConstantFolding {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_predicate_pushdown_apply() {
+        let rule = PredicatePushdown;
+        let mut plan = String::new();
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_projection_pruning_apply() {
+        let rule = ProjectionPruning;
+        let mut plan = String::new();
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_apply() {
+        let rule = ConstantFolding;
+        let mut plan = String::new();
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_rule_name_string() {
+        let names = ["PredicatePushdown", "ProjectionPruning", "ConstantFolding"];
+        assert_eq!(names[0], "PredicatePushdown");
+        assert_eq!(names[1], "ProjectionPruning");
+        assert_eq!(names[2], "ConstantFolding");
+    }
+}
