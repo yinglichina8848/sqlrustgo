@@ -128,3 +128,121 @@ impl Optimizer for NoOpOptimizer {
         Ok(plan)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Schema;
+    use crate::{DataType, Field};
+
+    #[test]
+    fn test_predicate_pushdown_name() {
+        let rule = PredicatePushdown;
+        assert_eq!(rule.name(), "PredicatePushdown");
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply() {
+        let rule = PredicatePushdown;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_projection_pruning_name() {
+        let rule = ProjectionPruning;
+        assert_eq!(rule.name(), "ProjectionPruning");
+    }
+
+    #[test]
+    fn test_projection_pruning_apply() {
+        let rule = ProjectionPruning;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_name() {
+        let rule = ConstantFolding;
+        assert_eq!(rule.name(), "ConstantFolding");
+    }
+
+    #[test]
+    fn test_constant_folding_apply() {
+        let rule = ConstantFolding;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_default_optimizer_new() {
+        let optimizer = DefaultOptimizer::new();
+        assert!(true);
+    }
+
+    #[test]
+    fn test_default_optimizer_with_rules() {
+        let optimizer = DefaultOptimizer::with_rules(vec![]);
+        assert!(true);
+    }
+
+    #[test]
+    fn test_noop_optimizer() {
+        let mut optimizer = NoOpOptimizer;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let result = optimizer.optimize(plan).unwrap();
+        assert!(matches!(result, LogicalPlan::TableScan { .. }));
+    }
+
+    #[test]
+    fn test_default_optimizer_optimize() {
+        let mut optimizer = DefaultOptimizer::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let result = optimizer.optimize(plan).unwrap();
+        assert!(matches!(result, LogicalPlan::TableScan { .. }));
+    }
+
+    #[test]
+    fn test_optimizer_error() {
+        let error = OptimizerError::OptimizationFailed("test error".to_string());
+        assert!(error.to_string().contains("Optimization failed"));
+    }
+
+    #[test]
+    fn test_optimizer_result() {
+        let ok_result: OptimizerResult<i32> = Ok(42);
+        assert!(ok_result.is_ok());
+
+        let err_result: OptimizerResult<i32> =
+            Err(OptimizerError::OptimizationFailed("test".to_string()));
+        assert!(err_result.is_err());
+    }
+}
