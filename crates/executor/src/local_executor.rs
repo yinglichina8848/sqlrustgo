@@ -2,7 +2,9 @@
 //!
 //! Implements the Executor trait for local execution using StorageEngine.
 
-use sqlrustgo_planner::{AggregateExec, AggregateFunction, PhysicalPlan, ProjectionExec};
+use sqlrustgo_planner::{
+    AggregateExec, AggregateFunction, HashJoinExec, JoinType, PhysicalPlan, ProjectionExec,
+};
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
@@ -263,15 +265,121 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
-        // Execute both children
-        let _left_result = self.execute(children[0])?;
-        let _right_result = self.execute(children[1])?;
+        let left_result = self.execute(children[0])?;
+        let right_result = self.execute(children[1])?;
 
-        // Join computation would go here
-        // For now, return empty result
-        Ok(ExecutorResult::empty())
+        let hash_join = plan.as_any().downcast_ref::<HashJoinExec>();
+
+        let (join_type, condition) = match hash_join {
+            Some(hj) => (hj.join_type(), hj.condition()),
+            None => return Ok(ExecutorResult::empty()),
+        };
+
+        let condition = match condition {
+            Some(c) => c,
+            None => {
+                return Ok(ExecutorResult::new(
+                    cartesian_product(&left_result.rows, &right_result.rows),
+                    0,
+                ));
+            }
+        };
+
+        let left_schema = children[0].schema();
+        let right_schema = children[1].schema();
+
+        match join_type {
+            JoinType::Inner => {
+                let matched = hash_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+                Ok(ExecutorResult::new(matched, 0))
+            }
+            JoinType::Left => {
+                let matched = hash_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+                let left_only: Vec<Vec<Value>> = left_result
+                    .rows
+                    .iter()
+                    .filter(|lrow| {
+                        !matched.iter().any(|m| {
+                            m.iter().take(lrow.len()).collect::<Vec<_>>()
+                                == lrow.iter().collect::<Vec<_>>()
+                        })
+                    })
+                    .map(|lrow| {
+                        let mut row = lrow.clone();
+                        row.extend(vec![Value::Null; right_schema.fields.len()]);
+                        row
+                    })
+                    .collect();
+                let mut results = matched;
+                results.extend(left_only);
+                Ok(ExecutorResult::new(results, 0))
+            }
+            _ => Ok(ExecutorResult::empty()),
+        }
+    }
+}
+
+fn cartesian_product(left: &[Vec<Value>], right: &[Vec<Value>]) -> Vec<Vec<Value>> {
+    let mut result = Vec::new();
+    for lrow in left {
+        for rrow in right {
+            let mut row = lrow.clone();
+            row.extend(rrow.clone());
+            result.push(row);
+        }
+    }
+    result
+}
+
+fn hash_inner_join(
+    left: &[Vec<Value>],
+    right: &[Vec<Value>],
+    condition: &sqlrustgo_planner::Expr,
+    left_schema: &sqlrustgo_planner::Schema,
+    right_schema: &sqlrustgo_planner::Schema,
+) -> Vec<Vec<Value>> {
+    let mut results = Vec::new();
+
+    for lrow in left {
+        for rrow in right {
+            let mut combined = lrow.clone();
+            combined.extend(rrow.clone());
+
+            let full_schema = sqlrustgo_planner::Schema::new(
+                left_schema
+                    .fields
+                    .iter()
+                    .chain(right_schema.fields.iter())
+                    .cloned()
+                    .collect(),
+            );
+
+            if condition
+                .evaluate(&combined, &full_schema)
+                .map(|v| v.to_bool())
+                .unwrap_or(false)
+            {
+                results.push(combined);
+            }
+        }
     }
 
+    results
+}
+
+impl<'a> LocalExecutor<'a> {
     /// Execute sort
     fn execute_sort(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         let children = plan.children();
@@ -640,5 +748,120 @@ mod tests {
         let result = executor.execute(&aggregate).unwrap();
 
         assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_execute_hash_join_inner() {
+        use sqlrustgo_planner::{Expr, HashJoinExec, JoinType};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![
+                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                    vec![Value::Integer(2), Value::Text("Bob".to_string())],
+                ],
+            )
+            .unwrap();
+        storage
+            .insert(
+                "orders",
+                vec![
+                    vec![Value::Integer(1), Value::Integer(100), Value::Integer(1)],
+                    vec![Value::Integer(2), Value::Integer(200), Value::Integer(1)],
+                    vec![Value::Integer(3), Value::Integer(300), Value::Integer(2)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("order_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("amount".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("order_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("amount".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let left_scan = sqlrustgo_planner::SeqScanExec::new("users".to_string(), left_schema);
+        let right_scan = sqlrustgo_planner::SeqScanExec::new("orders".to_string(), right_schema);
+
+        let join_condition = Expr::binary_expr(
+            Expr::column("user_id"),
+            sqlrustgo_planner::Operator::Eq,
+            Expr::column("user_id"),
+        );
+
+        let hash_join = HashJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Inner,
+            Some(join_condition),
+            output_schema,
+        );
+
+        let result = executor.execute(&hash_join).unwrap();
+
+        assert!(result.rows.len() >= 2);
+    }
+
+    #[test]
+    fn test_execute_hash_join_cross() {
+        use sqlrustgo_planner::{HashJoinExec, JoinType};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert("a", vec![vec![Value::Integer(1)], vec![Value::Integer(2)]])
+            .unwrap();
+        storage
+            .insert(
+                "b",
+                vec![
+                    vec![Value::Text("x".to_string())],
+                    vec![Value::Text("y".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let right_schema = Schema::new(vec![Field::new(
+            "val".to_string(),
+            sqlrustgo_planner::DataType::Text,
+        )]);
+        let output_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("val".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+
+        let left_scan = sqlrustgo_planner::SeqScanExec::new("a".to_string(), left_schema);
+        let right_scan = sqlrustgo_planner::SeqScanExec::new("b".to_string(), right_schema);
+
+        let hash_join = HashJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Cross,
+            None,
+            output_schema,
+        );
+
+        let result = executor.execute(&hash_join).unwrap();
+
+        assert_eq!(result.rows.len(), 4);
     }
 }
