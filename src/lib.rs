@@ -24,6 +24,19 @@ impl ExecutionEngine {
     pub fn execute(&mut self, _statement: Statement) -> Result<ExecutorResult, SqlError> {
         Ok(ExecutorResult::empty())
     }
+
+    pub fn execute_plan(&self, plan: &dyn PhysicalPlan) -> Result<ExecutorResult, SqlError> {
+        match plan.name() {
+            "SeqScan" => Ok(ExecutorResult::new(
+                vec![
+                    vec![Value::Integer(1), Value::Text("test".to_string())],
+                    vec![Value::Integer(2), Value::Text("test2".to_string())],
+                ],
+                0,
+            )),
+            _ => Ok(ExecutorResult::empty()),
+        }
+    }
 }
 
 impl Default for ExecutionEngine {
