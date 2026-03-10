@@ -255,3 +255,133 @@ impl PhysicalPlan for LimitExec {
         "Limit"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Expr, Field, Schema, SortExpr};
+    use sqlrustgo_types::Value;
+
+    #[test]
+    fn test_seq_scan_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let scan = SeqScanExec::new("test_table".to_string(), schema.clone());
+
+        assert_eq!(scan.name(), "SeqScan");
+        assert_eq!(scan.schema().fields.len(), 1);
+        assert!(scan.children().is_empty());
+    }
+
+    #[test]
+    fn test_seq_scan_exec_with_projection() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), crate::DataType::Integer),
+            Field::new("name".to_string(), crate::DataType::Text),
+        ]);
+        let scan = SeqScanExec::new("test_table".to_string(), schema).with_projection(vec![0]);
+
+        assert!(scan.schema().fields.len() >= 1);
+    }
+
+    #[test]
+    fn test_projection_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let proj = ProjectionExec::new(input, vec![Expr::column("id")], schema);
+
+        assert_eq!(proj.name(), "Projection");
+        assert_eq!(proj.schema().fields.len(), 1);
+        assert!(!proj.children().is_empty());
+    }
+
+    #[test]
+    fn test_filter_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let predicate = Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::Gt,
+            Expr::literal(Value::Integer(10)),
+        );
+        let filter = FilterExec::new(input, predicate);
+
+        assert_eq!(filter.name(), "Filter");
+        assert!(!filter.children().is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let agg = AggregateExec::new(
+            input,
+            vec![Expr::column("id")],
+            vec![Expr::column("id")],
+            schema,
+        );
+
+        assert_eq!(agg.name(), "Aggregate");
+        assert_eq!(agg.schema().fields.len(), 1);
+        assert!(!agg.children().is_empty());
+    }
+
+    #[test]
+    fn test_hash_join_exec() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let left = Box::new(SeqScanExec::new("left_table".to_string(), left_schema.clone()));
+        let right = Box::new(SeqScanExec::new("right_table".to_string(), right_schema.clone()));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), crate::DataType::Integer),
+            Field::new("id".to_string(), crate::DataType::Integer),
+        ]);
+        let join = HashJoinExec::new(
+            left,
+            right,
+            crate::JoinType::Inner,
+            None,
+            join_schema,
+        );
+
+        assert_eq!(join.name(), "HashJoin");
+        assert!(!join.children().is_empty());
+    }
+
+    #[test]
+    fn test_sort_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_expr);
+
+        assert_eq!(sort.name(), "Sort");
+        assert_eq!(sort.schema().fields.len(), 1);
+        assert!(!sort.children().is_empty());
+    }
+
+    #[test]
+    fn test_limit_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let limit = LimitExec::new(input, 10, None);
+
+        assert_eq!(limit.name(), "Limit");
+        assert_eq!(limit.schema().fields.len(), 1);
+        assert!(!limit.children().is_empty());
+    }
+
+    #[test]
+    fn test_limit_exec_with_offset() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let limit = LimitExec::new(input, 10, Some(5));
+
+        assert_eq!(limit.name(), "Limit");
+        assert!(!limit.children().is_empty());
+    }
+}
