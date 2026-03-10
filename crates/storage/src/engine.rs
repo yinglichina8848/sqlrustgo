@@ -323,8 +323,8 @@ mod tests {
 
     #[test]
     fn test_record_new() {
-        let record = Record(vec![Value::Integer(1), Value::Text("test".to_string())]);
-        assert_eq!(record.0.len(), 2);
+        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+        assert_eq!(record.len(), 2);
     }
 
     #[test]
@@ -332,3 +332,10 @@ mod tests {
         let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
         assert_eq!(record[0], Value::Integer(1));
     }
+}
+
+#[test]
+fn test_record_index() {
+    let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+    assert_eq!(record[0], Value::Integer(1));
+}
