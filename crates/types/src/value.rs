@@ -78,6 +78,16 @@ impl Value {
         }
     }
 
+    /// Convert to boolean for predicate evaluation
+    pub fn to_bool(&self) -> bool {
+        match self {
+            Value::Boolean(b) => *b,
+            Value::Integer(i) => *i != 0,
+            Value::Null => false,
+            _ => false,
+        }
+    }
+
     /// Convert Value to SQL string representation
     pub fn to_sql_string(&self) -> String {
         match self {
