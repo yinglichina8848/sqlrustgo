@@ -13,3 +13,36 @@ pub use buffer_pool::BufferPool;
 pub use engine::{ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo};
 pub use file_storage::FileStorage;
 pub use page::Page;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_module_exports() {
+        let _ = BPlusTree::new();
+        let _ = BufferPool::new(1024);
+        let _ = MemoryStorage::new();
+        let _ = FileStorage::new(std::env::temp_dir());
+    }
+
+    #[test]
+    fn test_bplus_tree_creation() {
+        let tree = BPlusTree::new();
+        assert!(tree.is_empty());
+        assert_eq!(tree.len(), 0);
+    }
+
+    #[test]
+    fn test_buffer_pool_creation() {
+        let pool = BufferPool::new(4096);
+        assert_eq!(pool.capacity(), 4096);
+    }
+
+    #[test]
+    fn test_memory_storage_creation() {
+        let storage = MemoryStorage::new();
+        let tables = storage.list_tables();
+        assert!(tables.is_empty());
+    }
+}
