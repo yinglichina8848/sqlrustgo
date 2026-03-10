@@ -138,6 +138,7 @@ pub enum Expression {
     Literal(String),
     Identifier(String),
     BinaryOp(Box<Expression>, String, Box<Expression>),
+    Wildcard,
 }
 
 /// SQL Parser
@@ -200,6 +201,7 @@ impl Parser {
         self.expect(Token::Select)?;
 
         let mut columns = Vec::new();
+        let mut aggregates = Vec::new();
         loop {
             match self.current() {
                 Some(Token::From) => break,
@@ -209,6 +211,41 @@ impl Parser {
                         alias: None,
                     });
                     self.next();
+                }
+                Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+                | Some(Token::Max) => {
+                    let func = match self.current() {
+                        Some(Token::Count) => AggregateFunction::Count,
+                        Some(Token::Sum) => AggregateFunction::Sum,
+                        Some(Token::Avg) => AggregateFunction::Avg,
+                        Some(Token::Min) => AggregateFunction::Min,
+                        Some(Token::Max) => AggregateFunction::Max,
+                        _ => return Err("Unknown aggregate function".to_string()),
+                    };
+                    self.next(); // consume function name
+                    self.expect(Token::LParen)?;
+
+                    let mut args = Vec::new();
+                    match self.current() {
+                        Some(Token::Star) => {
+                            args.push(Expression::Wildcard);
+                            self.next();
+                        }
+                        Some(Token::Identifier(name)) => {
+                            args.push(Expression::Identifier(name));
+                            self.next();
+                        }
+                        _ => return Err("Expected * or column name in aggregate".to_string()),
+                    }
+
+                    self.expect(Token::RParen)?;
+
+                    let agg = AggregateCall {
+                        func,
+                        args,
+                        distinct: false,
+                    };
+                    aggregates.push(agg);
                 }
                 Some(Token::Identifier(_)) => {
                     if let Some(Token::Identifier(name)) = self.next() {
@@ -245,7 +282,7 @@ impl Parser {
             table,
             where_clause,
             join_clause: None,
-            aggregates: vec![],
+            aggregates,
         }))
     }
 
