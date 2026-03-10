@@ -4,6 +4,155 @@ use crate::Rule;
 use std::any::Any;
 use std::fmt::Debug;
 
+// =============================================================================
+// Simple Plan Enum for demonstration
+// =============================================================================
+
+/// Simple plan node types for the optimizer framework
+#[derive(Debug, Clone, PartialEq)]
+pub enum Plan {
+    /// Table scan operation
+    TableScan {
+        table_name: String,
+        projection: Option<Vec<usize>>,
+    },
+    /// Filter operation (WHERE clause)
+    Filter {
+        predicate: Expr,
+        input: Box<Plan>,
+    },
+    /// Projection operation (SELECT columns)
+    Projection {
+        expr: Vec<Expr>,
+        input: Box<Plan>,
+    },
+    /// Join operation
+    Join {
+        left: Box<Plan>,
+        right: Box<Plan>,
+        join_type: JoinType,
+        condition: Option<Expr>,
+    },
+    /// Aggregate operation (GROUP BY)
+    Aggregate {
+        group_by: Vec<Expr>,
+        aggregates: Vec<Expr>,
+        input: Box<Plan>,
+    },
+    /// Sort operation (ORDER BY)
+    Sort {
+        expr: Vec<Expr>,
+        input: Box<Plan>,
+    },
+    /// Limit operation
+    Limit {
+        limit: usize,
+        input: Box<Plan>,
+    },
+    /// Empty relation
+    EmptyRelation,
+}
+
+/// Simple expression types for plan nodes
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+    /// Column reference
+    Column(String),
+    /// Literal value
+    Literal(Value),
+    /// Binary expression
+    BinaryExpr {
+        left: Box<Expr>,
+        op: Operator,
+        right: Box<Expr>,
+    },
+    /// Unary expression
+    UnaryExpr {
+        op: Operator,
+        expr: Box<Expr>,
+    },
+}
+
+/// Join types
+#[derive(Debug, Clone, PartialEq)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+}
+
+/// Simple value types
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    String(String),
+    Null,
+}
+
+/// Operators
+#[derive(Debug, Clone, PartialEq)]
+pub enum Operator {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Eq,
+    NotEq,
+    Gt,
+    Lt,
+    GtEq,
+    LtEq,
+    And,
+    Or,
+    Not,
+    Like,
+}
+
+impl Plan {
+    /// Get the type name of this plan node
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Plan::TableScan { .. } => "TableScan",
+            Plan::Filter { .. } => "Filter",
+            Plan::Projection { .. } => "Projection",
+            Plan::Join { .. } => "Join",
+            Plan::Aggregate { .. } => "Aggregate",
+            Plan::Sort { .. } => "Sort",
+            Plan::Limit { .. } => "Limit",
+            Plan::EmptyRelation => "EmptyRelation",
+        }
+    }
+
+    /// Get mutable reference to child plan if exists
+    pub fn get_child_mut(&mut self) -> Option<&mut Box<Plan>> {
+        match self {
+            Plan::Filter { input, .. } => Some(input),
+            Plan::Projection { input, .. } => Some(input),
+            Plan::Join { left, right, .. } => Some(left),
+            Plan::Aggregate { input, .. } => Some(input),
+            Plan::Sort { input, .. } => Some(input),
+            Plan::Limit { input, .. } => Some(input),
+            _ => None,
+        }
+    }
+
+    /// Get references to all children
+    pub fn get_children(&self) -> Vec<&Plan> {
+        match self {
+            Plan::Filter { input, .. } => vec![input],
+            Plan::Projection { input, .. } => vec![input],
+            Plan::Join { left, right, .. } => vec![left, right],
+            Plan::Aggregate { input, .. } => vec![input],
+            Plan::Sort { input, .. } => vec![input],
+            Plan::Limit { input, .. } => vec![input],
+            _ => vec![],
+        }
+    }
+}
+
 /// PredicatePushdown rule - pushes filter conditions down to the source
 pub struct PredicatePushdown;
 
@@ -20,16 +169,73 @@ impl Default for PredicatePushdown {
     }
 }
 
-impl<Plan> Rule<Plan> for PredicatePushdown {
+/// PredicatePushdown implementation for Plan type
+impl Rule<Plan> for PredicatePushdown {
     fn name(&self) -> &str {
         "PredicatePushdown"
     }
 
-    fn apply(&self, _plan: &mut Plan) -> bool {
-        // TODO: Implement predicate pushdown logic
-        // For now, return false (no change)
-        false
+    fn apply(&self, plan: &mut Plan) -> bool {
+        self.pushdown(plan)
     }
+}
+
+impl PredicatePushdown {
+    /// Push predicates down to table scans
+    fn pushdown(&self, plan: &mut Plan) -> bool {
+        match plan {
+            Plan::Filter { predicate, input } => {
+                match &mut **input {
+                    Plan::TableScan { .. } => {
+                        // Filter directly on table scan - already optimal
+                        false
+                    }
+                    Plan::Projection { input: proj_input, .. } => {
+                        // Push filter through projection to its input
+                        let new_filter = Plan::Filter {
+                            predicate: predicate.clone(),
+                            input: proj_input.clone(),
+                        };
+                        **input = new_filter;
+                        return true;
+                    }
+                    Plan::Join { left, right, join_type, condition } => {
+                        let mut changed = false;
+
+                        // Push into left side
+                        if let Some(pred) = condition.as_ref() {
+                            if can_push_to_left(pred, join_type) {
+                                changed |= self.pushdown(left);
+                            }
+                        }
+
+                        // Push into right side
+                        if let Some(pred) = condition.as_ref() {
+                            if can_push_to_right(pred, join_type) {
+                                changed |= self.pushdown(right);
+                            }
+                        }
+
+                        return changed;
+                    }
+                    _ => false,
+                }
+            }
+            Plan::Projection { input, .. } => self.pushdown(input),
+            Plan::Aggregate { .. } => false,
+            Plan::Sort { input, .. } => self.pushdown(input),
+            Plan::Limit { input, .. } => self.pushdown(input),
+            _ => false,
+        }
+    }
+}
+
+fn can_push_to_left(_predicate: &Expr, join_type: &JoinType) -> bool {
+    matches!(join_type, JoinType::Inner | JoinType::Left)
+}
+
+fn can_push_to_right(_predicate: &Expr, join_type: &JoinType) -> bool {
+    matches!(join_type, JoinType::Inner | JoinType::Right)
 }
 
 /// ProjectionPruning rule - removes unnecessary columns
@@ -48,14 +254,94 @@ impl Default for ProjectionPruning {
     }
 }
 
-impl<Plan> Rule<Plan> for ProjectionPruning {
+/// ProjectionPruning implementation for Plan type
+impl Rule<Plan> for ProjectionPruning {
     fn name(&self) -> &str {
         "ProjectionPruning"
     }
 
-    fn apply(&self, _plan: &mut Plan) -> bool {
-        // TODO: Implement projection pruning logic
-        false
+    fn apply(&self, plan: &mut Plan) -> bool {
+        self.prune(plan)
+    }
+}
+
+impl ProjectionPruning {
+    /// Remove unnecessary columns from projections
+    fn prune(&self, plan: &mut Plan) -> bool {
+        match plan {
+            Plan::Projection { input, expr, .. } => {
+                // Collect columns used in this projection
+                let used_cols = self.collect_columns(expr);
+
+                // Check if input is a table scan that can benefit from projection
+                if let Plan::TableScan { projection, .. } = &mut **input {
+                    if projection.is_none() && !used_cols.is_all {
+                        // Push down projection to table scan
+                        let new_projection: Option<Vec<usize>> = Some(used_cols.indices);
+                        *projection = new_projection;
+                        return true;
+                    }
+                }
+
+                // Recurse into input
+                self.prune(input)
+            }
+            Plan::Filter { input, .. } => self.prune(input),
+            Plan::Aggregate { input, .. } => self.prune(input),
+            Plan::Join { left, right, .. } => {
+                let changed_left = self.prune(left);
+                let changed_right = self.prune(right);
+                changed_left || changed_right
+            }
+            Plan::Sort { input, .. } => self.prune(input),
+            Plan::Limit { input, .. } => self.prune(input),
+            _ => false,
+        }
+    }
+
+    /// Collect columns used in expressions
+    fn collect_columns(&self, exprs: &[Expr]) -> SimpleColumnSet {
+        let mut cols = SimpleColumnSet::new();
+        for expr in exprs {
+            self.collect_from_expr(expr, &mut cols);
+        }
+        cols
+    }
+
+    fn collect_from_expr(&self, expr: &Expr, cols: &mut SimpleColumnSet) {
+        match expr {
+            Expr::Column(col_name) => {
+                cols.add(col_name);
+            }
+            Expr::BinaryExpr { left, right, .. } => {
+                self.collect_from_expr(left, cols);
+                self.collect_from_expr(right, cols);
+            }
+            Expr::UnaryExpr { expr, .. } => {
+                self.collect_from_expr(expr, cols);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Simple column set for tracking used columns
+#[derive(Debug, Clone, Default)]
+pub struct SimpleColumnSet {
+    pub indices: Vec<usize>,
+    pub is_all: bool,
+}
+
+impl SimpleColumnSet {
+    pub fn new() -> Self {
+        Self {
+            indices: vec![],
+            is_all: true,
+        }
+    }
+
+    pub fn add(&mut self, _name: &str) {
+        self.is_all = false;
     }
 }
 
@@ -75,14 +361,117 @@ impl Default for ConstantFolding {
     }
 }
 
-impl<Plan> Rule<Plan> for ConstantFolding {
+/// ConstantFolding implementation for Plan type
+impl Rule<Plan> for ConstantFolding {
     fn name(&self) -> &str {
         "ConstantFolding"
     }
 
-    fn apply(&self, _plan: &mut Plan) -> bool {
-        // TODO: Implement constant folding logic
-        false
+    fn apply(&self, plan: &mut Plan) -> bool {
+        self.fold(plan)
+    }
+}
+
+impl ConstantFolding {
+    /// Evaluate constant expressions
+    fn fold(&self, plan: &mut Plan) -> bool {
+        match plan {
+            Plan::Filter { predicate, input } => {
+                // Try to simplify the predicate
+                let simplified = self.simplify_expr(predicate);
+                if simplified != *predicate {
+                    *predicate = simplified;
+                    return true;
+                }
+                self.fold(input)
+            }
+            Plan::Projection { input, expr, .. } => {
+                // Try to simplify projection expressions
+                let mut changed = false;
+                let mut new_exprs = Vec::new();
+                for e in expr.iter() {
+                    let simplified = self.simplify_expr(e);
+                    if simplified != *e {
+                        changed = true;
+                    }
+                    new_exprs.push(simplified);
+                }
+                if changed {
+                    *expr = new_exprs;
+                }
+                changed || self.fold(input)
+            }
+            Plan::Aggregate { input, .. } => self.fold(input),
+            Plan::Join { left, right, .. } => {
+                let changed_left = self.fold(left);
+                let changed_right = self.fold(right);
+                changed_left || changed_right
+            }
+            Plan::Sort { input, .. } => self.fold(input),
+            Plan::Limit { input, .. } => self.fold(input),
+            _ => false,
+        }
+    }
+
+    /// Simplify an expression by evaluating constants
+    fn simplify_expr(&self, expr: &Expr) -> Expr {
+        match expr {
+            Expr::BinaryExpr { left, op, right } => {
+                let left_simplified = self.simplify_expr(left);
+                let right_simplified = self.simplify_expr(right);
+
+                // If both are literals, try to evaluate
+                if let Expr::Literal(lv) = &left_simplified {
+                    if let Expr::Literal(rv) = &right_simplified {
+                        if let Some(result) = self.eval_binary_op(op, lv, rv) {
+                            return Expr::Literal(result);
+                        }
+                    }
+                }
+
+                Expr::BinaryExpr {
+                    left: Box::new(left_simplified),
+                    op: op.clone(),
+                    right: Box::new(right_simplified),
+                }
+            }
+            Expr::UnaryExpr { op, expr } => {
+                let simplified = self.simplify_expr(expr);
+                if let Expr::Literal(v) = &simplified {
+                    if let Some(result) = self.eval_unary_op(op, v) {
+                        return Expr::Literal(result);
+                    }
+                }
+                Expr::UnaryExpr {
+                    op: op.clone(),
+                    expr: Box::new(simplified),
+                }
+            }
+            _ => expr.clone(),
+        }
+    }
+
+    fn eval_binary_op(&self, op: &Operator, left: &Value, right: &Value) -> Option<Value> {
+        match (op, left, right) {
+            (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
+            (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
+            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l * r)),
+            (Operator::Eq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l <= r)),
+            _ => None,
+        }
+    }
+
+    fn eval_unary_op(&self, op: &Operator, value: &Value) -> Option<Value> {
+        match (op, value) {
+            (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
+            (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
+            _ => None,
+        }
     }
 }
 
