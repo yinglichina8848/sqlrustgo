@@ -727,9 +727,67 @@ mod tests {
     }
 
     #[test]
+    fn test_in_memory_provider_remove_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(100));
+
+        provider.remove_stats("users");
+        assert!(!provider.has_stats("users"));
+    }
+
+    #[test]
     fn test_in_memory_provider_debug() {
         let provider = InMemoryStatisticsProvider::new();
         let debug = format!("{:?}", provider);
         assert!(!debug.is_empty());
+    }
+
+    #[test]
+    fn test_statistics_provider_update_stats_not_found() {
+        let provider = InMemoryStatisticsProvider::new();
+        let result = provider.update_stats("users", TableStats::new("users"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_statistics_provider_update_stats_ok() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(100));
+
+        let result = provider.update_stats("users", TableStats::new("users").with_row_count(200));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_table_stats_with_size_bytes() {
+        let stats = TableStats::new("users").with_size_bytes(5000);
+        assert_eq!(stats.size_bytes, 5000);
+    }
+
+    #[test]
+    fn test_column_stats_eq_selectivity_high_distinct() {
+        let stats = ColumnStats::new("id").with_distinct_count(10000);
+        let selectivity = stats.eq_selectivity();
+        assert!(selectivity < 0.001);
+    }
+
+    #[test]
+    fn test_column_stats_eq_selectivity_single_value() {
+        let stats = ColumnStats::new("status").with_distinct_count(1);
+        let selectivity = stats.eq_selectivity();
+        assert_eq!(selectivity, 1.0);
+    }
+
+    #[test]
+    fn test_stats_error_update_failed() {
+        let err = StatsError::UpdateFailed("failed".to_string());
+        assert!(err.to_string().contains("failed"));
+    }
+
+    #[test]
+    fn test_stats_error_debug() {
+        let err = StatsError::TableNotFound("test".to_string());
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("TableNotFound"));
     }
 }
