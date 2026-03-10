@@ -318,6 +318,17 @@ mod tests {
     #[test]
     fn test_memory_storage_default() {
         let storage = MemoryStorage::default();
-        assert!(storage.list_tables().is_empty());
+        assert!(storage.tables.is_empty());
     }
-}
+
+    #[test]
+    fn test_record_new() {
+        let record = Record(vec![Value::Integer(1), Value::Text("test".to_string())]);
+        assert_eq!(record.0.len(), 2);
+    }
+
+    #[test]
+    fn test_record_index() {
+        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+        assert_eq!(record[0], Value::Integer(1));
+    }
