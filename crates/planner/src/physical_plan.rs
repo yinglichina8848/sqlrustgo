@@ -33,7 +33,7 @@ pub trait PhysicalPlan: Send + Sync {
         ""
     }
 
-    /// Get as Any for downcasting
+    /// Downcast to concrete type
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -86,6 +86,10 @@ impl PhysicalPlan for SeqScanExec {
         &self.table_name
     }
 
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        Ok(vec![])
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -107,14 +111,6 @@ impl ProjectionExec {
             schema,
         }
     }
-
-    pub fn expr(&self) -> &Vec<Expr> {
-        &self.expr
-    }
-
-    pub fn input(&self) -> &dyn PhysicalPlan {
-        self.input.as_ref()
-    }
 }
 
 impl PhysicalPlan for ProjectionExec {
@@ -130,8 +126,105 @@ impl PhysicalPlan for ProjectionExec {
         "Projection"
     }
 
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let input_rows = self.input.execute()?;
+
+        if self.expr.is_empty() {
+            return Ok(input_rows);
+        }
+
+        let input_schema = self.input.schema();
+        let mut results = vec![];
+
+        for row in input_rows {
+            let mut projected_row = vec![];
+            for expr in &self.expr {
+                let value = self.evaluate_expr(expr, &row, input_schema);
+                projected_row.push(value);
+            }
+            results.push(projected_row);
+        }
+
+        Ok(results)
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl ProjectionExec {
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
+    pub fn expr(&self) -> &Vec<Expr> {
+        &self.expr
+    }
+
+    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
+        match expr {
+            Expr::Column(col) => {
+                if let Some(idx) = schema.field_index(&col.name) {
+                    row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expr::Literal(val) => val.clone(),
+            Expr::Wildcard => Value::Text(
+                row.iter()
+                    .map(|v| format!("{:?}", v))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
+            Expr::Alias { expr, .. } => self.evaluate_expr(expr, row, schema),
+            Expr::BinaryExpr { left, op, right } => {
+                let lval = self.evaluate_expr(left, row, schema);
+                let rval = self.evaluate_expr(right, row, schema);
+                self.evaluate_arithmetic(op, &lval, &rval)
+            }
+            _ => Value::Null,
+        }
+    }
+
+    fn evaluate_arithmetic(&self, op: &Operator, left: &Value, right: &Value) -> Value {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => match op {
+                Operator::Plus => Value::Integer(l + r),
+                Operator::Minus => Value::Integer(l - r),
+                Operator::Multiply => Value::Integer(l * r),
+                Operator::Divide => {
+                    if *r != 0 {
+                        Value::Integer(l / r)
+                    } else {
+                        Value::Null
+                    }
+                }
+                Operator::Modulo => {
+                    if *r != 0 {
+                        Value::Integer(l % r)
+                    } else {
+                        Value::Null
+                    }
+                }
+                _ => Value::Null,
+            },
+            (Value::Float(l), Value::Float(r)) => match op {
+                Operator::Plus => Value::Float(l + r),
+                Operator::Minus => Value::Float(l - r),
+                Operator::Multiply => Value::Float(l * r),
+                Operator::Divide => {
+                    if *r != 0.0 {
+                        Value::Float(l / r)
+                    } else {
+                        Value::Null
+                    }
+                }
+                _ => Value::Null,
+            },
+            _ => Value::Null,
+        }
     }
 }
 
@@ -147,12 +240,12 @@ impl FilterExec {
         Self { input, predicate }
     }
 
-    pub fn predicate(&self) -> &Expr {
-        &self.predicate
-    }
-
     pub fn input(&self) -> &dyn PhysicalPlan {
         self.input.as_ref()
+    }
+
+    pub fn predicate(&self) -> &Expr {
+        &self.predicate
     }
 }
 
@@ -169,8 +262,63 @@ impl PhysicalPlan for FilterExec {
         "Filter"
     }
 
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let input_rows = self.input.execute()?;
+        let input_schema = self.input.schema();
+
+        let filtered: Vec<Vec<Value>> = input_rows
+            .into_iter()
+            .filter(|row| self.evaluate_predicate(&self.predicate, row, input_schema))
+            .collect();
+
+        Ok(filtered)
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl FilterExec {
+    fn evaluate_predicate(&self, expr: &Expr, row: &[Value], schema: &Schema) -> bool {
+        match expr {
+            Expr::BinaryExpr { left, op, right } => {
+                let lval = self.evaluate_expr(left, row, schema);
+                let rval = self.evaluate_expr(right, row, schema);
+                self.compare_values(&lval, op, &rval)
+            }
+            Expr::Literal(Value::Integer(n)) => *n != 0,
+            _ => true,
+        }
+    }
+
+    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
+        match expr {
+            Expr::Column(col) => {
+                if let Some(idx) = schema.field_index(&col.name) {
+                    row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expr::Literal(val) => val.clone(),
+            _ => Value::Null,
+        }
+    }
+
+    fn compare_values(&self, left: &Value, op: &Operator, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => match op {
+                Operator::Eq => l == r,
+                Operator::NotEq => l != r,
+                Operator::Gt => l > r,
+                Operator::Lt => l < r,
+                Operator::GtEq => l >= r,
+                Operator::LtEq => l <= r,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 }
 
@@ -198,16 +346,16 @@ impl AggregateExec {
         }
     }
 
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
     pub fn group_expr(&self) -> &Vec<Expr> {
         &self.group_expr
     }
 
     pub fn aggregate_expr(&self) -> &Vec<Expr> {
         &self.aggregate_expr
-    }
-
-    pub fn input(&self) -> &dyn PhysicalPlan {
-        self.input.as_ref()
     }
 
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
@@ -221,62 +369,133 @@ impl AggregateExec {
             }
             Expr::Literal(val) => val.clone(),
             Expr::Wildcard => Value::Integer(row.len() as i64),
+            Expr::Alias { expr, .. } => self.evaluate_expr(expr, row, schema),
             _ => Value::Null,
         }
     }
 
-    fn compute_aggregate(&self, func: &AggregateFunction, values: &[Value]) -> Value {
+    fn compute_aggregate(
+        &self,
+        func: &AggregateFunction,
+        args: &[Expr],
+        values: &[Value],
+    ) -> Value {
         match func {
-            AggregateFunction::Count => Value::Integer(values.len() as i64),
+            AggregateFunction::Count => {
+                if args.is_empty() {
+                    Value::Integer(values.len() as i64)
+                } else {
+                    let non_null_count =
+                        values.iter().filter(|v| !matches!(v, Value::Null)).count();
+                    Value::Integer(non_null_count as i64)
+                }
+            }
             AggregateFunction::Sum => {
                 let mut sum: i64 = 0;
+                let mut sum_float: f64 = 0.0;
+                let mut has_float = false;
                 for v in values {
+                    if let Value::Null = v {
+                        continue;
+                    }
                     if let Value::Integer(n) = v {
                         sum += n;
+                    } else if let Value::Float(n) = v {
+                        has_float = true;
+                        sum_float += n;
                     }
                 }
-                Value::Integer(sum)
+                if has_float {
+                    Value::Float(sum_float + sum as f64)
+                } else {
+                    Value::Integer(sum)
+                }
             }
             AggregateFunction::Avg => {
                 let mut sum: i64 = 0;
+                let mut sum_float: f64 = 0.0;
                 let mut count = 0;
+                let mut has_float = false;
                 for v in values {
+                    if let Value::Null = v {
+                        continue;
+                    }
                     if let Value::Integer(n) = v {
                         sum += n;
+                        count += 1;
+                    } else if let Value::Float(n) = v {
+                        has_float = true;
+                        sum_float += n;
                         count += 1;
                     }
                 }
                 if count > 0 {
-                    Value::Integer(sum / count as i64)
+                    if has_float {
+                        Value::Float((sum_float + sum as f64) / count as f64)
+                    } else {
+                        Value::Integer(sum / count as i64)
+                    }
                 } else {
                     Value::Null
                 }
             }
             AggregateFunction::Min => {
-                let mut min_val: Option<i64> = None;
+                let mut min_val: Option<(bool, i64, f64)> = None;
                 for v in values {
+                    if let Value::Null = v {
+                        continue;
+                    }
                     if let Value::Integer(n) = v {
+                        let n = *n;
                         match min_val {
-                            Some(m) if *n < m => min_val = Some(*n),
-                            None => min_val = Some(*n),
+                            Some((false, m, _)) if n < m => min_val = Some((false, n, 0.0)),
+                            None => min_val = Some((false, n, 0.0)),
+                            _ => {}
+                        }
+                    } else if let Value::Float(n) = v {
+                        let n = *n;
+                        match min_val {
+                            Some((true, _, m)) if n < m => min_val = Some((true, 0, n)),
+                            None => min_val = Some((true, 0, n)),
+                            Some((false, _, _)) => min_val = Some((true, 0, n)),
                             _ => {}
                         }
                     }
                 }
-                min_val.map(Value::Integer).unwrap_or(Value::Null)
+                match min_val {
+                    Some((true, _, n)) => Value::Float(n),
+                    Some((false, n, _)) => Value::Integer(n),
+                    None => Value::Null,
+                }
             }
             AggregateFunction::Max => {
-                let mut max_val: Option<i64> = None;
+                let mut max_val: Option<(bool, i64, f64)> = None;
                 for v in values {
+                    if let Value::Null = v {
+                        continue;
+                    }
                     if let Value::Integer(n) = v {
+                        let n = *n;
                         match max_val {
-                            Some(m) if *n > m => max_val = Some(*n),
-                            None => max_val = Some(*n),
+                            Some((false, m, _)) if n > m => max_val = Some((false, n, 0.0)),
+                            None => max_val = Some((false, n, 0.0)),
+                            _ => {}
+                        }
+                    } else if let Value::Float(n) = v {
+                        let n = *n;
+                        match max_val {
+                            Some((true, _, m)) if n > m => max_val = Some((true, 0, n)),
+                            None => max_val = Some((true, 0, n)),
+                            Some((false, _, _)) => max_val = Some((true, 0, n)),
                             _ => {}
                         }
                     }
                 }
-                max_val.map(Value::Integer).unwrap_or(Value::Null)
+                match max_val {
+                    Some((true, _, n)) => Value::Float(n),
+                    Some((false, n, _)) => Value::Integer(n),
+                    None => Value::Null,
+                }
             }
         }
     }
@@ -304,17 +523,21 @@ impl PhysicalPlan for AggregateExec {
 
             for agg_expr in &self.aggregate_expr {
                 if let Expr::AggregateFunction { func, args, .. } = agg_expr {
-                    let values: Vec<Value> = input_rows
-                        .iter()
-                        .map(|row| {
-                            self.evaluate_expr(
-                                args.first().unwrap_or(&Expr::Wildcard),
-                                row,
-                                self.input.schema(),
-                            )
-                        })
-                        .collect();
-                    let result = self.compute_aggregate(func, &values);
+                    let values: Vec<Value> = if args.is_empty() {
+                        input_rows.iter().map(|_| Value::Null).collect()
+                    } else {
+                        input_rows
+                            .iter()
+                            .map(|row| {
+                                self.evaluate_expr(
+                                    args.first().unwrap_or(&Expr::Wildcard),
+                                    row,
+                                    self.input.schema(),
+                                )
+                            })
+                            .collect()
+                    };
+                    let result = self.compute_aggregate(func, args, &values);
                     agg_results.push(result);
                 }
             }
@@ -341,17 +564,21 @@ impl PhysicalPlan for AggregateExec {
                 let mut row = key;
                 for agg_expr in &self.aggregate_expr {
                     if let Expr::AggregateFunction { func, args, .. } = agg_expr {
-                        let values: Vec<Value> = group_rows
-                            .iter()
-                            .map(|r| {
-                                self.evaluate_expr(
-                                    args.first().unwrap_or(&Expr::Wildcard),
-                                    r,
-                                    self.input.schema(),
-                                )
-                            })
-                            .collect();
-                        let result = self.compute_aggregate(func, &values);
+                        let values: Vec<Value> = if args.is_empty() {
+                            group_rows.iter().map(|_| Value::Null).collect()
+                        } else {
+                            group_rows
+                                .iter()
+                                .map(|r| {
+                                    self.evaluate_expr(
+                                        args.first().unwrap_or(&Expr::Wildcard),
+                                        r,
+                                        self.input.schema(),
+                                    )
+                                })
+                                .collect()
+                        };
+                        let result = self.compute_aggregate(func, args, &values);
                         row.push(result);
                     }
                 }
@@ -705,5 +932,110 @@ mod tests {
         let child = SeqScanExec::new("users".to_string(), schema.clone());
         let exec = SortExec::new(Box::new(child), vec![]);
         assert_eq!(exec.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_projection_exec_column() {
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+        let proj = ProjectionExec::new(input, vec![Expr::column("id")], output_schema);
+
+        assert_eq!(proj.name(), "Projection");
+        assert_eq!(proj.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_projection_exec_alias() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let aliased_expr = Expr::Alias {
+            expr: Box::new(Expr::column("id")),
+            name: "my_id".to_string(),
+        };
+        let proj = ProjectionExec::new(input, vec![aliased_expr], schema);
+
+        assert_eq!(proj.name(), "Projection");
+    }
+
+    #[test]
+    fn test_aggregate_exec_count_star() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("test_table".to_string(), schema.clone());
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        assert_eq!(agg.name(), "Aggregate");
+    }
+
+    #[test]
+    fn test_aggregate_exec_count_column() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("test_table".to_string(), schema.clone());
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![Expr::column("id")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        assert_eq!(agg.name(), "Aggregate");
+    }
+
+    #[test]
+    fn test_aggregate_exec_sum() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("test_table".to_string(), schema.clone());
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Sum,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("sum".to_string(), DataType::Integer)]),
+        );
+
+        assert_eq!(agg.name(), "Aggregate");
+    }
+
+    #[test]
+    fn test_aggregate_exec_group_by() {
+        let schema = Schema::new(vec![
+            Field::new("category".to_string(), DataType::Text),
+            Field::new("amount".to_string(), DataType::Integer),
+        ]);
+        let child = SeqScanExec::new("test_table".to_string(), schema.clone());
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![Expr::column("category")],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Sum,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![
+                Field::new("category".to_string(), DataType::Text),
+                Field::new("sum".to_string(), DataType::Integer),
+            ]),
+        );
+
+        assert_eq!(agg.name(), "Aggregate");
     }
 }
