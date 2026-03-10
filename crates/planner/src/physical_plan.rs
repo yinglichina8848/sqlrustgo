@@ -334,4 +334,131 @@ mod tests {
         _check::<Box<dyn PhysicalPlan>>();
         _check::<SeqScanExec>();
     }
+
+    #[test]
+    fn test_sort_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let sort_expr = vec![crate::SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: true,
+        }];
+        let exec = SortExec::new(Box::new(child), sort_expr);
+        assert_eq!(exec.name(), "Sort");
+        assert_eq!(exec.schema(), &schema);
+    }
+
+    #[test]
+    fn test_sort_exec_children() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema);
+        let exec = SortExec::new(Box::new(child), vec![]);
+        assert!(!exec.children().is_empty());
+    }
+
+    #[test]
+    fn test_limit_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = LimitExec::new(Box::new(child), 10, Some(5));
+        assert_eq!(exec.name(), "Limit");
+        assert_eq!(exec.schema(), &schema);
+    }
+
+    #[test]
+    fn test_limit_exec_no_offset() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema);
+        let exec = LimitExec::new(Box::new(child), 100, None);
+        assert_eq!(exec.name(), "Limit");
+    }
+
+    #[test]
+    fn test_limit_exec_children() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema);
+        let exec = LimitExec::new(Box::new(child), 10, None);
+        assert!(!exec.children().is_empty());
+    }
+
+    #[test]
+    fn test_filter_exec_children() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let predicate = Expr::column("id");
+        let exec = FilterExec::new(Box::new(child), predicate.clone());
+        let children = exec.children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_aggregate_exec_children() {
+        let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        assert!(!exec.children().is_empty());
+    }
+
+    #[test]
+    fn test_hash_join_exec_left_right() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let exec = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Left,
+            None,
+            schema,
+        );
+        let children = exec.children();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_hash_join_exec_right() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let exec = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Right,
+            None,
+            schema,
+        );
+        assert_eq!(exec.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_hash_join_exec_full() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let exec = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Full,
+            None,
+            schema,
+        );
+        assert_eq!(exec.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_projection_exec_children() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = ProjectionExec::new(Box::new(child), vec![], schema);
+        assert!(!exec.children().is_empty());
+    }
+
+    #[test]
+    fn test_physical_plan_debug() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let exec = SeqScanExec::new("users".to_string(), schema);
+        let debug_str = format!("{:?}", exec);
+        assert!(debug_str.contains("SeqScanExec"));
+    }
 }
