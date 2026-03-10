@@ -787,4 +787,16 @@ mod tests {
         let tokens = tokenize("@");
         assert!(matches!(&tokens[0], Token::Identifier(s) if s == "@"));
     }
+
+    #[test]
+    fn test_lexer_decimal_number() {
+        let tokens = tokenize("3.14");
+        assert!(matches!(&tokens[0], Token::NumberLiteral(n) if n == "3.14"));
+    }
+
+    #[test]
+    fn test_lexer_string_with_escaped_quote() {
+        let tokens = tokenize("'it''s'");
+        assert!(matches!(&tokens[0], Token::StringLiteral(s) if s == "it''s"));
+    }
 }
