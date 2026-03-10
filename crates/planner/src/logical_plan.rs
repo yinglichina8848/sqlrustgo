@@ -260,7 +260,7 @@ mod tests {
     fn test_logical_plan_schema_delete() {
         let plan = LogicalPlan::Delete {
             table_name: "users".to_string(),
-            where_clause: None,
+            predicate: None,
         };
         assert!(plan.schema().fields.is_empty());
     }
@@ -270,7 +270,7 @@ mod tests {
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let plan = LogicalPlan::Update {
             table_name: "users".to_string(),
-            where_clause: None,
+            predicate: None,
             updates: vec![],
             schema: schema.clone(),
         };
@@ -280,7 +280,8 @@ mod tests {
     #[test]
     fn test_logical_plan_schema_drop_table() {
         let plan = LogicalPlan::DropTable {
-            name: "users".to_string(),
+            table_name: "users".to_string(),
+            if_exists: false,
         };
         assert!(plan.schema().fields.is_empty());
     }
