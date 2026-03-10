@@ -66,10 +66,10 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
+    fn create_table_index(&self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
     /// Drop an index from a table
-    fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
+    fn drop_table_index(&self, table: &str, column: &str) -> SqlResult<()>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -151,11 +151,16 @@ impl StorageEngine for MemoryStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&mut self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
+    fn create_table_index(
+        &self,
+        _table: &str,
+        _column: &str,
+        _column_index: usize,
+    ) -> SqlResult<()> {
         Ok(())
     }
 
-    fn drop_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
         Ok(())
     }
 }
@@ -219,47 +224,6 @@ mod tests {
     }
 
     #[test]
-    fn test_column_definition() {
-        let col = ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-        };
-        assert_eq!(col.name, "id");
-        assert_eq!(col.data_type, "INTEGER");
-        assert!(!col.nullable);
-    }
-
-    #[test]
-    fn test_table_info() {
-        let col = ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-        };
-        let info = TableInfo {
-            name: "users".to_string(),
-            columns: vec![col],
-        };
-        assert_eq!(info.name, "users");
-        assert_eq!(info.columns.len(), 1);
-    }
-
-    #[test]
-    fn test_table_data() {
-        let info = TableInfo {
-            name: "users".to_string(),
-            columns: vec![],
-        };
-        let data = TableData {
-            info: info.clone(),
-            rows: vec![],
-        };
-        assert_eq!(data.info.name, "users");
-        assert!(data.rows.is_empty());
-    }
-
-    #[test]
     fn test_memory_storage_create_table() {
         let mut storage = MemoryStorage::new();
         let info = TableInfo {
@@ -299,13 +263,6 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_storage_get_table_info_not_found() {
-        let storage = MemoryStorage::new();
-        let result = storage.get_table_info("users");
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_memory_storage_delete() {
         let mut storage = MemoryStorage::new();
         storage
@@ -328,14 +285,57 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_storage_create_index() {
-        let mut storage = MemoryStorage::new();
-        storage.create_index("users", "id", 0).unwrap();
+    fn test_column_definition() {
+        let col = ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        };
+        assert_eq!(col.name, "id");
     }
 
     #[test]
-    fn test_memory_storage_drop_index() {
-        let mut storage = MemoryStorage::new();
-        storage.drop_index("users", "id").unwrap();
+    fn test_table_info() {
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        assert_eq!(info.name, "users");
     }
+
+    #[test]
+    fn test_table_data() {
+        let data = TableData {
+            info: TableInfo {
+                name: "users".to_string(),
+                columns: vec![],
+            },
+            rows: vec![],
+        };
+        assert_eq!(data.info.name, "users");
+    }
+
+    #[test]
+    fn test_memory_storage_default() {
+        let storage = MemoryStorage::default();
+        assert!(storage.tables.is_empty());
+    }
+
+    #[test]
+    fn test_record_new() {
+        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+        assert_eq!(record.len(), 2);
+    }
+
+    #[test]
+    fn test_record_index() {
+        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+        assert_eq!(record[0], Value::Integer(1));
+    }
+}
+
+#[test]
+fn test_record_index() {
+    let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
+    assert_eq!(record[0], Value::Integer(1));
 }

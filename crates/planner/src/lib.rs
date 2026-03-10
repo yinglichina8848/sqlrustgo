@@ -15,7 +15,9 @@ pub mod planner;
 
 pub use logical_plan::LogicalPlan;
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
-pub use physical_plan::PhysicalPlan;
+pub use physical_plan::{
+    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
+};
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
 use sqlrustgo_types::Value;
@@ -143,6 +145,80 @@ impl Expr {
             op,
             right: Box::new(right),
         }
+    }
+
+    pub fn evaluate(&self, row: &[Value], schema: &Schema) -> Option<Value> {
+        match self {
+            Expr::Column(col) => {
+                let idx = schema.field_index(&col.name)?;
+                row.get(idx).cloned()
+            }
+            Expr::Literal(val) => Some(val.clone()),
+            Expr::BinaryExpr { left, op, right } => {
+                let lv = left.evaluate(row, schema)?;
+                let rv = right.evaluate(row, schema)?;
+                evaluate_binary_op(&lv, op, &rv)
+            }
+            Expr::UnaryExpr { op, expr } => {
+                let v = expr.evaluate(row, schema)?;
+                evaluate_unary_op(&v, op)
+            }
+            Expr::AggregateFunction { .. } => None,
+            Expr::Alias { expr, .. } => expr.evaluate(row, schema),
+            Expr::Wildcard => None,
+            Expr::QualifiedWildcard { .. } => None,
+        }
+    }
+
+    pub fn matches(&self, row: &[Value], schema: &Schema) -> bool {
+        if let Some(value) = self.evaluate(row, schema) {
+            value.to_bool()
+        } else {
+            false
+        }
+    }
+}
+
+fn evaluate_binary_op(left: &Value, op: &Operator, right: &Value) -> Option<Value> {
+    use sqlrustgo_types::Value::*;
+    use Operator::*;
+
+    match (left, op, right) {
+        (Integer(l), Eq, Integer(r)) => Some(Boolean(l == r)),
+        (Integer(l), NotEq, Integer(r)) => Some(Boolean(l != r)),
+        (Integer(l), Lt, Integer(r)) => Some(Boolean(l < r)),
+        (Integer(l), LtEq, Integer(r)) => Some(Boolean(l <= r)),
+        (Integer(l), Gt, Integer(r)) => Some(Boolean(l > r)),
+        (Integer(l), GtEq, Integer(r)) => Some(Boolean(l >= r)),
+        (Text(l), Eq, Text(r)) => Some(Boolean(l == r)),
+        (Text(l), NotEq, Text(r)) => Some(Boolean(l != r)),
+        (Text(l), Lt, Text(r)) => Some(Boolean(l < r)),
+        (Text(l), LtEq, Text(r)) => Some(Boolean(l <= r)),
+        (Text(l), Gt, Text(r)) => Some(Boolean(l > r)),
+        (Text(l), GtEq, Text(r)) => Some(Boolean(l >= r)),
+        (Integer(l), Plus, Integer(r)) => Some(Integer(l + r)),
+        (Integer(l), Minus, Integer(r)) => Some(Integer(l - r)),
+        (Integer(l), Multiply, Integer(r)) => Some(Integer(l * r)),
+        (Integer(l), Divide, Integer(r)) => {
+            if *r != 0 {
+                Some(Integer(l / r))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn evaluate_unary_op(value: &Value, op: &Operator) -> Option<Value> {
+    use sqlrustgo_types::Value::*;
+    use Operator::*;
+
+    match (value, op) {
+        (Integer(v), Operator::Not) => Some(Boolean(*v == 0)),
+        (Boolean(v), Operator::Not) => Some(Boolean(!v)),
+        (Integer(v), Operator::Minus) => Some(Integer(-v)),
+        _ => None,
     }
 }
 

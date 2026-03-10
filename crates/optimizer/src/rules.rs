@@ -153,4 +153,31 @@ mod tests {
         let rule = ConstantFolding::default();
         assert_eq!(Rule::<TestPlan>::name(&rule), "ConstantFolding");
     }
+
+    #[test]
+    fn test_projection_pruning_apply_with_string() {
+        let rule = ProjectionPruning;
+        let mut plan = String::from("test");
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_apply_with_string() {
+        let rule = ConstantFolding;
+        let mut plan = String::from("test");
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_all_rules_apply_return_false() {
+        let mut plan1 = String::new();
+        let mut plan2 = String::new();
+        let mut plan3 = String::new();
+
+        assert!(!PredicatePushdown.apply(&mut plan1));
+        assert!(!ProjectionPruning.apply(&mut plan2));
+        assert!(!ConstantFolding.apply(&mut plan3));
+    }
 }
