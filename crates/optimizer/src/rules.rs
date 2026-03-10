@@ -17,15 +17,9 @@ pub enum Plan {
         projection: Option<Vec<usize>>,
     },
     /// Filter operation (WHERE clause)
-    Filter {
-        predicate: Expr,
-        input: Box<Plan>,
-    },
+    Filter { predicate: Expr, input: Box<Plan> },
     /// Projection operation (SELECT columns)
-    Projection {
-        expr: Vec<Expr>,
-        input: Box<Plan>,
-    },
+    Projection { expr: Vec<Expr>, input: Box<Plan> },
     /// Join operation
     Join {
         left: Box<Plan>,
@@ -40,15 +34,9 @@ pub enum Plan {
         input: Box<Plan>,
     },
     /// Sort operation (ORDER BY)
-    Sort {
-        expr: Vec<Expr>,
-        input: Box<Plan>,
-    },
+    Sort { expr: Vec<Expr>, input: Box<Plan> },
     /// Limit operation
-    Limit {
-        limit: usize,
-        input: Box<Plan>,
-    },
+    Limit { limit: usize, input: Box<Plan> },
     /// Empty relation
     EmptyRelation,
 }
@@ -67,10 +55,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary expression
-    UnaryExpr {
-        op: Operator,
-        expr: Box<Expr>,
-    },
+    UnaryExpr { op: Operator, expr: Box<Expr> },
 }
 
 /// Join types
@@ -190,16 +175,23 @@ impl PredicatePushdown {
                         // Filter directly on table scan - already optimal
                         false
                     }
-                    Plan::Projection { input: proj_input, .. } => {
+                    Plan::Projection {
+                        input: proj_input, ..
+                    } => {
                         // Push filter through projection to its input
                         let new_filter = Plan::Filter {
                             predicate: predicate.clone(),
                             input: proj_input.clone(),
                         };
                         **input = new_filter;
-                        return true;
+                        true
                     }
-                    Plan::Join { left, right, join_type, condition } => {
+                    Plan::Join {
+                        left,
+                        right,
+                        join_type,
+                        condition,
+                    } => {
                         let mut changed = false;
 
                         // Push into left side
@@ -216,7 +208,7 @@ impl PredicatePushdown {
                             }
                         }
 
-                        return changed;
+                        changed
                     }
                     _ => false,
                 }
@@ -455,7 +447,9 @@ impl ConstantFolding {
         match (op, left, right) {
             (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
             (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
-            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l * r)),
+            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => {
+                Some(Value::Integer(l * r))
+            }
             (Operator::Eq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l == r)),
             (Operator::NotEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l != r)),
             (Operator::Gt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l > r)),
@@ -618,51 +612,60 @@ impl OptimizerRuleSet {
     }
 
     /// Add a rule with metadata
-    pub fn add_rule(
-        mut self,
-        meta: RuleMeta,
-        apply_fn: fn(&mut dyn Any) -> bool,
-    ) -> Self {
+    pub fn add_rule(mut self, meta: RuleMeta, apply_fn: fn(&mut dyn Any) -> bool) -> Self {
         self.rules.push(RuleItem { meta, apply_fn });
-        self.rules.sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
+        self.rules
+            .sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
         self
     }
 
     /// Add built-in PredicatePushdown rule
     pub fn with_predicate_pushdown(mut self) -> Self {
-        let meta = RuleMeta::new("PredicatePushdown", "Push filter conditions down to data source")
-            .with_priority(100)
-            .repeatable();
+        let meta = RuleMeta::new(
+            "PredicatePushdown",
+            "Push filter conditions down to data source",
+        )
+        .with_priority(100)
+        .repeatable();
         self.rules.push(RuleItem {
             meta,
             apply_fn: |_plan: &mut dyn Any| false,
         });
-        self.rules.sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
+        self.rules
+            .sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
         self
     }
 
     /// Add built-in ProjectionPruning rule
     pub fn with_projection_pruning(mut self) -> Self {
-        let meta = RuleMeta::new("ProjectionPruning", "Remove unnecessary columns from projection")
-            .with_priority(90)
-            .repeatable();
+        let meta = RuleMeta::new(
+            "ProjectionPruning",
+            "Remove unnecessary columns from projection",
+        )
+        .with_priority(90)
+        .repeatable();
         self.rules.push(RuleItem {
             meta,
             apply_fn: |_plan: &mut dyn Any| false,
         });
-        self.rules.sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
+        self.rules
+            .sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
         self
     }
 
     /// Add built-in ConstantFolding rule
     pub fn with_constant_folding(mut self) -> Self {
-        let meta = RuleMeta::new("ConstantFolding", "Evaluate constant expressions at compile time")
-            .with_priority(200);
+        let meta = RuleMeta::new(
+            "ConstantFolding",
+            "Evaluate constant expressions at compile time",
+        )
+        .with_priority(200);
         self.rules.push(RuleItem {
             meta,
             apply_fn: |_plan: &mut dyn Any| false,
         });
-        self.rules.sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
+        self.rules
+            .sort_by(|a, b| b.meta.priority.cmp(&a.meta.priority));
         self
     }
 
