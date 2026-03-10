@@ -24,6 +24,11 @@ pub trait PhysicalPlan: Send + Sync {
     fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
         Ok(vec![])
     }
+
+    /// Get table name for scan operators
+    fn table_name(&self) -> &str {
+        ""
+    }
 }
 
 /// Sequential scan execution operator
@@ -48,6 +53,14 @@ impl SeqScanExec {
         self.projection = Some(projection);
         self
     }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn projection(&self) -> Option<&Vec<usize>> {
+        self.projection.as_ref()
+    }
 }
 
 impl PhysicalPlan for SeqScanExec {
@@ -61,6 +74,10 @@ impl PhysicalPlan for SeqScanExec {
 
     fn name(&self) -> &str {
         "SeqScan"
+    }
+
+    fn table_name(&self) -> &str {
+        &self.table_name
     }
 }
 
