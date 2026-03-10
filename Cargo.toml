@@ -100,3 +100,7 @@ harness = false
 [[bench]]
 name = "bench_aggregate"
 harness = false
+
+[[bench]]
+name = "bench_insert"
+harness = false
