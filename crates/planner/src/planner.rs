@@ -291,4 +291,104 @@ mod tests {
 
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_join_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let right = LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: crate::JoinType::Inner,
+            condition: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&join_plan);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_aggregate_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let agg_plan = LogicalPlan::Aggregate {
+            input: Box::new(table_scan),
+            group_expr: vec![Expr::column("id")],
+            aggregate_expr: vec![],
+            schema: schema.clone(),
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&agg_plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sort_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let sort_plan = LogicalPlan::Sort {
+            input: Box::new(table_scan),
+            sort_expr: vec![crate::SortExpr {
+                expr: Expr::column("id"),
+                asc: true,
+                nulls_first: false,
+            }],
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&sort_plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_planner_result_ok() {
+        let ok: PlannerResult<i32> = Ok(42);
+        assert!(ok.is_ok());
+        assert_eq!(ok.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_planner_result_err() {
+        let err: PlannerResult<i32> = Err(PlannerError::PlanningFailed("test".to_string()));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_noop_planner_default() {
+        let planner = NoOpPlanner::default();
+        assert!(std::any::type_name::<NoOpPlanner>().contains("NoOpPlanner"));
+    }
+
+    #[test]
+    fn test_planner_error_display() {
+        let err = PlannerError::PlanningFailed("test error".to_string());
+        assert!(err.to_string().contains("Planning failed"));
+    }
 }
