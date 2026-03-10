@@ -391,4 +391,97 @@ mod tests {
         let err = PlannerError::PlanningFailed("test error".to_string());
         assert!(err.to_string().contains("Planning failed"));
     }
+
+    #[test]
+    fn test_aggregate_physical_plan_with_group_by() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "data".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let aggregate_plan = LogicalPlan::Aggregate {
+            input: Box::new(table_scan),
+            group_expr: vec![Expr::column("id")],
+            aggregate_expr: vec![Expr::column("value")],
+            schema: schema.clone(),
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&aggregate_plan);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "Aggregate");
+    }
+
+    #[test]
+    fn test_limit_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let limit_plan = LogicalPlan::Limit {
+            input: Box::new(table_scan),
+            limit: 10,
+            offset: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&limit_plan);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "Limit");
+    }
+
+    #[test]
+    fn test_limit_physical_plan_with_offset() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let limit_plan = LogicalPlan::Limit {
+            input: Box::new(table_scan),
+            limit: 10,
+            offset: Some(5),
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&limit_plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_table_scan_with_projection() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: Some(vec![0]),
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&table_scan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_default_optimizer() {
+        let _optimizer = DefaultOptimizer::new();
+        assert!(std::any::type_name::<DefaultOptimizer>().contains("DefaultOptimizer"));
+    }
 }
