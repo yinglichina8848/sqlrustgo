@@ -6,6 +6,7 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
+use crate::Operator;
 use crate::Schema;
 use sqlrustgo_types::Value;
 use std::any::Any;
