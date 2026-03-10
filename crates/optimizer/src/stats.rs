@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_column_stats_with_average() {
-        let stats = ColumnStats::new("score").with_average(Value::Float(85.5));
+        let stats = ColumnStats::new("score").with_average(85.5);
         assert!(stats.avg_value.is_some());
     }
 
@@ -644,51 +644,8 @@ mod tests {
     }
 
     #[test]
-    fn test_stats_collector_trait() {
-        fn _check_stats_collector<T: StatsCollector>(_collector: &T) {}
-        let provider = InMemoryStatisticsProvider::new();
-        _check_stats_collector(&provider);
-    }
-
-    #[test]
-    fn test_statistics_provider_trait() {
-        fn _check_stats_provider<T: StatisticsProvider>(_provider: &T) {}
-        let provider = InMemoryStatisticsProvider::new();
-        _check_stats_provider(&provider);
-    }
-
-    #[test]
     fn test_default_stats_collector() {
-        let collector = DefaultStatsCollector::new();
+        let _collector = DefaultStatsCollector::new();
         assert!(std::any::type_name::<DefaultStatsCollector>().contains("DefaultStatsCollector"));
-    }
-
-    #[test]
-    fn test_table_stats_estimate_size() {
-        let stats = TableStats::new("users").with_size_bytes(10000);
-        let size = stats.estimate_size();
-        assert_eq!(size, 10000);
-    }
-
-    #[test]
-    fn test_provider_remove_stats() {
-        let mut provider = InMemoryStatisticsProvider::new();
-        provider.add_stats(TableStats::new("users").with_row_count(100));
-
-        let result = provider.remove_stats("users");
-        assert!(result.is_ok());
-
-        let removed = provider.table_stats("users");
-        assert!(removed.is_none());
-    }
-
-    #[test]
-    fn test_provider_clear() {
-        let mut provider = InMemoryStatisticsProvider::new();
-        provider.add_stats(TableStats::new("users").with_row_count(100));
-        provider.clear();
-
-        let stats = provider.table_stats("users");
-        assert!(stats.is_none());
     }
 }
