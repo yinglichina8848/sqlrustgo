@@ -458,4 +458,59 @@ mod tests {
         assert!(expr.asc);
         assert!(!expr.nulls_first);
     }
+
+    #[test]
+    fn test_expr_display_unary() {
+        let expr = Expr::UnaryExpr {
+            op: Operator::Minus,
+            expr: Box::new(Expr::literal(Value::Integer(1))),
+        };
+        assert!(!expr.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_expr_display_aggregate() {
+        let expr = Expr::AggregateFunction {
+            func: AggregateFunction::Count,
+            args: vec![Expr::column("id")],
+            distinct: false,
+        };
+        assert!(expr.to_string().contains("COUNT"));
+
+        let expr_distinct = Expr::AggregateFunction {
+            func: AggregateFunction::Sum,
+            args: vec![Expr::column("amount")],
+            distinct: true,
+        };
+        assert!(expr_distinct.to_string().contains("DISTINCT"));
+    }
+
+    #[test]
+    fn test_expr_display_alias() {
+        let expr = Expr::Alias {
+            expr: Box::new(Expr::column("id")),
+            name: "user_id".to_string(),
+        };
+        assert!(expr.to_string().contains("AS"));
+    }
+
+    #[test]
+    fn test_expr_display_wildcard() {
+        let expr = Expr::Wildcard;
+        assert_eq!(expr.to_string(), "*");
+
+        let qualified = Expr::QualifiedWildcard {
+            qualifier: "users".to_string(),
+        };
+        assert_eq!(qualified.to_string(), "users.*");
+    }
+
+    #[test]
+    fn test_operator_display_all() {
+        assert_eq!(Operator::And.to_string(), "AND");
+        assert_eq!(Operator::Or.to_string(), "OR");
+        assert_eq!(Operator::Like.to_string(), "LIKE");
+        assert_eq!(Operator::Plus.to_string(), "+");
+        assert_eq!(Operator::Minus.to_string(), "-");
+    }
 }

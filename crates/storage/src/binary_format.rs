@@ -304,5 +304,73 @@ mod tests {
 
         let err = BinaryFormatError::DataTooLarge(100);
         assert_eq!(format!("{}", err), "Data too large: 100 bytes");
+
+        let err = BinaryFormatError::Unknown("unknown error".to_string());
+        assert_eq!(format!("{}", err), "Unknown error: unknown error");
+    }
+
+    #[test]
+    fn test_helpers_read_u64_insufficient_data() {
+        let result = helpers::read_u64(&[1, 2, 3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_helpers_read_i64_insufficient_data() {
+        let result = helpers::read_i64(&[1, 2, 3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_helpers_read_f64_insufficient_data() {
+        let result = helpers::read_f64(&[1, 2, 3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_value_to_bytes_blob() {
+        let value = Value::Blob(vec![1, 2, 3, 4, 5]);
+        let bytes = value.to_bytes();
+        assert!(!bytes.is_empty());
+        assert_eq!(bytes[0], 5); // type indicator for Blob
+    }
+
+    #[test]
+    fn test_value_from_bytes_empty() {
+        let result = Value::from_bytes(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_value_from_bytes_blob() {
+        let original = Value::Blob(vec![1, 2, 3, 4, 5]);
+        let bytes = original.to_bytes();
+        let restored = Value::from_bytes(&bytes).unwrap();
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn test_value_from_bytes_unknown_type() {
+        let result = Value::from_bytes(&[99]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_helpers_write_string() {
+        let bytes = helpers::write_string("test");
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_helpers_read_string_empty() {
+        let result = helpers::read_string(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_helpers_read_string_short() {
+        let bytes = helpers::write_string("hello");
+        let result = helpers::read_string(&bytes[0..2]);
+        assert!(result.is_err());
     }
 }
