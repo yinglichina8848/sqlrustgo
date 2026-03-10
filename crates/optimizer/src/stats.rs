@@ -715,8 +715,8 @@ mod tests {
         let err = StatsError::TableNotFound("users".to_string());
         assert!(err.to_string().contains("users"));
 
-        let err = StatsError::ColumnNotFound("age".to_string());
-        assert!(err.to_string().contains("age"));
+        let err = StatsError::InvalidStats("invalid".to_string());
+        assert!(err.to_string().contains("invalid"));
     }
 
     #[test]
