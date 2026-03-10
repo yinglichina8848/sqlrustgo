@@ -2,7 +2,7 @@
 //!
 //! Implements the Executor trait for local execution using StorageEngine.
 
-use sqlrustgo_planner::PhysicalPlan;
+use sqlrustgo_planner::{PhysicalPlan, ProjectionExec};
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
@@ -54,13 +54,36 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
-        // Execute child first
         let child_result = self.execute(children[0])?;
 
-        // For projection, we need the projection indices from the plan
-        // But SeqScanExec stores projection as Option<Vec<usize>>
-        // We need a different approach - let's just return the child's result
-        Ok(child_result)
+        let projection = plan
+            .as_any()
+            .downcast_ref::<ProjectionExec>()
+            .map(|p| p.expr().clone())
+            .unwrap_or_default();
+
+        if projection.is_empty() {
+            return Ok(child_result);
+        }
+
+        let input_schema = children[0].schema();
+        let _output_schema = plan.schema();
+
+        let projected_rows: Vec<Vec<Value>> = child_result
+            .rows
+            .iter()
+            .map(|row| {
+                projection
+                    .iter()
+                    .map(|expr| expr.evaluate(row, input_schema).unwrap_or(Value::Null))
+                    .collect()
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(
+            projected_rows,
+            child_result.affected_rows,
+        ))
     }
 
     /// Execute filter (WHERE clause)
@@ -158,6 +181,7 @@ mod tests {
     use super::*;
     use sqlrustgo_planner::{Field, Schema};
     use sqlrustgo_storage::MemoryStorage;
+    use std::any::Any;
 
     fn make_test_schema() -> Schema {
         Schema::new(vec![Field::new(
@@ -204,6 +228,9 @@ mod tests {
             fn table_name(&self) -> &str {
                 "users"
             }
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
         }
 
         let result = executor
@@ -219,5 +246,81 @@ mod tests {
         fn _check<T: Send + Sync>() {}
         let _storage = MemoryStorage::new();
         _check::<LocalExecutor>();
+    }
+
+    #[test]
+    fn test_execute_projection() {
+        use sqlrustgo_planner::Expr;
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![
+                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                    vec![Value::Integer(2), Value::Text("Bob".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let output_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+
+        let seq_scan = sqlrustgo_planner::SeqScanExec::new("users".to_string(), input_schema);
+        let projection =
+            ProjectionExec::new(Box::new(seq_scan), vec![Expr::column("id")], output_schema);
+
+        let result = executor.execute(&projection).unwrap();
+
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0], vec![Value::Integer(1)]);
+        assert_eq!(result.rows[1], vec![Value::Integer(2)]);
+    }
+
+    #[test]
+    fn test_execute_projection_multiple_columns() {
+        use sqlrustgo_planner::Expr;
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let output_schema = Schema::new(vec![
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let seq_scan = sqlrustgo_planner::SeqScanExec::new("users".to_string(), input_schema);
+        let projection = ProjectionExec::new(
+            Box::new(seq_scan),
+            vec![Expr::column("name"), Expr::column("id")],
+            output_schema,
+        );
+
+        let result = executor.execute(&projection).unwrap();
+
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(
+            result.rows[0],
+            vec![Value::Text("Alice".to_string()), Value::Integer(1)]
+        );
     }
 }
