@@ -148,4 +148,39 @@ mod tests {
         fn _check_cost_model<T: CostModel>(_model: &T) {}
         _check_cost_model(&SimpleCostModel::default_model());
     }
+
+    #[test]
+    fn test_join_cost_sort_merge() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.join_cost(1000, 2000, "sort_merge");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_join_cost_default() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.join_cost(1000, 2000, "unknown_method");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_sort_cost_external() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.sort_cost(2_000_000, 100);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_simple_cost_model_custom() {
+        let model = SimpleCostModel::new(2.0, 20.0, 0.002);
+        assert_eq!(model.cpu_cost_per_row, 2.0);
+        assert_eq!(model.io_cost_per_page, 20.0);
+    }
+
+    #[test]
+    fn test_agg_cost_no_group_by() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.agg_cost(1000, 0);
+        assert!(cost > 0.0);
+    }
 }
