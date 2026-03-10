@@ -267,14 +267,12 @@ mod tests {
 
     #[test]
     fn test_logical_plan_schema_update() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let plan = LogicalPlan::Update {
             table_name: "users".to_string(),
             predicate: None,
             updates: vec![],
-            schema: schema.clone(),
         };
-        assert_eq!(plan.schema(), schema);
+        assert!(plan.schema().fields.is_empty());
     }
 
     #[test]
