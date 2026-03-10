@@ -43,7 +43,9 @@ fn bench_10k_select_all(c: &mut Criterion) {
 
     c.bench_function("10k_select_all", |b| {
         b.iter(|| {
-            engine.execute(parse("SELECT * FROM bench_data").unwrap()).unwrap()
+            engine
+                .execute(parse("SELECT * FROM bench_data").unwrap())
+                .unwrap()
         });
     });
 }
@@ -66,7 +68,9 @@ fn bench_100k_select_all(c: &mut Criterion) {
 
     c.bench_function("100k_select_all", |b| {
         b.iter(|| {
-            engine.execute(parse("SELECT * FROM bench_data").unwrap()).unwrap()
+            engine
+                .execute(parse("SELECT * FROM bench_data").unwrap())
+                .unwrap()
         });
     });
 }
@@ -113,16 +117,17 @@ fn bench_insert_10k(c: &mut Criterion) {
         b.iter(|| {
             let mut engine = ExecutionEngine::new();
             engine
-                .execute(
-                    parse("CREATE TABLE insert_test (id INTEGER, value TEXT)").unwrap(),
-                )
+                .execute(parse("CREATE TABLE insert_test (id INTEGER, value TEXT)").unwrap())
                 .unwrap();
 
             for i in 0..10000 {
                 engine
                     .execute(
-                        parse(&format!("INSERT INTO insert_test VALUES ({}, 'value{}')", i, i))
-                            .unwrap(),
+                        parse(&format!(
+                            "INSERT INTO insert_test VALUES ({}, 'value{}')",
+                            i, i
+                        ))
+                        .unwrap(),
                     )
                     .unwrap();
             }
