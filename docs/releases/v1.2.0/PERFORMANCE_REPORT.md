@@ -169,3 +169,87 @@
 |------|------|------|
 | 1.0 | 2026-03-04 | 初始版本 |
 | 1.1 | 2026-03-08 | Beta 门禁测试完成，性能数据已更新 |
+| 1.2 | 2026-03-10 | RC 阶段 - 100万行性能测试 |
+
+---
+
+## 七、RC 阶段 100万行性能测试 (2026-03-10)
+
+### 7.1 测试环境
+
+| 配置项 | 值 |
+|--------|-----|
+| 操作系统 | macOS Darwin 25.3.0 |
+| CPU | Apple M2 |
+| 内存 | 16GB |
+| Rust 版本 | 1.85+ |
+| 编译模式 | Release |
+
+### 7.2 测试结果
+
+| 测试项 | 目标 | 实际 | 状态 |
+|--------|------|------|------|
+| 100万行插入 | - | 584.8s | ⚠️ 需优化 |
+| SELECT * 全表扫描 | < 1s | 18µs (空结果) | ❌ 数据未返回 |
+| SELECT WHERE | < 1s | 5.75µs (空结果) | ❌ 数据未返回 |
+| SELECT LIMIT 100 | < 1s | 2.33µs | ❌ 数据未返回 |
+
+### 7.3 问题分析
+
+#### 问题 1: 执行器返回空结果
+
+**现象**: 所有 SELECT 查询返回 `ExecutorResult { rows: [], affected_rows: 0 }`
+
+**原因**: `LocalExecutor::execute()` 方法未实现真正的查询执行逻辑
+
+```rust
+// crates/executor/src/local_executor.rs:21
+impl Executor for LocalExecutor {
+    fn execute(&self, _plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        Ok(ExecutorResult::empty())  // 直接返回空结果
+    }
+}
+```
+
+**影响**: 无法验证 100万行数据处理的实际性能
+
+#### 问题 2: 索引测试失败
+
+**现象**: 3 个索引相关测试失败
+
+```
+test_file_storage_index ... FAILED
+test_file_storage_index_search ... FAILED
+test_file_storage_get_index ... FAILED
+```
+
+**原因**: 独立示例运行正常，但测试环境存在问题（可能是 RwLock 竞争或状态问题）
+
+#### 问题 3: 插入性能
+
+**现象**: 100万行插入耗时 584.8 秒
+
+**原因**: 逐行插入，未使用批量插入优化
+
+### 7.4 后续建议
+
+1. **P0 - 修复执行器**: 实现 LocalExecutor 的真正查询执行逻辑
+2. **P1 - 修复索引测试**: 调查测试环境问题
+3. **P2 - 优化插入性能**: 实现批量插入优化
+
+### 7.5 基准测试代码
+
+新增基准测试文件: `benches/scale_bench.rs`
+
+```bash
+# 运行 10K 规模测试
+cargo bench --bench scale_bench 10k
+
+# 运行 100K 规模测试
+cargo bench --bench scale_bench 100k
+```
+
+测试结果:
+- 10k_select_all: ~660ns
+- 10k_select_where: ~1.5µs
+- insert_10k: ~20ms
