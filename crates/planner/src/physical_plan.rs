@@ -33,7 +33,7 @@ pub trait PhysicalPlan: Send + Sync {
         ""
     }
 
-    /// Downcast to concrete type
+    /// Get as Any for downcasting
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -86,10 +86,6 @@ impl PhysicalPlan for SeqScanExec {
         &self.table_name
     }
 
-    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        Ok(vec![])
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -111,6 +107,14 @@ impl ProjectionExec {
             schema,
         }
     }
+
+    pub fn expr(&self) -> &Vec<Expr> {
+        &self.expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
 }
 
 impl PhysicalPlan for ProjectionExec {
@@ -126,47 +130,8 @@ impl PhysicalPlan for ProjectionExec {
         "Projection"
     }
 
-    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        let input_rows = self.input.execute()?;
-
-        if self.expr.is_empty() {
-            return Ok(input_rows);
-        }
-
-        let input_schema = self.input.schema();
-        let mut results = vec![];
-
-        for row in input_rows {
-            let mut projected_row = vec![];
-            for expr in &self.expr {
-                let value = self.evaluate_expr(expr, &row, input_schema);
-                projected_row.push(value);
-            }
-            results.push(projected_row);
-        }
-
-        Ok(results)
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-impl ProjectionExec {
-    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
-        match expr {
-            Expr::Column(col) => {
-                if let Some(idx) = schema.field_index(&col.name) {
-                    row.get(idx).cloned().unwrap_or(Value::Null)
-                } else {
-                    Value::Null
-                }
-            }
-            Expr::Literal(val) => val.clone(),
-            Expr::Wildcard => Value::Null,
-            _ => Value::Null,
-        }
     }
 }
 
@@ -182,12 +147,12 @@ impl FilterExec {
         Self { input, predicate }
     }
 
-    pub fn input(&self) -> &dyn PhysicalPlan {
-        self.input.as_ref()
-    }
-
     pub fn predicate(&self) -> &Expr {
         &self.predicate
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 }
 
@@ -204,63 +169,8 @@ impl PhysicalPlan for FilterExec {
         "Filter"
     }
 
-    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        let input_rows = self.input.execute()?;
-        let input_schema = self.input.schema();
-
-        let filtered: Vec<Vec<Value>> = input_rows
-            .into_iter()
-            .filter(|row| self.evaluate_predicate(&self.predicate, row, input_schema))
-            .collect();
-
-        Ok(filtered)
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-impl FilterExec {
-    fn evaluate_predicate(&self, expr: &Expr, row: &[Value], schema: &Schema) -> bool {
-        match expr {
-            Expr::BinaryExpr { left, op, right } => {
-                let lval = self.evaluate_expr(left, row, schema);
-                let rval = self.evaluate_expr(right, row, schema);
-                self.compare_values(&lval, op, &rval)
-            }
-            Expr::Literal(Value::Integer(n)) => *n != 0,
-            _ => true,
-        }
-    }
-
-    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
-        match expr {
-            Expr::Column(col) => {
-                if let Some(idx) = schema.field_index(&col.name) {
-                    row.get(idx).cloned().unwrap_or(Value::Null)
-                } else {
-                    Value::Null
-                }
-            }
-            Expr::Literal(val) => val.clone(),
-            _ => Value::Null,
-        }
-    }
-
-    fn compare_values(&self, left: &Value, op: &Operator, right: &Value) -> bool {
-        match (left, right) {
-            (Value::Integer(l), Value::Integer(r)) => match op {
-                Operator::Eq => l == r,
-                Operator::NotEq => l != r,
-                Operator::Gt => l > r,
-                Operator::Lt => l < r,
-                Operator::GtEq => l >= r,
-                Operator::LtEq => l <= r,
-                _ => false,
-            },
-            _ => false,
-        }
     }
 }
 
@@ -286,6 +196,18 @@ impl AggregateExec {
             aggregate_expr,
             schema,
         }
+    }
+
+    pub fn group_expr(&self) -> &Vec<Expr> {
+        &self.group_expr
+    }
+
+    pub fn aggregate_expr(&self) -> &Vec<Expr> {
+        &self.aggregate_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
