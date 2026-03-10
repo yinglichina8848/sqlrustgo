@@ -6,8 +6,10 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
+use crate::Operator;
 use crate::Schema;
 use sqlrustgo_types::Value;
+use std::any::Any;
 use std::collections::HashMap;
 
 /// Physical plan trait - common interface for all physical operators
@@ -30,6 +32,9 @@ pub trait PhysicalPlan: Send + Sync {
     fn table_name(&self) -> &str {
         ""
     }
+
+    /// Downcast to concrete type
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Sequential scan execution operator
@@ -80,6 +85,14 @@ impl PhysicalPlan for SeqScanExec {
     fn table_name(&self) -> &str {
         &self.table_name
     }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        Ok(vec![])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Projection execution operator
@@ -112,6 +125,49 @@ impl PhysicalPlan for ProjectionExec {
     fn name(&self) -> &str {
         "Projection"
     }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let input_rows = self.input.execute()?;
+
+        if self.expr.is_empty() {
+            return Ok(input_rows);
+        }
+
+        let input_schema = self.input.schema();
+        let mut results = vec![];
+
+        for row in input_rows {
+            let mut projected_row = vec![];
+            for expr in &self.expr {
+                let value = self.evaluate_expr(expr, &row, input_schema);
+                projected_row.push(value);
+            }
+            results.push(projected_row);
+        }
+
+        Ok(results)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl ProjectionExec {
+    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
+        match expr {
+            Expr::Column(col) => {
+                if let Some(idx) = schema.field_index(&col.name) {
+                    row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expr::Literal(val) => val.clone(),
+            Expr::Wildcard => Value::Null,
+            _ => Value::Null,
+        }
+    }
 }
 
 /// Filter execution operator
@@ -124,6 +180,14 @@ pub struct FilterExec {
 impl FilterExec {
     pub fn new(input: Box<dyn PhysicalPlan>, predicate: Expr) -> Self {
         Self { input, predicate }
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
+    pub fn predicate(&self) -> &Expr {
+        &self.predicate
     }
 }
 
@@ -138,6 +202,65 @@ impl PhysicalPlan for FilterExec {
 
     fn name(&self) -> &str {
         "Filter"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let input_rows = self.input.execute()?;
+        let input_schema = self.input.schema();
+
+        let filtered: Vec<Vec<Value>> = input_rows
+            .into_iter()
+            .filter(|row| self.evaluate_predicate(&self.predicate, row, input_schema))
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl FilterExec {
+    fn evaluate_predicate(&self, expr: &Expr, row: &[Value], schema: &Schema) -> bool {
+        match expr {
+            Expr::BinaryExpr { left, op, right } => {
+                let lval = self.evaluate_expr(left, row, schema);
+                let rval = self.evaluate_expr(right, row, schema);
+                self.compare_values(&lval, op, &rval)
+            }
+            Expr::Literal(Value::Integer(n)) => *n != 0,
+            _ => true,
+        }
+    }
+
+    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
+        match expr {
+            Expr::Column(col) => {
+                if let Some(idx) = schema.field_index(&col.name) {
+                    row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expr::Literal(val) => val.clone(),
+            _ => Value::Null,
+        }
+    }
+
+    fn compare_values(&self, left: &Value, op: &Operator, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => match op {
+                Operator::Eq => l == r,
+                Operator::NotEq => l != r,
+                Operator::Gt => l > r,
+                Operator::Lt => l < r,
+                Operator::GtEq => l >= r,
+                Operator::LtEq => l <= r,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 }
 
@@ -316,6 +439,10 @@ impl PhysicalPlan for AggregateExec {
             Ok(results)
         }
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Hash join execution operator
@@ -358,6 +485,10 @@ impl PhysicalPlan for HashJoinExec {
     fn name(&self) -> &str {
         "HashJoin"
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Sort execution operator
@@ -384,6 +515,10 @@ impl PhysicalPlan for SortExec {
 
     fn name(&self) -> &str {
         "Sort"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -416,6 +551,10 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
