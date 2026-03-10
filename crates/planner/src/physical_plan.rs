@@ -667,6 +667,14 @@ impl SortExec {
     pub fn new(input: Box<dyn PhysicalPlan>, sort_expr: Vec<crate::SortExpr>) -> Self {
         Self { input, sort_expr }
     }
+
+    pub fn sort_expr(&self) -> &Vec<crate::SortExpr> {
+        &self.sort_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
 }
 
 impl PhysicalPlan for SortExec {
@@ -702,6 +710,18 @@ impl LimitExec {
             limit,
             offset,
         }
+    }
+
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
+    pub fn offset(&self) -> Option<usize> {
+        self.offset
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 }
 
