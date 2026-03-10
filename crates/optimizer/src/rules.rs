@@ -469,6 +469,270 @@ impl ConstantFolding {
     }
 }
 
+/// ExpressionSimplification rule - simplifies boolean and arithmetic expressions
+pub struct ExpressionSimplification;
+
+impl ExpressionSimplification {
+    /// Create a new ExpressionSimplification rule
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Rule name
+    pub fn name(&self) -> &'static str {
+        "ExpressionSimplification"
+    }
+
+    /// Simplify expressions in a plan
+    fn simplify(&self, plan: &mut Plan) -> bool {
+        match plan {
+            Plan::Filter { predicate, input } => {
+                let simplified = self.simplify_expr(predicate);
+                if simplified != *predicate {
+                    *predicate = simplified;
+                    return true;
+                }
+                self.simplify(input)
+            }
+            Plan::Projection { input, expr, .. } => {
+                let mut changed = false;
+                let mut new_exprs = Vec::new();
+                for e in expr.iter() {
+                    let simplified = self.simplify_expr(e);
+                    if simplified != *e {
+                        changed = true;
+                    }
+                    new_exprs.push(simplified);
+                }
+                if changed {
+                    *expr = new_exprs;
+                }
+                changed || self.simplify(input)
+            }
+            Plan::Aggregate { input, .. } => self.simplify(input),
+            Plan::Join { left, right, .. } => {
+                let changed_left = self.simplify(left);
+                let changed_right = self.simplify(right);
+                changed_left || changed_right
+            }
+            Plan::Sort { input, .. } => self.simplify(input),
+            Plan::Limit { input, .. } => self.simplify(input),
+            _ => false,
+        }
+    }
+
+    /// Simplify an expression
+    fn simplify_expr(&self, expr: &Expr) -> Expr {
+        match expr {
+            Expr::BinaryExpr { left, op, right } => {
+                let left_simplified = self.simplify_expr(left);
+                let right_simplified = self.simplify_expr(right);
+
+                // Try to simplify boolean expressions
+                if let Some(simplified) = self.simplify_binary(&left_simplified, op, &right_simplified) {
+                    return simplified;
+                }
+
+                // Try constant folding
+                if let Expr::Literal(lv) = &left_simplified {
+                    if let Expr::Literal(rv) = &right_simplified {
+                        if let Some(result) = self.eval_binary_op(op, lv, rv) {
+                            return Expr::Literal(result);
+                        }
+                    }
+                }
+
+                Expr::BinaryExpr {
+                    left: Box::new(left_simplified),
+                    op: op.clone(),
+                    right: Box::new(right_simplified),
+                }
+            }
+            Expr::UnaryExpr { op, expr } => {
+                let simplified = self.simplify_expr(expr);
+
+                // Try to simplify NOT expressions
+                if let Some(simplified) = self.simplify_unary(op, &simplified) {
+                    return simplified;
+                }
+
+                // Try constant folding
+                if let Expr::Literal(v) = &simplified {
+                    if let Some(result) = self.eval_unary_op(op, v) {
+                        return Expr::Literal(result);
+                    }
+                }
+
+                Expr::UnaryExpr {
+                    op: op.clone(),
+                    expr: Box::new(simplified),
+                }
+            }
+            _ => expr.clone(),
+        }
+    }
+
+    /// Simplify binary expressions (boolean logic)
+    fn simplify_binary(&self, left: &Expr, op: &Operator, right: &Expr) -> Option<Expr> {
+        // Boolean simplification
+        match op {
+            Operator::And => {
+                // true AND x = x
+                if let Expr::Literal(Value::Boolean(true)) = left {
+                    return Some(right.clone());
+                }
+                // x AND true = x
+                if let Expr::Literal(Value::Boolean(true)) = right {
+                    return Some(left.clone());
+                }
+                // false AND x = false
+                if let Expr::Literal(Value::Boolean(false)) = left {
+                    return Some(Expr::Literal(Value::Boolean(false)));
+                }
+                // x AND false = false
+                if let Expr::Literal(Value::Boolean(false)) = right {
+                    return Some(Expr::Literal(Value::Boolean(false)));
+                }
+            }
+            Operator::Or => {
+                // false OR x = x
+                if let Expr::Literal(Value::Boolean(false)) = left {
+                    return Some(right.clone());
+                }
+                // x OR false = x
+                if let Expr::Literal(Value::Boolean(false)) = right {
+                    return Some(left.clone());
+                }
+                // true OR x = true
+                if let Expr::Literal(Value::Boolean(true)) = left {
+                    return Some(Expr::Literal(Value::Boolean(true)));
+                }
+                // x OR true = true
+                if let Expr::Literal(Value::Boolean(true)) = right {
+                    return Some(Expr::Literal(Value::Boolean(true)));
+                }
+            }
+            Operator::Eq => {
+                // x = x = true
+                if left == right {
+                    return Some(Expr::Literal(Value::Boolean(true)));
+                }
+            }
+            Operator::NotEq => {
+                // x <> x = false
+                if left == right {
+                    return Some(Expr::Literal(Value::Boolean(false)));
+                }
+            }
+            _ => {}
+        }
+
+        // Arithmetic simplification
+        match op {
+            Operator::Plus => {
+                // x + 0 = x
+                if let Expr::Literal(Value::Integer(0)) = right {
+                    return Some(left.clone());
+                }
+                // 0 + x = x
+                if let Expr::Literal(Value::Integer(0)) = left {
+                    return Some(right.clone());
+                }
+            }
+            Operator::Minus => {
+                // x - 0 = x
+                if let Expr::Literal(Value::Integer(0)) = right {
+                    return Some(left.clone());
+                }
+            }
+            Operator::Multiply => {
+                // x * 0 = 0
+                if let Expr::Literal(Value::Integer(0)) = right {
+                    return Some(Expr::Literal(Value::Integer(0)));
+                }
+                if let Expr::Literal(Value::Integer(0)) = left {
+                    return Some(Expr::Literal(Value::Integer(0)));
+                }
+                // x * 1 = x
+                if let Expr::Literal(Value::Integer(1)) = right {
+                    return Some(left.clone());
+                }
+                // 1 * x = x
+                if let Expr::Literal(Value::Integer(1)) = left {
+                    return Some(right.clone());
+                }
+            }
+            Operator::Divide => {
+                // x / 1 = x
+                if let Expr::Literal(Value::Integer(1)) = right {
+                    return Some(left.clone());
+                }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Simplify unary expressions
+    fn simplify_unary(&self, op: &Operator, expr: &Expr) -> Option<Expr> {
+        match op {
+            Operator::Not => {
+                // NOT NOT x = x
+                if let Expr::UnaryExpr {
+                    op: Operator::Not,
+                    expr: inner,
+                } = expr
+                {
+                    return Some((**inner).clone());
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    fn eval_binary_op(&self, op: &Operator, left: &Value, right: &Value) -> Option<Value> {
+        match (op, left, right) {
+            (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
+            (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
+            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l * r)),
+            (Operator::Eq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l <= r)),
+            _ => None,
+        }
+    }
+
+    fn eval_unary_op(&self, op: &Operator, value: &Value) -> Option<Value> {
+        match (op, value) {
+            (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
+            (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
+            _ => None,
+        }
+    }
+}
+
+impl Default for ExpressionSimplification {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Rule implementation for ExpressionSimplification
+impl Rule<Plan> for ExpressionSimplification {
+    fn name(&self) -> &str {
+        "ExpressionSimplification"
+    }
+
+    fn apply(&self, plan: &mut Plan) -> bool {
+        self.simplify(plan)
+    }
+}
+
 // =============================================================================
 // Rule Matching Framework - for Cascades optimizer
 // =============================================================================
@@ -722,97 +986,214 @@ impl OptimizerRuleSet {
 mod tests {
     use super::*;
 
-    /// Simple plan struct for testing
-    #[derive(Debug, Default)]
-    struct TestPlan {
-        modified: bool,
-    }
-
     #[test]
     fn test_predicate_pushdown_name() {
         let rule = PredicatePushdown::new();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "PredicatePushdown");
+        assert_eq!(rule.name(), "PredicatePushdown");
     }
 
     #[test]
     fn test_predicate_pushdown_apply() {
         let rule = PredicatePushdown::new();
-        let mut plan = TestPlan::default();
-        let result = Rule::<TestPlan>::apply(&rule, &mut plan);
-        assert!(!result); // Returns false (no change) for stub
+        let mut plan = Plan::EmptyRelation;
+        let result = rule.apply(&mut plan);
+        assert!(!result); // Returns false (no change) for EmptyRelation
     }
 
     #[test]
     fn test_predicate_pushdown_default() {
         let rule = PredicatePushdown::default();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "PredicatePushdown");
+        assert_eq!(rule.name(), "PredicatePushdown");
     }
 
     #[test]
     fn test_projection_pruning_name() {
         let rule = ProjectionPruning::new();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "ProjectionPruning");
+        assert_eq!(rule.name(), "ProjectionPruning");
     }
 
     #[test]
     fn test_projection_pruning_apply() {
         let rule = ProjectionPruning::new();
-        let mut plan = TestPlan::default();
-        let result = Rule::<TestPlan>::apply(&rule, &mut plan);
+        let mut plan = Plan::EmptyRelation;
+        let result = rule.apply(&mut plan);
         assert!(!result);
     }
 
     #[test]
     fn test_projection_pruning_default() {
         let rule = ProjectionPruning::default();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "ProjectionPruning");
+        assert_eq!(rule.name(), "ProjectionPruning");
     }
 
     #[test]
     fn test_constant_folding_name() {
         let rule = ConstantFolding::new();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "ConstantFolding");
+        assert_eq!(rule.name(), "ConstantFolding");
     }
 
     #[test]
     fn test_constant_folding_apply() {
         let rule = ConstantFolding::new();
-        let mut plan = TestPlan::default();
-        let result = Rule::<TestPlan>::apply(&rule, &mut plan);
+        let mut plan = Plan::EmptyRelation;
+        let result = rule.apply(&mut plan);
         assert!(!result);
     }
 
     #[test]
     fn test_constant_folding_default() {
         let rule = ConstantFolding::default();
-        assert_eq!(Rule::<TestPlan>::name(&rule), "ConstantFolding");
+        assert_eq!(rule.name(), "ConstantFolding");
     }
 
     #[test]
-    fn test_projection_pruning_apply_with_string() {
-        let rule = ProjectionPruning;
-        let mut plan = String::from("test");
-        let result = rule.apply(&mut plan);
-        assert!(!result);
+    fn test_expression_simplification_name() {
+        let rule = ExpressionSimplification::new();
+        assert_eq!(rule.name(), "ExpressionSimplification");
     }
 
     #[test]
-    fn test_constant_folding_apply_with_string() {
-        let rule = ConstantFolding;
-        let mut plan = String::from("test");
+    fn test_expression_simplification_and_true() {
+        let rule = ExpressionSimplification::new();
+        // true AND x = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(true))),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_expression_simplification_and_false() {
+        let rule = ExpressionSimplification::new();
+        // false AND x = false
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(false))),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Literal(Value::Boolean(false)));
+    }
+
+    #[test]
+    fn test_expression_simplification_or_true() {
+        let rule = ExpressionSimplification::new();
+        // true OR x = true
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(true))),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Literal(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_expression_simplification_or_false() {
+        let rule = ExpressionSimplification::new();
+        // false OR x = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(false))),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_expression_simplification_not_not() {
+        let rule = ExpressionSimplification::new();
+        // NOT NOT x = x
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::UnaryExpr {
+                op: Operator::Not,
+                expr: Box::new(Expr::Column("x".to_string())),
+            }),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_expression_simplification_eq_same() {
+        let rule = ExpressionSimplification::new();
+        // x = x = true
+        let x = Expr::Column("x".to_string());
+        let expr = Expr::BinaryExpr {
+            left: Box::new(x.clone()),
+            op: Operator::Eq,
+            right: Box::new(x),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Literal(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_expression_simplification_arithmetic() {
+        let rule = ExpressionSimplification::new();
+        // x + 0 = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Plus,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_expression_simplification_multiply_zero() {
+        let rule = ExpressionSimplification::new();
+        // x * 0 = 0
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Multiply,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Literal(Value::Integer(0)));
+    }
+
+    #[test]
+    fn test_expression_simplification_multiply_one() {
+        let rule = ExpressionSimplification::new();
+        // x * 1 = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Multiply,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert_eq!(simplified, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_expression_simplification_apply() {
+        let rule = ExpressionSimplification::new();
+        let mut plan = Plan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
         let result = rule.apply(&mut plan);
-        assert!(!result);
+        assert!(!result); // No change for table scan
     }
 
     #[test]
     fn test_all_rules_apply_return_false() {
-        let mut plan1 = String::new();
-        let mut plan2 = String::new();
-        let mut plan3 = String::new();
+        let rule1 = PredicatePushdown;
+        let rule2 = ProjectionPruning;
+        let rule3 = ConstantFolding;
 
-        assert!(!PredicatePushdown.apply(&mut plan1));
-        assert!(!ProjectionPruning.apply(&mut plan2));
-        assert!(!ConstantFolding.apply(&mut plan3));
+        let mut plan = Plan::EmptyRelation;
+
+        assert!(!rule1.apply(&mut plan));
+        assert!(!rule2.apply(&mut plan));
+        assert!(!rule3.apply(&mut plan));
     }
 
     // =============================================================================
