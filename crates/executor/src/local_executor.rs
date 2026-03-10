@@ -203,8 +203,8 @@ mod tests {
             fn name(&self) -> &str {
                 "SeqScan"
             }
-            fn table_name(&self) -> Option<&str> {
-                Some("users")
+            fn table_name(&self) -> &str {
+                "users"
             }
         }
 
