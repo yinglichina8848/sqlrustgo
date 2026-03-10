@@ -13,7 +13,10 @@ pub mod stats;
 pub use cost::SimpleCostModel;
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
-pub use rules::{ConstantFolding, PredicatePushdown, ProjectionPruning};
+pub use rules::{
+    ConstantFolding, MatchResult, OptimizerRuleSet, PlanPattern, PredicatePushdown,
+    ProjectionPruning, RuleContext, RuleMeta,
+};
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
     StatsCollector, StatsError, StatsResult, TableStats,
