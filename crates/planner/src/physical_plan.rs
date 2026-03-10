@@ -7,7 +7,6 @@
 use crate::Expr;
 use crate::Schema;
 use sqlrustgo_types::Value;
-use sqlrustgo_types::Value;
 use std::collections::HashMap;
 
 /// Physical plan trait - common interface for all physical operators
@@ -267,7 +266,7 @@ impl PhysicalPlan for LimitExec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Expr, Field, Schema, SortExpr};
+    use crate::{DataType, Expr, Field, Schema, SortExpr};
     use sqlrustgo_types::Value;
 
     #[test]
