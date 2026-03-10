@@ -17,6 +17,11 @@ pub trait PhysicalPlan: Send + Sync {
 
     /// Get the name of this plan node
     fn name(&self) -> &str;
+
+    /// Get the table name if this is a scan operator (optional)
+    fn table_name(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Sequential scan execution operator
@@ -41,6 +46,11 @@ impl SeqScanExec {
         self.projection = Some(projection);
         self
     }
+
+    /// Get the table name for this scan
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
 }
 
 impl PhysicalPlan for SeqScanExec {
@@ -54,6 +64,10 @@ impl PhysicalPlan for SeqScanExec {
 
     fn name(&self) -> &str {
         "SeqScan"
+    }
+
+    fn table_name(&self) -> Option<&str> {
+        Some(&self.table_name)
     }
 }
 
