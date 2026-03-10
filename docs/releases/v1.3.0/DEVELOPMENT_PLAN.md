@@ -1,346 +1,346 @@
-# SQLRustGo v1.3.0 开发计划 (讨论稿)
+# SQLRustGo v1.3.0 开发计划
 
-> **版本**: v1.3.0  
-> **代号**: Observability Engine
-> **状态**: 📋 规划中 (待 v1.2.0 Alpha 阶段确认)  
-> **目标成熟度**: L3 → L4 产品级  
-> **版本类型**: 🏢 商用级可观测性 + 性能增强
-
-> ⚠️ **重要**: v1.3.0 开发依赖于 v1.2.0 GA 发布后的接口冻结。
-> 向量化执行已从 v1.2.0 延后到 v1.3.0 (详见 TASK_MATRIX.md)。
-
-> **讨论重点**:
-> 1. v1.2.0 遗留任务优先级排序
-> 2. 可观测性系统技术选型
-> 3. 插件系统架构设计
-> 4. 里程碑时间规划
+> **版本**: v1.3.0
+> **代号**: Architecture Stabilization Release (架构稳定版)
+> **状态**: 📋 规划中
+> **目标成熟度**: L3 → L4 产品级
+> **版本类型**: 🏗️ 架构稳定 + 测试驱动
 
 ---
 
-## 一、版本概述
+## 一、版本定位
 
-### 1.1 版本目标
+### 1.1 战略定位
 
-| 项目 | 值 |
-|------|-----|
-| **版本号** | v1.3.0 |
-| **目标成熟度** | L4 产品级 |
-| **核心目标** | 商用级可观测性、支持百万行数据处理 |
-| **预计时间** | v1.2.0 GA 后 2-4 周 |
+**v1.3.0 = Architecture Stabilization Release**
 
-### 1.2 前置依赖
+核心目标：
+- 不是加很多新功能
+- 而是把 v1.x 的核心内核"打牢"
+- 为 2.0 的 CBO / Vectorized Execution 做准备
 
-- [ ] v1.2.0 正式发布到 main
-- [ ] #88 (2.0 总体开发计划) 持续跟踪
+### 1.2 为什么是架构稳定版？
 
----
+当前系统风险分析：
 
-## 二、v1.2.0 完成状态分析
+| 模块 | 覆盖率 | 风险等级 |
+|------|--------|----------|
+| parser | 75% | ✅ 安全 |
+| storage | 58% | ⚠️ 可接受 |
+| planner | 43% | ⚠️ 中 |
+| optimizer | 18% | 🔴 高 |
+| types | 23% | 🔴 高 |
+| executor | 0.86% | 🔴 极高 |
+| transaction | 0% | 🔴 极高 |
+| catalog | 0% | 🔴 极高 |
 
-### 2.1 已完成 (从 Issue 推断)
+**关键问题**：
+- Executor = 基本没有验证 (最大风险)
+- Transaction = 完全无测试
+- Catalog = 完全无测试
 
-| 模块 | 状态 | 关键 Issue |
-|------|------|-----------|
-| **向量化基础** | ✅ 完成 |E-001（记录批次）|
-| **向量化执行** | ✅ 完成 | E-002~E-004 |
-| **存储抽象** | ✅ 完成 |第103章（储存特质）|
-| **统计信息** | ✅ 完成 | S-003~S-006 |
-| **优化器基础** | ✅ 完成 | O-001~O-006 |
-| **测试覆盖** | ✅ 完成 | T-001~T-006 |
-
-### 2.2 v1.2.0 遗留/增强项
-
-从 #200 和 v2.0 路线图，以下功能需要延续到 v1.3.0：
-
-- **完整 CBO** - Join 重排序、复杂成本估算
-- **Join 算法演进** - Nested Loop → Hash Join → Sort Merge
-- **插件系统** - 动态加载扩展
-- **可观测性** - 日志、指标、追踪
-
----
-
-## 三、v1.3.0 开发轨道
-
-### 轨道 A: 可观测性系统 (Observability)
-
+数据库核心流程：
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          轨道 A: 可观测性系统                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   O-001: 日志系统                                                            │
-│   ├── 结构化日志 (tracing)                                                   │
-│   ├── 日志级别管理                                                           │
-│   └── 日志输出配置 (文件/stdout)                                             │
-│                                                                              │
-│   O-002: 指标系统                                                            │
-│   ├── QueryLatency、Throughput 计数器                                        │
-│   ├── 内存使用、CPU 利用率                                                    │
-│   └── Prometheus 导出格式                                                     │
-│                                                                              │
-│   O-003: 追踪系统                                                            │
-│   ├── Span 生命周期管理                                                      │
-│   ├── 查询执行链路追踪                                                       │
-│   └── 慢查询识别                                                             │
-│                                                                              │
-│   O-004: 健康检查                                                            │
-│   ├── 存储引擎健康状态                                                        │
-│   ├── 连接池状态                                                             │
-│   └── 自检接口 (HTTP)                                                        │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Parser → Planner → Optimizer → Executor → Storage
 ```
 
-### 轨道 B: 性能增强 (Performance)
+而现在 Executor 几乎没有验证，这是数据库系统最大风险。
+
+### 1.3 版本演进顺序
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          轨道 B: 性能增强                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   P-001: 完整 CBO                                                            │
-│   ├── Join 重排序 (基于代价)                                                │
-│   ├── 复杂表达式成本估算                                                     │
-│   └── 多表查询优化                                                           │
-│                                                                              │
-│   P-002: Join 算法演进                                                       │
-│   ├── Sort Merge Join 实现                                                   │
-│   ├── Join 算子选择策略                                                      │
-│   └── 向量化 Join 优化                                                       │
-│                                                                              │
-│   P-003: 内存管理                                                            │
-│   ├── Memory Pool 实现                                                      │
-│   ├── 内存分配器优化                                                         │
-│   └── 内存溢出到磁盘 (Spill)                                                │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 轨道 C: 插件系统 (Plugin System)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          轨道 C: 插件系统                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   X-001: 插件架构                                                            │
-│   ├── Plugin trait 定义                                                      │
-│   ├── 插件生命周期管理                                                       │
-│   └── 插件元数据注册                                                         │
-│                                                                              │
-│   X-002: 存储插件                                                            │
-│   ├── 插件化 StorageEngine                                                   │
-│   ├── 内置插件: FileStorage, MemoryStorage                                  │
-│   └── 插件配置加载                                                            │
-│                                                                              │
-│   X-003: UDF 插件                                                            │
-│   ├── 用户自定义函数注册                                                     │
-│   ├── 常用函数库 (数学/字符串/日期)                                         │
-│   └── 插件市场预留                                                           │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+1.0   Parser
+↓
+1.2   Basic Engine
+↓
+1.3   Stable Executor  ← 当前位置
+↓
+1.5   Batch Execution
+↓
+2.0   Vectorized Engine
+↓
+3.0   Parallel Engine
 ```
 
 ---
 
-## 四、任务矩阵
+## 二、功能矩阵
 
-| ID | 任务 | 预估时间 | 优先级 | 依赖 |
-|----|------|----------|--------|------|
-| **可观测性** |||||
-| O-001 | 日志系统 (tracing) | 6h | P0 | - |
-| O-002 | 指标系统 | 8h | P0 | O-001 |
-| O-003 | 追踪系统 | 8h | P1 | O-002 |
-| O-004 | 健康检查 | 4h | P0 | - |
-| **性能增强** |||||
-| P-001 | 完整 CBO (Join 重排序) | 16h | P0 | v1.2.0 CBO |
-| P-002 |排序合并连接| 12h | P1 | P-001 |
-| P-003 |内存池| 8h | P1 | - |
-| P-004 |溢出到磁盘| 12h | P2 | P-003 |
-| **插件系统** |||||
-| X-001 |Plugin trait 架构| 6h | P1 | - |
-| X-002 | 存储插件化 | 8h | P1 | X-001 |
-| X-003 | UDF 插件 | 6h | P2 | X-001 |
-| **测试与文档** |||||
-| T-001 | 可观测性测试 | 4h | P1 | O-001~O-004 |
-| T-002 | 性能基准测试 | 4h | P1 | P-001~P-004 |
-| D-001 | 升级指南 | 2h | P0 | - |
+### 2.1 测试体系 (P0)
 
----
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Executor 单元测试框架 | P0 | 最重要 |
+| Transaction 测试 | P0 | MVCC 基础 |
+| Catalog 测试 | P0 | 表定义 |
 
-## 五、技术设计
+### 2.2 执行器稳定化 (P0)
 
-### 5.1 可观测性架构
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Volcano Executor 稳定化 | P0 | 核心执行模型 |
+| TableScan | P0 | 必须 |
+| Projection | P0 | 必须 |
+| Filter | P0 | 必须 |
+| HashJoin | P1 | 为 2.0 做准备 |
 
-```rust
-// 日志系统
-use tracing::{info, warn, error};
+### 2.3 Planner 清理 (P1)
 
-pub struct Logger {
-    level: LogLevel,
-    output: Box<dyn LogOutput>,
-}
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| LogicalPlan 清理 | P1 | 减少 2.0 重构 |
 
-// 指标系统
-pub struct Metrics {
-    query_latency: Histogram,
-    throughput: Counter,
-    memory_usage: Gauge,
-}
+### 2.4 Optimizer 骨架 (P1)
 
-impl Metrics {
-    pub fn record_query(&self, duration_ms: u64) {
-        self.query_latency.record(duration_ms);
-    }
-}
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Rule Framework | P1 | Cascades 前置 |
+| Predicate Pushdown | P1 | 谓词下推 |
+| Projection Pushdown | P1 | 投影裁剪 |
 
-// 健康检查
-pub trait HealthChecker: Send + Sync {
-    fn check(&self) -> HealthStatus;
-}
-```
+### 2.5 存储 (P2)
 
-### 5.2 Sort Merge Join 设计
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| 简单统计信息 | P2 | CBO 预留 |
 
-```rust
-pub struct SortMergeJoinExec {
-    left: Arc<dyn PhysicalPlan>,
-    right: Arc<dyn PhysicalPlan>,
-    on: Vec<(Column, Column)>,
-    join_type: JoinType,
-}
+### 2.6 SQL 能力 (P0)
 
-impl SortMergeJoinExec {
-    pub fn execute(&self) -> Result<RecordBatch> {
-        // 1. 对左右表排序
-        // 2. 归并扫描
-        // 3. 输出匹配行
-    }
-}
-```
-
-### 5.3 插件架构
-
-```rust
-pub trait Plugin: Send + Sync {
-    fn name(&self) -> &str;
-    fn version(&self) -> &str;
-    fn initialize(&self) -> Result<()>;
-}
-
-pub trait StoragePlugin: Plugin {
-    fn open(&self, path: &str) -> Result<Box<dyn StorageEngine>>;
-}
-```
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| 基础 SELECT 完整支持 | P0 | demo 能力 |
 
 ---
 
-## 六、里程碑
+## 三、硬指标目标
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          v1.3.0 里程碑                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   v1.3.0-draft ─────────────────────────────────────────────────────────►   │
-│   │                                                                          │
-│   ├── Week 1: 可观测性基础                                                  │
-│   │   └── O-001 ~ O-004: 日志 + 指标 + 追踪 + 健康检查                       │
-│   │                                                                          │
-│   ├── Week 2: 性能增强                                                      │
-│   │   └── P-001: 完整 CBO                                                   │
-│   │                                                                          │
-│   ├── Week 3: Join 演进 + 内存管理                                          │
-│   │   └── P-002 ~ P-003: Sort Merge Join + Memory Pool                      │
-│   │                                                                          │
-│   ├── Week 4: 插件系统                                                      │
-│   │   └── X-001 ~ X-003: 插件架构 + 存储插件 + UDF                          │
-│   │                                                                          │
-│   └── Week 5: 测试与发布                                                    │
-│       └── T-001 ~ T-002 + D-001: 测试 + 文档                                │
-│                                                                              │
-│   v1.3.0 GA ─────────────────────────────────────────────────────────────►   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 七、验收标准
-
-### 7.1 功能验收
-
-| 验收项 | 标准 |
-|--------|------|
-| 日志系统 | 结构化日志，支持多级别 |
-| 指标系统 |QueryLatency、Throughput 可测量|
-| 追踪系统 | 查询执行链路可追踪 |
-| 健康检查 | HTTP 接口返回健康状态 |
-| 完整 CBO | Join 重排序生效 |
-|排序合并连接| 正确处理大表 Join |
-| 插件系统 | 可动态加载存储插件 |
-
-### 7.2 性能验收
+### 3.1 覆盖率目标
 
 | 指标 | 目标 |
 |------|------|
-| 100万行 JOIN | < 500ms |
-| 内存使用 | 可限制上限 |
-| 日志开销 | < 5% 性能影响 |
+| 整体覆盖率 | ≥ 65% |
+| Executor 覆盖率 | ≥ 60% |
+| Planner 覆盖率 | ≥ 60% |
+| Optimizer 覆盖率 | ≥ 40% |
 
-### 7.3 质量验收
+### 3.2 SQL 能力目标
+
+必须稳定支持：
+```sql
+SELECT col FROM table WHERE predicate JOIN table2
+```
+
+包含：
+- Projection (列投影)
+- Filter (条件过滤)
+- HashJoin (哈希连接)
+
+### 3.3 执行引擎目标
+
+明确执行模型：**Volcano Model**
+
+统一 trait：
+```rust
+trait Executor {
+    fn open(&mut self);
+    fn next(&mut self) -> Option<Tuple>;
+    fn close(&mut self);
+}
+```
+
+### 3.4 Optimizer 目标
+
+不是做 CBO，而是做：
+- Rule-based optimizer skeleton
+- Predicate Pushdown (谓词下推)
+- Projection Pushdown (投影裁剪)
+
+这样 2.0 Cascades 才能接上。
+
+### 3.5 性能目标
 
 | 指标 | 目标 |
 |------|------|
-| 测试覆盖率 | ≥ 90% |
-|剪辑| 无警告 |
-| 文档 | 完整 |
+| INSERT 100k rows | < 2s (≈ 50k rows/s) |
+| SELECT * (100k rows) | < 200ms |
+| HashJoin (100k × 100k) | < 2s |
+
+**注意**: 1M rows/s 在 v1.x 阶段不现实，v2.0 向量化执行阶段再追求。
 
 ---
 
-## 八、风险评估
-
-| 风险 | 影响 | 概率 | 缓解措施 |
-|------|------|------|----------|
-| 可观测性设计变更 | 中 | 低 | 预留扩展接口 |
-| CBO 实现复杂度 | 高 | 中 | 简化版本 + 迭代 |
-| 插件安全性 | 高 | 低 | 沙箱隔离 |
-| 性能目标未达成 | 中 | 中 | 基准测试 + 优化 |
-
----
-
-## 九、版本流程
+## 四、开发路线图 (6 周)
 
 ```
 v1.3.0-draft → v1.3.0-alpha → v1.3.0-beta → v1.3.0-rc → v1.3.0
 ```
 
+### Week 1-2: 测试框架
+
+**核心**: Executor Test Framework
+
+**完成**:
+- executor test harness
+- mock storage
+- tuple generator
+
+**目标**: Executor coverage > 40%
+
+### Week 3: 核心算子
+
+**完成算子**:
+- TableScan
+- Projection
+- Filter
+
+**实现**: Iterator executor
+
+### Week 4: Join 实现
+
+**完成**:
+- HashJoin
+
+**SQL 支持**:
+```sql
+SELECT * FROM A JOIN B
+```
+
+### Week 5: Optimizer 骨架
+
+**完成**:
+- rule framework
+- predicate pushdown
+- projection pushdown
+
+### Week 6: 测试冲刺
+
+**完成**:
+- transaction tests
+- catalog tests
+- integration tests
+
+**SQL 集成测试**:
+- tests/sql/
+
 ---
 
-## 十、关联 Issue
+## 五、技术设计
+
+### 5.1 Volcano Executor
+
+```rust
+pub trait Executor: Send {
+    fn open(&mut self);
+    fn next(&mut self) -> Option<Record>;
+    fn close(&mut self);
+}
+
+pub struct SeqScanExec {
+    table_name: String,
+    storage: Arc<dyn StorageEngine>,
+}
+
+pub struct FilterExec {
+    child: Box<dyn Executor>,
+    predicate: Expression,
+}
+
+pub struct ProjectionExec {
+    child: Box<dyn Executor>,
+    columns: Vec<String>,
+}
+
+pub struct HashJoinExec {
+    left: Box<dyn Executor>,
+    right: Box<dyn Executor>,
+    on: (String, String),
+}
+```
+
+### 5.2 测试框架
+
+```rust
+#[cfg(test)]
+mod executor_tests {
+    use super::*;
+
+    fn create_mock_storage() -> MockStorage {
+        // 创建测试用 mock storage
+    }
+
+    #[test]
+    fn test_table_scan() {
+        let storage = create_mock_storage();
+        let exec = SeqScanExec::new("test_table", storage);
+        // 验证结果
+    }
+
+    #[test]
+    fn test_filter() {
+        // 测试过滤条件
+    }
+
+    #[test]
+    fn test_hash_join() {
+        // 测试哈希连接
+    }
+}
+```
+
+---
+
+## 六、验收标准
+
+### 6.1 功能验收
+
+| 验收项 | 标准 |
+|--------|------|
+| Executor 测试 | > 60% 覆盖率 |
+| Transaction 测试 | 基础 MVCC 测试通过 |
+| Catalog 测试 | 表定义操作测试通过 |
+| SQL SELECT | WHERE/JOIN 正常工作 |
+
+### 6.2 架构验收
+
+| 验收项 | 标准 |
+|--------|------|
+| Volcano Model | 统一执行接口 |
+| Optimizer 骨架 | Rule-based 优化生效 |
+
+### 6.3 性能验收
+
+| 指标 | 目标 |
+|------|------|
+| INSERT 100k | < 2s |
+| SELECT 100k | < 200ms |
+
+---
+
+## 七、风险评估
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| Executor 实现复杂度高 | 高 | 分步实现，从简单算子开始 |
+| 测试框架搭建耗时 | 中 | 复用现有 mock 模式 |
+| 性能目标未达成 | 中 | 降低预期，聚焦功能正确性 |
+
+---
+
+## 八、关联 Issue
 
 - 父 Issue: #200 (v1.3.0 详细开发任务)
 - 前置 Issue: v1.2.0 GA 发布
-- 相关 Issue:
-  - #103: Storage trait 化 (v1.2.0 完成，可在 v1.3.0 插件化)
-  - #104: Optimizer 规则系统实现
-  - #105: 向量化执行实现
-  - #106: 插件系统完整实现
-  - #109: CBO 成本优化器实现
-  - #110: Join 算法演进
-  - #111: 架构治理与长期演进规划
 
 ---
 
-## 十一、下一步行动
+## 九、下一步行动
 
-1. ✅ 文档评审 (本文档)
-2. ⏳ 创建 `develop-v1.3.0` 分支
-3. ⏳ 基于本文档创建子 Issue
-4. ⏳ 开始 O-001: 日志系统开发
-5. ⏳ v1.2.0 GA 发布后合并到 main
+1. ⏳ 创建 v1.3.0 开发分支
+2. ⏳ 基于本文档创建子 Issue
+3. ⏳ 开始 Executor 测试框架开发
+4. ⏳ v1.2.0 GA 发布后正式启动
 
 ---
 
-*本文档由 opencode AI 助手基于 v1.2.0 设计和 #200 Issue 生成*  
-*制定日期: 2026-03-06*
+*制定日期: 2026-03-11*
+*基于 v1.2.0 测试覆盖率分析和架构战略讨论*
