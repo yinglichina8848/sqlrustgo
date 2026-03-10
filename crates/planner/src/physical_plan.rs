@@ -4,9 +4,9 @@
 
 #![allow(dead_code)]
 
+use crate::AggregateFunction;
 use crate::Expr;
 use crate::Schema;
-use sqlrustgo_types::Value;
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 
@@ -147,6 +147,77 @@ impl AggregateExec {
             schema,
         }
     }
+
+    fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
+        match expr {
+            Expr::Column(col) => {
+                if let Some(idx) = schema.field_index(&col.name) {
+                    row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expr::Literal(val) => val.clone(),
+            Expr::Wildcard => Value::Integer(row.len() as i64),
+            _ => Value::Null,
+        }
+    }
+
+    fn compute_aggregate(&self, func: &AggregateFunction, values: &[Value]) -> Value {
+        match func {
+            AggregateFunction::Count => Value::Integer(values.len() as i64),
+            AggregateFunction::Sum => {
+                let mut sum: i64 = 0;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        sum += n;
+                    }
+                }
+                Value::Integer(sum)
+            }
+            AggregateFunction::Avg => {
+                let mut sum: i64 = 0;
+                let mut count = 0;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        sum += n;
+                        count += 1;
+                    }
+                }
+                if count > 0 {
+                    Value::Integer(sum / count as i64)
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => {
+                let mut min_val: Option<i64> = None;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        match min_val {
+                            Some(m) if *n < m => min_val = Some(*n),
+                            None => min_val = Some(*n),
+                            _ => {}
+                        }
+                    }
+                }
+                min_val.map(Value::Integer).unwrap_or(Value::Null)
+            }
+            AggregateFunction::Max => {
+                let mut max_val: Option<i64> = None;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        match max_val {
+                            Some(m) if *n > m => max_val = Some(*n),
+                            None => max_val = Some(*n),
+                            _ => {}
+                        }
+                    }
+                }
+                max_val.map(Value::Integer).unwrap_or(Value::Null)
+            }
+        }
+    }
 }
 
 impl PhysicalPlan for AggregateExec {
@@ -160,6 +231,73 @@ impl PhysicalPlan for AggregateExec {
 
     fn name(&self) -> &str {
         "Aggregate"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let input_rows = self.input.execute()?;
+
+        if self.group_expr.is_empty() {
+            let mut results = vec![];
+            let mut agg_results = vec![];
+
+            for agg_expr in &self.aggregate_expr {
+                if let Expr::AggregateFunction { func, args, .. } = agg_expr {
+                    let values: Vec<Value> = input_rows
+                        .iter()
+                        .map(|row| {
+                            self.evaluate_expr(
+                                args.first().unwrap_or(&Expr::Wildcard),
+                                row,
+                                self.input.schema(),
+                            )
+                        })
+                        .collect();
+                    let result = self.compute_aggregate(func, &values);
+                    agg_results.push(result);
+                }
+            }
+
+            if !agg_results.is_empty() {
+                results.push(agg_results);
+            }
+
+            Ok(results)
+        } else {
+            let mut groups: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
+
+            for row in &input_rows {
+                let key: Vec<Value> = self
+                    .group_expr
+                    .iter()
+                    .map(|expr| self.evaluate_expr(expr, row, self.input.schema()))
+                    .collect();
+                groups.entry(key).or_insert_with(Vec::new).push(row.clone());
+            }
+
+            let mut results = vec![];
+            for (key, group_rows) in groups {
+                let mut row = key;
+                for agg_expr in &self.aggregate_expr {
+                    if let Expr::AggregateFunction { func, args, .. } = agg_expr {
+                        let values: Vec<Value> = group_rows
+                            .iter()
+                            .map(|r| {
+                                self.evaluate_expr(
+                                    args.first().unwrap_or(&Expr::Wildcard),
+                                    r,
+                                    self.input.schema(),
+                                )
+                            })
+                            .collect();
+                        let result = self.compute_aggregate(func, &values);
+                        row.push(result);
+                    }
+                }
+                results.push(row);
+            }
+
+            Ok(results)
+        }
     }
 }
 
