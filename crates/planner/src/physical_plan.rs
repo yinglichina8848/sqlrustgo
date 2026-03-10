@@ -6,6 +6,9 @@
 
 use crate::Expr;
 use crate::Schema;
+use sqlrustgo_types::Value;
+use sqlrustgo_types::Value;
+use std::collections::HashMap;
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
@@ -17,6 +20,11 @@ pub trait PhysicalPlan: Send + Sync {
 
     /// Get the name of this plan node
     fn name(&self) -> &str;
+
+    /// Execute this physical plan and return results
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        Ok(vec![])
+    }
 }
 
 /// Sequential scan execution operator
