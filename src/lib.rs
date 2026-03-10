@@ -8,17 +8,20 @@ pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{parse, Lexer, Statement, Token};
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner};
-pub use sqlrustgo_storage::{BPlusTree, BufferPool, FileStorage, Page, StorageEngine};
+use std::sync::Arc;
+
+pub use sqlrustgo_storage::{
+    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
+};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
-#[derive(Debug)]
 pub struct ExecutionEngine {
-    _private: (),
+    storage: Arc<dyn StorageEngine>,
 }
 
 impl ExecutionEngine {
-    pub fn new() -> Self {
-        Self { _private: () }
+    pub fn new(storage: Arc<dyn StorageEngine>) -> Self {
+        Self { storage }
     }
 
     pub fn execute(&mut self, _statement: Statement) -> Result<ExecutorResult, SqlError> {
@@ -27,13 +30,10 @@ impl ExecutionEngine {
 
     pub fn execute_plan(&self, plan: &dyn PhysicalPlan) -> Result<ExecutorResult, SqlError> {
         match plan.name() {
-            "SeqScan" => Ok(ExecutorResult::new(
-                vec![
-                    vec![Value::Integer(1), Value::Text("test".to_string())],
-                    vec![Value::Integer(2), Value::Text("test2".to_string())],
-                ],
-                0,
-            )),
+            "SeqScan" => {
+                let rows = self.storage.scan(plan.table_name())?;
+                Ok(ExecutorResult::new(rows, 0))
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -41,7 +41,9 @@ impl ExecutionEngine {
 
 impl Default for ExecutionEngine {
     fn default() -> Self {
-        Self::new()
+        Self {
+            storage: Arc::new(MemoryStorage::new()),
+        }
     }
 }
 
@@ -85,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_execution_engine_new() {
-        let mut engine = ExecutionEngine::new();
+        let mut engine = ExecutionEngine::default();
         let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
         assert_eq!(engine.execute(stmt).unwrap().rows.len(), 0);
     }
@@ -95,6 +97,34 @@ mod tests {
         let mut engine = ExecutionEngine::default();
         let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
         assert_eq!(engine.execute(stmt).unwrap().affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_plan_seqscan() {
+        use sqlrustgo_planner::{DataType, Field, Schema, SeqScanExec};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![
+                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                    vec![Value::Integer(2), Value::Text("Bob".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let engine = ExecutionEngine::new(Arc::new(storage));
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let plan = SeqScanExec::new("users".to_string(), schema);
+        let result = engine.execute_plan(&plan).unwrap();
+
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0][0], Value::Integer(1));
+        assert_eq!(result.rows[0][1], Value::Text("Alice".to_string()));
     }
 
     #[test]
