@@ -883,4 +883,130 @@ mod tests {
         let result2 = exec2.execute();
         assert!(result2.is_ok());
     }
+
+    #[test]
+    fn test_projection_exec_with_alias() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let proj = ProjectionExec::new(
+            Box::new(child),
+            vec![Expr::Alias {
+                expr: Box::new(Expr::column("id")),
+                name: "user_id".to_string(),
+            }],
+            Schema::new(vec![Field::new("user_id".to_string(), DataType::Integer)]),
+        );
+
+        assert_eq!(proj.name(), "Projection");
+        assert_eq!(proj.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_seq_scan_with_projection() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+
+        let scan =
+            SeqScanExec::new("users".to_string(), schema.clone()).with_projection(vec![0, 1]);
+
+        assert_eq!(scan.name(), "SeqScan");
+        assert!(scan.projection().is_some());
+        assert_eq!(scan.projection().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_physical_plan_debug() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let scan = SeqScanExec::new("users".to_string(), schema.clone());
+
+        let debug_str = format!("{:?}", scan);
+        assert!(debug_str.contains("SeqScan"));
+    }
+
+    #[test]
+    fn test_aggregate_exec_with_distinct() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = SeqScanExec::new("test".to_string(), schema.clone());
+
+        let exec = AggregateExec::new(
+            Box::new(input),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![Expr::column("id")],
+                distinct: true,
+            }],
+            schema,
+        );
+
+        let result = exec.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_hash_join_with_condition() {
+        use crate::JoinType;
+
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+
+        let join = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            JoinType::Left,
+            Some(Expr::column("id")),
+            schema,
+        );
+
+        assert_eq!(join.name(), "HashJoin");
+        assert_eq!(join.join_type(), JoinType::Left);
+        assert!(join.condition().is_some());
+    }
+
+    #[test]
+    fn test_sort_exec_with_multiple_expr() {
+        use crate::SortExpr;
+
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let sort_expr = vec![
+            SortExpr {
+                expr: Expr::column("id"),
+                asc: true,
+                nulls_first: true,
+            },
+            SortExpr {
+                expr: Expr::column("name"),
+                asc: false,
+                nulls_first: false,
+            },
+        ];
+
+        let exec = SortExec::new(Box::new(child), sort_expr);
+
+        assert_eq!(exec.name(), "Sort");
+        assert_eq!(exec.sort_expr().len(), 2);
+    }
+
+    #[test]
+    fn test_limit_exec_only_offset() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema);
+
+        let exec = LimitExec::new(Box::new(child), 0, Some(10));
+
+        assert_eq!(exec.limit(), 0);
+        assert_eq!(exec.offset(), Some(10));
+    }
 }
