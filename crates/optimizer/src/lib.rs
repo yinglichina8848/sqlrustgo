@@ -14,8 +14,8 @@ pub use cost::SimpleCostModel;
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use rules::{
-    ConstantFolding, MatchResult, OptimizerRuleSet, PlanPattern, PredicatePushdown,
-    ProjectionPruning, RuleContext, RuleMeta,
+    ConstantFolding, Expr, JoinType, MatchResult, Operator, Plan, PlanPattern,
+    PredicatePushdown, ProjectionPruning, RuleContext, RuleMeta, SimpleColumnSet, Value,
 };
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
