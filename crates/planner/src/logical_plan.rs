@@ -179,9 +179,10 @@ mod tests {
     fn test_logical_plan_schema_create_table() {
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let plan = LogicalPlan::CreateTable {
-            name: "users".to_string(),
+            table_name: "users".to_string(),
             columns: vec![],
             schema: schema.clone(),
+            if_not_exists: true,
         };
         assert_eq!(plan.schema(), schema);
     }
