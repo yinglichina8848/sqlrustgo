@@ -31,6 +31,13 @@ pub enum Token {
     Revoke,
     Analyze,
 
+    // Aggregate Functions
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+
     // Data Types
     Integer,
     Text,
@@ -114,6 +121,12 @@ impl fmt::Display for Token {
             Token::Boolean => write!(f, "BOOLEAN"),
             Token::Blob => write!(f, "BLOB"),
             Token::Null => write!(f, "NULL"),
+            // Aggregate Functions
+            Token::Count => write!(f, "COUNT"),
+            Token::Sum => write!(f, "SUM"),
+            Token::Avg => write!(f, "AVG"),
+            Token::Min => write!(f, "MIN"),
+            Token::Max => write!(f, "MAX"),
             // Operators - uppercase
             Token::Equal => write!(f, "="),
             Token::NotEqual => write!(f, "<>"),
