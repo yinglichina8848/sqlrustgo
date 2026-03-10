@@ -1,0 +1,33 @@
+{
+  "name": "test_cmp",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "val",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "a"
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Text": "b"
+      }
+    ]
+  ]
+}
