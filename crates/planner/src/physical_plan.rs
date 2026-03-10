@@ -392,6 +392,22 @@ impl HashJoinExec {
             schema,
         }
     }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+
+    pub fn join_type(&self) -> crate::JoinType {
+        self.join_type.clone()
+    }
+
+    pub fn condition(&self) -> Option<&Expr> {
+        self.condition.as_ref()
+    }
 }
 
 impl PhysicalPlan for HashJoinExec {
