@@ -591,26 +591,6 @@ mod tests {
     }
 
     #[test]
-    fn test_stats_error_display() {
-        let err = StatsError::TableNotFound("users".to_string());
-        assert!(err.to_string().contains("users"));
-
-        let err = StatsError::InvalidStats("invalid".to_string());
-        assert!(err.to_string().contains("invalid"));
-
-        let err = StatsError::UpdateFailed("failed".to_string());
-        assert!(err.to_string().contains("failed"));
-    }
-
-    #[test]
-    fn test_column_stats_range_selectivity() {
-        let stats =
-            ColumnStats::new("id").with_range(Some(Value::Integer(1)), Some(Value::Integer(100)));
-        let selectivity = stats.range_selectivity(&Value::Integer(1), &Value::Integer(50));
-        assert!(selectivity > 0.0);
-    }
-
-    #[test]
     fn test_column_stats_eq_selectivity_zero_distinct() {
         let stats = ColumnStats::new("id").with_distinct_count(0);
         let selectivity = stats.eq_selectivity();
@@ -618,15 +598,132 @@ mod tests {
     }
 
     #[test]
+    fn test_column_stats_range_selectivity() {
+        let stats = ColumnStats::new("price")
+            .with_range(Some(Value::Float(0.0)), Some(Value::Float(100.0)));
+        let selectivity = stats.range_selectivity(&Value::Float(0.0), &Value::Float(100.0));
+        assert_eq!(selectivity, 0.33);
+    }
+
+    #[test]
+    fn test_column_stats_with_distinct_count() {
+        let stats = ColumnStats::new("status").with_distinct_count(10);
+        assert_eq!(stats.distinct_count, 10);
+    }
+
+    #[test]
+    fn test_column_stats_with_null_count() {
+        let stats = ColumnStats::new("name").with_null_count(5);
+        assert_eq!(stats.null_count, 5);
+    }
+
+    #[test]
+    fn test_column_stats_with_average() {
+        let stats = ColumnStats::new("score").with_average(85.5);
+        assert!(stats.avg_value.is_some());
+    }
+
+    #[test]
+    fn test_table_stats_with_last_updated() {
+        let stats = TableStats::new("users").with_last_updated(1234567890);
+        assert_eq!(stats.last_updated, 1234567890);
+    }
+
+    #[test]
+    fn test_table_stats_column() {
+        let col = ColumnStats::new("id").with_distinct_count(100);
+        let stats = TableStats::new("users").add_column_stats(col);
+        assert!(stats.column("id").is_some());
+    }
+
+    #[test]
+    fn test_table_stats_debug() {
+        let stats = TableStats::new("test").with_row_count(100);
+        let debug_str = format!("{:?}", stats);
+        assert!(debug_str.contains("test"));
+    }
+
+    #[test]
+    fn test_default_stats_collector() {
+        let _collector = DefaultStatsCollector::new();
+        assert!(std::any::type_name::<DefaultStatsCollector>().contains("DefaultStatsCollector"));
+    }
+
+    #[test]
+    fn test_table_stats_estimate_selectivity() {
+        let col = ColumnStats::new("id").with_distinct_count(100);
+        let stats = TableStats::new("users")
+            .with_row_count(1000)
+            .add_column_stats(col);
+
+        let selectivity = stats.estimate_selectivity("id");
+        assert!((selectivity - 0.01).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_table_stats_estimate_selectivity_unknown_column() {
+        let stats = TableStats::new("users").with_row_count(1000);
+        let selectivity = stats.estimate_selectivity("unknown");
+        assert_eq!(selectivity, 0.1);
+    }
+
+    #[test]
     fn test_table_stats_with_column_stats() {
-        let mut col_stats = HashMap::new();
-        col_stats.insert(
+        let mut stats_map = HashMap::new();
+        stats_map.insert(
             "id".to_string(),
             ColumnStats::new("id").with_distinct_count(100),
         );
 
-        let stats = TableStats::new("users").with_column_stats(col_stats);
+        let stats = TableStats::new("users").with_column_stats(stats_map);
         assert!(stats.column("id").is_some());
+    }
+
+    #[test]
+    fn test_statistics_provider_estimated_rows() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(5000));
+
+        assert_eq!(provider.estimated_rows("users"), 5000);
+        assert_eq!(provider.estimated_rows("unknown"), 0);
+    }
+
+    #[test]
+    fn test_statistics_provider_has_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(100));
+
+        assert!(provider.has_stats("users"));
+        assert!(!provider.has_stats("unknown"));
+    }
+
+    #[test]
+    fn test_statistics_provider_column_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(
+            TableStats::new("users")
+                .add_column_stats(ColumnStats::new("age").with_distinct_count(50)),
+        );
+
+        let col_stats = provider.column_stats("users", "age");
+        assert!(col_stats.is_some());
+        assert_eq!(col_stats.unwrap().distinct_count, 50);
+    }
+
+    #[test]
+    fn test_stats_error_display() {
+        let err = StatsError::TableNotFound("users".to_string());
+        assert!(err.to_string().contains("users"));
+
+        let err = StatsError::InvalidStats("invalid".to_string());
+        assert!(err.to_string().contains("invalid"));
+    }
+
+    #[test]
+    fn test_column_stats_debug() {
+        let stats = ColumnStats::new("test").with_distinct_count(100);
+        let debug = format!("{:?}", stats);
+        assert!(debug.contains("test"));
     }
 
     #[test]
@@ -634,123 +731,296 @@ mod tests {
         let mut provider = InMemoryStatisticsProvider::new();
         provider.add_stats(TableStats::new("users").with_row_count(100));
 
-        assert!(provider.has_stats("users"));
-
         provider.remove_stats("users");
-
         assert!(!provider.has_stats("users"));
     }
 
     #[test]
-    fn test_in_memory_provider_update_nonexistent() {
+    fn test_in_memory_provider_debug() {
+        let provider = InMemoryStatisticsProvider::new();
+        let debug = format!("{:?}", provider);
+        assert!(!debug.is_empty());
+    }
+
+    #[test]
+    fn test_statistics_provider_update_stats_not_found() {
         let provider = InMemoryStatisticsProvider::new();
         let result = provider.update_stats("users", TableStats::new("users"));
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_provider_column_stats() {
+    fn test_statistics_provider_update_stats_ok() {
         let mut provider = InMemoryStatisticsProvider::new();
-        provider.add_stats(
-            TableStats::new("users")
-                .add_column_stats(ColumnStats::new("id").with_distinct_count(100)),
-        );
+        provider.add_stats(TableStats::new("users").with_row_count(100));
 
-        let col_stats = provider.column_stats("users", "id");
-        assert!(col_stats.is_some());
-        assert_eq!(col_stats.unwrap().distinct_count, 100);
-    }
-
-    #[test]
-    fn test_provider_column_stats_not_found() {
-        let provider = InMemoryStatisticsProvider::new();
-        let col_stats = provider.column_stats("users", "id");
-        assert!(col_stats.is_none());
-    }
-
-    #[test]
-    fn test_default_stats_collector_new() {
-        let collector = DefaultStatsCollector::new();
-        let _ = collector;
-    }
-
-    #[test]
-    fn test_in_memory_statistics_provider_new() {
-        let provider = InMemoryStatisticsProvider::new();
-        assert!(!provider.has_stats("users"));
-    }
-
-    #[test]
-    fn test_stats_error_debug() {
-        let err = StatsError::TableNotFound("users".to_string());
-        let debug_str = format!("{:?}", err);
-        assert!(debug_str.contains("TableNotFound"));
-    }
-
-    #[test]
-    fn test_stats_error_not_found() {
-        let err = StatsError::TableNotFound("orders".to_string());
-        assert!(err.to_string().contains("orders"));
-    }
-
-    #[test]
-    fn test_stats_error_invalid() {
-        let err = StatsError::InvalidStats("invalid stats".to_string());
-        assert!(err.to_string().contains("invalid"));
-    }
-
-    #[test]
-    fn test_stats_error_update_failed() {
-        let err = StatsError::UpdateFailed("disk full".to_string());
-        assert!(err.to_string().contains("disk"));
+        let result = provider.update_stats("users", TableStats::new("users").with_row_count(200));
+        assert!(result.is_ok());
     }
 
     #[test]
     fn test_table_stats_with_size_bytes() {
-        let stats = TableStats::new("users").with_size_bytes(1_000_000);
-        assert_eq!(stats.size_bytes, 1_000_000);
+        let stats = TableStats::new("users").with_size_bytes(5000);
+        assert_eq!(stats.size_bytes, 5000);
     }
 
     #[test]
-    fn test_table_stats_estimate_selectivity_default() {
-        let stats = TableStats::new("users");
-        let selectivity = stats.estimate_selectivity("unknown_column");
-        assert_eq!(selectivity, 0.1);
+    fn test_column_stats_eq_selectivity_high_distinct() {
+        let stats = ColumnStats::new("id").with_distinct_count(10000);
+        let selectivity = stats.eq_selectivity();
+        assert!(selectivity < 0.001);
     }
 
     #[test]
-    fn test_in_memory_provider_has_stats() {
-        let mut provider = InMemoryStatisticsProvider::new();
-        assert!(!provider.has_stats("users"));
-
-        provider.add_stats(TableStats::new("users"));
-        assert!(provider.has_stats("users"));
+    fn test_column_stats_eq_selectivity_single_value() {
+        let stats = ColumnStats::new("status").with_distinct_count(1);
+        let selectivity = stats.eq_selectivity();
+        assert_eq!(selectivity, 1.0);
     }
 
     #[test]
-    fn test_statistics_provider_trait_object() {
-        fn _check_provider(_p: &dyn StatisticsProvider) {}
-        let provider = InMemoryStatisticsProvider::new();
-        _check_provider(&provider);
+    fn test_stats_error_update_failed() {
+        let err = StatsError::UpdateFailed("failed".to_string());
+        assert!(err.to_string().contains("failed"));
     }
 
     #[test]
-    fn test_stats_collector_trait_object() {
-        fn _check_collector(_c: &dyn StatsCollector) {}
+    fn test_stats_error_debug() {
+        let err = StatsError::TableNotFound("test".to_string());
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("TableNotFound"));
+    }
+
+    #[test]
+    fn test_stats_error_update_failed_display() {
+        let err = StatsError::UpdateFailed("disk full".to_string());
+        assert!(err.to_string().contains("disk full"));
+    }
+
+    #[test]
+    fn test_stats_result_map() {
+        let ok: StatsResult<i32> = Ok(42);
+        let mapped = ok.map(|v| v * 2);
+        assert_eq!(mapped.unwrap(), 84);
+    }
+
+    #[test]
+    fn test_stats_result_map_err() {
+        let err: StatsResult<i32> = Err(StatsError::TableNotFound("users".to_string()));
+        let mapped = err.map(|v| v * 2);
+        assert!(mapped.is_err());
+    }
+
+    #[test]
+    fn test_column_stats_with_max_value() {
+        let stats = ColumnStats::new("price")
+            .with_range(Some(Value::Float(0.0)), Some(Value::Float(1000.0)));
+        assert!(stats.max_value.is_some());
+    }
+
+    use sqlrustgo_storage::engine::{
+        ColumnDefinition, Record, SqlError, SqlResult, StorageEngine, TableInfo,
+    };
+
+    struct MockStorage {
+        tables: HashMap<String, Vec<Record>>,
+        table_infos: HashMap<String, TableInfo>,
+        scan_error: Option<String>,
+    }
+
+    impl MockStorage {
+        fn new() -> Self {
+            Self {
+                tables: HashMap::new(),
+                table_infos: HashMap::new(),
+                scan_error: None,
+            }
+        }
+
+        fn with_data(
+            mut self,
+            table: &str,
+            records: Vec<Record>,
+            columns: Vec<ColumnDefinition>,
+        ) -> Self {
+            self.tables.insert(table.to_string(), records);
+            let info = TableInfo {
+                name: table.to_string(),
+                columns,
+            };
+            self.table_infos.insert(table.to_string(), info);
+            self
+        }
+
+        fn with_scan_error(mut self, err: &str) -> Self {
+            self.scan_error = Some(err.to_string());
+            self
+        }
+    }
+
+    impl StorageEngine for MockStorage {
+        fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
+            if let Some(err) = &self.scan_error {
+                return Err(SqlError::TableNotFound(err.clone()));
+            }
+            Ok(self.tables.get(table).cloned().unwrap_or_default())
+        }
+
+        fn insert(&mut self, _table: &str, _records: Vec<Record>) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn delete(&mut self, _table: &str, _filters: &[Value]) -> SqlResult<usize> {
+            Ok(0)
+        }
+
+        fn update(
+            &mut self,
+            _table: &str,
+            _filters: &[Value],
+            _updates: &[(usize, Value)],
+        ) -> SqlResult<usize> {
+            Ok(0)
+        }
+
+        fn create_table(&mut self, _info: &TableInfo) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_table(&mut self, _table: &str) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
+            self.table_infos
+                .get(table)
+                .cloned()
+                .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+        }
+
+        fn has_table(&self, table: &str) -> bool {
+            self.tables.contains_key(table)
+        }
+
+        fn list_tables(&self) -> Vec<String> {
+            self.tables.keys().cloned().collect()
+        }
+
+        fn create_table_index(
+            &self,
+            _table: &str,
+            _column: &str,
+            _column_index: usize,
+        ) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_default_stats_collector_collect_table_stats() {
+        let records = vec![
+            vec![Value::Integer(1), Value::Text("Alice".to_string())],
+            vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            vec![Value::Integer(3), Value::Text("Carol".to_string())],
+        ];
+        let columns = vec![
+            ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            },
+            ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: false,
+            },
+        ];
+        let storage = MockStorage::new().with_data("users", records, columns);
+
         let collector = DefaultStatsCollector::new();
-        _check_collector(&collector);
-    }
+        let result = collector.collect_table_stats(&storage, "users");
 
-    #[test]
-    fn test_stats_result_ok() {
-        let result: StatsResult<u64> = Ok(100);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 100);
+        let stats = result.unwrap();
+        assert_eq!(stats.row_count, 3);
+        assert!(stats.column_stats.contains_key("id"));
+        assert!(stats.column_stats.contains_key("name"));
     }
 
     #[test]
-    fn test_stats_result_err() {
-        let result: StatsResult<u64> = Err(StatsError::TableNotFound("users".to_string()));
+    fn test_default_stats_collector_collect_row_count() {
+        let records = vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage = MockStorage::new().with_data("orders", records, columns);
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_row_count(&storage, "orders");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+    }
+
+    #[test]
+    fn test_default_stats_collector_collect_column_stats() {
+        let records = vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage = MockStorage::new().with_data("users", records, columns);
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_column_stats(&storage, "users", "id", 0);
+
+        assert!(result.is_ok());
+        let col_stats = result.unwrap();
+        assert_eq!(col_stats.column_name, "id");
+    }
+
+    #[test]
+    fn test_default_stats_collector_scan_error() {
+        let storage = MockStorage::new().with_scan_error("scan failed");
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_table_stats(&storage, "users");
+
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stats_collector_trait_objects() {
+        let records = vec![vec![Value::Integer(1)]];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage: Box<dyn StorageEngine> =
+            Box::new(MockStorage::new().with_data("t", records, columns));
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_table_stats(storage.as_ref(), "t");
+        assert!(result.is_ok());
     }
 }

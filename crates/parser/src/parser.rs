@@ -138,6 +138,7 @@ pub enum Expression {
     Literal(String),
     Identifier(String),
     BinaryOp(Box<Expression>, String, Box<Expression>),
+    Wildcard,
 }
 
 /// SQL Parser
@@ -200,6 +201,7 @@ impl Parser {
         self.expect(Token::Select)?;
 
         let mut columns = Vec::new();
+        let mut aggregates = Vec::new();
         loop {
             match self.current() {
                 Some(Token::From) => break,
@@ -209,6 +211,41 @@ impl Parser {
                         alias: None,
                     });
                     self.next();
+                }
+                Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+                | Some(Token::Max) => {
+                    let func = match self.current() {
+                        Some(Token::Count) => AggregateFunction::Count,
+                        Some(Token::Sum) => AggregateFunction::Sum,
+                        Some(Token::Avg) => AggregateFunction::Avg,
+                        Some(Token::Min) => AggregateFunction::Min,
+                        Some(Token::Max) => AggregateFunction::Max,
+                        _ => return Err("Unknown aggregate function".to_string()),
+                    };
+                    self.next(); // consume function name
+                    self.expect(Token::LParen)?;
+
+                    let mut args = Vec::new();
+                    match self.current() {
+                        Some(Token::Star) => {
+                            args.push(Expression::Wildcard);
+                            self.next();
+                        }
+                        Some(Token::Identifier(name)) => {
+                            args.push(Expression::Identifier(name));
+                            self.next();
+                        }
+                        _ => return Err("Expected * or column name in aggregate".to_string()),
+                    }
+
+                    self.expect(Token::RParen)?;
+
+                    let agg = AggregateCall {
+                        func,
+                        args,
+                        distinct: false,
+                    };
+                    aggregates.push(agg);
                 }
                 Some(Token::Identifier(_)) => {
                     if let Some(Token::Identifier(name)) = self.next() {
@@ -245,7 +282,7 @@ impl Parser {
             table,
             where_clause,
             join_clause: None,
-            aggregates: vec![],
+            aggregates,
         }))
     }
 
@@ -937,6 +974,72 @@ mod tests {
     #[test]
     fn test_update_multi_set() {
         let result = parse("UPDATE users SET name = 'A', age = 30 WHERE id = 1");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_insert_error_no_table() {
+        let result = parse("INSERT VALUES (1)");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_error_no_values() {
+        let result = parse("INSERT INTO users ()");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_all_columns() {
+        let result = parse("SELECT * FROM users");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_delete_error_no_table() {
+        let result = parse("DELETE WHERE id = 1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_update_error_no_set() {
+        let result = parse("UPDATE users WHERE id = 1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_without_columns() {
+        let result = parse("CREATE TABLE users");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_drop_error_no_name() {
+        let result = parse("DROP TABLE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_single_value() {
+        let result = parse("INSERT INTO users VALUES (1)");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_insert_with_column_list() {
+        let result = parse("INSERT INTO users (id, name) VALUES (1, 'test')");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.columns, vec!["id", "name"]);
+            }
+            _ => panic!("Expected INSERT"),
+        }
+    }
+
+    #[test]
+    fn test_parse_update_single_set() {
+        let result = parse("UPDATE users SET name = 'Bob'");
         assert!(result.is_ok());
     }
 }
