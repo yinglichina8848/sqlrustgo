@@ -41,4 +41,67 @@ mod tests {
             Value::Text("hello".to_string())
         );
     }
+
+    #[test]
+    fn test_parse_sql_literal_integer() {
+        assert_eq!(parse_sql_literal("0"), Value::Integer(0));
+        assert_eq!(parse_sql_literal("-1"), Value::Integer(-1));
+        assert_eq!(parse_sql_literal("999999"), Value::Integer(999999));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_float() {
+        assert_eq!(parse_sql_literal("0.0"), Value::Float(0.0));
+        assert_eq!(parse_sql_literal("-3.14"), Value::Float(-3.14));
+        assert_eq!(parse_sql_literal("1e10"), Value::Float(1e10));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_text() {
+        assert_eq!(parse_sql_literal("'abc'"), Value::Text("abc".to_string()));
+        assert_eq!(parse_sql_literal("''"), Value::Text("".to_string()));
+        assert_eq!(
+            parse_sql_literal("'hello world'"),
+            Value::Text("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sql_literal_case_insensitive() {
+        assert_eq!(parse_sql_literal("null"), Value::Null);
+        assert_eq!(parse_sql_literal("Null"), Value::Null);
+        assert_eq!(parse_sql_literal("NULL"), Value::Null);
+        assert_eq!(parse_sql_literal("true"), Value::Boolean(true));
+        assert_eq!(parse_sql_literal("True"), Value::Boolean(true));
+        assert_eq!(parse_sql_literal("TRUE"), Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_whitespace() {
+        assert_eq!(parse_sql_literal("  NULL  "), Value::Null);
+        assert_eq!(parse_sql_literal("  42  "), Value::Integer(42));
+        assert_eq!(
+            parse_sql_literal("  'test'  "),
+            Value::Text("test".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sql_literal_unknown() {
+        assert_eq!(
+            parse_sql_literal("unknown"),
+            Value::Text("unknown".to_string())
+        );
+        assert_eq!(
+            parse_sql_literal("abc123"),
+            Value::Text("abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_module_exports() {
+        let _error: SqlError = SqlError::ParseError("test".to_string());
+        let _result: SqlResult<i32> = Ok(42);
+        let _value: Value = Value::Null;
+    }
 }
