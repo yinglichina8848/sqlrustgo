@@ -35,8 +35,10 @@ impl<'a> LocalExecutor<'a> {
 
     /// Execute sequential scan
     fn execute_seq_scan(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
-        // Get table name from the physical plan using the table_name method
         let table_name = plan.table_name();
+        if table_name.is_empty() {
+            return Ok(ExecutorResult::empty());
+        }
 
         // Scan from storage
         let records = self.storage.scan(table_name).unwrap_or_default();
