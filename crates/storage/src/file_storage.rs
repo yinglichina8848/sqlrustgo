@@ -853,6 +853,108 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_get_table_mut() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_mut");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "mutable".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![],
+        };
+        storage
+            .insert_table("mutable".to_string(), table_data)
+            .unwrap();
+
+        // Test get_table_mut
+        {
+            let table = storage.get_table_mut("mutable").unwrap();
+            table.rows.push(vec![Value::Integer(1)]);
+        }
+
+        let table = storage.get_table("mutable").unwrap();
+        assert_eq!(table.rows.len(), 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_get_table_not_found() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_not_found");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let result = storage.get_table("nonexistent");
+        assert!(result.is_none());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_search_index_not_found() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_search_no");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "search_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            },
+            rows: vec![vec![Value::Integer(1)]],
+        };
+        storage
+            .insert_table("search_test".to_string(), table_data)
+            .unwrap();
+
+        // Search for non-existent key
+        let result = storage.search_index("search_test", "id", 999);
+        assert!(result.is_none());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_index_path() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_path");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let path = storage.index_path("users", "id");
+        assert!(path.to_string_lossy().contains("users_idx_id"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_table_path() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_table_path");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let path = storage.table_path("users");
+        assert!(path.to_string_lossy().contains("users.json"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
 
 impl StorageEngine for FileStorage {
