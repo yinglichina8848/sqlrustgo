@@ -648,4 +648,88 @@ mod tests {
         let _collector = DefaultStatsCollector::new();
         assert!(std::any::type_name::<DefaultStatsCollector>().contains("DefaultStatsCollector"));
     }
+
+    #[test]
+    fn test_table_stats_estimate_selectivity() {
+        let col = ColumnStats::new("id").with_distinct_count(100);
+        let stats = TableStats::new("users")
+            .with_row_count(1000)
+            .add_column_stats(col);
+
+        let selectivity = stats.estimate_selectivity("id");
+        assert!((selectivity - 0.01).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_table_stats_estimate_selectivity_unknown_column() {
+        let stats = TableStats::new("users").with_row_count(1000);
+        let selectivity = stats.estimate_selectivity("unknown");
+        assert_eq!(selectivity, 0.1);
+    }
+
+    #[test]
+    fn test_table_stats_with_column_stats() {
+        let mut stats_map = HashMap::new();
+        stats_map.insert(
+            "id".to_string(),
+            ColumnStats::new("id").with_distinct_count(100),
+        );
+
+        let stats = TableStats::new("users").with_column_stats(stats_map);
+        assert!(stats.column("id").is_some());
+    }
+
+    #[test]
+    fn test_statistics_provider_estimated_rows() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(5000));
+
+        assert_eq!(provider.estimated_rows("users"), 5000);
+        assert_eq!(provider.estimated_rows("unknown"), 0);
+    }
+
+    #[test]
+    fn test_statistics_provider_has_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(100));
+
+        assert!(provider.has_stats("users"));
+        assert!(!provider.has_stats("unknown"));
+    }
+
+    #[test]
+    fn test_statistics_provider_column_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(
+            TableStats::new("users")
+                .add_column_stats(ColumnStats::new("age").with_distinct_count(50)),
+        );
+
+        let col_stats = provider.column_stats("users", "age");
+        assert!(col_stats.is_some());
+        assert_eq!(col_stats.unwrap().distinct_count, 50);
+    }
+
+    #[test]
+    fn test_stats_error_display() {
+        let err = StatsError::TableNotFound("users".to_string());
+        assert!(err.to_string().contains("users"));
+
+        let err = StatsError::ColumnNotFound("age".to_string());
+        assert!(err.to_string().contains("age"));
+    }
+
+    #[test]
+    fn test_column_stats_debug() {
+        let stats = ColumnStats::new("test").with_distinct_count(100);
+        let debug = format!("{:?}", stats);
+        assert!(debug.contains("test"));
+    }
+
+    #[test]
+    fn test_in_memory_provider_debug() {
+        let provider = InMemoryStatisticsProvider::new();
+        let debug = format!("{:?}", provider);
+        assert!(!debug.is_empty());
+    }
 }

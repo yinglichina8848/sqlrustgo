@@ -939,4 +939,76 @@ mod tests {
         let result = parse("UPDATE users SET name = 'A', age = 30 WHERE id = 1");
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_parse_insert_error_no_table() {
+        let result = parse("INSERT VALUES (1)");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_error_no_values() {
+        let result = parse("INSERT INTO users ()");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_all_columns() {
+        let result = parse("SELECT * FROM users");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_select_count() {
+        let result = parse("SELECT COUNT(*) FROM users");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_delete_error_no_table() {
+        let result = parse("DELETE WHERE id = 1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_update_error_no_set() {
+        let result = parse("UPDATE users WHERE id = 1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_without_columns() {
+        let result = parse("CREATE TABLE users");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_drop_error_no_name() {
+        let result = parse("DROP TABLE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_single_value() {
+        let result = parse("INSERT INTO users VALUES (1)");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_insert_with_column_list() {
+        let result = parse("INSERT INTO users (id, name) VALUES (1, 'test')");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.columns, vec!["id", "name"]);
+            }
+            _ => panic!("Expected INSERT"),
+        }
+    }
+
+    #[test]
+    fn test_parse_update_single_set() {
+        let result = parse("UPDATE users SET name = 'Bob'");
+        assert!(result.is_ok());
+    }
 }
