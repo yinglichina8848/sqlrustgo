@@ -197,6 +197,18 @@ impl AggregateExec {
         }
     }
 
+    pub fn group_expr(&self) -> &Vec<Expr> {
+        &self.group_expr
+    }
+
+    pub fn aggregate_expr(&self) -> &Vec<Expr> {
+        &self.aggregate_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
         match expr {
             Expr::Column(col) => {
