@@ -1,0 +1,27 @@
+{
+  "name": "test_float",
+  "columns": [
+    {
+      "name": "price",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Float": 1.5
+      }
+    ],
+    [
+      {
+        "Float": 3.5
+      }
+    ],
+    [
+      {
+        "Float": 5.5
+      }
+    ]
+  ]
+}
