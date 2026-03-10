@@ -790,4 +790,237 @@ mod tests {
         let debug = format!("{:?}", err);
         assert!(debug.contains("TableNotFound"));
     }
+
+    #[test]
+    fn test_stats_error_update_failed_display() {
+        let err = StatsError::UpdateFailed("disk full".to_string());
+        assert!(err.to_string().contains("disk full"));
+    }
+
+    #[test]
+    fn test_stats_result_map() {
+        let ok: StatsResult<i32> = Ok(42);
+        let mapped = ok.map(|v| v * 2);
+        assert_eq!(mapped.unwrap(), 84);
+    }
+
+    #[test]
+    fn test_stats_result_map_err() {
+        let err: StatsResult<i32> = Err(StatsError::TableNotFound("users".to_string()));
+        let mapped = err.map(|v| v * 2);
+        assert!(mapped.is_err());
+    }
+
+    #[test]
+    fn test_column_stats_with_max_value() {
+        let stats = ColumnStats::new("price")
+            .with_range(Some(Value::Float(0.0)), Some(Value::Float(1000.0)));
+        assert!(stats.max_value.is_some());
+    }
+
+    use sqlrustgo_storage::engine::{
+        ColumnDefinition, Record, SqlError, SqlResult, StorageEngine, TableInfo,
+    };
+
+    struct MockStorage {
+        tables: HashMap<String, Vec<Record>>,
+        table_infos: HashMap<String, TableInfo>,
+        scan_error: Option<String>,
+    }
+
+    impl MockStorage {
+        fn new() -> Self {
+            Self {
+                tables: HashMap::new(),
+                table_infos: HashMap::new(),
+                scan_error: None,
+            }
+        }
+
+        fn with_data(
+            mut self,
+            table: &str,
+            records: Vec<Record>,
+            columns: Vec<ColumnDefinition>,
+        ) -> Self {
+            self.tables.insert(table.to_string(), records);
+            let info = TableInfo {
+                name: table.to_string(),
+                columns,
+            };
+            self.table_infos.insert(table.to_string(), info);
+            self
+        }
+
+        fn with_scan_error(mut self, err: &str) -> Self {
+            self.scan_error = Some(err.to_string());
+            self
+        }
+    }
+
+    impl StorageEngine for MockStorage {
+        fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
+            if let Some(err) = &self.scan_error {
+                return Err(SqlError::TableNotFound(err.clone()));
+            }
+            Ok(self.tables.get(table).cloned().unwrap_or_default())
+        }
+
+        fn insert(&mut self, _table: &str, _records: Vec<Record>) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn delete(&mut self, _table: &str, _filters: &[Value]) -> SqlResult<usize> {
+            Ok(0)
+        }
+
+        fn update(
+            &mut self,
+            _table: &str,
+            _filters: &[Value],
+            _updates: &[(usize, Value)],
+        ) -> SqlResult<usize> {
+            Ok(0)
+        }
+
+        fn create_table(&mut self, _info: &TableInfo) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_table(&mut self, _table: &str) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
+            self.table_infos
+                .get(table)
+                .cloned()
+                .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+        }
+
+        fn has_table(&self, table: &str) -> bool {
+            self.tables.contains_key(table)
+        }
+
+        fn list_tables(&self) -> Vec<String> {
+            self.tables.keys().cloned().collect()
+        }
+
+        fn create_table_index(
+            &self,
+            _table: &str,
+            _column: &str,
+            _column_index: usize,
+        ) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_default_stats_collector_collect_table_stats() {
+        let records = vec![
+            vec![Value::Integer(1), Value::Text("Alice".to_string())],
+            vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            vec![Value::Integer(3), Value::Text("Carol".to_string())],
+        ];
+        let columns = vec![
+            ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            },
+            ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: false,
+            },
+        ];
+        let storage = MockStorage::new().with_data("users", records, columns);
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_table_stats(&storage, "users");
+
+        assert!(result.is_ok());
+        let stats = result.unwrap();
+        assert_eq!(stats.row_count, 3);
+        assert!(stats.column_stats.contains_key("id"));
+        assert!(stats.column_stats.contains_key("name"));
+    }
+
+    #[test]
+    fn test_default_stats_collector_collect_row_count() {
+        let records = vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage = MockStorage::new().with_data("orders", records, columns);
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_row_count(&storage, "orders");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+    }
+
+    #[test]
+    fn test_default_stats_collector_collect_column_stats() {
+        let records = vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage = MockStorage::new().with_data("users", records, columns);
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_column_stats(&storage, "users", "id", 0);
+
+        assert!(result.is_ok());
+        let col_stats = result.unwrap();
+        assert_eq!(col_stats.column_name, "id");
+    }
+
+    #[test]
+    fn test_default_stats_collector_scan_error() {
+        let storage = MockStorage::new().with_scan_error("scan failed");
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_table_stats(&storage, "users");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stats_collector_trait_objects() {
+        let records = vec![vec![Value::Integer(1)]];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
+        let storage: Box<dyn StorageEngine> =
+            Box::new(MockStorage::new().with_data("t", records, columns));
+
+        let collector = DefaultStatsCollector::new();
+        let result = collector.collect_table_stats(storage.as_ref(), "t");
+        assert!(result.is_ok());
+    }
 }
