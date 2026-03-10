@@ -29,7 +29,7 @@ fn setup_engine_with_data(rows: usize) -> ExecutionEngine {
 }
 
 fn bench_scan_1k(c: &mut Criterion) {
-    let engine = setup_engine_with_data(1_000);
+    let mut engine = setup_engine_with_data(1_000);
 
     c.bench_function("scan_1k", |b| {
         b.iter(|| {
@@ -41,7 +41,7 @@ fn bench_scan_1k(c: &mut Criterion) {
 }
 
 fn bench_scan_10k(c: &mut Criterion) {
-    let engine = setup_engine_with_data(10_000);
+    let mut engine = setup_engine_with_data(10_000);
 
     c.bench_function("scan_10k", |b| {
         b.iter(|| {
@@ -53,7 +53,7 @@ fn bench_scan_10k(c: &mut Criterion) {
 }
 
 fn bench_scan_100k(c: &mut Criterion) {
-    let engine = setup_engine_with_data(100_000);
+    let mut engine = setup_engine_with_data(100_000);
 
     c.bench_function("scan_100k", |b| {
         b.iter(|| {
@@ -68,7 +68,7 @@ fn bench_scan_with_filter(c: &mut Criterion) {
     let mut group = c.benchmark_group("scan_with_filter");
 
     for size in [1_000, 10_000, 100_000] {
-        let engine = setup_engine_with_data(size);
+        let mut engine = setup_engine_with_data(size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
@@ -86,7 +86,7 @@ fn bench_scan_projection(c: &mut Criterion) {
     let mut group = c.benchmark_group("scan_projection");
 
     for size in [1_000, 10_000, 100_000] {
-        let engine = setup_engine_with_data(size);
+        let mut engine = setup_engine_with_data(size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
