@@ -824,4 +824,119 @@ mod tests {
             _ => panic!("Expected DROP TABLE statement"),
         }
     }
+
+    #[test]
+    fn test_parse_select_star() {
+        let result = parse("SELECT * FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert_eq!(s.columns.len(), 1);
+                assert_eq!(s.columns[0].name, "*");
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_select_multiple_columns() {
+        let result = parse("SELECT id, name, age FROM users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 3);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_select_with_where() {
+        let result = parse("SELECT id FROM users WHERE name = 'Alice'");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze_with_table() {
+        let result = parse("ANALYZE users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_name, Some("users".to_string()));
+            }
+            _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_error_empty() {
+        let result = parse("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_error_unexpected_token() {
+        let result = parse("INVALID");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_select_missing_from() {
+        let result = parse("SELECT id");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_insert_missing_table() {
+        let result = parse("INSERT VALUES (1)");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parser_is_eof() {
+        let tokens = vec![Token::Eof];
+        let parser = Parser::new(tokens);
+        assert!(parser.is_eof());
+    }
+
+    #[test]
+    fn test_parser_expect() {
+        let tokens = vec![Token::Select, Token::From];
+        let mut parser = Parser::new(tokens);
+        let result = parser.expect(Token::Select);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parser_expect_error() {
+        let tokens = vec![Token::From];
+        let mut parser = Parser::new(tokens);
+        let result = parser.expect(Token::Select);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_table_with_not_null() {
+        let result = parse("CREATE TABLE users (id INTEGER NOT NULL, name TEXT)");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_table_with_multiple_columns() {
+        let result = parse("CREATE TABLE test (a INTEGER, b TEXT, c FLOAT, d BOOLEAN)");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_multi_set() {
+        let result = parse("UPDATE users SET name = 'A', age = 30 WHERE id = 1");
+        assert!(result.is_ok());
+    }
 }
