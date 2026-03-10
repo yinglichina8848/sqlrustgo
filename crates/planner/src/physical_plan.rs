@@ -6,6 +6,7 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
+use crate::Operator;
 use crate::Schema;
 use sqlrustgo_types::Value;
 use std::any::Any;
@@ -197,6 +198,18 @@ impl AggregateExec {
         }
     }
 
+    pub fn group_expr(&self) -> &Vec<Expr> {
+        &self.group_expr
+    }
+
+    pub fn aggregate_expr(&self) -> &Vec<Expr> {
+        &self.aggregate_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
         match expr {
             Expr::Column(col) => {
@@ -379,6 +392,22 @@ impl HashJoinExec {
             condition,
             schema,
         }
+    }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+
+    pub fn join_type(&self) -> crate::JoinType {
+        self.join_type.clone()
+    }
+
+    pub fn condition(&self) -> Option<&Expr> {
+        self.condition.as_ref()
     }
 }
 
