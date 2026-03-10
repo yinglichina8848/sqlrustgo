@@ -440,6 +440,14 @@ impl SortExec {
     pub fn new(input: Box<dyn PhysicalPlan>, sort_expr: Vec<crate::SortExpr>) -> Self {
         Self { input, sort_expr }
     }
+
+    pub fn sort_expr(&self) -> &Vec<crate::SortExpr> {
+        &self.sort_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
 }
 
 impl PhysicalPlan for SortExec {
@@ -475,6 +483,18 @@ impl LimitExec {
             limit,
             offset,
         }
+    }
+
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
+    pub fn offset(&self) -> Option<usize> {
+        self.offset
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 }
 
@@ -705,5 +725,162 @@ mod tests {
         let child = SeqScanExec::new("users".to_string(), schema.clone());
         let exec = SortExec::new(Box::new(child), vec![]);
         assert_eq!(exec.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_sort_exec_accessors() {
+        use crate::SortExpr;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let exec = SortExec::new(Box::new(child), sort_expr.clone());
+        assert_eq!(exec.sort_expr().len(), 1);
+        assert!(exec.input().schema().fields.len() >= 1);
+    }
+
+    #[test]
+    fn test_limit_exec_new() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = LimitExec::new(Box::new(child), 10, None);
+        assert_eq!(exec.name(), "Limit");
+    }
+
+    #[test]
+    fn test_limit_exec_schema() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = LimitExec::new(Box::new(child), 10, None);
+        assert_eq!(exec.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_limit_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = LimitExec::new(Box::new(child), 10, Some(5));
+        assert_eq!(exec.limit(), 10);
+        assert_eq!(exec.offset(), Some(5));
+        assert!(exec.input().schema().fields.len() >= 1);
+    }
+
+    #[test]
+    fn test_hash_join_exec_accessors() {
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let exec = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Inner,
+            None,
+            schema,
+        );
+        assert_eq!(exec.join_type(), crate::JoinType::Inner);
+        assert!(exec.condition().is_none());
+    }
+
+    #[test]
+    fn test_aggregate_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = AggregateExec::new(
+            Box::new(child),
+            vec![Expr::column("id")],
+            vec![Expr::column("id")],
+            schema,
+        );
+        assert_eq!(exec.group_expr().len(), 1);
+        assert_eq!(exec.aggregate_expr().len(), 1);
+    }
+
+    #[test]
+    fn test_filter_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let predicate = Expr::column("id");
+        let exec = FilterExec::new(Box::new(child), predicate);
+        assert!(exec.predicate() != &Expr::column("nonexistent"));
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = SeqScanExec::new("test".to_string(), schema.clone());
+
+        let exec = AggregateExec::new(
+            Box::new(input),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let result = exec.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_group_by() {
+        let schema = Schema::new(vec![
+            Field::new("category".to_string(), DataType::Text),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+        let input = SeqScanExec::new("test".to_string(), schema.clone());
+
+        let exec = AggregateExec::new(
+            Box::new(input),
+            vec![Expr::column("category")],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Sum,
+                args: vec![Expr::column("value")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let result = exec.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_min_max() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = SeqScanExec::new("test".to_string(), schema.clone());
+
+        let exec = AggregateExec::new(
+            Box::new(input),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Min,
+                args: vec![Expr::column("id")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let result = exec.execute();
+        assert!(result.is_ok());
+
+        let exec2 = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Max,
+                args: vec![Expr::column("id")],
+                distinct: false,
+            }],
+            schema,
+        );
+
+        let result2 = exec2.execute();
+        assert!(result2.is_ok());
     }
 }
