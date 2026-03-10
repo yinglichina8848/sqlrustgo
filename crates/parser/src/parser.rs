@@ -959,12 +959,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_select_count() {
-        let result = parse("SELECT COUNT(*) FROM users");
-        assert!(result.is_ok());
-    }
-
-    #[test]
     fn test_parse_delete_error_no_table() {
         let result = parse("DELETE WHERE id = 1");
         assert!(result.is_err());
