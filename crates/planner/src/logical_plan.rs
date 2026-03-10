@@ -180,7 +180,6 @@ mod tests {
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let plan = LogicalPlan::CreateTable {
             table_name: "users".to_string(),
-            columns: vec![],
             schema: schema.clone(),
             if_not_exists: true,
         };
