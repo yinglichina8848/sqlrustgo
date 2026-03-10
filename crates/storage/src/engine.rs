@@ -217,4 +217,125 @@ mod tests {
         fn _check<T: Send + Sync>() {}
         _check::<MemoryStorage>();
     }
+
+    #[test]
+    fn test_column_definition() {
+        let col = ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        };
+        assert_eq!(col.name, "id");
+        assert_eq!(col.data_type, "INTEGER");
+        assert!(!col.nullable);
+    }
+
+    #[test]
+    fn test_table_info() {
+        let col = ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        };
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![col],
+        };
+        assert_eq!(info.name, "users");
+        assert_eq!(info.columns.len(), 1);
+    }
+
+    #[test]
+    fn test_table_data() {
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        let data = TableData {
+            info: info.clone(),
+            rows: vec![],
+        };
+        assert_eq!(data.info.name, "users");
+        assert!(data.rows.is_empty());
+    }
+
+    #[test]
+    fn test_memory_storage_create_table() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+        assert!(storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_memory_storage_drop_table() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+        storage.drop_table("users").unwrap();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_memory_storage_get_table_info() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+        let result = storage.get_table_info("users").unwrap();
+        assert_eq!(result.name, "users");
+    }
+
+    #[test]
+    fn test_memory_storage_get_table_info_not_found() {
+        let storage = MemoryStorage::new();
+        let result = storage.get_table_info("users");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_memory_storage_delete() {
+        let mut storage = MemoryStorage::new();
+        storage
+            .tables
+            .insert("users".to_string(), vec![vec![Value::Integer(1)]]);
+        let count = storage.delete("users", &[]).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_memory_storage_update() {
+        let mut storage = MemoryStorage::new();
+        storage
+            .tables
+            .insert("users".to_string(), vec![vec![Value::Integer(1)]]);
+        let count = storage
+            .update("users", &[], &[(0, Value::Integer(2))])
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_memory_storage_create_index() {
+        let mut storage = MemoryStorage::new();
+        storage.create_index("users", "id", 0).unwrap();
+    }
+
+    #[test]
+    fn test_memory_storage_drop_index() {
+        let mut storage = MemoryStorage::new();
+        storage.drop_index("users", "id").unwrap();
+    }
 }
