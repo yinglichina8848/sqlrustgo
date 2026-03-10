@@ -36,3 +36,36 @@ impl Default for ExecutionEngine {
 pub fn init() {
     println!("SQLRustGo Database System initialized");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init() {
+        init();
+    }
+
+    #[test]
+    fn test_module_exports() {
+        let _ = tokenize("SELECT 1");
+        let _ = parse("SELECT 1");
+        let _ = Value::Integer(1);
+    }
+
+    #[test]
+    fn test_sql_result_alias() {
+        let result: SqlResult<i32> = Ok(42);
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_optimizer_alias() {
+        let _: Option<Box<dyn sqlrustgo_optimizer::Optimizer>> = None;
+    }
+
+    #[test]
+    fn test_physical_plan_trait() {
+        let _: Option<Box<dyn PhysicalPlan>> = None;
+    }
+}
