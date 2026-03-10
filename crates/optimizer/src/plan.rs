@@ -1,6 +1,15 @@
 //! Optimizer Plan Types Module
 
+use std::any::Any;
 use thiserror::Error;
+
+/// Trait for types that can be converted to Any for dynamic dispatch
+pub trait AsAny: Any {
+    /// Convert reference to Any
+    fn as_any(&self) -> &dyn Any;
+    /// Convert mutable reference to Any
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 /// Optimizer result type alias
 pub type OptimizerResult<T> = Result<T, OptimizerError>;
