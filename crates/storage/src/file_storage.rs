@@ -302,17 +302,22 @@ impl FileStorage {
             .unwrap_or(false);
 
         if has_index {
-            // Get mutable reference, insert, then save
+            // First get a clone of the index to save, then modify
+            let index_clone = {
+                let indexes = self.indexes.read().unwrap();
+                indexes.get(&key_exists).cloned()
+            };
+
+            // Update the in-memory index
             if let Ok(mut indexes) = self.indexes.write() {
                 if let Some(index) = indexes.get_mut(&key_exists) {
                     index.insert(key, row_id);
-                    // Save to disk
-                    if let Ok(read_indexes) = self.indexes.read() {
-                        if let Some(idx) = read_indexes.get(&key_exists) {
-                            let _ = self.save_index(table_name, column_name, idx);
-                        }
-                    }
                 }
+            }
+
+            // Save to disk (outside the write lock)
+            if let Some(idx) = index_clone {
+                let _ = self.save_index(table_name, column_name, &idx);
             }
         }
 
@@ -918,11 +923,44 @@ impl StorageEngine for FileStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
+    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
+        // Inline the implementation to avoid potential recursion issues
+        // Get table from tables
+        let table_data = self.tables.get(table).cloned()
+            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))?;
+
+        // Build B+ Tree from existing rows
+        let mut index = crate::bplus_tree::BPlusTree::new();
+        for (row_id, row) in table_data.rows.iter().enumerate() {
+            if let Some(value) = row.get(column_index) {
+                if let Some(key) = value.to_index_key() {
+                    index.insert(key, row_id as u32);
+                }
+            }
+        }
+
+        // Save to disk
+        self.save_index(table, column, &index).map_err(SqlError::from)?;
+
+        // Store in memory
+        let mut indexes = self.indexes.write().unwrap();
+        indexes.insert((table.to_string(), column.to_string()), index);
+
         Ok(())
     }
 
-    fn drop_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
+        let key = (table.to_string(), column.to_string());
+
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.remove(&key);
+        }
+
+        let path = self.index_path(table, column);
+        if path.exists() {
+            std::fs::remove_file(path).map_err(SqlError::from)?;
+        }
+
         Ok(())
     }
 }
