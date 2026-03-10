@@ -69,4 +69,33 @@ mod tests {
     fn test_physical_plan_trait() {
         let _: Option<Box<dyn PhysicalPlan>> = None;
     }
+
+    #[test]
+    fn test_execution_engine_new() {
+        let mut engine = ExecutionEngine::new();
+        let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
+        assert_eq!(engine.execute(stmt).unwrap().rows.len(), 0);
+    }
+
+    #[test]
+    fn test_execution_engine_default() {
+        let mut engine = ExecutionEngine::default();
+        let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
+        assert_eq!(engine.execute(stmt).unwrap().affected_rows, 0);
+    }
+
+    #[test]
+    fn test_storage_engine_export() {
+        let _: Option<Box<dyn StorageEngine>> = None;
+    }
+
+    #[test]
+    fn test_executor_export() {
+        let _: Option<Box<dyn Executor>> = None;
+    }
+
+    #[test]
+    fn test_planner_export() {
+        let _: Option<Box<dyn Planner>> = None;
+    }
 }
