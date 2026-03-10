@@ -2,6 +2,8 @@
 //!
 //! Defines the physical execution representation of query plans.
 
+#![allow(dead_code)]
+
 use crate::Expr;
 use crate::Schema;
 
@@ -251,5 +253,85 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DataType, Expr, Field};
+
+    #[test]
+    fn test_seq_scan_exec_new() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let exec = SeqScanExec::new("users".to_string(), schema.clone());
+        assert_eq!(exec.schema(), &schema);
+        assert_eq!(exec.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_seq_scan_exec_with_projection() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let exec = SeqScanExec::new("users".to_string(), schema).with_projection(vec![0]);
+        assert!(exec.projection.is_some());
+    }
+
+    #[test]
+    fn test_seq_scan_children() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let exec = SeqScanExec::new("users".to_string(), schema);
+        assert!(exec.children().is_empty());
+    }
+
+    #[test]
+    fn test_projection_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = ProjectionExec::new(Box::new(child), vec![], schema);
+        assert_eq!(exec.name(), "Projection");
+    }
+
+    #[test]
+    fn test_filter_exec() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let predicate = Expr::column("id");
+        let exec = FilterExec::new(Box::new(child), predicate);
+        assert_eq!(exec.name(), "Filter");
+    }
+
+    #[test]
+    fn test_aggregate_exec() {
+        let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("users".to_string(), schema.clone());
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        assert_eq!(exec.name(), "Aggregate");
+    }
+
+    #[test]
+    fn test_hash_join_exec() {
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let exec = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Inner,
+            None,
+            schema,
+        );
+        assert_eq!(exec.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_physical_plan_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let exec = SeqScanExec::new("users".to_string(), schema);
+        _check::<Box<dyn PhysicalPlan>>();
+        _check::<SeqScanExec>();
     }
 }

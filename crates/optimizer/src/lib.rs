@@ -2,6 +2,8 @@
 //!
 //! This module provides query optimization interfaces for the SQL engine.
 
+#![allow(clippy::type_complexity)]
+
 pub mod cost;
 pub mod network_cost;
 pub mod plan;
