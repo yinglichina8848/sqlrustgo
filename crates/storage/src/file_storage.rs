@@ -903,6 +903,140 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_scan() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_scan");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create table first
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+
+        // Insert data
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        // Scan
+        let records = storage.scan("users").unwrap();
+        assert_eq!(records.len(), 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_scan_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_scan_empty");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let records = storage.scan("nonexistent").unwrap();
+        assert!(records.is_empty());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_list_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_list");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+
+        let tables = storage.list_tables();
+        assert!(tables.contains(&"users".to_string()));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_delete() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_delete");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        let count = storage.delete("users", &[]).unwrap();
+        assert_eq!(count, 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_delete_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_del_emp");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let count = storage.delete("nonexistent", &[]).unwrap();
+        assert_eq!(count, 0);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_update() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_update");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        let count = storage
+            .update("users", &[], &[(0, Value::Integer(2))])
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_update_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_upd_emp");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let count = storage.update("nonexistent", &[], &[]).unwrap();
+        assert_eq!(count, 0);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
 
 impl StorageEngine for FileStorage {
