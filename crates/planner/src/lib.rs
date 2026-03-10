@@ -589,4 +589,244 @@ mod tests {
         assert_eq!(Operator::Plus.to_string(), "+");
         assert_eq!(Operator::Minus.to_string(), "-");
     }
+
+    #[test]
+    fn test_expr_evaluate_column() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::column("id");
+        let row = vec![Value::Integer(42)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_literal() {
+        let schema = Schema::new(vec![]);
+        let expr = Expr::literal(Value::Integer(42));
+        let row = vec![];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_binary_expr() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::binary_expr(
+            Expr::column("a"),
+            Operator::Plus,
+            Expr::column("b"),
+        );
+        let row = vec![Value::Integer(10), Value::Integer(5)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Integer(15)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_binary_expr_integer_comparison() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::binary_expr(
+            Expr::column("a"),
+            Operator::Gt,
+            Expr::column("b"),
+        );
+        let row = vec![Value::Integer(10), Value::Integer(5)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_binary_expr_text_comparison() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Text),
+            Field::new("b".to_string(), DataType::Text),
+        ]);
+        let expr = Expr::binary_expr(
+            Expr::column("a"),
+            Operator::Lt,
+            Expr::column("b"),
+        );
+        let row = vec![Value::Text("apple".to_string()), Value::Text("banana".to_string())];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_binary_expr_divide_by_zero() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::binary_expr(
+            Expr::column("a"),
+            Operator::Divide,
+            Expr::column("b"),
+        );
+        let row = vec![Value::Integer(10), Value::Integer(0)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_expr_evaluate_unary_expr_not() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::column("a")),
+        };
+        let row = vec![Value::Integer(0)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_unary_expr_minus() {
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::UnaryExpr {
+            op: Operator::Minus,
+            expr: Box::new(Expr::column("a")),
+        };
+        let row = vec![Value::Integer(10)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Integer(-10)));
+    }
+
+    #[test]
+    fn test_expr_evaluate_alias() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::Alias {
+            expr: Box::new(Expr::column("id")),
+            name: "user_id".to_string(),
+        };
+        let row = vec![Value::Integer(42)];
+        let result = expr.evaluate(&row, &schema);
+        assert_eq!(result, Some(Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_expr_matches() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::binary_expr(
+            Expr::column("id"),
+            Operator::Gt,
+            Expr::literal(Value::Integer(10)),
+        );
+        let row = vec![Value::Integer(20)];
+        assert!(expr.matches(&row, &schema));
+    }
+
+    #[test]
+    fn test_expr_matches_returns_false_for_null() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let expr = Expr::Wildcard;
+        let row = vec![Value::Integer(20)];
+        assert!(!expr.matches(&row, &schema));
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_integer() {
+        use sqlrustgo_types::Value::*;
+        // Test multiplication
+        let result = evaluate_binary_op(&Integer(3), &Operator::Multiply, &Integer(4));
+        assert_eq!(result, Some(Integer(12)));
+        // Test subtraction
+        let result = evaluate_binary_op(&Integer(10), &Operator::Minus, &Integer(3));
+        assert_eq!(result, Some(Integer(7)));
+    }
+
+    #[test]
+    fn test_evaluate_unary_op_not_boolean() {
+        use sqlrustgo_types::Value::*;
+        let result = evaluate_unary_op(&Boolean(true), &Operator::Not);
+        assert_eq!(result, Some(Boolean(false)));
+    }
+
+    #[test]
+    fn test_schema_default() {
+        let schema = Schema::default();
+        assert!(schema.fields.is_empty());
+    }
+
+    #[test]
+    fn test_join_type_variants_left_semi() {
+        assert!(matches!(JoinType::LeftSemi, JoinType::LeftSemi));
+        assert!(matches!(JoinType::LeftAnti, JoinType::LeftAnti));
+        assert!(matches!(JoinType::RightSemi, JoinType::RightSemi));
+        assert!(matches!(JoinType::RightAnti, JoinType::RightAnti));
+    }
+
+    #[test]
+    fn test_aggregate_function_all_variants() {
+        // Test all variants are accessible
+        let funcs = vec![
+            AggregateFunction::Count,
+            AggregateFunction::Sum,
+            AggregateFunction::Avg,
+            AggregateFunction::Min,
+            AggregateFunction::Max,
+        ];
+        assert_eq!(funcs.len(), 5);
+    }
+
+    #[test]
+    fn test_operator_all_variants() {
+        // Test all operator variants
+        let ops = vec![
+            Operator::Eq,
+            Operator::NotEq,
+            Operator::Lt,
+            Operator::LtEq,
+            Operator::Gt,
+            Operator::GtEq,
+            Operator::Plus,
+            Operator::Minus,
+            Operator::Multiply,
+            Operator::Divide,
+            Operator::Modulo,
+            Operator::And,
+            Operator::Or,
+            Operator::Not,
+            Operator::Like,
+        ];
+        assert_eq!(ops.len(), 15);
+    }
+
+    #[test]
+    fn test_datatype_all_variants() {
+        let types = vec![
+            DataType::Boolean,
+            DataType::Integer,
+            DataType::Float,
+            DataType::Text,
+            DataType::Blob,
+            DataType::Null,
+        ];
+        assert_eq!(types.len(), 6);
+    }
+
+    #[test]
+    fn test_field_with_nullable_default() {
+        let field = Field::new("id".to_string(), DataType::Integer);
+        assert!(field.nullable);
+
+        let field_not_null = Field::new_not_null("id".to_string(), DataType::Integer);
+        assert!(!field_not_null.nullable);
+    }
 }
