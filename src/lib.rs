@@ -54,6 +54,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unnecessary_literal_unwrap)]
     fn test_sql_result_alias() {
         let result: SqlResult<i32> = Ok(42);
         assert_eq!(result.unwrap(), 42);
