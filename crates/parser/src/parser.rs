@@ -232,7 +232,7 @@ impl Parser {
                             self.next();
                         }
                         Some(Token::Identifier(name)) => {
-                            args.push(Expression::Identifier(name));
+                            args.push(Expression::Identifier(name.to_string()));
                             self.next();
                         }
                         _ => return Err("Expected * or column name in aggregate".to_string()),
