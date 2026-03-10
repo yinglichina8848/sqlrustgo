@@ -1,38 +1,41 @@
-//! Insert Benchmark for SQLRustGo
+//! Insert Benchmark - benches/bench_insert.rs
 //!
-//! Benchmarks for INSERT operations at various scales.
+//! INSERT performance benchmark for SQLRustGo using StorageEngine
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
+use sqlrustgo_types::Value;
 
-fn setup_engine() -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new();
-    engine
-        .execute(parse("CREATE TABLE insert_bench (id INTEGER, name TEXT, value INTEGER)").unwrap())
-        .unwrap();
-    engine
+/// Generate test data rows
+fn generate_rows(count: usize) -> Vec<Vec<Value>> {
+    (0..count)
+        .map(|i| vec![Value::Integer(i as i64)])
+        .collect()
 }
 
-fn bench_insert_single_row(c: &mut Criterion) {
-    let mut group = c.benchmark_group("insert_single");
+/// Create test table info
+fn create_table_info() -> TableInfo {
+    TableInfo {
+        name: "bench".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }],
+    }
+}
 
-    for size in [1, 10, 100] {
+/// Benchmark INSERT with different data sizes using MemoryStorage
+fn bench_insert_sizes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("insert");
+
+    for size in [1_000, 10_000, 100_000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
-                let mut engine = setup_engine();
-                for i in 0..size {
-                    engine
-                        .execute(
-                            parse(&format!(
-                                "INSERT INTO insert_bench VALUES ({}, 'name_{}', {})",
-                                i,
-                                i % 100,
-                                i
-                            ))
-                            .unwrap(),
-                        )
-                        .unwrap();
-                }
+                let mut storage = MemoryStorage::new();
+                storage.create_table(&create_table_info()).unwrap();
+                let rows = generate_rows(size);
+                storage.insert("bench", rows).unwrap();
             });
         });
     }
@@ -40,89 +43,30 @@ fn bench_insert_single_row(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_insert_1k(c: &mut Criterion) {
-    c.bench_function("insert_1k", |b| {
-        b.iter(|| {
-            let mut engine = setup_engine();
-            for i in 0..1_000 {
-                engine
-                    .execute(
-                        parse(&format!(
-                            "INSERT INTO insert_bench VALUES ({}, 'name_{}', {})",
-                            i,
-                            i % 1000,
-                            i
-                        ))
-                        .unwrap(),
-                    )
-                    .unwrap();
-            }
-        });
-    });
-}
-
-fn bench_insert_10k(c: &mut Criterion) {
-    c.bench_function("insert_10k", |b| {
-        b.iter(|| {
-            let mut engine = setup_engine();
-            for i in 0..10_000 {
-                engine
-                    .execute(
-                        parse(&format!(
-                            "INSERT INTO insert_bench VALUES ({}, 'name_{}', {})",
-                            i,
-                            i % 10000,
-                            i
-                        ))
-                        .unwrap(),
-                    )
-                    .unwrap();
-            }
-        });
-    });
-}
-
-fn bench_insert_100k(c: &mut Criterion) {
-    c.bench_function("insert_100k", |b| {
-        b.iter(|| {
-            let mut engine = setup_engine();
-            for i in 0..100_000 {
-                engine
-                    .execute(
-                        parse(&format!(
-                            "INSERT INTO insert_bench VALUES ({}, 'name_{}', {})",
-                            i,
-                            i % 100000,
-                            i
-                        ))
-                        .unwrap(),
-                    )
-                    .unwrap();
-            }
-        });
-    });
-}
-
+/// Benchmark batch INSERT performance
 fn bench_insert_batch(c: &mut Criterion) {
     let mut group = c.benchmark_group("insert_batch");
 
     for batch_size in [10, 100, 1000] {
+        let total_rows = 10_000;
         group.bench_with_input(
             BenchmarkId::from_parameter(batch_size),
             &batch_size,
             |b, &batch_size| {
                 b.iter(|| {
-                    let mut engine = setup_engine();
-                    for i in 0..batch_size {
-                        engine
-                            .execute(
-                                parse(&format!(
-                                    "INSERT INTO insert_bench VALUES ({}, 'name_{}', {})",
-                                    i, i, i
-                                ))
-                                .unwrap(),
-                            )
-                            .unwrap();
+                    let mut storage = MemoryStorage::new();
+                    storage.create_table(&create_table_info()).unwrap();
+
+                    let mut batch = Vec::with_capacity(batch_size);
+                    for i in 0..total_rows {
+                        batch.push(vec![Value::Integer(i as i64)]);
+                        if batch.len() >= batch_size {
+                            storage.insert("bench", std::mem::take(&mut batch)).unwrap();
+                            batch = Vec::with_capacity(batch_size);
+                        }
+                    }
+                    if !batch.is_empty() {
+                        storage.insert("bench", batch).unwrap();
                     }
                 });
             },
@@ -132,23 +76,47 @@ fn bench_insert_batch(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_insert_text_column(c: &mut Criterion) {
-    let mut group = c.benchmark_group("insert_text");
+/// Benchmark INSERT with multiple columns
+fn bench_insert_multi_column(c: &mut Criterion) {
+    let mut group = c.benchmark_group("insert_multi_column");
 
-    for text_len in [10, 100, 1000] {
-        let text = "x".repeat(text_len);
-        group.bench_with_input(BenchmarkId::from_parameter(text_len), &text_len, |b, _| {
+    let table_info = TableInfo {
+        name: "bench".to_string(),
+        columns: vec![
+            ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+            },
+            ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+            },
+            ColumnDefinition {
+                name: "value".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: true,
+            },
+        ],
+    };
+
+    for size in [1_000, 10_000] {
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
-                let mut engine = setup_engine();
-                engine
-                    .execute(
-                        parse(&format!(
-                            "INSERT INTO insert_bench VALUES (1, '{}', 1)",
-                            text
-                        ))
-                        .unwrap(),
-                    )
-                    .unwrap();
+                let mut storage = MemoryStorage::new();
+                storage.create_table(&table_info).unwrap();
+
+                let rows: Vec<Vec<Value>> = (0..size)
+                    .map(|i| {
+                        vec![
+                            Value::Integer(i as i64),
+                            Value::Text(format!("user_{}", i)),
+                            Value::Integer((i * 10) as i64),
+                        ]
+                    })
+                    .collect();
+                storage.insert("bench", rows).unwrap();
             });
         });
     }
@@ -156,13 +124,27 @@ fn bench_insert_text_column(c: &mut Criterion) {
     group.finish();
 }
 
+/// Measure throughput (rows/s) for 100k insert
+fn bench_insert_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("insert_throughput");
+
+    group.bench_function("100k_rows", |b| {
+        b.iter(|| {
+            let mut storage = MemoryStorage::new();
+            storage.create_table(&create_table_info()).unwrap();
+            let rows = generate_rows(100_000);
+            storage.insert("bench", rows).unwrap();
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
-    bench_insert_single_row,
-    bench_insert_1k,
-    bench_insert_10k,
-    bench_insert_100k,
+    bench_insert_sizes,
     bench_insert_batch,
-    bench_insert_text_column
+    bench_insert_multi_column,
+    bench_insert_throughput
 );
 criterion_main!(benches);
