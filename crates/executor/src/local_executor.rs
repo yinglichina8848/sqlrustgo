@@ -220,4 +220,522 @@ mod tests {
         let _storage = MemoryStorage::new();
         _check::<LocalExecutor>();
     }
+
+    #[test]
+    fn test_local_executor_name() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+        assert_eq!(executor.name(), "local");
+    }
+
+    #[test]
+    fn test_local_executor_is_ready() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+        assert!(executor.is_ready());
+    }
+
+    #[test]
+    fn test_local_executor_execute_projection() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for Projection
+        struct MockProjectionPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockProjectionPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "Projection"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockProjectionPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_filter() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for Filter
+        struct MockFilterPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockFilterPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "Filter"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockFilterPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_aggregate() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for Aggregate
+        struct MockAggregatePlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockAggregatePlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "Aggregate"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockAggregatePlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_hash_join() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for HashJoin with only one child
+        struct MockHashJoinPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockHashJoinPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "HashJoin"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockHashJoinPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_sort() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for Sort
+        struct MockSortPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockSortPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "Sort"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockSortPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_limit() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for Limit
+        struct MockLimitPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockLimitPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                // Return empty to trigger early return
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "Limit"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockLimitPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_unknown_plan() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a mock plan for unknown type
+        struct MockUnknownPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockUnknownPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "UnknownPlan"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let result = executor.execute(&MockUnknownPlan { schema: test_schema });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_projection_with_child() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a child plan
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent projection with child
+        struct MockProjectionPlan {
+            schema: Schema,
+            child: MockChildPlan,
+        }
+        impl PhysicalPlan for MockProjectionPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.child]
+            }
+            fn name(&self) -> &str {
+                "Projection"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockProjectionPlan {
+            schema: test_schema,
+            child: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_filter_with_child() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a child plan
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent filter with child
+        struct MockFilterPlan {
+            schema: Schema,
+            child: MockChildPlan,
+        }
+        impl PhysicalPlan for MockFilterPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.child]
+            }
+            fn name(&self) -> &str {
+                "Filter"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockFilterPlan {
+            schema: test_schema,
+            child: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_aggregate_with_child() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a child plan
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent aggregate with child
+        struct MockAggregatePlan {
+            schema: Schema,
+            child: MockChildPlan,
+        }
+        impl PhysicalPlan for MockAggregatePlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.child]
+            }
+            fn name(&self) -> &str {
+                "Aggregate"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockAggregatePlan {
+            schema: test_schema,
+            child: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_hash_join_with_two_children() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create two child plans
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent hash join with two children
+        struct MockHashJoinPlan {
+            schema: Schema,
+            left: MockChildPlan,
+            right: MockChildPlan,
+        }
+        impl PhysicalPlan for MockHashJoinPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.left, &self.right]
+            }
+            fn name(&self) -> &str {
+                "HashJoin"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockHashJoinPlan {
+            schema: test_schema.clone(),
+            left: MockChildPlan {
+                schema: test_schema.clone(),
+            },
+            right: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_sort_with_child() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a child plan
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent sort with child
+        struct MockSortPlan {
+            schema: Schema,
+            child: MockChildPlan,
+        }
+        impl PhysicalPlan for MockSortPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.child]
+            }
+            fn name(&self) -> &str {
+                "Sort"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockSortPlan {
+            schema: test_schema,
+            child: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_local_executor_execute_limit_with_child() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // Create a child plan
+        struct MockChildPlan {
+            schema: Schema,
+        }
+        impl PhysicalPlan for MockChildPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![]
+            }
+            fn name(&self) -> &str {
+                "SeqScan"
+            }
+            fn table_name(&self) -> &str {
+                "test_table"
+            }
+        }
+
+        // Create parent limit with child
+        struct MockLimitPlan {
+            schema: Schema,
+            child: MockChildPlan,
+        }
+        impl PhysicalPlan for MockLimitPlan {
+            fn schema(&self) -> &Schema {
+                &self.schema
+            }
+            fn children(&self) -> Vec<&dyn PhysicalPlan> {
+                vec![&self.child]
+            }
+            fn name(&self) -> &str {
+                "Limit"
+            }
+        }
+
+        let test_schema = make_test_schema();
+        let test_schema_clone = test_schema.clone();
+        let result = executor.execute(&MockLimitPlan {
+            schema: test_schema,
+            child: MockChildPlan {
+                schema: test_schema_clone,
+            },
+        });
+        assert!(result.is_ok());
+    }
 }
