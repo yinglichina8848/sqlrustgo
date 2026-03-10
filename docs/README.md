@@ -93,8 +93,11 @@ docs/
 
 | 文档 | 说明 |
 |------|------|
-| [路线图](v2.0/SQLRUSTGO_2_0_ROADMAP.md) | 2.0 开发路线图 |
+| [技术路线图](v2.0/TECH_ROADMAP.md) | 1.x → 3.0 完整演进路线 |
 | [架构设计](v2.0/ARCHITECTURE_V2.md) | 2.0 架构设计 |
+| [Cascades 优化器](v2.0/CASCADES_OPTIMIZER.md) | 工业级查询优化器设计 |
+| [基准测试框架](v2.0/BENCHMARK_FRAMEWORK.md) | 性能测试框架 |
+| [路线图](v2.0/SQLRUSTGO_2_0_ROADMAP.md) | 2.0 开发路线图 |
 | [分布式接口设计](v2.0/DISTRIBUTED_INTERFACE_DESIGN.md) | 3.0 分布式接口 |
 | [风险矩阵](v2.0/RISK_MATRIX.md) | 风险评估 |
 | [白皮书](v2.0/WHITEPAPER.md) | 项目白皮书 |
@@ -147,7 +150,7 @@ docs/
 
 | 文档 | 说明 |
 |------|------|
-| [架构设计](architecture.md) | 系统架构设计 |
+| [架构设计](architecture.md) | 系统架构设计（含 Mermaid 架构图） |
 | [架构演进](ARCHITECTURE_EVOLUTION.md) | 架构演进历史 |
 | [设计文档](2026-02-13-sqlcc-rust-redesign-design.md) | 重构设计文档 |
 | [实施计划](2026-02-13-sqlcc-rust-impl-plan.md) | 实施计划 |
