@@ -46,14 +46,12 @@ impl PredicatePushdown {
                 // Try to push filter down into input
                 if let LogicalPlan::TableScan { .. } = **input {
                     // Filter directly on table scan - no pushdown needed
-                    // But we can mark it for storage-level filtering
                     return false;
                 }
 
-                // Try to push into Projection or Aggregate
+                // Try to push into Projection
                 match &mut **input {
                     LogicalPlan::Projection { input: proj_input, .. } => {
-                        // Push filter into the projection's input
                         let new_filter = LogicalPlan::Filter {
                             predicate: predicate.clone(),
                             input: proj_input.clone(),
@@ -61,42 +59,24 @@ impl PredicatePushdown {
                         **input = new_filter;
                         return true;
                     }
-                    LogicalPlan::TableScan { .. } => {
-                        // Already at table scan, can't push further
-                        return false;
-                    }
-                    _ => {
-                        // Can't push down through other operators
-                        return false;
-                    }
+                    LogicalPlan::TableScan { .. } => false,
+                    _ => false,
                 }
             }
-            LogicalPlan::Projection { input, expr: _, schema: _ } => {
-                // Recursively process input
-                self.pushdown(input)
-            }
-            LogicalPlan::Aggregate { input: _, .. } => {
-                // Cannot push predicates through aggregation
-                false
-            }
+            LogicalPlan::Projection { input, .. } => self.pushdown(input),
+            LogicalPlan::Aggregate { input: _, .. } => false,
             LogicalPlan::Join { left, right, join_type, condition } => {
-                // Try to push predicates into join children based on join type
                 let mut changed = false;
-
-                // Push down into left
                 if let Some(pred) = condition.as_ref() {
                     if self.can_push_to_left(pred, join_type) {
                         changed |= self.pushdown(left);
                     }
                 }
-
-                // Push down into right
                 if let Some(pred) = condition.as_ref() {
                     if self.can_push_to_right(pred, join_type) {
                         changed |= self.pushdown(right);
                     }
                 }
-
                 changed
             }
             LogicalPlan::Sort { input, .. } => self.pushdown(input),
@@ -105,12 +85,10 @@ impl PredicatePushdown {
         }
     }
 
-    /// Check if predicate can be pushed to left side of join
     fn can_push_to_left(&self, _pred: &Expr, join_type: &crate::JoinType) -> bool {
         matches!(join_type, crate::JoinType::Inner | crate::JoinType::Left)
     }
 
-    /// Check if predicate can be pushed to right side of join
     fn can_push_to_right(&self, _pred: &Expr, join_type: &crate::JoinType) -> bool {
         matches!(join_type, crate::JoinType::Inner | crate::JoinType::Right)
     }
@@ -140,28 +118,20 @@ impl ProjectionPruning {
         Self
     }
 
-    /// Remove unnecessary columns from projections
     fn prune(&self, plan: &mut LogicalPlan) -> bool {
         match plan {
             LogicalPlan::Projection { input, expr, schema: _ } => {
-                // Collect columns used in this projection
                 let used_cols = self.collect_columns(expr);
-
-                // Check if input is a table scan that can benefit from projection
                 if let LogicalPlan::TableScan { projection, .. } = &mut **input {
                     if projection.is_none() && !used_cols.is_all {
-                        // Push down projection to table scan
-                        let new_projection: Option<Vec<usize>> = Some(used_cols.indices);
-                        *projection = new_projection;
+                        *projection = Some(used_cols.indices);
                         return true;
                     }
                 }
-
-                // Recurse into input
                 self.prune(input)
             }
             LogicalPlan::Filter { input, .. } => self.prune(input),
-            LogicalPlan::Aggregate { input, .. } => self.prune(input),
+            LogicalPlan::Aggregate { input: _, .. } => false,
             LogicalPlan::Join { left, right, .. } => {
                 let changed_left = self.prune(left);
                 let changed_right = self.prune(right);
@@ -173,7 +143,6 @@ impl ProjectionPruning {
         }
     }
 
-    /// Collect columns used in expressions
     fn collect_columns(&self, exprs: &[Expr]) -> ColumnSet {
         let mut cols = ColumnSet::new();
         for expr in exprs {
@@ -184,24 +153,18 @@ impl ProjectionPruning {
 
     fn collect_from_expr(&self, expr: &Expr, cols: &mut ColumnSet) {
         match expr {
-            Expr::Column(col) => {
-                cols.add(&col.name);
-            }
+            Expr::Column(col) => cols.add(&col.name),
             Expr::BinaryExpr { left, right, .. } => {
                 self.collect_from_expr(left, cols);
                 self.collect_from_expr(right, cols);
             }
-            Expr::UnaryExpr { expr, .. } => {
-                self.collect_from_expr(expr, cols);
-            }
+            Expr::UnaryExpr { expr, .. } => self.collect_from_expr(expr, cols),
             Expr::AggregateFunction { args, .. } => {
                 for arg in args {
                     self.collect_from_expr(arg, cols);
                 }
             }
-            Expr::Alias { expr, .. } => {
-                self.collect_from_expr(expr, cols);
-            }
+            Expr::Alias { expr, .. } => self.collect_from_expr(expr, cols),
             _ => {}
         }
     }
@@ -239,8 +202,6 @@ impl ColumnSet {
     }
 
     pub fn add(&mut self, _name: &str) {
-        // For now, mark as not all columns
-        // In full implementation, would track actual column names
         self.is_all = false;
     }
 }
@@ -259,11 +220,9 @@ impl ConstantFolding {
         Self
     }
 
-    /// Evaluate constant expressions
     fn fold(&self, plan: &mut LogicalPlan) -> bool {
         match plan {
             LogicalPlan::Filter { predicate, input } => {
-                // Try to simplify the predicate
                 let simplified = self.simplify_expr(predicate);
                 if simplified != *predicate {
                     *predicate = simplified;
@@ -271,8 +230,7 @@ impl ConstantFolding {
                 }
                 self.fold(input)
             }
-            LogicalPlan::Projection { input, expr, schema: _ } => {
-                // Try to simplify projection expressions
+            LogicalPlan::Projection { input, expr, .. } => {
                 let mut changed = false;
                 for e in expr {
                     let simplified = self.simplify_expr(e);
@@ -294,14 +252,11 @@ impl ConstantFolding {
         }
     }
 
-    /// Simplify an expression by evaluating constants
     fn simplify_expr(&self, expr: &Expr) -> Expr {
         match expr {
             Expr::BinaryExpr { left, op, right } => {
                 let left_simplified = self.simplify_expr(left);
                 let right_simplified = self.simplify_expr(right);
-
-                // If both are literals, try to evaluate
                 if let Expr::Literal(lv) = &left_simplified {
                     if let Expr::Literal(rv) = &right_simplified {
                         if let Some(result) = self.eval_binary_op(op, lv, rv) {
@@ -309,7 +264,6 @@ impl ConstantFolding {
                         }
                     }
                 }
-
                 Expr::BinaryExpr {
                     left: Box::new(left_simplified),
                     op: op.clone(),
@@ -335,7 +289,6 @@ impl ConstantFolding {
     fn eval_binary_op(&self, op: &crate::Operator, left: &sqlrustgo_types::Value, right: &sqlrustgo_types::Value) -> Option<sqlrustgo_types::Value> {
         use sqlrustgo_types::Value;
         use crate::Operator;
-
         match (op, left, right) {
             (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
             (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
@@ -353,7 +306,6 @@ impl ConstantFolding {
     fn eval_unary_op(&self, op: &crate::Operator, value: &sqlrustgo_types::Value) -> Option<sqlrustgo_types::Value> {
         use sqlrustgo_types::Value;
         use crate::Operator;
-
         match (op, value) {
             (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
             (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
