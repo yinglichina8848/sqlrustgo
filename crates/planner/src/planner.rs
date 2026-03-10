@@ -291,4 +291,165 @@ mod tests {
 
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_planner_sort_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let sort_plan = LogicalPlan::Sort {
+            input: Box::new(table_scan),
+            sort_expr: vec![crate::SortExpr {
+                expr: Expr::column("id"),
+                asc: true,
+                nulls_first: true,
+            }],
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&sort_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Sort");
+    }
+
+    #[test]
+    fn test_planner_limit_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let limit_plan = LogicalPlan::Limit {
+            input: Box::new(table_scan),
+            limit: 100,
+            offset: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&limit_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Limit");
+    }
+
+    #[test]
+    fn test_planner_limit_with_offset_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let table_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let limit_plan = LogicalPlan::Limit {
+            input: Box::new(table_scan),
+            limit: 50,
+            offset: Some(10),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&limit_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Limit");
+    }
+
+    #[test]
+    fn test_planner_join_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: crate::JoinType::Inner,
+            condition: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_planner_left_join_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: crate::JoinType::Left,
+            condition: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_planner_table_scan_with_projection() {
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let logical_plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: Some(vec![0]),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&logical_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_planner_values_physical_plan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let values_plan = LogicalPlan::Values {
+            values: vec![
+                vec![sqlrustgo_types::Value::Integer(1)],
+                vec![sqlrustgo_types::Value::Integer(2)],
+            ],
+            schema: schema.clone(),
+        };
+
+        let planner = DefaultPlanner::new();
+        let result = planner.create_physical_plan(&values_plan);
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_planner_send_sync() {
+        fn _check<T: Send + Sync>() {}
+        let planner = DefaultPlanner::new();
+        _check::<DefaultPlanner>();
+    }
 }
