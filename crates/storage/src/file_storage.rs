@@ -294,26 +294,35 @@ impl FileStorage {
     ) -> std::io::Result<()> {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
-        // Clone the key for later use
-        let has_index = self
-            .indexes
-            .read()
-            .map(|indexes| indexes.contains_key(&key_exists))
-            .unwrap_or(false);
+        // Check if index exists and get a clone of it for saving
+        let index_clone = {
+            let has_index = self
+                .indexes
+                .read()
+                .map(|indexes| indexes.contains_key(&key_exists))
+                .unwrap_or(false);
 
-        if has_index {
-            // Get mutable reference, insert, then save
+            if !has_index {
+                return Ok(());
+            }
+
+            // Get write lock, insert, and save
             if let Ok(mut indexes) = self.indexes.write() {
                 if let Some(index) = indexes.get_mut(&key_exists) {
                     index.insert(key, row_id);
-                    // Save to disk
-                    if let Ok(read_indexes) = self.indexes.read() {
-                        if let Some(idx) = read_indexes.get(&key_exists) {
-                            let _ = self.save_index(table_name, column_name, idx);
-                        }
-                    }
+                    // Clone the index for saving
+                    Some(index.clone())
+                } else {
+                    None
                 }
+            } else {
+                None
             }
+        };
+
+        // Save to disk outside the lock
+        if let Some(index) = index_clone {
+            self.save_index(table_name, column_name, &index)?;
         }
 
         Ok(())
@@ -396,10 +405,10 @@ mod tests {
         {
             let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
 
-            // Insert a table
+            // Insert table with data
             let table_data = TableData {
                 info: TableInfo {
-                    name: "users".to_string(),
+                    name: "idx_test".to_string(),
                     columns: vec![
                         ColumnDefinition {
                             name: "id".to_string(),
@@ -407,26 +416,53 @@ mod tests {
                             nullable: false,
                         },
                         ColumnDefinition {
-                            name: "name".to_string(),
-                            data_type: "TEXT".to_string(),
-                            nullable: true,
+                            name: "value".to_string(),
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
                         },
                     ],
                 },
-                rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+                rows: vec![
+                    vec![Value::Integer(1), Value::Integer(100)],
+                    vec![Value::Integer(2), Value::Integer(200)],
+                ],
             };
-
             storage
-                .insert_table("users".to_string(), table_data)
+                .insert_table("idx_test".to_string(), table_data)
                 .unwrap();
+
+            // Create index on id column (column_index = 0)
+            storage.create_index("idx_test", "id", 0).unwrap();
+
+            // Test has_index
+            assert!(storage.has_index("idx_test", "id"));
+            assert!(!storage.has_index("idx_test", "nonexistent"));
+
+            // Test search_index
+            let row_id = storage.search_index("idx_test", "id", 1);
+            assert!(row_id.is_some());
+
+            // Test range_index
+            let range_results = storage.range_index("idx_test", "id", 1, 3);
+            assert!(!range_results.is_empty());
+
+            // Test insert_with_index
+            storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
+
+            // Test drop_index
+            storage.drop_index("idx_test", "id").unwrap();
+            assert!(!storage.has_index("idx_test", "id"));
+
+            // Test flush_indexes
+            storage.flush_indexes().unwrap();
         }
 
         // Load from disk
         {
             let storage = FileStorage::new(temp_dir.clone()).unwrap();
-            let table = storage.get_table("users").unwrap();
-            assert_eq!(table.info.name, "users");
-            assert_eq!(table.rows.len(), 1);
+            let table = storage.get_table("idx_test").unwrap();
+            assert_eq!(table.info.name, "idx_test");
+            assert_eq!(table.rows.len(), 2);
         }
 
         let _ = remove_dir_all(&temp_dir);
@@ -573,31 +609,50 @@ mod tests {
             .unwrap();
 
         // Create index on id column (column_index = 0)
+        eprintln!("TEST: about to call create_index");
         storage.create_index("idx_test", "id", 0).unwrap();
+        eprintln!("TEST: create_index returned");
 
         // Test has_index
+        eprintln!("TEST: about to call has_index");
         assert!(storage.has_index("idx_test", "id"));
+        eprintln!("TEST: has_index passed");
         assert!(!storage.has_index("idx_test", "nonexistent"));
+        eprintln!("TEST: has_index nonexistent passed");
 
         // Test search_index
+        eprintln!("TEST: about to call search_index");
         let row_id = storage.search_index("idx_test", "id", 1);
+        eprintln!("TEST: search_index returned: {:?}", row_id);
         assert!(row_id.is_some());
+        eprintln!("TEST: search_index passed");
 
         // Test range_index
+        eprintln!("TEST: about to call range_index");
         let range_results = storage.range_index("idx_test", "id", 1, 3);
+        eprintln!("TEST: range_index returned: {:?}", range_results.len());
         assert!(!range_results.is_empty());
+        eprintln!("TEST: range_index passed");
 
         // Test insert_with_index
+        eprintln!("TEST: about to call insert_with_index");
         storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
+        eprintln!("TEST: insert_with_index returned");
 
         // Test drop_index
+        eprintln!("TEST: about to call drop_index");
         storage.drop_index("idx_test", "id").unwrap();
+        eprintln!("TEST: drop_index returned");
         assert!(!storage.has_index("idx_test", "id"));
+        eprintln!("TEST: drop_index assertion passed");
 
         // Test flush_indexes
+        eprintln!("TEST: about to call flush_indexes");
         storage.flush_indexes().unwrap();
+        eprintln!("TEST: flush_indexes returned");
 
         let _ = remove_dir_all(&temp_dir);
+        eprintln!("TEST: test complete");
     }
 
     #[test]
@@ -918,11 +973,46 @@ impl StorageEngine for FileStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
+    fn create_table_index(
+        &self,
+        table_name: &str,
+        column_name: &str,
+        column_index: usize,
+    ) -> SqlResult<()> {
+        let table = self
+            .tables
+            .get(table_name)
+            .ok_or_else(|| SqlError::TableNotFound(table_name.to_string()))?;
+
+        let mut index = BPlusTree::new();
+        for (row_id, row) in table.rows.iter().enumerate() {
+            if let Some(value) = row.get(column_index) {
+                if let Some(key) = value.to_index_key() {
+                    index.insert(key, row_id as u32);
+                }
+            }
+        }
+
+        self.save_index(table_name, column_name, &index)
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.insert((table_name.to_string(), column_name.to_string()), index);
+        }
+
         Ok(())
     }
 
-    fn drop_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn drop_table_index(&self, table_name: &str, column_name: &str) -> SqlResult<()> {
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.remove(&(table_name.to_string(), column_name.to_string()));
+        }
+
+        let path = self.index_path(table_name, column_name);
+        if path.exists() {
+            std::fs::remove_file(path).map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        }
+
         Ok(())
     }
 }
