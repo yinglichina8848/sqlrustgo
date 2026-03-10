@@ -1,0 +1,22 @@
+{
+  "name": "test_mixed",
+  "columns": [
+    {
+      "name": "val",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Text": "zebra"
+      }
+    ],
+    [
+      {
+        "Text": "apple"
+      }
+    ]
+  ]
+}

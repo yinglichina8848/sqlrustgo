@@ -1,0 +1,33 @@
+{
+  "name": "test_text",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "name",
+      "data_type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Text": "apple"
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      {
+        "Text": "banana"
+      }
+    ]
+  ]
+}
