@@ -35,11 +35,10 @@ impl<'a> LocalExecutor<'a> {
 
     /// Execute sequential scan
     fn execute_seq_scan(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
-        // Get table name from the physical plan using the table_name method
-        let table_name = match plan.table_name() {
-            Some(name) => name,
-            None => return Ok(ExecutorResult::empty()),
-        };
+        let table_name = plan.table_name();
+        if table_name.is_empty() {
+            return Ok(ExecutorResult::empty());
+        }
 
         // Scan from storage
         let records = self.storage.scan(table_name).unwrap_or_default();
@@ -163,7 +162,10 @@ mod tests {
     use sqlrustgo_storage::MemoryStorage;
 
     fn make_test_schema() -> Schema {
-        Schema::new(vec![Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer)])
+        Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )])
     }
 
     #[test]
@@ -206,7 +208,11 @@ mod tests {
             }
         }
 
-        let result = executor.execute(&MockPlan { schema: test_schema }).unwrap();
+        let result = executor
+            .execute(&MockPlan {
+                schema: test_schema,
+            })
+            .unwrap();
         assert!(result.rows.is_empty());
     }
 
