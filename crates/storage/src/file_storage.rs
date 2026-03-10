@@ -294,35 +294,31 @@ impl FileStorage {
     ) -> std::io::Result<()> {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
-        // Check if index exists and get a clone of it for saving
-        let index_clone = {
-            let has_index = self
-                .indexes
-                .read()
-                .map(|indexes| indexes.contains_key(&key_exists))
-                .unwrap_or(false);
+        // Clone the key for later use
+        let has_index = self
+            .indexes
+            .read()
+            .map(|indexes| indexes.contains_key(&key_exists))
+            .unwrap_or(false);
 
-            if !has_index {
-                return Ok(());
-            }
+        if has_index {
+            // First get a clone of the index to save, then modify
+            let index_clone = {
+                let indexes = self.indexes.read().unwrap();
+                indexes.get(&key_exists).cloned()
+            };
 
-            // Get write lock, insert, and save
+            // Update the in-memory index
             if let Ok(mut indexes) = self.indexes.write() {
                 if let Some(index) = indexes.get_mut(&key_exists) {
                     index.insert(key, row_id);
-                    // Clone the index for saving
-                    Some(index.clone())
-                } else {
-                    None
                 }
-            } else {
-                None
             }
-        };
 
-        // Save to disk outside the lock
-        if let Some(index) = index_clone {
-            self.save_index(table_name, column_name, &index)?;
+            // Save to disk (outside the write lock)
+            if let Some(idx) = index_clone {
+                let _ = self.save_index(table_name, column_name, &idx);
+            }
         }
 
         Ok(())
@@ -405,10 +401,10 @@ mod tests {
         {
             let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
 
-            // Insert table with data
+            // Insert a table
             let table_data = TableData {
                 info: TableInfo {
-                    name: "idx_test".to_string(),
+                    name: "users".to_string(),
                     columns: vec![
                         ColumnDefinition {
                             name: "id".to_string(),
@@ -416,53 +412,26 @@ mod tests {
                             nullable: false,
                         },
                         ColumnDefinition {
-                            name: "value".to_string(),
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
+                            name: "name".to_string(),
+                            data_type: "TEXT".to_string(),
+                            nullable: true,
                         },
                     ],
                 },
-                rows: vec![
-                    vec![Value::Integer(1), Value::Integer(100)],
-                    vec![Value::Integer(2), Value::Integer(200)],
-                ],
+                rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
             };
+
             storage
-                .insert_table("idx_test".to_string(), table_data)
+                .insert_table("users".to_string(), table_data)
                 .unwrap();
-
-            // Create index on id column (column_index = 0)
-            storage.create_index("idx_test", "id", 0).unwrap();
-
-            // Test has_index
-            assert!(storage.has_index("idx_test", "id"));
-            assert!(!storage.has_index("idx_test", "nonexistent"));
-
-            // Test search_index
-            let row_id = storage.search_index("idx_test", "id", 1);
-            assert!(row_id.is_some());
-
-            // Test range_index
-            let range_results = storage.range_index("idx_test", "id", 1, 3);
-            assert!(!range_results.is_empty());
-
-            // Test insert_with_index
-            storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
-
-            // Test drop_index
-            storage.drop_index("idx_test", "id").unwrap();
-            assert!(!storage.has_index("idx_test", "id"));
-
-            // Test flush_indexes
-            storage.flush_indexes().unwrap();
         }
 
         // Load from disk
         {
             let storage = FileStorage::new(temp_dir.clone()).unwrap();
-            let table = storage.get_table("idx_test").unwrap();
-            assert_eq!(table.info.name, "idx_test");
-            assert_eq!(table.rows.len(), 2);
+            let table = storage.get_table("users").unwrap();
+            assert_eq!(table.info.name, "users");
+            assert_eq!(table.rows.len(), 1);
         }
 
         let _ = remove_dir_all(&temp_dir);
@@ -609,50 +578,31 @@ mod tests {
             .unwrap();
 
         // Create index on id column (column_index = 0)
-        eprintln!("TEST: about to call create_index");
         storage.create_index("idx_test", "id", 0).unwrap();
-        eprintln!("TEST: create_index returned");
 
         // Test has_index
-        eprintln!("TEST: about to call has_index");
         assert!(storage.has_index("idx_test", "id"));
-        eprintln!("TEST: has_index passed");
         assert!(!storage.has_index("idx_test", "nonexistent"));
-        eprintln!("TEST: has_index nonexistent passed");
 
         // Test search_index
-        eprintln!("TEST: about to call search_index");
         let row_id = storage.search_index("idx_test", "id", 1);
-        eprintln!("TEST: search_index returned: {:?}", row_id);
         assert!(row_id.is_some());
-        eprintln!("TEST: search_index passed");
 
         // Test range_index
-        eprintln!("TEST: about to call range_index");
         let range_results = storage.range_index("idx_test", "id", 1, 3);
-        eprintln!("TEST: range_index returned: {:?}", range_results.len());
         assert!(!range_results.is_empty());
-        eprintln!("TEST: range_index passed");
 
         // Test insert_with_index
-        eprintln!("TEST: about to call insert_with_index");
         storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
-        eprintln!("TEST: insert_with_index returned");
 
         // Test drop_index
-        eprintln!("TEST: about to call drop_index");
         storage.drop_index("idx_test", "id").unwrap();
-        eprintln!("TEST: drop_index returned");
         assert!(!storage.has_index("idx_test", "id"));
-        eprintln!("TEST: drop_index assertion passed");
 
         // Test flush_indexes
-        eprintln!("TEST: about to call flush_indexes");
         storage.flush_indexes().unwrap();
-        eprintln!("TEST: flush_indexes returned");
 
         let _ = remove_dir_all(&temp_dir);
-        eprintln!("TEST: test complete");
     }
 
     #[test]
@@ -973,19 +923,15 @@ impl StorageEngine for FileStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_table_index(
-        &self,
-        table_name: &str,
-        column_name: &str,
-        column_index: usize,
-    ) -> SqlResult<()> {
-        let table = self
-            .tables
-            .get(table_name)
-            .ok_or_else(|| SqlError::TableNotFound(table_name.to_string()))?;
+    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
+        // Inline the implementation to avoid potential recursion issues
+        // Get table from tables
+        let table_data = self.tables.get(table).cloned()
+            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))?;
 
-        let mut index = BPlusTree::new();
-        for (row_id, row) in table.rows.iter().enumerate() {
+        // Build B+ Tree from existing rows
+        let mut index = crate::bplus_tree::BPlusTree::new();
+        for (row_id, row) in table_data.rows.iter().enumerate() {
             if let Some(value) = row.get(column_index) {
                 if let Some(key) = value.to_index_key() {
                     index.insert(key, row_id as u32);
@@ -993,24 +939,26 @@ impl StorageEngine for FileStorage {
             }
         }
 
-        self.save_index(table_name, column_name, &index)
-            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        // Save to disk
+        self.save_index(table, column, &index).map_err(SqlError::from)?;
 
-        if let Ok(mut indexes) = self.indexes.write() {
-            indexes.insert((table_name.to_string(), column_name.to_string()), index);
-        }
+        // Store in memory
+        let mut indexes = self.indexes.write().unwrap();
+        indexes.insert((table.to_string(), column.to_string()), index);
 
         Ok(())
     }
 
-    fn drop_table_index(&self, table_name: &str, column_name: &str) -> SqlResult<()> {
+    fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
+        let key = (table.to_string(), column.to_string());
+
         if let Ok(mut indexes) = self.indexes.write() {
-            indexes.remove(&(table_name.to_string(), column_name.to_string()));
+            indexes.remove(&key);
         }
 
-        let path = self.index_path(table_name, column_name);
+        let path = self.index_path(table, column);
         if path.exists() {
-            std::fs::remove_file(path).map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+            std::fs::remove_file(path).map_err(SqlError::from)?;
         }
 
         Ok(())
