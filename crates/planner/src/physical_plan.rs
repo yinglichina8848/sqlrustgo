@@ -6,8 +6,10 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
+use crate::Operator;
 use crate::Schema;
 use sqlrustgo_types::Value;
+use std::any::Any;
 use std::collections::HashMap;
 
 /// Physical plan trait - common interface for all physical operators
@@ -30,6 +32,9 @@ pub trait PhysicalPlan: Send + Sync {
     fn table_name(&self) -> &str {
         ""
     }
+
+    /// Get as Any for downcasting
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Sequential scan execution operator
@@ -80,6 +85,10 @@ impl PhysicalPlan for SeqScanExec {
     fn table_name(&self) -> &str {
         &self.table_name
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Projection execution operator
@@ -98,6 +107,14 @@ impl ProjectionExec {
             schema,
         }
     }
+
+    pub fn expr(&self) -> &Vec<Expr> {
+        &self.expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
 }
 
 impl PhysicalPlan for ProjectionExec {
@@ -112,6 +129,10 @@ impl PhysicalPlan for ProjectionExec {
     fn name(&self) -> &str {
         "Projection"
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Filter execution operator
@@ -124,6 +145,14 @@ pub struct FilterExec {
 impl FilterExec {
     pub fn new(input: Box<dyn PhysicalPlan>, predicate: Expr) -> Self {
         Self { input, predicate }
+    }
+
+    pub fn predicate(&self) -> &Expr {
+        &self.predicate
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 }
 
@@ -138,6 +167,10 @@ impl PhysicalPlan for FilterExec {
 
     fn name(&self) -> &str {
         "Filter"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -163,6 +196,18 @@ impl AggregateExec {
             aggregate_expr,
             schema,
         }
+    }
+
+    pub fn group_expr(&self) -> &Vec<Expr> {
+        &self.group_expr
+    }
+
+    pub fn aggregate_expr(&self) -> &Vec<Expr> {
+        &self.aggregate_expr
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
     }
 
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
@@ -316,6 +361,10 @@ impl PhysicalPlan for AggregateExec {
             Ok(results)
         }
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Hash join execution operator
@@ -344,6 +393,22 @@ impl HashJoinExec {
             schema,
         }
     }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+
+    pub fn join_type(&self) -> crate::JoinType {
+        self.join_type.clone()
+    }
+
+    pub fn condition(&self) -> Option<&Expr> {
+        self.condition.as_ref()
+    }
 }
 
 impl PhysicalPlan for HashJoinExec {
@@ -357,6 +422,10 @@ impl PhysicalPlan for HashJoinExec {
 
     fn name(&self) -> &str {
         "HashJoin"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -384,6 +453,10 @@ impl PhysicalPlan for SortExec {
 
     fn name(&self) -> &str {
         "Sort"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -416,6 +489,10 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
