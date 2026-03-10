@@ -102,3 +102,7 @@ harness = false
 [[bench]]
 name = "scale_bench"
 harness = false
+
+[[bench]]
+name = "bench_insert"
+harness = false
