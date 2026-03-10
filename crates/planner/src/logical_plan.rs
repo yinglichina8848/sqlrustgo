@@ -111,3 +111,129 @@ impl LogicalPlan {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DataType, Field};
+
+    #[test]
+    fn test_logical_plan_schema_table_scan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        assert_eq!(plan.schema(), schema);
+    }
+
+    #[test]
+    fn test_logical_plan_schema_projection() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Projection {
+            input: Box::new(input),
+            expr: vec![],
+            schema: schema.clone(),
+        };
+        assert_eq!(plan.schema(), schema);
+    }
+
+    #[test]
+    fn test_logical_plan_schema_filter() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Filter {
+            predicate: Expr::literal(Value::Null),
+            input: Box::new(input),
+        };
+        assert_eq!(plan.schema(), schema);
+    }
+
+    #[test]
+    fn test_logical_plan_schema_empty_relation() {
+        let plan = LogicalPlan::EmptyRelation;
+        assert_eq!(plan.schema(), Schema::empty());
+    }
+
+    #[test]
+    fn test_logical_plan_schema_values() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::Values {
+            values: vec![],
+            schema: schema.clone(),
+        };
+        assert_eq!(plan.schema(), schema);
+    }
+
+    #[test]
+    fn test_logical_plan_schema_create_table() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::CreateTable {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            if_not_exists: true,
+        };
+        assert_eq!(plan.schema(), schema);
+    }
+
+    #[test]
+    fn test_logical_plan_schema_drop_table() {
+        let plan = LogicalPlan::DropTable {
+            table_name: "users".to_string(),
+            if_exists: false,
+        };
+        assert_eq!(plan.schema(), Schema::empty());
+    }
+
+    #[test]
+    fn test_logical_plan_schema_update() {
+        let plan = LogicalPlan::Update {
+            table_name: "users".to_string(),
+            updates: vec![],
+            predicate: None,
+        };
+        assert_eq!(plan.schema(), Schema::empty());
+    }
+
+    #[test]
+    fn test_logical_plan_schema_delete() {
+        let plan = LogicalPlan::Delete {
+            table_name: "users".to_string(),
+            predicate: None,
+        };
+        assert_eq!(plan.schema(), Schema::empty());
+    }
+
+    #[test]
+    fn test_logical_plan_schema_join() {
+        let plan = LogicalPlan::Join {
+            left: Box::new(LogicalPlan::EmptyRelation),
+            right: Box::new(LogicalPlan::EmptyRelation),
+            join_type: crate::JoinType::Inner,
+            condition: None,
+        };
+        assert_eq!(plan.schema(), Schema::empty());
+    }
+
+    #[test]
+    fn test_logical_plan_debug() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema,
+            projection: None,
+        };
+        let debug = format!("{:?}", plan);
+        assert!(debug.contains("TableScan"));
+    }
+}
