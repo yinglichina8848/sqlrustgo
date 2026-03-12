@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use std::sync::Arc;
 
 fn bench_parse_select(c: &mut Criterion) {
     c.bench_function("parse_simple_select", |b| {
@@ -8,7 +9,7 @@ fn bench_parse_select(c: &mut Criterion) {
 }
 
 fn bench_execute_select(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
         .unwrap();
@@ -28,7 +29,7 @@ fn bench_execute_select(c: &mut Criterion) {
 }
 
 fn bench_execute_insert(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE bench (id INTEGER)").unwrap())
         .unwrap();
@@ -45,7 +46,7 @@ fn bench_execute_insert(c: &mut Criterion) {
 }
 
 fn bench_execute_aggregate(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE orders (amount INTEGER)").unwrap())
         .unwrap();

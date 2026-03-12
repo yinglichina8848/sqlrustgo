@@ -3,10 +3,11 @@
 //! Benchmarks for full table scan operations.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use std::sync::Arc;
 
 fn setup_engine_with_data(rows: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE scan_bench (id INTEGER, name TEXT, value INTEGER)").unwrap())
         .unwrap();
