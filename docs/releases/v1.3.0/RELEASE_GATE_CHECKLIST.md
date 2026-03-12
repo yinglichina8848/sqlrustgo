@@ -1,9 +1,8 @@
 # SQLRustGo v1.3.0 发布门禁检查清单
 
-> 版本：v1.3.0
-> 日期：2026-03-05
-> 发布类型：规划中
-> 目标成熟度：L4 企业级
+> **版本**: v1.2
+> **更新日期**: 2026-03-12
+> **更新依据**: VERSION_ROADMAP.md (v1.1)
 
 ---
 
@@ -14,29 +13,30 @@
 | 项目 | 值 |
 |------|-----|
 | **版本号** | v1.3.0 |
-| **发布类型** | 规划中 |
-| **目标分支** | release/v1.3.0 |
-| **开发分支** | develop-v1.3.0 |
+| **阶段** | Draft |
+| **发布分支** | release/v1.3.0 |
+| **开发分支** | develop/v1.3.0 |
 | **前置版本** | v1.2.0 (GA) |
-| **目标成熟度** | L4 企业级 |
+| **成熟度目标** | L4 |
 
-### 1.2 版本目标
+### 1.2 版本原则
+
+> **核心原则**: 聚焦稳定，不引入新功能
+
+### 1.3 核心目标
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          v1.3.0 核心目标                                     │
+│                          v1.3.0 核心目标                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   🎯 架构升级：L3 → L4 企业级                                                │
+│   🎯 架构稳定：Executor 稳定化                                               │
 │                                                                              │
-│   ✅ 插件系统完整实现                                                        │
-│   ✅ CBO 成本优化器完善                                                      │
-│   ✅ Join 算法演进 (SortMergeJoin)                                           │
-│   ✅ 事务隔离级别 + MVCC 基础                                                │
-│   ✅ 性能监控指标系统                                                        │
-│   ✅ 健康检查端点                                                            │
-│   ✅ Prometheus 指标暴露                                                     │
-│   ✅ 测试覆盖率 ≥ 90%                                                        │
+│   ✅ Volcano Model 统一 trait                                               │
+│   ✅ 核心算子: TableScan, Projection, Filter, HashJoin                     │
+│   ✅ Executor 测试框架                                                       │
+│   ✅ 测试覆盖率: 整体 ≥65%, Executor ≥60%                                   │
+│   ✅ 可观测性: /health/live, /health/ready                                  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -45,191 +45,117 @@
 
 ## 二、门禁检查清单
 
-### 2.1 🔴 必须项
+### 2.1 代码质量门禁 (A类)
 
-#### A. 代码质量门禁
+| 检查项 | 命令 | 要求 | 状态 |
+|--------|------|------|------|
+| Debug 编译 | `cargo build --workspace` | 通过 | ⏳ |
+| Release 编译 | `cargo build --release --workspace` | 通过 | ⏳ |
+| Clippy | `cargo clippy --workspace -- -D warnings` | 零警告 | ⏳ |
+| 格式化 | `cargo fmt --all -- --check` | 通过 | ⏳ |
 
-| ID | 检查项 | 状态 | 说明 | 检查结果 |
-|----|--------|------|------|----------|
-| A-01 | 编译通过 | ⏳ | `cargo build --all` 无错误 | - |
-| A-02 | 测试通过 | ⏳ | `cargo test --all` 全部通过 | - |
-| A-03 | Clippy 检查 | ⏳ | `cargo clippy -- -D warnings` 无警告 | - |
-| A-04 | 格式检查 | ⏳ | `cargo fmt --all -- --check` 通过 | - |
-| A-05 | 无 unwrap/panic | ⏳ | 核心代码无 unwrap/panic 调用 | - |
-| A-06 | 错误处理完整 | ⏳ | 使用 SqlResult<T> 统一错误处理 | - |
+### 2.2 测试门禁 (A类)
 
-#### B. 测试覆盖门禁
+| 检查项 | 命令 | 要求 | 状态 |
+|--------|------|------|------|
+| 单元测试 | `cargo test --workspace` | 100% 通过 | ⏳ |
+| 覆盖率-整体 | `cargo tarpaulin --workspace --all-features` | ≥65% | ⏳ |
+| 覆盖率-Executor | 同上 | ≥60% | ⏳ |
+| 覆盖率-Planner | 同上 | ≥60% | ⏳ |
 
-| ID | 检查项 | 状态 | 当前值 | 目标值 | 说明 |
-|----|--------|------|--------|--------|------|
-| B-01 | 行覆盖率 | ⏳ | - | ≥90% | - |
-| B-02 | 函数覆盖率 | ⏳ | - | ≥85% | - |
-| B-03 | 区域覆盖率 | ⏳ | - | ≥85% | - |
-| B-04 | 核心模块覆盖率 | ⏳ | - | ≥80% | plugin/executor/transaction |
-| B-05 | 新增代码覆盖率 | ⏳ | - | ≥80% | v1.3.0 新增代码 |
+**测量方法**: 使用 `cargo tarpaulin --workspace --all-features`，以行覆盖率为准
 
-#### C. 功能完整性门禁
+### 2.3 功能门禁 (A类)
 
-| ID | 检查项 | 状态 | 说明 | Issue/PR |
-|----|--------|------|------|----------|
-| C-01 | 插件系统 | ⏳ | Plugin trait + 加载器 | #106 |
-| C-02 | CBO 完善 | ⏳ | 成本模型 + 优化器 | #109 |
-| C-03 | SortMergeJoin | ⏳ | 新 Join 算法 | #110 |
-| C-04 | 事务隔离级别 | ⏳ | Read Committed/Repeatable Read | - |
-| C-05 | MVCC 基础 | ⏳ | 快照隔离 | - |
-| C-06 | 性能监控 | ⏳ | Metrics 系统 | - |
-| C-07 | 健康检查 | ⏳ | Health 端点 | - |
+| 检查项 | 要求 | 状态 |
+|--------|------|------|
+| Volcano Model trait | 统一接口定义 | ⏳ |
+| TableScan 算子 | 功能可用 | ⏳ |
+| Projection 算子 | 功能可用 | ⏳ |
+| Filter 算子 | 功能可用 | ⏳ |
+| HashJoin 算子 | 功能可用 | ⏳ |
 
----
+### 2.4 可观测性门禁 (B类)
 
-### 2.2 🟠 重要项
-
-#### D. 可观测性门禁
-
-| ID | 检查项 | 状态 | 说明 |
-|----|--------|------|------|
-| D-01 | /health/live 端点 | ⏳ | 存活探针 |
-| D-02 | /health/ready 端点 | ⏳ | 就绪探针 |
-| D-03 | /health 端点 | ⏳ | 综合健康检查 |
-| D-04 | /metrics 端点 | ⏳ | Prometheus 格式 |
-| D-05 | 核心指标 ≥ 20 个 | ⏳ | BufferPool/Executor/Network |
-| D-06 | Grafana Dashboard | ⏳ | 可视化模板 |
-
-#### E. 性能门禁
-
-| ID | 检查项 | 状态 | 说明 |
-|----|--------|------|------|
-| E-01 | 性能基准测试 | ⏳ | 继承 v1.2.0 基准 |
-| E-02 | Join 性能测试 | ⏳ | SortMergeJoin vs HashJoin |
-| E-03 | 事务性能测试 | ⏳ | 并发事务吞吐量 |
-| E-04 | 无性能退化 | ⏳ | 与 v1.2.0 对比 |
-
-#### F. 文档门禁
-
-| ID | 检查项 | 状态 | 说明 |
-|----|--------|------|------|
-| F-01 | Release Notes | ⏳ | 版本发布说明 |
-| F-02 | CHANGELOG 更新 | ⏳ | 变更日志 |
-| F-03 | API 文档 | ⏳ | 公共 API 文档注释 |
-| F-04 | 可观测性指南 | ⏳ | 监控和健康检查使用说明 |
-| F-05 | 升级指南 | ⏳ | v1.2.0 → v1.3.0 迁移指南 |
-
-#### G. 安全门禁
-
-| ID | 检查项 | 状态 | 说明 |
-|----|--------|------|------|
-| G-01 | 依赖审计 | ⏳ | `cargo audit` 通过 |
-| G-02 | 安全扫描 | ⏳ | 无高危安全问题 |
-| G-03 | 敏感信息检查 | ⏳ | 无密钥/凭证泄露 |
+| 检查项 | 要求 | 状态 |
+|--------|------|------|
+| /health/live | 返回 200 | ⏳ |
+| /health/ready | 返回 200 | ⏳ |
+| BufferPool 指标 | 指标收集 | ⏳ |
 
 ---
 
-### 2.3 🟡 建议项
+## 三、版本对比
 
-#### H. 工程化门禁
+### 3.1 v1.3.0 vs 原规划
 
-| ID | 检查项 | 状态 | 说明 |
-|----|--------|------|------|
-| H-01 | CI 流程完整 | ⏳ | GitHub Actions 配置完整 |
-| H-02 | 分支保护配置 | ⏳ | develop-v1.3.0 保护规则 |
-| H-03 | 代码所有者 | ⏳ | CODEOWNERS 文件更新 |
-| H-04 | Issue 关联 | ⏳ | 所有 PR 关联 Issue |
-| H-05 | Commit 规范 | ⏳ | 遵循 Conventional Commits |
-
----
-
-## 三、可观测性验收标准
-
-### 3.1 健康检查端点
-
-| 端点 | 请求 | 预期响应 | 状态码 |
-|------|------|----------|--------|
-| `/health/live` | GET | `{"status": "alive"}` | 200 |
-| `/health/ready` | GET | `{"status": "ready", "checks": {...}}` | 200/503 |
-| `/health` | GET | 详细健康报告 | 200/503 |
-
-### 3.2 性能指标
-
-| 指标类别 | 指标名称 | 类型 | 说明 |
-|----------|----------|------|------|
-| BufferPool | sqlrustgo_buffer_pool_hits | Counter | 缓存命中次数 |
-| BufferPool | sqlrustgo_buffer_pool_misses | Counter | 缓存未命中次数 |
-| BufferPool | sqlrustgo_buffer_pool_evictions | Counter | 页面淘汰次数 |
-| Executor | sqlrustgo_queries_total | Counter | 查询总数 |
-| Executor | sqlrustgo_queries_failed | Counter | 失败查询数 |
-| Executor | sqlrustgo_query_duration_seconds | Histogram | 查询延迟 |
-| Network | sqlrustgo_connections_active | Gauge | 活跃连接数 |
-| Network | sqlrustgo_connections_total | Counter | 连接总数 |
+| 任务 | 原规划 | 调整后 | 原因 |
+|------|--------|--------|------|
+| 插件系统 | P0 | **推迟到 v1.5.0** | 稳定性优先 |
+| CBO 完善 | P0 | **推迟到 v1.4.0** | 依赖统计信息 |
+| Join 算法 | P0 | HashJoin 已实现 | 简化目标 |
+| 完整事务 | P0 | **推迟到 v1.5.0** | 复杂度高 |
+| 覆盖率 | ≥90% | **≥65%** | 合理目标 |
 
 ---
 
-## 四、发布流程
+## 四、门禁统计
+
+### 4.1 通过标准
+
+| 分类 | 通过率 | 说明 |
+|------|--------|------|
+| A类门禁 | 100% | 必须全部通过 |
+| B类门禁 | ≥80% | 建议通过 |
+
+### 4.2 检查流程
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          v1.3.0 发布流程                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   Phase 1: 开发阶段                                                          │
-│   ├── 1.1 插件系统实现                                                      │
-│   ├── 1.2 CBO 完善                                                          │
-│   ├── 1.3 Join 算法演进                                                     │
-│   ├── 1.4 事务增强                                                          │
-│   ├── 1.5 可观测性系统                                                      │
-│   └── 1.6 测试与文档                                                        │
-│                                                                              │
-│   Phase 2: 验证阶段                                                          │
-│   ├── 2.1 执行完整测试套件                                                  │
-│   ├── 2.2 执行性能基准测试                                                  │
-│   ├── 2.3 执行安全审计                                                      │
-│   └── 2.4 可观测性验收                                                      │
-│                                                                              │
-│   Phase 3: 发布阶段                                                          │
-│   ├── 3.1 创建 v1.3.0 Tag                                                   │
-│   ├── 3.2 发布 GitHub Release                                               │
-│   └── 3.3 合并到 main 分支                                                  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+1. 代码质量检查
+   ├── cargo build --workspace
+   ├── cargo clippy --workspace -- -D warnings
+   └── cargo fmt --all -- --check
+
+2. 测试检查
+   ├── cargo test --workspace
+   └── cargo tarpaulin --workspace --all-features
+
+3. 功能检查
+   └── 手动验证核心算子
+
+4. 可观测性检查
+   └── curl http://localhost:8080/health/live
 ```
 
 ---
 
-## 五、检查命令
+## 五、风险记录
 
-```bash
-# 代码质量
-cargo build --all
-cargo test --all
-cargo clippy --all-targets -- -D warnings
-cargo fmt --all -- --check
-
-# 测试覆盖率
-cargo llvm-cov --all-features
-
-# 安全审计
-cargo audit
-cargo outdated
-
-# 性能测试
-cargo bench
-
-# 健康检查验证
-curl http://localhost:3306/health/live
-curl http://localhost:3306/health/ready
-curl http://localhost:3306/health
-curl http://localhost:3306/metrics
-```
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| 覆盖率目标挑战 | 中 | 预留测试时间 |
+| 算子实现复杂度 | 中 | 分步实现 |
 
 ---
 
-## 六、相关文档
+## 六、关联文档
 
-- [版本计划](./VERSION_PLAN.md)
-- [v1.2.0 发布门禁](../v1.2.0/RELEASE_GATE_CHECKLIST.md)
-- [健康检查规范](../v1.1.0/HEALTH_CHECK_SPECIFICATION.md)
-- [监控规范](../v1.1.0/MONITORING_SPECIFICATION.md)
+| 文档 | 说明 |
+|------|------|
+| [VERSION_PLAN.md](./VERSION_PLAN.md) | 版本计划 |
+| [VERSION_ROADMAP.md](../VERSION_ROADMAP.md) | 版本路线图 |
 
 ---
 
-*本文档由 yinglichina8848 创建*
-*最后更新: 2026-03-05*
+## 七、变更历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.0 | 2026-03-05 | 初始版本 |
+| 1.1 | 2026-03-12 | 对齐 roadmap，调整目标 |
+| 1.2 | 2026-03-12 | 精简门禁项，推迟插件/CBO/事务 |
+
+---
+
+*更新日期: 2026-03-12*
+*依据: DeepSeek 评估意见*
