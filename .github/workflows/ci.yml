@@ -11,12 +11,12 @@ on:
     branches:
       - main
       - rc/*
-      - ga/*
+      - release/*
   pull_request:
     branches:
       - main
       - rc/*
-      - ga/*
+      - release/*
 
 env:
   CARGO_TERM_COLOR: always
