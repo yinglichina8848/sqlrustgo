@@ -1565,4 +1565,686 @@ mod tests {
         let result = limit.execute();
         assert!(result.is_ok());
     }
+
+    // Additional tests to increase coverage
+
+    #[test]
+    fn test_projection_exec_getters() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let proj = ProjectionExec::new(input, vec![Expr::column("id")], schema.clone());
+
+        // Test getters
+        assert_eq!(proj.name(), "Projection");
+        assert_eq!(proj.expr().len(), 1);
+        // Test that input returns a valid PhysicalPlan
+        let _ = proj.input();
+    }
+
+    #[test]
+    fn test_filter_exec_getters() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let predicate = Expr::column("id");
+        let filter = FilterExec::new(input, predicate);
+
+        // Test getters
+        assert_eq!(filter.name(), "Filter");
+        // predicate() returns &Expr directly
+        let _ = filter.predicate();
+        // input() returns &dyn PhysicalPlan
+        let _ = filter.input();
+    }
+
+    #[test]
+    fn test_aggregate_exec_getters() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let agg = AggregateExec::new(
+            input,
+            vec![Expr::column("id")],
+            vec![Expr::column("id")],
+            schema,
+        );
+
+        // Test getters
+        assert_eq!(agg.name(), "Aggregate");
+        assert!(agg.input().schema().fields.len() >= 1);
+        assert_eq!(agg.group_expr().len(), 1);
+        assert_eq!(agg.aggregate_expr().len(), 1);
+    }
+
+    #[test]
+    fn test_hash_join_exec_getters() {
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let join = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Inner,
+            None,
+            schema,
+        );
+
+        // Test getters
+        assert_eq!(join.name(), "HashJoin");
+        assert!(join.left().schema().fields.is_empty());
+        assert!(join.right().schema().fields.is_empty());
+        assert_eq!(join.join_type(), crate::JoinType::Inner);
+        assert_eq!(join.condition(), None);
+    }
+
+    #[test]
+    fn test_hash_join_exec_getters_with_condition() {
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let condition = Expr::column("id");
+        let join = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Inner,
+            Some(condition),
+            schema,
+        );
+
+        assert!(join.condition().is_some());
+    }
+
+    #[test]
+    fn test_hash_join_exec_schema() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left = Box::new(SeqScanExec::new("left_table".to_string(), left_schema));
+        let right = Box::new(SeqScanExec::new("right_table".to_string(), right_schema));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let join = HashJoinExec::new(left, right, crate::JoinType::Inner, None, join_schema);
+
+        assert_eq!(join.schema().fields.len(), 2);
+    }
+
+    #[test]
+    fn test_sort_exec_getters() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_expr);
+
+        // Test getters
+        assert_eq!(sort.name(), "Sort");
+        assert_eq!(sort.sort_expr().len(), 1);
+        assert!(sort.input().schema().fields.len() >= 1);
+    }
+
+    #[test]
+    fn test_sort_exec_as_any() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_expr);
+
+        let _ = sort.as_any().downcast_ref::<SortExec>();
+    }
+
+    #[test]
+    fn test_limit_exec_getters() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let limit = LimitExec::new(input, 10, Some(5));
+
+        // Test getters
+        assert_eq!(limit.name(), "Limit");
+        assert_eq!(limit.limit(), 10);
+        assert_eq!(limit.offset(), Some(5));
+        assert!(limit.input().schema().fields.len() >= 1);
+    }
+
+    #[test]
+    fn test_limit_exec_as_any() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let limit = LimitExec::new(input, 10, None);
+
+        let _ = limit.as_any().downcast_ref::<LimitExec>();
+    }
+
+    #[test]
+    fn test_aggregate_exec_as_any() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        let _ = agg.as_any().downcast_ref::<AggregateExec>();
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_count_star() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_avg() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Avg,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("avg".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_min() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Min,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("min".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_max() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Max,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("max".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_sum_float() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Float)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Sum,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_avg_float() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Float)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Avg,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("avg".to_string(), DataType::Float)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_min_float() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Float)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Min,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("min".to_string(), DataType::Float)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_max_float() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Float)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Max,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("max".to_string(), DataType::Float)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_filter_exec_with_literal_predicate() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        // Use literal predicate (non-zero integer evaluates to true)
+        let predicate = Expr::Literal(Value::Integer(1));
+        let filter = FilterExec::new(input, predicate);
+
+        let result = filter.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_filter_exec_with_complex_binary_expr() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        // Test with Eq operator
+        let predicate = Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::Eq,
+            Expr::literal(Value::Integer(10)),
+        );
+        let filter = FilterExec::new(input, predicate);
+
+        let result = filter.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_filter_exec_with_lte_operator() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let predicate = Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::LtEq,
+            Expr::literal(Value::Integer(10)),
+        );
+        let filter = FilterExec::new(input, predicate);
+
+        let result = filter.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_with_alias() {
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+        let aliased_expr = Expr::Alias {
+            expr: Box::new(Expr::column("id")),
+            name: "my_id".to_string(),
+        };
+        let proj = ProjectionExec::new(input, vec![aliased_expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_hash_join_exec_as_any() {
+        let schema = Schema::new(vec![]);
+        let left = SeqScanExec::new("users".to_string(), schema.clone());
+        let right = SeqScanExec::new("orders".to_string(), schema.clone());
+        let join = HashJoinExec::new(
+            Box::new(left),
+            Box::new(right),
+            crate::JoinType::Inner,
+            None,
+            schema,
+        );
+
+        let _ = join.as_any().downcast_ref::<HashJoinExec>();
+    }
+
+    // Tests for evaluate_expr with different expression types
+
+    #[test]
+    fn test_projection_exec_evaluate_wildcard() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Text),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("*".to_string(), DataType::Text)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+        let proj = ProjectionExec::new(input, vec![Expr::Wildcard], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_binary_plus() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("sum".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Plus,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_binary_minus() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("diff".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Minus,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_binary_multiply() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("product".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Multiply,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_binary_divide() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("quotient".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Divide,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_binary_modulo() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("mod".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Modulo,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_float_operations() {
+        let input_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Float),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let output_schema = Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Plus,
+            right: Box::new(Expr::column("b")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_unary_minus() {
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let output_schema = Schema::new(vec![Field::new("neg_id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        let expr = Expr::UnaryExpr {
+            op: Operator::Minus,
+            expr: Box::new(Expr::column("id")),
+        };
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_exec_evaluate_column_not_found() {
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let output_schema = Schema::new(vec![Field::new("not_found".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
+
+        // Column "not_found" doesn't exist in the input schema
+        let expr = Expr::column("not_found");
+        let proj = ProjectionExec::new(input, vec![expr], output_schema);
+
+        let result = proj.execute();
+        assert!(result.is_ok());
+    }
+
+    // Tests for aggregate with different scenarios
+
+    #[test]
+    fn test_aggregate_exec_execute_multiple_aggregates() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![
+                Expr::AggregateFunction {
+                    func: AggregateFunction::Count,
+                    args: vec![],
+                    distinct: false,
+                },
+                Expr::AggregateFunction {
+                    func: AggregateFunction::Sum,
+                    args: vec![Expr::column("amount")],
+                    distinct: false,
+                },
+            ],
+            Schema::new(vec![
+                Field::new("count".to_string(), DataType::Integer),
+                Field::new("sum".to_string(), DataType::Integer),
+            ]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_execute_with_distinct() {
+        let schema = Schema::new(vec![Field::new("amount".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let agg = AggregateExec::new(
+            input,
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![Expr::column("amount")],
+                distinct: true,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_group_by_multiple_columns() {
+        let schema = Schema::new(vec![
+            Field::new("dept".to_string(), DataType::Text),
+            Field::new("category".to_string(), DataType::Text),
+            Field::new("amount".to_string(), DataType::Integer),
+        ]);
+        let child = SeqScanExec::new("test_table".to_string(), schema.clone());
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![Expr::column("dept"), Expr::column("category")],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Sum,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            Schema::new(vec![
+                Field::new("dept".to_string(), DataType::Text),
+                Field::new("category".to_string(), DataType::Text),
+                Field::new("sum".to_string(), DataType::Integer),
+            ]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_aggregate_exec_evaluate_expr_wildcard() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let child = SeqScanExec::new("test_table".to_string(), schema);
+        let agg = AggregateExec::new(
+            Box::new(child),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Count,
+                args: vec![Expr::Wildcard],
+                distinct: false,
+            }],
+            Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
+        );
+
+        let result = agg.execute();
+        assert!(result.is_ok());
+    }
+
+    // Additional filter tests for different predicates
+
+    #[test]
+    fn test_filter_exec_with_or_predicate() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+
+        let predicate = Expr::BinaryExpr {
+            left: Box::new(Expr::column("id")),
+            op: crate::Operator::Or,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let filter = FilterExec::new(input, predicate);
+
+        let result = filter.execute();
+        assert!(result.is_ok());
+    }
 }
