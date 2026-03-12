@@ -167,7 +167,7 @@ impl<'a> LocalExecutor<'a> {
                             .unwrap_or(Value::Null)
                     })
                     .collect();
-                groups.entry(key).or_insert_with(Vec::new).push(row.clone());
+                groups.entry(key).or_default().push(row.clone());
             }
 
             let mut results = vec![];
@@ -867,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_execute_sort() {
-        use sqlrustgo_planner::{physical_plan::SortExec, SeqScanExec, DataType, Expr};
+        use sqlrustgo_planner::{physical_plan::SortExec, DataType, Expr, SeqScanExec};
         // Test execution of SortExec
         let storage = MemoryStorage::new();
         let executor = LocalExecutor::new(&storage);
@@ -895,14 +895,12 @@ mod tests {
 
     #[test]
     fn test_execute_limit() {
-        use sqlrustgo_planner::{physical_plan::LimitExec, SeqScanExec, DataType};
+        use sqlrustgo_planner::{physical_plan::LimitExec, DataType, SeqScanExec};
         // Test execution of LimitExec
         let storage = MemoryStorage::new();
         let executor = LocalExecutor::new(&storage);
 
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
 
         // Create a table scan as child
         let scan = SeqScanExec::new("test".to_string(), schema.clone());

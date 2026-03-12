@@ -67,7 +67,7 @@ impl ExecutionEngine {
                 let input_result = self.execute_plan(child)?;
 
                 let exprs = proj_plan.expr();
-                let output_schema = plan.schema();
+                let _output_schema = plan.schema();
                 let projected_rows: Vec<Vec<Value>> = input_result
                     .rows
                     .iter()
