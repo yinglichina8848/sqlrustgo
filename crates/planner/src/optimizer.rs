@@ -390,6 +390,7 @@ mod tests {
     use super::*;
     use crate::Schema;
     use crate::{DataType, Field};
+    use sqlrustgo_types::Value;
 
     #[test]
     fn test_predicate_pushdown_name() {
@@ -500,5 +501,1048 @@ mod tests {
         let err_result: OptimizerResult<i32> =
             Err(OptimizerError::OptimizationFailed("test".to_string()));
         assert!(err_result.is_err());
+    }
+
+    #[test]
+    fn test_column_set_new() {
+        let cols = ColumnSet::new();
+        assert!(cols.is_all);
+        assert!(cols.indices.is_empty());
+    }
+
+    #[test]
+    fn test_column_set_add() {
+        let mut cols = ColumnSet::new();
+        assert!(cols.is_all);
+        cols.add("test");
+        assert!(!cols.is_all);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_new() {
+        let rule = PredicatePushdown::new();
+        assert_eq!(rule.name(), "PredicatePushdown");
+    }
+
+    #[test]
+    fn test_projection_pruning_new() {
+        let rule = ProjectionPruning::new();
+        assert_eq!(rule.name(), "ProjectionPruning");
+    }
+
+    #[test]
+    fn test_constant_folding_new() {
+        let rule = ConstantFolding::new();
+        assert_eq!(rule.name(), "ConstantFolding");
+    }
+
+    #[test]
+    fn test_predicate_pushdown_projection() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Filter -> Projection -> TableScan
+        let mut plan = LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::Projection {
+                expr: vec![Expr::Column(crate::Column::new("id".to_string()))],
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: inner_schema,
+                    projection: None,
+                }),
+                schema: schema.clone(),
+            }),
+        };
+
+        let rule = PredicatePushdown;
+        let result = rule.apply(&mut plan);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_join() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Filter -> Join
+        let left = Box::new(LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+        let right = Box::new(LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let mut plan = LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::Join {
+                left,
+                right,
+                join_type: crate::JoinType::Inner,
+                condition: Some(Expr::BinaryExpr {
+                    left: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                    op: Operator::Eq,
+                    right: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                }),
+            }),
+        };
+
+        let rule = PredicatePushdown;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_sort() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut plan = LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::Sort {
+                sort_expr: vec![crate::SortExpr {
+                    expr: Expr::Column(crate::Column::new("id".to_string())),
+                    asc: true,
+                    nulls_first: true,
+                }],
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: inner_schema,
+                    projection: None,
+                }),
+            }),
+        };
+
+        let rule = PredicatePushdown;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_limit() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut plan = LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::Limit {
+                limit: 10,
+                offset: None,
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: inner_schema,
+                    projection: None,
+                }),
+            }),
+        };
+
+        let rule = PredicatePushdown;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_projection_pruning_projection_table_scan() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Projection -> TableScan
+        let mut plan = LogicalPlan::Projection {
+            expr: vec![Expr::Column(crate::Column::new("id".to_string()))],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: inner_schema,
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let rule = ProjectionPruning;
+        let result = rule.apply(&mut plan);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_projection_pruning_filter() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Projection -> Filter -> TableScan
+        let mut plan = LogicalPlan::Projection {
+            expr: vec![Expr::Column(crate::Column::new("id".to_string()))],
+            input: Box::new(LogicalPlan::Filter {
+                predicate: Expr::Literal(Value::Boolean(true)),
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: inner_schema,
+                    projection: None,
+                }),
+            }),
+            schema: schema.clone(),
+        };
+
+        let rule = ProjectionPruning;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_projection_pruning_join() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+        let right = Box::new(LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let mut plan = LogicalPlan::Join {
+            left,
+            right,
+            join_type: crate::JoinType::Inner,
+            condition: None,
+        };
+
+        let rule = ProjectionPruning;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_constant_folding_filter() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Filter with constant expression 1 + 1
+        let mut plan = LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(1))),
+                op: Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let rule = ConstantFolding;
+        let result = rule.apply(&mut plan);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_constant_folding_projection() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create: Projection with constant expression 2 * 3
+        let mut plan = LogicalPlan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(2))),
+                op: Operator::Multiply,
+                right: Box::new(Expr::Literal(Value::Integer(3))),
+            }],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let rule = ConstantFolding;
+        let result = rule.apply(&mut plan);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_constant_folding_join() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(LogicalPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(1))),
+                op: Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        });
+        let right = Box::new(LogicalPlan::TableScan {
+            table_name: "orders".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let mut plan = LogicalPlan::Join {
+            left,
+            right,
+            join_type: crate::JoinType::Inner,
+            condition: None,
+        };
+
+        let rule = ConstantFolding;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_constant_folding_sort() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut plan = LogicalPlan::Sort {
+            sort_expr: vec![crate::SortExpr {
+                expr: Expr::BinaryExpr {
+                    left: Box::new(Expr::Literal(Value::Integer(1))),
+                    op: Operator::Plus,
+                    right: Box::new(Expr::Literal(Value::Integer(1))),
+                },
+                asc: true,
+                nulls_first: true,
+            }],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: inner_schema,
+                projection: None,
+            }),
+        };
+
+        let rule = ConstantFolding;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_constant_folding_limit() {
+        use crate::Operator;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut plan = LogicalPlan::Limit {
+            limit: 10,
+            offset: None,
+            input: Box::new(LogicalPlan::Filter {
+                predicate: Expr::BinaryExpr {
+                    left: Box::new(Expr::Literal(Value::Integer(1))),
+                    op: Operator::Plus,
+                    right: Box::new(Expr::Literal(Value::Integer(1))),
+                },
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: inner_schema,
+                    projection: None,
+                }),
+            }),
+        };
+
+        let rule = ConstantFolding;
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_default_optimizer_iterations() {
+        let mut optimizer = DefaultOptimizer::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create a plan that needs multiple optimization passes
+        let plan = LogicalPlan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(1))),
+                op: crate::Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            }],
+            input: Box::new(LogicalPlan::Filter {
+                predicate: Expr::BinaryExpr {
+                    left: Box::new(Expr::Literal(Value::Integer(2))),
+                    op: crate::Operator::Multiply,
+                    right: Box::new(Expr::Literal(Value::Integer(3))),
+                },
+                input: Box::new(LogicalPlan::TableScan {
+                    table_name: "users".to_string(),
+                    schema: schema.clone(),
+                    projection: None,
+                }),
+            }),
+            schema: schema.clone(),
+        };
+
+        let result = optimizer.optimize(plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_predicate_pushdown_with_aggregate() {
+        let rule = PredicatePushdown::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Test with Aggregate - should return false (can't push down)
+        let plan = LogicalPlan::Aggregate {
+            group_expr: vec![Expr::column("id")],
+            aggregate_expr: vec![Expr::column("id")],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let mut plan_clone = plan.clone();
+        let result = rule.apply(&mut plan_clone);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_with_sort() {
+        let rule = PredicatePushdown::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Sort {
+            sort_expr: vec![crate::SortExpr {
+                expr: Expr::column("id"),
+                asc: true,
+                nulls_first: true,
+            }],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_with_limit() {
+        let rule = PredicatePushdown::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Limit {
+            limit: 10,
+            offset: None,
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_join_can_push_left() {
+        let rule = PredicatePushdown::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Test Inner join - can push to left
+        let can_push_inner = rule.can_push_to_left(&Expr::column("id"), &crate::JoinType::Inner);
+        assert!(can_push_inner);
+
+        // Test Left join - can push to left
+        let can_push_left = rule.can_push_to_left(&Expr::column("id"), &crate::JoinType::Left);
+        assert!(can_push_left);
+
+        // Test Right join - cannot push to left
+        let can_push_right = rule.can_push_to_left(&Expr::column("id"), &crate::JoinType::Right);
+        assert!(!can_push_right);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_join_can_push_right() {
+        let rule = PredicatePushdown::new();
+
+        // Test Inner join - can push to right
+        let can_push_inner = rule.can_push_to_right(&Expr::column("id"), &crate::JoinType::Inner);
+        assert!(can_push_inner);
+
+        // Test Right join - can push to right
+        let can_push_right = rule.can_push_to_right(&Expr::column("id"), &crate::JoinType::Right);
+        assert!(can_push_right);
+
+        // Test Left join - cannot push to right
+        let can_push_left = rule.can_push_to_right(&Expr::column("id"), &crate::JoinType::Left);
+        assert!(!can_push_left);
+    }
+
+    #[test]
+    fn test_projection_pruning_with_projection() {
+        let rule = ProjectionPruning::new();
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+
+        let plan = LogicalPlan::Projection {
+            expr: vec![Expr::column("id")],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_projection_pruning_default() {
+        let rule = ProjectionPruning::default();
+        assert_eq!(rule.name(), "ProjectionPruning");
+    }
+
+    #[test]
+    fn test_constant_folding_with_literal_expressions() {
+        let rule = ConstantFolding::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Test with all literals - should be folded
+        let plan = LogicalPlan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(1))),
+                op: crate::Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Integer(2))),
+            }],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_constant_folding_unary_minus() {
+        let rule = ConstantFolding::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Projection {
+            expr: vec![Expr::UnaryExpr {
+                op: crate::Operator::Minus,
+                expr: Box::new(Expr::Literal(Value::Integer(5))),
+            }],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            schema: schema.clone(),
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_default_optimizer_with_empty_rules() {
+        let optimizer = DefaultOptimizer::with_rules(vec![]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let mut optimizer_mut = DefaultOptimizer::with_rules(vec![]);
+        let result = optimizer_mut.optimize(plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_noop_optimizer_returns_plan() {
+        let mut optimizer = NoOpOptimizer;
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let result = optimizer.optimize(plan);
+        assert!(result.is_ok());
+    }
+
+    // Additional tests to improve coverage
+
+    #[test]
+    fn test_predicate_pushdown_with_join_condition() {
+        // Test predicate pushdown through a join with actual condition
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+
+        let left = Box::new(LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let right = Box::new(LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let join = LogicalPlan::Join {
+            left,
+            right,
+            join_type: crate::JoinType::Inner,
+            condition: Some(Expr::binary_expr(
+                Expr::column("id"),
+                crate::Operator::Eq,
+                Expr::column("id"),
+            )),
+        };
+
+        let filter = LogicalPlan::Filter {
+            predicate: Expr::binary_expr(
+                Expr::column("value"),
+                crate::Operator::Gt,
+                Expr::literal(sqlrustgo_types::Value::Integer(10)),
+            ),
+            input: Box::new(join),
+        };
+
+        let rule = PredicatePushdown::new();
+        let mut plan = filter;
+        let _result = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_default_trait() {
+        // Test Default trait implementation
+        let rule: PredicatePushdown = Default::default();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut plan = LogicalPlan::TableScan {
+            table_name: "test".to_string(),
+            schema,
+            projection: None,
+        };
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_projection_pruning_aggregate() {
+        // Test ProjectionPruning with Aggregate (returns false)
+        let rule = ProjectionPruning::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Aggregate {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            group_expr: vec![Expr::column("id")],
+            aggregate_expr: vec![],
+            schema,
+        };
+
+        let mut plan_clone = plan;
+        let result = rule.apply(&mut plan_clone);
+        assert!(!result); // Aggregate doesn't change
+    }
+
+    #[test]
+    fn test_projection_pruning_sort() {
+        // Test ProjectionPruning with Sort
+        let rule = ProjectionPruning::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Sort {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: inner_schema,
+                projection: None,
+            }),
+            sort_expr: vec![crate::SortExpr {
+                expr: Expr::column("id"),
+                asc: true,
+                nulls_first: false,
+            }],
+        };
+
+        let mut plan_clone = plan;
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_projection_pruning_limit() {
+        // Test ProjectionPruning with Limit
+        let rule = ProjectionPruning::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Limit {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: inner_schema,
+                projection: None,
+            }),
+            limit: 10,
+            offset: None,
+        };
+
+        let mut plan_clone = plan;
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_collect_columns_unary_expr() {
+        // Test collect_columns with UnaryExpr
+        let rule = ProjectionPruning::new();
+        let exprs = vec![Expr::UnaryExpr {
+            op: crate::Operator::Minus,
+            expr: Box::new(Expr::column("value")),
+        }];
+        let cols = rule.collect_columns(&exprs);
+        assert!(!cols.is_all);
+    }
+
+    #[test]
+    fn test_collect_columns_aggregate_function() {
+        // Test collect_columns with AggregateFunction
+        use crate::AggregateFunction;
+        let rule = ProjectionPruning::new();
+        let exprs = vec![Expr::AggregateFunction {
+            func: AggregateFunction::Sum,
+            args: vec![Expr::column("value")],
+            distinct: false,
+        }];
+        let cols = rule.collect_columns(&exprs);
+        assert!(!cols.is_all);
+    }
+
+    #[test]
+    fn test_collect_columns_alias() {
+        // Test collect_columns with Alias
+        let rule = ProjectionPruning::new();
+        let exprs = vec![Expr::Alias {
+            expr: Box::new(Expr::column("value")),
+            name: "aliased".to_string(),
+        }];
+        let cols = rule.collect_columns(&exprs);
+        assert!(!cols.is_all);
+    }
+
+    #[test]
+    fn test_column_set_default_trait() {
+        // Test Default trait for ColumnSet
+        let cols: ColumnSet = Default::default();
+        assert!(cols.is_all); // Default is_all is true
+    }
+
+    #[test]
+    fn test_constant_folding_aggregate() {
+        // Test ConstantFolding with Aggregate
+        let rule = ConstantFolding::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Aggregate {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            group_expr: vec![Expr::column("id")],
+            aggregate_expr: vec![],
+            schema,
+        };
+
+        let mut plan_clone = plan;
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_constant_folding_binary_not_both_literals() {
+        // Test constant folding when binary expr has column (not both literals)
+        let rule = ConstantFolding::new();
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+
+        let plan = LogicalPlan::Projection {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("id")),
+                op: crate::Operator::Plus,
+                right: Box::new(Expr::literal(sqlrustgo_types::Value::Integer(1))),
+            }],
+            schema,
+        };
+
+        let mut plan_clone = plan;
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_constant_folding_unary_not_literal() {
+        // Test constant folding when unary expr has column (not literal)
+        let rule = ConstantFolding::new();
+        let schema = Schema::new(vec![Field::new("value".to_string(), DataType::Integer)]);
+
+        let plan = LogicalPlan::Projection {
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+            expr: vec![Expr::UnaryExpr {
+                op: crate::Operator::Minus,
+                expr: Box::new(Expr::column("value")),
+            }],
+            schema,
+        };
+
+        let mut plan_clone = plan;
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_eval_binary_op_float() {
+        // Test eval_binary_op with Float values
+        use sqlrustgo_types::Value;
+        use crate::Operator;
+
+        let rule = ConstantFolding::new();
+
+        // Test Float Plus (not implemented)
+        let result = rule.eval_binary_op(&Operator::Plus, &Value::Float(1.5), &Value::Float(2.5));
+        assert!(result.is_none());
+
+        // Test Float comparison (not implemented)
+        let result = rule.eval_binary_op(&Operator::Eq, &Value::Float(1.5), &Value::Float(1.5));
+        assert!(result.is_none());
+
+        // Test Integer Divide (not implemented)
+        let result = rule.eval_binary_op(&Operator::Divide, &Value::Integer(10), &Value::Integer(2));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_eval_binary_op_integer_comparisons() {
+        // Test more integer comparison operations
+        use sqlrustgo_types::Value;
+        use crate::Operator;
+
+        let rule = ConstantFolding::new();
+
+        let result = rule.eval_binary_op(&Operator::GtEq, &Value::Integer(5), &Value::Integer(3));
+        assert_eq!(result, Some(Value::Boolean(true)));
+
+        let result = rule.eval_binary_op(&Operator::LtEq, &Value::Integer(3), &Value::Integer(5));
+        assert_eq!(result, Some(Value::Boolean(true)));
+
+        // Test And/Or with Integer (should return None)
+        let result = rule.eval_binary_op(&Operator::And, &Value::Integer(1), &Value::Integer(0));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_eval_unary_op_not_implemented() {
+        // Test eval_unary_op with types that aren't supported
+        use sqlrustgo_types::Value;
+        use crate::Operator;
+
+        let rule = ConstantFolding::new();
+
+        // Not on Integer (only Minus is supported)
+        let result = rule.eval_unary_op(&Operator::Not, &Value::Integer(1));
+        assert!(result.is_none());
+
+        // Minus on non-integer
+        let result = rule.eval_unary_op(&Operator::Minus, &Value::Float(1.5));
+        assert!(result.is_none());
+
+        // Not on Boolean (should work)
+        let result = rule.eval_unary_op(&Operator::Not, &Value::Boolean(true));
+        assert_eq!(result, Some(Value::Boolean(false)));
+
+        // Minus on Boolean (should not work)
+        let result = rule.eval_unary_op(&Operator::Minus, &Value::Boolean(true));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_constant_folding_default_trait() {
+        // Test Default trait for ConstantFolding
+        let rule: ConstantFolding = Default::default();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut plan = LogicalPlan::TableScan {
+            table_name: "test".to_string(),
+            schema,
+            projection: None,
+        };
+        let _ = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_default_optimizer_default_trait() {
+        // Test Default trait for DefaultOptimizer
+        let optimizer: DefaultOptimizer = Default::default();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "test".to_string(),
+            schema,
+            projection: None,
+        };
+        let mut optimizer_mut = optimizer;
+        let result = optimizer_mut.optimize(plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_predicate_pushdown_filter_on_table_scan() {
+        // Test predicate pushdown when Filter has direct TableScan child
+        // This covers line 62 in the optimizer
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        // Create a Filter directly on TableScan (no Projection in between)
+        let plan = LogicalPlan::Filter {
+            predicate: Expr::binary_expr(
+                Expr::column("id"),
+                crate::Operator::Gt,
+                Expr::literal(sqlrustgo_types::Value::Integer(5)),
+            ),
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "test".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let rule = PredicatePushdown::new();
+        let mut plan_clone = plan;
+        // This should hit line 62 (TableScan case returns false)
+        let _result = rule.apply(&mut plan_clone);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_join_left_right_push() {
+        // Test predicate pushdown through join with condition that can push to both sides
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+
+        let left = Box::new(LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        let right = Box::new(LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        });
+
+        // Join with Inner type (can push to both left and right)
+        let join = LogicalPlan::Join {
+            left,
+            right,
+            join_type: crate::JoinType::Inner,
+            condition: Some(Expr::binary_expr(
+                Expr::column("id"),
+                crate::Operator::Eq,
+                Expr::column("id"),
+            )),
+        };
+
+        // Wrap in Filter
+        let filter = LogicalPlan::Filter {
+            predicate: Expr::binary_expr(
+                Expr::column("value"),
+                crate::Operator::Gt,
+                Expr::literal(sqlrustgo_types::Value::Integer(10)),
+            ),
+            input: Box::new(join),
+        };
+
+        let rule = PredicatePushdown::new();
+        let mut plan = filter;
+        let _result = rule.apply(&mut plan);
+    }
+
+    #[test]
+    fn test_eval_binary_op_gteq() {
+        // Test GtEq comparison
+        use sqlrustgo_types::Value;
+        use crate::Operator;
+
+        let rule = ConstantFolding::new();
+
+        let result = rule.eval_binary_op(&Operator::GtEq, &Value::Integer(5), &Value::Integer(5));
+        assert_eq!(result, Some(Value::Boolean(true)));
+
+        let result = rule.eval_binary_op(&Operator::GtEq, &Value::Integer(3), &Value::Integer(5));
+        assert_eq!(result, Some(Value::Boolean(false)));
+    }
+
+    #[test]
+    fn test_eval_binary_op_lteq() {
+        // Test LtEq comparison
+        use sqlrustgo_types::Value;
+        use crate::Operator;
+
+        let rule = ConstantFolding::new();
+
+        let result = rule.eval_binary_op(&Operator::LtEq, &Value::Integer(5), &Value::Integer(5));
+        assert_eq!(result, Some(Value::Boolean(true)));
+
+        let result = rule.eval_binary_op(&Operator::LtEq, &Value::Integer(6), &Value::Integer(5));
+        assert_eq!(result, Some(Value::Boolean(false)));
     }
 }
