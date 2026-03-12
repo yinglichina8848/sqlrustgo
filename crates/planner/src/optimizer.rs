@@ -51,13 +51,15 @@ impl PredicatePushdown {
 
                 // Try to push into Projection
                 match &mut **input {
-                    LogicalPlan::Projection { input: proj_input, .. } => {
+                    LogicalPlan::Projection {
+                        input: proj_input, ..
+                    } => {
                         let new_filter = LogicalPlan::Filter {
                             predicate: predicate.clone(),
                             input: proj_input.clone(),
                         };
                         **input = new_filter;
-                        return true;
+                        true
                     }
                     LogicalPlan::TableScan { .. } => false,
                     _ => false,
@@ -65,7 +67,12 @@ impl PredicatePushdown {
             }
             LogicalPlan::Projection { input, .. } => self.pushdown(input),
             LogicalPlan::Aggregate { input: _, .. } => false,
-            LogicalPlan::Join { left, right, join_type, condition } => {
+            LogicalPlan::Join {
+                left,
+                right,
+                join_type,
+                condition,
+            } => {
                 let mut changed = false;
                 if let Some(pred) = condition.as_ref() {
                     if self.can_push_to_left(pred, join_type) {
@@ -120,7 +127,11 @@ impl ProjectionPruning {
 
     fn prune(&self, plan: &mut LogicalPlan) -> bool {
         match plan {
-            LogicalPlan::Projection { input, expr, schema: _ } => {
+            LogicalPlan::Projection {
+                input,
+                expr,
+                schema: _,
+            } => {
                 let used_cols = self.collect_columns(expr);
                 if let LogicalPlan::TableScan { projection, .. } = &mut **input {
                     if projection.is_none() && !used_cols.is_all {
@@ -286,13 +297,20 @@ impl ConstantFolding {
         }
     }
 
-    fn eval_binary_op(&self, op: &crate::Operator, left: &sqlrustgo_types::Value, right: &sqlrustgo_types::Value) -> Option<sqlrustgo_types::Value> {
-        use sqlrustgo_types::Value;
+    fn eval_binary_op(
+        &self,
+        op: &crate::Operator,
+        left: &sqlrustgo_types::Value,
+        right: &sqlrustgo_types::Value,
+    ) -> Option<sqlrustgo_types::Value> {
         use crate::Operator;
+        use sqlrustgo_types::Value;
         match (op, left, right) {
             (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
             (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
-            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l * r)),
+            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => {
+                Some(Value::Integer(l * r))
+            }
             (Operator::Eq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l == r)),
             (Operator::NotEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l != r)),
             (Operator::Gt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l > r)),
@@ -303,9 +321,13 @@ impl ConstantFolding {
         }
     }
 
-    fn eval_unary_op(&self, op: &crate::Operator, value: &sqlrustgo_types::Value) -> Option<sqlrustgo_types::Value> {
-        use sqlrustgo_types::Value;
+    fn eval_unary_op(
+        &self,
+        op: &crate::Operator,
+        value: &sqlrustgo_types::Value,
+    ) -> Option<sqlrustgo_types::Value> {
         use crate::Operator;
+        use sqlrustgo_types::Value;
         match (op, value) {
             (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
             (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
@@ -1353,8 +1375,8 @@ mod tests {
     #[test]
     fn test_eval_binary_op_float() {
         // Test eval_binary_op with Float values
-        use sqlrustgo_types::Value;
         use crate::Operator;
+        use sqlrustgo_types::Value;
 
         let rule = ConstantFolding::new();
 
@@ -1367,15 +1389,16 @@ mod tests {
         assert!(result.is_none());
 
         // Test Integer Divide (not implemented)
-        let result = rule.eval_binary_op(&Operator::Divide, &Value::Integer(10), &Value::Integer(2));
+        let result =
+            rule.eval_binary_op(&Operator::Divide, &Value::Integer(10), &Value::Integer(2));
         assert!(result.is_none());
     }
 
     #[test]
     fn test_eval_binary_op_integer_comparisons() {
         // Test more integer comparison operations
-        use sqlrustgo_types::Value;
         use crate::Operator;
+        use sqlrustgo_types::Value;
 
         let rule = ConstantFolding::new();
 
@@ -1393,8 +1416,8 @@ mod tests {
     #[test]
     fn test_eval_unary_op_not_implemented() {
         // Test eval_unary_op with types that aren't supported
-        use sqlrustgo_types::Value;
         use crate::Operator;
+        use sqlrustgo_types::Value;
 
         let rule = ConstantFolding::new();
 
@@ -1519,8 +1542,8 @@ mod tests {
     #[test]
     fn test_eval_binary_op_gteq() {
         // Test GtEq comparison
-        use sqlrustgo_types::Value;
         use crate::Operator;
+        use sqlrustgo_types::Value;
 
         let rule = ConstantFolding::new();
 
@@ -1534,8 +1557,8 @@ mod tests {
     #[test]
     fn test_eval_binary_op_lteq() {
         // Test LtEq comparison
-        use sqlrustgo_types::Value;
         use crate::Operator;
+        use sqlrustgo_types::Value;
 
         let rule = ConstantFolding::new();
 
