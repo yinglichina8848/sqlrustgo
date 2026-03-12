@@ -7,9 +7,7 @@ use sqlrustgo_types::Value;
 
 /// Generate sequential integer rows
 pub fn generate_integer_rows(count: usize) -> Vec<Vec<Value>> {
-    (0..count)
-        .map(|i| vec![Value::Integer(i as i64)])
-        .collect()
+    (0..count).map(|i| vec![Value::Integer(i as i64)]).collect()
 }
 
 /// Generate rows with multiple columns (id, name, value)
@@ -30,10 +28,7 @@ pub fn generate_ordered_rows(count: usize) -> Vec<Vec<Value>> {
     (0..count)
         .map(|i| {
             let value = if i % 2 == 0 { i } else { count - i };
-            vec![
-                Value::Integer(i as i64),
-                Value::Integer(value as i64),
-            ]
+            vec![Value::Integer(i as i64), Value::Integer(value as i64)]
         })
         .collect()
 }

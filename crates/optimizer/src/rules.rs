@@ -116,7 +116,7 @@ impl Plan {
         match self {
             Plan::Filter { input, .. } => Some(input),
             Plan::Projection { input, .. } => Some(input),
-            Plan::Join { left, right, .. } => Some(left),
+            Plan::Join { left, right: _, .. } => Some(left),
             Plan::Aggregate { input, .. } => Some(input),
             Plan::Sort { input, .. } => Some(input),
             Plan::Limit { input, .. } => Some(input),
@@ -529,7 +529,9 @@ impl ExpressionSimplification {
                 let right_simplified = self.simplify_expr(right);
 
                 // Try to simplify boolean expressions
-                if let Some(simplified) = self.simplify_binary(&left_simplified, op, &right_simplified) {
+                if let Some(simplified) =
+                    self.simplify_binary(&left_simplified, op, &right_simplified)
+                {
                     return simplified;
                 }
 
@@ -676,18 +678,15 @@ impl ExpressionSimplification {
 
     /// Simplify unary expressions
     fn simplify_unary(&self, op: &Operator, expr: &Expr) -> Option<Expr> {
-        match op {
-            Operator::Not => {
-                // NOT NOT x = x
-                if let Expr::UnaryExpr {
-                    op: Operator::Not,
-                    expr: inner,
-                } = expr
-                {
-                    return Some((**inner).clone());
-                }
+        if *op == Operator::Not {
+            // NOT NOT x = x
+            if let Expr::UnaryExpr {
+                op: Operator::Not,
+                expr: inner,
+            } = expr
+            {
+                return Some((**inner).clone());
             }
-            _ => {}
         }
         None
     }
@@ -696,7 +695,9 @@ impl ExpressionSimplification {
         match (op, left, right) {
             (Operator::Plus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l + r)),
             (Operator::Minus, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l - r)),
-            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => Some(Value::Integer(l * r)),
+            (Operator::Multiply, Value::Integer(l), Value::Integer(r)) => {
+                Some(Value::Integer(l * r))
+            }
             (Operator::Eq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l == r)),
             (Operator::NotEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l != r)),
             (Operator::Gt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l > r)),
@@ -734,7 +735,12 @@ impl JoinReordering {
     /// Reorder join operations
     fn reorder(&self, plan: &mut Plan) -> bool {
         match plan {
-            Plan::Join { left, right, join_type, condition } => {
+            Plan::Join {
+                left,
+                right,
+                join_type,
+                condition,
+            } => {
                 let mut changed = false;
 
                 // First, try to reorder children
@@ -772,17 +778,15 @@ impl JoinReordering {
 
         // For inner joins, prefer smaller table on the right (broadcast join)
         // This is a simple heuristic: put smaller table on the right side
-        if matches!(join_type, JoinType::Inner) {
-            if left_size > right_size {
-                // Try commutativity: swap left and right
-                if self.can_commute(condition) {
-                    return Some(Plan::Join {
-                        left: right.clone(),
-                        right: left.clone(),
-                        join_type: join_type.clone(),
-                        condition: condition.clone(),
-                    });
-                }
+        if matches!(join_type, JoinType::Inner) && left_size > right_size {
+            // Try commutativity: swap left and right
+            if self.can_commute(condition) {
+                return Some(Plan::Join {
+                    left: right.clone(),
+                    right: left.clone(),
+                    join_type: join_type.clone(),
+                    condition: condition.clone(),
+                });
             }
         }
 
@@ -798,7 +802,12 @@ impl JoinReordering {
                 self.estimate_size(input) / 2
             }
             Plan::Projection { input, .. } => self.estimate_size(input),
-            Plan::Join { left, right, join_type, condition } => {
+            Plan::Join {
+                left,
+                right,
+                join_type,
+                condition: _,
+            } => {
                 match join_type {
                     JoinType::Inner => {
                         let left_size = self.estimate_size(left);
@@ -820,7 +829,7 @@ impl JoinReordering {
                 self.estimate_size(input) / 10
             }
             Plan::Sort { input, .. } => self.estimate_size(input),
-            Plan::Limit { input, .. } => {
+            Plan::Limit { input: _, .. } => {
                 // Assume limit reduces to ~100 rows
                 100
             }
@@ -995,6 +1004,7 @@ pub struct OptimizerRuleSet {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct RuleItem {
     meta: RuleMeta,
     apply_fn: fn(&mut dyn Any) -> bool,
@@ -1575,7 +1585,10 @@ mod tests {
 
     #[test]
     fn test_plan_type_name() {
-        let plan = Plan::TableScan { table_name: "test".to_string(), projection: None };
+        let plan = Plan::TableScan {
+            table_name: "test".to_string(),
+            projection: None,
+        };
         assert_eq!(plan.type_name(), "TableScan");
 
         let plan = Plan::Filter {
@@ -1605,10 +1618,16 @@ mod tests {
         };
         assert_eq!(plan.type_name(), "Aggregate");
 
-        let plan = Plan::Sort { expr: vec![], input: Box::new(Plan::EmptyRelation) };
+        let plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
         assert_eq!(plan.type_name(), "Sort");
 
-        let plan = Plan::Limit { limit: 10, input: Box::new(Plan::EmptyRelation) };
+        let plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(Plan::EmptyRelation),
+        };
         assert_eq!(plan.type_name(), "Limit");
 
         assert_eq!(Plan::EmptyRelation.type_name(), "EmptyRelation");
@@ -1643,13 +1662,22 @@ mod tests {
         };
         assert!(plan.get_child_mut().is_some());
 
-        let mut plan = Plan::Sort { expr: vec![], input: Box::new(Plan::EmptyRelation) };
+        let mut plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
         assert!(plan.get_child_mut().is_some());
 
-        let mut plan = Plan::Limit { limit: 10, input: Box::new(Plan::EmptyRelation) };
+        let mut plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(Plan::EmptyRelation),
+        };
         assert!(plan.get_child_mut().is_some());
 
-        let mut plan = Plan::TableScan { table_name: "test".to_string(), projection: None };
+        let mut plan = Plan::TableScan {
+            table_name: "test".to_string(),
+            projection: None,
+        };
         assert!(plan.get_child_mut().is_none());
 
         let mut plan = Plan::EmptyRelation;
@@ -1672,7 +1700,10 @@ mod tests {
         };
         assert_eq!(plan.get_children().len(), 2);
 
-        let plan = Plan::TableScan { table_name: "test".to_string(), projection: None };
+        let plan = Plan::TableScan {
+            table_name: "test".to_string(),
+            projection: None,
+        };
         assert!(plan.get_children().is_empty());
 
         let plan = Plan::EmptyRelation;
@@ -1692,7 +1723,10 @@ mod tests {
             predicate: Expr::Column("x".to_string()),
             input: Box::new(Plan::Projection {
                 expr: vec![],
-                input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+                input: Box::new(Plan::TableScan {
+                    table_name: "t".to_string(),
+                    projection: None,
+                }),
             }),
         };
 
@@ -1708,8 +1742,14 @@ mod tests {
         let mut plan = Plan::Filter {
             predicate: Expr::Column("x".to_string()),
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: Some(Expr::Column("x".to_string())),
             }),
@@ -1727,8 +1767,14 @@ mod tests {
         let mut plan = Plan::Filter {
             predicate: Expr::Column("x".to_string()),
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Left,
                 condition: Some(Expr::Column("x".to_string())),
             }),
@@ -1744,8 +1790,14 @@ mod tests {
         let mut plan = Plan::Filter {
             predicate: Expr::Column("x".to_string()),
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Right,
                 condition: Some(Expr::Column("x".to_string())),
             }),
@@ -1763,7 +1815,10 @@ mod tests {
             expr: vec![],
             input: Box::new(Plan::Filter {
                 predicate: Expr::Column("x".to_string()),
-                input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+                input: Box::new(Plan::TableScan {
+                    table_name: "t".to_string(),
+                    projection: None,
+                }),
             }),
         };
 
@@ -1779,7 +1834,10 @@ mod tests {
             expr: vec![],
             input: Box::new(Plan::Filter {
                 predicate: Expr::Column("x".to_string()),
-                input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+                input: Box::new(Plan::TableScan {
+                    table_name: "t".to_string(),
+                    projection: None,
+                }),
             }),
         };
 
@@ -1795,7 +1853,10 @@ mod tests {
             limit: 10,
             input: Box::new(Plan::Filter {
                 predicate: Expr::Column("x".to_string()),
-                input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+                input: Box::new(Plan::TableScan {
+                    table_name: "t".to_string(),
+                    projection: None,
+                }),
             }),
         };
 
@@ -1828,7 +1889,10 @@ mod tests {
         // Create: Projection -> TableScan with existing projection
         let mut plan = Plan::Projection {
             expr: vec![],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: Some(vec![0]) }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: Some(vec![0]),
+            }),
         };
 
         let result = rule.apply(&mut plan);
@@ -1842,7 +1906,10 @@ mod tests {
         let mut plan = Plan::Aggregate {
             group_by: vec![],
             aggregates: vec![],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
 
         let result = rule.apply(&mut plan);
@@ -1981,7 +2048,10 @@ mod tests {
                 op: Operator::And,
                 right: Box::new(Expr::Column("x".to_string())),
             },
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
 
         let result = rule.apply(&mut plan);
@@ -1998,7 +2068,10 @@ mod tests {
                 op: Operator::Plus,
                 right: Box::new(Expr::Column("x".to_string())),
             }],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
 
         let result = rule.apply(&mut plan);
@@ -2012,7 +2085,10 @@ mod tests {
         let mut plan = Plan::Aggregate {
             group_by: vec![],
             aggregates: vec![],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
 
         let result = rule.apply(&mut plan);
@@ -2024,8 +2100,14 @@ mod tests {
         let rule = ExpressionSimplification::new();
 
         let mut plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Inner,
             condition: None,
         };
@@ -2149,11 +2231,7 @@ mod tests {
     #[test]
     fn test_eval_binary_op_float() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Plus,
-            &Value::Float(1.5),
-            &Value::Float(2.5),
-        );
+        let result = rule.eval_binary_op(&Operator::Plus, &Value::Float(1.5), &Value::Float(2.5));
         assert!(result.is_none());
     }
 
@@ -2195,8 +2273,14 @@ mod tests {
         let rule = JoinReordering::new();
 
         let mut plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "large".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "small".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "large".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "small".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Inner,
             condition: None,
         };
@@ -2213,8 +2297,14 @@ mod tests {
         let mut plan = Plan::Filter {
             predicate: Expr::Column("x".to_string()),
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: None,
             }),
@@ -2230,8 +2320,14 @@ mod tests {
         let mut plan = Plan::Projection {
             expr: vec![],
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: None,
             }),
@@ -2248,8 +2344,14 @@ mod tests {
             group_by: vec![],
             aggregates: vec![],
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: None,
             }),
@@ -2265,8 +2367,14 @@ mod tests {
         let mut plan = Plan::Sort {
             expr: vec![],
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: None,
             }),
@@ -2282,8 +2390,14 @@ mod tests {
         let mut plan = Plan::Limit {
             limit: 10,
             input: Box::new(Plan::Join {
-                left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-                right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+                left: Box::new(Plan::TableScan {
+                    table_name: "a".to_string(),
+                    projection: None,
+                }),
+                right: Box::new(Plan::TableScan {
+                    table_name: "b".to_string(),
+                    projection: None,
+                }),
                 join_type: JoinType::Inner,
                 condition: None,
             }),
@@ -2297,7 +2411,10 @@ mod tests {
         let rule = JoinReordering::new();
         let plan = Plan::Filter {
             predicate: Expr::Column("x".to_string()),
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
         assert_eq!(rule.estimate_size(&plan), 500); // 1000 / 2
     }
@@ -2307,7 +2424,10 @@ mod tests {
         let rule = JoinReordering::new();
         let plan = Plan::Projection {
             expr: vec![],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
         assert_eq!(rule.estimate_size(&plan), 1000);
     }
@@ -2316,8 +2436,14 @@ mod tests {
     fn test_estimate_size_join_inner() {
         let rule = JoinReordering::new();
         let plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Inner,
             condition: None,
         };
@@ -2329,8 +2455,14 @@ mod tests {
     fn test_estimate_size_join_left() {
         let rule = JoinReordering::new();
         let plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Left,
             condition: None,
         };
@@ -2341,8 +2473,14 @@ mod tests {
     fn test_estimate_size_join_right() {
         let rule = JoinReordering::new();
         let plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Right,
             condition: None,
         };
@@ -2353,8 +2491,14 @@ mod tests {
     fn test_estimate_size_join_full() {
         let rule = JoinReordering::new();
         let plan = Plan::Join {
-            left: Box::new(Plan::TableScan { table_name: "a".to_string(), projection: None }),
-            right: Box::new(Plan::TableScan { table_name: "b".to_string(), projection: None }),
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
             join_type: JoinType::Full,
             condition: None,
         };
@@ -2367,7 +2511,10 @@ mod tests {
         let plan = Plan::Aggregate {
             group_by: vec![],
             aggregates: vec![],
-            input: Box::new(Plan::TableScan { table_name: "t".to_string(), projection: None }),
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
         };
         assert_eq!(rule.estimate_size(&plan), 100); // 1000 / 10
     }
@@ -2405,11 +2552,10 @@ mod tests {
     #[test]
     fn test_optimizer_rule_set_add_rule() {
         use std::any::Any;
-        let rule_set = OptimizerRuleSet::new()
-            .add_rule(
-                RuleMeta::new("TestRule", "A test rule").with_priority(50),
-                |_plan: &mut dyn Any| true,
-            );
+        let rule_set = OptimizerRuleSet::new().add_rule(
+            RuleMeta::new("TestRule", "A test rule").with_priority(50),
+            |_plan: &mut dyn Any| true,
+        );
         assert_eq!(rule_set.len(), 1);
     }
 

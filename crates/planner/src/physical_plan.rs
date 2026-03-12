@@ -556,7 +556,7 @@ impl PhysicalPlan for AggregateExec {
                     .iter()
                     .map(|expr| self.evaluate_expr(expr, row, self.input.schema()))
                     .collect();
-                groups.entry(key).or_insert_with(Vec::new).push(row.clone());
+                groups.entry(key).or_default().push(row.clone());
             }
 
             let mut results = vec![];
@@ -1083,15 +1083,14 @@ mod tests {
         let proj = scan.projection();
         assert!(proj.is_none());
 
-        let scan_with_proj = SeqScanExec::new("test_table".to_string(), schema).with_projection(vec![0]);
+        let scan_with_proj =
+            SeqScanExec::new("test_table".to_string(), schema).with_projection(vec![0]);
         assert!(scan_with_proj.projection().is_some());
     }
 
     #[test]
     fn test_projection_exec_execute() {
-        let input_schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let output_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
         let proj = ProjectionExec::new(input, vec![Expr::column("id")], output_schema);
@@ -1209,7 +1208,13 @@ mod tests {
             op: Operator::Eq,
             right: Box::new(Expr::Column(crate::Column::new("id".to_string()))),
         };
-        let join = HashJoinExec::new(left, right, crate::JoinType::Inner, Some(condition), join_schema);
+        let join = HashJoinExec::new(
+            left,
+            right,
+            crate::JoinType::Inner,
+            Some(condition),
+            join_schema,
+        );
 
         let result = join.execute();
         assert!(result.is_ok());
@@ -1390,11 +1395,7 @@ mod tests {
     fn test_projection_exec_evaluate_literal() {
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
-        let proj = ProjectionExec::new(
-            input,
-            vec![Expr::Literal(Value::Integer(42))],
-            schema,
-        );
+        let proj = ProjectionExec::new(input, vec![Expr::Literal(Value::Integer(42))], schema);
 
         let result = proj.execute();
         assert!(result.is_ok());
@@ -1471,13 +1472,7 @@ mod tests {
         let right = Box::new(SeqScanExec::new("right_table".to_string(), right_schema));
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
 
-        let join = HashJoinExec::new(
-            left,
-            right,
-            crate::JoinType::Left,
-            None,
-            schema,
-        );
+        let join = HashJoinExec::new(left, right, crate::JoinType::Left, None, schema);
 
         assert_eq!(join.name(), "HashJoin");
     }
@@ -2050,7 +2045,8 @@ mod tests {
             Field::new("a".to_string(), DataType::Integer),
             Field::new("b".to_string(), DataType::Integer),
         ]);
-        let output_schema = Schema::new(vec![Field::new("quotient".to_string(), DataType::Integer)]);
+        let output_schema =
+            Schema::new(vec![Field::new("quotient".to_string(), DataType::Integer)]);
         let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
 
         let expr = Expr::BinaryExpr {
@@ -2123,7 +2119,8 @@ mod tests {
     #[test]
     fn test_projection_exec_evaluate_column_not_found() {
         let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let output_schema = Schema::new(vec![Field::new("not_found".to_string(), DataType::Integer)]);
+        let output_schema =
+            Schema::new(vec![Field::new("not_found".to_string(), DataType::Integer)]);
         let input = Box::new(SeqScanExec::new("test_table".to_string(), input_schema));
 
         // Column "not_found" doesn't exist in the input schema
