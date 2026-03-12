@@ -2500,4 +2500,517 @@ mod tests {
         let result = agg.execute();
         assert!(result.is_ok());
     }
+
+    // === Tests for uncovered code paths ===
+
+    #[test]
+    fn test_filter_compare_values_non_comparison_operators() {
+        // Test non-comparison operators (Plus, Minus, etc.) on integers
+        // These should return false per line 318
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let filter = FilterExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Plus, // Non-comparison operator
+                right: Box::new(Expr::column("b")),
+            },
+        );
+
+        // Evaluate predicate - should return false for non-comparison ops on integers
+        let row = vec![Value::Integer(5), Value::Integer(3)];
+        let result = filter.evaluate_predicate(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Plus,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert!(!result); // Should be false per line 318
+    }
+
+    #[test]
+    fn test_filter_compare_values_float_comparison() {
+        // Test Float comparisons - should return false per line 320
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Float),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let filter = FilterExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Gt,
+                right: Box::new(Expr::column("b")),
+            },
+        );
+
+        // Evaluate predicate with Float values - should return false per line 320
+        let row = vec![Value::Float(5.0), Value::Float(3.0)];
+        let result = filter.evaluate_predicate(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Gt,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert!(!result); // Float comparisons return false
+    }
+
+    #[test]
+    fn test_projection_arithmetic_integer_division_by_zero() {
+        // Test integer division by zero - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Divide,
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Integer)]),
+        );
+
+        // Evaluate expression with divisor = 0
+        let row = vec![Value::Integer(10), Value::Integer(0)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Divide,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Division by zero returns Null
+    }
+
+    #[test]
+    fn test_projection_arithmetic_integer_modulo_by_zero() {
+        // Test integer modulo by zero - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Modulo,
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Integer)]),
+        );
+
+        // Evaluate expression with divisor = 0
+        let row = vec![Value::Integer(10), Value::Integer(0)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Modulo,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Modulo by zero returns Null
+    }
+
+    #[test]
+    fn test_projection_arithmetic_float_division_by_zero() {
+        // Test float division by zero - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Float),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Divide,
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Float)]),
+        );
+
+        // Evaluate expression with divisor = 0.0
+        let row = vec![Value::Float(10.0), Value::Float(0.0)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Divide,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Float division by zero returns Null
+    }
+
+    #[test]
+    fn test_projection_arithmetic_non_arithmetic_op_on_integer() {
+        // Test non-arithmetic operator on integers - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Eq, // Comparison operator in arithmetic context
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Integer)]),
+        );
+
+        let row = vec![Value::Integer(10), Value::Integer(5)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Eq,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Non-arithmetic operators return Null
+    }
+
+    #[test]
+    fn test_projection_arithmetic_float_non_division_ops() {
+        // Test non-division arithmetic operators on floats - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Float),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Modulo, // Not valid for floats
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Float)]),
+        );
+
+        let row = vec![Value::Float(10.0), Value::Float(3.0)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Modulo,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Non-division float ops return Null
+    }
+
+    #[test]
+    fn test_projection_arithmetic_mixed_types() {
+        // Test mixed types (Integer + Float) - should return Value::Null
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let proj = ProjectionExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Plus,
+                right: Box::new(Expr::column("b")),
+            }],
+            Schema::new(vec![Field::new("result".to_string(), DataType::Float)]),
+        );
+
+        let row = vec![Value::Integer(10), Value::Float(3.0)];
+        let result = proj.evaluate_expr(&Expr::BinaryExpr {
+            left: Box::new(Expr::column("a")),
+            op: Operator::Plus,
+            right: Box::new(Expr::column("b")),
+        }, &row, &schema);
+        assert_eq!(result, Value::Null); // Mixed types return Null
+    }
+
+    // ========== Tests for AggregateExec coverage ==========
+
+    #[test]
+    fn test_aggregate_sum_with_float_values() {
+        // Test Sum aggregate with Float values - covers lines 398-409
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Sum,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Float(1.5), Value::Float(2.5), Value::Float(3.0)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Sum,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(7.0));
+    }
+
+    #[test]
+    fn test_aggregate_sum_with_mixed_int_float() {
+        // Test Sum aggregate with mixed Integer and Float - covers lines 401-409
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Sum,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Integer(5), Value::Float(2.5), Value::Integer(3)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Sum,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(10.5));
+    }
+
+    #[test]
+    fn test_aggregate_avg_with_float_values() {
+        // Test Avg aggregate with Float values - covers lines 420-436
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Avg,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Float(10.0), Value::Float(20.0), Value::Float(30.0)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Avg,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(20.0));
+    }
+
+    #[test]
+    fn test_aggregate_avg_with_mixed_types() {
+        // Test Avg aggregate with mixed Integer and Float - covers lines 423-434
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Avg,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Integer(10), Value::Float(20.0)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Avg,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(15.0));
+    }
+
+    #[test]
+    fn test_aggregate_min_with_float_values() {
+        // Test Min aggregate with Float values - covers lines 445-467
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Min,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Float(5.5), Value::Float(2.2), Value::Float(8.8)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Min,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(2.2));
+    }
+
+    #[test]
+    fn test_aggregate_min_with_mixed_types() {
+        // Test Min aggregate with mixed Integer and Float - covers lines 448-461
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Min,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Integer(10), Value::Float(5.5), Value::Integer(20)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Min,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(5.5));
+    }
+
+    #[test]
+    fn test_aggregate_max_with_float_values() {
+        // Test Max aggregate with Float values - covers lines 474-496
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Max,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Float(5.5), Value::Float(22.2), Value::Float(8.8)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Max,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(22.2));
+    }
+
+    #[test]
+    fn test_aggregate_max_with_mixed_types() {
+        // Test Max aggregate with mixed Integer and Float - covers lines 477-490
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Float)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Max,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Integer(10), Value::Float(55.5), Value::Integer(20)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Max,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Float(55.5));
+    }
+
+    #[test]
+    fn test_aggregate_count_with_args() {
+        // Test Count aggregate with args (non-null count) - covers lines 385-390
+        let schema = Schema::new(vec![Field::new("val".to_string(), DataType::Integer)]);
+        let agg = AggregateExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: crate::AggregateFunction::Count,
+                args: vec![Expr::column("val")],
+                distinct: false,
+            }],
+            schema.clone(),
+        );
+
+        let values = vec![Value::Integer(1), Value::Null, Value::Integer(3)];
+        let result = agg.compute_aggregate(
+            &crate::AggregateFunction::Count,
+            &[Expr::column("val")],
+            &values,
+        );
+        assert_eq!(result, Value::Integer(2)); // Non-null count
+    }
+
+    // ========== Tests for FilterExec coverage ==========
+
+    #[test]
+    fn test_filter_evaluate_predicate_integer_literal() {
+        // Test Filter evaluate_predicate with Integer literal - covers line 290
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let filter = FilterExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            Expr::Literal(Value::Integer(1)),
+        );
+
+        // Test with non-zero integer - should be true
+        let row = vec![Value::Integer(5)];
+        let result = filter.evaluate_predicate(&Expr::Literal(Value::Integer(1)), &row, &schema);
+        assert!(result);
+
+        // Test with zero integer - should be false
+        let result = filter.evaluate_predicate(&Expr::Literal(Value::Integer(0)), &row, &schema);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_filter_compare_values_non_integer() {
+        // Test Filter compare_values with non-Integer values - covers lines 320-321
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let filter = FilterExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            Expr::literal(Value::Integer(1)),
+        );
+
+        // Test with Float values - should return false (non-matching types)
+        let left = Value::Float(5.0);
+        let right = Value::Float(3.0);
+        let result = filter.compare_values(&left, &Operator::Eq, &right);
+        assert!(!result);
+
+        // Test with Text values - should return false
+        let left = Value::Text("hello".to_string());
+        let right = Value::Text("world".to_string());
+        let result = filter.compare_values(&left, &Operator::Eq, &right);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_filter_evaluate_expr_literal() {
+        // Test Filter evaluate_expr with Literal - covers lines 304-305
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let filter = FilterExec::new(
+            Box::new(SeqScanExec::new("test".to_string(), schema.clone())),
+            Expr::literal(Value::Integer(1)),
+        );
+
+        let row = vec![Value::Integer(5)];
+        let result = filter.evaluate_expr(&Expr::Literal(Value::Integer(100)), &row, &schema);
+        assert_eq!(result, Value::Integer(100));
+    }
+
+    // ========== Tests for HashJoinExec coverage ==========
+
+    #[test]
+    fn test_hash_join_execute_inner_join() {
+        // Test HashJoinExec execute with inner join - covers lines 532-535
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema.clone()));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema.clone()));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let join = HashJoinExec::new(left, right, crate::JoinType::Inner, None, join_schema);
+
+        let result = join.execute();
+        // Empty input produces empty result
+        assert!(result.is_ok());
+        let rows = result.unwrap();
+        assert!(rows.is_empty());
+    }
 }
