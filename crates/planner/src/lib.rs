@@ -212,7 +212,6 @@ fn evaluate_binary_op(left: &Value, op: &Operator, right: &Value) -> Option<Valu
 
 fn evaluate_unary_op(value: &Value, op: &Operator) -> Option<Value> {
     use sqlrustgo_types::Value::*;
-    use Operator::*;
 
     match (value, op) {
         (Integer(v), Operator::Not) => Some(Boolean(*v == 0)),
@@ -592,9 +591,7 @@ mod tests {
 
     #[test]
     fn test_expr_evaluate_column() {
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let expr = Expr::column("id");
         let row = vec![Value::Integer(42)];
         let result = expr.evaluate(&row, &schema);
@@ -616,11 +613,7 @@ mod tests {
             Field::new("a".to_string(), DataType::Integer),
             Field::new("b".to_string(), DataType::Integer),
         ]);
-        let expr = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Plus,
-            Expr::column("b"),
-        );
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Plus, Expr::column("b"));
         let row = vec![Value::Integer(10), Value::Integer(5)];
         let result = expr.evaluate(&row, &schema);
         assert_eq!(result, Some(Value::Integer(15)));
@@ -632,11 +625,7 @@ mod tests {
             Field::new("a".to_string(), DataType::Integer),
             Field::new("b".to_string(), DataType::Integer),
         ]);
-        let expr = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Gt,
-            Expr::column("b"),
-        );
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Gt, Expr::column("b"));
         let row = vec![Value::Integer(10), Value::Integer(5)];
         let result = expr.evaluate(&row, &schema);
         assert_eq!(result, Some(Value::Boolean(true)));
@@ -648,12 +637,11 @@ mod tests {
             Field::new("a".to_string(), DataType::Text),
             Field::new("b".to_string(), DataType::Text),
         ]);
-        let expr = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Lt,
-            Expr::column("b"),
-        );
-        let row = vec![Value::Text("apple".to_string()), Value::Text("banana".to_string())];
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Lt, Expr::column("b"));
+        let row = vec![
+            Value::Text("apple".to_string()),
+            Value::Text("banana".to_string()),
+        ];
         let result = expr.evaluate(&row, &schema);
         assert_eq!(result, Some(Value::Boolean(true)));
     }
@@ -664,11 +652,7 @@ mod tests {
             Field::new("a".to_string(), DataType::Integer),
             Field::new("b".to_string(), DataType::Integer),
         ]);
-        let expr = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Divide,
-            Expr::column("b"),
-        );
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Divide, Expr::column("b"));
         let row = vec![Value::Integer(10), Value::Integer(0)];
         let result = expr.evaluate(&row, &schema);
         assert_eq!(result, None);
@@ -676,9 +660,7 @@ mod tests {
 
     #[test]
     fn test_expr_evaluate_unary_expr_not() {
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
         let expr = Expr::UnaryExpr {
             op: Operator::Not,
             expr: Box::new(Expr::column("a")),
@@ -690,9 +672,7 @@ mod tests {
 
     #[test]
     fn test_expr_evaluate_unary_expr_minus() {
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
         let expr = Expr::UnaryExpr {
             op: Operator::Minus,
             expr: Box::new(Expr::column("a")),
@@ -704,9 +684,7 @@ mod tests {
 
     #[test]
     fn test_expr_evaluate_alias() {
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let expr = Expr::Alias {
             expr: Box::new(Expr::column("id")),
             name: "user_id".to_string(),
@@ -718,9 +696,7 @@ mod tests {
 
     #[test]
     fn test_expr_matches() {
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let expr = Expr::binary_expr(
             Expr::column("id"),
             Operator::Gt,
@@ -732,9 +708,7 @@ mod tests {
 
     #[test]
     fn test_expr_matches_returns_false_for_null() {
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let expr = Expr::Wildcard;
         let row = vec![Value::Integer(20)];
         assert!(!expr.matches(&row, &schema));
