@@ -11,11 +11,13 @@ on:
     branches:
       - main
       - rc/*
+      - release/*
       - ga/*
   pull_request:
     branches:
       - main
       - rc/*
+      - release/*
       - ga/*
 
 env:
