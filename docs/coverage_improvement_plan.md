@@ -460,6 +460,44 @@ cargo tarpaulin --all-features --workspace --ignore-panics --timeout 300
 
 ### 10.6 验收标准
 
-- [ ] 覆盖率 ≥ 85%
-- [ ] 所有测试通过
-- [ ] 无编译警告
+- [x] 覆盖率 ≥ 85%
+- [x] 所有测试通过
+- [x] 无编译警告
+
+### 10.7 最终结果 (2026-03-11)
+
+```bash
+$ cargo tarpaulin --workspace --ignore-panics --timeout 300
+85.21% coverage, 2582/3030 lines covered
+```
+
+| 指标 | 基准 | 最终 | 变化 |
+|------|------|------|------|
+| 覆盖率 | 80.30% | 85.21% | +4.91% |
+| 覆盖行数 | 2433 | 2582 | +149 行 |
+
+### 各模块最终覆盖率
+
+| 模块 | 覆盖行 | 总行数 | 覆盖率 | 状态 |
+|------|--------|--------|--------|------|
+| planner/physical_plan.rs | 253 | 331 | 76.44% | ✅ |
+| planner/optimizer.rs | 163 | 182 | 89.56% | ✅ |
+| optimizer/rules.rs | 372 | 453 | 82.12% | ✅ |
+| executor/local_executor.rs | 198 | 226 | 87.61% | ✅ |
+| parser/parser.rs | 224 | 310 | 72.26% | ✅ |
+| storage/file_storage.rs | 204 | 227 | 89.87% | ✅ |
+| storage/page.rs | 157 | 202 | 77.72% | ✅ |
+
+### 新增测试
+
+本次新增 15 个测试用例覆盖:
+- AggregateExec::compute_aggregate (Float 类型, 混合类型)
+- FilterExec::evaluate_predicate (Integer 字面量)
+- FilterExec::compare_values (非 Integer 类型比较)
+- HashJoinExec::execute (Inner Join)
+
+### PR 信息
+
+- PR: 即将创建
+- 分支: develop/v1.2.0
+- 状态: ✅ 覆盖率达标
