@@ -16,51 +16,74 @@
 | **版本号** | v1.3.0 |
 | **阶段** | Draft |
 | **成熟度目标** | L4 |
-| **核心目标** | 架构稳定，Executor 稳定化 |
-| **预计时间** | 2026-04 - 2026-06 (3个月) |
+| **核心目标** | 架构稳定 + Expression Engine |
+| **预计时间** | 2026-04 - 2026-07 (3-4个月) |
 
 ### 1.2 版本原则
 
-> **重要**: v1.3.0 聚焦于现有功能的稳定化，不引入新功能。
+> **重要**: v1.3.0 是整个路线图的基础，必须建立 Expression Engine，否则后续算子无法实现。
 
 ### 1.3 前置依赖
 
 - ✅ v1.2.0 GA 发布
 
+### 1.4 真实工程量估算
+
+| 模块 | 真实时间 |
+|------|----------|
+| Expression Engine | 1-2 周 |
+| Volcano trait | 1-2 天 |
+| TableScan | 2-3 天 |
+| Projection | 1 天 |
+| Filter | 1-2 天 |
+| HashJoin | 3-5 天 |
+| 测试框架 | 2-3 天 |
+| 覆盖率提升 | 1-2 周 |
+
+**总计**: 约 3-4 周 (而非 3 周!)
+
 ---
 
 ## 二、开发轨道
 
-### 轨道 A: Executor 稳定化 (P0)
+### 轨道 A: Expression Engine (P0 - 关键!)
 
 ```
 Week 1-2:
-├── E-001: Volcano Model 统一 trait 定义
-├── E-002: TableScan 算子实现
-├── E-003: Projection 算子实现
-├── E-004: Filter 算子实现
-└── E-005: HashJoin 算子实现
+├── X-001: Expression trait 定义
+├── X-002: Literal expression
+├── X-003: Column expression
+├── X-004: Binary expression (+, -, *, /, =, <, >, etc.)
+└── X-005: Expression evaluator
 
-Week 3:
-├── E-006: Executor 测试框架
-├── E-007: 单元测试编写
-└── E-008: 覆盖率提升
+这是 Filter, Projection, HashJoin 的基础!
 ```
 
-### 轨道 B: 覆盖率提升 (P0)
+### 轨道 B: Executor 稳定化 (P0)
+
+```
+Week 3-4:
+├── E-001: Volcano Model trait 统一
+├── E-002: TableScan 算子
+├── E-003: Projection 算子
+└── E-004: Filter 算子 (依赖 Expression Engine!)
+
+Week 5:
+├── E-005: HashJoin 算子 (依赖 Expression + 哈希表)
+└── E-006: Executor 测试框架
+```
+
+### 轨道 C: 覆盖率提升 (P0)
 
 | 模块 | 目标覆盖率 |
 |------|-----------|
 | 整体 | ≥65% |
 | Executor | ≥60% |
-| Planner | ≥60% |
 
-**测量方法**: 使用 `cargo tarpaulin --workspace --all-features`，以行覆盖率为准。
-
-### 轨道 C: 可观测性基础 (P1)
+### 轨道 D: 可观测性基础 (P1)
 
 ```
-Week 4:
+Week 6:
 ├── M-001: Metrics trait 定义
 ├── M-002: BufferPoolMetrics 实现
 ├── H-001: /health/live 端点
