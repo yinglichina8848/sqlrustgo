@@ -484,4 +484,122 @@ mod tests {
         let _optimizer = DefaultOptimizer::new();
         assert!(std::any::type_name::<DefaultOptimizer>().contains("DefaultOptimizer"));
     }
+
+    #[test]
+    fn test_empty_relation_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let plan = LogicalPlan::EmptyRelation;
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_values_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::Values {
+            schema: schema.clone(),
+            values: vec![],
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_table_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let plan = LogicalPlan::CreateTable {
+            table_name: "test".to_string(),
+            schema: Schema::empty(),
+            if_not_exists: false,
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_drop_table_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let plan = LogicalPlan::DropTable {
+            table_name: "test".to_string(),
+            if_exists: false,
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let plan = LogicalPlan::Update {
+            table_name: "test".to_string(),
+            updates: vec![],
+            predicate: None,
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let plan = LogicalPlan::Delete {
+            table_name: "test".to_string(),
+            predicate: None,
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_subquery_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Subquery {
+            subquery: Box::new(inner),
+            alias: "sub".to_string(),
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_union_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left = LogicalPlan::TableScan {
+            table_name: "left".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "right".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Union {
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_noop_planner_create_physical_plan() {
+        let planner = NoOpPlanner::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let plan = LogicalPlan::TableScan {
+            table_name: "test".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
 }
