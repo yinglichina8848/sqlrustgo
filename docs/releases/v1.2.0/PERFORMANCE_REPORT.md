@@ -1,8 +1,8 @@
 # v1.2.0 性能测试报告
 
-> **版本**: v1.2.0-beta
-> **测试日期**: 2026-03-08
-> **测试人**: Claude Code
+> **版本**: v1.2.0-RC
+> **测试日期**: 2026-03-13
+> **测试人**: Claude Code (sonaheartopen)
 > **环境**: macOS Darwin 25.3.0, Apple M2
 
 ---
@@ -253,3 +253,59 @@ cargo bench --bench scale_bench 100k
 - 10k_select_all: ~660ns
 - 10k_select_where: ~1.5µs
 - insert_10k: ~20ms
+
+---
+
+## 八、测试覆盖率 (RC 阶段)
+
+### 8.1 覆盖率测试结果
+
+| 指标 | 数值 |
+|------|------|
+| 覆盖行数 | 2,433 |
+| 总行数 | 3,030 |
+| **覆盖率** | **80.30%** |
+| 目标 | 85% |
+| 差距 | -4.70% |
+
+### 8.2 各模块覆盖率
+
+| 模块 | 覆盖/总数 | 覆盖率 | 状态 |
+|------|----------|--------|------|
+| planner/optimizer.rs | 163/182 | 89.56% | ✅ |
+| planner/planner.rs | 79/81 | 97.53% | ✅ |
+| optimizer/rules.rs | 368/449 | 81.96% | ✅ |
+| optimizer/stats.rs | 135/158 | 85.44% | ✅ |
+| planner/physical_plan.rs | 170/331 | 51.36% | ❌ |
+| executor/local_executor.rs | 164/226 | 72.57% | ⚠️ |
+| parser/parser.rs | 224/310 | 72.26% | ⚠️ |
+| storage/file_storage.rs | 176/227 | 77.53% | ⚠️ |
+| storage/page.rs | 157/202 | 77.72% | ⚠️ |
+
+### 8.3 待提升模块
+
+| 模块 | 当前 | 目标 | 差距 |
+|------|------|------|------|
+| planner/physical_plan.rs | 51.36% | 85% | +33.64% |
+| executor/local_executor.rs | 72.57% | 85% | +12.43% |
+| storage 模块 | ~77% | 85% | +8% |
+
+### 8.4 测试命令
+
+```bash
+# 运行覆盖率测试
+cargo tarpaulin --workspace --output-dir target/tarpaulin --ignore-panics --timeout 300
+```
+
+---
+
+## 九、门禁检查状态 (RC)
+
+| 检查项 | 要求 | 当前 | 状态 |
+|--------|------|------|------|
+| 编译 | 通过 | ✅ | 通过 |
+| 测试 | 100% | ✅ | 通过 |
+| Clippy | 零警告 | ✅ | 通过 |
+| 格式化 | 通过 | ✅ | 通过 |
+| 覆盖率 | ≥85% | 80.30% | ⚠️ |
+| 安全扫描 | 无漏洞 | ✅ | 通过 |
