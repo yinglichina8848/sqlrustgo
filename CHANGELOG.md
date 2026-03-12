@@ -5,15 +5,7 @@ SQLRustGo 的所有显着更改都将记录在此文件中。
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [未发布]
-
-### Added
-
-- **治理**：将 v1.2.0 Alpha 阶段的活动开发分支统一到 `develop/v1.2.0`。
-- **文档**：在顶级发布文档中添加了明确的 `alpha/v1.2.0` 状态标记。
-- **架构**：添加了 crates 工作区迁移的目录重构进度说明。
-
-## [1.2.0] - TBD
+## [1.2.0] - 2026-03-13
 
 ### Added
 
@@ -24,14 +16,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **功能**：用于统计收集的 ANALYZE 命令
 - **功能**：带有表/列统计信息的简化 CBO
 - **功能**：用于嵌入式使用的 LocalExecutor
-- **测试**：LocalExecutor 测试 (T-005)
+- **功能**：HashJoinExec 表连接实现
+- **功能**：聚合函数 (COUNT, SUM, AVG, MIN, MAX)
+- **功能**：ProjectionExec 列投影 (Wildcard, Alias, BinaryExpr)
+- **功能**：FilterExec 谓词过滤
+- **功能**：SeqScanExec 全表扫描
+- **优化器**：Predicate Pushdown 谓词下推
+- **优化器**：Projection Pruning 投影裁剪
+- **优化器**：Constant Folding 常量折叠
+- **优化器**：Expression Simplification 表达式简化
+- **优化器**：Join Reordering 连接重排序
+- **测试**：LocalExecutor 测试框架
+- **测试**：覆盖率提升至 80%+
 
-### 已更改
+### Changed
 
 - **重构**：存储层抽象
 - **重构**：统计基础设施
+- **重构**：PhysicalPlan execute() 方法实现
 
-＃＃＃ 安全
+### Fixed
+
+- **修复**：Optimizer 规则测试编译错误
+- **修复**：CI 配置完善 (release/* 分支触发)
+- **修复**：Benchmark 编译适配
+
+### Security
 
 - **审核**：依赖审核已通过（无高严重性漏洞）
 
@@ -41,8 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新增**：v1.2.0 升级指南
 - **新**：v1.2.0 成熟度评估
 - **新**：v1.2.0 测试计划（目标覆盖率超过 85%）
+- **新增**：v1.2.0 性能测试报告
+- **新增**：覆盖率改进计划
 
-## [1.1.0] - 2026-03-05
+## [未发布]
 
 ### Added
 
