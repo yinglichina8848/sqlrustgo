@@ -864,4 +864,61 @@ mod tests {
 
         assert_eq!(result.rows.len(), 4);
     }
+
+    #[test]
+    fn test_execute_sort() {
+        use sqlrustgo_planner::{physical_plan::SortExec, SeqScanExec, DataType, Expr};
+        // Test execution of SortExec
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+
+        // Create a table scan as child
+        let scan = SeqScanExec::new("test".to_string(), schema.clone());
+
+        // Create sort plan
+        let sort_expr = vec![sqlrustgo_planner::SortExpr {
+            expr: Expr::column("value"),
+            asc: true,
+            nulls_first: false,
+        }];
+
+        let sort = SortExec::new(Box::new(scan), sort_expr);
+
+        let result = executor.execute(&sort).unwrap();
+        assert!(result.rows.is_empty()); // No data in storage
+    }
+
+    #[test]
+    fn test_execute_limit() {
+        use sqlrustgo_planner::{physical_plan::LimitExec, SeqScanExec, DataType};
+        // Test execution of LimitExec
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+
+        // Create a table scan as child
+        let scan = SeqScanExec::new("test".to_string(), schema.clone());
+
+        // Create limit plan with offset
+        let limit = LimitExec::new(Box::new(scan), 10, Some(5));
+
+        let result = executor.execute(&limit).unwrap();
+        assert!(result.rows.is_empty()); // No data in storage
+    }
+
+    #[test]
+    fn test_executor_name() {
+        // Test the executor name method
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+        assert_eq!(executor.name(), "local");
+    }
 }
