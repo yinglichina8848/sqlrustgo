@@ -2,6 +2,7 @@
 //!
 //! A Rust implementation of a SQL-92 compliant database system.
 
+pub mod common;
 pub mod executor;
 pub mod lexer;
 pub mod network;
@@ -10,6 +11,7 @@ pub mod storage;
 pub mod transaction;
 pub mod types;
 
+pub use common::metrics::{Counter, Gauge, Histogram, MetricsRegistry, MetricType};
 pub use executor::{ExecutionEngine, ExecutionResult, execute};
 pub use lexer::{Lexer, Token, tokenize};
 pub use network::{NetworkHandler, connect, start_server_sync};
