@@ -6,5 +6,4 @@ pub mod harness;
 
 pub use mock_storage::MockStorage;
 pub use test_data::{TestDataGenerator, TestTableBuilder, schemas};
-
 pub use sqlrustgo_types::Value;
