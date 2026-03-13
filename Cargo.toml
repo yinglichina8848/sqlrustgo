@@ -44,7 +44,7 @@ lru-cache = "0.1.2"
 ctrlc = "3.5.2"
 serde_json = "1.0"
 tempfile = "3.25.0"
-criterion = "0.5"
+criterion = "0.8"
 
 [dev-dependencies]
 criterion = "0.5"
