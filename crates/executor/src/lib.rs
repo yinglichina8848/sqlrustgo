@@ -8,6 +8,11 @@ pub use executor::{Executor, ExecutorResult, VolcanoExecutor, VolIterator, execu
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
 
+// Test framework modules - publicly accessible
+pub mod mock_storage;
+pub mod test_data;
+pub mod harness;
+
 #[cfg(test)]
 mod tests {
     use super::*;
