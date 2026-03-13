@@ -3,6 +3,7 @@
 pub mod executor;
 pub mod filter;
 pub mod local_executor;
+pub mod test_framework;
 
 pub use executor::{Executor, ExecutorResult, VolcanoExecutor, VolIterator, execute_collect};
 pub use filter::FilterVolcanoExecutor;
