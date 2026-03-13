@@ -71,7 +71,7 @@ fn bench_scan_with_filter(c: &mut Criterion) {
     for size in [1_000, 10_000, 100_000] {
         let mut engine = setup_engine_with_data(size);
 
-        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
             b.iter(|| {
                 engine
                     .execute(parse("SELECT * FROM scan_bench WHERE value > 500").unwrap())
@@ -89,7 +89,7 @@ fn bench_scan_projection(c: &mut Criterion) {
     for size in [1_000, 10_000, 100_000] {
         let mut engine = setup_engine_with_data(size);
 
-        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
             b.iter(|| {
                 engine
                     .execute(parse("SELECT id, value FROM scan_bench").unwrap())
