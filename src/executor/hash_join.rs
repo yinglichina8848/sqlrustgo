@@ -72,3 +72,35 @@ impl Executor for HashJoinExecutor {
     fn schema(&self) -> &[String] { &self.output_columns }
     fn init(&mut self) -> SqlResult<()> { self.hash_table.clear(); self.phase = JoinPhase::Build; self.probe_index = 0; self.right_buffer.clear(); self.buffer_index = 0; self.left.init()?; self.right.init() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::executor::executor::NullExecutor;
+    use crate::types::Value;
+
+    #[test]
+    fn test_hash_join_new() {
+        let left = Box::new(NullExecutor::new(vec!["id".to_string()]));
+        let right = Box::new(NullExecutor::new(vec!["id".to_string()]));
+        let executor = HashJoinExecutor::new(
+            left,
+            right,
+            vec![0],
+            vec![0],
+            vec!["id".to_string(), "id".to_string()],
+        );
+        assert_eq!(executor.schema(), &["id", "id"]);
+    }
+
+    #[test]
+    fn test_key_to_string() {
+        let left = Box::new(NullExecutor::new(vec![]));
+        let right = Box::new(NullExecutor::new(vec![]));
+        let executor = HashJoinExecutor::new(left, right, vec![0], vec![0], vec![]);
+        
+        let row = vec![Value::Integer(1), Value::Text("test".to_string())];
+        let key = executor.key_to_string(&row, &[0]);
+        assert!(key.contains("1"));
+    }
+}

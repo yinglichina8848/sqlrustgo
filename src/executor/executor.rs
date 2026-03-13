@@ -46,3 +46,62 @@ impl Executor for OnceExecutor {
 }
 
 pub use crate::executor::ExecutionEngine;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Value;
+
+    #[test]
+    fn test_record_batch_new() {
+        let columns = vec!["id".to_string(), "name".to_string()];
+        let rows = vec![
+            vec![Value::Integer(1), Value::Text("Alice".to_string())],
+            vec![Value::Integer(2), Value::Text("Bob".to_string())],
+        ];
+        let batch = RecordBatch::new(columns.clone(), rows.clone());
+        assert_eq!(batch.columns, columns);
+        assert_eq!(batch.rows.len(), 2);
+        assert_eq!(batch.num_rows, 2);
+    }
+
+    #[test]
+    fn test_record_batch_empty() {
+        let batch = RecordBatch::empty();
+        assert!(batch.columns.is_empty());
+        assert!(batch.rows.is_empty());
+        assert_eq!(batch.num_rows, 0);
+    }
+
+    #[test]
+    fn test_null_executor() {
+        let mut executor = NullExecutor::new(vec!["col1".to_string()]);
+        assert_eq!(executor.schema(), &["col1"]);
+        let result = executor.next();
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_once_executor() {
+        let batch = RecordBatch::new(
+            vec!["id".to_string()],
+            vec![vec![Value::Integer(1)]],
+        );
+        let mut executor = OnceExecutor::new(batch);
+        let result = executor.next().unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().num_rows, 1);
+        let result = executor.next().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_once_executor_schema() {
+        let batch = RecordBatch::new(
+            vec!["a".to_string(), "b".to_string()],
+            vec![],
+        );
+        let executor = OnceExecutor::new(batch);
+        assert_eq!(executor.schema(), &["a", "b"]);
+    }
+}

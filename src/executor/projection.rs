@@ -46,3 +46,29 @@ impl Executor for FilterExecutor {
     fn schema(&self) -> &[String] { self.child.schema() }
     fn init(&mut self) -> SqlResult<()> { self.child.init() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::executor::executor::{Executor, RecordBatch, NullExecutor};
+    use crate::types::Value;
+
+    #[test]
+    fn test_projection_new() {
+        let child = Box::new(NullExecutor::new(vec!["a".to_string()]));
+        let executor = ProjectionExecutor::new(
+            child,
+            vec![0],
+            vec!["a".to_string()],
+        );
+        assert_eq!(executor.schema(), &["a"]);
+    }
+
+    #[test]
+    fn test_filter_new() {
+        let child = Box::new(NullExecutor::new(vec!["a".to_string()]));
+        let predicate = Box::new(|_: &[Value]| true);
+        let executor = FilterExecutor::new(child, predicate);
+        assert_eq!(executor.schema(), &["a"]);
+    }
+}

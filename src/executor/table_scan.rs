@@ -63,3 +63,39 @@ impl Executor for TableScanExecutor {
     fn schema(&self) -> &[String] { &[] }
     fn init(&mut self) -> SqlResult<()> { self.load_table()?; self.current_row = 0; Ok(()) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn create_mock_storage() -> Arc<FileStorage> {
+        let temp_dir = std::env::temp_dir().join(format!("tablescan_test_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).ok();
+        Arc::new(FileStorage::new(temp_dir).unwrap())
+    }
+
+    #[test]
+    fn test_tablescan_new() {
+        let storage = create_mock_storage();
+        let executor = TableScanExecutor::new("test_table".to_string(), storage);
+        assert!(executor.schema().is_empty());
+    }
+
+    #[test]
+    fn test_tablescan_with_columns() {
+        let storage = create_mock_storage();
+        let executor = TableScanExecutor::new("test_table".to_string(), storage)
+            .with_columns(vec!["id".to_string()])
+            .with_batch_size(100);
+        assert!(executor.schema().is_empty());
+    }
+
+    #[test]
+    fn test_tablescan_batch_size() {
+        let storage = create_mock_storage();
+        let executor = TableScanExecutor::new("test_table".to_string(), storage)
+            .with_batch_size(50);
+        assert!(executor.schema().is_empty());
+    }
+}
