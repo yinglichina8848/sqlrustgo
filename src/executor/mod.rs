@@ -16,6 +16,7 @@
 //! Volcano Model trait definitions
 pub mod executor;
 pub mod table_scan;
+pub mod projection;
 
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,

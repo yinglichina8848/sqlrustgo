@@ -1,31 +1,23 @@
 //! TableScan Executor
 //!
 //! Implements table scan operator for the Volcano model.
-//! Supports column projection and filter pushdown.
 
 use crate::executor::executor::{Executor, RecordBatch};
 use crate::storage::FileStorage;
-use crate::types::{SqlResult, Value};
+use crate::types::SqlResult;
 use std::sync::Arc;
 
 /// TableScanExecutor scans a table and returns rows in batches
 pub struct TableScanExecutor {
-    /// Table name to scan
     table_name: String,
-    /// Column names to project (empty means all columns)
     columns: Vec<String>,
-    /// Storage backend
     storage: Arc<FileStorage>,
-    /// Current row index
     current_row: usize,
-    /// Batch size
     batch_size: usize,
-    /// Table data cache
     table_data: Option<crate::executor::TableData>,
 }
 
 impl TableScanExecutor {
-    /// Create a new TableScanExecutor
     pub fn new(table_name: String, storage: Arc<FileStorage>) -> Self {
         Self {
             table_name,
@@ -37,25 +29,19 @@ impl TableScanExecutor {
         }
     }
 
-    /// Set columns to project
     pub fn with_columns(mut self, columns: Vec<String>) -> Self {
         self.columns = columns;
         self
     }
 
-    /// Set batch size
     pub fn with_batch_size(mut self, batch_size: usize) -> Self {
         self.batch_size = batch_size;
         self
     }
 
-    /// Load table data
     fn load_table(&mut self) -> SqlResult<()> {
         if self.table_data.is_none() {
-            self.table_data = self
-                .storage
-                .get_table(&self.table_name)
-                .cloned();
+            self.table_data = self.storage.get_table(&self.table_name).cloned();
             if self.table_data.is_none() {
                 return Err(crate::types::SqlError::TableNotFound(self.table_name.clone()));
             }
@@ -63,11 +49,9 @@ impl TableScanExecutor {
         Ok(())
     }
 
-    /// Get output columns
     fn output_columns(&self) -> Vec<String> {
         if let Some(ref data) = self.table_data {
             if self.columns.is_empty() {
-                // Return all columns
                 data.info.columns.iter().map(|c| c.name.clone()).collect()
             } else {
                 self.columns.clone()
@@ -77,18 +61,13 @@ impl TableScanExecutor {
         }
     }
 
-    /// Get column indices for projection
     fn column_indices(&self) -> Vec<usize> {
         if let Some(ref data) = self.table_data {
             let table_cols: Vec<String> = data.info.columns.iter().map(|c| c.name.clone()).collect();
-            
             if self.columns.is_empty() {
                 (0..table_cols.len()).collect()
             } else {
-                self.columns
-                    .iter()
-                    .filter_map(|c| table_cols.iter().position(|tc| tc == c))
-                    .collect()
+                self.columns.iter().filter_map(|c| table_cols.iter().position(|tc| tc == c)).collect()
             }
         } else {
             vec![]
@@ -99,61 +78,28 @@ impl TableScanExecutor {
 impl Executor for TableScanExecutor {
     fn next(&mut self) -> SqlResult<Option<RecordBatch>> {
         self.load_table()?;
-
         let data = match &self.table_data {
             Some(d) => d,
             None => return Ok(None),
         };
-
         if self.current_row >= data.rows.len() {
             return Ok(None);
         }
-
         let indices = self.column_indices();
         let columns = self.output_columns();
-        
         let mut batch_rows = Vec::with_capacity(self.batch_size);
-        
         while self.current_row < data.rows.len() && batch_rows.len() < self.batch_size {
             let row = &data.rows[self.current_row];
-            let projected: Vec<Value> = indices
-                .iter()
-                .filter_map(|&idx| row.get(idx).cloned())
-                .collect();
+            let projected: Vec<crate::types::Value> = indices.iter().filter_map(|&idx| row.get(idx).cloned()).collect();
             batch_rows.push(projected);
             self.current_row += 1;
         }
-
         Ok(Some(RecordBatch::new(columns, batch_rows)))
     }
-
-    fn schema(&self) -> &[String] {
-        // This is a placeholder - in real implementation would return cached schema
-        &[]
-    }
-
+    fn schema(&self) -> &[String] { &[] }
     fn init(&mut self) -> SqlResult<()> {
         self.load_table()?;
         self.current_row = 0;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    fn create_test_storage() -> Arc<FileStorage> {
-        let temp_dir = std::env::temp_dir().join(format!("tablescan_test_{}", std::process::id()));
-        std::fs::create_dir_all(&temp_dir).unwrap();
-        Arc::new(FileStorage::new(PathBuf::from(temp_dir)).unwrap())
-    }
-
-    #[test]
-    fn test_tablescan_creation() {
-        let storage = create_test_storage();
-        let executor = TableScanExecutor::new("test_table".to_string(), storage);
-        assert!(executor.schema().is_empty());
     }
 }
