@@ -3,7 +3,8 @@
 //! Implements the Executor trait for local execution using StorageEngine.
 
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, HashJoinExec, JoinType, PhysicalPlan, ProjectionExec,
+    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
+    ProjectionExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -100,10 +101,29 @@ impl<'a> LocalExecutor<'a> {
         // Execute child first
         let child_result = self.execute(children[0])?;
 
-        // Filter evaluation is complex - we would need to evaluate the predicate
-        // For now, return the child result as-is
-        // The actual filtering would require expression evaluation
-        Ok(child_result)
+        // Get the predicate from FilterExec
+        let filter = plan
+            .as_any()
+            .downcast_ref::<FilterExec>();
+
+        let predicate = match filter {
+            Some(f) => f.predicate(),
+            None => return Ok(ExecutorResult::empty()),
+        };
+
+        let input_schema = children[0].schema();
+
+        // Filter rows based on predicate
+        let filtered_rows: Vec<Vec<Value>> = child_result
+            .rows
+            .into_iter()
+            .filter(|row| {
+                let predicate_val = predicate.evaluate(row, input_schema).unwrap_or(Value::Null);
+                matches!(predicate_val, Value::Boolean(true))
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(filtered_rows, 0))
     }
 
     /// Execute aggregate (COUNT, SUM, AVG, etc.)
