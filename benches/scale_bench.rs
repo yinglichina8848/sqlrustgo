@@ -2,10 +2,11 @@
 // Target: 100K+ rows processed efficiently
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use std::sync::Arc;
 
 fn setup_engine_with_rows(count: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
 
     // Create table
     engine
@@ -115,7 +116,7 @@ fn bench_100k_projection(c: &mut Criterion) {
 fn bench_insert_10k(c: &mut Criterion) {
     c.bench_function("insert_10k", |b| {
         b.iter(|| {
-            let mut engine = ExecutionEngine::new();
+            let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
             engine
                 .execute(parse("CREATE TABLE insert_test (id INTEGER, value TEXT)").unwrap())
                 .unwrap();
