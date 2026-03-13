@@ -1,7 +1,8 @@
 //! Volcano Executor trait - 统一的查询执行接口
 
+use crate::filter::FilterVolcanoExecutor;
 use sqlrustgo_planner::{PhysicalPlan, Schema};
-use sqlrustgo_types::{SqlResult, Value, SqlError};
+use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::any::Any;
 
 #[derive(Debug, Clone)]
@@ -105,36 +106,6 @@ impl VolcanoExecutor for ProjectionVolcanoExecutor {
     fn close(&mut self) -> SqlResult<()> { self.child.close()?; self.initialized = false; Ok(()) }
     fn schema(&self) -> &Schema { &self.schema }
     fn name(&self) -> &str { "Projection" }
-    fn is_initialized(&self) -> bool { self.initialized }
-    fn as_any(&self) -> &dyn Any { self }
-}
-
-pub struct FilterVolcanoExecutor {
-    child: Box<dyn VolcanoExecutor>,
-    predicate: sqlrustgo_planner::Expr,
-    schema: Schema,
-    input_schema: Schema,
-    initialized: bool,
-}
-
-impl FilterVolcanoExecutor {
-    pub fn new(child: Box<dyn VolcanoExecutor>, predicate: sqlrustgo_planner::Expr, schema: Schema, input_schema: Schema) -> Self {
-        Self { child, predicate, schema, input_schema, initialized: false }
-    }
-}
-
-impl VolcanoExecutor for FilterVolcanoExecutor {
-    fn init(&mut self) -> SqlResult<()> { self.child.init()?; self.initialized = true; Ok(()) }
-    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
-        while let Some(row) = self.child.next()? {
-            let predicate_val = self.predicate.evaluate(&row, &self.input_schema).unwrap_or(Value::Null);
-            if let Value::Boolean(true) = predicate_val { return Ok(Some(row)); }
-        }
-        Ok(None)
-    }
-    fn close(&mut self) -> SqlResult<()> { self.child.close()?; self.initialized = false; Ok(()) }
-    fn schema(&self) -> &Schema { &self.schema }
-    fn name(&self) -> &str { "Filter" }
     fn is_initialized(&self) -> bool { self.initialized }
     fn as_any(&self) -> &dyn Any { self }
 }
