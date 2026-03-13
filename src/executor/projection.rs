@@ -1,11 +1,7 @@
 //! Projection Executor
-//!
-//! Implements projection operator for the Volcano model.
-
 use crate::executor::executor::{Executor, RecordBatch};
 use crate::types::{SqlResult, Value};
 
-/// ProjectionExecutor performs column projection on input data
 pub struct ProjectionExecutor {
     child: Box<dyn Executor>,
     column_indices: Vec<usize>,
@@ -34,7 +30,6 @@ impl Executor for ProjectionExecutor {
     fn init(&mut self) -> SqlResult<()> { self.child.init() }
 }
 
-/// FilterExecutor applies a filter condition to input data
 pub struct FilterExecutor {
     child: Box<dyn Executor>,
     predicate: Box<dyn Fn(&[Value]) -> bool + Send>,
@@ -47,9 +42,7 @@ impl FilterExecutor {
 }
 
 impl Executor for FilterExecutor {
-    fn next(&mut self) -> SqlResult<Option<RecordBatch>> {
-        Ok(None) // TODO: implement proper filtering
-    }
+    fn next(&mut self) -> SqlResult<Option<RecordBatch>> { Ok(None) }
     fn schema(&self) -> &[String] { self.child.schema() }
     fn init(&mut self) -> SqlResult<()> { self.child.init() }
 }
