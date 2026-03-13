@@ -18,6 +18,7 @@ pub mod executor;
 pub mod table_scan;
 pub mod projection;
 pub mod hash_join;
+pub mod test_framework;
 
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
