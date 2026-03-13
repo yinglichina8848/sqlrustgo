@@ -13,6 +13,9 @@
 //! - 支持：DML (INSERT/UPDATE/DELETE) 和 DQL (SELECT)
 //! - 表达式求值：WHERE 子句的布尔表达式
 
+//! Volcano Model trait definitions
+pub mod executor;
+
 use crate::parser::{
     DeleteStatement, Expression, InsertStatement, SelectStatement, Statement, UpdateStatement,
 };
