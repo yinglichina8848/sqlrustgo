@@ -104,3 +104,53 @@ mod tests {
         assert!(key.contains("1"));
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use crate::executor::executor::{Executor, RecordBatch, NullExecutor, OnceExecutor};
+    use crate::types::Value;
+
+    #[test]
+    fn test_join_phase_clone() {
+        let phase = JoinPhase::Build;
+        assert_eq!(phase, JoinPhase::Build);
+    }
+
+    #[test]
+    fn test_join_phase_eq() {
+        assert_eq!(JoinPhase::Build, JoinPhase::Build);
+        assert_eq!(JoinPhase::Probe, JoinPhase::Probe);
+        assert_eq!(JoinPhase::Done, JoinPhase::Done);
+    }
+
+    #[test]
+    fn test_key_to_string_int() {
+        let left = Box::new(NullExecutor::new(vec![]));
+        let right = Box::new(NullExecutor::new(vec![]));
+        let executor = HashJoinExecutor::new(left, right, vec![0], vec![0], vec![]);
+        let row = vec![Value::Integer(42)];
+        let key = executor.key_to_string(&row, &[0]);
+        assert!(key.contains("42"));
+    }
+
+    #[test]
+    fn test_key_to_string_text() {
+        let left = Box::new(NullExecutor::new(vec![]));
+        let right = Box::new(NullExecutor::new(vec![]));
+        let executor = HashJoinExecutor::new(left, right, vec![0], vec![0], vec![]);
+        let row = vec![Value::Text("hello".to_string())];
+        let key = executor.key_to_string(&row, &[0]);
+        assert!(key.contains("hello"));
+    }
+
+    #[test]
+    fn test_key_to_string_float() {
+        let left = Box::new(NullExecutor::new(vec![]));
+        let right = Box::new(NullExecutor::new(vec![]));
+        let executor = HashJoinExecutor::new(left, right, vec![0], vec![0], vec![]);
+        let row = vec![Value::Float(3.14)];
+        let key = executor.key_to_string(&row, &[0]);
+        assert!(key.contains("3.14"));
+    }
+}

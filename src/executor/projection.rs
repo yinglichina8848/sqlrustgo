@@ -72,3 +72,34 @@ mod tests {
         assert_eq!(executor.schema(), &["a"]);
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use crate::executor::executor::{Executor, RecordBatch, NullExecutor, OnceExecutor};
+    use crate::types::Value;
+
+    #[test]
+    fn test_projection_init() {
+        let child = Box::new(NullExecutor::new(vec!["a".to_string()]));
+        let mut executor = ProjectionExecutor::new(child, vec![0], vec!["a".to_string()]);
+        let result = executor.init();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_filter_init() {
+        let child = Box::new(NullExecutor::new(vec!["a".to_string()]));
+        let predicate = Box::new(|_: &[Value]| true);
+        let mut executor = FilterExecutor::new(child, predicate);
+        let result = executor.init();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_projection_schema() {
+        let child = Box::new(NullExecutor::new(vec!["x".to_string()]));
+        let executor = ProjectionExecutor::new(child, vec![0], vec!["y".to_string()]);
+        assert_eq!(executor.schema(), &["y"]);
+    }
+}

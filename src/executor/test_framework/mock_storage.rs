@@ -1,12 +1,9 @@
 //! Mock Storage for Testing
-//!
-//! Provides an in-memory storage implementation for testing executors
 
 use crate::types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-/// Mock storage for testing - simple in-memory implementation
 pub struct MockStorage {
     tables: RwLock<HashMap<String, TableData>>,
 }
@@ -58,4 +55,75 @@ impl MockStorage {
 
 impl Default for MockStorage {
     fn default() -> Self { Self::new() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mock_storage_new() {
+        let storage = MockStorage::new();
+        assert!(storage.get_table("test").is_none());
+    }
+
+    #[test]
+    fn test_mock_storage_with_table() {
+        let storage = MockStorage::new()
+            .with_table("users", vec![("id", "INTEGER"), ("name", "TEXT")], vec![]);
+        assert!(storage.get_table("users").is_some());
+    }
+
+    #[test]
+    fn test_mock_storage_get_table() {
+        let storage = MockStorage::new()
+            .with_table("users", vec![("id", "INTEGER")], 
+            vec![vec![Value::Integer(1)]]);
+        let table = storage.get_table("users").unwrap();
+        assert_eq!(table.info.name, "users");
+        assert_eq!(table.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_mock_storage_insert() {
+        let storage = MockStorage::new()
+            .with_table("users", vec![("id", "INTEGER")], vec![]);
+        storage.insert("users", vec![Value::Integer(1)]).unwrap();
+        let table = storage.get_table("users").unwrap();
+        assert_eq!(table.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_mock_storage_insert_nonexistent() {
+        let storage = MockStorage::new();
+        let result = storage.insert("users", vec![Value::Integer(1)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_table_data_clone() {
+        let data = TableData {
+            info: TableInfo { name: "test".to_string(), columns: vec![] },
+            rows: vec![vec![Value::Integer(1)]],
+        };
+        let cloned = data.clone();
+        assert_eq!(cloned.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_table_info_clone() {
+        let info = TableInfo {
+            name: "test".to_string(),
+            columns: vec![ColumnInfo { name: "id".to_string(), data_type: "INTEGER".to_string() }],
+        };
+        let cloned = info.clone();
+        assert_eq!(cloned.columns.len(), 1);
+    }
+
+    #[test]
+    fn test_column_info() {
+        let col = ColumnInfo { name: "id".to_string(), data_type: "INTEGER".to_string() };
+        assert_eq!(col.name, "id");
+        assert_eq!(col.data_type, "INTEGER");
+    }
 }
