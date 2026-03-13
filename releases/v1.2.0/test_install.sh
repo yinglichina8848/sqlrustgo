@@ -33,9 +33,12 @@ echo ""
 
 # 检查二进制文件
 log_info "检查二进制文件..."
+
+# 尝试多个位置
 if [ -f "./$BINARY_NAME" ]; then
-    log_success "找到二进制文件: ./$BINARY_NAME"
     BINARY_PATH="./$BINARY_NAME"
+elif [ -f "releases/v1.2.0/$BINARY_NAME" ]; then
+    BINARY_PATH="releases/v1.2.0/$BINARY_NAME"
 elif [ -f "$TEST_DIR/$BINARY_NAME" ]; then
     BINARY_PATH="$TEST_DIR/$BINARY_NAME"
     log_success "找到二进制文件: $BINARY_PATH"
