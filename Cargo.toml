@@ -49,6 +49,7 @@ criterion = "0.5"
 [dev-dependencies]
 criterion = "0.5"
 tempfile = "3.25.0"
+serde_yaml = "0.9"
 
 [package]
 name = "sqlrustgo"
