@@ -1171,17 +1171,17 @@ mod storage_engine_tests {
             let table_data = TableData {
                 info: TableInfo {
                     name: "users".to_string(),
-                    columns: vec![
-                        ColumnDefinition {
-                            name: "id".to_string(),
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
-                        },
-                    ],
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    }],
                 },
                 rows: vec![],
             };
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
 
             // Get table info through trait
             let info = storage.get_table_info("users").unwrap();
@@ -1206,7 +1206,9 @@ mod storage_engine_tests {
                 },
                 rows: vec![],
             };
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
 
             // Test has_table
             assert!(storage.has_table("users"));
@@ -1224,11 +1226,17 @@ mod storage_engine_tests {
 
             // Insert multiple tables
             let table1 = TableData {
-                info: TableInfo { name: "users".to_string(), columns: vec![] },
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![],
+                },
                 rows: vec![],
             };
             let table2 = TableData {
-                info: TableInfo { name: "orders".to_string(), columns: vec![] },
+                info: TableInfo {
+                    name: "orders".to_string(),
+                    columns: vec![],
+                },
                 rows: vec![],
             };
             storage.insert_table("users".to_string(), table1).unwrap();
@@ -1253,20 +1261,17 @@ mod storage_engine_tests {
             let table_data = TableData {
                 info: TableInfo {
                     name: "users".to_string(),
-                    columns: vec![
-                        ColumnDefinition {
-                            name: "id".to_string(),
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
-                        },
-                    ],
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    }],
                 },
-                rows: vec![
-                    vec![Value::Integer(1)],
-                    vec![Value::Integer(2)],
-                ],
+                rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
             };
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
 
             // Create index through trait
             storage.create_table_index("users", "id", 0).unwrap();
@@ -1288,17 +1293,17 @@ mod storage_engine_tests {
             let table_data = TableData {
                 info: TableInfo {
                     name: "users".to_string(),
-                    columns: vec![
-                        ColumnDefinition {
-                            name: "id".to_string(),
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
-                        },
-                    ],
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    }],
                 },
                 rows: vec![vec![Value::Integer(1)]],
             };
-            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
             storage.create_index("users", "id", 0).unwrap();
 
             // Drop index through trait

@@ -28,13 +28,27 @@ pub struct ColumnInfo {
 
 impl MockStorage {
     pub fn new() -> Self {
-        Self { tables: RwLock::new(HashMap::new()) }
+        Self {
+            tables: RwLock::new(HashMap::new()),
+        }
     }
 
-    pub fn with_table(mut self, name: &str, columns: Vec<(&str, &str)>, rows: Vec<Vec<Value>>) -> Self {
-        let cols = columns.into_iter().map(|(n, t)| ColumnInfo { name: n.to_string(), data_type: t.to_string() }).collect();
-        let info = TableInfo { name: name.to_string(), columns: cols };
-        self.tables.write().unwrap().insert(name.to_string(), TableData { info, rows });
+    pub fn with_table(self, name: &str, columns: Vec<(&str, &str)>, rows: Vec<Vec<Value>>) -> Self {
+        let cols = columns
+            .into_iter()
+            .map(|(n, t)| ColumnInfo {
+                name: n.to_string(),
+                data_type: t.to_string(),
+            })
+            .collect();
+        let info = TableInfo {
+            name: name.to_string(),
+            columns: cols,
+        };
+        self.tables
+            .write()
+            .unwrap()
+            .insert(name.to_string(), TableData { info, rows });
         self
     }
 
@@ -54,7 +68,9 @@ impl MockStorage {
 }
 
 impl Default for MockStorage {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -69,16 +85,21 @@ mod tests {
 
     #[test]
     fn test_mock_storage_with_table() {
-        let storage = MockStorage::new()
-            .with_table("users", vec![("id", "INTEGER"), ("name", "TEXT")], vec![]);
+        let storage = MockStorage::new().with_table(
+            "users",
+            vec![("id", "INTEGER"), ("name", "TEXT")],
+            vec![],
+        );
         assert!(storage.get_table("users").is_some());
     }
 
     #[test]
     fn test_mock_storage_get_table() {
-        let storage = MockStorage::new()
-            .with_table("users", vec![("id", "INTEGER")], 
-            vec![vec![Value::Integer(1)]]);
+        let storage = MockStorage::new().with_table(
+            "users",
+            vec![("id", "INTEGER")],
+            vec![vec![Value::Integer(1)]],
+        );
         let table = storage.get_table("users").unwrap();
         assert_eq!(table.info.name, "users");
         assert_eq!(table.rows.len(), 1);
@@ -86,8 +107,7 @@ mod tests {
 
     #[test]
     fn test_mock_storage_insert() {
-        let storage = MockStorage::new()
-            .with_table("users", vec![("id", "INTEGER")], vec![]);
+        let storage = MockStorage::new().with_table("users", vec![("id", "INTEGER")], vec![]);
         storage.insert("users", vec![Value::Integer(1)]).unwrap();
         let table = storage.get_table("users").unwrap();
         assert_eq!(table.rows.len(), 1);
@@ -103,7 +123,10 @@ mod tests {
     #[test]
     fn test_table_data_clone() {
         let data = TableData {
-            info: TableInfo { name: "test".to_string(), columns: vec![] },
+            info: TableInfo {
+                name: "test".to_string(),
+                columns: vec![],
+            },
             rows: vec![vec![Value::Integer(1)]],
         };
         let cloned = data.clone();
@@ -114,7 +137,10 @@ mod tests {
     fn test_table_info_clone() {
         let info = TableInfo {
             name: "test".to_string(),
-            columns: vec![ColumnInfo { name: "id".to_string(), data_type: "INTEGER".to_string() }],
+            columns: vec![ColumnInfo {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+            }],
         };
         let cloned = info.clone();
         assert_eq!(cloned.columns.len(), 1);
@@ -122,7 +148,10 @@ mod tests {
 
     #[test]
     fn test_column_info() {
-        let col = ColumnInfo { name: "id".to_string(), data_type: "INTEGER".to_string() };
+        let col = ColumnInfo {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+        };
         assert_eq!(col.name, "id");
         assert_eq!(col.data_type, "INTEGER");
     }

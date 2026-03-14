@@ -13,12 +13,16 @@ on:
       - rc/*
       - release/*
       - ga/*
+      - develop/*
+      - feature/*
   pull_request:
     branches:
       - main
       - rc/*
       - release/*
       - ga/*
+      - develop/*
+      - feature/*
 
 env:
   CARGO_TERM_COLOR: always
