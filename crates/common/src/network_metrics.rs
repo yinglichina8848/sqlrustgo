@@ -292,4 +292,122 @@ mod tests {
         fn _check_send_sync<T: Send + Sync>() {}
         _check_send_sync::<NetworkMetrics>();
     }
+
+    #[test]
+    fn test_network_metrics_connection_lifecycle() {
+        let metrics = NetworkMetrics::new();
+
+        metrics.record_connection_open();
+        assert_eq!(metrics.connections_active(), 1);
+        assert_eq!(metrics.connections_total(), 1);
+
+        metrics.record_connection_open();
+        assert_eq!(metrics.connections_active(), 2);
+
+        metrics.record_connection_close();
+        assert_eq!(metrics.connections_active(), 1);
+        assert_eq!(metrics.connections_closed(), 1);
+
+        metrics.record_connection_close();
+        assert_eq!(metrics.connections_active(), 0);
+        assert_eq!(metrics.connections_closed(), 2);
+    }
+
+    #[test]
+    fn test_network_metrics_bytes_accumulation() {
+        let metrics = NetworkMetrics::new();
+
+        metrics.record_bytes_sent(1024);
+        metrics.record_bytes_sent(2048);
+        assert_eq!(metrics.bytes_sent(), 3072);
+
+        metrics.record_bytes_received(512);
+        metrics.record_bytes_received(256);
+        assert_eq!(metrics.bytes_received(), 768);
+    }
+
+    #[test]
+    fn test_network_metrics_packets_accumulation() {
+        let metrics = NetworkMetrics::new();
+
+        for _ in 0..10 {
+            metrics.record_packet_sent();
+        }
+        for _ in 0..5 {
+            metrics.record_packet_received();
+        }
+
+        assert_eq!(metrics.packets_sent(), 10);
+        assert_eq!(metrics.packets_received(), 5);
+    }
+
+    #[test]
+    fn test_network_metrics_multiple_errors() {
+        let metrics = NetworkMetrics::new();
+
+        metrics.record_error();
+        metrics.record_error();
+        metrics.record_error();
+
+        assert_eq!(metrics.errors_total(), 3);
+    }
+
+    #[test]
+    fn test_network_metrics_full_lifecycle() {
+        let metrics = NetworkMetrics::new();
+
+        metrics.record_connection_open();
+        metrics.record_bytes_sent(1024);
+        metrics.record_bytes_received(512);
+        metrics.record_packet_sent();
+        metrics.record_packet_received();
+
+        assert_eq!(metrics.connections_active(), 1);
+        assert_eq!(metrics.bytes_sent(), 1024);
+        assert_eq!(metrics.bytes_received(), 512);
+        assert_eq!(metrics.packets_sent(), 1);
+        assert_eq!(metrics.packets_received(), 1);
+    }
+
+    #[test]
+    fn test_network_metrics_reset_preserves_nothing() {
+        let mut metrics = NetworkMetrics::new();
+
+        metrics.record_connection_open();
+        metrics.record_bytes_sent(1024);
+        metrics.record_packet_sent();
+        metrics.record_error();
+
+        metrics.reset();
+
+        assert_eq!(metrics.connections_active(), 0);
+        assert_eq!(metrics.connections_total(), 0);
+        assert_eq!(metrics.bytes_sent(), 0);
+        assert_eq!(metrics.packets_sent(), 0);
+        assert_eq!(metrics.errors_total(), 0);
+    }
+
+    #[test]
+    fn test_network_metrics_concurrent_connections() {
+        use std::thread;
+
+        let metrics = NetworkMetrics::new();
+        let mut handles = vec![];
+
+        for _ in 0..5 {
+            let handle = thread::spawn(|| {
+                let m = NetworkMetrics::new();
+                m.record_connection_open();
+                m.record_bytes_sent(100);
+                m.record_bytes_received(50);
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(metrics.connections_active(), 0);
+    }
 }
