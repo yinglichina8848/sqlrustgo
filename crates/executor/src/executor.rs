@@ -1211,12 +1211,128 @@ mod tests {
                 vec![Value::Integer(3)],
             ],
         ));
-
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let mut exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
 
         exec.init().unwrap();
         let count = std::iter::from_fn(|| exec.next().unwrap()).count();
         assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_projection_volcano_executor() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1), Value::Integer(100)],
+            vec![Value::Integer(2), Value::Integer(200)],
+        ]));
+
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Integer),
+        ]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let expr = vec![sqlrustgo_planner::Expr::Column(
+            sqlrustgo_planner::Column::new("id".to_string()),
+        )];
+
+        let mut exec = ProjectionVolcanoExecutor::new(child, expr, schema, input_schema);
+        exec.init().unwrap();
+
+        let row = exec.next().unwrap().unwrap();
+        assert_eq!(row.len(), 1);
+        assert_eq!(row[0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_projection_volcano_executor_multiple_columns() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![vec![
+            Value::Integer(1),
+            Value::Text("a".to_string()),
+        ]]));
+
+        let input_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let schema = Schema::new(vec![
+            Field::new("name".to_string(), DataType::Text),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let expr = vec![
+            sqlrustgo_planner::Expr::Column(sqlrustgo_planner::Column::new("name".to_string())),
+            sqlrustgo_planner::Expr::Column(sqlrustgo_planner::Column::new("id".to_string())),
+        ];
+
+        let mut exec = ProjectionVolcanoExecutor::new(child, expr, schema, input_schema);
+        exec.init().unwrap();
+
+        let row = exec.next().unwrap().unwrap();
+        assert_eq!(row.len(), 2);
+    }
+
+    #[test]
+    fn test_projection_volcano_executor_empty_input() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![]));
+
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let expr = vec![sqlrustgo_planner::Expr::Column(
+            sqlrustgo_planner::Column::new("id".to_string()),
+        )];
+
+        let mut exec = ProjectionVolcanoExecutor::new(child, expr, schema, input_schema);
+        exec.init().unwrap();
+
+        let row = exec.next().unwrap();
+        assert!(row.is_none());
+    }
+
+    #[test]
+    fn test_projection_volcano_executor_name() {
+        let child = Box::new(MockVolcanoExecutor::new());
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let expr = vec![];
+
+        let exec = ProjectionVolcanoExecutor::new(child, expr, schema, input_schema);
+        assert_eq!(exec.name(), "Projection");
+    }
+
+    #[test]
+    fn test_limit_volcano_executor() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ]));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut exec = LimitVolcanoExecutor::new(child, 3, 0, schema);
+        exec.init().unwrap();
+
+        let count = std::iter::from_fn(|| exec.next().unwrap()).count();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_limit_volcano_executor_with_offset() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+            vec![Value::Integer(4)],
+            vec![Value::Integer(5)],
+        ]));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut exec = LimitVolcanoExecutor::new(child, 2, 2, schema);
+        exec.init().unwrap();
+
+        let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
+        assert_eq!(rows.len(), 2);
     }
 }
