@@ -127,3 +127,12 @@ path = "tests/executor_test.rs"
 [[test]]
 name = "planner_test"
 path = "tests/planner_test.rs"
+
+
+[[test]]
+name = "binary_format_test"
+path = "tests/binary_format_test.rs"
+
+[[test]]
+name = "optimizer_stats_test"
+path = "tests/optimizer_stats_test.rs"
