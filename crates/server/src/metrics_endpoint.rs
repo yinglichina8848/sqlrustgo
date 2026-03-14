@@ -152,4 +152,120 @@ mod tests {
 
         assert!(output.contains("# TYPE"));
     }
+
+    #[test]
+    fn test_metrics_registry_with_multiple_default_metrics() {
+        let metrics1: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics1.write().unwrap();
+            m.record_query("SELECT", 100);
+            m.record_query("INSERT", 50);
+        }
+
+        let metrics2: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics2.write().unwrap();
+            m.record_query("UPDATE", 75);
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics1);
+        registry.register_metrics(metrics2);
+
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_queries"));
+    }
+
+    #[test]
+    fn test_metrics_registry_empty_output() {
+        let registry = MetricsRegistry::new();
+        let output = registry.to_prometheus_format();
+
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn test_metrics_registry_with_errors() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_query("SELECT", 100);
+            m.record_error();
+            m.record_error();
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_errors"));
+    }
+
+    #[test]
+    fn test_metrics_registry_with_bytes() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_bytes_read(1024);
+            m.record_bytes_written(512);
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_bytes_read"));
+        assert!(output.contains("sqlrustgo_bytes_written"));
+    }
+
+    #[test]
+    fn test_metrics_registry_with_cache() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_cache_hit();
+            m.record_cache_hit();
+            m.record_cache_miss();
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_cache_hits"));
+        assert!(output.contains("sqlrustgo_cache_misses"));
+    }
+
+    #[test]
+    fn test_metrics_registry_multiple_custom_metrics() {
+        let mut registry = MetricsRegistry::new();
+        registry.register_custom_metric("sqlrustgo_custom_a".to_string(), "10".to_string());
+        registry.register_custom_metric("sqlrustgo_custom_b".to_string(), "20".to_string());
+        registry.register_custom_metric("sqlrustgo_custom_c".to_string(), "30".to_string());
+
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_custom_a 10"));
+        assert!(output.contains("sqlrustgo_custom_b 20"));
+        assert!(output.contains("sqlrustgo_custom_c 30"));
+    }
+
+    #[test]
+    fn test_metrics_registry_prometheus_type_comments() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_query("SELECT", 100);
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        let output = registry.to_prometheus_format();
+
+        let counter_count = output.matches("counter").count();
+        let gauge_count = output.matches("gauge").count();
+
+        assert!(counter_count > 0 || gauge_count > 0);
+    }
 }
