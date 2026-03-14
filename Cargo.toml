@@ -108,3 +108,8 @@ harness = false
 [[test]]
 name = "optimizer_rules_test"
 path = "tests/optimizer_rules_test.rs"
+
+
+[[test]]
+name = "buffer_pool_test"
+path = "tests/buffer_pool_test.rs"
