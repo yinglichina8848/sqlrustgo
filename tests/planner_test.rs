@@ -1,7 +1,6 @@
 // Planner Tests
 use sqlrustgo_planner::{
-    Schema, Field, DataType, LogicalPlan, Expr, JoinType, AggregateFunction, Operator,
-    Column,
+    AggregateFunction, Column, DataType, Expr, Field, JoinType, LogicalPlan, Operator, Schema,
 };
 use sqlrustgo_types::Value;
 
@@ -22,13 +21,13 @@ fn test_schema_field() {
         Field::new("name".to_string(), DataType::Text),
     ];
     let schema = Schema::new(fields);
-    
+
     let field = schema.field("id");
     assert!(field.is_some());
-    
+
     let field = schema.field("name");
     assert!(field.is_some());
-    
+
     let field = schema.field("not_exist");
     assert!(field.is_none());
 }

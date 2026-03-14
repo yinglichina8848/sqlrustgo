@@ -4,7 +4,7 @@
 //! that can be used for testing executor operations without
 //! requiring a real database connection.
 
-use sqlrustgo_storage::{StorageEngine, TableInfo, ColumnDefinition};
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_types::{SqlResult, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -49,7 +49,11 @@ impl MockStorage {
     }
 
     /// Add a table schema
-    pub fn add_schema(&self, table_name: &str, columns: Vec<(String, sqlrustgo_planner::DataType)>) {
+    pub fn add_schema(
+        &self,
+        table_name: &str,
+        columns: Vec<(String, sqlrustgo_planner::DataType)>,
+    ) {
         let column_defs: Vec<ColumnDefinition> = columns
             .iter()
             .map(|(name, data_type)| ColumnDefinition {
@@ -58,12 +62,12 @@ impl MockStorage {
                 nullable: false,
             })
             .collect();
-        
+
         let table_info = TableInfo {
             name: table_name.to_string(),
             columns: column_defs,
         };
-        
+
         let mut infos = self.table_infos.write().unwrap();
         infos.insert(table_name.to_string(), table_info);
     }
@@ -109,28 +113,28 @@ impl StorageEngine for MockStorage {
 
     fn insert(&mut self, table_name: &str, values: Vec<Vec<Value>>) -> SqlResult<()> {
         let mut tables = self.tables.write().unwrap();
-        let table_data = tables.entry(table_name.to_string()).or_insert_with(Vec::new);
+        let table_data = tables.entry(table_name.to_string()).or_default();
         table_data.extend(values);
         Ok(())
     }
 
     fn create_table(&mut self, table_info: &TableInfo) -> SqlResult<()> {
         let mut tables = self.tables.write().unwrap();
-        tables.entry(table_info.name.clone()).or_insert_with(Vec::new);
-        
+        tables.entry(table_info.name.clone()).or_default();
+
         let mut infos = self.table_infos.write().unwrap();
         infos.insert(table_info.name.clone(), table_info.clone());
-        
+
         Ok(())
     }
 
     fn drop_table(&mut self, table_name: &str) -> SqlResult<()> {
         let mut tables = self.tables.write().unwrap();
         tables.remove(table_name);
-        
+
         let mut infos = self.table_infos.write().unwrap();
         infos.remove(table_name);
-        
+
         Ok(())
     }
 
@@ -225,7 +229,7 @@ mod tests {
                 vec![Value::Integer(2), Value::Text("Bob".to_string())],
             ],
         );
-        
+
         let result = storage.scan("users").unwrap();
         assert_eq!(result.len(), 2);
     }
@@ -233,16 +237,20 @@ mod tests {
     #[test]
     fn test_mock_storage_insert() {
         let mut storage = MockStorage::new();
-        storage.create_table(&TableInfo {
-            name: "users".to_string(),
-            columns: vec![ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-            }],
-        }).unwrap();
-        
-        storage.insert("users", vec![vec![Value::Integer(1)]]).unwrap();
+        storage
+            .create_table(&TableInfo {
+                name: "users".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                }],
+            })
+            .unwrap();
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
         assert_eq!(storage.row_count("users"), 1);
     }
 
@@ -250,7 +258,7 @@ mod tests {
     fn test_mock_storage_clone() {
         let storage = MockStorage::new();
         storage.put_table_data("test", vec![vec![Value::Integer(1)]]);
-        
+
         let cloned = storage.clone();
         assert!(cloned.has_table("test"));
     }

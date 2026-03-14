@@ -44,11 +44,8 @@ fn test_page_free_space() {
 #[test]
 fn test_page_write_row() {
     let mut page = Page::new(1);
-    let values = vec![
-        Value::Integer(1),
-        Value::Text("test".to_string()),
-    ];
-    
+    let values = vec![Value::Integer(1), Value::Text("test".to_string())];
+
     let result = page.write_row(&values);
     assert!(result);
     assert_eq!(page.row_count(), 1);
@@ -57,14 +54,11 @@ fn test_page_write_row() {
 #[test]
 fn test_page_read_rows() {
     let mut page = Page::new(1);
-    let values = vec![
-        Value::Integer(1),
-        Value::Text("test".to_string()),
-    ];
-    
+    let values = vec![Value::Integer(1), Value::Text("test".to_string())];
+
     page.write_row(&values);
     let rows = page.read_rows();
-    
+
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], Value::Integer(1));
 }
@@ -80,7 +74,7 @@ fn test_page_to_bytes() {
 fn test_page_from_bytes() {
     let page = Page::new(1);
     let bytes = page.to_bytes();
-    
+
     let restored = Page::from_bytes(bytes);
     assert!(restored.is_some());
 }

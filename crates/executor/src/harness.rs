@@ -65,7 +65,7 @@ impl ExecutorTestCase {
     /// Run the test case
     pub fn run<S: StorageEngine>(&self, harness: &TestHarness<S>) -> SqlResult<()> {
         let result = harness.execute(self.plan.as_ref())?;
-        
+
         assert_eq!(
             result.rows.len(),
             self.expected_rows,
@@ -130,11 +130,7 @@ pub mod assertions {
             !result.rows.is_empty(),
             "Cannot assert first row: result is empty"
         );
-        assert_eq!(
-            result.rows[0],
-            expected,
-            "First row mismatch"
-        );
+        assert_eq!(result.rows[0], expected, "First row mismatch");
     }
 
     /// Assert that a specific row matches
@@ -145,22 +141,15 @@ pub mod assertions {
             index,
             result.rows.len()
         );
-        assert_eq!(
-            result.rows[index],
-            expected,
-            "Row {} mismatch",
-            index
-        );
+        assert_eq!(result.rows[index], expected, "Row {} mismatch", index);
     }
 
     /// Assert that affected_rows matches expected
     pub fn assert_affected_rows(result: &ExecutorResult, expected: usize) {
         assert_eq!(
-            result.affected_rows,
-            expected,
+            result.affected_rows, expected,
             "Expected {} affected rows, got {}",
-            expected,
-            result.affected_rows
+            expected, result.affected_rows
         );
     }
 
@@ -181,10 +170,7 @@ pub mod helpers {
     use sqlrustgo_planner::{Expr, Field, SeqScanExec};
 
     /// Create a simple SeqScan plan for testing
-    pub fn create_seq_scan_plan(
-        table_name: &str,
-        schema: Schema,
-    ) -> Box<dyn PhysicalPlan> {
+    pub fn create_seq_scan_plan(table_name: &str, schema: Schema) -> Box<dyn PhysicalPlan> {
         Box::new(SeqScanExec::new(table_name.to_string(), schema))
     }
 
@@ -215,7 +201,12 @@ pub mod helpers {
         output_schema: Schema,
     ) -> Box<dyn PhysicalPlan> {
         use sqlrustgo_planner::AggregateExec;
-        Box::new(AggregateExec::new(child, group_expr, aggregate_expr, output_schema))
+        Box::new(AggregateExec::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            output_schema,
+        ))
     }
 
     /// Create a schema for common test tables
@@ -248,7 +239,7 @@ pub mod helpers {
 /// Fixture utilities for setting up test data
 pub mod fixtures {
     use super::*;
-    use sqlrustgo_storage::{TableInfo, ColumnDefinition};
+    use sqlrustgo_storage::{ColumnDefinition, TableInfo};
 
     /// Setup a test users table with data
     pub fn setup_users_table(storage: &mut dyn StorageEngine) -> SqlResult<()> {
@@ -325,7 +316,7 @@ pub mod compare {
         if actual.len() != expected.len() {
             return false;
         }
-        
+
         for (i, exp) in expected.iter().enumerate() {
             match exp {
                 Value::Null => continue, // Null in expected matches anything
@@ -336,7 +327,7 @@ pub mod compare {
                 }
             }
         }
-        
+
         true
     }
 
@@ -362,10 +353,7 @@ mod tests {
 
     #[test]
     fn test_assertions_row_count() {
-        let result = ExecutorResult::new(
-            vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
-            0,
-        );
+        let result = ExecutorResult::new(vec![vec![Value::Integer(1)], vec![Value::Integer(2)]], 0);
         assertions::assert_row_count(&result, 2);
     }
 
@@ -421,7 +409,7 @@ mod tests {
             vec![Value::Integer(2), Value::Text("Bob".to_string())],
         ];
         let expected = vec![Value::Null, Value::Text("Bob".to_string())];
-        
+
         let found = compare::find_matching_row(&result, &expected);
         assert!(found.is_some());
     }
