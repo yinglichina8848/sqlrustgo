@@ -3,10 +3,12 @@
 pub mod executor;
 pub mod filter;
 pub mod local_executor;
+pub mod projection;
 
 pub use executor::{Executor, ExecutorResult, VolcanoExecutor, VolIterator, execute_collect};
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
+pub use projection::{ProjectionBuilder, ProjectionConfig, ProjectionExecutor, ProjectionExpr};
 
 #[cfg(test)]
 mod tests {
