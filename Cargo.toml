@@ -118,3 +118,12 @@ path = "tests/buffer_pool_test.rs"
 [[test]]
 name = "page_test"
 path = "tests/page_test.rs"
+
+
+[[test]]
+name = "executor_test"
+path = "tests/executor_test.rs"
+
+[[test]]
+name = "planner_test"
+path = "tests/planner_test.rs"
