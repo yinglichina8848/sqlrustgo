@@ -78,7 +78,7 @@ impl Default for MetricValue {
 }
 
 /// QueryType - classifies different types of SQL queries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum QueryType {
     /// SELECT query
     Select,
@@ -97,6 +97,7 @@ pub enum QueryType {
     /// Transaction control (BEGIN/COMMIT/ROLLBACK)
     Transaction,
     /// Other/unknown query type
+    #[default]
     Unknown,
 }
 
@@ -141,12 +142,6 @@ impl QueryType {
         } else {
             QueryType::Unknown
         }
-    }
-}
-
-impl Default for QueryType {
-    fn default() -> Self {
-        QueryType::Unknown
     }
 }
 
