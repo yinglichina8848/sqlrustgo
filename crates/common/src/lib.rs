@@ -1,5 +1,7 @@
 // SQLRustGo Common Module - Common types and errors
 
+pub mod metrics;
+
 #[derive(Debug)]
 pub struct SqlError {
     message: String,
