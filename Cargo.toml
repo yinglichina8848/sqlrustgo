@@ -104,3 +104,7 @@ harness = false
 [[bench]]
 name = "bench_insert"
 harness = false
+
+[[test]]
+name = "optimizer_rules_test"
+path = "tests/optimizer_rules_test.rs"
