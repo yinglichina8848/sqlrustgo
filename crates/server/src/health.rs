@@ -62,6 +62,47 @@ impl ComponentHealth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComprehensiveHealthReport {
+    pub status: HealthStatus,
+    pub version: String,
+    pub timestamp: u64,
+    pub uptime_seconds: u64,
+    pub components: std::collections::HashMap<String, ComponentHealth>,
+    pub metrics: Option<HealthMetrics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthMetrics {
+    pub queries_total: u64,
+    pub queries_failed: u64,
+    pub avg_query_ms: f64,
+}
+
+impl ComprehensiveHealthReport {
+    pub fn new(
+        status: HealthStatus,
+        version: String,
+        uptime_seconds: u64,
+        components: std::collections::HashMap<String, ComponentHealth>,
+        metrics: Option<HealthMetrics>,
+    ) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        Self {
+            status,
+            version,
+            timestamp,
+            uptime_seconds,
+            components,
+            metrics,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthReport {
     pub status: HealthStatus,
     pub version: String,
@@ -137,6 +178,38 @@ impl HealthChecker {
 
     pub fn uptime_seconds(&self) -> u64 {
         self.start_time.elapsed().map(|d| d.as_secs()).unwrap_or(0)
+    }
+
+    pub fn check_health(&self) -> ComprehensiveHealthReport {
+        let components: Vec<ComponentHealth> = self.components.iter().map(|c| c.check()).collect();
+
+        let overall_status = if components.iter().all(|c| c.status == HealthStatus::Healthy) {
+            HealthStatus::Healthy
+        } else if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Unhealthy)
+        {
+            HealthStatus::Unhealthy
+        } else {
+            HealthStatus::Degraded
+        };
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        ComprehensiveHealthReport {
+            status: overall_status,
+            version: self.version.clone(),
+            timestamp,
+            uptime_seconds: self.uptime_seconds(),
+            components: components
+                .into_iter()
+                .map(|c| (c.name.clone(), c))
+                .collect(),
+            metrics: None,
+        }
     }
 }
 
