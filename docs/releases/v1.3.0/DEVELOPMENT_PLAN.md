@@ -121,16 +121,27 @@ cargo tarpaulin --workspace --ignore-panics --timeout 600
 | **T-002** | **planner** | **Planner 覆盖率提升** | **T-001** | **≥60%** | ✅ **已完成** | **认领: AI Assistant** |
 | **T-003** | **optimizer** | **Optimizer 测试补充** | **-** | **≥40%** | ✅ **已完成** | **认领: AI Assistant** |
 
-### 4.2 P1 - 应该完成
+### 4.2 P1 - 应该完成 (v1.3.0 扩展)
 
-| ID | 模块 | 任务 | 依赖 | 目标 |
-|----|------|------|------|------|
-| M-001 | observability | Metrics trait 定义 | - | 框架基础 |
-| M-002 | observability | BufferPoolMetrics 初步 | M-001 | 指标收集 |
-| H-001 | observability | /health/live 端点 | - | 存活探针 |
-| H-002 | observability | /health/ready 端点 | - | 就绪探针 |
+> 2026-03-15 更新: v1.3.1 功能已合并到 v1.3.0
 
-### 4.3 P2 - 可选完成
+| ID | 模块 | 任务 | 依赖 | 目标 | 状态 |
+|----|------|------|------|------|------|
+| M-001 | observability | Metrics trait 定义 | - | 框架基础 | ✅ 已完成 |
+| M-002 | observability | BufferPoolMetrics 初步 | M-001 | 指标收集 | ✅ 已完成 |
+| H-001 | observability | /health/live 端点 | - | 存活探针 | ✅ 已完成 |
+| H-002 | observability | /health/ready 端点 | - | 就绪探针 | ✅ 已完成 |
+
+### 4.3 P1 扩展 - 可观测性增强 (原 v1.3.1)
+
+| ID | 模块 | 任务 | 依赖 | 目标 | 状态 |
+|----|------|------|------|------|------|
+| M-003 | observability | Prometheus 指标格式 | M-001 | 指标暴露 | ⏳ 待开发 |
+| M-004 | observability | /metrics 端点 | M-003 | 指标查询 | ⏳ 待开发 |
+| M-005 | observability | Grafana Dashboard 模板 | M-004 | 可视化 | ⏳ 可选 |
+| M-006 | observability | 告警规则示例 | M-004 | 告警配置 | ⏳ 可选 |
+
+### 4.4 P2 - 可选完成
 
 | ID | 模块 | 任务 | 依赖 |
 |----|------|------|------|
@@ -145,7 +156,7 @@ cargo tarpaulin --workspace --ignore-panics --timeout 600
 | CBO 成本优化器 | v1.4.0 | 依赖统计信息系统 |
 | 插件系统完整实现 | v1.5.0 | 非核心功能 |
 | SortMergeJoin | v1.4.0 | HashJoin 优先 |
-| 完整可观测性 (Prometheus, Grafana) | v1.3.1+ | 可后续增强 |
+| 完整可观测性 (Prometheus, Grafana) | ✅ 已合并到 v1.3.0 | 见 4.3 节 |
 
 ---
 
