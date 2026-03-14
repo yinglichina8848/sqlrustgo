@@ -333,8 +333,12 @@ impl Metrics for DefaultMetrics {
         self.query_count += 1;
         self.total_query_time_ms += duration_ms;
 
-        *self.query_counts_by_type.entry(query_type.to_string()).or_insert(0) += 1;
-        *self.query_times_by_type
+        *self
+            .query_counts_by_type
+            .entry(query_type.to_string())
+            .or_insert(0) += 1;
+        *self
+            .query_times_by_type
             .entry(query_type.to_string())
             .or_insert(0) += duration_ms;
     }
@@ -345,7 +349,10 @@ impl Metrics for DefaultMetrics {
 
     fn record_error_with_type(&mut self, error_type: &str) {
         self.error_count += 1;
-        *self.errors_by_type.entry(error_type.to_string()).or_insert(0) += 1;
+        *self
+            .errors_by_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
     }
 
     fn record_bytes_read(&mut self, bytes: u64) {
@@ -457,21 +464,45 @@ mod tests {
 
     #[test]
     fn test_query_type_from_sql() {
-        assert_eq!(QueryType::from_sql("SELECT * FROM users"), QueryType::Select);
-        assert_eq!(QueryType::from_sql("INSERT INTO users VALUES (1)"), QueryType::Insert);
-        assert_eq!(QueryType::from_sql("UPDATE users SET name = 'Bob'"), QueryType::Update);
-        assert_eq!(QueryType::from_sql("DELETE FROM users WHERE id = 1"), QueryType::Delete);
-        assert_eq!(QueryType::from_sql("CREATE TABLE users (id INT)"), QueryType::Create);
+        assert_eq!(
+            QueryType::from_sql("SELECT * FROM users"),
+            QueryType::Select
+        );
+        assert_eq!(
+            QueryType::from_sql("INSERT INTO users VALUES (1)"),
+            QueryType::Insert
+        );
+        assert_eq!(
+            QueryType::from_sql("UPDATE users SET name = 'Bob'"),
+            QueryType::Update
+        );
+        assert_eq!(
+            QueryType::from_sql("DELETE FROM users WHERE id = 1"),
+            QueryType::Delete
+        );
+        assert_eq!(
+            QueryType::from_sql("CREATE TABLE users (id INT)"),
+            QueryType::Create
+        );
         assert_eq!(QueryType::from_sql("DROP TABLE users"), QueryType::Drop);
-        assert_eq!(QueryType::from_sql("ALTER TABLE users ADD name TEXT"), QueryType::Alter);
+        assert_eq!(
+            QueryType::from_sql("ALTER TABLE users ADD name TEXT"),
+            QueryType::Alter
+        );
         assert_eq!(QueryType::from_sql("BEGIN"), QueryType::Transaction);
         assert_eq!(QueryType::from_sql("COMMIT"), QueryType::Transaction);
     }
 
     #[test]
     fn test_query_type_from_sql_lowercase() {
-        assert_eq!(QueryType::from_sql("select * from users"), QueryType::Select);
-        assert_eq!(QueryType::from_sql("insert into users values (1)"), QueryType::Insert);
+        assert_eq!(
+            QueryType::from_sql("select * from users"),
+            QueryType::Select
+        );
+        assert_eq!(
+            QueryType::from_sql("insert into users values (1)"),
+            QueryType::Insert
+        );
     }
 
     #[test]
@@ -597,6 +628,97 @@ mod tests {
         let metrics = DefaultMetrics::new();
         let debug_str = format!("{:?}", metrics);
         assert!(debug_str.contains("DefaultMetrics"));
+    }
+
+    #[test]
+    fn test_query_type_from_sql_select() {
+        assert_eq!(
+            QueryType::from_sql("SELECT * FROM users"),
+            QueryType::Select
+        );
+        assert_eq!(
+            QueryType::from_sql("select * from users"),
+            QueryType::Select
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_insert() {
+        assert_eq!(
+            QueryType::from_sql("INSERT INTO users VALUES (1)"),
+            QueryType::Insert
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_update() {
+        assert_eq!(
+            QueryType::from_sql("UPDATE users SET name = 'test'"),
+            QueryType::Update
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_delete() {
+        assert_eq!(
+            QueryType::from_sql("DELETE FROM users WHERE id = 1"),
+            QueryType::Delete
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_create() {
+        assert_eq!(
+            QueryType::from_sql("CREATE TABLE users (id INT)"),
+            QueryType::Create
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_drop() {
+        assert_eq!(QueryType::from_sql("DROP TABLE users"), QueryType::Drop);
+    }
+
+    #[test]
+    fn test_query_type_from_sql_alter() {
+        assert_eq!(
+            QueryType::from_sql("ALTER TABLE users ADD COLUMN name TEXT"),
+            QueryType::Alter
+        );
+    }
+
+    #[test]
+    fn test_query_type_from_sql_transaction() {
+        assert_eq!(QueryType::from_sql("BEGIN"), QueryType::Transaction);
+        assert_eq!(QueryType::from_sql("COMMIT"), QueryType::Transaction);
+        assert_eq!(QueryType::from_sql("ROLLBACK"), QueryType::Transaction);
+    }
+
+    #[test]
+    fn test_query_type_unknown_sql() {
+        assert_eq!(QueryType::from_sql("UNKNOWN SQL"), QueryType::Unknown);
+    }
+
+    #[test]
+    fn test_metric_value_as_u64() {
+        assert_eq!(MetricValue::Counter(100).as_u64(), Some(100));
+        assert_eq!(MetricValue::Gauge(3.14).as_u64(), Some(3));
+        assert_eq!(MetricValue::Timing(200).as_u64(), Some(200));
+        assert_eq!(MetricValue::Histogram(vec![]).as_u64(), None);
+    }
+
+    #[test]
+    fn test_metric_value_as_f64() {
+        assert_eq!(MetricValue::Counter(100).as_f64(), Some(100.0));
+        assert_eq!(MetricValue::Gauge(3.14).as_f64(), Some(3.14));
+        assert_eq!(MetricValue::Timing(200).as_f64(), Some(200.0));
+        assert_eq!(MetricValue::Histogram(vec![]).as_f64(), None);
+    }
+
+    #[test]
+    fn test_metric_value_default_impl() {
+        let val: MetricValue = Default::default();
+        assert_eq!(val, MetricValue::Counter(0));
     }
 
     // Test MetricsTimer
