@@ -20,10 +20,10 @@
 
 ---
 
-## [开发中] v1.3.0
+## [已发布] v1.3.0
 
-> **发布日期**: 待定  
-> **代号**: Architecture Stabilization
+> **发布日期**: 2026-03-15  
+> **代号**: Enterprise Ready (架构稳定版)
 
 ### Added
 
@@ -38,11 +38,11 @@
 #### Planner 模块
 - **测试**: Planner 测试框架
 
-#### 可观测性 (计划中)
-- **功能**: Metrics trait 定义 (M-001)
-- **功能**: BufferPool 指标收集 (M-002)
-- **功能**: /health/live 端点 (H-001)
-- **功能**: /health/ready 端点 (H-002)
+#### 可观测性
+- **功能**: Metrics trait 定义 (M-001) ✅ 已完成
+- **功能**: BufferPool 指标收集 (M-002) ✅ 已完成
+- **功能**: /health/live 端点 (H-001) ✅ 已完成
+- **功能**: /health/ready 端点 (H-002) ✅ 已完成
 
 ### Changed
 
@@ -160,7 +160,7 @@
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v1.3.0 | 开发中 | Architecture Stabilization |
+| v1.3.0 | 2026-03-15 | Enterprise Ready (架构稳定版) |
 | v1.2.0 | 2026-03-13 | Vector Engine |
 | v1.1.0 | 2026-02-28 | 稳定性增强 |
 | v1.0.0 | 2026-02-22 | 初始发布 |
