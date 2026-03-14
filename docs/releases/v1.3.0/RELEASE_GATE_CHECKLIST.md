@@ -1,7 +1,7 @@
 # SQLRustGo v1.3.0 发布门禁检查清单 (RELEASE_GATE_CHECKLIST.md)
 
 > **版本**: v1.3.0
-> **日期**: 2026-03-13
+> **日期**: 2026-03-15
 > **发布类型**: 架构稳定版
 > **目标成熟度**: L4 企业级
 > **对齐文档**: DEVELOPMENT_PLAN.md
@@ -57,25 +57,31 @@
 
 #### B. 测试覆盖门禁
 
+> 更新日期: 2026-03-15
+
 | ID | 检查项 | 状态 | 当前值 | 目标值 | 说明 |
 |----|--------|------|--------|--------|------|
-| B-01 | 整体行覆盖率 | ⏳ | 80.30% | ≥65% | 当前已达标，需保持 |
-| B-02 | Executor 行覆盖率 | ⏳ | 72% | ≥60% | 必须确保核心算子 (HashJoin) 测试充分 |
-| B-03 | Planner 行覆盖率 | ⏳ | 43% | ≥60% | - |
-| B-04 | Optimizer 行覆盖率 | ⏳ | 18% | ≥40% | - |
+| B-01 | 整体行覆盖率 | ✅ | **78.88%** | ≥65% | 达标 (+13.88%) |
+| B-02 | Executor 行覆盖率 | ✅ | **87.71%** | ≥60% | 达标 (local_executor) |
+| B-03 | Planner 行覆盖率 | ✅ | **76.44%** | ≥60% | 达标 (physical_plan) |
+| B-04 | Optimizer 行覆盖率 | ✅ | **82.12%** | ≥40% | 达标 (rules.rs) |
+
+> 注: 测试方法 `cargo tarpaulin --workspace --ignore-panics --timeout 600`，不含测试代码
 
 #### C. 功能完整性门禁
 
+> 更新日期: 2026-03-15
+
 | ID | 检查项 | 状态 | 说明 | Issue/PR |
 |----|--------|------|------|----------|
-| C-01 | Volcano Executor trait | ⏳ | 统一 Executor trait，所有算子实现 | E-001 |
-| C-02 | TableScan 算子 | ⏳ | 完整表扫描 | E-002 |
-| C-03 | Projection 算子 | ⏳ | 列投影 | E-003 |
-| C-04 | Filter 算子 | ⏳ | 条件过滤 | E-004 |
-| C-05 | HashJoin 算子 (内连接) | ⏳ | 基础哈希连接实现 | E-005 |
-| C-06 | Executor 测试框架 | ⏳ | 包含 mock storage 和测试数据生成器 | E-006 |
-| C-07 | Planner 测试框架 | ⏳ | 为 planner 添加测试套件 | T-001 |
-| C-08 | Metrics trait 定义 | ⏳ | 在 common 中定义基础指标 trait | M-001 |
+| C-01 | Volcano Executor trait | ✅ | 统一 Executor trait，所有算子实现 | E-001 |
+| C-02 | TableScan 算子 | ✅ | 完整表扫描 | E-002 |
+| C-03 | Projection 算子 | ✅ | 列投影 | E-003 |
+| C-04 | Filter 算子 | ✅ | 条件过滤 | E-004 |
+| C-05 | HashJoin 算子 (内连接) | ✅ | 基础哈希连接实现 | E-005 |
+| C-06 | Executor 测试框架 | ✅ | 包含 mock storage 和测试数据生成器 | E-006 |
+| C-07 | Planner 测试框架 | ✅ | 为 planner 添加测试套件 | T-001 |
+| C-08 | Metrics trait 定义 | ✅ | 在 common 中定义基础指标 trait | M-001 |
 | C-09 | /health/live 端点 | ⏳ | 存活探针 | H-001 |
 | C-10 | /health/ready 端点 | ⏳ | 就绪探针 | H-002 |
 
@@ -191,9 +197,11 @@ curl http://localhost:3306/health/ready
 |------|------|------|
 | 1.0 | 2026-03-05 | 初始版本 (过于理想化) |
 | 2.0 | 2026-03-13 | 根据 DEVELOPMENT_PLAN.md 修订，聚焦 Executor 稳定 |
+| 2.1 | 2026-03-15 | 更新覆盖率测试结果，标注 C-01~C-08 已完成，T 系列任务认领 |
 
 ---
 
 **文档状态**: 正式版  
 **创建人**: yinglichina8848  
+**更新人**: AI Assistant  
 **本文档由 yinglichina8848 创建，与 DEVELOPMENT_PLAN.md 和 VERSION_PLAN.md 保持一致**
