@@ -1,8 +1,10 @@
 // SQLRustGo server module
 
 pub mod health;
+pub mod metrics_endpoint;
 
 pub use health::{ComponentHealth, HealthChecker, HealthComponent, HealthReport, HealthStatus};
+pub use metrics_endpoint::MetricsRegistry;
 
 #[cfg(test)]
 mod tests {
