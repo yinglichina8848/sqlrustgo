@@ -104,3 +104,35 @@ harness = false
 [[bench]]
 name = "bench_insert"
 harness = false
+
+[[test]]
+name = "optimizer_rules_test"
+path = "tests/optimizer_rules_test.rs"
+
+
+[[test]]
+name = "buffer_pool_test"
+path = "tests/buffer_pool_test.rs"
+
+
+[[test]]
+name = "page_test"
+path = "tests/page_test.rs"
+
+
+[[test]]
+name = "executor_test"
+path = "tests/executor_test.rs"
+
+[[test]]
+name = "planner_test"
+path = "tests/planner_test.rs"
+
+
+[[test]]
+name = "binary_format_test"
+path = "tests/binary_format_test.rs"
+
+[[test]]
+name = "optimizer_stats_test"
+path = "tests/optimizer_stats_test.rs"
