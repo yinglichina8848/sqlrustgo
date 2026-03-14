@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn test_filter_executor_schema() {
         use sqlrustgo_planner::{DataType, Field};
-        
+
         let fields = vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),

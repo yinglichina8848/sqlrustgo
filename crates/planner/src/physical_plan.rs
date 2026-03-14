@@ -2522,11 +2522,15 @@ mod tests {
 
         // Evaluate predicate - should return false for non-comparison ops on integers
         let row = vec![Value::Integer(5), Value::Integer(3)];
-        let result = filter.evaluate_predicate(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Plus,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = filter.evaluate_predicate(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Plus,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert!(!result); // Should be false per line 318
     }
 
@@ -2548,11 +2552,15 @@ mod tests {
 
         // Evaluate predicate with Float values - should return false per line 320
         let row = vec![Value::Float(5.0), Value::Float(3.0)];
-        let result = filter.evaluate_predicate(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Gt,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = filter.evaluate_predicate(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Gt,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert!(!result); // Float comparisons return false
     }
 
@@ -2575,11 +2583,15 @@ mod tests {
 
         // Evaluate expression with divisor = 0
         let row = vec![Value::Integer(10), Value::Integer(0)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Divide,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Divide,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Division by zero returns Null
     }
 
@@ -2602,11 +2614,15 @@ mod tests {
 
         // Evaluate expression with divisor = 0
         let row = vec![Value::Integer(10), Value::Integer(0)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Modulo,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Modulo,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Modulo by zero returns Null
     }
 
@@ -2629,11 +2645,15 @@ mod tests {
 
         // Evaluate expression with divisor = 0.0
         let row = vec![Value::Float(10.0), Value::Float(0.0)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Divide,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Divide,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Float division by zero returns Null
     }
 
@@ -2655,11 +2675,15 @@ mod tests {
         );
 
         let row = vec![Value::Integer(10), Value::Integer(5)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Eq,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Eq,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Non-arithmetic operators return Null
     }
 
@@ -2681,11 +2705,15 @@ mod tests {
         );
 
         let row = vec![Value::Float(10.0), Value::Float(3.0)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Modulo,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Modulo,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Non-division float ops return Null
     }
 
@@ -2707,11 +2735,15 @@ mod tests {
         );
 
         let row = vec![Value::Integer(10), Value::Float(3.0)];
-        let result = proj.evaluate_expr(&Expr::BinaryExpr {
-            left: Box::new(Expr::column("a")),
-            op: Operator::Plus,
-            right: Box::new(Expr::column("b")),
-        }, &row, &schema);
+        let result = proj.evaluate_expr(
+            &Expr::BinaryExpr {
+                left: Box::new(Expr::column("a")),
+                op: Operator::Plus,
+                right: Box::new(Expr::column("b")),
+            },
+            &row,
+            &schema,
+        );
         assert_eq!(result, Value::Null); // Mixed types return Null
     }
 
