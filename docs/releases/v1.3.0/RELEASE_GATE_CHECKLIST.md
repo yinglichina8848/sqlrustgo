@@ -95,8 +95,8 @@
 | D-02 | /health/ready 端点 | ✅ | 就绪探针 (必需) |
 | D-03 | Metrics trait 定义 | ✅ | 已定义即可，不要求完整集成 |
 | D-04 | BufferPoolMetrics 初步 | ✅ | 在 storage 中集成简单指标计数 |
-| D-05 | Prometheus 指标格式 | ⏳ | 指标暴露 (v1.3.0 扩展) |
-| D-06 | /metrics 端点 | ⏳ | 指标查询 (v1.3.0 扩展) |
+| D-05 | Prometheus 指标格式 | ✅ | 已实现 (E-001, PR#506) |
+| D-06 | /metrics 端点 | ✅ | MetricsRegistry 已实现 |
 
 #### E. 性能门禁
 
