@@ -1,10 +1,18 @@
 // SQLRustGo executor module
 
 pub mod executor;
+pub mod filter;
 pub mod local_executor;
+pub mod test_framework;
 
-pub use executor::{Executor, ExecutorResult};
+pub use executor::{Executor, ExecutorResult, VolcanoExecutor, VolIterator, execute_collect};
+pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
+
+// Test framework modules - publicly accessible
+pub mod mock_storage;
+pub mod test_data;
+pub mod harness;
 
 #[cfg(test)]
 mod tests {

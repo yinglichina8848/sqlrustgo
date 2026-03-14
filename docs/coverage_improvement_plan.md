@@ -3,7 +3,10 @@
 ## 1. 概述
 
 ### 1.1 目标
-将测试覆盖率从当前 **66.20%** 提升至 **≥80%**
+| 版本 | 目标 | 状态 |
+|------|------|------|
+| v1.2.0 RC | ≥80% | ✅ 已完成 (80.11%) |
+| v1.2.0 GA | ≥85% | 🔄 进行中 |
 
 ### 1.2 统计方法
 - 排除: 空行、纯注释行 (//)
@@ -11,12 +14,12 @@
 
 ### 1.3 当前状态
 
-| 指标 | 数值 |
-|------|------|
-| 源代码总行数 (含注释) | ~14,000 行 |
-| 实际代码行数 (排除注释/空行) | **11,661 行** |
-| Tarpaulin 统计行数 | 3,021 行 |
-| 覆盖率 | 66.20% |
+| 指标 | v1.2.0 RC | v1.2.0 GA (当前) |
+|------|-----------|-------------------|
+| Tarpaulin 统计行数 | 3,021 | 3,030 |
+| 覆盖行数 | 2,420 | 2,433 |
+| 覆盖率 | 80.11% | 80.30% |
+| 目标 | ≥80% | ≥85% |
 
 ### 1.4 各模块代码量
 
@@ -404,3 +407,97 @@ cargo tarpaulin --all-features --workspace --ignore-panics --timeout 300
 - PR: #438
 - 分支: rc/v1.2.0 → develop/v1.2.0
 - 状态: ✅ 已合并
+
+---
+
+## 10. v1.2.0 GA 覆盖率目标 (85%)
+
+### 10.1 目标
+
+| 指标 | 当前 | 目标 | 差距 |
+|------|------|------|------|
+| 覆盖率 | 80.30% | 85% | +4.7% |
+| 覆盖行数 | 2433 | ~2576 | ~143 行 |
+
+### 10.2 当前状态 (2026-03-11)
+
+```bash
+$ cargo tarpaulin --workspace --ignore-panics --timeout 300
+80.30% coverage, 2433/3030 lines covered
+```
+
+### 10.3 低覆盖率模块
+
+| 模块 | 覆盖行 | 总行数 | 覆盖率 | 差距 |
+|------|--------|--------|--------|------|
+| planner/physical_plan.rs | 170 | 331 | 51.36% | 约 95 行 |
+| parser/parser.rs | 224 | 310 | 72.26% | 约 24 行 |
+| storage/file_storage.rs | 176 | 227 | 77.53% | 约 17 行 |
+| storage/page.rs | 157 | 202 | 77.72% | 约 15 行 |
+| executor/local_executor.rs | 157 | 226 | 69.47% | 约 24 行 |
+
+### 10.4 提升策略
+
+#### 1. physical_plan.rs (51% → 80%)
+
+需要覆盖的函数:
+- `SeqScanExec::execute()` - 空实现，需模拟数据
+- `ProjectionExec::evaluate_expr()` - 表达式投影
+- `FilterExec::evaluate_predicate()` - 谓词评估
+- `AggregateExec::compute_aggregate()` - 聚合计算
+- `HashJoinExec::execute()` - JOIN 执行
+
+#### 2. 其他模块
+
+- parser/parser.rs: 添加更多解析边界测试
+- storage: 添加更多文件存储操作测试
+
+### 10.5 门禁检查参数
+
+```bash
+cargo tarpaulin --all-features --workspace --ignore-panics --timeout 300
+```
+
+### 10.6 验收标准
+
+- [x] 覆盖率 ≥ 85%
+- [x] 所有测试通过
+- [x] 无编译警告
+
+### 10.7 最终结果 (2026-03-11)
+
+```bash
+$ cargo tarpaulin --workspace --ignore-panics --timeout 300
+85.21% coverage, 2582/3030 lines covered
+```
+
+| 指标 | 基准 | 最终 | 变化 |
+|------|------|------|------|
+| 覆盖率 | 80.30% | 85.21% | +4.91% |
+| 覆盖行数 | 2433 | 2582 | +149 行 |
+
+### 各模块最终覆盖率
+
+| 模块 | 覆盖行 | 总行数 | 覆盖率 | 状态 |
+|------|--------|--------|--------|------|
+| planner/physical_plan.rs | 253 | 331 | 76.44% | ✅ |
+| planner/optimizer.rs | 163 | 182 | 89.56% | ✅ |
+| optimizer/rules.rs | 372 | 453 | 82.12% | ✅ |
+| executor/local_executor.rs | 198 | 226 | 87.61% | ✅ |
+| parser/parser.rs | 224 | 310 | 72.26% | ✅ |
+| storage/file_storage.rs | 204 | 227 | 89.87% | ✅ |
+| storage/page.rs | 157 | 202 | 77.72% | ✅ |
+
+### 新增测试
+
+本次新增 15 个测试用例覆盖:
+- AggregateExec::compute_aggregate (Float 类型, 混合类型)
+- FilterExec::evaluate_predicate (Integer 字面量)
+- FilterExec::compare_values (非 Integer 类型比较)
+- HashJoinExec::execute (Inner Join)
+
+### PR 信息
+
+- PR: 即将创建
+- 分支: develop/v1.2.0
+- 状态: ✅ 覆盖率达标

@@ -3,7 +3,8 @@
 //! Implements the Executor trait for local execution using StorageEngine.
 
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, HashJoinExec, JoinType, PhysicalPlan, ProjectionExec,
+    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
+    ProjectionExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -100,10 +101,29 @@ impl<'a> LocalExecutor<'a> {
         // Execute child first
         let child_result = self.execute(children[0])?;
 
-        // Filter evaluation is complex - we would need to evaluate the predicate
-        // For now, return the child result as-is
-        // The actual filtering would require expression evaluation
-        Ok(child_result)
+        // Get the predicate from FilterExec
+        let filter = plan
+            .as_any()
+            .downcast_ref::<FilterExec>();
+
+        let predicate = match filter {
+            Some(f) => f.predicate(),
+            None => return Ok(ExecutorResult::empty()),
+        };
+
+        let input_schema = children[0].schema();
+
+        // Filter rows based on predicate
+        let filtered_rows: Vec<Vec<Value>> = child_result
+            .rows
+            .into_iter()
+            .filter(|row| {
+                let predicate_val = predicate.evaluate(row, input_schema).unwrap_or(Value::Null);
+                matches!(predicate_val, Value::Boolean(true))
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(filtered_rows, 0))
     }
 
     /// Execute aggregate (COUNT, SUM, AVG, etc.)
@@ -1026,5 +1046,166 @@ mod tests {
         let result = executor.execute(&filter).unwrap();
         // All rows returned since filter doesn't actually filter in this implementation
         assert!(result.rows.len() >= 1);
+    }
+
+    // === Tests for uncovered code paths ===
+
+    #[test]
+    fn test_executor_is_ready() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+        // is_ready should return true (always ready)
+        assert!(executor.is_ready());
+    }
+
+    #[test]
+    fn test_execute_aggregate_min() {
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "orders",
+                vec![
+                    vec![Value::Integer(100)],
+                    vec![Value::Integer(200)],
+                    vec![Value::Integer(50)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let input_schema = Schema::new(vec![Field::new(
+            "amount".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let output_schema = Schema::new(vec![Field::new(
+            "min".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+
+        let seq_scan = SeqScanExec::new("orders".to_string(), input_schema);
+        let aggregate = AggregateExec::new(
+            Box::new(seq_scan),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Min,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            output_schema,
+        );
+
+        let result = executor.execute(&aggregate).unwrap();
+
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0], vec![Value::Integer(50)]);
+    }
+
+    #[test]
+    fn test_execute_aggregate_max() {
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "orders",
+                vec![
+                    vec![Value::Integer(100)],
+                    vec![Value::Integer(200)],
+                    vec![Value::Integer(50)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let input_schema = Schema::new(vec![Field::new(
+            "amount".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let output_schema = Schema::new(vec![Field::new(
+            "max".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+
+        let seq_scan = SeqScanExec::new("orders".to_string(), input_schema);
+        let aggregate = AggregateExec::new(
+            Box::new(seq_scan),
+            vec![],
+            vec![Expr::AggregateFunction {
+                func: AggregateFunction::Max,
+                args: vec![Expr::column("amount")],
+                distinct: false,
+            }],
+            output_schema,
+        );
+
+        let result = executor.execute(&aggregate).unwrap();
+
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0], vec![Value::Integer(200)]);
+    }
+
+    #[test]
+    fn test_execute_hash_join_left() {
+        use sqlrustgo_planner::HashJoinExec;
+        use sqlrustgo_planner::JoinType;
+
+        let mut left_storage = MemoryStorage::new();
+        left_storage
+            .insert(
+                "left_table",
+                vec![
+                    vec![Value::Integer(1), Value::Text("A".to_string())],
+                    vec![Value::Integer(2), Value::Text("B".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let mut right_storage = MemoryStorage::new();
+        right_storage
+            .insert(
+                "right_table",
+                vec![
+                    vec![Value::Integer(1), Value::Text("X".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&left_storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+
+        let left_scan = SeqScanExec::new("left_table".to_string(), left_schema);
+        let right_scan = SeqScanExec::new("right_table".to_string(), right_schema);
+
+        let join_condition = Some(Expr::BinaryExpr {
+            left: Box::new(Expr::column("id")),
+            op: Operator::Eq,
+            right: Box::new(Expr::column("id")),
+        });
+
+        let hash_join = HashJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Left,
+            join_condition,
+            join_schema,
+        );
+
+        let result = executor.execute(&hash_join);
+        // Left join should complete without error
+        assert!(result.is_ok());
     }
 }
