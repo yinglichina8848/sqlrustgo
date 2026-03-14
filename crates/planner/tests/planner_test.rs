@@ -40,7 +40,7 @@ fn test_planner_create_physical_plan() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&logical_plan);
-    
+
     assert!(result.is_ok());
     let physical_plan = result.unwrap();
     assert_eq!(physical_plan.name(), "SeqScan");
@@ -57,10 +57,7 @@ fn test_planner_with_projection() {
 
     let projection_plan = LogicalPlan::Projection {
         input: Box::new(table_scan),
-        expr: vec![
-            Expr::column("id"),
-            Expr::column("name"),
-        ],
+        expr: vec![Expr::column("id"), Expr::column("name")],
         schema: Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
@@ -69,7 +66,7 @@ fn test_planner_with_projection() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&projection_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Projection");
 }
@@ -94,7 +91,7 @@ fn test_planner_with_filter() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&filter_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Filter");
 }
@@ -132,7 +129,7 @@ fn test_planner_with_aggregate() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&agg_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Aggregate");
 }
@@ -173,7 +170,7 @@ fn test_planner_with_join() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&join_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "HashJoin");
 }
@@ -205,7 +202,7 @@ fn test_planner_with_sort() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&sort_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Sort");
 }
@@ -227,7 +224,7 @@ fn test_planner_with_limit() {
 
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&limit_plan);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Limit");
 }
@@ -247,7 +244,7 @@ fn test_planner_optimize() {
 
     let mut planner = DefaultPlanner::new();
     let result = planner.optimize(logical_plan);
-    
+
     assert!(result.is_ok());
 }
 
@@ -262,21 +259,17 @@ fn test_planner_optimize_with_expression() {
 
     let projection_plan = LogicalPlan::Projection {
         input: Box::new(table_scan),
-        expr: vec![
-            Expr::BinaryExpr {
-                left: Box::new(Expr::Literal(Value::Integer(1))),
-                op: Operator::Plus,
-                right: Box::new(Expr::Literal(Value::Integer(1))),
-            },
-        ],
-        schema: Schema::new(vec![
-            Field::new("computed".to_string(), DataType::Integer),
-        ]),
+        expr: vec![Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Integer(1))),
+            op: Operator::Plus,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        }],
+        schema: Schema::new(vec![Field::new("computed".to_string(), DataType::Integer)]),
     };
 
     let mut planner = DefaultPlanner::new();
     let result = planner.optimize(projection_plan);
-    
+
     assert!(result.is_ok());
 }
 
@@ -295,7 +288,7 @@ fn test_noop_planner() {
 
     let mut planner = NoOpPlanner::new();
     let result = planner.optimize(logical_plan);
-    
+
     assert!(result.is_ok());
 }
 
@@ -310,7 +303,7 @@ fn test_noop_planner_create_physical_plan() {
 
     let planner = NoOpPlanner::new();
     let result = planner.create_physical_plan(&logical_plan);
-    
+
     assert!(result.is_ok());
 }
 
@@ -334,7 +327,7 @@ fn test_logical_plan_schema() {
 fn test_physical_plan_schema() {
     let schema = create_test_schema();
     let scan = sqlrustgo_planner::SeqScanExec::new("users".to_string(), schema.clone());
-    
+
     assert_eq!(scan.schema().fields.len(), 4);
 }
 
@@ -348,46 +341,38 @@ fn test_expression_evaluation() {
         Field::new("a".to_string(), DataType::Integer),
         Field::new("b".to_string(), DataType::Integer),
     ]);
-    
-    let expr = Expr::binary_expr(
-        Expr::column("a"),
-        Operator::Plus,
-        Expr::column("b"),
-    );
-    
+
+    let expr = Expr::binary_expr(Expr::column("a"), Operator::Plus, Expr::column("b"));
+
     let row = vec![Value::Integer(10), Value::Integer(5)];
     let result = expr.evaluate(&row, &schema);
-    
+
     assert_eq!(result, Some(Value::Integer(15)));
 }
 
 #[test]
 fn test_expression_with_comparison() {
-    let schema = Schema::new(vec![
-        Field::new("age".to_string(), DataType::Integer),
-    ]);
-    
+    let schema = Schema::new(vec![Field::new("age".to_string(), DataType::Integer)]);
+
     let expr = Expr::binary_expr(
         Expr::column("age"),
         Operator::Gt,
         Expr::literal(Value::Integer(18)),
     );
-    
+
     let row = vec![Value::Integer(25)];
     let result = expr.evaluate(&row, &schema);
-    
+
     assert_eq!(result, Some(Value::Boolean(true)));
 }
 
 #[test]
 fn test_expression_matches() {
-    let schema = Schema::new(vec![
-        Field::new("active".to_string(), DataType::Boolean),
-    ]);
-    
+    let schema = Schema::new(vec![Field::new("active".to_string(), DataType::Boolean)]);
+
     let expr = Expr::column("active");
     let row = vec![Value::Boolean(true)];
-    
+
     assert!(expr.matches(&row, &schema));
 }
 
@@ -399,7 +384,7 @@ fn test_expression_matches() {
 fn test_seq_scan_execute() {
     let schema = create_simple_schema();
     let scan = sqlrustgo_planner::SeqScanExec::new("users".to_string(), schema);
-    
+
     let result = scan.execute();
     assert!(result.is_ok());
     assert!(result.unwrap().is_empty());
@@ -411,30 +396,23 @@ fn test_projection_execute() {
         Field::new("id".to_string(), DataType::Integer),
         Field::new("name".to_string(), DataType::Text),
     ]);
-    let output_schema = Schema::new(vec![
-        Field::new("id".to_string(), DataType::Integer),
-    ]);
-    
+    let output_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
     let input = Box::new(sqlrustgo_planner::SeqScanExec::new(
         "users".to_string(),
         input_schema,
     ));
-    let proj = sqlrustgo_planner::ProjectionExec::new(
-        input,
-        vec![Expr::column("id")],
-        output_schema,
-    );
-    
+    let proj =
+        sqlrustgo_planner::ProjectionExec::new(input, vec![Expr::column("id")], output_schema);
+
     let result = proj.execute();
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_filter_execute() {
-    let schema = Schema::new(vec![
-        Field::new("id".to_string(), DataType::Integer),
-    ]);
-    
+    let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
     let input = Box::new(sqlrustgo_planner::SeqScanExec::new(
         "users".to_string(),
         schema.clone(),
@@ -445,17 +423,15 @@ fn test_filter_execute() {
         Expr::literal(Value::Integer(10)),
     );
     let filter = sqlrustgo_planner::FilterExec::new(input, predicate);
-    
+
     let result = filter.execute();
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_aggregate_execute_count() {
-    let schema = Schema::new(vec![
-        Field::new("id".to_string(), DataType::Integer),
-    ]);
-    
+    let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
     let input = Box::new(sqlrustgo_planner::SeqScanExec::new(
         "users".to_string(),
         schema.clone(),
@@ -468,11 +444,9 @@ fn test_aggregate_execute_count() {
             args: vec![],
             distinct: false,
         }],
-        Schema::new(vec![
-            Field::new("count".to_string(), DataType::Integer),
-        ]),
+        Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
     );
-    
+
     let result = agg.execute();
     assert!(result.is_ok());
 }
@@ -485,14 +459,14 @@ fn test_aggregate_execute_count() {
 fn test_complex_query_plan() {
     // Simulates: SELECT id, name FROM users WHERE age > 25 ORDER BY name LIMIT 10
     let base_schema = create_test_schema();
-    
+
     // Table Scan
     let table_scan = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: base_schema.clone(),
         projection: None,
     };
-    
+
     // Filter
     let filter = LogicalPlan::Filter {
         predicate: Expr::binary_expr(
@@ -502,20 +476,17 @@ fn test_complex_query_plan() {
         ),
         input: Box::new(table_scan),
     };
-    
+
     // Projection
     let projection = LogicalPlan::Projection {
         input: Box::new(filter),
-        expr: vec![
-            Expr::column("id"),
-            Expr::column("name"),
-        ],
+        expr: vec![Expr::column("id"), Expr::column("name")],
         schema: Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
         ]),
     };
-    
+
     // Sort
     let sort = LogicalPlan::Sort {
         input: Box::new(projection),
@@ -525,21 +496,21 @@ fn test_complex_query_plan() {
             nulls_first: false,
         }],
     };
-    
+
     // Limit
     let limit = LogicalPlan::Limit {
         input: Box::new(sort),
         limit: 10,
         offset: None,
     };
-    
+
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&limit);
-    
+
     assert!(result.is_ok());
     let physical = result.unwrap();
     assert_eq!(physical.name(), "Limit");
-    
+
     // Check children chain
     let children = physical.children();
     assert_eq!(children.len(), 1);
@@ -550,13 +521,13 @@ fn test_complex_query_plan() {
 fn test_group_by_query_plan() {
     // Simulates: SELECT department, COUNT(*), AVG(salary) FROM users GROUP BY department
     let base_schema = create_test_schema();
-    
+
     let table_scan = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: base_schema.clone(),
         projection: None,
     };
-    
+
     let aggregate = LogicalPlan::Aggregate {
         input: Box::new(table_scan),
         group_expr: vec![Expr::column("department")],
@@ -578,10 +549,10 @@ fn test_group_by_query_plan() {
             Field::new("avg".to_string(), DataType::Float),
         ]),
     };
-    
+
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&aggregate);
-    
+
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name(), "Aggregate");
 }
@@ -597,19 +568,19 @@ fn test_join_query_plan() {
         Field::new("user_id".to_string(), DataType::Integer),
         Field::new("amount".to_string(), DataType::Float),
     ]);
-    
+
     let users = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: users_schema,
         projection: None,
     };
-    
+
     let orders = LogicalPlan::TableScan {
         table_name: "orders".to_string(),
         schema: orders_schema,
         projection: None,
     };
-    
+
     let join = LogicalPlan::Join {
         left: Box::new(users),
         right: Box::new(orders),
@@ -620,14 +591,14 @@ fn test_join_query_plan() {
             Expr::column("user_id"),
         )),
     };
-    
+
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&join);
-    
+
     assert!(result.is_ok());
     let physical = result.unwrap();
     assert_eq!(physical.name(), "HashJoin");
-    
+
     // Check that it has two children (left and right)
     let children = physical.children();
     assert_eq!(children.len(), 2);
@@ -645,19 +616,17 @@ fn test_empty_schema() {
         schema: schema.clone(),
         projection: None,
     };
-    
+
     assert!(plan.schema().fields.is_empty());
 }
 
 #[test]
 fn test_plan_with_null_values() {
-    let schema = Schema::new(vec![
-        Field::new("value".to_string(), DataType::Integer),
-    ]);
-    
+    let schema = Schema::new(vec![Field::new("value".to_string(), DataType::Integer)]);
+
     let expr = Expr::column("value");
     let row = vec![Value::Null];
-    
+
     let result = expr.evaluate(&row, &schema);
     assert_eq!(result, Some(Value::Null));
 }
@@ -670,16 +639,16 @@ fn test_limit_with_zero() {
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let limit = LogicalPlan::Limit {
         input: Box::new(table_scan),
         limit: 0,
         offset: None,
     };
-    
+
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&limit);
-    
+
     assert!(result.is_ok());
 }
 
@@ -687,74 +656,74 @@ fn test_limit_with_zero() {
 fn test_join_different_types() {
     // Test LEFT JOIN
     let schema = create_simple_schema();
-    
+
     let left = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let right = LogicalPlan::TableScan {
         table_name: "orders".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let join = LogicalPlan::Join {
         left: Box::new(left),
         right: Box::new(right),
         join_type: JoinType::Left,
         condition: None,
     };
-    
+
     let planner = DefaultPlanner::new();
     let result = planner.create_physical_plan(&join);
-    
+
     assert!(result.is_ok());
-    
+
     // Test RIGHT JOIN
     let left = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let right = LogicalPlan::TableScan {
         table_name: "orders".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let join = LogicalPlan::Join {
         left: Box::new(left),
         right: Box::new(right),
         join_type: JoinType::Right,
         condition: None,
     };
-    
+
     let result = planner.create_physical_plan(&join);
     assert!(result.is_ok());
-    
+
     // Test CROSS JOIN
     let left = LogicalPlan::TableScan {
         table_name: "users".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let right = LogicalPlan::TableScan {
         table_name: "orders".to_string(),
         schema: schema.clone(),
         projection: None,
     };
-    
+
     let join = LogicalPlan::Join {
         left: Box::new(left),
         right: Box::new(right),
         join_type: JoinType::Cross,
         condition: None,
     };
-    
+
     let result = planner.create_physical_plan(&join);
     assert!(result.is_ok());
 }

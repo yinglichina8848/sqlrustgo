@@ -73,7 +73,10 @@ impl HealthReport {
     pub fn new(version: impl Into<String>, components: Vec<ComponentHealth>) -> Self {
         let status = if components.iter().all(|c| c.status == HealthStatus::Healthy) {
             HealthStatus::Healthy
-        } else if components.iter().any(|c| c.status == HealthStatus::Unhealthy) {
+        } else if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Unhealthy)
+        {
             HealthStatus::Unhealthy
         } else {
             HealthStatus::Degraded
@@ -123,11 +126,7 @@ impl HealthChecker {
     }
 
     pub fn check_ready(&self) -> HealthReport {
-        let components: Vec<ComponentHealth> = self
-            .components
-            .iter()
-            .map(|c| c.check())
-            .collect();
+        let components: Vec<ComponentHealth> = self.components.iter().map(|c| c.check()).collect();
 
         HealthReport::new(&self.version, components)
     }
@@ -137,10 +136,7 @@ impl HealthChecker {
     }
 
     pub fn uptime_seconds(&self) -> u64 {
-        self.start_time
-            .elapsed()
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
+        self.start_time.elapsed().map(|d| d.as_secs()).unwrap_or(0)
     }
 }
 
@@ -155,7 +151,7 @@ pub struct SystemHealthComponent;
 
 impl SystemHealthComponent {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 }
 
@@ -165,8 +161,7 @@ impl HealthComponent for SystemHealthComponent {
     }
 
     fn check(&self) -> ComponentHealth {
-        ComponentHealth::new("system", HealthStatus::Healthy)
-            .with_message("System is operational")
+        ComponentHealth::new("system", HealthStatus::Healthy).with_message("System is operational")
     }
 }
 
@@ -197,8 +192,7 @@ mod tests {
 
     #[test]
     fn test_readiness_check_with_components() {
-        let checker = HealthChecker::new("1.3.0")
-            .with_component(SystemHealthComponent::new());
+        let checker = HealthChecker::new("1.3.0").with_component(SystemHealthComponent::new());
         let report = checker.check_ready();
         assert_eq!(report.status, HealthStatus::Healthy);
         assert_eq!(report.components.len(), 1);

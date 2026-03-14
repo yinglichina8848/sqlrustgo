@@ -107,16 +107,16 @@ fn test_plan_empty_relation() {
 fn test_value_debug() {
     let v = Value::Integer(42);
     assert!(format!("{:?}", v).contains("Integer"));
-    
+
     let v2 = Value::Float(3.14);
     assert!(format!("{:?}", v2).contains("Float"));
-    
+
     let v3 = Value::Boolean(true);
     assert!(format!("{:?}", v3).contains("Boolean"));
-    
+
     let v4 = Value::String("hello".to_string());
     assert!(format!("{:?}", v4).contains("String"));
-    
+
     let v5 = Value::Null;
     assert!(format!("{:?}", v5).contains("Null"));
 }

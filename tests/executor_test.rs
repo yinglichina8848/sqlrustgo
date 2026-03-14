@@ -17,10 +17,7 @@ fn test_executor_result_empty() {
 
 #[test]
 fn test_executor_result_with_data() {
-    let rows = vec![
-        vec![Value::Integer(1)],
-        vec![Value::Integer(2)],
-    ];
+    let rows = vec![vec![Value::Integer(1)], vec![Value::Integer(2)]];
     let result = ExecutorResult::new(rows, 2);
     assert_eq!(result.rows.len(), 2);
     assert_eq!(result.affected_rows, 2);

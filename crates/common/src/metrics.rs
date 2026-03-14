@@ -333,8 +333,12 @@ impl Metrics for DefaultMetrics {
         self.query_count += 1;
         self.total_query_time_ms += duration_ms;
 
-        *self.query_counts_by_type.entry(query_type.to_string()).or_insert(0) += 1;
-        *self.query_times_by_type
+        *self
+            .query_counts_by_type
+            .entry(query_type.to_string())
+            .or_insert(0) += 1;
+        *self
+            .query_times_by_type
             .entry(query_type.to_string())
             .or_insert(0) += duration_ms;
     }
@@ -345,7 +349,10 @@ impl Metrics for DefaultMetrics {
 
     fn record_error_with_type(&mut self, error_type: &str) {
         self.error_count += 1;
-        *self.errors_by_type.entry(error_type.to_string()).or_insert(0) += 1;
+        *self
+            .errors_by_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
     }
 
     fn record_bytes_read(&mut self, bytes: u64) {
@@ -457,21 +464,45 @@ mod tests {
 
     #[test]
     fn test_query_type_from_sql() {
-        assert_eq!(QueryType::from_sql("SELECT * FROM users"), QueryType::Select);
-        assert_eq!(QueryType::from_sql("INSERT INTO users VALUES (1)"), QueryType::Insert);
-        assert_eq!(QueryType::from_sql("UPDATE users SET name = 'Bob'"), QueryType::Update);
-        assert_eq!(QueryType::from_sql("DELETE FROM users WHERE id = 1"), QueryType::Delete);
-        assert_eq!(QueryType::from_sql("CREATE TABLE users (id INT)"), QueryType::Create);
+        assert_eq!(
+            QueryType::from_sql("SELECT * FROM users"),
+            QueryType::Select
+        );
+        assert_eq!(
+            QueryType::from_sql("INSERT INTO users VALUES (1)"),
+            QueryType::Insert
+        );
+        assert_eq!(
+            QueryType::from_sql("UPDATE users SET name = 'Bob'"),
+            QueryType::Update
+        );
+        assert_eq!(
+            QueryType::from_sql("DELETE FROM users WHERE id = 1"),
+            QueryType::Delete
+        );
+        assert_eq!(
+            QueryType::from_sql("CREATE TABLE users (id INT)"),
+            QueryType::Create
+        );
         assert_eq!(QueryType::from_sql("DROP TABLE users"), QueryType::Drop);
-        assert_eq!(QueryType::from_sql("ALTER TABLE users ADD name TEXT"), QueryType::Alter);
+        assert_eq!(
+            QueryType::from_sql("ALTER TABLE users ADD name TEXT"),
+            QueryType::Alter
+        );
         assert_eq!(QueryType::from_sql("BEGIN"), QueryType::Transaction);
         assert_eq!(QueryType::from_sql("COMMIT"), QueryType::Transaction);
     }
 
     #[test]
     fn test_query_type_from_sql_lowercase() {
-        assert_eq!(QueryType::from_sql("select * from users"), QueryType::Select);
-        assert_eq!(QueryType::from_sql("insert into users values (1)"), QueryType::Insert);
+        assert_eq!(
+            QueryType::from_sql("select * from users"),
+            QueryType::Select
+        );
+        assert_eq!(
+            QueryType::from_sql("insert into users values (1)"),
+            QueryType::Insert
+        );
     }
 
     #[test]
