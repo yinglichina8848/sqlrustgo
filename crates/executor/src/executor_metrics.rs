@@ -385,4 +385,90 @@ mod tests {
         let debug_str = format!("{:?}", metrics);
         assert!(debug_str.contains("ExecutorMetrics"));
     }
+
+    #[test]
+    fn test_executor_metrics_query_duration_by_type() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_query("SELECT", 200);
+        metrics.record_query("INSERT", 50);
+
+        assert!(metrics.query_duration_ns() > 0);
+    }
+
+    #[test]
+    fn test_executor_metrics_record_bytes_read() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_bytes_read(1024);
+        metrics.record_bytes_read(2048);
+
+        let metric = metrics.get_metric("bytes_read");
+        assert!(metric.is_none());
+    }
+
+    #[test]
+    fn test_executor_metrics_record_bytes_written() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_bytes_written(512);
+
+        let metric = metrics.get_metric("bytes_written");
+        assert!(metric.is_none());
+    }
+
+    #[test]
+    fn test_executor_metrics_record_cache_hit() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_cache_hit();
+        metrics.record_cache_miss();
+
+        let hit_metric = metrics.get_metric("cache_hits");
+        assert!(hit_metric.is_none());
+        let miss_metric = metrics.get_metric("cache_misses");
+        assert!(miss_metric.is_none());
+    }
+
+    #[test]
+    fn test_executor_metrics_empty_query_type() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("", 100);
+
+        assert_eq!(metrics.queries_total(), 1);
+    }
+
+    #[test]
+    fn test_executor_metrics_concurrent_queries() {
+        use std::thread;
+
+        let metrics = ExecutorMetrics::new();
+        let mut handles = vec![];
+
+        for _ in 0..5 {
+            let handle = thread::spawn(|| {
+                let mut m = ExecutorMetrics::new();
+                for _ in 0..10 {
+                    m.record_query("SELECT", 100);
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(metrics.execution_count(), 0);
+    }
+
+    #[test]
+    fn test_executor_metrics_send_sync() {
+        fn _check_send_sync<T: Send + Sync>() {}
+        _check_send_sync::<ExecutorMetrics>();
+    }
+
+    #[test]
+    fn test_executor_metrics_trait_object() {
+        fn _check_metrics(_metrics: &dyn Metrics) {}
+        let metrics = ExecutorMetrics::new();
+        _check_metrics(&metrics);
+    }
 }
