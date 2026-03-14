@@ -102,9 +102,7 @@ impl<'a> LocalExecutor<'a> {
         let child_result = self.execute(children[0])?;
 
         // Get the predicate from FilterExec
-        let filter = plan
-            .as_any()
-            .downcast_ref::<FilterExec>();
+        let filter = plan.as_any().downcast_ref::<FilterExec>();
 
         let predicate = match filter {
             Some(f) => f.predicate(),
@@ -1164,9 +1162,7 @@ mod tests {
         right_storage
             .insert(
                 "right_table",
-                vec![
-                    vec![Value::Integer(1), Value::Text("X".to_string())],
-                ],
+                vec![vec![Value::Integer(1), Value::Text("X".to_string())]],
             )
             .unwrap();
 

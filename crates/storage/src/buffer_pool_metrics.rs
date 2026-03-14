@@ -30,32 +30,38 @@ impl BufferPoolMetrics {
     }
 
     pub fn queries_total(&self) -> u64 {
-        self.queries_total.load(std::sync::atomic::Ordering::Relaxed)
+        self.queries_total
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn queries_failed(&self) -> u64 {
-        self.queries_failed.load(std::sync::atomic::Ordering::Relaxed)
+        self.queries_failed
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn rows_processed(&self) -> u64 {
-        self.rows_processed.load(std::sync::atomic::Ordering::Relaxed)
+        self.rows_processed
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
 impl Metrics for BufferPoolMetrics {
     fn record_query(&mut self, _query_type: &str, duration_ms: u64) {
-        self.queries_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.queries_total
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let duration_ns = duration_ms * 1_000_000;
         self.query_duration_ns
             .fetch_add(duration_ns, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn record_error(&mut self) {
-        self.queries_failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.queries_failed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn record_error_with_type(&mut self, _error_type: &str) {
-        self.queries_failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.queries_failed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn record_bytes_read(&mut self, _bytes: u64) {}
@@ -93,10 +99,14 @@ impl Metrics for BufferPoolMetrics {
     }
 
     fn reset(&mut self) {
-        self.queries_total.store(0, std::sync::atomic::Ordering::Relaxed);
-        self.queries_failed.store(0, std::sync::atomic::Ordering::Relaxed);
-        self.query_duration_ns.store(0, std::sync::atomic::Ordering::Relaxed);
-        self.rows_processed.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.queries_total
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.queries_failed
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.query_duration_ns
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.rows_processed
+            .store(0, std::sync::atomic::Ordering::Relaxed);
     }
 }
 

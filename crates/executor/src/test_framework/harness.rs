@@ -6,9 +6,11 @@ pub struct TestHarness {
 
 impl TestHarness {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string() }
+        Self {
+            name: name.to_string(),
+        }
     }
-    
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -20,14 +22,16 @@ pub struct TestFixture {
 
 impl TestFixture {
     pub fn new() -> Self {
-        Self { data: std::collections::HashMap::new() }
+        Self {
+            data: std::collections::HashMap::new(),
+        }
     }
-    
+
     pub fn add_table(mut self, name: &str, rows: Vec<Vec<sqlrustgo_types::Value>>) -> Self {
         self.data.insert(name.to_string(), rows);
         self
     }
-    
+
     pub fn get_table(&self, name: &str) -> Option<&Vec<Vec<sqlrustgo_types::Value>>> {
         self.data.get(name)
     }
@@ -42,7 +46,9 @@ impl TestFixture {
 }
 
 impl Default for TestFixture {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -63,8 +69,8 @@ mod tests {
 
     #[test]
     fn test_test_fixture_add_table() {
-        let fixture = TestFixture::new()
-            .add_table("users", vec![vec![sqlrustgo_types::Value::Integer(1)]]);
+        let fixture =
+            TestFixture::new().add_table("users", vec![vec![sqlrustgo_types::Value::Integer(1)]]);
         assert!(fixture.get_table("users").is_some());
     }
 
