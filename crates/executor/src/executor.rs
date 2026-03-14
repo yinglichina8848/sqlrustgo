@@ -879,6 +879,12 @@ impl MockStorageForExecutor {
     }
 }
 
+impl Default for MockStorageForExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Storage for MockStorageForExecutor {
     fn scan(&self, table_name: &str) -> SqlResult<Vec<Vec<Value>>> {
         Ok(self.data.get(table_name).cloned().unwrap_or_default())
