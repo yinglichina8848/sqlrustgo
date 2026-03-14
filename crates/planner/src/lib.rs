@@ -817,11 +817,7 @@ mod tests {
         let row = vec![Value::Integer(5), Value::Integer(3)];
 
         // Test Integer modulo (not supported in evaluate_binary_op)
-        let expr = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Modulo,
-            Expr::column("b"),
-        );
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Modulo, Expr::column("b"));
         let result = expr.evaluate(&row, &schema);
         assert!(result.is_none()); // Modulo on integers returns None
 
@@ -831,11 +827,7 @@ mod tests {
             Field::new("b".to_string(), DataType::Float),
         ]);
         let float_row = vec![Value::Float(5.0), Value::Float(3.0)];
-        let expr2 = Expr::binary_expr(
-            Expr::column("a"),
-            Operator::Plus,
-            Expr::column("b"),
-        );
+        let expr2 = Expr::binary_expr(Expr::column("a"), Operator::Plus, Expr::column("b"));
         let result2 = expr2.evaluate(&float_row, &float_schema);
         assert!(result2.is_none()); // Float arithmetic returns None
     }
@@ -844,9 +836,7 @@ mod tests {
     fn test_expr_evaluate_unary_op_unsupported() {
         // Test unary operations on unsupported types
         // This tests the _ => None case at line 220
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Text),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Text)]);
         let row = vec![Value::Text("hello".to_string())];
 
         // Test NOT operator on Text (not supported)
@@ -869,9 +859,7 @@ mod tests {
     #[test]
     fn test_expr_evaluate_qualified_wildcard() {
         // Test QualifiedWildcard evaluate returns None
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
         let row = vec![Value::Integer(5)];
 
         let expr = Expr::QualifiedWildcard {
@@ -884,9 +872,7 @@ mod tests {
     #[test]
     fn test_expr_evaluate_aggregate_function() {
         // Test AggregateFunction evaluate returns None
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
         let row = vec![Value::Integer(5)];
 
         let expr = Expr::AggregateFunction {
@@ -901,9 +887,7 @@ mod tests {
     #[test]
     fn test_expr_matches_returns_false_for_none() {
         // Test matches returns false when evaluate returns None
-        let schema = Schema::new(vec![
-            Field::new("a".to_string(), DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
         let row = vec![Value::Integer(5)];
 
         // AggregateFunction evaluate returns None, so matches should return false

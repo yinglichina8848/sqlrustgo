@@ -119,7 +119,8 @@ fn bench_concurrent_queries(c: &mut Criterion) {
             let handles: Vec<_> = (0..10)
                 .map(|_| {
                     thread::spawn(|| {
-                        let mut eng = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+                        let mut eng =
+                            sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
                         for _ in 0..10 {
                             let _ = eng.execute(
                                 sqlrustgo::parse("SELECT * FROM concurrent_test").unwrap(),

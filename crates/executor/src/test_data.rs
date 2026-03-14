@@ -3,10 +3,10 @@
 //! This module provides utilities for generating test data
 //! with various data types and distributions.
 
-use sqlrustgo_planner::{DataType, Field, Schema};
-use sqlrustgo_types::Value;
 use rand::prelude::*;
 use rand::rngs::StdRng;
+use sqlrustgo_planner::{DataType, Field, Schema};
+use sqlrustgo_types::Value;
 
 /// TestDataGenerator - Generates test data for executor tests
 pub struct TestDataGenerator {
@@ -71,13 +71,13 @@ impl TestDataGenerator {
 
     /// Generate test data for common table schemas
     pub fn generate_users_table(&mut self, count: usize) -> Vec<Vec<Value>> {
-        let schema = Schema::new(vec![
+        let _schema = Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
             Field::new("age".to_string(), DataType::Integer),
             Field::new("email".to_string(), DataType::Text),
         ]);
-        
+
         (0..count)
             .map(|i| {
                 vec![
@@ -105,7 +105,7 @@ impl TestDataGenerator {
 
     pub fn generate_products_table(&mut self, count: usize) -> Vec<Vec<Value>> {
         let products = ["Laptop", "Phone", "Tablet", "Watch", "Headphones"];
-        
+
         (0..count)
             .map(|i| {
                 vec![
@@ -141,7 +141,8 @@ impl TestTableBuilder {
 
     /// Add an integer column
     pub fn add_integer_column(mut self, name: &str) -> Self {
-        self.columns.push((name.to_string(), DataType::Integer, None));
+        self.columns
+            .push((name.to_string(), DataType::Integer, None));
         self
     }
 
@@ -159,7 +160,8 @@ impl TestTableBuilder {
 
     /// Add a boolean column
     pub fn add_boolean_column(mut self, name: &str) -> Self {
-        self.columns.push((name.to_string(), DataType::Boolean, None));
+        self.columns
+            .push((name.to_string(), DataType::Boolean, None));
         self
     }
 
@@ -307,10 +309,10 @@ mod tests {
     fn test_generator_with_seed() {
         let mut gen1 = TestDataGenerator::with_seed(42);
         let mut gen2 = TestDataGenerator::with_seed(42);
-        
+
         let val1 = gen1.generate_value(&DataType::Integer);
         let val2 = gen2.generate_value(&DataType::Integer);
-        
+
         assert_eq!(val1, val2);
     }
 
@@ -321,7 +323,7 @@ mod tests {
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
         ]);
-        
+
         let row = gen.generate_row(&schema);
         assert_eq!(row.len(), 2);
     }
@@ -330,7 +332,7 @@ mod tests {
     fn test_generator_rows() {
         let mut gen = TestDataGenerator::new();
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        
+
         let rows = gen.generate_rows(&schema, 10);
         assert_eq!(rows.len(), 10);
     }
@@ -339,7 +341,7 @@ mod tests {
     fn test_generator_sequential() {
         let mut gen = TestDataGenerator::new();
         let integers = gen.generate_sequential_integers(1, 5);
-        
+
         assert_eq!(integers.len(), 5);
         assert_eq!(integers[0], Value::Integer(1));
         assert_eq!(integers[4], Value::Integer(5));
@@ -351,7 +353,7 @@ mod tests {
             .add_integer_column("id")
             .add_text_column("name")
             .add_integer_column("age");
-        
+
         let schema = builder.build_schema();
         assert_eq!(schema.fields.len(), 3);
     }
@@ -363,7 +365,7 @@ mod tests {
             .add_text("Alice")
             .add_integer(30)
             .build();
-        
+
         assert_eq!(row.len(), 3);
         assert_eq!(row[0], Value::Integer(1));
         assert_eq!(row[1], Value::Text("Alice".to_string()));
