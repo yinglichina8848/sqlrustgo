@@ -862,6 +862,29 @@ pub trait Storage: Send + Sync {
     fn scan(&self, table_name: &str) -> SqlResult<Vec<Vec<Value>>>;
 }
 
+pub struct MockStorageForExecutor {
+    data: std::collections::HashMap<String, Vec<Vec<Value>>>,
+}
+
+impl MockStorageForExecutor {
+    pub fn new() -> Self {
+        Self {
+            data: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn with_table(mut self, name: &str, rows: Vec<Vec<Value>>) -> Self {
+        self.data.insert(name.to_string(), rows);
+        self
+    }
+}
+
+impl Storage for MockStorageForExecutor {
+    fn scan(&self, table_name: &str) -> SqlResult<Vec<Vec<Value>>> {
+        Ok(self.data.get(table_name).cloned().unwrap_or_default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1153,5 +1176,47 @@ mod tests {
     fn test_executor_result_with_affected_rows() {
         let result = ExecutorResult::new(vec![], 10);
         assert_eq!(result.affected_rows, 10);
+    }
+
+    #[test]
+    fn test_mock_storage_for_executor() {
+        let storage = MockStorageForExecutor::new().with_table(
+            "users",
+            vec![
+                vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            ],
+        );
+
+        let rows = storage.scan("users").unwrap();
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn test_mock_storage_for_executor_empty_table() {
+        let storage = MockStorageForExecutor::new();
+        let rows = storage.scan("unknown").unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_seq_scan_volcano_executor_with_storage() {
+        use std::sync::Arc;
+
+        let storage = Arc::new(MockStorageForExecutor::new().with_table(
+            "test",
+            vec![
+                vec![Value::Integer(1)],
+                vec![Value::Integer(2)],
+                vec![Value::Integer(3)],
+            ],
+        ));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
+
+        exec.init().unwrap();
+        let count = std::iter::from_fn(|| exec.next().unwrap()).count();
+        assert_eq!(count, 3);
     }
 }
