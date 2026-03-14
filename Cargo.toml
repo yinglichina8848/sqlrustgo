@@ -113,3 +113,8 @@ path = "tests/optimizer_rules_test.rs"
 [[test]]
 name = "buffer_pool_test"
 path = "tests/buffer_pool_test.rs"
+
+
+[[test]]
+name = "page_test"
+path = "tests/page_test.rs"
