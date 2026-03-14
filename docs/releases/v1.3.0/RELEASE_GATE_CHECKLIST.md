@@ -107,17 +107,17 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| F-01 | Release Notes | ⏳ | 版本发布说明 (草稿) |
-| F-02 | CHANGELOG 更新 | ⏳ | 记录变更 |
-| F-03 | API 文档注释 | ⏳ | 公共 API 需有文档注释 |
-| F-04 | 健康检查说明 | ⏳ | 简要说明端点用途 |
+| F-01 | Release Notes | ✅ | [RELEASE_NOTES.md](./RELEASE_NOTES.md) 已创建 |
+| F-02 | CHANGELOG 更新 | ✅ | CHANGELOG.md 已添加 v1.3.0 变更 |
+| F-03 | API 文档注释 | ✅ | 公共 API 已有文档注释 |
+| F-04 | 健康检查说明 | ✅ | [HEALTH_CHECK_SPECIFICATION.md](./HEALTH_CHECK_SPECIFICATION.md) 已创建 |
 
 #### G. 安全门禁
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| G-01 | 依赖审计 | ⏳ | cargo audit 通过 (无高危漏洞) |
-| G-02 | 敏感信息检查 | ⏳ | 无密钥/凭证泄露 |
+| G-01 | 依赖审计 | ✅ | cargo audit 通过 (无高危漏洞) |
+| G-02 | 敏感信息检查 | ✅ | 无密钥/凭证泄露 |
 
 ### 2.3 🟡 建议项
 
@@ -125,11 +125,11 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| H-01 | CI 流程完整 | ⏳ | GitHub Actions 配置运行所有检查 |
-| H-02 | 分支保护配置 | ⏳ | develop/v1.3.0 启用 PR 保护 |
-| H-03 | 代码所有者 | ⏳ | CODEOWNERS 文件存在 |
-| H-04 | Issue 关联 | ⏳ | 所有 PR 关联相应 Issue |
-| H-05 | Commit 规范 | ⏳ | 遵循 Conventional Commits |
+| H-01 | CI 流程完整 | ✅ | GitHub Actions 已配置所有检查 |
+| H-02 | 分支保护配置 | ✅ | develop/v1.3.0 分支保护规则已添加 |
+| H-03 | 代码所有者 | ✅ | CODEOWNERS 文件已存在 |
+| H-04 | Issue 关联 | ✅ | PR 关联相应 Issue |
+| H-05 | Commit 规范 | ✅ | 遵循 Conventional Commits |
 
 ---
 
@@ -187,6 +187,8 @@ curl http://localhost:3306/health/ready
 
 - [VERSION_PLAN.md](./VERSION_PLAN.md)
 - [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)
+- [RELEASE_NOTES.md](./RELEASE_NOTES.md)
+- [HEALTH_CHECK_SPECIFICATION.md](./HEALTH_CHECK_SPECIFICATION.md)
 - [v1.2.0 发布门禁](../v1.2.0/RELEASE_GATE_CHECKLIST.md)
 
 ---
@@ -198,10 +200,12 @@ curl http://localhost:3306/health/ready
 | 1.0 | 2026-03-05 | 初始版本 (过于理想化) |
 | 2.0 | 2026-03-13 | 根据 DEVELOPMENT_PLAN.md 修订，聚焦 Executor 稳定 |
 | 2.1 | 2026-03-15 | 更新覆盖率测试结果，标注 C-01~C-08 已完成，T 系列任务认领 |
+| 3.0 | 2026-03-15 | v1.3.1 功能合并到 v1.3.0，更新 D-05/D-06 待开发项 |
+| 4.0 | 2026-03-15 | 完成工程和文档门禁，创建 RELEASE_NOTES 和 HEALTH_CHECK |
 
 ---
 
-**文档状态**: 正式版  
+**文档状态**: 已完成发布准备  
 **创建人**: yinglichina8848  
 **更新人**: AI Assistant  
 **本文档由 yinglichina8848 创建，与 DEVELOPMENT_PLAN.md 和 VERSION_PLAN.md 保持一致**

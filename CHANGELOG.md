@@ -45,14 +45,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **审核**：依赖审核已通过（无高严重性漏洞）
 
-### 文档
+### Documentation
 
-- **新**：v1.2.0 发行说明
+- **新**: v1.2.0 Release Notes
 - **新增**：v1.2.0 升级指南
 - **新**：v1.2.0 成熟度评估
 - **新**：v1.2.0 测试计划（目标覆盖率超过 85%）
 - **新增**：v1.2.0 性能测试报告
 - **新增**：覆盖率改进计划
+
+## [1.3.0] - 2026-03-15
+
+### Added
+
+- **架构**：Volcano Executor trait 统一所有算子
+- **架构**：L4 企业级架构升级
+- **功能**：TableScan 算子 - 完整表扫描实现
+- **功能**：Projection 算子 - 列投影功能
+- **功能**：Filter 算子 - 条件过滤
+- **功能**：HashJoin 算子 - 内连接实现
+- **功能**：Executor 测试框架 (mock storage + 测试数据生成器)
+- **功能**：Planner 测试框架 - Planner 完整测试套件
+- **功能**：Metrics trait 定义 - 可观测性基础
+- **功能**：/health/live 端点 - 存活探针
+- **功能**：/health/ready 端点 - 就绪探针
+- **功能**：BufferPoolMetrics 初步集成
+- **测试**：整体行覆盖率 78.88% (目标 ≥65%)
+- **测试**：Executor 行覆盖率 87.71% (目标 ≥60%)
+- **测试**：Planner 行覆盖率 76.44% (目标 ≥60%)
+- **测试**：Optimizer 行覆盖率 82.12% (目标 ≥40%)
+
+### Changed
+
+- **重构**：统一 Executor trait 接口
+- **重构**：PhysicalPlan 迁移到 Volcano 模型
+- **重构**：测试框架标准化
+
+### Fixed
+
+- **修复**：Clippy 警告全部清除
+- **修复**：cargo fmt 格式问题
+- **修复**：代码质量门禁全通过
+
+### Security
+
+- **审核**：依赖审计通过（无高危漏洞）
+
+### Documentation
+
+- **新**：v1.3.0 发布门禁检查清单
+- **新**：v1.3.0 版本计划
+- **新**：v1.3.0 开发计划
 
 ## [未发布]
 
