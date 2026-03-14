@@ -949,6 +949,15 @@ mod tests {
                 ]),
             }
         }
+
+        pub fn with_data(data: Vec<Vec<Value>>) -> Self {
+            Self {
+                data,
+                idx: 0,
+                initialized: false,
+                schema: Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]),
+            }
+        }
     }
     impl Default for MockVolcanoExecutor {
         fn default() -> Self {
@@ -1041,5 +1050,66 @@ mod tests {
         fn _check<T: Send + Sync>() {}
         _check::<MockVolcanoExecutor>();
         _check::<Box<dyn VolcanoExecutor>>();
+    }
+
+    #[test]
+    fn test_volcano_executor_init() {
+        let mut executor = MockVolcanoExecutor::new();
+        assert!(!executor.is_initialized());
+        executor.init().unwrap();
+        assert!(executor.is_initialized());
+    }
+
+    #[test]
+    fn test_volcano_executor_next() {
+        let mut executor = MockVolcanoExecutor::new();
+        executor.init().unwrap();
+        let row = executor.next().unwrap();
+        assert!(row.is_some());
+        assert_eq!(
+            row.unwrap(),
+            vec![Value::Integer(1), Value::Text("Alice".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_volcano_executor_close() {
+        let mut executor = MockVolcanoExecutor::new();
+        executor.init().unwrap();
+        executor.next().unwrap();
+        executor.close().unwrap();
+    }
+
+    #[test]
+    fn test_volcano_executor_schema_method() {
+        let executor = MockVolcanoExecutor::new();
+        let schema = executor.schema();
+        assert_eq!(schema.fields.len(), 2);
+    }
+
+    #[test]
+    fn test_volcano_executor_as_any() {
+        let executor = MockVolcanoExecutor::new();
+        let any = executor.as_any();
+        assert!(any.is::<MockVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_execute_collect_empty() {
+        let mut executor = MockVolcanoExecutor::with_data(vec![]);
+        let result = execute_collect(&mut executor).unwrap();
+        assert!(result.rows.is_empty());
+    }
+
+    #[test]
+    fn test_execute_collect_multiple_rows() {
+        let rows = vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+        ];
+        let mut executor = MockVolcanoExecutor::with_data(rows);
+        let result = execute_collect(&mut executor).unwrap();
+        assert_eq!(result.rows.len(), 3);
     }
 }
