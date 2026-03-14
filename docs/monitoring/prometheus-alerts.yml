@@ -1,0 +1,113 @@
+groups:
+  - name: sqlrustgo_alerts
+    interval: 30s
+    rules:
+      # High Query Latency
+      - alert: HighQueryLatency
+        expr: rate(sqlrustgo_query_duration_seconds_sum[5m]) / rate(sqlrustgo_query_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: "High query latency detected"
+          description: "Average query latency is above 1 second for more than 5 minutes"
+
+      # Very High Query Latency
+      - alert: CriticalQueryLatency
+        expr: rate(sqlrustgo_query_duration_seconds_sum[5m]) / rate(sqlrustgo_query_duration_seconds_count[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: query
+        annotations:
+          summary: "Critical query latency"
+          description: "Average query latency is above 5 seconds"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(sqlrustgo_errors_total[5m]) / rate(sqlrustgo_queries_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: errors
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for more than 5 minutes"
+
+      # Critical Error Rate
+      - alert: CriticalErrorRate
+        expr: rate(sqlrustgo_errors_total[5m]) / rate(sqlrustgo_queries_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: errors
+        annotations:
+          summary: "Critical error rate"
+          description: "Error rate is above 10%"
+
+      # Low Buffer Pool Hit Ratio
+      - alert: LowBufferPoolHitRatio
+        expr: sqlrustgo_cache_hits / (sqlrustgo_cache_hits + sqlrustgo_cache_misses) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: storage
+        annotations:
+          summary: "Low buffer pool hit ratio"
+          description: "Buffer pool hit ratio is below 80% for more than 10 minutes"
+
+      # Very Low Buffer Pool Hit Ratio
+      - alert: CriticalBufferPoolHitRatio
+        expr: sqlrustgo_cache_hits / (sqlrustgo_cache_hits + sqlrustgo_cache_misses) < 0.5
+        for: 5m
+        labels:
+          severity: critical
+          component: storage
+        annotations:
+          summary: "Critical buffer pool hit ratio"
+          description: "Buffer pool hit ratio is below 50%"
+
+      # High Query Rate
+      - alert: HighQueryRate
+        expr: rate(sqlrustgo_queries_total[5m]) > 10000
+        for: 10m
+        labels:
+          severity: info
+          component: query
+        annotations:
+          summary: "High query rate"
+          description: "Query rate is above 10,000 queries per second"
+
+      # No Queries
+      - alert: NoQueries
+        expr: rate(sqlrustgo_queries_total[15m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: "No queries detected"
+          description: "No queries in the last 15 minutes"
+
+      # High Storage I/O
+      - alert: HighStorageRead
+        expr: rate(sqlrustgo_storage_bytes_read_total[5m]) > 1073741824
+        for: 10m
+        labels:
+          severity: info
+          component: storage
+        annotations:
+          summary: "High storage read rate"
+          description: "Storage read rate is above 1 GB/s"
+
+      # Query Duration p99 High
+      - alert: HighQueryDurationP99
+        expr: histogram_quantile(0.99, rate(sqlrustgo_query_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: "High p99 query latency"
+          description: "99th percentile query latency is above 5 seconds"
