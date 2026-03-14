@@ -2,9 +2,7 @@
 
 pub mod health;
 
-pub use health::{
-    ComponentHealth, HealthChecker, HealthReport, HealthStatus, HealthComponent,
-};
+pub use health::{ComponentHealth, HealthChecker, HealthComponent, HealthReport, HealthStatus};
 
 #[cfg(test)]
 mod tests {

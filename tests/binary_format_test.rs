@@ -1,17 +1,17 @@
 // Binary Format Tests
-use sqlrustgo_storage::binary_format::{BinaryFormat, BinaryFormatError, helpers};
+use sqlrustgo_storage::binary_format::{helpers, BinaryFormat, BinaryFormatError};
 
 #[test]
 fn test_binary_format_error_display() {
     let err = BinaryFormatError::InsufficientData;
     assert_eq!(format!("{}", err), "Insufficient data in buffer");
-    
+
     let err = BinaryFormatError::InvalidFormat("test".to_string());
     assert!(format!("{}", err).contains("Invalid format"));
-    
+
     let err = BinaryFormatError::DataTooLarge(100);
     assert!(format!("{}", err).contains("Data too large"));
-    
+
     let err = BinaryFormatError::Unknown("test error".to_string());
     assert!(format!("{}", err).contains("Unknown error"));
 }
@@ -40,7 +40,10 @@ fn test_helpers_read_u64() {
 fn test_helpers_read_u64_insufficient_data() {
     let result = helpers::read_u64(&[1, 2, 3]);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), BinaryFormatError::InsufficientData));
+    assert!(matches!(
+        result.unwrap_err(),
+        BinaryFormatError::InsufficientData
+    ));
 }
 
 #[test]
