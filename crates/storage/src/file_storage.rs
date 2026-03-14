@@ -1150,3 +1150,162 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod storage_engine_tests {
+    use super::*;
+    use crate::engine::ColumnDefinition;
+    use std::fs::remove_dir_all;
+
+    // === Tests for StorageEngine trait implementation ===
+
+    #[test]
+    fn test_storage_engine_trait_get_table_info() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_info");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![
+                        ColumnDefinition {
+                            name: "id".to_string(),
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                        },
+                    ],
+                },
+                rows: vec![],
+            };
+            storage.insert_table("users".to_string(), table_data).unwrap();
+
+            // Get table info through trait
+            let info = storage.get_table_info("users").unwrap();
+            assert_eq!(info.name, "users");
+            assert_eq!(info.columns.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_has_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_has_table");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![],
+                },
+                rows: vec![],
+            };
+            storage.insert_table("users".to_string(), table_data).unwrap();
+
+            // Test has_table
+            assert!(storage.has_table("users"));
+            assert!(!storage.has_table("nonexistent"));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_list_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_list");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert multiple tables
+            let table1 = TableData {
+                info: TableInfo { name: "users".to_string(), columns: vec![] },
+                rows: vec![],
+            };
+            let table2 = TableData {
+                info: TableInfo { name: "orders".to_string(), columns: vec![] },
+                rows: vec![],
+            };
+            storage.insert_table("users".to_string(), table1).unwrap();
+            storage.insert_table("orders".to_string(), table2).unwrap();
+
+            // Test list_tables
+            let tables = storage.list_tables();
+            assert!(tables.contains(&"users".to_string()));
+            assert!(tables.contains(&"orders".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_create_table_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_create_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table with data
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![
+                        ColumnDefinition {
+                            name: "id".to_string(),
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                        },
+                    ],
+                },
+                rows: vec![
+                    vec![Value::Integer(1)],
+                    vec![Value::Integer(2)],
+                ],
+            };
+            storage.insert_table("users".to_string(), table_data).unwrap();
+
+            // Create index through trait
+            storage.create_table_index("users", "id", 0).unwrap();
+
+            // Verify index exists
+            assert!(storage.has_index("users", "id"));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_drop_table_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table and create index
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![
+                        ColumnDefinition {
+                            name: "id".to_string(),
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                        },
+                    ],
+                },
+                rows: vec![vec![Value::Integer(1)]],
+            };
+            storage.insert_table("users".to_string(), table_data).unwrap();
+            storage.create_index("users", "id", 0).unwrap();
+
+            // Drop index through trait
+            storage.drop_table_index("users", "id").unwrap();
+
+            // Verify index is dropped
+            assert!(!storage.has_index("users", "id"));
+        }
+    }
+}
