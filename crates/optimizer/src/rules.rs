@@ -1525,4 +1525,69 @@ mod tests {
         let rule = IndexSelect::default();
         assert_eq!(rule.name(), "IndexSelect");
     }
+
+    #[test]
+    fn test_plan_type_name() {
+        assert_eq!(Plan::EmptyRelation.type_name(), "EmptyRelation");
+        assert_eq!(
+            Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None
+            }
+            .type_name(),
+            "TableScan"
+        );
+        assert_eq!(
+            Plan::IndexScan {
+                table_name: "t".to_string(),
+                index_name: "i".to_string(),
+                predicate: None
+            }
+            .type_name(),
+            "IndexScan"
+        );
+    }
+
+    #[test]
+    fn test_plan_get_child_mut() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_children() {
+        let plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+
+        let join_plan = Plan::Join {
+            join_type: crate::JoinType::Inner,
+            left: Box::new(Plan::EmptyRelation),
+            right: Box::new(Plan::EmptyRelation),
+            condition: Some(Expr::Literal(Value::Boolean(true))),
+        };
+        let children = join_plan.get_children();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_no_child() {
+        let mut plan = Plan::EmptyRelation;
+        let child = plan.get_child_mut();
+        assert!(child.is_none());
+
+        let mut plan = Plan::TableScan {
+            table_name: "t".to_string(),
+            projection: None,
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_none());
+    }
 }

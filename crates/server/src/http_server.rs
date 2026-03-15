@@ -190,4 +190,32 @@ mod tests {
         let server = HttpServer::new("127.0.0.1", 8080).with_version("2.0.0");
         assert_eq!(server.version, "2.0.0");
     }
+
+    #[test]
+    fn test_http_server_with_metrics_registry() {
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+        let server = HttpServer::new("127.0.0.1", 8080).with_metrics_registry(registry);
+        assert_eq!(server.port, 8080);
+    }
+
+    #[test]
+    fn test_http_server_default_version() {
+        let server = HttpServer::new("127.0.0.1", 8080);
+        assert_eq!(server.version, "1.4.0");
+    }
+
+    #[test]
+    fn test_http_server_host() {
+        let server = HttpServer::new("0.0.0.0", 5432);
+        assert_eq!(server.host, "0.0.0.0");
+        assert_eq!(server.port, 5432);
+    }
+
+    #[test]
+    fn test_http_server_with_different_ports() {
+        let server1 = HttpServer::new("127.0.0.1", 8080);
+        let server2 = HttpServer::new("127.0.0.1", 9000);
+        assert_eq!(server1.port, 8080);
+        assert_eq!(server2.port, 9000);
+    }
 }
