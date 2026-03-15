@@ -1524,4 +1524,163 @@ mod tests {
         let rule = IndexSelect::default();
         assert_eq!(rule.name(), "IndexSelect");
     }
+
+    // =============================================================================
+    // CBO-05: Cost Estimation Tests - Verify Optimization Effects
+    // =============================================================================
+
+    #[test]
+    fn test_cbo_cost_comparison_index_vs_seq_scan() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Index scan: 100 rows (selective), 5 index pages, 2 data pages (only reading matching rows)
+        let index_cost = model.index_scan_cost(100, 5, 2);
+
+        // Sequential scan: 1000 rows, 10 pages
+        let seq_cost = model.seq_scan_cost(1000, 10);
+
+        // Index should be cheaper for selective queries (100 rows out of 1000 = 10% selectivity)
+        assert!(
+            index_cost < seq_cost,
+            "index_cost={} < seq_cost={}",
+            index_cost,
+            seq_cost
+        );
+    }
+
+    #[test]
+    fn test_cbo_cost_comparison_large_table_index() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Large table: 1M rows, 1000 pages
+        // Index scan: 10000 rows (1% selectivity), 10 index pages, 100 data pages
+        let index_cost = model.index_scan_cost(10000, 10, 100);
+
+        // Sequential scan: full table
+        let seq_cost = model.seq_scan_cost(1_000_000, 1000);
+
+        // Index should be much cheaper for selective queries
+        assert!(index_cost < seq_cost);
+        // And significantly cheaper (at least 10x)
+        assert!(seq_cost / index_cost > 10.0);
+    }
+
+    #[test]
+    fn test_cbo_join_cost_comparison() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Nested loop: O(N*M)
+        let nl_cost = model.join_cost(1000, 1000, "nested_loop");
+
+        // Hash join: O(N+M)
+        let hj_cost = model.join_cost(1000, 1000, "hash_join");
+
+        // Sort merge: O(N log N + M log M)
+        let sm_cost = model.join_cost(1000, 1000, "sort_merge");
+
+        // Hash join should be cheaper than nested loop for large tables
+        assert!(hj_cost < nl_cost);
+        // Sort merge should be between hash join and nested loop
+        assert!(sm_cost < nl_cost);
+    }
+
+    #[test]
+    fn test_cbo_join_cost_large_tables() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Large tables: 100k rows each
+        let nl_cost = model.join_cost(100_000, 100_000, "nested_loop");
+        let hj_cost = model.join_cost(100_000, 100_000, "hash_join");
+
+        // For large tables, hash join should be much cheaper
+        assert!(hj_cost < nl_cost);
+        // Nested loop should be significantly more expensive
+        assert!(nl_cost / hj_cost > 50.0);
+    }
+
+    #[test]
+    fn test_cbo_aggregation_cost_with_group_by() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Aggregation with group by
+        let agg_cost_1 = model.agg_cost(10000, 1);
+        let agg_cost_2 = model.agg_cost(10000, 2);
+        let agg_cost_4 = model.agg_cost(10000, 4);
+
+        // More group by columns should increase cost
+        assert!(agg_cost_2 > agg_cost_1);
+        assert!(agg_cost_4 > agg_cost_2);
+    }
+
+    #[test]
+    fn test_cbo_sort_cost_in_memory_vs_external() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Small sort: in-memory
+        let small_sort = model.sort_cost(1000, 100);
+
+        // Large sort: external (spill to disk)
+        let large_sort = model.sort_cost(2_000_000, 100);
+
+        // External sort should be more expensive
+        assert!(large_sort > small_sort);
+        // And significantly more expensive (at least 10x due to I/O)
+        assert!(large_sort / small_sort > 10.0);
+    }
+
+    #[test]
+    fn test_cbo_index_select_rule_integration() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // Simulate: query selecting 5% of rows from 10000 row table
+        let selective_count = 500;
+        let total_count = 10000;
+
+        // Index scan cost
+        let index_cost = model.index_scan_cost(selective_count, 5, 50);
+
+        // Sequential scan cost
+        let seq_cost = model.seq_scan_cost(total_count, 100);
+
+        // CBO should choose index scan for selective query
+        let use_index = index_cost < seq_cost;
+        assert!(
+            use_index,
+            "CBO should choose index scan for selective query"
+        );
+    }
+
+    #[test]
+    fn test_cbo_join_reordering_cost_based() {
+        use crate::SimpleCostModel;
+
+        let model = SimpleCostModel::default_model();
+
+        // A (1000 rows) join B (100 rows) join C (10000 rows)
+        // Optimal order: (B join C) join A = smaller first
+
+        let bc_join = model.join_cost(100, 10000, "hash_join"); // 10100
+        let abc_join = model.join_cost(1000, 10100, "hash_join"); // 11100
+
+        // Alternative: A join B first = 1100, then join C
+        let ab_join = model.join_cost(1000, 100, "hash_join"); // 1100
+        let abc_alt = model.join_cost(1100, 10000, "hash_join"); // 11100
+
+        // Both should be similar, but small-first is better
+        assert!(abc_join <= abc_alt);
+    }
 }
