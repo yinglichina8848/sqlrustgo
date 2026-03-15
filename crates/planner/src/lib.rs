@@ -803,4 +803,100 @@ mod tests {
         let field_not_null = Field::new_not_null("id".to_string(), DataType::Integer);
         assert!(!field_not_null.nullable);
     }
+
+    // === Tests for expression evaluation ===
+
+    #[test]
+    fn test_expr_evaluate_binary_op_unsupported_types() {
+        // Test binary operations on unsupported type combinations
+        // This tests the _ => None case at line 209
+        let schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Integer),
+        ]);
+        let row = vec![Value::Integer(5), Value::Integer(3)];
+
+        // Test Integer modulo (not supported in evaluate_binary_op)
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Modulo, Expr::column("b"));
+        let result = expr.evaluate(&row, &schema);
+        assert!(result.is_none()); // Modulo on integers returns None
+
+        // Test Float arithmetic (not supported in evaluate_binary_op)
+        let float_schema = Schema::new(vec![
+            Field::new("a".to_string(), DataType::Float),
+            Field::new("b".to_string(), DataType::Float),
+        ]);
+        let float_row = vec![Value::Float(5.0), Value::Float(3.0)];
+        let expr2 = Expr::binary_expr(Expr::column("a"), Operator::Plus, Expr::column("b"));
+        let result2 = expr2.evaluate(&float_row, &float_schema);
+        assert!(result2.is_none()); // Float arithmetic returns None
+    }
+
+    #[test]
+    fn test_expr_evaluate_unary_op_unsupported() {
+        // Test unary operations on unsupported types
+        // This tests the _ => None case at line 220
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Text)]);
+        let row = vec![Value::Text("hello".to_string())];
+
+        // Test NOT operator on Text (not supported)
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::column("a")),
+        };
+        let result = expr.evaluate(&row, &schema);
+        assert!(result.is_none());
+
+        // Test Minus operator on Text (not supported)
+        let expr2 = Expr::UnaryExpr {
+            op: Operator::Minus,
+            expr: Box::new(Expr::column("a")),
+        };
+        let result2 = expr2.evaluate(&row, &schema);
+        assert!(result2.is_none());
+    }
+
+    #[test]
+    fn test_expr_evaluate_qualified_wildcard() {
+        // Test QualifiedWildcard evaluate returns None
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
+        let row = vec![Value::Integer(5)];
+
+        let expr = Expr::QualifiedWildcard {
+            qualifier: "table".to_string(),
+        };
+        let result = expr.evaluate(&row, &schema);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_expr_evaluate_aggregate_function() {
+        // Test AggregateFunction evaluate returns None
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
+        let row = vec![Value::Integer(5)];
+
+        let expr = Expr::AggregateFunction {
+            func: AggregateFunction::Count,
+            args: vec![Expr::column("a")],
+            distinct: false,
+        };
+        let result = expr.evaluate(&row, &schema);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_expr_matches_returns_false_for_none() {
+        // Test matches returns false when evaluate returns None
+        let schema = Schema::new(vec![Field::new("a".to_string(), DataType::Integer)]);
+        let row = vec![Value::Integer(5)];
+
+        // AggregateFunction evaluate returns None, so matches should return false
+        let expr = Expr::AggregateFunction {
+            func: AggregateFunction::Count,
+            args: vec![Expr::column("a")],
+            distinct: false,
+        };
+        let result = expr.matches(&row, &schema);
+        assert!(!result);
+    }
 }
