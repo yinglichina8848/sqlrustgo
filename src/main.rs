@@ -2,7 +2,7 @@
 
 fn main() {
     sqlrustgo::init();
-    println!("SQLRustGo v1.2.0");
+    println!("SQLRustGo v1.3.0");
 }
 
 #[cfg(test)]
