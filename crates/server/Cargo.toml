@@ -21,6 +21,8 @@ log.workspace = true
 env_logger.workspace = true
 ctrlc.workspace = true
 async-trait.workspace = true
+actix-web = "4"
+actix-rt = "2"
 
 [dev-dependencies]
 tempfile.workspace = true
