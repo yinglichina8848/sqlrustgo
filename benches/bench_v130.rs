@@ -35,47 +35,12 @@ fn setup_table(engine: &mut ExecutionEngine, table_name: &str, rows: usize) {
     }
 }
 
-fn setup_join_tables(engine: &mut ExecutionEngine, left_rows: usize, right_rows: usize) {
-    engine
-        .execute(parse("CREATE TABLE left_table (id INTEGER, value INTEGER)").unwrap())
-        .unwrap();
-    engine
-        .execute(parse("CREATE TABLE right_table (id INTEGER, amount INTEGER)").unwrap())
-        .unwrap();
-
-    for i in 0..left_rows {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO left_table VALUES ({}, {})",
-                    i,
-                    i * 10
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
-
-    for i in 0..right_rows {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO right_table VALUES ({}, {})",
-                    i,
-                    i * 100
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
-}
-
 // ============================================================================
 // TableScan Benchmarks (6 benchmarks)
 // ============================================================================
 
 fn bench_tablescan_full(c: &mut Criterion) {
-    let mut group = c.benchmark_group("tablescan");
+    let mut group = c.benchmark_group("tablescan_full");
 
     for size in [100, 1000, 10000] {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
@@ -113,16 +78,16 @@ fn bench_tablescan_projection(c: &mut Criterion) {
 // ============================================================================
 
 fn bench_filter_equality(c: &mut Criterion) {
-    let mut group = c.benchmark_group("filter");
+    let mut group = c.benchmark_group("filter_equality");
 
     for size in [100, 1000, 10000] {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
         setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(BenchmarkId::new("equality", size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::new("eq", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT * FROM t1 WHERE id = 500").unwrap())
+                    .execute(parse("SELECT * FROM t1 WHERE id = 50").unwrap())
                     .unwrap()
             });
         });
@@ -138,7 +103,7 @@ fn bench_filter_range(c: &mut Criterion) {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
         setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(BenchmarkId::new("range", size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::new("gt", size), &size, |b, _| {
             b.iter(|| {
                 engine
                     .execute(parse("SELECT * FROM t1 WHERE value > 50").unwrap())
@@ -157,7 +122,7 @@ fn bench_filter_and(c: &mut Criterion) {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
         setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(BenchmarkId::new("and_condition", size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::new("and", size), &size, |b, _| {
             b.iter(|| {
                 engine
                     .execute(parse("SELECT * FROM t1 WHERE id > 10 AND value < 50").unwrap())
@@ -169,22 +134,18 @@ fn bench_filter_and(c: &mut Criterion) {
     group.finish();
 }
 
-// ============================================================================
-// HashJoin Benchmarks (6 benchmarks)
-// ============================================================================
+fn bench_filter_or(c: &mut Criterion) {
+    let mut group = c.benchmark_group("filter_or");
 
-fn bench_hashjoin_inner(c: &mut Criterion) {
-    let mut group = c.benchmark_group("hashjoin_inner");
-
-    for (left, right) in [(100, 100), (1000, 1000), (10000, 10000)] {
+    for size in [100, 1000, 10000] {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
-        setup_join_tables(&mut engine, left, right);
+        setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(BenchmarkId::new("inner_join", left), &(left, right), |b, _| {
+        group.bench_with_input(BenchmarkId::new("or", size), &size, |b, _| {
             b.iter(|| {
-                engine.execute(parse(
-                    "SELECT l.id, l.value, r.amount FROM left_table l INNER JOIN right_table r ON l.id = r.id"
-                ).unwrap()).unwrap()
+                engine
+                    .execute(parse("SELECT * FROM t1 WHERE id < 10 OR id > 90").unwrap())
+                    .unwrap()
             });
         });
     }
@@ -192,18 +153,22 @@ fn bench_hashjoin_inner(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_hashjoin_left(c: &mut Criterion) {
-    let mut group = c.benchmark_group("hashjoin_left");
+// ============================================================================
+// Aggregate Benchmarks (6 benchmarks)
+// ============================================================================
 
-    for (left, right) in [(100, 100), (1000, 1000), (10000, 10000)] {
+fn bench_aggregate_count(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aggregate_count");
+
+    for size in [100, 1000, 10000] {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
-        setup_join_tables(&mut engine, left, right);
+        setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(BenchmarkId::new("left_join", left), &(left, right), |b, _| {
+        group.bench_with_input(BenchmarkId::new("count", size), &size, |b, _| {
             b.iter(|| {
-                engine.execute(parse(
-                    "SELECT l.id, l.value, r.amount FROM left_table l LEFT JOIN right_table r ON l.id = r.id"
-                ).unwrap()).unwrap()
+                engine
+                    .execute(parse("SELECT COUNT(*) FROM t1").unwrap())
+                    .unwrap()
             });
         });
     }
@@ -211,27 +176,58 @@ fn bench_hashjoin_left(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_hashjoin_cross(c: &mut Criterion) {
-    let mut group = c.benchmark_group("hashjoin_cross");
+fn bench_aggregate_sum(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aggregate_sum");
 
-    for (left, right) in [(10, 10), (100, 100), (1000, 1000)] {
+    for size in [100, 1000, 10000] {
         let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
-        setup_join_tables(&mut engine, left, right);
+        setup_table(&mut engine, "t1", size);
 
-        group.bench_with_input(
-            BenchmarkId::new("cross_join", left),
-            &(left, right),
-            |b, _| {
-                b.iter(|| {
-                    engine
-                        .execute(
-                            parse("SELECT l.id, r.id FROM left_table l CROSS JOIN right_table r")
-                                .unwrap(),
-                        )
-                        .unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("sum", size), &size, |b, _| {
+            b.iter(|| {
+                engine
+                    .execute(parse("SELECT SUM(value) FROM t1").unwrap())
+                    .unwrap()
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_aggregate_avg(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aggregate_avg");
+
+    for size in [100, 1000, 10000] {
+        let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+        setup_table(&mut engine, "t1", size);
+
+        group.bench_with_input(BenchmarkId::new("avg", size), &size, |b, _| {
+            b.iter(|| {
+                engine
+                    .execute(parse("SELECT AVG(value) FROM t1").unwrap())
+                    .unwrap()
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_aggregate_group_by(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aggregate_group_by");
+
+    for size in [100, 1000, 10000] {
+        let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+        setup_table(&mut engine, "t1", size);
+
+        group.bench_with_input(BenchmarkId::new("group_by", size), &size, |b, _| {
+            b.iter(|| {
+                engine
+                    .execute(parse("SELECT value, COUNT(*) FROM t1 GROUP BY value").unwrap())
+                    .unwrap()
+            });
+        });
     }
 
     group.finish();
@@ -239,16 +235,18 @@ fn bench_hashjoin_cross(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // TableScan (6)
+    // TableScan (2 x 3 sizes = 6)
     bench_tablescan_full,
     bench_tablescan_projection,
-    // Filter (6)
+    // Filter (4 x 3 sizes = 12)
     bench_filter_equality,
     bench_filter_range,
     bench_filter_and,
-    // HashJoin (6)
-    bench_hashjoin_inner,
-    bench_hashjoin_left,
-    bench_hashjoin_cross,
+    bench_filter_or,
+    // Aggregate (4 x 3 sizes = 12)
+    bench_aggregate_count,
+    bench_aggregate_sum,
+    bench_aggregate_avg,
+    bench_aggregate_group_by,
 );
 criterion_main!(benches);
