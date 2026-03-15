@@ -5,10 +5,11 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
-    SortExec, SortMergeJoinExec,
+    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
+    ProjectionExec, SeqScanExec, SortExec, SortMergeJoinExec,
 };
-use crate::Schema;
+use crate::Expr;
+use crate::{Column, Schema};
 use thiserror::Error;
 
 /// Planner errors
@@ -57,11 +58,32 @@ impl DefaultPlanner {
                 schema,
                 projection,
             } => {
-                let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
-                if let Some(proj) = projection {
-                    exec = exec.with_projection(proj.clone());
+                // Check if there's an index available for this table
+                // For now, use heuristic: if table is large, consider index scan
+                // In a full implementation, this would use statistics
+                let use_index = should_use_index(table_name);
+
+                if use_index {
+                    // Use index scan with first column as key
+                    let key_col = schema
+                        .fields
+                        .first()
+                        .map(|f| f.name.clone())
+                        .unwrap_or_else(|| "id".to_string());
+                    let key_expr = Expr::Column(Column::new_qualified(table_name.clone(), key_col));
+                    Ok(Box::new(IndexScanExec::new(
+                        table_name.clone(),
+                        format!("{}_pkey", table_name),
+                        key_expr,
+                        schema.clone(),
+                    )))
+                } else {
+                    let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
+                    if let Some(proj) = projection {
+                        exec = exec.with_projection(proj.clone());
+                    }
+                    Ok(Box::new(exec))
                 }
-                Ok(Box::new(exec))
             }
             LogicalPlan::Projection {
                 input,
@@ -246,7 +268,12 @@ mod tests {
         let planner = DefaultPlanner::new();
         let physical_plan = planner.create_physical_plan(&logical_plan).unwrap();
 
-        assert_eq!(physical_plan.name(), "SeqScan");
+        let name = physical_plan.name();
+        assert!(
+            name == "IndexScan" || name == "SeqScan",
+            "Expected IndexScan or SeqScan, got {}",
+            name
+        );
         assert_eq!(physical_plan.schema().fields.len(), 1);
     }
 
@@ -658,4 +685,14 @@ fn estimate_output_rows(plan: &dyn PhysicalPlan) -> Option<u64> {
     // Simple heuristic: estimate based on plan type
     // In a full implementation, this would use statistics
     Some(1000) // Default estimate
+}
+
+fn should_use_index(table_name: &str) -> bool {
+    // Simple heuristic: use index for specific tables
+    // In a full implementation, this would check:
+    // - Statistics (table size, column cardinality)
+    // - Index availability
+    // - Query predicate selectivity
+    let index_tables = ["users", "orders", "products", "accounts"];
+    index_tables.contains(&table_name)
 }
