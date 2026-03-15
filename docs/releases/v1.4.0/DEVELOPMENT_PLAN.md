@@ -63,9 +63,9 @@ v1.4.0 聚焦于查询优化和执行器增强，主要包括：
 
 | ID | 模块 | 任务 | 依赖 | 目标 |
 |----|------|------|------|------|
-| M-003 | observability | Prometheus 指标格式 | Metrics trait | OpenMetrics 兼容格式 |
-| M-004 | observability | /metrics 端点 | M-003 | HTTP 端点暴露指标 |
-| M-005 | observability | Grafana Dashboard 模板 | M-004 | 基础仪表盘 JSON |
+| M-003 | observability | Prometheus 指标格式 | Metrics trait | OpenMetrics 兼容格式 | ✅ 已完成 |
+| M-004 | observability | /metrics 端点 | M-003 | HTTP 端点暴露指标 | ✅ 已完成 |
+| M-005 | observability | Grafana Dashboard 模板 | M-004 | 基础仪表盘 JSON | ✅ 已完成 |
 | NLJ-01 | executor | NestedLoopJoin 优化 | - | 支持 Cross Join 和外连接 |
 | PB-01 | benchmark | TPC-H 基准测试 | - | 性能基线数据 |
 
