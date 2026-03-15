@@ -525,6 +525,274 @@ impl VolcanoExecutor for HashJoinVolcanoExecutor {
     }
 }
 
+/// SortMergeJoinVolcanoExecutor - Sort-Merge Join algorithm implementation
+/// Alternative to HashJoin, works best when inputs are already sorted by join keys
+#[allow(dead_code)]
+pub struct SortMergeJoinVolcanoExecutor {
+    left: Box<dyn VolcanoExecutor>,
+    right: Box<dyn VolcanoExecutor>,
+    join_type: sqlrustgo_planner::JoinType,
+    left_schema: Schema,
+    right_schema: Schema,
+    schema: Schema,
+    initialized: bool,
+    // Sorted data for merge
+    left_sorted: Vec<Vec<Value>>,
+    right_sorted: Vec<Vec<Value>>,
+    // Current positions in merge
+    left_idx: usize,
+    right_idx: usize,
+    // For handling multiple matches
+    left_matches: Vec<Vec<Value>>,
+    left_match_idx: usize,
+}
+
+impl SortMergeJoinVolcanoExecutor {
+    pub fn new(
+        left: Box<dyn VolcanoExecutor>,
+        right: Box<dyn VolcanoExecutor>,
+        join_type: sqlrustgo_planner::JoinType,
+        left_schema: Schema,
+        right_schema: Schema,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            join_type,
+            left_schema,
+            right_schema,
+            schema,
+            initialized: false,
+            left_sorted: Vec::new(),
+            right_sorted: Vec::new(),
+            left_idx: 0,
+            right_idx: 0,
+            left_matches: Vec::new(),
+            left_match_idx: 0,
+        }
+    }
+}
+
+/// Compare two rows by their first column (join key)
+fn compare_join_keys(left_row: &[Value], right_row: &[Value]) -> std::cmp::Ordering {
+    let left_key = left_row.first().unwrap_or(&Value::Null);
+    let right_key = right_row.first().unwrap_or(&Value::Null);
+
+    match (left_key, right_key) {
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r),
+        (Value::Text(l), Value::Text(r)) => l.cmp(r),
+        (Value::Float(l), Value::Float(r)) => {
+            if l < r {
+                std::cmp::Ordering::Less
+            } else if l > r {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        }
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+impl SortMergeJoinVolcanoExecutor {
+    fn next_inner(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        loop {
+            // If we have cached matches, return them
+            if self.left_match_idx < self.left_matches.len() {
+                let mut result = self.left_matches[self.left_match_idx].clone();
+                result.extend(self.right_sorted[self.right_idx].clone());
+                self.left_match_idx += 1;
+                self.right_idx += 1;
+                return Ok(Some(result));
+            }
+
+            // Clear cached matches after consuming them all
+            self.left_matches.clear();
+            self.left_match_idx = 0;
+
+            // Check if we've exhausted either input
+            if self.left_idx >= self.left_sorted.len() || self.right_idx >= self.right_sorted.len()
+            {
+                return Ok(None);
+            }
+
+            let left_row = &self.left_sorted[self.left_idx];
+            let right_row = &self.right_sorted[self.right_idx];
+
+            let cmp = compare_join_keys(left_row, right_row);
+
+            if cmp == std::cmp::Ordering::Equal {
+                // Found match - collect all matching right rows for this left row
+                // Collect all matching right rows
+                while self.right_idx < self.right_sorted.len()
+                    && compare_join_keys(left_row, &self.right_sorted[self.right_idx])
+                        == std::cmp::Ordering::Equal
+                {
+                    self.left_matches.push(left_row.clone());
+                    self.right_idx += 1;
+                }
+
+                // Return first match
+                if !self.left_matches.is_empty() {
+                    let mut result = self.left_matches[0].clone();
+                    // Get the first right row from the match set (we already advanced right_idx)
+                    result.extend(self.right_sorted[self.right_idx - 1].clone());
+                    self.left_match_idx = 1;
+                    return Ok(Some(result));
+                }
+            } else if cmp == std::cmp::Ordering::Less {
+                // Left key is smaller, advance left
+                self.left_idx += 1;
+            } else {
+                // Right key is smaller, advance right
+                self.right_idx += 1;
+            }
+        }
+    }
+
+    fn next_left(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        // Loop to find next output
+        loop {
+            // Check if we've exhausted left input
+            if self.left_idx >= self.left_sorted.len() {
+                return Ok(None);
+            }
+
+            // If we have cached matches, return them
+            if self.left_match_idx < self.left_matches.len() {
+                let mut result = self.left_matches[self.left_match_idx].clone();
+                result.extend(self.right_sorted[self.right_idx - 1].clone());
+                self.left_match_idx += 1;
+                return Ok(Some(result));
+            }
+
+            // Clear cached matches and continue searching
+            self.left_matches.clear();
+            self.left_match_idx = 0;
+
+            let left_row = &self.left_sorted[self.left_idx];
+
+            // If right is exhausted, return left row with nulls
+            if self.right_idx >= self.right_sorted.len() {
+                let mut result = left_row.clone();
+                for _ in 0..self.right_schema.fields.len() {
+                    result.push(Value::Null);
+                }
+                self.left_idx += 1;
+                self.right_idx = 0;
+                return Ok(Some(result));
+            }
+
+            let right_row = &self.right_sorted[self.right_idx];
+            let cmp = compare_join_keys(left_row, right_row);
+
+            if cmp == std::cmp::Ordering::Equal {
+                // Found match - collect all matching right rows
+                while self.right_idx < self.right_sorted.len()
+                    && compare_join_keys(left_row, &self.right_sorted[self.right_idx])
+                        == std::cmp::Ordering::Equal
+                {
+                    self.left_matches.push(left_row.clone());
+                    self.right_idx += 1;
+                }
+
+                if !self.left_matches.is_empty() {
+                    let mut result = self.left_matches[0].clone();
+                    result.extend(self.right_sorted[self.right_idx - 1].clone());
+                    self.left_match_idx = 1;
+                    // After exhausting all matches for this left row, advance to next left
+                    self.left_idx += 1;
+                    self.right_idx = 0;
+                    return Ok(Some(result));
+                }
+            } else if cmp == std::cmp::Ordering::Less {
+                // Left key doesn't have a match in right, return with nulls
+                let mut result = left_row.clone();
+                for _ in 0..self.right_schema.fields.len() {
+                    result.push(Value::Null);
+                }
+                self.left_idx += 1;
+                self.right_idx = 0;
+                return Ok(Some(result));
+            } else {
+                // Right key is smaller, advance right
+                self.right_idx += 1;
+            }
+        }
+    }
+}
+
+impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
+    fn init(&mut self) -> SqlResult<()> {
+        // Initialize and collect left input
+        self.left.init()?;
+        while let Some(row) = self.left.next()? {
+            self.left_sorted.push(row);
+        }
+        self.left.close()?;
+
+        // Initialize and collect right input
+        self.right.init()?;
+        while let Some(row) = self.right.next()? {
+            self.right_sorted.push(row);
+        }
+        self.right.close()?;
+
+        // Sort both inputs by join key
+        self.left_sorted.sort_by(|a, b| compare_join_keys(a, b));
+        self.right_sorted.sort_by(|a, b| compare_join_keys(a, b));
+
+        // Reset indices
+        self.left_idx = 0;
+        self.right_idx = 0;
+        self.left_matches.clear();
+        self.left_match_idx = 0;
+        self.initialized = true;
+
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if !self.initialized {
+            return Err(SqlError::ExecutionError("Not initialized".to_string()));
+        }
+
+        match self.join_type {
+            sqlrustgo_planner::JoinType::Inner => self.next_inner(),
+            sqlrustgo_planner::JoinType::Left => self.next_left(),
+            _ => Ok(None),
+        }
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.left_sorted.clear();
+        self.right_sorted.clear();
+        self.left_matches.clear();
+        self.left_idx = 0;
+        self.right_idx = 0;
+        self.left_match_idx = 0;
+        self.initialized = false;
+        Ok(())
+    }
+
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn name(&self) -> &str {
+        "SortMergeJoin"
+    }
+
+    fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 pub struct SortVolcanoExecutor {
     child: Box<dyn VolcanoExecutor>,
     sort_expr: Vec<sqlrustgo_planner::SortExpr>,
@@ -1757,5 +2025,201 @@ mod tests {
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
         assert_eq!(rows.len(), 2);
+    }
+
+    // ========== Tests for SortMergeJoinVolcanoExecutor ==========
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_inner_join() {
+        // Test SortMergeJoin with inner join
+        let left = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1), Value::Text("a".to_string())],
+            vec![Value::Integer(2), Value::Text("b".to_string())],
+        ]));
+        let right = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1), Value::Text("x".to_string())],
+            vec![Value::Integer(2), Value::Text("y".to_string())],
+        ]));
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Text),
+        ]);
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Text),
+        ]);
+
+        let mut exec = SortMergeJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+
+        exec.init().unwrap();
+
+        let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
+        // Should have 2 matching rows (id=1 and id=2)
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_left_join() {
+        // Test SortMergeJoin with left join
+        let left = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1), Value::Text("a".to_string())],
+            vec![Value::Integer(3), Value::Text("c".to_string())],
+        ]));
+        let right = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1), Value::Text("x".to_string())],
+            vec![Value::Integer(2), Value::Text("y".to_string())],
+        ]));
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Text),
+        ]);
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("value".to_string(), DataType::Text),
+        ]);
+
+        let mut exec = SortMergeJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Left,
+            left_schema,
+            right_schema,
+            schema,
+        );
+
+        exec.init().unwrap();
+
+        let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
+        // Should have 2 rows: id=1 (match) and id=3 (no match, nulls for right)
+        assert_eq!(rows.len(), 2);
+        // Check that the second row has nulls for right side
+        assert_eq!(rows[1][2], Value::Null);
+    }
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_empty_input() {
+        // Test SortMergeJoin with empty input
+        let left = Box::new(MockVolcanoExecutor::with_data(vec![]));
+        let right = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+        ]));
+
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+
+        let mut exec = SortMergeJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+
+        exec.init().unwrap();
+
+        let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_name() {
+        let left = Box::new(MockVolcanoExecutor::new());
+        let right = Box::new(MockVolcanoExecutor::new());
+        let left_schema = Schema::empty();
+        let right_schema = Schema::empty();
+        let schema = Schema::empty();
+
+        let exec = SortMergeJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+        assert_eq!(exec.name(), "SortMergeJoin");
+    }
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_close() {
+        let left = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+        ]));
+        let right = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+        ]));
+
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+
+        let mut exec = SortMergeJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+
+        exec.init().unwrap();
+        exec.next().unwrap();
+        exec.close().unwrap();
+        assert!(!exec.is_initialized());
+    }
+
+    #[test]
+    fn test_sort_merge_join_compare_keys() {
+        // Test the standalone compare function
+        let left = vec![Value::Integer(1)];
+        let right = vec![Value::Integer(1)];
+        let cmp = compare_join_keys(&left, &right);
+        assert_eq!(cmp, std::cmp::Ordering::Equal);
+
+        let left = vec![Value::Integer(1)];
+        let right = vec![Value::Integer(2)];
+        let cmp = compare_join_keys(&left, &right);
+        assert_eq!(cmp, std::cmp::Ordering::Less);
+
+        let left = vec![Value::Integer(2)];
+        let right = vec![Value::Integer(1)];
+        let cmp = compare_join_keys(&left, &right);
+        assert_eq!(cmp, std::cmp::Ordering::Greater);
+
+        // Test with Text
+        let left = vec![Value::Text("a".to_string())];
+        let right = vec![Value::Text("b".to_string())];
+        let cmp = compare_join_keys(&left, &right);
+        assert_eq!(cmp, std::cmp::Ordering::Less);
     }
 }
