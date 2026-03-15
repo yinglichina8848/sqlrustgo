@@ -95,6 +95,65 @@ impl PhysicalPlan for SeqScanExec {
     }
 }
 
+/// Index scan execution operator - uses index instead of full table scan
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct IndexScanExec {
+    table_name: String,
+    index_name: String,
+    key_expr: Expr,
+    schema: Schema,
+}
+
+impl IndexScanExec {
+    pub fn new(table_name: String, index_name: String, key_expr: Expr, schema: Schema) -> Self {
+        Self {
+            table_name,
+            index_name,
+            key_expr,
+            schema,
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn index_name(&self) -> &str {
+        &self.index_name
+    }
+
+    pub fn key_expr(&self) -> &Expr {
+        &self.key_expr
+    }
+}
+
+impl PhysicalPlan for IndexScanExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![]
+    }
+
+    fn name(&self) -> &str {
+        "IndexScan"
+    }
+
+    fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        Ok(vec![])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Projection execution operator
 #[allow(dead_code)]
 pub struct ProjectionExec {
