@@ -37,9 +37,9 @@ v1.4.0 专注于提升查询性能，通过 CBO 成本优化器和 SortMergeJoin
 
 | 功能 | 描述 | 优先级 | 状态 |
 |------|------|--------|------|
-| Prometheus 格式 | OpenMetrics 兼容指标格式 | P1 | ⏳ |
-| /metrics 端点 | HTTP 暴露指标 | P1 | ⏳ |
-| Grafana Dashboard | 基础仪表盘模板 | P2 | ⏳ |
+| Prometheus 格式 | OpenMetrics 兼容指标格式 | P1 | ✅ |
+| /metrics 端点 | HTTP 暴露指标 | P1 | ✅ |
+| Grafana Dashboard | 基础仪表盘模板 | P2 | ✅ |
 
 ### 2.4 轨道 D: 基准测试 (可选)
 
