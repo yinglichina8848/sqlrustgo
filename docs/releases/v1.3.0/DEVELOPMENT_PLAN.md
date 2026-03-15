@@ -134,12 +134,14 @@ cargo tarpaulin --workspace --ignore-panics --timeout 600
 
 ### 4.3 P1 扩展 - 可观测性增强 (原 v1.3.1)
 
+> 2026-03-15 更新: 根据最新提交，M-003~M-006 已完成
+
 | ID | 模块 | 任务 | 依赖 | 目标 | 状态 |
 |----|------|------|------|------|------|
-| M-003 | observability | Prometheus 指标格式 | M-001 | 指标暴露 | ⏳ 待开发 |
-| M-004 | observability | /metrics 端点 | M-003 | 指标查询 | ⏳ 待开发 |
-| M-005 | observability | Grafana Dashboard 模板 | M-004 | 可视化 | ⏳ 可选 |
-| M-006 | observability | 告警规则示例 | M-004 | 告警配置 | ⏳ 可选 |
+| M-003 | observability | Prometheus 指标格式 | M-001 | 指标暴露 | ✅ 已完成 |
+| M-004 | observability | /metrics 端点 | M-003 | 指标查询 | ✅ 已完成 |
+| M-005 | observability | Grafana Dashboard 模板 | M-004 | 可视化 | ✅ 已完成 |
+| M-006 | observability | 告警规则示例 | M-004 | 告警配置 | ✅ 已完成 |
 
 ### 4.4 P2 - 可选完成
 
