@@ -20,10 +20,10 @@
 
 ---
 
-## [开发中] v1.3.0
+## [已发布] v1.3.0
 
-> **发布日期**: 待定  
-> **代号**: Architecture Stabilization
+> **发布日期**: 2026-03-15  
+> **代号**: Enterprise Ready (架构稳定版)
 
 ### Added
 
@@ -36,13 +36,21 @@
 - **测试**: Executor 测试框架
 
 #### Planner 模块
-- **测试**: Planner 测试框架
+- **测试**: Planner 测试套件
 
-#### 可观测性 (计划中)
-- **功能**: Metrics trait 定义 (M-001)
-- **功能**: BufferPool 指标收集 (M-002)
-- **功能**: /health/live 端点 (H-001)
-- **功能**: /health/ready 端点 (H-002)
+#### 可观测性
+- **功能**: Metrics trait 定义 (M-001) ✅ 已完成
+- **功能**: BufferPool 指标收集 (M-002) ✅ 已完成
+- **功能**: ExecutorMetrics 指标收集 (M-003) ✅ 已完成
+- **功能**: NetworkMetrics 网络指标 (M-004) ✅ 已完成
+- **功能**: MetricsRegistry 指标注册表 (M-005) ✅ 已完成
+- **功能**: Grafana Dashboard (M-006) ✅ 已完成
+- **功能**: Alert Rules (M-007) ✅ 已完成
+- **功能**: /health/live 端点 (H-001) ✅ 已完成
+- **功能**: /health/ready 端点 (H-002) ✅ 已完成
+- **功能**: /health 综合端点 (H-004) ✅ 已完成
+- **功能**: /metrics 端点 (E-001) ✅ 已完成
+- **功能**: Prometheus 格式支持 ✅ 已完成
 
 ### Changed
 
@@ -51,19 +59,12 @@
 
 ### Fixed
 
-- (待记录)
-
-### Deprecated
-
-- (待记录)
-
-### Removed
-
-- (待记录)
+- **修复**: 性能基准测试编译错误
+- **修复**: HashJoin 测试解析问题
 
 ### Security
 
-- (待记录)
+- 依赖审核已通过 (无高严重性漏洞)
 
 ---
 
@@ -160,7 +161,7 @@
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v1.3.0 | 开发中 | Architecture Stabilization |
+| v1.3.0 | 2026-03-15 | Enterprise Ready (架构稳定版) |
 | v1.2.0 | 2026-03-13 | Vector Engine |
 | v1.1.0 | 2026-02-28 | 稳定性增强 |
 | v1.0.0 | 2026-02-22 | 初始发布 |
