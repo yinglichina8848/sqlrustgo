@@ -100,6 +100,7 @@ impl VolcanoExecutor for FilterVolcanoExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlrustgo_planner::{Column, DataType, Field};
     use sqlrustgo_types::Value;
 
     #[test]
@@ -129,6 +130,134 @@ mod tests {
             Schema::empty(),
         );
         assert_eq!(executor.schema().fields.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_executor_init() {
+        let executor = FilterVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            Expr::Literal(Value::Boolean(true)),
+            Schema::empty(),
+            Schema::empty(),
+        );
+        assert!(!executor.is_initialized());
+    }
+
+    #[test]
+    fn test_filter_executor_next_with_matching_rows() {
+        let child = Box::new(MockExecutorWithData::new(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+        ]));
+
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let executor = FilterVolcanoExecutor::new(
+            child,
+            Expr::BinaryExpr {
+                left: Box::new(Expr::Column(Column::new("id".to_string()))),
+                op: sqlrustgo_planner::Operator::Gt,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            schema,
+            input_schema,
+        );
+
+        assert_eq!(executor.name(), "Filter");
+    }
+
+    #[test]
+    fn test_filter_executor_next_filters_false() {
+        let child = Box::new(MockExecutorWithData::new(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+        ]));
+
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut executor = FilterVolcanoExecutor::new(
+            child,
+            Expr::Literal(Value::Boolean(false)),
+            schema,
+            input_schema,
+        );
+
+        executor.init().unwrap();
+        let result = executor.next().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_filter_executor_next_filters_matching() {
+        let child = Box::new(MockExecutorWithData::new(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+        ]));
+
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut executor = FilterVolcanoExecutor::new(
+            child,
+            Expr::BinaryExpr {
+                left: Box::new(Expr::Column(Column::new("id".to_string()))),
+                op: sqlrustgo_planner::Operator::Gt,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            schema,
+            input_schema,
+        );
+
+        executor.init().unwrap();
+        let result = executor.next().unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap()[0], Value::Integer(2));
+    }
+
+    #[test]
+    fn test_filter_executor_close() {
+        let child = Box::new(MockExecutorWithData::new(vec![]));
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let mut executor = FilterVolcanoExecutor::new(
+            child,
+            Expr::Literal(Value::Boolean(true)),
+            schema,
+            input_schema,
+        );
+
+        executor.init().unwrap();
+        executor.close().unwrap();
+        assert!(!executor.is_initialized());
+    }
+
+    #[test]
+    fn test_filter_executor_as_any() {
+        let executor = FilterVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            Expr::Literal(Value::Boolean(true)),
+            Schema::empty(),
+            Schema::empty(),
+        );
+        let any = executor.as_any();
+        assert!(any.is::<FilterVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_filter_executor_predicate_and_input_schema() {
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let executor = FilterVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            Expr::Literal(Value::Boolean(true)),
+            Schema::empty(),
+            input_schema.clone(),
+        );
+        assert_eq!(executor.input_schema().fields.len(), 1);
     }
 
     // Mock executor for testing
@@ -167,6 +296,62 @@ mod tests {
 
         fn name(&self) -> &str {
             "Mock"
+        }
+
+        fn is_initialized(&self) -> bool {
+            self.initialized
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    struct MockExecutorWithData {
+        data: Vec<Vec<Value>>,
+        idx: usize,
+        initialized: bool,
+        schema: Schema,
+    }
+
+    impl MockExecutorWithData {
+        fn new(data: Vec<Vec<Value>>) -> Self {
+            Self {
+                data,
+                idx: 0,
+                initialized: false,
+                schema: Schema::empty(),
+            }
+        }
+    }
+
+    impl VolcanoExecutor for MockExecutorWithData {
+        fn init(&mut self) -> SqlResult<()> {
+            self.initialized = true;
+            Ok(())
+        }
+
+        fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+            if self.idx >= self.data.len() {
+                return Ok(None);
+            }
+            let row = self.data[self.idx].clone();
+            self.idx += 1;
+            Ok(Some(row))
+        }
+
+        fn close(&mut self) -> SqlResult<()> {
+            self.initialized = false;
+            self.idx = 0;
+            Ok(())
+        }
+
+        fn schema(&self) -> &Schema {
+            &self.schema
+        }
+
+        fn name(&self) -> &str {
+            "MockWithData"
         }
 
         fn is_initialized(&self) -> bool {
