@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -104,6 +104,10 @@ harness = false
 
 [[bench]]
 name = "bench_insert"
+harness = false
+
+[[bench]]
+name = "bench_v130"
 harness = false
 
 [[test]]
