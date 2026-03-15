@@ -656,7 +656,7 @@ impl PhysicalPlan for HashJoinExec {
     }
 }
 
-/// SortMergeJoin execution operator - alternative to HashJoin for sorted inputs
+/// Sort-Merge join execution operator
 #[allow(dead_code)]
 pub struct SortMergeJoinExec {
     left: Box<dyn PhysicalPlan>,
@@ -798,78 +798,6 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-/// Sort-Merge join execution operator
-#[allow(dead_code)]
-pub struct SortMergeJoinExec {
-    left: Box<dyn PhysicalPlan>,
-    right: Box<dyn PhysicalPlan>,
-    join_type: crate::JoinType,
-    condition: Option<Expr>,
-    schema: Schema,
-    left_keys: Vec<Expr>,
-    right_keys: Vec<Expr>,
-}
-
-impl SortMergeJoinExec {
-    pub fn new(
-        left: Box<dyn PhysicalPlan>,
-        right: Box<dyn PhysicalPlan>,
-        join_type: crate::JoinType,
-        condition: Option<Expr>,
-        left_keys: Vec<Expr>,
-        right_keys: Vec<Expr>,
-        schema: Schema,
-    ) -> Self {
-        Self {
-            left,
-            right,
-            join_type,
-            condition,
-            left_keys,
-            right_keys,
-            schema,
-        }
-    }
-
-    pub fn left(&self) -> &dyn PhysicalPlan {
-        self.left.as_ref()
-    }
-
-    pub fn right(&self) -> &dyn PhysicalPlan {
-        self.right.as_ref()
-    }
-
-    pub fn join_type(&self) -> crate::JoinType {
-        self.join_type.clone()
-    }
-
-    pub fn left_keys(&self) -> &[Expr] {
-        &self.left_keys
-    }
-
-    pub fn right_keys(&self) -> &[Expr] {
-        &self.right_keys
-    }
-}
-
-impl PhysicalPlan for SortMergeJoinExec {
-    fn schema(&self) -> &Schema {
-        &self.schema
-    }
-
-    fn children(&self) -> Vec<&dyn PhysicalPlan> {
-        vec![self.left.as_ref(), self.right.as_ref()]
-    }
-
-    fn name(&self) -> &str {
-        "SortMergeJoin"
     }
 
     fn as_any(&self) -> &dyn Any {
