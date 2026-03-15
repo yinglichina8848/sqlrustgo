@@ -5,11 +5,13 @@ pub mod executor_metrics;
 pub mod filter;
 pub mod local_executor;
 pub mod test_framework;
+pub mod vectorization;
 
 pub use executor::{execute_collect, Executor, ExecutorResult, VolIterator, VolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
+pub use vectorization::{BatchIterator, RecordBatch, Vector, VectorizedExecutor};
 
 // Test framework modules - publicly accessible
 pub mod harness;
