@@ -262,4 +262,90 @@ mod tests {
         let cloned = storage.clone();
         assert!(cloned.has_table("test"));
     }
+
+    #[test]
+    fn test_mock_storage_drop_table() {
+        let mut storage = MockStorage::new();
+        storage.put_table_data("test", vec![vec![Value::Integer(1)]]);
+
+        storage.drop_table("test").unwrap();
+
+        assert!(!storage.has_table("test"));
+    }
+
+    #[test]
+    fn test_mock_storage_get_table_info() {
+        let storage = MockStorage::new();
+        storage.add_schema(
+            "users",
+            vec![("id".to_string(), sqlrustgo_planner::DataType::Integer)],
+        );
+
+        let info = storage.get_table_info("users").unwrap();
+        assert_eq!(info.name, "users");
+    }
+
+    #[test]
+    fn test_mock_storage_get_table_info_not_found() {
+        let storage = MockStorage::new();
+        let result = storage.get_table_info("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mock_storage_list_tables() {
+        let storage = MockStorage::new();
+        storage.put_table_data("users", vec![]);
+        storage.put_table_data("orders", vec![]);
+
+        let tables = storage.list_tables();
+        assert_eq!(tables.len(), 2);
+    }
+
+    #[test]
+    fn test_mock_storage_delete() {
+        let mut storage = MockStorage::new();
+        storage.put_table_data("users", vec![vec![Value::Integer(1)]]);
+
+        let deleted = storage.delete("users", &[]).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn test_mock_storage_update() {
+        let mut storage = MockStorage::new();
+        storage.put_table_data("users", vec![vec![Value::Integer(1)]]);
+
+        let updated = storage
+            .update("users", &[], &[(0, Value::Integer(2))])
+            .unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn test_mock_storage_create_index() {
+        let storage = MockStorage::new();
+        let result = storage.create_table_index("users", "id", 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_storage_drop_index() {
+        let storage = MockStorage::new();
+        let result = storage.drop_table_index("users", "id");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_storage_default() {
+        let storage: MockStorage = Default::default();
+        assert_eq!(storage.table_count(), 0);
+    }
+
+    #[test]
+    fn test_mock_storage_scan_nonexistent() {
+        let storage = MockStorage::new();
+        let result = storage.scan("nonexistent").unwrap();
+        assert!(result.is_empty());
+    }
 }
