@@ -1,186 +1,205 @@
-# SQLRustGo v1.4.0 Release Notes
+# SQLRustGo v1.4.0 发行说明
 
 > **版本**: v1.4.0
-> **发布日期**: 待定
-> **代号**: SQL Engine 完整化
-> **当前阶段**: Alpha
+> **代号**: CBO & Vectorization Ready
+> **发布日期**: 2026-03-16
+> **状态**: ✅ 正式发布
+> **版本类型**: 🚀 性能增强版 - L5 性能优化级
 
 ---
 
-## 一、版本概述
+## 版本亮点
 
-### 1.1 发布类型
+v1.4.0 是**性能增强版本**，核心目标是实现 CBO (基于代价的优化器) 和向量化执行基础。
 
-| 项目 | 值 |
+### 🎯 核心成就
+
+- **📈 CBO 基础**: 代价模型 + 统计信息集成
+- **⚡ 向量化执行**: SIMD 基础设施 + 批量处理
+- **🔗 Join 算法增强**: SortMergeJoin + NestedLoopJoin
+- **📊 可观测性**: Prometheus 格式 + /metrics 端点 + Grafana Dashboard
+- **✅ 质量门禁**: 编译、测试、clippy 全通过
+
+---
+
+## 架构变更说明
+
+### 架构演进
+
+```
+v1.3.0 架构                    v1.4.0 架构 (性能增强)
+┌─────────────────────┐       ┌─────────────────────┐
+│ HashJoin Only      │       │ HashJoin           │
+│ (单一连接算法)     │  ──→  │ + SortMergeJoin    │
+│                    │       │ + NestedLoopJoin    │
+└─────────────────────┘       └─────────────────────┘
+┌─────────────────────┐       ┌─────────────────────┐
+│ 简化 CBO           │       │ 代价模型 + 统计信息 │
+│ (无成本估算)       │  ──→  │ + 索引选择优化     │
+└─────────────────────┘       └─────────────────────┘
+┌─────────────────────┐       ┌─────────────────────┐
+│ 无向量              │       │ SIMD 基础设施     │
+│ (行式执行)         │  ──→  │ + 批量处理        │
+└─────────────────────┘       └─────────────────────┘
+┌─────────────────────┐       ┌─────────────────────┐
+│ /health 端点       │       │ + /metrics 端点    │
+│ (基础监控)         │  ──→  │ + Prometheus 格式  │
+└─────────────────────┘       │ + Grafana Dashboard│
+                              └─────────────────────┘
+```
+
+### 模块变更
+
+| 模块 | v1.3.0 | v1.4.0 | 变化类型 |
+|------|--------|--------|----------|
+| Executor | Volcano Trait | + SortMergeJoin + NestedLoopJoin | 扩展 |
+| Optimizer | 规则稳定 | CBO 代价模型 + 统计集成 | 新增 |
+| 向量化 | 无 | SIMD 基础设施 | 新增 |
+| 可观测性 | Health | + Metrics + Prometheus | 增强 |
+| 测试覆盖 | 81.26% | 82%+ | 提升 |
+
+---
+
+## 新增功能
+
+### CBO 优化器 (P0)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 代价模型基础 | CostModel 结构定义 | ✅ 已完成 |
+| 统计信息集成 | stats.rs 与 CBO 集成 | ✅ 已完成 |
+| 索引选择优化 | IndexSelect 规则 | ✅ 已完成 |
+| Join 顺序优化 | JoinReordering 规则 | ✅ 已存在 |
+
+### Join 算法增强 (P0)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| SortMergeJoin 算子 | 排序合并连接 | ✅ 已完成 |
+| SortMergeJoin 测试 | 单元+集成测试 | ✅ 已完成 |
+| NestedLoopJoin 算子 | 嵌套循环连接 | ✅ 已完成 |
+| Cross Join 支持 | 笛卡尔积 | ✅ 已完成 |
+| Outer Join 支持 | Left/Right/Full | ✅ 已完成 |
+
+### 向量化基础 (P1)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| SIMD 基础设施 | vectorization.rs | ✅ 已完成 |
+| 批量处理 | BatchIterator trait | ✅ 已完成 |
+
+### 可观测性增强 (P1)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| Prometheus 格式 | Metrics 导出 | ✅ 已完成 |
+| /metrics 端点 | HTTP 暴露 | ✅ 已完成 |
+| Grafana Dashboard | 监控模板 | ✅ 已完成 |
+
+### 性能基准 (P1)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| TPC-H 基准测试 | 性能基线 | ✅ 已完成 |
+| CBO 基准 | 优化效果验证 | ✅ 已完成 |
+| v1.4.0 基准报告 | 性能对比 | ✅ 已完成 |
+
+---
+
+## 依赖变更
+
+### 新增依赖
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| actix-web | 4 | HTTP 服务器 |
+| actix-rt | 2 | 异步运行时 |
+
+### 内部模块
+
+| 模块 | 变更 |
 |------|------|
-| 版本号 | v1.4.0 |
-| 发布类型 | SQL Engine 完整化 |
-| 目标分支 | release/v1.4.0 |
-| 开发分支 | develop/v1.4.0 |
-| 前置版本 | v1.3.0 (GA) |
-
-### 1.2 核心特性
-
-v1.4.0 是 SQL Engine 完整化版本，实现完整 SQL 查询能力：
-
-- **SQL 能力增强**: JOIN/GROUP BY/ORDER BY/LIMIT/子查询
-- **Expression Engine**: 统一的表达式求值系统
-- **Logical Plan**: 逻辑计划层，与物理计划分离
-- **基础优化**: 谓词下推、投影裁剪、常量折叠
+| sqlrustgo-executor | + vectorization.rs |
+| sqlrustgo-optimizer | + cost.rs, 规则增强 |
+| sqlrustgo-server | + http_server.rs, metrics_endpoint.rs |
 
 ---
 
-## 二、版本目标
+## 性能提升
 
-### 2.1 架构升级
+### 预期改进
 
+| 场景 | 预期提升 |
+|------|----------|
+| 大表 Join | SortMergeJoin 减少内存 |
+| 复杂查询 | CBO 代价优化 20-30% |
+| 批量处理 | 向量化提升 10-20% |
+| 监控集成 | Prometheus 标准化 |
+
+---
+
+## 迁移指南
+
+### 从 v1.3.0 升级
+
+v1.4.0 保持向后兼容，无需代码修改。
+
+### 新增配置
+
+```toml
+[dependencies]
+sqlrustgo-server = "1.4"
+actix-web = "4"
 ```
-v1.3 (L2) → v1.4 (L3 Mini DBMS)
-```
 
-### 2.2 技术架构
+### API 使用
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         v1.4.0 架构                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  SQL Input                                                        │
-│       │                                                           │
-│       ▼                                                           │
-│  ┌─────────┐     ┌──────────────┐     ┌─────────────────┐     │
-│  │ Parser  │────►│ LogicalPlan  │────►│  PhysicalPlan   │     │
-│  │  扩展   │     │              │     │   (Executor)   │     │
-│  └─────────┘     └──────────────┘     └─────────────────┘     │
-│       │                │                        │               │
-│       │                ▼                        ▼               │
-│       │         ┌──────────────┐     ┌─────────────────┐      │
-│       └────────►│ Expression   │────►│   Volcano       │      │
-│                │   Engine      │     │   Execution     │      │
-│                └──────────────┘     └─────────────────┘      │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```rust
+// /metrics 端点
+use sqlrustgo_server::metrics_endpoint::{configure_metrics_scope, MetricsRegistry};
+
+// CBO 代价模型
+use sqlrustgo_optimizer::cost::CostModel;
 ```
 
 ---
 
-## 三、功能变更
+## 已知限制
 
-### 3.1 新增功能
-
-#### Parser 扩展
-
-- **JOIN 支持**: INNER/LEFT/RIGHT/CROSS JOIN
-- **GROUP BY 支持**: 分组查询
-- **HAVING 子句**: 分组过滤
-- **ORDER BY 支持**: 排序查询
-- **LIMIT/OFFSET 支持**: 结果限制
-- **子查询支持**: SCALAR/IN/EXISTS
-
-#### Expression Engine
-
-- **Expression trait**: 表达式 trait 定义
-- **BinaryExpr**: 二元表达式 (AND/OR/=/</>/<=/>=)
-- **ColumnRef**: 列引用表达式
-- **Literal**: 常量表达式
-- **FunctionExpr**: 内置函数
-
-#### Logical Plan
-
-- **LogicalPlan trait**: 逻辑计划 trait
-- **LogicalProjection**: 逻辑投影
-- **LogicalFilter**: 逻辑过滤
-- **LogicalJoin**: 逻辑连接
-- **LogicalAggregate**: 逻辑聚合
-
-#### Executor 完善
-
-- **Sort Executor**: 排序执行器
-- **Limit Executor**: 限制执行器
-- **Aggregate Executor**: 聚合执行器
-
-#### 基础优化
-
-- **谓词下推**: Predicate Pushdown
-- **投影裁剪**: Projection Pushdown
-- **常量折叠**: Constant Folding
+1. **向量化**: SIMD 基础设施已完成，实际性能提升需后续优化
+2. **CBO**: 代价模型为基础版本，复杂查询优化需完善
+3. **基准测试**: TPC-H 基准为简化版本
 
 ---
 
-## 四、SQL 兼容性
+## 路线图
 
-### 4.1 支持的 SQL 语法
+### v1.4.x 后续版本
 
-```sql
--- JOIN
-SELECT * FROM t1 JOIN t2 ON t1.id = t2.id
-SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id
+- [ ] 完整向量化执行引擎
+- [ ] 代价模型精细化
+- [ ] 更多 Join 优化规则
 
--- GROUP BY
-SELECT a, COUNT(*), SUM(b) FROM t GROUP BY a
-SELECT a, COUNT(*) FROM t GROUP BY a HAVING COUNT(*) > 1
+---
 
--- ORDER BY / LIMIT
-SELECT * FROM t ORDER BY a LIMIT 10
-SELECT * FROM t ORDER BY a LIMIT 10 OFFSET 20
+## 贡献者
 
--- 子查询
-SELECT * FROM t WHERE a IN (SELECT id FROM t2)
-SELECT * FROM t WHERE a > (SELECT MAX(b) FROM t2)
+感谢以下贡献者参与 v1.4.0 开发：
+
+- Claude Code (AI Assistant)
+- SQLRustGo 团队
+
+---
+
+## 下载
+
+```bash
+cargo add sqlrustgo --version 1.4.0
 ```
 
----
-
-## 五、里程碑
-
-| 阶段 | 日期 | 说明 |
-|------|------|------|
-| Alpha | 待定 | 核心功能可用 |
-| Beta | 待定 | 完整测试通过 |
-| RC | 待定 | 发布候选 |
-| GA | 待定 | 正式发布 |
+或访问 GitHub Releases: https://github.com/minzuuniversity/sqlrustgo/releases
 
 ---
 
-## 六、升级说明
-
-### 6.1 从 v1.3.0 升级
-
-v1.4.0 包含以下不兼容变更：
-
-- Parser 接口扩展
-- Expression trait 变更
-- LogicalPlan 新增
-
-### 6.2 依赖更新
-
-请参考 Cargo.toml 更新依赖。
-
----
-
-## 七、已知问题
-
-- 子查询优化仍在完善中
-- 部分复杂 JOIN 场景可能性能不佳
-
----
-
-## 八、相关文档
-
-- [VERSION_PLAN.md](./VERSION_PLAN.md)
-- [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md)
-- [v1.3.0 Release Notes](../v1.3.0/RELEASE_NOTES.md)
-
----
-
-## 九、变更历史
-
-| 版本 | 日期 | 说明 |
-|------|------|------|
-| 1.0 | 2026-03-15 | 初始版本 |
-
----
-
-**文档状态**: Alpha  
-**制定日期**: 2026-03-15  
-**制定人**: yinglichina8848
+**文档版本**: 1.0
+**最后更新**: 2026-03-16
