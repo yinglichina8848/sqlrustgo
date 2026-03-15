@@ -6,7 +6,7 @@ use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
     AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
-    SortExec,
+    SortExec, SortMergeJoinExec,
 };
 use crate::Schema;
 use thiserror::Error;
@@ -101,14 +101,32 @@ impl DefaultPlanner {
             } => {
                 let left_plan = self.create_physical_plan_internal(left)?;
                 let right_plan = self.create_physical_plan_internal(right)?;
-                let schema = Schema::new(vec![]); // Would need to compute from children
-                Ok(Box::new(HashJoinExec::new(
-                    left_plan,
-                    right_plan,
-                    join_type.clone(),
-                    condition.clone(),
-                    schema,
-                )))
+
+                // Estimate row counts for cost model
+                let left_rows = estimate_output_rows(left_plan.as_ref()).unwrap_or(1000);
+                let right_rows = estimate_output_rows(right_plan.as_ref()).unwrap_or(1000);
+
+                // Use heuristic to select join algorithm
+                let join_algorithm = select_join_algorithm(&(), left_rows, right_rows, join_type);
+
+                let schema = Schema::new(vec![]);
+
+                match join_algorithm.as_str() {
+                    "sort_merge" => Ok(Box::new(SortMergeJoinExec::new(
+                        left_plan,
+                        right_plan,
+                        join_type.clone(),
+                        condition.clone(),
+                        schema,
+                    ))),
+                    _ => Ok(Box::new(HashJoinExec::new(
+                        left_plan,
+                        right_plan,
+                        join_type.clone(),
+                        condition.clone(),
+                        schema,
+                    ))),
+                }
             }
             LogicalPlan::Sort { input, sort_expr } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
@@ -602,4 +620,36 @@ mod tests {
         let result = planner.create_physical_plan(&plan);
         assert!(result.is_ok());
     }
+}
+
+fn select_join_algorithm(
+    _cost_model: &(),
+    left_rows: u64,
+    right_rows: u64,
+    join_type: &crate::JoinType,
+) -> String {
+    // Simple heuristic-based join algorithm selection
+    // Use HashJoin for Cross joins
+    if matches!(join_type, crate::JoinType::Cross) {
+        return "hash_join".to_string();
+    }
+
+    // For small datasets, prefer sort_merge (faster for sorted data)
+    if left_rows < 5000 && right_rows < 5000 {
+        return "sort_merge".to_string();
+    }
+
+    // For large datasets, prefer hash_join
+    if left_rows > 50000 || right_rows > 50000 {
+        return "hash_join".to_string();
+    }
+
+    // Default: use sort_merge for medium datasets
+    "sort_merge".to_string()
+}
+
+fn estimate_output_rows(plan: &dyn PhysicalPlan) -> Option<u64> {
+    // Simple heuristic: estimate based on plan type
+    // In a full implementation, this would use statistics
+    Some(1000) // Default estimate
 }
