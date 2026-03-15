@@ -81,6 +81,45 @@ impl SimpleCostModel {
             pages * self.io_cost_per_page * 2.0
         }
     }
+
+    /// Estimate cost using statistics - integrates with StatisticsProvider
+    pub fn estimate_with_stats(&self, table_stats: &super::stats::TableStats) -> f64 {
+        let row_count = table_stats.row_count();
+        let page_count = table_stats.page_count();
+        self.seq_scan_cost(row_count, page_count)
+    }
+
+    /// Estimate index scan cost using column statistics
+    pub fn estimate_index_scan_with_stats(
+        &self,
+        table_stats: &super::stats::TableStats,
+        column_name: &str,
+    ) -> f64 {
+        let row_count = table_stats.row_count();
+        let page_count = table_stats.page_count();
+
+        let index_selectivity = table_stats
+            .column_stats(column_name)
+            .map(|cs| cs.eq_selectivity())
+            .unwrap_or(0.1);
+
+        let estimated_rows = (row_count as f64 * index_selectivity) as u64;
+        let index_pages = ((estimated_rows as f64) / 100.0) as u64;
+
+        self.index_scan_cost(estimated_rows, index_pages.max(1), page_count)
+    }
+
+    /// Estimate join cost using table statistics
+    pub fn estimate_join_with_stats(
+        &self,
+        left_stats: &super::stats::TableStats,
+        right_stats: &super::stats::TableStats,
+        join_method: &str,
+    ) -> f64 {
+        let left_rows = left_stats.row_count();
+        let right_rows = right_stats.row_count();
+        self.join_cost(left_rows, right_rows, join_method)
+    }
 }
 
 impl CostModel for SimpleCostModel {
@@ -181,6 +220,49 @@ mod tests {
     fn test_agg_cost_no_group_by() {
         let model = SimpleCostModel::default_model();
         let cost = model.agg_cost(1000, 0);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_with_stats() {
+        use super::stats::{ColumnStats, TableStats};
+
+        let model = SimpleCostModel::default_model();
+        let table_stats = TableStats::new("users")
+            .with_row_count(10000)
+            .with_size_bytes(409600);
+
+        let cost = model.estimate_with_stats(&table_stats);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_index_scan_with_stats() {
+        use super::stats::{ColumnStats, TableStats};
+
+        let model = SimpleCostModel::default_model();
+        let table_stats = TableStats::new("users")
+            .with_row_count(10000)
+            .with_size_bytes(409600)
+            .add_column_stats(ColumnStats::new("id").with_distinct_count(10000));
+
+        let cost = model.estimate_index_scan_with_stats(&table_stats, "id");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_join_with_stats() {
+        use super::stats::TableStats;
+
+        let model = SimpleCostModel::default_model();
+        let left_stats = TableStats::new("users")
+            .with_row_count(1000)
+            .with_size_bytes(40960);
+        let right_stats = TableStats::new("orders")
+            .with_row_count(5000)
+            .with_size_bytes(204800);
+
+        let cost = model.estimate_join_with_stats(&left_stats, &right_stats, "hash_join");
         assert!(cost > 0.0);
     }
 }
