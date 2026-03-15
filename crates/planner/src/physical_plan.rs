@@ -656,6 +656,68 @@ impl PhysicalPlan for HashJoinExec {
     }
 }
 
+/// SortMergeJoin execution operator - alternative to HashJoin for sorted inputs
+#[allow(dead_code)]
+pub struct SortMergeJoinExec {
+    left: Box<dyn PhysicalPlan>,
+    right: Box<dyn PhysicalPlan>,
+    join_type: crate::JoinType,
+    condition: Option<Expr>,
+    schema: Schema,
+}
+
+impl SortMergeJoinExec {
+    pub fn new(
+        left: Box<dyn PhysicalPlan>,
+        right: Box<dyn PhysicalPlan>,
+        join_type: crate::JoinType,
+        condition: Option<Expr>,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            join_type,
+            condition,
+            schema,
+        }
+    }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+
+    pub fn join_type(&self) -> crate::JoinType {
+        self.join_type.clone()
+    }
+
+    pub fn condition(&self) -> Option<&Expr> {
+        self.condition.as_ref()
+    }
+}
+
+impl PhysicalPlan for SortMergeJoinExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.left.as_ref(), self.right.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "SortMergeJoin"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Sort execution operator
 #[allow(dead_code)]
 pub struct SortExec {

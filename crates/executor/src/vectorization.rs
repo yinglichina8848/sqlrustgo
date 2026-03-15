@@ -2,6 +2,7 @@
 //!
 //! Provides SIMD infrastructure and batch processing for vectorized execution.
 
+#[allow(unused_imports)]
 use std::ops::{Add, Div, Mul, Sub};
 
 /// Vector data type for SIMD operations
