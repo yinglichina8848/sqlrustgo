@@ -2585,7 +2585,7 @@ mod tests {
     // ========== Tests for SortMergeJoinVolcanoExecutor ==========
 
     #[test]
-    fn test_sort_merge_join_volcano_executor_inner_join() {
+    fn test_smj_volcano_exec_inner_join() {
         // Test SortMergeJoin with inner join
         let left = Box::new(MockVolcanoExecutor::with_data(vec![
             vec![Value::Integer(1), Value::Text("a".to_string())],
@@ -2628,7 +2628,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_merge_join_volcano_executor_left_join() {
+    fn test_smj_volcano_exec_left_join() {
         // Test SortMergeJoin with left join
         let left = Box::new(MockVolcanoExecutor::with_data(vec![
             vec![Value::Integer(1), Value::Text("a".to_string())],
@@ -2673,7 +2673,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_merge_join_volcano_executor_empty_input() {
+    fn test_smj_volcano_exec_empty_input() {
         // Test SortMergeJoin with empty input
         let left = Box::new(MockVolcanoExecutor::with_data(vec![]));
         let right = Box::new(MockVolcanoExecutor::with_data(vec![vec![Value::Integer(
@@ -2703,7 +2703,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_merge_join_volcano_executor_name() {
+    fn test_smj_volcano_exec_name() {
         let left = Box::new(MockVolcanoExecutor::new());
         let right = Box::new(MockVolcanoExecutor::new());
         let left_schema = Schema::empty();
@@ -2722,7 +2722,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_merge_join_volcano_executor_close() {
+    fn test_smj_volcano_exec_close() {
         let left = Box::new(MockVolcanoExecutor::with_data(vec![
             vec![Value::Integer(1)],
             vec![Value::Integer(2)],
