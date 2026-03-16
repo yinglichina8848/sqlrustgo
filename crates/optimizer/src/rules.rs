@@ -854,6 +854,7 @@ impl JoinReordering {
 }
 
 /// IndexSelect rule - chooses between index scan and table scan based on cost
+#[allow(dead_code)]
 pub struct IndexSelect {
     cost_model: crate::SimpleCostModel,
     available_indexes: Vec<(String, String)>,
@@ -924,7 +925,7 @@ impl Rule<Plan> for IndexSelect {
                 if let Plan::TableScan { table_name, .. } = input.as_ref() {
                     if self.should_use_index(table_name, predicate) {
                         let index_scan = self.convert_to_index_scan(table_name, predicate);
-                        *input = Box::new(index_scan);
+                        **input = index_scan;
                         return true;
                     }
                 }
@@ -1523,5 +1524,263 @@ mod tests {
     fn test_index_select_default() {
         let rule = IndexSelect::default();
         assert_eq!(rule.name(), "IndexSelect");
+    }
+
+    #[test]
+    fn test_plan_type_name() {
+        assert_eq!(Plan::EmptyRelation.type_name(), "EmptyRelation");
+        assert_eq!(
+            Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None
+            }
+            .type_name(),
+            "TableScan"
+        );
+        assert_eq!(
+            Plan::IndexScan {
+                table_name: "t".to_string(),
+                index_name: "i".to_string(),
+                predicate: None
+            }
+            .type_name(),
+            "IndexScan"
+        );
+    }
+
+    #[test]
+    fn test_plan_get_child_mut() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_children() {
+        let plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+
+        let join_plan = Plan::Join {
+            join_type: crate::JoinType::Inner,
+            left: Box::new(Plan::EmptyRelation),
+            right: Box::new(Plan::EmptyRelation),
+            condition: Some(Expr::Literal(Value::Boolean(true))),
+        };
+        let children = join_plan.get_children();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_no_child() {
+        let mut plan = Plan::EmptyRelation;
+        let child = plan.get_child_mut();
+        assert!(child.is_none());
+
+        let mut plan = Plan::TableScan {
+            table_name: "t".to_string(),
+            projection: None,
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_none());
+    }
+
+    #[test]
+    fn test_join_reordering_new() {
+        let rule = JoinReordering::new();
+        assert_eq!(rule.name(), "JoinReordering");
+    }
+
+    #[test]
+    fn test_join_reordering_default() {
+        let rule = JoinReordering::default();
+        assert_eq!(rule.name(), "JoinReordering");
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_tablescan() {
+        let rule = JoinReordering::new();
+        let plan = Plan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 1000);
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_indexscan() {
+        let rule = JoinReordering::new();
+        let plan = Plan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx".to_string(),
+            predicate: None,
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 100);
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_filter() {
+        let rule = JoinReordering::new();
+        let plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            }),
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 500); // 1000 / 2
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_aggregate() {
+        let rule = JoinReordering::new();
+        let plan = Plan::Aggregate {
+            group_by: vec![],
+            aggregates: vec![],
+            input: Box::new(Plan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            }),
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 100); // 1000 / 10
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_limit() {
+        let rule = JoinReordering::new();
+        let plan = Plan::Limit {
+            limit: 50,
+            input: Box::new(Plan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            }),
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 100);
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_empty() {
+        let rule = JoinReordering::new();
+        let plan = Plan::EmptyRelation;
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 0);
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_inner_join() {
+        let rule = JoinReordering::new();
+        let plan = Plan::Join {
+            join_type: JoinType::Inner,
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
+            condition: None,
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 100000); // 1000 * 1000 / 10
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size_left_join() {
+        let rule = JoinReordering::new();
+        let plan = Plan::Join {
+            join_type: JoinType::Left,
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
+            condition: None,
+        };
+        let size = rule.estimate_size(&plan);
+        assert_eq!(size, 1000); // left size
+    }
+
+    #[test]
+    fn test_join_reordering_can_commute() {
+        let rule = JoinReordering::new();
+        assert!(rule.can_commute(&None));
+        assert!(!rule.can_commute(&Some(Expr::Literal(Value::Boolean(true)))));
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply_with_projection() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Projection {
+            expr: vec![],
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply_with_join() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Join {
+            join_type: JoinType::Inner,
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
+            condition: Some(Expr::Column("id".to_string())),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_projection_pruning_apply_with_projection() {
+        let rule = ProjectionPruning::new();
+        let mut plan = Plan::Projection {
+            expr: vec![],
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_with_literal() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Integer(1))),
+                op: Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Integer(2))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
     }
 }
