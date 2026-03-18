@@ -5,6 +5,9 @@ use sqlrustgo::{parse, ExecutionEngine, StorageEngine};
 use std::sync::Arc;
 use std::time::Instant;
 
+pub const MAX_MEMORY_MB: usize = 2048;
+const LINEITEM_BYTES_PER_ROW: usize = 100;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScaleFactor {
     SF01,
@@ -23,6 +26,25 @@ impl ScaleFactor {
         match self {
             ScaleFactor::SF01 => "0.1",
             ScaleFactor::SF1 => "1",
+        }
+    }
+
+    pub fn estimate_memory_mb(&self) -> usize {
+        let lineitem_rows = (6000000.0 * self.to_f64()) as usize;
+        let orders_rows = (1500000.0 * self.to_f64()) as usize;
+        let total_rows = lineitem_rows + orders_rows;
+        (total_rows * LINEITEM_BYTES_PER_ROW) / (1024 * 1024)
+    }
+
+    pub fn is_safe(&self) -> bool {
+        self.estimate_memory_mb() <= MAX_MEMORY_MB
+    }
+
+    pub fn safe_default() -> Self {
+        if ScaleFactor::SF1.is_safe() {
+            ScaleFactor::SF1
+        } else {
+            ScaleFactor::SF01
         }
     }
 }
@@ -554,6 +576,28 @@ mod tests {
         assert_eq!(TestScenario::MultiThread.to_str(), "multi_thread");
         assert_eq!(TestScenario::CacheHit.to_str(), "cache_hit");
         assert_eq!(TestScenario::CacheMiss.to_str(), "cache_miss");
+    }
+
+    #[test]
+    fn test_memory_safety() {
+        let sf01_mem = ScaleFactor::SF01.estimate_memory_mb();
+        let sf1_mem = ScaleFactor::SF1.estimate_memory_mb();
+
+        println!("SF0.1 estimated memory: {} MB", sf01_mem);
+        println!("SF1 estimated memory: {} MB", sf1_mem);
+        println!("Max allowed: {} MB", MAX_MEMORY_MB);
+
+        assert!(sf01_mem < MAX_MEMORY_MB, "SF0.1 should be safe");
+        assert!(sf1_mem < MAX_MEMORY_MB, "SF1 should be safe");
+    }
+
+    #[test]
+    fn test_safe_default() {
+        let safe = ScaleFactor::safe_default();
+        assert!(
+            safe.is_safe(),
+            "safe_default should return safe scale factor"
+        );
     }
 
     #[test]
