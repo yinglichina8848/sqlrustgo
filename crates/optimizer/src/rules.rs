@@ -2313,4 +2313,105 @@ mod tests {
             }
         }
     }
+
+    // E-02: Expression Simplification - NULL handling
+
+    #[test]
+    fn test_expression_simplification_null_and() {
+        let rule = ExpressionSimplification::new();
+
+        // NULL AND x = NULL
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Null)),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Null)));
+    }
+
+    #[test]
+    fn test_expression_simplification_null_or() {
+        let rule = ExpressionSimplification::new();
+
+        // NULL OR x = x (short-circuit)
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Null)),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_null_not() {
+        let rule = ExpressionSimplification::new();
+
+        // NOT NULL = NULL
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::Literal(Value::Null)),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Null)));
+    }
+
+    #[test]
+    fn test_expression_simplification_null_comparison() {
+        let rule = ExpressionSimplification::new();
+
+        // NULL = NULL = NULL
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Null)),
+            op: Operator::Eq,
+            right: Box::new(Expr::Literal(Value::Null)),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Null)));
+    }
+
+    // E-02: Redundant expression elimination
+
+    #[test]
+    fn test_expression_simplification_redundant_and() {
+        let rule = ExpressionSimplification::new();
+
+        // x AND x = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_redundant_or() {
+        let rule = ExpressionSimplification::new();
+
+        // x OR x = x
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_null_arithmetic() {
+        let rule = ExpressionSimplification::new();
+
+        // NULL + x = NULL
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Null)),
+            op: Operator::Plus,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Null)));
+    }
 }
