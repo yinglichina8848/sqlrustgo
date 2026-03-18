@@ -32,6 +32,8 @@ pub enum Value {
     Text(String),
     /// Binary large object
     Blob(Vec<u8>),
+    /// Date value (days since UNIX epoch)
+    Date(i32),
 }
 
 impl Hash for Value {
@@ -49,6 +51,7 @@ impl Hash for Value {
             }
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
+            Value::Date(d) => d.hash(state),
         }
     }
 }
@@ -62,6 +65,7 @@ impl PartialEq for Value {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
+            (Value::Date(a), Value::Date(b)) => a == b,
             _ => false,
         }
     }
@@ -97,6 +101,7 @@ impl Value {
             Value::Float(f) => f.to_string(),
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
+            Value::Date(d) => d.to_string(),
         }
     }
 
@@ -109,6 +114,7 @@ impl Value {
             Value::Float(_) => "FLOAT",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
+            Value::Date(_) => "DATE",
         }
     }
 
@@ -361,5 +367,43 @@ mod tests {
         let neg_inf = Value::Float(f64::NEG_INFINITY);
         assert_eq!(pos_inf.to_sql_string(), "inf");
         assert_eq!(neg_inf.to_sql_string(), "-inf");
+    }
+
+    #[test]
+    fn test_value_date_basic() {
+        let date = Value::Date(0);
+        assert_eq!(date.type_name(), "DATE");
+    }
+
+    #[test]
+    fn test_value_date_equality() {
+        let d1 = Value::Date(100);
+        let d2 = Value::Date(100);
+        let d3 = Value::Date(200);
+        assert_eq!(d1, d2);
+        assert_ne!(d1, d3);
+    }
+
+    #[test]
+    fn test_value_date_to_sql_string() {
+        let date = Value::Date(19780);
+        assert_eq!(date.to_sql_string(), "19780");
+    }
+
+    #[test]
+    fn test_value_date_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+
+        let d1 = Value::Date(100);
+        let d2 = Value::Date(100);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+
+        d1.hash(&mut h1);
+        d2.hash(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
     }
 }
