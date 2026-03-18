@@ -919,6 +919,7 @@ impl Rule<Plan> for IndexSelect {
         "IndexSelect"
     }
 
+    #[allow(clippy::replace_box)]
     fn apply(&self, plan: &mut Plan) -> bool {
         match plan {
             Plan::Filter { input, predicate } => {
