@@ -163,10 +163,8 @@ impl PhysicalPlan for IndexScanExec {
             for key in *start..*end {
                 results.push(vec![Value::Integer(key)]);
             }
-        } else {
-            if let Expr::Literal(Value::Integer(key)) = &self.key_expr {
-                results.push(vec![Value::Integer(*key)]);
-            }
+        } else if let Expr::Literal(Value::Integer(key)) = &self.key_expr {
+            results.push(vec![Value::Integer(*key)]);
         }
 
         Ok(results)
@@ -3294,13 +3292,7 @@ mod tests {
         ]);
         let left_keys = vec![Expr::column("id")];
         let right_keys = vec![Expr::column("id")];
-        let smj = SortMergeJoinExec::new(
-            left,
-            right,
-            crate::JoinType::Left,
-            None,
-            join_schema,
-        );
+        let smj = SortMergeJoinExec::new(left, right, crate::JoinType::Left, None, join_schema);
 
         assert_eq!(smj.join_type(), crate::JoinType::Left);
     }
