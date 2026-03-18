@@ -6,6 +6,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 /// WAL magic number for validation
 #[allow(dead_code)]
@@ -466,6 +467,178 @@ impl WalManager {
     }
 }
 
+/// Thread-safe WAL manager for concurrent writes
+pub struct ConcurrentWalManager {
+    wal_path: PathBuf,
+    writer: Arc<Mutex<WalWriter>>,
+    lsn: Arc<Mutex<u64>>,
+    batch_buffer: Arc<Mutex<Vec<WalEntry>>>,
+    batch_size: usize,
+}
+
+impl ConcurrentWalManager {
+    pub fn new(wal_path: PathBuf, batch_size: usize) -> std::io::Result<Self> {
+        let writer = WalWriter::new(&wal_path)?;
+        Ok(Self {
+            wal_path,
+            writer: Arc::new(Mutex::new(writer)),
+            lsn: Arc::new(Mutex::new(0)),
+            batch_buffer: Arc::new(Mutex::new(Vec::new())),
+            batch_size,
+        })
+    }
+
+    pub fn log_begin(&self, tx_id: u64) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Begin,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn log_commit(&self, tx_id: u64) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Commit,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn log_rollback(&self, tx_id: u64) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Rollback,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn log_insert(
+        &self,
+        tx_id: u64,
+        table_id: u64,
+        key: Vec<u8>,
+        data: Vec<u8>,
+    ) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Insert,
+            table_id,
+            key: Some(key),
+            data: Some(data),
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn log_update(
+        &self,
+        tx_id: u64,
+        table_id: u64,
+        key: Vec<u8>,
+        data: Vec<u8>,
+    ) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Update,
+            table_id,
+            key: Some(key),
+            data: Some(data),
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn log_delete(&self, tx_id: u64, table_id: u64, key: Vec<u8>) -> std::io::Result<u64> {
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Delete,
+            table_id,
+            key: Some(key),
+            data: None,
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    fn append_entry(&self, mut entry: WalEntry) -> std::io::Result<u64> {
+        let lsn = {
+            let mut lsn = self.lsn.lock().unwrap();
+            let current_lsn = *lsn;
+            entry.lsn = current_lsn;
+            *lsn += 1;
+            current_lsn
+        };
+
+        let mut buffer = self.batch_buffer.lock().unwrap();
+        buffer.push(entry);
+
+        if buffer.len() >= self.batch_size {
+            self.flush_batch_internal(&mut buffer)?;
+        }
+
+        Ok(lsn)
+    }
+
+    fn flush_batch_internal(&self, buffer: &mut Vec<WalEntry>) -> std::io::Result<()> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+
+        let mut writer = self.writer.lock().unwrap();
+        for entry in buffer.drain(..) {
+            writer.append(&entry)?;
+        }
+        writer.writer.flush()?;
+        Ok(())
+    }
+
+    pub fn flush(&self) -> std::io::Result<()> {
+        let mut buffer = self.batch_buffer.lock().unwrap();
+        self.flush_batch_internal(&mut buffer)
+    }
+
+    pub fn checkpoint(&self, tx_id: u64) -> std::io::Result<u64> {
+        self.flush()?;
+        self.append_entry(WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Checkpoint,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: current_timestamp(),
+        })
+    }
+
+    pub fn recover(&self) -> std::io::Result<Vec<WalEntry>> {
+        let mut reader = WalReader::new(&self.wal_path)?;
+        reader.read_all()
+    }
+
+    pub fn current_lsn(&self) -> u64 {
+        *self.lsn.lock().unwrap()
+    }
+}
+
+fn current_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -876,5 +1049,94 @@ mod tests {
             "WAL throughput too low: {:.2} MB/s",
             throughput_mbps
         );
+    }
+
+    #[test]
+    fn test_concurrent_wal_manager_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("concurrent.wal");
+
+        let manager = ConcurrentWalManager::new(wal_path, 100).unwrap();
+
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+        manager.flush().unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert!(entries.len() >= 3);
+    }
+
+    #[test]
+    fn test_concurrent_wal_manager_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("batch.wal");
+
+        let manager = ConcurrentWalManager::new(wal_path, 50).unwrap();
+
+        for i in 0..100 {
+            let _ = manager.log_insert(1, 1, vec![i], vec![i as u8]).unwrap();
+        }
+        let _ = manager.log_commit(1).unwrap();
+
+        manager.flush().unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 101);
+    }
+
+    #[test]
+    fn test_concurrent_wal_manager_concurrent_write() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("concurrent_write.wal");
+
+        let manager = Arc::new(ConcurrentWalManager::new(wal_path, 1000).unwrap());
+
+        let mut handles = vec![];
+        for tx_id in 1..=4 {
+            let mgr = Arc::clone(&manager);
+            let handle = thread::spawn(move || {
+                for i in 0..50 {
+                    let _ = mgr
+                        .log_insert(tx_id, 1, vec![tx_id as u8, i as u8], vec![i as u8])
+                        .unwrap();
+                }
+                let _ = mgr.log_commit(tx_id).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        manager.flush().unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 204);
+    }
+
+    #[test]
+    fn test_concurrent_wal_checkpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("checkpoint.wal");
+
+        let manager = ConcurrentWalManager::new(wal_path, 100).unwrap();
+
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.checkpoint(1).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+        manager.flush().unwrap();
+
+        let entries = manager.recover().unwrap();
+        let checkpoint_count = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Checkpoint)
+            .count();
+        assert_eq!(checkpoint_count, 1);
     }
 }
