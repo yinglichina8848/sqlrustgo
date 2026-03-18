@@ -117,7 +117,7 @@ impl Page {
 
         // Calculate checksum for all bytes except checksum field (offset 12-15)
         for i in 0..PAGE_SIZE {
-            if i >= 12 && i < 16 {
+            if (12..16).contains(&i) {
                 continue; // Skip checksum field
             }
             checksum = checksum.wrapping_add(self.data[i] as u32 * multiplier);
@@ -702,5 +702,145 @@ mod tests {
         // Checksum should be preserved
         assert_eq!(page.checksum(), restored.checksum());
         assert!(restored.verify_checksum());
+    }
+
+    #[test]
+    fn test_page_type() {
+        let page = Page::new(1);
+        // Page::new creates a Free page
+        assert_eq!(page.page_type(), PageType::Free);
+
+        let data_page = Page::new_data(1, 100);
+        assert_eq!(data_page.page_type(), PageType::Data);
+    }
+
+    #[test]
+    fn test_page_free_space() {
+        let page = Page::new(1);
+        // Meta page should have full free space minus header
+        let free = page.free_space();
+        assert!(free > 0);
+
+        let data_page = Page::new_data(1, 100);
+        // Data page should also have free space
+        let data_free = data_page.free_space();
+        assert!(data_free > 0);
+    }
+
+    #[test]
+    fn test_page_checksum_method() {
+        let page = Page::new_data(1, 100);
+        let checksum = page.checksum();
+        // Checksum should be consistent
+        assert_eq!(page.checksum(), checksum);
+    }
+
+    #[test]
+    fn test_page_calculate_checksum() {
+        let page = Page::new_data(1, 100);
+        let checksum = page.calculate_checksum();
+        // Calculate checksum twice should be same
+        assert_eq!(page.calculate_checksum(), checksum);
+    }
+
+    #[test]
+    fn test_page_verify_checksum_valid() {
+        let page = Page::new_data(1, 100);
+        assert!(page.verify_checksum());
+    }
+
+    #[test]
+    fn test_page_verify_checksum_invalid() {
+        let mut page = Page::new_data(1, 100);
+        // Corrupt the data
+        page.data[64] = 0xFF;
+        assert!(!page.verify_checksum());
+    }
+
+    #[test]
+    fn test_value_to_bytes_text_v2() {
+        let value = Value::Text("hello".to_string());
+        let bytes = value_to_bytes(&value);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_value_to_bytes_float_v2() {
+        let value = Value::Float(3.14);
+        let bytes = value_to_bytes(&value);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_bytes_to_value_integer_v2() {
+        let bytes = vec![0x01, 42, 0, 0, 0, 0, 0, 0, 0];
+        let value = bytes_to_value(&bytes);
+        assert!(value.is_some());
+        assert_eq!(value.unwrap(), Value::Integer(42));
+    }
+
+    #[test]
+    fn test_bytes_to_value_float_v2() {
+        // Float uses prefix 0x02, then 8 bytes for f64
+        let f = 3.14f64;
+        let mut bytes = vec![0x02];
+        bytes.extend_from_slice(&f.to_le_bytes());
+        let value = bytes_to_value(&bytes);
+        assert!(value.is_some());
+    }
+
+    #[test]
+    fn test_bytes_to_value_text_v2() {
+        let bytes = vec![0x02, 5, 0, 0, 0, 0, 0, 0, 0, 'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8];
+        let value = bytes_to_value(&bytes);
+        assert!(value.is_some());
+    }
+
+    #[test]
+    fn test_bytes_to_value_empty() {
+        let result = bytes_to_value(&[]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_page_from_bytes_invalid() {
+        // Too short
+        let result = Page::from_bytes(vec![0u8; 100]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_page_from_bytes_valid() {
+        let mut page = Page::new_data(1, 100);
+        page.write_row(&vec![Value::Integer(42)]);
+        let bytes = page.to_bytes();
+        let restored = Page::from_bytes(bytes);
+        assert!(restored.is_some());
+    }
+
+    #[test]
+    fn test_page_write_row_full_page() {
+        let mut page = Page::new_data(1, 100);
+        // Try to fill the page
+        let mut i = 0;
+        while page.write_row(&vec![Value::Integer(i)]) {
+            i += 1;
+        }
+        // Should have written at least one row
+        assert!(i > 0);
+    }
+
+    #[test]
+    fn test_page_read_rows_empty() {
+        let page = Page::new_data(1, 100);
+        let rows = page.read_rows();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_page_debug_v2() {
+        let page = Page::new(1);
+        let debug_str = format!("{:?}", page);
+        assert!(!debug_str.is_empty());
     }
 }

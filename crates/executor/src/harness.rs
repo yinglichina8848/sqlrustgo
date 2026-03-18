@@ -271,6 +271,45 @@ pub mod fixtures {
         Ok(())
     }
 
+    /// Setup a test customers table with data (for TPC-H Q10)
+    pub fn setup_customers_table(storage: &mut dyn StorageEngine) -> SqlResult<()> {
+        storage.create_table(&TableInfo {
+            name: "customer".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "c_custkey".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                },
+                ColumnDefinition {
+                    name: "c_name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                },
+            ],
+        })?;
+
+        storage.insert(
+            "customer",
+            vec![
+                vec![
+                    Value::Integer(1),
+                    Value::Text("Customer#000000001".to_string()),
+                ],
+                vec![
+                    Value::Integer(2),
+                    Value::Text("Customer#000000002".to_string()),
+                ],
+                vec![
+                    Value::Integer(3),
+                    Value::Text("Customer#000000003".to_string()),
+                ],
+            ],
+        )?;
+
+        Ok(())
+    }
+
     /// Setup a test orders table with data
     pub fn setup_orders_table(storage: &mut dyn StorageEngine) -> SqlResult<()> {
         storage.create_table(&TableInfo {

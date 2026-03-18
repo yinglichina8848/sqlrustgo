@@ -1,7 +1,6 @@
 // Page Tests
 use sqlrustgo_storage::page::{Page, PageType, PageWriter};
 use sqlrustgo_types::Value;
-use std::io::Cursor;
 
 #[test]
 fn test_page_new() {

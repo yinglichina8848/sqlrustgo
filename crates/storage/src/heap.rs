@@ -14,6 +14,7 @@ use std::path::PathBuf;
 /// Heap page header size
 const HEAP_PAGE_HEADER_SIZE: usize = 48;
 /// Heap magic number
+#[allow(dead_code)]
 const HEAP_MAGIC: u32 = 0x48454150; // "HEAP" in hex
 
 /// Row identifier
@@ -75,11 +76,12 @@ pub struct HeapStorage {
 impl HeapStorage {
     /// Create a new heap storage
     pub fn new(file_path: PathBuf, table_id: u64, table_name: String) -> std::io::Result<Self> {
-        let mut meta = HeapMeta::new(table_id, table_name);
+        let meta = HeapMeta::new(table_id, table_name);
 
         // Create or open the file
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .read(true)
             .write(true)
             .open(&file_path)?;
@@ -89,10 +91,7 @@ impl HeapStorage {
         // Get initial page count
         let page_count = Self::get_page_count(&file_path);
 
-        let mut heap = Self {
-            file_path,
-            meta,
-        };
+        let mut heap = Self { file_path, meta };
 
         // Initialize with first page if empty
         if page_count == 0 {
@@ -127,9 +126,7 @@ impl HeapStorage {
 
     /// Write a page to disk
     fn write_page(&self, page_id: u32, buffer: &[u8]) -> std::io::Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .open(&self.file_path)?;
+        let mut file = OpenOptions::new().write(true).open(&self.file_path)?;
         file.seek(SeekFrom::Start((page_id as u64) * (PAGE_SIZE as u64)))?;
         file.write_all(buffer)?;
         file.flush()?;
@@ -139,7 +136,7 @@ impl HeapStorage {
     /// Allocate a new page
     fn allocate_page(&mut self) -> std::io::Result<u32> {
         let page_id = self.meta.page_count;
-        let mut page = Page::new_data(page_id, self.meta.table_id);
+        let page = Page::new_data(page_id, self.meta.table_id);
 
         // Write page to disk
         self.write_page(page_id, &page.to_bytes())?;
@@ -161,22 +158,21 @@ impl HeapStorage {
             let mut buffer = self.read_page(page_id)?;
 
             // Check free space (offset 44-47 in page header)
-            let free_space = u32::from_le_bytes([
-                buffer[44], buffer[45], buffer[46], buffer[47]
-            ]) as usize;
+            let free_space =
+                u32::from_le_bytes([buffer[44], buffer[45], buffer[46], buffer[47]]) as usize;
 
             if free_space >= 4 + data.len() {
                 // Get row count (offset 40-43)
-                let row_count = u32::from_le_bytes([
-                    buffer[40], buffer[41], buffer[42], buffer[43]
-                ]);
+                let row_count =
+                    u32::from_le_bytes([buffer[40], buffer[41], buffer[42], buffer[43]]);
                 let slot = row_count as u16;
 
                 // Calculate data offset
                 let data_offset = HEAP_PAGE_HEADER_SIZE + (slot as usize) * (4 + data.len());
 
                 // Write size (4 bytes) + data
-                buffer[data_offset..data_offset + 4].copy_from_slice(&(data.len() as u32).to_le_bytes());
+                buffer[data_offset..data_offset + 4]
+                    .copy_from_slice(&(data.len() as u32).to_le_bytes());
                 buffer[data_offset + 4..data_offset + 4 + data.len()].copy_from_slice(data);
 
                 // Update row count
@@ -222,9 +218,7 @@ impl HeapStorage {
         let buffer = self.read_page(row_id.page_id)?;
 
         // Get row count
-        let row_count = u32::from_le_bytes([
-            buffer[40], buffer[41], buffer[42], buffer[43]
-        ]);
+        let row_count = u32::from_le_bytes([buffer[40], buffer[41], buffer[42], buffer[43]]);
 
         if row_id.slot as u32 >= row_count {
             return Ok(None);
@@ -234,16 +228,20 @@ impl HeapStorage {
         let mut offset = HEAP_PAGE_HEADER_SIZE;
         for _ in 0..row_id.slot {
             let size = u32::from_le_bytes([
-                buffer[offset], buffer[offset + 1],
-                buffer[offset + 2], buffer[offset + 3]
+                buffer[offset],
+                buffer[offset + 1],
+                buffer[offset + 2],
+                buffer[offset + 3],
             ]) as usize;
             offset += 4 + size;
         }
 
         // Read the Row
         let size = u32::from_le_bytes([
-            buffer[offset], buffer[offset + 1],
-            buffer[offset + 2], buffer[offset + 3]
+            buffer[offset],
+            buffer[offset + 1],
+            buffer[offset + 2],
+            buffer[offset + 3],
         ]) as usize;
 
         if size == 0 || offset + 4 + size > PAGE_SIZE {
@@ -260,15 +258,15 @@ impl HeapStorage {
         for page_id in 0..self.meta.page_count {
             let buffer = self.read_page(page_id)?;
 
-            let row_count = u32::from_le_bytes([
-                buffer[40], buffer[41], buffer[42], buffer[43]
-            ]);
+            let row_count = u32::from_le_bytes([buffer[40], buffer[41], buffer[42], buffer[43]]);
 
             let mut offset = HEAP_PAGE_HEADER_SIZE;
             for _ in 0..row_count {
                 let size = u32::from_le_bytes([
-                    buffer[offset], buffer[offset + 1],
-                    buffer[offset + 2], buffer[offset + 3]
+                    buffer[offset],
+                    buffer[offset + 1],
+                    buffer[offset + 2],
+                    buffer[offset + 3],
                 ]) as usize;
 
                 if size > 0 && offset + 4 + size <= PAGE_SIZE {
@@ -362,5 +360,77 @@ mod tests {
 
         let rows = heap.scan().unwrap();
         assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn test_heap_row_id() {
+        let row_id = RowId::new(1, 5);
+        assert_eq!(row_id.page_id, 1);
+        assert_eq!(row_id.slot, 5);
+    }
+
+    #[test]
+    fn test_heap_row_id_eq() {
+        let row_id1 = RowId::new(1, 5);
+        let row_id2 = RowId::new(1, 5);
+        let row_id3 = RowId::new(1, 6);
+
+        assert_eq!(row_id1, row_id2);
+        assert_ne!(row_id1, row_id3);
+    }
+
+    #[test]
+    fn test_heap_meta() {
+        let meta = HeapMeta::new(1, "test_table".to_string());
+        assert_eq!(meta.table_id, 1);
+        assert_eq!(meta.name, "test_table");
+        assert_eq!(meta.row_count, 0);
+        assert_eq!(meta.page_count, 0);
+    }
+
+    #[test]
+    fn test_heap_large_row() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert a larger row (1KB)
+        let large_data = vec![0u8; 1024];
+        let row_id = heap.insert(&large_data).unwrap();
+
+        let retrieved = heap.get(row_id).unwrap().unwrap();
+        assert_eq!(retrieved.len(), 1024);
+    }
+
+    #[test]
+    fn test_heap_multiple_pages() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert many rows to trigger multiple pages
+        // Each row is about 100 bytes, page size is 8KB
+        for i in 0..100 {
+            let data = vec![i as u8; 100];
+            heap.insert(&data).unwrap();
+        }
+
+        assert!(heap.page_count() > 1);
+        assert_eq!(heap.row_count(), 100);
+    }
+
+    #[test]
+    fn test_heap_insert_single_row() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert a single row
+        let row_id = heap.insert(&vec![1, 2, 3]).unwrap();
+        let retrieved = heap.get(row_id).unwrap();
+        assert!(retrieved.is_some());
     }
 }

@@ -70,12 +70,10 @@ EOF
 check_requirements() {
     log_info "检查系统要求..."
 
-    # 检查是否为 Root 用户
     if [ "$EUID" -eq 0 ]; then
         INSTALL_DIR="/usr/local/bin"
     fi
 
-    # 检查目录是否存在
     if [ ! -d "$INSTALL_DIR" ]; then
         log_info "创建安装目录: $INSTALL_DIR"
         mkdir -p "$INSTALL_DIR"
@@ -87,7 +85,6 @@ check_requirements() {
 install_cargo() {
     log_info "使用 Cargo 从源码安装..."
 
-    # 检查 Rust
     if ! command -v cargo &> /dev/null; then
         log_error "Cargo 未安装，请先安装 Rust: https://rustup.rs/"
         exit 1
@@ -107,7 +104,6 @@ install_cargo() {
     cp "target/release/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
-    # 清理
     cd /
     rm -rf "$TEMP_DIR"
 
@@ -118,7 +114,6 @@ install_cargo() {
 install_binary() {
     log_info "使用预编译二进制安装..."
 
-    # 检测系统架构
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
 
@@ -158,7 +153,6 @@ install_binary() {
     cp -r "${FILENAME}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
-    # 清理
     cd /
     rm -rf "$TEMP_DIR"
 
@@ -182,7 +176,6 @@ install_docker() {
     log_info "运行服务器: docker run -p 5432:5432 minzuuniversity/sqlrustgo:v${VERSION} --server"
 }
 
-# 主程序
 main() {
     echo ""
     echo "========================================"
@@ -190,7 +183,6 @@ main() {
     echo "========================================"
     echo ""
 
-    # 默认显示帮助或根据参数安装
     case "${1:-}" in
         --cargo)
             check_requirements
@@ -207,7 +199,6 @@ main() {
             show_help
             ;;
         "")
-            # 交互式选择
             show_help
             echo ""
             echo "请选择安装方式:"
