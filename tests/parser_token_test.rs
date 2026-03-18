@@ -14,10 +14,6 @@ fn test_token_variants() {
     let _ = Token::Drop;
     let _ = Token::Table;
     let _ = Token::Index;
-    let _ = Token::Join;
-    let _ = Token::Left;
-    let _ = Token::Right;
-    let _ = Token::Inner;
     let _ = Token::On;
     let _ = Token::And;
     let _ = Token::Or;
@@ -33,9 +29,9 @@ fn test_token_variants() {
     let _ = Token::Plus;
     let _ = Token::Minus;
     let _ = Token::Slash;
-    let _ = Token::Number;
-    let _ = Token::String;
-    let _ = Token::Ident;
+    let _ = Token::NumberLiteral(String::new());
+    let _ = Token::StringLiteral(String::new());
+    let _ = Token::Identifier(String::new());
     let _ = Token::Eof;
 }
 
@@ -54,16 +50,25 @@ fn test_is_keyword() {
     assert!(sqlrustgo_parser::token::is_keyword("INSERT"));
     assert!(sqlrustgo_parser::token::is_keyword("UPDATE"));
     assert!(sqlrustgo_parser::token::is_keyword("DELETE"));
-    
+
     assert!(!sqlrustgo_parser::token::is_keyword("not_a_keyword"));
     assert!(!sqlrustgo_parser::token::is_keyword("foo"));
 }
 
 #[test]
 fn test_from_keyword() {
-    assert_eq!(sqlrustgo_parser::token::from_keyword("SELECT"), Some(Token::Select));
-    assert_eq!(sqlrustgo_parser::token::from_keyword("FROM"), Some(Token::From));
-    assert_eq!(sqlrustgo_parser::token::from_keyword("WHERE"), Some(Token::Where));
-    
+    assert_eq!(
+        sqlrustgo_parser::token::from_keyword("SELECT"),
+        Some(Token::Select)
+    );
+    assert_eq!(
+        sqlrustgo_parser::token::from_keyword("FROM"),
+        Some(Token::From)
+    );
+    assert_eq!(
+        sqlrustgo_parser::token::from_keyword("WHERE"),
+        Some(Token::Where)
+    );
+
     assert_eq!(sqlrustgo_parser::token::from_keyword("invalid"), None);
 }
