@@ -4,6 +4,7 @@ pub mod executor;
 pub mod executor_metrics;
 pub mod filter;
 pub mod local_executor;
+pub mod query_cache_config;
 pub mod test_framework;
 pub mod vectorization;
 
