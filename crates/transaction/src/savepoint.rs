@@ -141,4 +141,102 @@ mod tests {
         let result = manager.rollback_to("nonexistent");
         assert!(matches!(result, Err(SavepointError::NotFound)));
     }
+
+    #[test]
+    fn test_savepoint_error_display() {
+        let err_not_found = SavepointError::NotFound;
+        let err_invalid = SavepointError::InvalidOperation;
+        assert_eq!(err_not_found.to_string(), "savepoint not found");
+        assert_eq!(err_invalid.to_string(), "invalid savepoint operation");
+    }
+
+    #[test]
+    fn test_add_undo() {
+        let mut manager = SavepointManager::new();
+        manager.add_undo(UndoRecord::Insert { key: vec![1, 2, 3] });
+        assert_eq!(manager.undo_log.len(), 1);
+    }
+
+    #[test]
+    fn test_add_undo_update() {
+        let mut manager = SavepointManager::new();
+        manager.add_undo(UndoRecord::Update {
+            key: vec![1],
+            old_value: vec![2],
+        });
+        manager.add_undo(UndoRecord::Delete {
+            key: vec![3],
+            old_value: vec![4],
+        });
+        assert_eq!(manager.undo_log.len(), 2);
+    }
+
+    #[test]
+    fn test_get_savepoint_count() {
+        let mut manager = SavepointManager::new();
+        assert_eq!(manager.get_savepoint_count(), 0);
+
+        manager.savepoint("sp1".to_string()).unwrap();
+        assert_eq!(manager.get_savepoint_count(), 1);
+
+        manager.savepoint("sp2".to_string()).unwrap();
+        assert_eq!(manager.get_savepoint_count(), 2);
+    }
+
+    #[test]
+    fn test_release_savepoint() {
+        let mut manager = SavepointManager::new();
+        manager.savepoint("sp1".to_string()).unwrap();
+        manager.savepoint("sp2".to_string()).unwrap();
+
+        manager.release_savepoint("sp1").unwrap();
+        assert_eq!(manager.get_savepoint_count(), 1);
+
+        manager.release_savepoint("sp2").unwrap();
+        assert_eq!(manager.get_savepoint_count(), 0);
+    }
+
+    #[test]
+    fn test_release_nonexistent_savepoint() {
+        let mut manager = SavepointManager::new();
+        let result = manager.release_savepoint("nonexistent");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_rollback_preserves_earlier_savepoints() {
+        let mut manager = SavepointManager::new();
+        manager.savepoint("sp1".to_string()).unwrap();
+        manager.savepoint("sp2".to_string()).unwrap();
+
+        manager.rollback_to("sp1").unwrap();
+
+        assert!(manager.savepoints.iter().any(|s| s.name == "sp1"));
+    }
+
+    #[test]
+    fn test_savepoint_override() {
+        let mut manager = SavepointManager::new();
+        manager.add_undo(UndoRecord::Insert { key: vec![1] });
+        manager.savepoint("sp1".to_string()).unwrap();
+
+        manager.add_undo(UndoRecord::Insert { key: vec![2] });
+        manager.add_undo(UndoRecord::Insert { key: vec![3] });
+
+        let idx = manager
+            .savepoints
+            .iter()
+            .rposition(|s| s.name == "sp1")
+            .unwrap();
+        assert_eq!(manager.savepoints[idx].undo_log_index, 1);
+
+        manager.savepoint("sp1".to_string()).unwrap();
+
+        let idx2 = manager
+            .savepoints
+            .iter()
+            .rposition(|s| s.name == "sp1")
+            .unwrap();
+        assert_eq!(manager.savepoints[idx2].undo_log_index, 3);
+    }
 }
