@@ -54,6 +54,8 @@ miniz_oxide = "0.7"
 criterion = "0.5"
 tempfile = "3.25.0"
 serde_yaml = "0.9"
+rand = "0.8"
+clap = { version = "4.0", features = ["derive"] }
 
 [package]
 name = "sqlrustgo"
@@ -125,6 +127,10 @@ harness = false
 [[bin]]
 name = "tpch_benchmark"
 path = "benches/tpch_comprehensive_main.rs"
+
+[[example]]
+name = "tpch_data_gen"
+path = "crates/bench/examples/tpch_data_gen.rs"
 
 [dependencies.rusqlite]
 version = "0.32"
