@@ -36,6 +36,16 @@ pub trait StorageEngine: Send + Sync {
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
+    /// Scan rows in batches for streaming (memory-efficient)
+    /// Returns (records, total_count, has_more)
+    fn scan_batch(&self, table: &str, offset: usize, limit: usize) -> SqlResult<(Vec<Record>, usize, bool)> {
+        let all_records = self.scan(table)?;
+        let total = all_records.len();
+        let has_more = offset + limit < total;
+        let batch = all_records.into_iter().skip(offset).take(limit).collect();
+        Ok((batch, total, has_more))
+    }
+
     /// Insert rows into a table
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
 

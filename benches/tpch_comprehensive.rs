@@ -1,9 +1,12 @@
 // TPC-H Comprehensive Benchmark
 
+mod tpch_streaming_config;
+
 use serde::Serialize;
 use sqlrustgo::{parse, ExecutionEngine, StorageEngine};
 use std::sync::Arc;
 use std::time::Instant;
+use tpch_streaming_config::{MemoryTracker, StreamingConfig};
 
 pub const MAX_MEMORY_MB: usize = 2048;
 const LINEITEM_BYTES_PER_ROW: usize = 100;
@@ -30,8 +33,8 @@ impl ScaleFactor {
     }
 
     pub fn estimate_memory_mb(&self) -> usize {
-        let lineitem_rows = (6000000.0 * self.to_f64()) as usize;
-        let orders_rows = (1500000.0 * self.to_f64()) as usize;
+        let lineitem_rows = (6000000.0 * self.as_f64()) as usize;
+        let orders_rows = (1500000.0 * self.as_f64()) as usize;
         let total_rows = lineitem_rows + orders_rows;
         (total_rows * LINEITEM_BYTES_PER_ROW) / (1024 * 1024)
     }
@@ -604,5 +607,230 @@ mod tests {
     fn test_benchmark_creation() {
         let benchmark = TpchBenchmark::new(ScaleFactor::SF01, TestScenario::SingleThread, 4);
         assert_eq!(benchmark.threads, 4);
+    }
+}
+
+// Streaming TPC-H implementation
+#[allow(dead_code)]
+impl TpchBenchmark {
+    /// Run benchmark with streaming configuration for large datasets
+    pub fn run_streaming(&self, config: &StreamingConfig) -> (BenchmarkResult, MemoryTracker) {
+        let mut memory_tracker = MemoryTracker::new(config.max_memory_bytes);
+        let mut storage = sqlrustgo::MemoryStorage::new();
+
+        // Generate data with streaming (batch inserts)
+        self.generate_data_streaming(&mut storage, &mut memory_tracker, config);
+
+        let queries = self.get_tpch_queries();
+        let mut engine = ExecutionEngine::new(Arc::new(storage));
+        let mut results = Vec::new();
+
+        for (name, sql) in queries {
+            let start = Instant::now();
+            let _ = engine.execute(parse(sql).unwrap());
+            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+
+            results.push(QueryResult {
+                query: name.to_string(),
+                sqlrustgo_ms: elapsed,
+                sqlite_ms: None,
+                cache_hit: false,
+                rows: 0,
+            });
+        }
+
+        let result = BenchmarkResult {
+            metadata: BenchmarkMetadata {
+                date: "2026-03-19".to_string(),
+                scale_factor: self.scale_factor.as_str().to_string(),
+                scenario: self.scenario.as_str().to_string(),
+                threads: self.threads,
+            },
+            results,
+            summary: BenchmarkSummary {
+                total_sqlrustgo_ms: 0.0,
+                total_sqlite_ms: None,
+                cache_hit_rate: 0.0,
+                qps: 0.0,
+            },
+        };
+
+        (result, memory_tracker)
+    }
+
+    /// Generate data with streaming (batch inserts to control memory)
+    fn generate_data_streaming(
+        &self,
+        storage: &mut sqlrustgo::MemoryStorage,
+        memory_tracker: &mut MemoryTracker,
+        config: &StreamingConfig,
+    ) {
+        // Create tables first
+        self.create_tables_streaming(storage);
+
+        let sf = self.scale_factor.as_f64();
+        let orders_rows = (1500000.0 * sf) as usize;
+        let lineitem_rows = (6000000.0 * sf) as usize;
+
+        // Estimate row size (approximate)
+        let order_row_size = 64; // bytes
+        let lineitem_row_size = 128; // bytes
+
+        // Insert orders in batches
+        let batch_size = config.batch_size;
+        for batch_start in (0..orders_rows).step_by(batch_size) {
+            let batch_end = (batch_start + batch_size).min(orders_rows);
+            let mut batch = Vec::with_capacity(batch_end - batch_start);
+
+            for i in batch_start..batch_end {
+                batch.push(vec![
+                    sqlrustgo_types::Value::Integer(i as i64 + 1),
+                    sqlrustgo_types::Value::Integer((i % 100) as i64 + 1),
+                    sqlrustgo_types::Value::Text("O".to_string()),
+                    sqlrustgo_types::Value::Integer(((i + 1) * 100) as i64),
+                    sqlrustgo_types::Value::Integer(87600 + (i % 2000) as i64),
+                ]);
+            }
+
+            storage.insert("orders", batch).ok();
+
+            // Track memory
+            let batch_bytes = (batch_end - batch_start) * order_row_size;
+            memory_tracker.allocate(batch_bytes);
+
+            // Check memory limit
+            if memory_tracker.usage_percent() > 80.0 {
+                println!(
+                    "Warning: Memory usage at {:.1}%, consider reducing batch size",
+                    memory_tracker.usage_percent()
+                );
+            }
+        }
+
+        // Insert lineitem in batches
+        for batch_start in (0..lineitem_rows).step_by(batch_size) {
+            let batch_end = (batch_start + batch_size).min(lineitem_rows);
+            let mut batch = Vec::with_capacity(batch_end - batch_start);
+
+            for i in batch_start..batch_end {
+                batch.push(vec![
+                    sqlrustgo_types::Value::Integer((i % 1000) as i64 + 1),
+                    sqlrustgo_types::Value::Integer((i as i64) + 1),
+                    sqlrustgo_types::Value::Integer(((i % 100) as i64) + 1),
+                    sqlrustgo_types::Value::Integer(((i % 50) as i64) + 1),
+                    sqlrustgo_types::Value::Integer(((i % 10000) as i64) + 1),
+                    sqlrustgo_types::Value::Integer((i % 10) as i64),
+                    sqlrustgo_types::Value::Integer((i % 8) as i64),
+                    sqlrustgo_types::Value::Text("N".to_string()),
+                    sqlrustgo_types::Value::Text("SHIP".to_string()),
+                ]);
+            }
+
+            storage.insert("lineitem", batch).ok();
+
+            // Track memory
+            let batch_bytes = (batch_end - batch_start) * lineitem_row_size;
+            memory_tracker.allocate(batch_bytes);
+
+            if memory_tracker.usage_percent() > 80.0 {
+                println!(
+                    "Warning: Memory usage at {:.1}%",
+                    memory_tracker.usage_percent()
+                );
+            }
+        }
+
+        println!(
+            "Data generation complete. Memory used: {:.1} MB",
+            memory_tracker.current() as f64 / 1024.0 / 1024.0
+        );
+    }
+
+    fn create_tables_streaming(&self, storage: &mut sqlrustgo::MemoryStorage) {
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "lineitem".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_orderkey".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_partkey".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_suppkey".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_quantity".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_extendedprice".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_discount".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_tax".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_returnflag".to_string(),
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "l_shipmode".to_string(),
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                    },
+                ],
+            })
+            .ok();
+
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "orders".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "o_orderkey".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "o_custkey".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "o_orderstatus".to_string(),
+                        data_type: "TEXT".to_string(),
+                        nullable: false,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "o_totalprice".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "o_orderdate".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                    },
+                ],
+            })
+            .ok();
     }
 }
