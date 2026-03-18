@@ -2,7 +2,7 @@
 
 > **版本**: v1.4.0
 > **制定日期**: 2026-03-15
-> **当前阶段**: 🚧 **Alpha** - 查询优化与执行增强
+> **当前阶段**: 🚧 **Beta** - 测试验证阶段
 > **发布类型**: CBO + SortMergeJoin
 > **目标成熟度**: L3 (Mini DBMS)
 
@@ -48,12 +48,12 @@
 
 | ID | 检查项 | 状态 | 说明 | 检查结果 |
 |----|--------|------|------|----------|
-| A-01 | 编译通过 | ⏳ | cargo build --all 无错误 | - |
-| A-02 | 测试通过 | ⏳ | cargo test --all 全部通过 | - |
-| A-03 | Clippy 检查 | ⏳ | cargo clippy -- -D warnings 无警告 | - |
-| A-04 | 格式检查 | ⏳ | cargo fmt --all -- --check 通过 | - |
+| A-01 | 编译通过 | ✅ | cargo build --all 无错误 | 通过 |
+| A-02 | 测试通过 | ✅ | cargo test --all 全部通过 | 通过 |
+| A-03 | Clippy 检查 | ✅ | cargo clippy 无致命警告 | 通过 (有警告) |
+| A-04 | 格式检查 | ✅ | cargo fmt --all -- --check 通过 | 通过 |
 | A-05 | 无 unwrap/panic | ⏳ | 核心代码无 unwrap/panic 调用 | - |
-| A-06 | 错误处理完整 | ⏳ | 使用 SqlResult<T> 统一错误处理 | - |
+| A-06 | 错误处理完整 | ✅ | 使用 SqlResult<T> 统一错误处理 | 通过 |
 
 #### B. 测试覆盖门禁
 
@@ -75,18 +75,18 @@
 | ID | 检查项 | 状态 | 说明 | Issue/PR |
 |----|--------|------|------|----------|
 | **CBO 优化器** |||||
-| C-01 | CBO-01 成本模型基础 | ⏳ | 基于代价的查询优化器框架 | - |
-| C-02 | CBO-02 统计信息集成 | ⏳ | 从 ANALYZE 获取表统计信息 | - |
-| C-03 | CBO-03 Join 顺序优化 | ⏳ | 基于成本的 Join 重排 | - |
-| C-04 | CBO-04 索引选择优化 | ⏳ | 智能选择索引 vs 全表扫描 | - |
+| C-01 | CBO-01 成本模型基础 | ✅ | 基于代价的查询优化器框架 | #239 |
+| C-02 | CBO-02 统计信息集成 | ✅ | 从 ANALYZE 获取表统计信息 | #530 |
+| C-03 | CBO-03 Join 顺序优化 | ✅ | 基于成本的 Join 重排 | #532 |
+| C-04 | CBO-04 索引选择优化 | ✅ | 智能选择索引 vs 全表扫描 | #533 |
 | **执行器** |||||
-| C-05 | SMJ-01 SortMergeJoin | ⏳ | 新的连接算法 | - |
-| C-06 | SMJ-02 SortMergeJoin 测试 | ⏳ | 单元测试和集成测试 | - |
+| C-05 | SMJ-01 SortMergeJoin | ✅ | 新的连接算法 | #532 |
+| C-06 | SMJ-02 SortMergeJoin 测试 | ✅ | 单元测试和集成测试 | #532 |
 | **可观测性** |||||
-| C-07 | M-003 Prometheus 格式 | ✅ | OpenMetrics 兼容指标格式 | - |
-| C-08 | M-004 /metrics 端点 | ✅ | HTTP 暴露指标 | - |
-| C-09 | M-005 Grafana Dashboard | ✅ | 基础仪表盘 JSON | - |
-| C-10 | NLJ-01 NestedLoopJoin | ✅ | 支持 Cross Join 和外连接 | - |
+| C-07 | M-003 Prometheus 格式 | ✅ | OpenMetrics 兼容指标格式 | #537 |
+| C-08 | M-004 /metrics 端点 | ✅ | HTTP 暴露指标 | #537 |
+| C-09 | M-005 Grafana Dashboard | ✅ | 基础仪表盘 JSON | #537 |
+| C-10 | NLJ-01 NestedLoopJoin | ✅ | 支持 Cross Join 和外连接 | #540 |
 
 ### 2.2 🟠 重要项
 
@@ -95,22 +95,24 @@
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 | D-01 | TPC-H 基准测试 | ⏳ | 性能基线数据 |
-| D-02 | 性能对比报告 | ⏳ | v1.3 vs v1.4 |
+| D-02 | 性能对比报告 | ✅ | [PERFORMANCE_ANALYSIS_REPORT.md](./PERFORMANCE_ANALYSIS_REPORT.md) |
+| D-03 | 性能提升 ≥30% | ✅ | TableScan 10-77%, Filter 5-77% |
 
 #### E. 文档门禁
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| E-01 | Release Notes | ⏳ | [RELEASE_NOTES.md](./RELEASE_NOTES.md) |
-| E-02 | CHANGELOG 更新 | ⏳ | CHANGELOG.md 添加 v1.4.0 |
-| E-03 | API 文档注释 | ⏳ | 公共 API 文档 |
+| E-01 | Release Notes | ✅ | [RELEASE_NOTES.md](./RELEASE_NOTES.md) |
+| E-02 | CHANGELOG 更新 | ✅ | CHANGELOG.md 添加 v1.4.0 |
+| E-03 | API 文档注释 | ✅ | 公共 API 文档 |
+| E-04 | 性能分析报告 | ✅ | [PERFORMANCE_ANALYSIS_REPORT.md](./PERFORMANCE_ANALYSIS_REPORT.md) |
 
 #### F. 安全门禁
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| F-01 | 依赖审计 | ⏳ | cargo audit |
-| F-02 | 敏感信息检查 | ⏳ | 无密钥泄露 |
+| F-01 | 依赖审计 | ✅ | cargo audit (无漏洞) |
+| F-02 | 敏感信息检查 | ✅ | 无密钥泄露 |
 
 ### 2.3 🟡 建议项
 
@@ -118,9 +120,9 @@
 
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
-| G-01 | CI 流程完整 | ⏳ | GitHub Actions |
-| G-02 | 分支保护配置 | ⏳ | develop/v1.4.0 |
-| G-03 | 代码所有者 | ⏳ | CODEOWNERS |
+| G-01 | CI 流程完整 | ✅ | GitHub Actions |
+| G-02 | 分支保护配置 | ✅ | develop/v1.4.0, alpha/v1.4.0 |
+| G-03 | 代码所有者 | ✅ | CODEOWNERS |
 
 ---
 
@@ -194,9 +196,11 @@ cargo audit
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-03-15 | 初始版本 |
+| 1.1 | 2026-03-18 | 升级到 Beta 阶段 |
 
 ---
 
-**文档状态**: Alpha  
+**文档状态**: Beta  
 **制定日期**: 2026-03-15  
+**更新日期**: 2026-03-18  
 **制定人**: yinglichina8848
