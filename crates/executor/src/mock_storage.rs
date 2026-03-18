@@ -181,6 +181,14 @@ impl StorageEngine for MockStorage {
     fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
         Ok(())
     }
+
+    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Option<u32> {
+        None
+    }
+
+    fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]
