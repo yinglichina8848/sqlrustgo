@@ -717,7 +717,7 @@ unsafe impl Sync for QueryCache {}
 
 ### 2.2 锁管理器 (T-04)
 
-**文件**: `crates/transaction/src/lock_manager.rs`
+**文件**: `crates/transaction/src/lock.rs`
 
 #### 核心数据结构
 
@@ -1083,7 +1083,6 @@ pub struct QueryCache {
 pub struct CacheKey {
     pub normalized_sql: String,    // 归一化 SQL
     pub params_hash: u64,         // 参数哈希
-    pub table_versions: Vec<u64>,  // 表版本（失效用）
 }
 
 pub struct CacheEntry {
@@ -1101,7 +1100,7 @@ pub struct CacheEntry {
 | LRU | `VecDeque<CacheKey>` | 最近最少使用淘汰 |
 | 容量限制 | `max_entries` | 最大条目数（默认 1000） |
 | 内存限制 | `max_memory_bytes` | 最大内存（默认 100MB） |
-| TTL | `ttl_seconds` | 过期时间（默认 300s） |
+| TTL | `ttl_seconds` | 过期时间（默认 30s） |
 | 表级失效 | `table_index` | 数据变更时清除相关缓存 |
 
 #### 缓存命中流程
