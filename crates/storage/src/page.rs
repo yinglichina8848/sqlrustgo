@@ -53,6 +53,7 @@ pub struct Page {
     row_count: u32,
     free_space: u32,
     table_id: u64,
+    checksum: u32,
 }
 
 impl Page {
@@ -65,6 +66,7 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
+            checksum: 0,
         }
     }
 
@@ -102,6 +104,39 @@ impl Page {
         self.free_space
     }
 
+    /// Get checksum
+    pub fn checksum(&self) -> u32 {
+        self.checksum
+    }
+
+    /// Calculate checksum for page data (excluding checksum field itself)
+    /// Uses simple XOR-based checksum
+    pub fn calculate_checksum(&self) -> u32 {
+        let mut checksum: u32 = 0;
+        let mut multiplier: u32 = 1;
+
+        // Calculate checksum for all bytes except checksum field (offset 12-15)
+        for i in 0..PAGE_SIZE {
+            if i >= 12 && i < 16 {
+                continue; // Skip checksum field
+            }
+            checksum = checksum.wrapping_add(self.data[i] as u32 * multiplier);
+            multiplier = multiplier.wrapping_mul(31).wrapping_add(1);
+            if multiplier > 1000000 {
+                multiplier = 1; // Prevent overflow
+            }
+        }
+
+        checksum
+    }
+
+    /// Verify page checksum
+    pub fn verify_checksum(&self) -> bool {
+        let stored = self.checksum;
+        let computed = self.calculate_checksum();
+        stored == computed
+    }
+
     /// Write page header
     fn write_header(&mut self) {
         let mut offset = 0;
@@ -130,7 +165,8 @@ impl Page {
         // Reserved (1 byte)
         offset += 1;
 
-        // Checksum placeholder (4 bytes)
+        // Checksum offset - will be updated after calculation
+        let checksum_offset = offset;
         offset += 4;
 
         // Previous page (4 bytes)
@@ -149,6 +185,14 @@ impl Page {
 
         // Table ID (8 bytes)
         self.data[offset..offset + 8].copy_from_slice(&self.table_id.to_le_bytes());
+
+        // Calculate checksum with checksum field set to 0
+        // Set checksum field to 0 for calculation
+        self.data[checksum_offset..checksum_offset + 4].copy_from_slice(&[0u8; 4]);
+
+        let checksum = self.calculate_checksum();
+        self.data[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_le_bytes());
+        self.checksum = checksum;
     }
 
     /// Read page header
@@ -176,7 +220,15 @@ impl Page {
         };
         offset += 2; // page_type (1) + reserved (1)
 
-        offset += 4; // skip checksum
+        // Checksum (4 bytes)
+        self.checksum = u32::from_le_bytes([
+            self.data[offset],
+            self.data[offset + 1],
+            self.data[offset + 2],
+            self.data[offset + 3],
+        ]);
+        offset += 4;
+
         offset += 4; // skip prev page
         offset += 4; // skip next page
 
@@ -278,6 +330,7 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
+            checksum: 0,
         };
 
         page.read_header();
@@ -589,5 +642,65 @@ mod tests {
         let pt = PageType::Data;
         let pt2 = pt;
         assert_eq!(pt, pt2);
+    }
+
+    #[test]
+    fn test_page_checksum() {
+        let mut page = Page::new_data(1, 100);
+
+        // Write a row to modify page data
+        let row = vec![Value::Integer(42), Value::Text("test".to_string())];
+        page.write_row(&row);
+
+        // Verify checksum is calculated
+        let checksum = page.checksum();
+        assert!(checksum != 0);
+
+        // Verify checksum is valid
+        assert!(page.verify_checksum());
+    }
+
+    #[test]
+    fn test_page_checksum_invalid() {
+        let mut page = Page::new_data(1, 100);
+
+        // Modify data to make checksum invalid
+        page.data[100] = 0xFF;
+
+        // Verify checksum should fail
+        assert!(!page.verify_checksum());
+    }
+
+    #[test]
+    fn test_page_checksum_after_modification() {
+        let mut page = Page::new_data(1, 100);
+
+        let initial_checksum = page.checksum();
+
+        // Write a row
+        let row = vec![Value::Integer(1)];
+        page.write_row(&row);
+
+        // Checksum should be updated
+        assert!(page.checksum() != initial_checksum);
+
+        // Verify checksum is still valid
+        assert!(page.verify_checksum());
+    }
+
+    #[test]
+    fn test_page_checksum_roundtrip() {
+        let mut page = Page::new_data(1, 100);
+        page.write_row(&vec![Value::Integer(42)]);
+
+        // Serialize page
+        let bytes = page.to_bytes();
+
+        // Deserialize page
+        let restored = Page::from_bytes(bytes).unwrap();
+
+        // Checksum should be preserved
+        assert_eq!(page.checksum(), restored.checksum());
+        assert!(restored.verify_checksum());
     }
 }
