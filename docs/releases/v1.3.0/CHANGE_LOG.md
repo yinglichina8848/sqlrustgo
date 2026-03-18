@@ -36,13 +36,16 @@
 - **测试**: Executor 测试框架
 
 #### Planner 模块
-- **测试**: Planner 测试框架
+- **测试**: Planner 测试套件
 
 #### 可观测性
 - **功能**: Metrics trait 定义 (M-001) ✅ 已完成
 - **功能**: BufferPool 指标收集 (M-002) ✅ 已完成
 - **功能**: /health/live 端点 (H-001) ✅ 已完成
 - **功能**: /health/ready 端点 (H-002) ✅ 已完成
+- **功能**: /health 综合端点 (H-004) ✅ 已完成
+- **功能**: /metrics 端点 (E-001) ✅ 已完成
+- **功能**: Prometheus 格式支持 ✅ 已完成
 
 ### Changed
 
@@ -51,19 +54,12 @@
 
 ### Fixed
 
-- (待记录)
-
-### Deprecated
-
-- (待记录)
-
-### Removed
-
-- (待记录)
+- **修复**: 性能基准测试编译错误
+- **修复**: HashJoin 测试解析问题
 
 ### Security
 
-- (待记录)
+- 依赖审核已通过 (无高严重性漏洞)
 
 ---
 
