@@ -7,7 +7,6 @@
 
 use sqlrustgo_planner::{DataType, Expr, Field, IndexScanExec, PhysicalPlan, Schema, SeqScanExec};
 use sqlrustgo_storage::BPlusTree;
-use std::sync::Arc;
 
 #[test]
 fn test_index_scan_basic() {
