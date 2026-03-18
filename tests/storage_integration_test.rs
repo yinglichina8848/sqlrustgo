@@ -266,7 +266,7 @@ fn test_storage_workflow() {
         let _ = tree.search(25);
     }
 
-    let stats = pool.stats();
+    let _stats = pool.stats();
     println!(
         "✓ Storage workflow: index size={}, range results={}",
         tree.len(),
