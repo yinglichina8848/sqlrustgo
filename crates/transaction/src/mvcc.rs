@@ -128,6 +128,27 @@ impl Snapshot {
             None => false,
         }
     }
+
+    pub fn is_visible_read_committed(
+        &self,
+        tx_id: TxId,
+        commit_timestamp: Option<u64>,
+        current_timestamp: u64,
+    ) -> bool {
+        if tx_id == self.tx_id {
+            return true;
+        }
+
+        match commit_timestamp {
+            Some(ts) => ts < current_timestamp,
+            None => false,
+        }
+    }
+
+    pub fn refresh_for_read_committed(&mut self, current_timestamp: u64) {
+        self.snapshot_timestamp = current_timestamp;
+        self.active_transactions.clear();
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
