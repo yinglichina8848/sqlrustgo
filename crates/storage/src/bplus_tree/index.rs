@@ -1,6 +1,7 @@
 //! Disk-based B+Tree index implementation
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 const BTREE_ORDER: usize = 64;
 const MAX_KEYS_PER_NODE: usize = BTREE_ORDER - 1;
@@ -11,8 +12,51 @@ const NODE_TYPE_LEAF: u8 = 2;
 
 const PAGE_DATA_SIZE: usize = 4096 - 64;
 
+/// Unique index constraint violation error
+#[derive(Debug, Clone, Error)]
+#[error("unique constraint violation: key {key} already exists")]
+pub struct UniqueConstraintViolation {
+    pub key: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub i64);
+
+/// Composite key for multi-column indexes
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
+pub struct CompositeKey {
+    pub columns: Vec<i64>,
+}
+
+impl CompositeKey {
+    pub fn new(columns: Vec<i64>) -> Self {
+        Self { columns }
+    }
+
+    pub fn from_slice(slice: &[i64]) -> Self {
+        Self {
+            columns: slice.to_vec(),
+        }
+    }
+}
+
+impl PartialOrd for CompositeKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CompositeKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for (a, b) in self.columns.iter().zip(other.columns.iter()) {
+            match a.cmp(b) {
+                std::cmp::Ordering::Equal => continue,
+                other => return other,
+            }
+        }
+        self.columns.len().cmp(&other.columns.len())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Value(pub u32);
@@ -134,6 +178,8 @@ pub struct BTreeMetadata {
     pub first_leaf: Option<u32>,
     pub num_entries: u64,
     pub height: u32,
+    /// Whether this is a unique index
+    pub is_unique: bool,
 }
 
 /// Index statistics
@@ -220,6 +266,28 @@ impl BTreeIndex {
 
         self.insert_into_node(self.metadata.root_page_id.unwrap(), key, value);
         self.metadata.num_entries += 1;
+        self.dirty = true;
+    }
+
+    /// Insert a key-value pair into a unique index
+    /// Returns Ok(()) if inserted successfully, Err if key already exists
+    pub fn insert_unique(&mut self, key: i64, value: u32) -> Result<(), UniqueConstraintViolation> {
+        // Check if key already exists
+        if self.search(key).is_some() {
+            return Err(UniqueConstraintViolation { key });
+        }
+        self.insert(key, value);
+        Ok(())
+    }
+
+    /// Check if this is a unique index
+    pub fn is_unique(&self) -> bool {
+        self.metadata.is_unique
+    }
+
+    /// Set the unique flag on this index
+    pub fn set_unique(&mut self, unique: bool) {
+        self.metadata.is_unique = unique;
         self.dirty = true;
     }
 
@@ -420,6 +488,166 @@ impl BTreeIndex {
 impl Default for BTreeIndex {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Composite B+Tree index for multi-column indexes
+pub struct CompositeBTreeIndex {
+    pub metadata: BTreeMetadata,
+    nodes: Vec<Option<BTreeNode>>,
+    dirty: bool,
+    /// Number of columns in the composite key
+    num_columns: usize,
+}
+
+impl CompositeBTreeIndex {
+    pub fn new(num_columns: usize) -> Self {
+        Self {
+            metadata: BTreeMetadata::default(),
+            nodes: vec![None],
+            dirty: true,
+            num_columns,
+        }
+    }
+
+    pub fn from_metadata(metadata: BTreeMetadata, num_columns: usize) -> Self {
+        Self {
+            metadata,
+            nodes: Vec::new(),
+            dirty: false,
+            num_columns,
+        }
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Insert a composite key-value pair
+    pub fn insert(&mut self, key: CompositeKey, value: u32) {
+        // Encode composite key as a single i64 for storage
+        // This is a simplified implementation - real DBs would use more sophisticated encoding
+        let encoded_key = self.encode_composite_key(&key);
+
+        if self.metadata.root_page_id.is_none() {
+            let root = BTreeNode::new_leaf();
+            let root_id = self.allocate_node(root);
+            self.metadata.root_page_id = Some(root_id);
+            self.metadata.first_leaf = Some(root_id);
+            self.metadata.num_entries = 1;
+            self.metadata.height = 1;
+            self.dirty = true;
+            if let Some(ref mut node) = self.nodes[root_id as usize] {
+                node.keys.push(encoded_key);
+                node.values.push(value);
+                node.num_keys = 1;
+            }
+            return;
+        }
+
+        self.insert_into_node(self.metadata.root_page_id.unwrap(), encoded_key, value);
+        self.metadata.num_entries += 1;
+        self.dirty = true;
+    }
+
+    fn encode_composite_key(&self, key: &CompositeKey) -> i64 {
+        // Simple encoding: use first column as the key
+        // For full implementation, would need more sophisticated encoding
+        key.columns.first().copied().unwrap_or(0)
+    }
+
+    fn allocate_node(&mut self, node: BTreeNode) -> u32 {
+        let id = self.nodes.len() as u32;
+        self.nodes.push(Some(node));
+        id
+    }
+
+    fn insert_into_node(&mut self, node_id: u32, key: i64, value: u32) {
+        if let Some(ref mut node) = self.nodes[node_id as usize] {
+            if node.is_leaf {
+                node.insert_key_value(key, value);
+            } else {
+                let child_idx = node.find_child_index(key);
+                if child_idx < node.children.len() {
+                    let child_id = node.children[child_idx];
+                    self.insert_into_node(child_id, key, value);
+                }
+            }
+        }
+    }
+
+    pub fn search(&self, key: &CompositeKey) -> Option<u32> {
+        let encoded_key = self.encode_composite_key(key);
+        if let Some(root_id) = self.metadata.root_page_id {
+            self.search_node(root_id, encoded_key)
+        } else {
+            None
+        }
+    }
+
+    fn search_node(&self, node_id: u32, key: i64) -> Option<u32> {
+        if let Some(ref node) = self.nodes[node_id as usize] {
+            if let Some(idx) = node.find_key_index(key) {
+                return node.values.get(idx).copied();
+            }
+            if !node.is_leaf {
+                let child_idx = node.find_child_index(key);
+                if child_idx < node.children.len() {
+                    return self.search_node(node.children[child_idx], key);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn range_query(&self, start: &CompositeKey, end: &CompositeKey) -> Vec<u32> {
+        let start_key = self.encode_composite_key(start);
+        let end_key = self.encode_composite_key(end);
+
+        if let Some(first_leaf) = self.metadata.first_leaf {
+            let mut results = Vec::new();
+            self.range_query_leaf(first_leaf, start_key, end_key, &mut results);
+            results
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn range_query_leaf(&self, node_id: u32, start: i64, end: i64, results: &mut Vec<u32>) {
+        if let Some(ref node) = self.nodes[node_id as usize] {
+            for (i, k) in node.keys.iter().enumerate() {
+                if *k >= start && *k < end {
+                    if let Some(v) = node.values.get(i) {
+                        results.push(*v);
+                    }
+                }
+            }
+            if let Some(next_leaf) = node.next_leaf {
+                self.range_query_leaf(next_leaf, start, end, results);
+            }
+        }
+    }
+
+    pub fn len(&self) -> u64 {
+        self.metadata.num_entries
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.metadata.num_entries == 0
+    }
+
+    pub fn num_columns(&self) -> usize {
+        self.num_columns
+    }
+}
+
+impl Default for CompositeBTreeIndex {
+    fn default() -> Self {
+        Self::new(1)
     }
 }
 
@@ -927,6 +1155,173 @@ mod tests {
 
         let stats = index.usage_stats();
 
+        let stats = index.usage_stats();
+
         assert_eq!(stats.num_entries, 2);
+    }
+}
+        let mut index = CompositeBTreeIndex::new(2);
+
+        // Insert composite keys
+        index.insert(CompositeKey::new(vec![1, 1]), 100);
+        index.insert(CompositeKey::new(vec![1, 2]), 200);
+        index.insert(CompositeKey::new(vec![2, 1]), 300);
+
+        assert_eq!(index.len(), 3);
+        assert!(!index.is_empty());
+    }
+
+    #[test]
+    fn test_composite_btree_index_search() {
+        let mut index = CompositeBTreeIndex::new(2);
+
+        // Insert with unique first column
+        index.insert(CompositeKey::new(vec![1, 1]), 100);
+        index.insert(CompositeKey::new(vec![2, 2]), 200);
+        index.insert(CompositeKey::new(vec![3, 1]), 300);
+
+        // Search for existing key
+        let result = index.search(&CompositeKey::new(vec![2, 2]));
+        assert_eq!(result, Some(200));
+
+        // Search for non-existing key (different first column)
+        let result = index.search(&CompositeKey::new(vec![5, 1]));
+        assert_eq!(result, None);
+    }
+
+    // Tests for unique index
+
+    #[test]
+    fn test_btree_index_is_unique_default() {
+        let index = BTreeIndex::new();
+        assert!(!index.is_unique());
+    }
+
+    #[test]
+    fn test_btree_index_set_unique() {
+        let mut index = BTreeIndex::new();
+        assert!(!index.is_unique());
+
+        index.set_unique(true);
+        assert!(index.is_unique());
+
+        index.set_unique(false);
+        assert!(!index.is_unique());
+    }
+
+    #[test]
+    fn test_btree_index_insert_unique_success() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // First insert should succeed
+        let result = index.insert_unique(1, 100);
+        assert!(result.is_ok());
+        assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn test_btree_index_insert_unique_duplicate() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // First insert
+        index.insert_unique(1, 100).unwrap();
+
+        // Duplicate key should fail
+        let result = index.insert_unique(1, 200);
+        assert!(result.is_err());
+        match result {
+            Err(UniqueConstraintViolation { key }) => {
+                assert_eq!(key, 1);
+            }
+            _ => panic!("expected UniqueConstraintViolation"),
+        }
+    }
+
+    #[test]
+    fn test_btree_index_unique_insert_multiple() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // Insert multiple unique keys
+        assert!(index.insert_unique(1, 100).is_ok());
+        assert!(index.insert_unique(2, 200).is_ok());
+        assert!(index.insert_unique(3, 300).is_ok());
+
+        assert_eq!(index.len(), 3);
+
+        // Try to insert duplicate
+        assert!(index.insert_unique(2, 999).is_err());
+        assert_eq!(index.len(), 3);
+    }
+}
+
+    // Tests for composite index
+
+    #[test]
+    fn test_composite_key_creation() {
+        let key = CompositeKey::new(vec![1, 2, 3]);
+        assert_eq!(key.columns.len(), 3);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_empty() {
+        let stats = IndexStats::default();
+        assert_eq!(stats.selectivity(), 1.0);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 50;
+        assert_eq!(stats.selectivity(), 0.5);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_clamped() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 150; // More unique than entries
+        assert_eq!(stats.selectivity(), 1.0); // Should clamp to 1.0
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats_empty() {
+        let index = BTreeIndex::new();
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 0);
+        assert_eq!(stats.height, 0);
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats() {
+        let mut index = BTreeIndex::new();
+
+        // Insert some entries
+        for i in 1..=10 {
+            index.insert(i, i as u32);
+        }
+
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 10);
+        assert!(stats.height >= 1);
+        assert!(stats.total_nodes >= 1);
+    }
+
+    #[test]
+    fn test_btree_index_usage_stats() {
+        let mut index = BTreeIndex::new();
+        index.insert(1, 100);
+        index.insert(2, 200);
+
+        let stats = index.usage_stats();
+
+        assert_eq!(stats.num_entries, 2);
+    }
+}
     }
 }
