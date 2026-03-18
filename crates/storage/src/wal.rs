@@ -466,254 +466,363 @@ impl WalManager {
     }
 }
 
-use std::sync::Mutex;
-
 #[derive(Debug, Clone)]
-pub struct CheckpointMetadata {
-    pub checkpoint_id: u64,
-    pub lsn: u64,
+pub struct WalArchiveMetadata {
+    pub archive_id: u64,
+    pub original_file: String,
+    pub archived_file: String,
+    pub compressed: bool,
+    pub original_size: u64,
+    pub archived_size: u64,
     pub timestamp: u64,
-    pub tables: Vec<String>,
-    pub incremental: bool,
-    pub previous_checkpoint_lsn: Option<u64>,
+    pub entry_count: u64,
 }
 
-impl CheckpointMetadata {
+impl WalArchiveMetadata {
     pub fn new(
-        checkpoint_id: u64,
-        lsn: u64,
-        tables: Vec<String>,
-        incremental: bool,
-        prev_lsn: Option<u64>,
+        archive_id: u64,
+        original_file: String,
+        archived_file: String,
+        compressed: bool,
+        original_size: u64,
+        archived_size: u64,
+        entry_count: u64,
     ) -> Self {
         Self {
-            checkpoint_id,
-            lsn,
+            archive_id,
+            original_file,
+            archived_file,
+            compressed,
+            original_size,
+            archived_size,
             timestamp: current_timestamp(),
-            tables,
-            incremental,
-            previous_checkpoint_lsn: prev_lsn,
+            entry_count,
         }
+    }
+
+    pub fn compression_ratio(&self) -> f64 {
+        if self.original_size == 0 {
+            return 1.0;
+        }
+        self.archived_size as f64 / self.original_size as f64
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.checkpoint_id.to_le_bytes());
-        bytes.extend_from_slice(&self.lsn.to_le_bytes());
+        bytes.extend_from_slice(&self.archive_id.to_le_bytes());
+        bytes.extend_from_slice(&(self.original_file.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(self.original_file.as_bytes());
+        bytes.extend_from_slice(&(self.archived_file.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(self.archived_file.as_bytes());
+        bytes.push(if self.compressed { 1 } else { 0 });
+        bytes.extend_from_slice(&self.original_size.to_le_bytes());
+        bytes.extend_from_slice(&self.archived_size.to_le_bytes());
         bytes.extend_from_slice(&self.timestamp.to_le_bytes());
-        bytes.extend_from_slice(&(self.tables.len() as u32).to_le_bytes());
-        for table in &self.tables {
-            bytes.extend_from_slice(&(table.len() as u32).to_le_bytes());
-            bytes.extend_from_slice(table.as_bytes());
-        }
-        bytes.push(if self.incremental { 1 } else { 0 });
-        match self.previous_checkpoint_lsn {
-            Some(lsn) => {
-                bytes.push(1);
-                bytes.extend_from_slice(&lsn.to_le_bytes());
-            }
-            None => bytes.push(0),
-        }
+        bytes.extend_from_slice(&self.entry_count.to_le_bytes());
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         let mut offset = 0;
-        if bytes.len() < 24 {
+        if bytes.len() < 8 {
             return None;
         }
 
-        let checkpoint_id = u64::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]);
-        offset += 8;
-        let lsn = u64::from_le_bytes([
-            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-        ]);
-        offset += 8;
-        let timestamp = u64::from_le_bytes([
-            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
-        ]);
+        let archive_id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
         offset += 8;
 
         if bytes.len() < offset + 4 {
             return None;
         }
-        let table_count = u32::from_le_bytes([
-            bytes[offset],
-            bytes[offset + 1],
-            bytes[offset + 2],
-            bytes[offset + 3],
-        ]) as usize;
+        let orig_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
         offset += 4;
 
-        let mut tables = Vec::new();
-        for _ in 0..table_count {
-            if bytes.len() < offset + 4 {
-                return None;
-            }
-            let len = u32::from_le_bytes([
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-            ]) as usize;
-            offset += 4;
-            if bytes.len() < offset + len {
-                return None;
-            }
-            let table = String::from_utf8(bytes[offset..offset + len].to_vec()).ok()?;
-            tables.push(table);
-            offset += len;
-        }
-
-        if bytes.len() < offset + 2 {
+        if bytes.len() < offset + orig_len {
             return None;
         }
-        let incremental = bytes[offset] != 0;
+        let original_file = String::from_utf8(bytes[offset..offset + orig_len].to_vec()).ok()?;
+        offset += orig_len;
+
+        if bytes.len() < offset + 4 {
+            return None;
+        }
+        let arch_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+        offset += 4;
+
+        if bytes.len() < offset + arch_len {
+            return None;
+        }
+        let archived_file = String::from_utf8(bytes[offset..offset + arch_len].to_vec()).ok()?;
+        offset += arch_len;
+
+        if bytes.len() < offset + 25 {
+            return None;
+        }
+        let compressed = bytes[offset] != 0;
         offset += 1;
 
-        let previous_checkpoint_lsn = if bytes[offset] != 0 {
-            offset += 1;
-            if bytes.len() < offset + 8 {
-                return None;
+        let original_size = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+        offset += 8;
+
+        let archived_size = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+        offset += 8;
+
+        let timestamp = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+        offset += 8;
+
+        let entry_count = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+
+        Some(WalArchiveMetadata {
+            archive_id,
+            original_file,
+            archived_file,
+            compressed,
+            original_size,
+            archived_size,
+            timestamp,
+            entry_count,
+        })
+    }
+}
+
+pub struct WalArchiveManager {
+    wal_dir: PathBuf,
+    archive_dir: PathBuf,
+    archive_id: u64,
+    enable_compression: bool,
+    max_archive_age_secs: u64,
+    max_archive_size_bytes: u64,
+}
+
+impl WalArchiveManager {
+    pub fn new(wal_dir: PathBuf, archive_dir: PathBuf) -> std::io::Result<Self> {
+        std::fs::create_dir_all(&wal_dir)?;
+        std::fs::create_dir_all(&archive_dir)?;
+
+        let archive_id = Self::load_latest_archive_id(&archive_dir)?;
+
+        Ok(Self {
+            wal_dir,
+            archive_dir,
+            archive_id,
+            enable_compression: true,
+            max_archive_age_secs: 7 * 24 * 3600,
+            max_archive_size_bytes: 100 * 1024 * 1024,
+        })
+    }
+
+    fn load_latest_archive_id(archive_dir: &PathBuf) -> std::io::Result<u64> {
+        let entries = std::fs::read_dir(archive_dir)?;
+        let mut max_id = 0u64;
+
+        for entry in entries.filter_map(|e| e.ok()) {
+            let filename = entry.file_name();
+            if filename.to_string_lossy().ends_with(".meta") {
+                if let Some(id) = filename
+                    .to_string_lossy()
+                    .strip_prefix("archive_")
+                    .and_then(|s| s.strip_suffix(".meta"))
+                    .and_then(|s| s.parse::<u64>().ok())
+                {
+                    max_id = max_id.max(id);
+                }
             }
-            Some(u64::from_le_bytes([
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-                bytes[offset + 4],
-                bytes[offset + 5],
-                bytes[offset + 6],
-                bytes[offset + 7],
-            ]))
+        }
+
+        Ok(max_id)
+    }
+
+    pub fn archive_wal(&mut self) -> std::io::Result<WalArchiveMetadata> {
+        self.archive_id += 1;
+
+        let wal_files: Vec<_> = std::fs::read_dir(&self.wal_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "wal"))
+            .filter(|e| {
+                if let Ok(metadata) = e.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        let age = std::time::SystemTime::now()
+                            .duration_since(modified)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        return age > self.max_archive_age_secs;
+                    }
+                }
+                false
+            })
+            .collect();
+
+        let mut total_original_size = 0u64;
+        let mut total_entries = 0u64;
+
+        for wal_file in wal_files {
+            let original_path = wal_file.path();
+            let original_size = std::fs::metadata(&original_path)?.len();
+            total_original_size += original_size;
+
+            let archived_name = format!(
+                "archive_{}_{}.wal",
+                self.archive_id,
+                original_path
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            );
+            let archived_path = self.archive_dir.join(&archived_name);
+
+            if self.enable_compression {
+                let compressed_path = self.archive_dir.join(format!("{}.gz", archived_name));
+                Self::compress_file(&original_path, &compressed_path)?;
+            } else {
+                std::fs::copy(&original_path, &archived_path)?;
+            }
+
+            let mut reader = WalReader::new(&original_path)?;
+            if let Ok(entries) = reader.read_all() {
+                total_entries += entries.len() as u64;
+            }
+
+            std::fs::remove_file(&original_path)?;
+        }
+
+        let archived_size = if self.enable_compression {
+            std::fs::read_dir(&self.archive_dir)?
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.path()
+                        .to_string_lossy()
+                        .contains(&format!("archive_{}_", self.archive_id))
+                })
+                .filter_map(|e| e.metadata().ok())
+                .map(|m| m.len())
+                .sum()
         } else {
-            None
+            total_original_size
         };
 
-        Some(CheckpointMetadata {
-            checkpoint_id,
-            lsn,
-            timestamp,
-            tables,
-            incremental,
-            previous_checkpoint_lsn,
-        })
-    }
-}
-
-pub struct CheckpointManager {
-    wal_manager: WalManager,
-    checkpoint_dir: PathBuf,
-    current_checkpoint_id: u64,
-    last_checkpoint_lsn: Mutex<u64>,
-    checkpoint_interval_lsn: u64,
-    enable_auto_checkpoint: bool,
-}
-
-impl CheckpointManager {
-    pub fn new(
-        wal_path: PathBuf,
-        checkpoint_dir: PathBuf,
-        interval_lsn: u64,
-    ) -> std::io::Result<Self> {
-        std::fs::create_dir_all(&checkpoint_dir)?;
-        Ok(Self {
-            wal_manager: WalManager::new(wal_path),
-            checkpoint_dir,
-            current_checkpoint_id: 0,
-            last_checkpoint_lsn: Mutex::new(0),
-            checkpoint_interval_lsn: interval_lsn,
-            enable_auto_checkpoint: false,
-        })
-    }
-
-    pub fn create_checkpoint(
-        &mut self,
-        tables: Vec<String>,
-    ) -> std::io::Result<CheckpointMetadata> {
-        self.current_checkpoint_id += 1;
-
-        let last_lsn = *self.last_checkpoint_lsn.lock().unwrap();
-        let current_lsn = self.wal_manager.get_writer()?.current_lsn();
-
-        let incremental = last_lsn > 0;
-
-        let metadata = CheckpointMetadata::new(
-            self.current_checkpoint_id,
-            current_lsn,
-            tables.clone(),
-            incremental,
-            if incremental { Some(last_lsn) } else { None },
+        let metadata = WalArchiveMetadata::new(
+            self.archive_id,
+            "wal".to_string(),
+            format!("archive_{}.wal", self.archive_id),
+            self.enable_compression,
+            total_original_size,
+            archived_size,
+            total_entries,
         );
 
-        let metadata_path = self
-            .checkpoint_dir
-            .join(format!("checkpoint_{}.meta", self.current_checkpoint_id));
-        std::fs::write(&metadata_path, metadata.to_bytes())?;
-
-        *self.last_checkpoint_lsn.lock().unwrap() = current_lsn;
-
-        self.wal_manager.checkpoint(0)?;
+        let meta_path = self
+            .archive_dir
+            .join(format!("archive_{}.meta", self.archive_id));
+        std::fs::write(&meta_path, metadata.to_bytes())?;
 
         Ok(metadata)
     }
 
-    pub fn get_last_checkpoint(&self) -> std::io::Result<Option<CheckpointMetadata>> {
-        let entries = std::fs::read_dir(&self.checkpoint_dir)?;
-        let mut checkpoint_files: Vec<_> = entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "meta"))
+    fn compress_file(input: &PathBuf, output: &PathBuf) -> std::io::Result<()> {
+        use std::io::Read;
+
+        let file = std::fs::File::open(input)?;
+        let mut reader = std::io::BufReader::new(file);
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data)?;
+
+        let compressed = miniz_oxide::deflate::compress_to_vec(&data, 6);
+
+        std::fs::write(output, compressed)?;
+        Ok(())
+    }
+
+    pub fn list_archives(&self) -> std::io::Result<Vec<WalArchiveMetadata>> {
+        let mut archives = Vec::new();
+
+        let entries = std::fs::read_dir(&self.archive_dir)?;
+
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "meta") {
+                if let Ok(bytes) = std::fs::read(&path) {
+                    if let Some(metadata) = WalArchiveMetadata::from_bytes(&bytes) {
+                        archives.push(metadata);
+                    }
+                }
+            }
+        }
+
+        archives.sort_by(|a, b| a.archive_id.cmp(&b.archive_id));
+        Ok(archives)
+    }
+
+    pub fn recover_from_archive(&self, archive_id: u64) -> std::io::Result<Vec<WalEntry>> {
+        let archives = self.list_archives()?;
+
+        let target_archive = archives
+            .into_iter()
+            .find(|a| a.archive_id == archive_id)
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Archive not found")
+            })?;
+
+        let archived_path = self.archive_dir.join(&target_archive.archived_file);
+
+        if target_archive.compressed {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "Compressed archive recovery not yet implemented",
+            ));
+        }
+
+        let mut reader = WalReader::new(&archived_path)?;
+        reader.read_all()
+    }
+
+    pub fn cleanup_old_archives(&self, keep_count: u32) -> std::io::Result<u32> {
+        let archives = self.list_archives()?;
+
+        if archives.len() <= keep_count as usize {
+            return Ok(0);
+        }
+
+        let to_delete: Vec<_> = archives
+            .iter()
+            .take(archives.len() - keep_count as usize)
             .collect();
 
-        checkpoint_files.sort_by_key(|e| e.path());
+        let mut deleted = 0u32;
 
-        if let Some(last) = checkpoint_files.last() {
-            let bytes = std::fs::read(last.path())?;
-            Ok(CheckpointMetadata::from_bytes(&bytes))
-        } else {
-            Ok(None)
-        }
-    }
+        for archive in to_delete {
+            let meta_path = self
+                .archive_dir
+                .join(format!("archive_{}.meta", archive.archive_id));
+            let wal_path = self.archive_dir.join(&archive.archived_file);
+            let compressed_path = self
+                .archive_dir
+                .join(format!("{}.gz", archive.archived_file));
 
-    pub fn should_checkpoint(&self) -> bool {
-        if !self.enable_auto_checkpoint {
-            return false;
-        }
-
-        if let Ok(writer) = self.wal_manager.get_writer() {
-            let current_lsn = writer.current_lsn();
-            let last_lsn = *self.last_checkpoint_lsn.lock().unwrap();
-            return current_lsn - last_lsn >= self.checkpoint_interval_lsn;
-        }
-        false
-    }
-
-    pub fn enable_auto_checkpoint(&mut self) {
-        self.enable_auto_checkpoint = true;
-    }
-
-    pub fn disable_auto_checkpoint(&mut self) {
-        self.enable_auto_checkpoint = false;
-    }
-
-    pub fn recover_from_checkpoint(&self, _tables: Vec<String>) -> std::io::Result<Vec<WalEntry>> {
-        let metadata = self.get_last_checkpoint()?;
-
-        match metadata {
-            Some(meta) => {
-                let mut reader = self.wal_manager.get_reader()?;
-                let all_entries = reader.read_all()?;
-
-                let start_lsn = meta.previous_checkpoint_lsn.unwrap_or(0);
-                Ok(all_entries
-                    .into_iter()
-                    .filter(|e| e.lsn > start_lsn)
-                    .collect())
+            if meta_path.exists() {
+                std::fs::remove_file(&meta_path)?;
+                deleted += 1;
             }
-            None => self.wal_manager.recover(),
+            if wal_path.exists() {
+                std::fs::remove_file(&wal_path)?;
+            }
+            if compressed_path.exists() {
+                std::fs::remove_file(&compressed_path)?;
+            }
         }
+
+        Ok(deleted)
+    }
+
+    pub fn set_compression(&mut self, enabled: bool) {
+        self.enable_compression = enabled;
+    }
+
+    pub fn set_max_age(&mut self, secs: u64) {
+        self.max_archive_age_secs = secs;
+    }
+
+    pub fn set_max_size(&mut self, bytes: u64) {
+        self.max_archive_size_bytes = bytes;
     }
 }
 
@@ -1137,106 +1246,58 @@ mod tests {
     }
 
     #[test]
-    fn test_checkpoint_metadata_serialization() {
-        let metadata = CheckpointMetadata::new(
+    fn test_wal_archive_metadata_serialization() {
+        let metadata = WalArchiveMetadata::new(
             1,
-            100,
-            vec!["table1".to_string(), "table2".to_string()],
+            "test.wal".to_string(),
+            "archive_1_test.wal".to_string(),
             true,
-            Some(50),
+            1000,
+            500,
+            100,
         );
 
         let bytes = metadata.to_bytes();
-        let restored = CheckpointMetadata::from_bytes(&bytes).unwrap();
+        let restored = WalArchiveMetadata::from_bytes(&bytes).unwrap();
 
-        assert_eq!(metadata.checkpoint_id, restored.checkpoint_id);
-        assert_eq!(metadata.lsn, restored.lsn);
-        assert_eq!(metadata.tables, restored.tables);
-        assert_eq!(metadata.incremental, restored.incremental);
-        assert_eq!(
-            metadata.previous_checkpoint_lsn,
-            restored.previous_checkpoint_lsn
-        );
+        assert_eq!(metadata.archive_id, restored.archive_id);
+        assert_eq!(metadata.compressed, restored.compressed);
+        assert_eq!(metadata.compression_ratio(), 0.5);
     }
 
     #[test]
-    fn test_checkpoint_manager_basic() {
+    fn test_wal_archive_manager_creation() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("test.wal");
-        let checkpoint_dir = dir.path().join("checkpoints");
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
 
-        let wal_mgr = WalManager::new(wal_path.clone());
-        let _ = wal_mgr.log_begin(1).unwrap();
+        let _manager = WalArchiveManager::new(wal_dir.clone(), archive_dir.clone()).unwrap();
 
-        let mut manager = CheckpointManager::new(wal_path, checkpoint_dir, 100).unwrap();
-
-        let metadata = manager
-            .create_checkpoint(vec!["test_table".to_string()])
-            .unwrap();
-
-        assert_eq!(metadata.checkpoint_id, 1);
+        assert!(wal_dir.exists());
+        assert!(archive_dir.exists());
     }
 
     #[test]
-    fn test_checkpoint_manager_incremental() {
+    fn test_wal_archive_list_archives() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("test2.wal");
-        let checkpoint_dir = dir.path().join("checkpoints2");
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
 
-        let wal_mgr = WalManager::new(wal_path.clone());
-        let _ = wal_mgr.log_begin(1).unwrap();
+        let manager = WalArchiveManager::new(wal_dir.clone(), archive_dir.clone()).unwrap();
 
-        let mut manager =
-            CheckpointManager::new(wal_path.clone(), checkpoint_dir.clone(), 100).unwrap();
-
-        let _ = manager
-            .create_checkpoint(vec!["table1".to_string()])
-            .unwrap();
-
-        let wal_mgr2 = WalManager::new(wal_path);
-        let _ = wal_mgr2.log_insert(1, 1, vec![1], vec![10]).unwrap();
-
-        let metadata2 = manager
-            .create_checkpoint(vec!["table1".to_string()])
-            .unwrap();
-
-        assert_eq!(metadata2.checkpoint_id, 2);
+        let archives = manager.list_archives().unwrap();
+        assert!(archives.is_empty());
     }
 
     #[test]
-    fn test_checkpoint_manager_auto_checkpoint() {
+    fn test_wal_archive_cleanup() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("test3.wal");
-        let checkpoint_dir = dir.path().join("checkpoints3");
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
 
-        {
-            let wal_mgr = WalManager::new(wal_path.clone());
-            let _ = wal_mgr.log_begin(1).unwrap();
-            for i in 0..150 {
-                let _ = wal_mgr.log_insert(1, 1, vec![i as u8], vec![10]).unwrap();
-            }
-        }
+        let manager = WalArchiveManager::new(wal_dir, archive_dir).unwrap();
 
-        let mut manager =
-            CheckpointManager::new(wal_path.clone(), checkpoint_dir.clone(), 100).unwrap();
-        manager.enable_auto_checkpoint();
-
-        let result = manager.should_checkpoint();
-        assert!(result || !result);
-    }
-
-    #[test]
-    fn test_checkpoint_recovery() {
-        let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("test4.wal");
-        let checkpoint_dir = dir.path().join("checkpoints4");
-
-        let wal_mgr = WalManager::new(wal_path.clone());
-        let _ = wal_mgr.log_begin(1).unwrap();
-        let _ = wal_mgr.log_insert(1, 1, vec![1], vec![10]).unwrap();
-        let _ = wal_mgr.log_commit(1).unwrap();
-
-        let wal2 = WalManager::new(wal_path.clone());
-        let _ = wal2.recover().unwrap();
+        let deleted = manager.cleanup_old_archives(10).unwrap();
+        assert_eq!(deleted, 0);
     }
 }
