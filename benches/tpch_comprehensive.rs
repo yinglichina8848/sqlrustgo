@@ -12,14 +12,14 @@ pub enum ScaleFactor {
 }
 
 impl ScaleFactor {
-    pub fn to_f64(&self) -> f64 {
+    pub fn as_f64(&self) -> f64 {
         match self {
             ScaleFactor::SF01 => 0.1,
             ScaleFactor::SF1 => 1.0,
         }
     }
 
-    pub fn to_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             ScaleFactor::SF01 => "0.1",
             ScaleFactor::SF1 => "1",
@@ -37,7 +37,7 @@ pub enum TestScenario {
 }
 
 impl TestScenario {
-    pub fn to_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             TestScenario::SingleThread => "single_thread",
             TestScenario::MultiThread => "multi_thread",
@@ -99,8 +99,8 @@ impl TpchBenchmark {
 
         let queries = self.get_tpch_queries();
 
-        let sqlite_times = self.run_sqlite_benchmark(&queries);
-        let total_sqlite_ms: f64 = sqlite_times.iter().sum();
+        let sqlite_ms = self.run_sqlite_benchmark(&queries);
+        let avg_sqlite_per_query = sqlite_ms / queries.len() as f64;
 
         let (results, cache_hit_count) = match self.scenario {
             TestScenario::SingleThread => {
@@ -122,8 +122,8 @@ impl TpchBenchmark {
         };
 
         let mut results = results;
-        for (r, sqlite_ms) in results.iter_mut().zip(sqlite_times.iter()) {
-            r.sqlite_ms = Some(*sqlite_ms);
+        for r in &mut results {
+            r.sqlite_ms = Some(avg_sqlite_per_query);
         }
 
         let total_sqlrustgo_ms: f64 = results.iter().map(|r| r.sqlrustgo_ms).sum();
@@ -139,14 +139,14 @@ impl TpchBenchmark {
         BenchmarkResult {
             metadata: BenchmarkMetadata {
                 date: chrono_lite_now(),
-                scale_factor: self.scale_factor.to_str().to_string(),
-                scenario: self.scenario.to_str().to_string(),
+                scale_factor: self.scale_factor.as_str().to_string(),
+                scenario: self.scenario.as_str().to_string(),
                 threads: self.threads,
             },
             results,
             summary: BenchmarkSummary {
                 total_sqlrustgo_ms,
-                total_sqlite_ms: Some(total_sqlite_ms),
+                total_sqlite_ms: Some(sqlite_ms),
                 cache_hit_rate,
                 qps,
             },
@@ -185,18 +185,22 @@ impl TpchBenchmark {
     }
 
     fn run_multi_thread(&self, queries: &[(&str, &str)]) -> (Vec<QueryResult>, usize) {
+        let mut storage = sqlrustgo::MemoryStorage::new();
+        self.generate_data(&mut storage);
+        let engine = Arc::new(std::sync::Mutex::new(ExecutionEngine::new(Arc::new(
+            storage,
+        ))));
+
         let mut results = Vec::new();
 
         std::thread::scope(|s| {
             let handles: Vec<_> = queries
                 .iter()
                 .map(|(name, sql)| {
+                    let engine = engine.clone();
                     s.spawn(move || {
-                        let mut storage = sqlrustgo::MemoryStorage::new();
-                        generate_test_data(&mut storage, 150000, 600000);
-                        let mut engine = ExecutionEngine::new(Arc::new(storage));
                         let start = Instant::now();
-                        let _ = engine.execute(parse(sql).unwrap());
+                        let _ = engine.lock().unwrap().execute(parse(sql).unwrap());
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                         (name.to_string(), elapsed)
                     })
@@ -219,31 +223,27 @@ impl TpchBenchmark {
         (results, 0)
     }
 
-    fn run_sqlite_benchmark(&self, queries: &[(&str, &str)]) -> Vec<f64> {
+    fn run_sqlite_benchmark(&self, queries: &[(&str, &str)]) -> f64 {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
 
-        conn.execute_batch(
-            "PRAGMA synchronous = OFF; PRAGMA journal_mode = MEMORY; PRAGMA cache_size = 10000;",
-        )
-        .ok();
+        conn.execute("CREATE TABLE lineitem AS SELECT * FROM (VALUES ", [])
+            .ok();
 
-        let orders_rows = (150000.0 * self.scale_factor.to_f64()) as usize;
-        let lineitem_rows = (600000.0 * self.scale_factor.to_f64()) as usize;
+        let orders_rows = (1500000.0 * self.scale_factor.as_f64()) as usize;
+        let lineitem_rows = (6000000.0 * self.scale_factor.as_f64()) as usize;
 
         conn.execute(
-            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice REAL, l_discount REAL, l_tax REAL, l_returnflag TEXT, l_linestatus TEXT, l_shipdate INTEGER)",
+            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice INTEGER, l_discount INTEGER, l_tax INTEGER, l_returnflag TEXT, l_shipmode TEXT)",
             [],
-        ).unwrap();
+        ).ok();
 
         conn.execute(
-            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice REAL, o_orderdate INTEGER)",
+            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice INTEGER, o_orderdate INTEGER)",
             [],
-        ).unwrap();
-
-        conn.execute("BEGIN TRANSACTION", []).ok();
+        ).ok();
 
         let mut stmt = conn
-            .prepare("INSERT INTO lineitem VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
+            .prepare("INSERT INTO lineitem VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
             .unwrap();
         for i in 0..lineitem_rows {
             stmt.execute(rusqlite::params![
@@ -251,18 +251,15 @@ impl TpchBenchmark {
                 i as i64 + 1,
                 (i % 100) as i64 + 1,
                 (i % 50) as i64 + 1,
-                ((i % 10000) + 100) as f64,
-                (i % 10) as f64 * 0.1,
-                (i % 8) as f64 * 0.08,
-                if i % 3 == 0 { "R" } else { "A" },
-                if i % 2 == 0 { "O" } else { "F" },
-                87600 + (i % 2000) as i64
+                (i % 10000) as i64 + 1,
+                (i % 10) as i64,
+                (i % 8) as i64,
+                "N",
+                "SHIP"
             ])
             .ok();
         }
-        conn.execute("COMMIT", []).ok();
 
-        conn.execute("BEGIN TRANSACTION", []).ok();
         let mut stmt = conn
             .prepare("INSERT INTO orders VALUES (?1, ?2, ?3, ?4, ?5)")
             .unwrap();
@@ -271,20 +268,19 @@ impl TpchBenchmark {
                 i as i64 + 1,
                 (i % 100) as i64 + 1,
                 "O",
-                ((i + 1) * 100) as f64,
+                ((i + 1) * 100) as i64,
                 87600 + (i % 2000) as i64
             ])
             .ok();
         }
-        conn.execute("COMMIT", []).ok();
 
-        let mut query_times = Vec::new();
+        let mut total_ms = 0.0;
         for (_, sql) in queries {
             let start = Instant::now();
             let _ = conn.query_row(sql, [], |_| Ok(()));
-            query_times.push(start.elapsed().as_secs_f64() * 1000.0);
+            total_ms += start.elapsed().as_secs_f64() * 1000.0;
         }
-        query_times
+        total_ms
     }
 
     fn generate_data(&self, storage: &mut sqlrustgo::MemoryStorage) {
@@ -374,7 +370,7 @@ impl TpchBenchmark {
             })
             .ok();
 
-        let sf = self.scale_factor.to_f64();
+        let sf = self.scale_factor.as_f64();
         let orders_rows = (1500000.0 * sf) as usize;
         let lineitem_rows = (6000000.0 * sf) as usize;
 
@@ -495,7 +491,7 @@ pub fn run_all_scenarios(sf: ScaleFactor) {
         .map(|p| p.get())
         .unwrap_or(4);
 
-    println!("\nRunning all TPC-H scenarios with SF={}", sf.to_str());
+    println!("\nRunning all TPC-H scenarios with SF={}", sf.as_str());
     println!("CPU cores: {}", threads_count);
 
     for scenario in scenarios {
@@ -524,7 +520,7 @@ pub fn run_sf_comparison() {
 
         println!(
             "\nSF={}: Total={:.2}ms, QPS={:.2}",
-            sf.to_str(),
+            sf.as_str(),
             result.summary.total_sqlrustgo_ms,
             result.summary.qps
         );
@@ -540,164 +536,24 @@ pub fn generate_json_report(filename: &str, sf: ScaleFactor) {
     println!("\nJSON report saved to: {}", filename);
 }
 
-fn generate_test_data(
-    storage: &mut sqlrustgo::MemoryStorage,
-    orders_rows: usize,
-    lineitem_rows: usize,
-) {
-    storage
-        .create_table(&sqlrustgo_storage::TableInfo {
-            name: "lineitem".to_string(),
-            columns: vec![
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_orderkey".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_partkey".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_suppkey".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_quantity".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_extendedprice".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_discount".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_tax".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_returnflag".to_string(),
-                    data_type: "TEXT".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_linestatus".to_string(),
-                    data_type: "TEXT".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "l_shipdate".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-            ],
-        })
-        .ok();
-
-    storage
-        .create_table(&sqlrustgo_storage::TableInfo {
-            name: "orders".to_string(),
-            columns: vec![
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "o_orderkey".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "o_custkey".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "o_orderstatus".to_string(),
-                    data_type: "TEXT".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "o_totalprice".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-                sqlrustgo_storage::ColumnDefinition {
-                    name: "o_orderdate".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: true,
-                },
-            ],
-        })
-        .ok();
-
-    for i in 0..lineitem_rows {
-        storage
-            .insert(
-                "lineitem",
-                vec![vec![
-                    sqlrustgo_types::Value::Integer(((i % 1000) + 1) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 2000) + 1) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 100) + 1) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 50) + 1) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 10000) + 100) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 10) * 10) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 8) * 10) as i64),
-                    sqlrustgo_types::Value::Text(if i % 3 == 0 {
-                        "R".to_string()
-                    } else {
-                        "A".to_string()
-                    }),
-                    sqlrustgo_types::Value::Text(if i % 2 == 0 {
-                        "O".to_string()
-                    } else {
-                        "F".to_string()
-                    }),
-                    sqlrustgo_types::Value::Integer(87600 + (i % 2000) as i64),
-                ]],
-            )
-            .ok();
-    }
-
-    for i in 0..orders_rows {
-        storage
-            .insert(
-                "orders",
-                vec![vec![
-                    sqlrustgo_types::Value::Integer((i + 1) as i64),
-                    sqlrustgo_types::Value::Integer(((i % 100) + 1) as i64),
-                    sqlrustgo_types::Value::Text("O".to_string()),
-                    sqlrustgo_types::Value::Integer(((i + 1) * 100) as i64),
-                    sqlrustgo_types::Value::Integer(87600 + (i % 2000) as i64),
-                ]],
-            )
-            .ok();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_scale_factor_conversion() {
-        assert_eq!(ScaleFactor::SF01.to_f64(), 0.1);
-        assert_eq!(ScaleFactor::SF1.to_f64(), 1.0);
-        assert_eq!(ScaleFactor::SF01.to_str(), "0.1");
-        assert_eq!(ScaleFactor::SF1.to_str(), "1");
+        assert_eq!(ScaleFactor::SF01.as_f64(), 0.1);
+        assert_eq!(ScaleFactor::SF1.as_f64(), 1.0);
+        assert_eq!(ScaleFactor::SF01.as_str(), "0.1");
+        assert_eq!(ScaleFactor::SF1.as_str(), "1");
     }
 
     #[test]
     fn test_scenario_conversion() {
-        assert_eq!(TestScenario::SingleThread.to_str(), "single_thread");
-        assert_eq!(TestScenario::MultiThread.to_str(), "multi_thread");
-        assert_eq!(TestScenario::CacheHit.to_str(), "cache_hit");
-        assert_eq!(TestScenario::CacheMiss.to_str(), "cache_miss");
+        assert_eq!(TestScenario::SingleThread.as_str(), "single_thread");
+        assert_eq!(TestScenario::MultiThread.as_str(), "multi_thread");
+        assert_eq!(TestScenario::CacheHit.as_str(), "cache_hit");
+        assert_eq!(TestScenario::CacheMiss.as_str(), "cache_miss");
     }
 
     #[test]
