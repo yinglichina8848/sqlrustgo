@@ -3166,4 +3166,123 @@ mod tests {
         let rows = result.unwrap();
         assert!(rows.is_empty());
     }
+
+    #[test]
+    fn test_seq_scan_exec_table_name() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let scan = SeqScanExec::new("my_table".to_string(), schema);
+
+        assert_eq!(scan.table_name(), "my_table");
+    }
+
+    #[test]
+    fn test_projection_exec_expr() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let expr = vec![Expr::column("id")];
+        let proj = ProjectionExec::new(input, expr.clone(), schema);
+
+        assert_eq!(proj.expr(), &expr);
+    }
+
+    #[test]
+    fn test_filter_exec_predicate() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let predicate = Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::Gt,
+            Expr::literal(Value::Integer(10)),
+        );
+        let filter = FilterExec::new(input, predicate.clone());
+
+        assert_eq!(filter.predicate(), &predicate);
+    }
+
+    #[test]
+    fn test_aggregate_exec_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let group_expr = vec![Expr::column("id")];
+        let agg_expr = vec![];
+        let agg = AggregateExec::new(input, group_expr.clone(), agg_expr, schema.clone());
+
+        assert_eq!(agg.group_expr(), &group_expr);
+    }
+
+    #[test]
+    fn test_hash_join_exec_methods() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema.clone()));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema.clone()));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let join = HashJoinExec::new(
+            left,
+            right,
+            crate::JoinType::Inner,
+            None,
+            join_schema.clone(),
+        );
+
+        assert_eq!(join.join_type(), crate::JoinType::Inner);
+    }
+
+    #[test]
+    fn test_sort_exec_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_expr.clone());
+
+        assert_eq!(sort.sort_expr(), &sort_expr);
+    }
+
+    #[test]
+    fn test_limit_exec_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let limit = LimitExec::new(input, 100, Some(10));
+
+        assert_eq!(limit.limit(), 100);
+        assert_eq!(limit.offset(), Some(10));
+    }
+
+    #[test]
+    fn test_sort_merge_join_exec_methods() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema.clone()));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema.clone()));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("id".to_string(), DataType::Integer),
+        ]);
+        let left_keys = vec![Expr::column("id")];
+        let right_keys = vec![Expr::column("id")];
+        let smj = SortMergeJoinExec::new(
+            left,
+            right,
+            crate::JoinType::Left,
+            None,
+            left_keys.clone(),
+            right_keys.clone(),
+            join_schema,
+        );
+
+        assert_eq!(smj.join_type(), crate::JoinType::Left);
+        assert_eq!(smj.left_keys(), &left_keys);
+        assert_eq!(smj.right_keys(), &right_keys);
+    }
 }
