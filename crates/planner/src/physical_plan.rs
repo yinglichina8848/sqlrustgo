@@ -3276,8 +3276,6 @@ mod tests {
             right,
             crate::JoinType::Left,
             None,
-            left_keys.clone(),
-            right_keys.clone(),
             join_schema,
         );
 

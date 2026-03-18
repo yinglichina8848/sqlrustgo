@@ -361,4 +361,76 @@ mod tests {
         let rows = heap.scan().unwrap();
         assert_eq!(rows.len(), 3);
     }
+
+    #[test]
+    fn test_heap_row_id() {
+        let row_id = RowId::new(1, 5);
+        assert_eq!(row_id.page_id, 1);
+        assert_eq!(row_id.slot, 5);
+    }
+
+    #[test]
+    fn test_heap_row_id_eq() {
+        let row_id1 = RowId::new(1, 5);
+        let row_id2 = RowId::new(1, 5);
+        let row_id3 = RowId::new(1, 6);
+
+        assert_eq!(row_id1, row_id2);
+        assert_ne!(row_id1, row_id3);
+    }
+
+    #[test]
+    fn test_heap_meta() {
+        let meta = HeapMeta::new(1, "test_table".to_string());
+        assert_eq!(meta.table_id, 1);
+        assert_eq!(meta.name, "test_table");
+        assert_eq!(meta.row_count, 0);
+        assert_eq!(meta.page_count, 0);
+    }
+
+    #[test]
+    fn test_heap_large_row() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert a larger row (1KB)
+        let large_data = vec![0u8; 1024];
+        let row_id = heap.insert(&large_data).unwrap();
+
+        let retrieved = heap.get(row_id).unwrap().unwrap();
+        assert_eq!(retrieved.len(), 1024);
+    }
+
+    #[test]
+    fn test_heap_multiple_pages() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert many rows to trigger multiple pages
+        // Each row is about 100 bytes, page size is 8KB
+        for i in 0..100 {
+            let data = vec![i as u8; 100];
+            heap.insert(&data).unwrap();
+        }
+
+        assert!(heap.page_count() > 1);
+        assert_eq!(heap.row_count(), 100);
+    }
+
+    #[test]
+    fn test_heap_insert_single_row() {
+        let dir = tempdir().unwrap();
+        let heap_path = dir.path().join("test_heap.dat");
+
+        let mut heap = HeapStorage::new(heap_path, 1, "test".to_string()).unwrap();
+
+        // Insert a single row
+        let row_id = heap.insert(&vec![1, 2, 3]).unwrap();
+        let retrieved = heap.get(row_id).unwrap();
+        assert!(retrieved.is_some());
+    }
 }
