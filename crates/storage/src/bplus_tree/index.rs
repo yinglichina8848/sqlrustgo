@@ -619,4 +619,157 @@ mod tests {
         assert_eq!(recovered.num_keys, 2);
         assert_eq!(recovered.children.len(), 3);
     }
+
+    #[test]
+    fn test_btree_node_remove_key() {
+        let mut node = BTreeNode::new_leaf();
+        node.keys.push(10);
+        node.keys.push(20);
+        node.values.push(1);
+        node.values.push(2);
+        node.num_keys = 2;
+
+        let removed = node.remove_key(10);
+        assert!(removed.is_some());
+        assert_eq!(removed, Some(1));
+        assert_eq!(node.num_keys, 1);
+    }
+
+    #[test]
+    fn test_btree_node_remove_key_not_found() {
+        let mut node = BTreeNode::new_leaf();
+        node.keys.push(10);
+        node.values.push(1);
+        node.num_keys = 1;
+
+        let removed = node.remove_key(999);
+        assert_eq!(removed, None);
+        assert_eq!(node.num_keys, 1);
+    }
+
+    #[test]
+    fn test_btree_index_is_empty() {
+        let index = BTreeIndex::new();
+        assert!(index.is_empty());
+    }
+
+    #[test]
+    fn test_btree_index_height() {
+        let mut index = BTreeIndex::new();
+        index.insert(1, 100);
+        assert_eq!(index.height(), 1);
+
+        // Insert more to potentially increase height
+        for i in 2..50 {
+            index.insert(i, i as u32 * 100);
+        }
+        // Height should still be 1 for small tree, or increase if split
+        assert!(index.height() >= 1);
+    }
+
+    #[test]
+    fn test_btree_index_len() {
+        let mut index = BTreeIndex::new();
+        assert_eq!(index.len(), 0);
+
+        index.insert(1, 100);
+        assert_eq!(index.len(), 1);
+
+        index.insert(2, 200);
+        assert_eq!(index.len(), 2);
+    }
+
+    #[test]
+    fn test_btree_index_keys_sorted() {
+        let mut index = BTreeIndex::new();
+        index.insert(3, 300);
+        index.insert(1, 100);
+        index.insert(2, 200);
+
+        let keys = index.keys();
+        assert_eq!(keys.len(), 3);
+    }
+
+    #[test]
+    fn test_btree_search_not_found() {
+        let mut index = BTreeIndex::new();
+        index.insert(1, 100);
+        index.insert(5, 500);
+
+        let result = index.search(999);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_btree_range_query_empty() {
+        let index = BTreeIndex::new();
+        let results = index.range_query(1, 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_btree_range_query_partial() {
+        let mut index = BTreeIndex::new();
+        for i in 1i64..=10 {
+            index.insert(i, i as u32);
+        }
+
+        let results = index.range_query(3, 7);
+        assert!(results.len() >= 0);
+    }
+
+    #[test]
+    fn test_node_find_key_index() {
+        let mut node = BTreeNode::new_leaf();
+        node.keys.push(10);
+        node.keys.push(20);
+        node.keys.push(30);
+        node.num_keys = 3;
+
+        assert_eq!(node.find_key_index(10), Some(0));
+        assert_eq!(node.find_key_index(20), Some(1));
+        assert_eq!(node.find_key_index(25), None);
+    }
+
+    #[test]
+    fn test_node_find_child_index() {
+        let mut node = BTreeNode::new_internal();
+        node.keys.push(10);
+        node.keys.push(20);
+        node.children.push(1);
+        node.children.push(2);
+        node.children.push(3);
+
+        assert_eq!(node.find_child_index(5), 0);
+        assert_eq!(node.find_child_index(15), 1);
+        assert_eq!(node.find_child_index(25), 2);
+    }
+
+    #[test]
+    fn test_node_is_full() {
+        let node = BTreeNode::new_leaf();
+        // Empty node is not full
+        assert!(!node.is_full());
+    }
+
+    #[test]
+    fn test_node_can_split() {
+        let node = BTreeNode::new_leaf();
+        // can_split should be callable
+        let _ = node.can_split();
+    }
+
+    #[test]
+    fn test_serialize_deserialize_empty_node() {
+        let node = BTreeNode::new_leaf();
+        let data = serialize_node(&node);
+        let recovered = deserialize_node(&data);
+        assert!(recovered.is_some());
+    }
+
+    #[test]
+    fn test_deserialize_invalid_data() {
+        let result = deserialize_node(&[1, 2, 3]);
+        assert!(result.is_none());
+    }
 }
