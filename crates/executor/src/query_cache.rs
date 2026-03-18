@@ -69,7 +69,7 @@ impl QueryCache {
         for table in &tables {
             self.table_index
                 .entry(table.clone())
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(key.clone());
         }
     }
