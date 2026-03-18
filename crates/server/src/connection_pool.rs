@@ -1,5 +1,5 @@
 use crossbeam_channel::{bounded, Receiver, Sender};
-use sqlrustgo_common::connection_pool::PoolConfig;
+pub use sqlrustgo_common::connection_pool::PoolConfig;
 use sqlrustgo_executor::LocalExecutor;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::Arc;
