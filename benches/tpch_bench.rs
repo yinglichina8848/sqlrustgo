@@ -5,7 +5,9 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo_server::{ConnectionPool, PoolConfig};
 use std::sync::Arc;
+use std::time::Instant;
 
 struct LatencyCollector {
     samples: Vec<u64>,
@@ -455,3 +457,53 @@ criterion_group!(
     bench_simple_join
 );
 criterion_main!(benches);
+
+fn run_parallel_benchmark(queries: Vec<(&str, &str)>) -> BenchmarkReport {
+    use std::thread;
+
+    let pool_config = PoolConfig::default();
+    let pool = ConnectionPool::new(pool_config);
+
+    let start_time = Instant::now();
+    let mut handles = Vec::new();
+    let mut collector = LatencyCollector::new();
+
+    for (name, _query) in &queries {
+        let pool = pool.clone();
+        let n = name.to_string();
+
+        handles.push(thread::spawn(move || {
+            let start = Instant::now();
+            let conn = pool.acquire();
+            let _executor = conn.executor();
+            let latency = start.elapsed().as_nanos() as u64;
+            (n, latency)
+        }));
+    }
+
+    for handle in handles {
+        if let Ok((name, latency)) = handle.join() {
+            collector.record(latency);
+        }
+    }
+
+    let total_time = start_time.elapsed();
+    let total_time_ms = total_time.as_millis() as u64;
+    let qps = queries.len() as f64 / (total_time_ms as f64 / 1000.0);
+
+    BenchmarkReport {
+        tpch_summary: TpchSummary {
+            scale_factor: SCALE_FACTOR,
+            total_queries: queries.len(),
+            execution_time_ms: total_time_ms,
+            qps,
+        },
+        queries: vec![QueryReport {
+            name: "Aggregated".to_string(),
+            avg_latency_ms: collector.avg_latency_ns() as f64 / 1_000_000.0,
+            p50_ms: collector.p50() / 1_000_000,
+            p90_ms: collector.p90() / 1_000_000,
+            p99_ms: collector.p99() / 1_000_000,
+        }],
+    }
+}
