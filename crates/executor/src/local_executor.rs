@@ -1427,9 +1427,9 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::Column(Column::new("user_id".to_string()))],
-            vec![Expr::Column(Column::new("user_id".to_string()))],
             output_schema,
+            vec![Expr::Column(Column::new("user_id".to_string()))],
+            vec![Expr::Column(Column::new("user_id".to_string()))],
         );
 
         let result = executor.execute(&sort_merge_join).unwrap();
@@ -1491,9 +1491,9 @@ mod tests {
             Box::new(right_scan),
             JoinType::Left,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
+            vec![Expr::column("id")],
+            vec![Expr::column("id")],
         );
 
         let result = executor.execute(&sort_merge_join);
@@ -1535,9 +1535,9 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
+            vec![Expr::column("id")],
+            vec![Expr::column("id")],
         );
 
         let result = executor.execute(&sort_merge_join);
