@@ -1384,9 +1384,12 @@ mod tests {
 
         let stats = index.usage_stats();
 
-        let stats = index.usage_stats();
-
         assert_eq!(stats.num_entries, 2);
+    }
+
+    #[test]
+    fn test_composite_btree_index_insert() {
+        let mut index = CompositeBTreeIndex::new(2);
     }
 
     // Full-text search index tests
@@ -1567,5 +1570,69 @@ mod tests {
         assert!(!results.contains(&2));
         assert!(results.contains(&3));
         assert!(!results.contains(&4));
+    }
+
+    #[test]
+    fn test_composite_key_creation() {
+        let key = CompositeKey::new(vec![1, 2, 3]);
+        assert_eq!(key.columns.len(), 3);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_empty() {
+        let stats = IndexStats::default();
+        assert_eq!(stats.selectivity(), 1.0);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 50;
+        assert_eq!(stats.selectivity(), 0.5);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_clamped() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 150; // More unique than entries
+        assert_eq!(stats.selectivity(), 1.0); // Should clamp to 1.0
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats_empty() {
+        let index = BTreeIndex::new();
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 0);
+        assert_eq!(stats.height, 0);
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats() {
+        let mut index = BTreeIndex::new();
+
+        // Insert some entries
+        for i in 1..=10 {
+            index.insert(i, i as u32);
+        }
+
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 10);
+        assert!(stats.height >= 1);
+        assert!(stats.total_nodes >= 1);
+    }
+
+    #[test]
+    fn test_btree_index_usage_stats() {
+        let mut index = BTreeIndex::new();
+        index.insert(1, 100);
+        index.insert(2, 200);
+
+        let stats = index.usage_stats();
+
+        assert_eq!(stats.num_entries, 2);
     }
 }
