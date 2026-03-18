@@ -134,13 +134,19 @@ impl DefaultPlanner {
                 let schema = Schema::new(vec![]);
 
                 match join_algorithm.as_str() {
-                    "sort_merge" => Ok(Box::new(SortMergeJoinExec::new(
-                        left_plan,
-                        right_plan,
-                        join_type.clone(),
-                        condition.clone(),
-                        schema,
-                    ))),
+                    "sort_merge" => {
+                        let left_keys = extract_join_keys(condition.as_ref(), true);
+                        let right_keys = extract_join_keys(condition.as_ref(), false);
+                        Ok(Box::new(SortMergeJoinExec::new(
+                            left_plan,
+                            right_plan,
+                            join_type.clone(),
+                            condition.clone(),
+                            schema,
+                            left_keys,
+                            right_keys,
+                        )))
+                    }
                     _ => Ok(Box::new(HashJoinExec::new(
                         left_plan,
                         right_plan,
@@ -676,4 +682,17 @@ fn should_use_index(_table_name: &str) -> bool {
     // Disabled for now - IndexScan not fully implemented
     // Will re-enable after proper implementation
     false
+}
+
+fn extract_join_keys(condition: Option<&Expr>, left_side: bool) -> Vec<Expr> {
+    match condition {
+        Some(Expr::BinaryExpr { left, right, .. }) => {
+            if left_side {
+                vec![(**left).clone()]
+            } else {
+                vec![(**right).clone()]
+            }
+        }
+        _ => vec![],
+    }
 }
