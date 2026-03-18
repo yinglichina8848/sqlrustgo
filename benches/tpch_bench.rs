@@ -52,6 +52,48 @@ impl LatencyCollector {
     }
 }
 
+struct QueryReport {
+    name: String,
+    avg_latency_ms: f64,
+    p50_ms: u64,
+    p90_ms: u64,
+    p99_ms: u64,
+}
+
+struct TpchSummary {
+    scale_factor: f64,
+    total_queries: usize,
+    execution_time_ms: u64,
+    qps: f64,
+}
+
+struct BenchmarkReport {
+    tpch_summary: TpchSummary,
+    queries: Vec<QueryReport>,
+}
+
+impl BenchmarkReport {
+    fn print(&self) {
+        println!("=== TPC-H Benchmark Report ===");
+        println!("Scale Factor: {}", self.tpch_summary.scale_factor);
+        println!("Total Queries: {}", self.tpch_summary.total_queries);
+        println!("Total Time: {} ms", self.tpch_summary.execution_time_ms);
+        println!("QPS: {:.2}", self.tpch_summary.qps);
+        println!();
+        println!(
+            "{:<10} {:>15} {:>15} {:>15} {:>15}",
+            "Query", "Avg(ms)", "P50(ms)", "P90(ms)", "P99(ms)"
+        );
+        println!("{}", "-".repeat(75));
+        for q in &self.queries {
+            println!(
+                "{:<10} {:>15.2} {:>15} {:>15} {:>15}",
+                q.name, q.avg_latency_ms, q.p50_ms, q.p90_ms, q.p99_ms
+            );
+        }
+    }
+}
+
 const SCALE_FACTOR: f64 = 0.1;
 
 struct TpchDataGenerator {
