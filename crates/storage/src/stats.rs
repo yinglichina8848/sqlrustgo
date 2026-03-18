@@ -173,7 +173,13 @@ impl StatsManager {
     }
 
     /// Update column statistics
-    pub fn update_column_stats(&mut self, table_name: &str, column_name: &str, value: Option<&[u8]>, size: usize) {
+    pub fn update_column_stats(
+        &mut self,
+        table_name: &str,
+        column_name: &str,
+        value: Option<&[u8]>,
+        size: usize,
+    ) {
         let table_stats = self.get_or_create_table(table_name);
         let col_stats = table_stats
             .column_stats
