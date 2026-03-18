@@ -661,24 +661,9 @@ fn select_join_algorithm(
     right_rows: u64,
     join_type: &crate::JoinType,
 ) -> String {
-    // Simple heuristic-based join algorithm selection
-    // Use HashJoin for Cross joins
-    if matches!(join_type, crate::JoinType::Cross) {
-        return "hash_join".to_string();
-    }
-
-    // For small datasets, prefer sort_merge (faster for sorted data)
-    if left_rows < 5000 && right_rows < 5000 {
-        return "sort_merge".to_string();
-    }
-
-    // For large datasets, prefer hash_join
-    if left_rows > 50000 || right_rows > 50000 {
-        return "hash_join".to_string();
-    }
-
-    // Default: use sort_merge for medium datasets
-    "sort_merge".to_string()
+    // Use HashJoin by default for stability
+    // TODO: Re-enable SortMergeJoin after more testing
+    "hash_join".to_string()
 }
 
 fn estimate_output_rows(plan: &dyn PhysicalPlan) -> Option<u64> {
@@ -688,11 +673,7 @@ fn estimate_output_rows(plan: &dyn PhysicalPlan) -> Option<u64> {
 }
 
 fn should_use_index(table_name: &str) -> bool {
-    // Simple heuristic: use index for specific tables
-    // In a full implementation, this would check:
-    // - Statistics (table size, column cardinality)
-    // - Index availability
-    // - Query predicate selectivity
-    let index_tables = ["users", "orders", "products", "accounts"];
-    index_tables.contains(&table_name)
+    // Disabled for now - IndexScan not fully implemented
+    // Will re-enable after proper implementation
+    false
 }
