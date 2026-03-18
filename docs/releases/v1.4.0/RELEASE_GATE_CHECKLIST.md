@@ -2,7 +2,7 @@
 
 > **版本**: v1.4.0
 > **制定日期**: 2026-03-15
-> **当前阶段**: 🚀 **RC (Release Candidate)** - 发布候选
+> **当前阶段**: 🚀 **GA (General Availability)** - 正式发布
 > **发布类型**: CBO + SortMergeJoin
 > **目标成熟度**: L3 (Mini DBMS)
 
