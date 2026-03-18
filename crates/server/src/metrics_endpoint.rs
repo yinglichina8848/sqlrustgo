@@ -65,7 +65,11 @@ impl MetricsRegistry {
                                 let mut result = String::new();
                                 for (i, count) in buckets.iter().enumerate() {
                                     use std::fmt::Write;
-                                    let _ = writeln!(result, "sqlrustgo_{}{{bucket=\"{}\"}} {}", name, i, count);
+                                    let _ = writeln!(
+                                        result,
+                                        "sqlrustgo_{}{{bucket=\"{}\"}} {}",
+                                        name, i, count
+                                    );
                                 }
                                 result
                             }
@@ -90,17 +94,14 @@ impl MetricsRegistry {
 pub async fn metrics_handler(data: web::Data<Arc<RwLock<MetricsRegistry>>>) -> impl Responder {
     let registry = data.read().unwrap();
     let output = registry.to_prometheus_format();
-    
+
     HttpResponse::Ok()
         .content_type("text/plain; version=0.0.4; charset=utf-8")
         .body(output)
 }
 
 pub fn configure_metrics_scope(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("/metrics")
-            .route(web::get().to(metrics_handler))
-    );
+    cfg.service(web::resource("/metrics").route(web::get().to(metrics_handler)));
 }
 
 impl Default for MetricsRegistry {
@@ -139,16 +140,16 @@ mod tests {
     fn test_metrics_registry_with_help_text() {
         let mut registry = MetricsRegistry::new();
         registry.register_help("queries".to_string(), "Total number of queries".to_string());
-        
+
         let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
         {
             let mut m = metrics.write().unwrap();
             m.record_query("SELECT", 100);
         }
         registry.register_metrics(metrics);
-        
+
         let output = registry.to_prometheus_format();
-        
+
         assert!(output.contains("# HELP sqlrustgo_queries"));
         assert!(output.contains("Total number of queries"));
     }
@@ -157,10 +158,10 @@ mod tests {
     fn test_metrics_registry_clone() {
         let mut registry = MetricsRegistry::new();
         registry.register_custom_metric("test_metric".to_string(), "1".to_string());
-        
+
         let cloned = registry.clone();
         let output = cloned.to_prometheus_format();
-        
+
         assert!(output.contains("test_metric"));
     }
 
@@ -168,9 +169,9 @@ mod tests {
     fn test_custom_metrics_registration() {
         let mut registry = MetricsRegistry::new();
         registry.register_custom_metric("build_info".to_string(), "version=\"1.4.0\"".to_string());
-        
+
         let output = registry.to_prometheus_format();
-        
+
         assert!(output.contains("build_info"));
         assert!(output.contains("version=\"1.4.0\""));
     }
@@ -185,14 +186,15 @@ mod tests {
 
         let mut registry = MetricsRegistry::new();
         registry.register_metrics(metrics);
-        
+
         let registry = Arc::new(RwLock::new(registry));
-        
+
         let app = actix_web::test::init_service(
             actix_web::App::new()
                 .app_data(web::Data::new(registry))
-                .configure(configure_metrics_scope)
-        ).await;
+                .configure(configure_metrics_scope),
+        )
+        .await;
 
         let req = actix_web::test::TestRequest::get()
             .uri("/metrics")
