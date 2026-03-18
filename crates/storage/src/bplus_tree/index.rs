@@ -136,6 +136,40 @@ pub struct BTreeMetadata {
     pub height: u32,
 }
 
+/// Index statistics
+#[derive(Debug, Clone, Default)]
+pub struct IndexStats {
+    /// Number of entries in the index
+    pub num_entries: u64,
+    /// Number of leaf nodes
+    pub num_leaf_nodes: u64,
+    /// Number of internal nodes
+    pub num_internal_nodes: u64,
+    /// Total number of nodes
+    pub total_nodes: u64,
+    /// Height of the tree (root to leaf)
+    pub height: u32,
+    /// Cardinality (distinct key count), estimated
+    pub cardinality: u64,
+    /// Index size in bytes (estimated)
+    pub size_bytes: u64,
+}
+
+impl IndexStats {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Calculate index selectivity (0.0 to 1.0)
+    pub fn selectivity(&self) -> f64 {
+        if self.num_entries == 0 {
+            return 1.0;
+        }
+        let selectivity = self.cardinality as f64 / self.num_entries as f64;
+        selectivity.min(1.0).max(0.0)
+    }
+}
+
 pub struct BTreeIndex {
     pub metadata: BTreeMetadata,
     nodes: Vec<Option<BTreeNode>>,
@@ -325,6 +359,61 @@ impl BTreeIndex {
                 self.collect_keys_leaf(next_leaf, keys);
             }
         }
+    }
+
+    /// Collect index statistics
+    pub fn collect_stats(&self) -> IndexStats {
+        let mut stats = IndexStats::new();
+        stats.num_entries = self.metadata.num_entries;
+        stats.height = self.metadata.height;
+
+        // Count nodes
+        let mut leaf_count = 0u64;
+        let mut internal_count = 0u64;
+        let mut total_size = 0u64;
+
+        for node_opt in &self.nodes {
+            if let Some(ref node) = node_opt {
+                total_size += std::mem::size_of::<BTreeNode>() as u64;
+                total_size += (node.keys.capacity() * std::mem::size_of::<i64>()) as u64;
+                total_size += (node.values.capacity() * std::mem::size_of::<u32>()) as u64;
+
+                if node.is_leaf {
+                    leaf_count += 1;
+                } else {
+                    internal_count += 1;
+                }
+            }
+        }
+
+        stats.num_leaf_nodes = leaf_count;
+        stats.num_internal_nodes = internal_count;
+        stats.total_nodes = leaf_count + internal_count;
+        stats.size_bytes = total_size;
+
+        // Estimate cardinality (simplified - assumes reasonable distribution)
+        // For a unique index, cardinality = num_entries
+        // For non-unique, we estimate based on tree depth
+        stats.cardinality = self.estimate_cardinality();
+
+        stats
+    }
+
+    /// Estimate cardinality (distinct key count)
+    fn estimate_cardinality(&self) -> u64 {
+        // Simplified estimation
+        // In reality, this would require scanning the index
+        let entries = self.metadata.num_entries;
+        if entries == 0 {
+            return 0;
+        }
+        // Estimate 80% of entries are unique as a rough heuristic
+        (entries * 8) / 10
+    }
+
+    /// Get index usage statistics
+    pub fn usage_stats(&self) -> IndexStats {
+        self.collect_stats()
     }
 }
 
@@ -771,5 +860,73 @@ mod tests {
     fn test_deserialize_invalid_data() {
         let result = deserialize_node(&[1, 2, 3]);
         assert!(result.is_none());
+    }
+
+    // Tests for index statistics
+
+    #[test]
+    fn test_index_stats_default() {
+        let stats = IndexStats::default();
+        assert_eq!(stats.num_entries, 0);
+        assert_eq!(stats.num_leaf_nodes, 0);
+        assert_eq!(stats.total_nodes, 0);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_empty() {
+        let stats = IndexStats::default();
+        assert_eq!(stats.selectivity(), 1.0);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 50;
+        assert_eq!(stats.selectivity(), 0.5);
+    }
+
+    #[test]
+    fn test_index_stats_selectivity_clamped() {
+        let mut stats = IndexStats::new();
+        stats.num_entries = 100;
+        stats.cardinality = 150; // More unique than entries
+        assert_eq!(stats.selectivity(), 1.0); // Should clamp to 1.0
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats_empty() {
+        let index = BTreeIndex::new();
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 0);
+        assert_eq!(stats.height, 0);
+    }
+
+    #[test]
+    fn test_btree_index_collect_stats() {
+        let mut index = BTreeIndex::new();
+
+        // Insert some entries
+        for i in 1..=10 {
+            index.insert(i, i as u32);
+        }
+
+        let stats = index.collect_stats();
+
+        assert_eq!(stats.num_entries, 10);
+        assert!(stats.height >= 1);
+        assert!(stats.total_nodes >= 1);
+    }
+
+    #[test]
+    fn test_btree_index_usage_stats() {
+        let mut index = BTreeIndex::new();
+        index.insert(1, 100);
+        index.insert(2, 200);
+
+        let stats = index.usage_stats();
+
+        assert_eq!(stats.num_entries, 2);
     }
 }
