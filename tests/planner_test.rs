@@ -1,6 +1,6 @@
 // Planner Tests
 use sqlrustgo_planner::{
-    AggregateFunction, Column, DataType, Expr, Field, JoinType, LogicalPlan, Operator, Schema,
+    AggregateFunction, Column, DataType, Expr, Field, JoinType, Operator, Schema,
 };
 use sqlrustgo_types::Value;
 
