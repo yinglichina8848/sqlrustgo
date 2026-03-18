@@ -1,3 +1,7 @@
+use std::time::{Duration, Instant};
+
+use sqlrustgo_types::Value;
+
 #[derive(Debug, Clone)]
 pub struct QueryCacheConfig {
     pub max_entries: usize,
@@ -14,5 +18,35 @@ impl Default for QueryCacheConfig {
             ttl_seconds: 30,
             enabled: true,
         }
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct CacheKey {
+    pub normalized_sql: String,
+    pub params_hash: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CacheEntry {
+    pub result: super::ExecutorResult,
+    pub tables: Vec<String>,
+    pub created_at: Instant,
+    pub size_bytes: usize,
+}
+
+impl CacheEntry {
+    pub fn is_expired(&self, ttl: Duration) -> bool {
+        self.created_at.elapsed() > ttl
+    }
+
+    pub fn estimate_size(&self) -> usize {
+        let mut size = 0;
+        for row in &self.result.rows {
+            for val in row {
+                size += val.estimate_memory_size();
+            }
+        }
+        size
     }
 }
