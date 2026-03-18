@@ -34,7 +34,20 @@ impl TransactionContext {
     }
 
     pub fn is_visible(&self, tx_id: TxId, commit_timestamp: Option<u64>) -> bool {
-        self.snapshot.is_visible(tx_id, commit_timestamp)
+        match self.isolation_level {
+            IsolationLevel::ReadCommitted => self.snapshot.is_visible_read_committed(
+                tx_id,
+                commit_timestamp,
+                self.snapshot.snapshot_timestamp,
+            ),
+            _ => self.snapshot.is_visible(tx_id, commit_timestamp),
+        }
+    }
+
+    pub fn refresh_snapshot(&mut self, current_timestamp: u64) {
+        if self.isolation_level == IsolationLevel::ReadCommitted {
+            self.snapshot.refresh_for_read_committed(current_timestamp);
+        }
     }
 }
 
@@ -163,6 +176,37 @@ impl TransactionManager {
         let mvcc = self.mvcc.read().map_err(|_| TransactionError::LockError)?;
         Ok(mvcc.get_global_timestamp())
     }
+
+    pub fn get_transaction_context_for_query(
+        &self,
+    ) -> Result<TransactionContext, TransactionError> {
+        let tx_id = self.current_tx.ok_or(TransactionError::NoTransaction)?;
+
+        let mvcc = self.mvcc.read().map_err(|_| TransactionError::LockError)?;
+        let tx = mvcc
+            .get_transaction(tx_id)
+            .ok_or(TransactionError::InvalidTransaction)?;
+
+        if !tx.is_active() {
+            return Err(TransactionError::TransactionNotActive);
+        }
+
+        let current_ts = mvcc.get_global_timestamp();
+        let snapshot = mvcc.create_snapshot(tx_id);
+
+        match self.isolation_level {
+            IsolationLevel::ReadCommitted => {
+                let mut ctx = TransactionContext::new(tx_id, snapshot, self.isolation_level);
+                ctx.refresh_snapshot(current_ts);
+                Ok(ctx)
+            }
+            _ => Ok(TransactionContext::new(
+                tx_id,
+                snapshot,
+                self.isolation_level,
+            )),
+        }
+    }
 }
 
 impl Default for TransactionManager {
@@ -281,5 +325,56 @@ mod tests {
         let mut manager = TransactionManager::new();
         let _tx_id = manager.begin_read_only().unwrap();
         assert!(manager.is_in_transaction());
+    }
+
+    #[test]
+    fn test_read_committed_isolation() {
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::ReadCommitted);
+
+        let tx_id = manager.begin().unwrap();
+
+        let ctx1 = manager.get_transaction_context_for_query().unwrap();
+        assert_eq!(ctx1.isolation_level, IsolationLevel::ReadCommitted);
+
+        let ctx2 = manager.get_transaction_context_for_query().unwrap();
+        assert!(ctx2.is_visible(tx_id, Some(1)));
+
+        manager.commit().unwrap();
+    }
+
+    #[test]
+    fn test_read_committed_no_dirty_read() {
+        use crate::mvcc::TxId;
+
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::ReadCommitted);
+
+        let _tx1 = manager.begin().unwrap();
+        let ctx = manager.get_transaction_context_for_query().unwrap();
+
+        assert!(!ctx.is_visible(TxId::new(999), None));
+
+        manager.rollback().unwrap();
+    }
+
+    #[test]
+    fn test_snapshot_refresh_on_each_query() {
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::ReadCommitted);
+
+        let _tx_id = manager.begin().unwrap();
+
+        let ctx1 = manager.get_transaction_context_for_query().unwrap();
+        let ts1 = ctx1.snapshot.snapshot_timestamp;
+
+        let _ = manager.get_global_timestamp().unwrap();
+
+        let ctx2 = manager.get_transaction_context_for_query().unwrap();
+        let ts2 = ctx2.snapshot.snapshot_timestamp;
+
+        assert!(ts2 >= ts1);
+
+        manager.commit().unwrap();
     }
 }
