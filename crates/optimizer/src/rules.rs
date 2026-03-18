@@ -1783,4 +1783,154 @@ mod tests {
         let result = rule.apply(&mut plan);
         assert!(result);
     }
+
+    #[test]
+    fn test_predicate_pushdown_with_filter() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column("a".to_string())),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::Integer(1))),
+            },
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_with_join() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Join {
+            join_type: JoinType::Inner,
+            left: Box::new(Plan::Filter {
+                predicate: Expr::BinaryExpr {
+                    left: Box::new(Expr::Column("a".to_string())),
+                    op: Operator::Eq,
+                    right: Box::new(Expr::Literal(Value::Integer(1))),
+                },
+                input: Box::new(Plan::TableScan {
+                    table_name: "t1".to_string(),
+                    projection: None,
+                }),
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "t2".to_string(),
+                projection: None,
+            }),
+            condition: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_projection_pruning_with_columns() {
+        let rule = ProjectionPruning::new();
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::Column("a".to_string())],
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: Some(vec![0, 1]),
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_nested() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::BinaryExpr {
+                    left: Box::new(Expr::Literal(Value::Integer(1))),
+                    op: Operator::Plus,
+                    right: Box::new(Expr::Literal(Value::Integer(2))),
+                }),
+                op: Operator::Multiply,
+                right: Box::new(Expr::Literal(Value::Integer(3))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_expression_simplification_and_false_left() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(false))),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Boolean(false))));
+    }
+
+    #[test]
+    fn test_expression_simplification_or_true_left() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(true))),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Boolean(true))));
+    }
+
+    #[test]
+    fn test_join_reordering_estimate_size() {
+        let rule = JoinReordering::new();
+        let plan = Plan::TableScan {
+            table_name: "t".to_string(),
+            projection: None,
+        };
+        let size = rule.estimate_size(&plan);
+        assert!(size > 0);
+    }
+
+    #[test]
+    fn test_expression_simplification_divide_by_one() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Divide,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_subtract_zero() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Minus,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_double_negation() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::UnaryExpr {
+                op: Operator::Not,
+                expr: Box::new(Expr::Column("x".to_string())),
+            }),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
 }
