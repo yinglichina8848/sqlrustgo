@@ -59,6 +59,7 @@ impl Clone for PooledSession {
 
 #[derive(Clone)]
 pub struct ConnectionPool {
+    #[allow(dead_code)]
     shared_storage: Arc<MemoryStorage>,
     #[allow(dead_code)]
     sessions: Arc<Vec<PooledSession>>,
