@@ -1155,17 +1155,12 @@ mod tests {
 
         let stats = index.usage_stats();
 
-        let stats = index.usage_stats();
-
         assert_eq!(stats.num_entries, 2);
     }
-}
-        let mut index = CompositeBTreeIndex::new(2);
 
-        // Insert composite keys
-        index.insert(CompositeKey::new(vec![1, 1]), 100);
-        index.insert(CompositeKey::new(vec![1, 2]), 200);
-        index.insert(CompositeKey::new(vec![2, 1]), 300);
+    #[test]
+    fn test_composite_btree_index_insert() {
+        let mut index = CompositeBTreeIndex::new(2);
 
         assert_eq!(index.len(), 3);
         assert!(!index.is_empty());
@@ -1255,7 +1250,6 @@ mod tests {
         assert!(index.insert_unique(2, 999).is_err());
         assert_eq!(index.len(), 3);
     }
-}
 
     // Tests for composite index
 
@@ -1321,7 +1315,5 @@ mod tests {
         let stats = index.usage_stats();
 
         assert_eq!(stats.num_entries, 2);
-    }
-}
     }
 }
