@@ -45,6 +45,8 @@ pub enum Token {
     Boolean,
     Blob,
     Null,
+    Date,
+    Timestamp,
 
     // Operators
     Equal,
@@ -79,6 +81,8 @@ pub enum Token {
     StringLiteral(String),
     NumberLiteral(String),
     BooleanLiteral(bool),
+    DateLiteral(String),
+    TimestampLiteral(String),
 
     // Special
     Eof,
@@ -91,6 +95,8 @@ impl fmt::Display for Token {
             Token::StringLiteral(s) => write!(f, "'{}'", s),
             Token::NumberLiteral(s) => write!(f, "{}", s),
             Token::BooleanLiteral(b) => write!(f, "{}", b),
+            Token::DateLiteral(s) => write!(f, "DATE '{}'", s),
+            Token::TimestampLiteral(s) => write!(f, "TIMESTAMP '{}'", s),
             // Keywords and data types - uppercase
             Token::Select => write!(f, "SELECT"),
             Token::From => write!(f, "FROM"),
@@ -121,6 +127,8 @@ impl fmt::Display for Token {
             Token::Boolean => write!(f, "BOOLEAN"),
             Token::Blob => write!(f, "BLOB"),
             Token::Null => write!(f, "NULL"),
+            Token::Date => write!(f, "DATE"),
+            Token::Timestamp => write!(f, "TIMESTAMP"),
             // Aggregate Functions
             Token::Count => write!(f, "COUNT"),
             Token::Sum => write!(f, "SUM"),
@@ -188,6 +196,8 @@ pub fn is_keyword(s: &str) -> bool {
             | "BOOLEAN"
             | "BLOB"
             | "NULL"
+            | "DATE"
+            | "TIMESTAMP"
             | "TRUE"
             | "FALSE"
             | "AND"
@@ -227,6 +237,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "BOOLEAN" => Some(Token::Boolean),
         "BLOB" => Some(Token::Blob),
         "NULL" => Some(Token::Null),
+        "DATE" => Some(Token::Date),
+        "TIMESTAMP" => Some(Token::Timestamp),
         "TRUE" => Some(Token::BooleanLiteral(true)),
         "FALSE" => Some(Token::BooleanLiteral(false)),
         "AND" => Some(Token::And),
@@ -411,6 +423,8 @@ mod tests {
         assert_eq!(from_keyword("BOOLEAN"), Some(Token::Boolean));
         assert_eq!(from_keyword("BLOB"), Some(Token::Blob));
         assert_eq!(from_keyword("NULL"), Some(Token::Null));
+        assert_eq!(from_keyword("DATE"), Some(Token::Date));
+        assert_eq!(from_keyword("TIMESTAMP"), Some(Token::Timestamp));
 
         // Boolean literals
         assert_eq!(from_keyword("FALSE"), Some(Token::BooleanLiteral(false)));
@@ -423,6 +437,8 @@ mod tests {
         // Case insensitive
         assert_eq!(from_keyword("Select"), Some(Token::Select));
         assert_eq!(from_keyword("FROM"), Some(Token::From));
+        assert_eq!(from_keyword("date"), Some(Token::Date));
+        assert_eq!(from_keyword("Timestamp"), Some(Token::Timestamp));
 
         // Non-keywords return None
         assert_eq!(from_keyword("users"), None);
