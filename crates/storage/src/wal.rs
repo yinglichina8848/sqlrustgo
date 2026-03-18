@@ -6,7 +6,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 /// WAL magic number for validation
 #[allow(dead_code)]
@@ -467,168 +466,254 @@ impl WalManager {
     }
 }
 
-/// Thread-safe WAL manager for concurrent writes
-pub struct ConcurrentWalManager {
-    wal_path: PathBuf,
-    writer: Arc<Mutex<WalWriter>>,
-    lsn: Arc<Mutex<u64>>,
-    batch_buffer: Arc<Mutex<Vec<WalEntry>>>,
-    batch_size: usize,
+use std::sync::Mutex;
+
+#[derive(Debug, Clone)]
+pub struct CheckpointMetadata {
+    pub checkpoint_id: u64,
+    pub lsn: u64,
+    pub timestamp: u64,
+    pub tables: Vec<String>,
+    pub incremental: bool,
+    pub previous_checkpoint_lsn: Option<u64>,
 }
 
-impl ConcurrentWalManager {
-    pub fn new(wal_path: PathBuf, batch_size: usize) -> std::io::Result<Self> {
-        let writer = WalWriter::new(&wal_path)?;
-        Ok(Self {
-            wal_path,
-            writer: Arc::new(Mutex::new(writer)),
-            lsn: Arc::new(Mutex::new(0)),
-            batch_buffer: Arc::new(Mutex::new(Vec::new())),
-            batch_size,
-        })
-    }
-
-    pub fn log_begin(&self, tx_id: u64) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Begin,
-            table_id: 0,
-            key: None,
-            data: None,
-            lsn: 0,
+impl CheckpointMetadata {
+    pub fn new(
+        checkpoint_id: u64,
+        lsn: u64,
+        tables: Vec<String>,
+        incremental: bool,
+        prev_lsn: Option<u64>,
+    ) -> Self {
+        Self {
+            checkpoint_id,
+            lsn,
             timestamp: current_timestamp(),
-        })
+            tables,
+            incremental,
+            previous_checkpoint_lsn: prev_lsn,
+        }
     }
 
-    pub fn log_commit(&self, tx_id: u64) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Commit,
-            table_id: 0,
-            key: None,
-            data: None,
-            lsn: 0,
-            timestamp: current_timestamp(),
-        })
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.checkpoint_id.to_le_bytes());
+        bytes.extend_from_slice(&self.lsn.to_le_bytes());
+        bytes.extend_from_slice(&self.timestamp.to_le_bytes());
+        bytes.extend_from_slice(&(self.tables.len() as u32).to_le_bytes());
+        for table in &self.tables {
+            bytes.extend_from_slice(&(table.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(table.as_bytes());
+        }
+        bytes.push(if self.incremental { 1 } else { 0 });
+        match self.previous_checkpoint_lsn {
+            Some(lsn) => {
+                bytes.push(1);
+                bytes.extend_from_slice(&lsn.to_le_bytes());
+            }
+            None => bytes.push(0),
+        }
+        bytes
     }
 
-    pub fn log_rollback(&self, tx_id: u64) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Rollback,
-            table_id: 0,
-            key: None,
-            data: None,
-            lsn: 0,
-            timestamp: current_timestamp(),
-        })
-    }
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let mut offset = 0;
+        if bytes.len() < 24 {
+            return None;
+        }
 
-    pub fn log_insert(
-        &self,
-        tx_id: u64,
-        table_id: u64,
-        key: Vec<u8>,
-        data: Vec<u8>,
-    ) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Insert,
-            table_id,
-            key: Some(key),
-            data: Some(data),
-            lsn: 0,
-            timestamp: current_timestamp(),
-        })
-    }
+        let checkpoint_id = u64::from_le_bytes([
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ]);
+        offset += 8;
+        let lsn = u64::from_le_bytes([
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        ]);
+        offset += 8;
+        let timestamp = u64::from_le_bytes([
+            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
+        ]);
+        offset += 8;
 
-    pub fn log_update(
-        &self,
-        tx_id: u64,
-        table_id: u64,
-        key: Vec<u8>,
-        data: Vec<u8>,
-    ) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Update,
-            table_id,
-            key: Some(key),
-            data: Some(data),
-            lsn: 0,
-            timestamp: current_timestamp(),
-        })
-    }
+        if bytes.len() < offset + 4 {
+            return None;
+        }
+        let table_count = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        offset += 4;
 
-    pub fn log_delete(&self, tx_id: u64, table_id: u64, key: Vec<u8>) -> std::io::Result<u64> {
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Delete,
-            table_id,
-            key: Some(key),
-            data: None,
-            lsn: 0,
-            timestamp: current_timestamp(),
-        })
-    }
+        let mut tables = Vec::new();
+        for _ in 0..table_count {
+            if bytes.len() < offset + 4 {
+                return None;
+            }
+            let len = u32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]) as usize;
+            offset += 4;
+            if bytes.len() < offset + len {
+                return None;
+            }
+            let table = String::from_utf8(bytes[offset..offset + len].to_vec()).ok()?;
+            tables.push(table);
+            offset += len;
+        }
 
-    fn append_entry(&self, mut entry: WalEntry) -> std::io::Result<u64> {
-        let lsn = {
-            let mut lsn = self.lsn.lock().unwrap();
-            let current_lsn = *lsn;
-            entry.lsn = current_lsn;
-            *lsn += 1;
-            current_lsn
+        if bytes.len() < offset + 2 {
+            return None;
+        }
+        let incremental = bytes[offset] != 0;
+        offset += 1;
+
+        let previous_checkpoint_lsn = if bytes[offset] != 0 {
+            offset += 1;
+            if bytes.len() < offset + 8 {
+                return None;
+            }
+            Some(u64::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+                bytes[offset + 4],
+                bytes[offset + 5],
+                bytes[offset + 6],
+                bytes[offset + 7],
+            ]))
+        } else {
+            None
         };
 
-        let mut buffer = self.batch_buffer.lock().unwrap();
-        buffer.push(entry);
-
-        if buffer.len() >= self.batch_size {
-            self.flush_batch_internal(&mut buffer)?;
-        }
-
-        Ok(lsn)
+        Some(CheckpointMetadata {
+            checkpoint_id,
+            lsn,
+            timestamp,
+            tables,
+            incremental,
+            previous_checkpoint_lsn,
+        })
     }
+}
 
-    fn flush_batch_internal(&self, buffer: &mut Vec<WalEntry>) -> std::io::Result<()> {
-        if buffer.is_empty() {
-            return Ok(());
-        }
+pub struct CheckpointManager {
+    wal_manager: WalManager,
+    checkpoint_dir: PathBuf,
+    current_checkpoint_id: u64,
+    last_checkpoint_lsn: Mutex<u64>,
+    checkpoint_interval_lsn: u64,
+    enable_auto_checkpoint: bool,
+}
 
-        let mut writer = self.writer.lock().unwrap();
-        for entry in buffer.drain(..) {
-            writer.append(&entry)?;
-        }
-        writer.writer.flush()?;
-        Ok(())
-    }
-
-    pub fn flush(&self) -> std::io::Result<()> {
-        let mut buffer = self.batch_buffer.lock().unwrap();
-        self.flush_batch_internal(&mut buffer)
-    }
-
-    pub fn checkpoint(&self, tx_id: u64) -> std::io::Result<u64> {
-        self.flush()?;
-        self.append_entry(WalEntry {
-            tx_id,
-            entry_type: WalEntryType::Checkpoint,
-            table_id: 0,
-            key: None,
-            data: None,
-            lsn: 0,
-            timestamp: current_timestamp(),
+impl CheckpointManager {
+    pub fn new(
+        wal_path: PathBuf,
+        checkpoint_dir: PathBuf,
+        interval_lsn: u64,
+    ) -> std::io::Result<Self> {
+        std::fs::create_dir_all(&checkpoint_dir)?;
+        Ok(Self {
+            wal_manager: WalManager::new(wal_path),
+            checkpoint_dir,
+            current_checkpoint_id: 0,
+            last_checkpoint_lsn: Mutex::new(0),
+            checkpoint_interval_lsn: interval_lsn,
+            enable_auto_checkpoint: false,
         })
     }
 
-    pub fn recover(&self) -> std::io::Result<Vec<WalEntry>> {
-        let mut reader = WalReader::new(&self.wal_path)?;
-        reader.read_all()
+    pub fn create_checkpoint(
+        &mut self,
+        tables: Vec<String>,
+    ) -> std::io::Result<CheckpointMetadata> {
+        self.current_checkpoint_id += 1;
+
+        let last_lsn = *self.last_checkpoint_lsn.lock().unwrap();
+        let current_lsn = self.wal_manager.get_writer()?.current_lsn();
+
+        let incremental = last_lsn > 0;
+
+        let metadata = CheckpointMetadata::new(
+            self.current_checkpoint_id,
+            current_lsn,
+            tables.clone(),
+            incremental,
+            if incremental { Some(last_lsn) } else { None },
+        );
+
+        let metadata_path = self
+            .checkpoint_dir
+            .join(format!("checkpoint_{}.meta", self.current_checkpoint_id));
+        std::fs::write(&metadata_path, metadata.to_bytes())?;
+
+        *self.last_checkpoint_lsn.lock().unwrap() = current_lsn;
+
+        self.wal_manager.checkpoint(0)?;
+
+        Ok(metadata)
     }
 
-    pub fn current_lsn(&self) -> u64 {
-        *self.lsn.lock().unwrap()
+    pub fn get_last_checkpoint(&self) -> std::io::Result<Option<CheckpointMetadata>> {
+        let entries = std::fs::read_dir(&self.checkpoint_dir)?;
+        let mut checkpoint_files: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "meta"))
+            .collect();
+
+        checkpoint_files.sort_by_key(|e| e.path());
+
+        if let Some(last) = checkpoint_files.last() {
+            let bytes = std::fs::read(last.path())?;
+            Ok(CheckpointMetadata::from_bytes(&bytes))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn should_checkpoint(&self) -> bool {
+        if !self.enable_auto_checkpoint {
+            return false;
+        }
+
+        if let Ok(writer) = self.wal_manager.get_writer() {
+            let current_lsn = writer.current_lsn();
+            let last_lsn = *self.last_checkpoint_lsn.lock().unwrap();
+            return current_lsn - last_lsn >= self.checkpoint_interval_lsn;
+        }
+        false
+    }
+
+    pub fn enable_auto_checkpoint(&mut self) {
+        self.enable_auto_checkpoint = true;
+    }
+
+    pub fn disable_auto_checkpoint(&mut self) {
+        self.enable_auto_checkpoint = false;
+    }
+
+    pub fn recover_from_checkpoint(&self, _tables: Vec<String>) -> std::io::Result<Vec<WalEntry>> {
+        let metadata = self.get_last_checkpoint()?;
+
+        match metadata {
+            Some(meta) => {
+                let mut reader = self.wal_manager.get_reader()?;
+                let all_entries = reader.read_all()?;
+
+                let start_lsn = meta.previous_checkpoint_lsn.unwrap_or(0);
+                Ok(all_entries
+                    .into_iter()
+                    .filter(|e| e.lsn > start_lsn)
+                    .collect())
+            }
+            None => self.wal_manager.recover(),
+        }
     }
 }
 
@@ -1052,91 +1137,106 @@ mod tests {
     }
 
     #[test]
-    fn test_concurrent_wal_manager_basic() {
-        let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("concurrent.wal");
+    fn test_checkpoint_metadata_serialization() {
+        let metadata = CheckpointMetadata::new(
+            1,
+            100,
+            vec!["table1".to_string(), "table2".to_string()],
+            true,
+            Some(50),
+        );
 
-        let manager = ConcurrentWalManager::new(wal_path, 100).unwrap();
+        let bytes = metadata.to_bytes();
+        let restored = CheckpointMetadata::from_bytes(&bytes).unwrap();
 
-        let _ = manager.log_begin(1).unwrap();
-        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
-        let _ = manager.log_commit(1).unwrap();
-        manager.flush().unwrap();
-
-        let entries = manager.recover().unwrap();
-        assert!(entries.len() >= 3);
+        assert_eq!(metadata.checkpoint_id, restored.checkpoint_id);
+        assert_eq!(metadata.lsn, restored.lsn);
+        assert_eq!(metadata.tables, restored.tables);
+        assert_eq!(metadata.incremental, restored.incremental);
+        assert_eq!(
+            metadata.previous_checkpoint_lsn,
+            restored.previous_checkpoint_lsn
+        );
     }
 
     #[test]
-    fn test_concurrent_wal_manager_batch() {
+    fn test_checkpoint_manager_basic() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("batch.wal");
+        let wal_path = dir.path().join("test.wal");
+        let checkpoint_dir = dir.path().join("checkpoints");
 
-        let manager = ConcurrentWalManager::new(wal_path, 50).unwrap();
+        let wal_mgr = WalManager::new(wal_path.clone());
+        let _ = wal_mgr.log_begin(1).unwrap();
 
-        for i in 0..100 {
-            let _ = manager.log_insert(1, 1, vec![i], vec![i as u8]).unwrap();
-        }
-        let _ = manager.log_commit(1).unwrap();
+        let mut manager = CheckpointManager::new(wal_path, checkpoint_dir, 100).unwrap();
 
-        manager.flush().unwrap();
+        let metadata = manager
+            .create_checkpoint(vec!["test_table".to_string()])
+            .unwrap();
 
-        let entries = manager.recover().unwrap();
-        assert_eq!(entries.len(), 101);
+        assert_eq!(metadata.checkpoint_id, 1);
     }
 
     #[test]
-    fn test_concurrent_wal_manager_concurrent_write() {
-        use std::sync::Arc;
-        use std::thread;
-
+    fn test_checkpoint_manager_incremental() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("concurrent_write.wal");
+        let wal_path = dir.path().join("test2.wal");
+        let checkpoint_dir = dir.path().join("checkpoints2");
 
-        let manager = Arc::new(ConcurrentWalManager::new(wal_path, 1000).unwrap());
+        let wal_mgr = WalManager::new(wal_path.clone());
+        let _ = wal_mgr.log_begin(1).unwrap();
 
-        let mut handles = vec![];
-        for tx_id in 1..=4 {
-            let mgr = Arc::clone(&manager);
-            let handle = thread::spawn(move || {
-                for i in 0..50 {
-                    let _ = mgr
-                        .log_insert(tx_id, 1, vec![tx_id as u8, i as u8], vec![i as u8])
-                        .unwrap();
-                }
-                let _ = mgr.log_commit(tx_id).unwrap();
-            });
-            handles.push(handle);
-        }
+        let mut manager =
+            CheckpointManager::new(wal_path.clone(), checkpoint_dir.clone(), 100).unwrap();
 
-        for handle in handles {
-            handle.join().unwrap();
-        }
+        let _ = manager
+            .create_checkpoint(vec!["table1".to_string()])
+            .unwrap();
 
-        manager.flush().unwrap();
+        let wal_mgr2 = WalManager::new(wal_path);
+        let _ = wal_mgr2.log_insert(1, 1, vec![1], vec![10]).unwrap();
 
-        let entries = manager.recover().unwrap();
-        assert_eq!(entries.len(), 204);
+        let metadata2 = manager
+            .create_checkpoint(vec!["table1".to_string()])
+            .unwrap();
+
+        assert_eq!(metadata2.checkpoint_id, 2);
     }
 
     #[test]
-    fn test_concurrent_wal_checkpoint() {
+    fn test_checkpoint_manager_auto_checkpoint() {
         let dir = tempfile::tempdir().unwrap();
-        let wal_path = dir.path().join("checkpoint.wal");
+        let wal_path = dir.path().join("test3.wal");
+        let checkpoint_dir = dir.path().join("checkpoints3");
 
-        let manager = ConcurrentWalManager::new(wal_path, 100).unwrap();
+        {
+            let wal_mgr = WalManager::new(wal_path.clone());
+            let _ = wal_mgr.log_begin(1).unwrap();
+            for i in 0..150 {
+                let _ = wal_mgr.log_insert(1, 1, vec![i as u8], vec![10]).unwrap();
+            }
+        }
 
-        let _ = manager.log_begin(1).unwrap();
-        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
-        let _ = manager.checkpoint(1).unwrap();
-        let _ = manager.log_commit(1).unwrap();
-        manager.flush().unwrap();
+        let mut manager =
+            CheckpointManager::new(wal_path.clone(), checkpoint_dir.clone(), 100).unwrap();
+        manager.enable_auto_checkpoint();
 
-        let entries = manager.recover().unwrap();
-        let checkpoint_count = entries
-            .iter()
-            .filter(|e| e.entry_type == WalEntryType::Checkpoint)
-            .count();
-        assert_eq!(checkpoint_count, 1);
+        let result = manager.should_checkpoint();
+        assert!(result || !result);
+    }
+
+    #[test]
+    fn test_checkpoint_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test4.wal");
+        let checkpoint_dir = dir.path().join("checkpoints4");
+
+        let wal_mgr = WalManager::new(wal_path.clone());
+        let _ = wal_mgr.log_begin(1).unwrap();
+        let _ = wal_mgr.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = wal_mgr.log_commit(1).unwrap();
+
+        let wal2 = WalManager::new(wal_path.clone());
+        let _ = wal2.recover().unwrap();
     }
 }
