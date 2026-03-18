@@ -12,14 +12,14 @@ pub enum ScaleFactor {
 }
 
 impl ScaleFactor {
-    pub fn to_f64(&self) -> f64 {
+    pub fn as_f64(&self) -> f64 {
         match self {
             ScaleFactor::SF01 => 0.1,
             ScaleFactor::SF1 => 1.0,
         }
     }
 
-    pub fn to_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             ScaleFactor::SF01 => "0.1",
             ScaleFactor::SF1 => "1",
@@ -37,7 +37,7 @@ pub enum TestScenario {
 }
 
 impl TestScenario {
-    pub fn to_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             TestScenario::SingleThread => "single_thread",
             TestScenario::MultiThread => "multi_thread",
@@ -139,8 +139,8 @@ impl TpchBenchmark {
         BenchmarkResult {
             metadata: BenchmarkMetadata {
                 date: chrono_lite_now(),
-                scale_factor: self.scale_factor.to_str().to_string(),
-                scenario: self.scenario.to_str().to_string(),
+                scale_factor: self.scale_factor.as_str().to_string(),
+                scenario: self.scenario.as_str().to_string(),
                 threads: self.threads,
             },
             results,
@@ -229,16 +229,16 @@ impl TpchBenchmark {
         conn.execute("CREATE TABLE lineitem AS SELECT * FROM (VALUES ", [])
             .ok();
 
-        let orders_rows = (1500000.0 * self.scale_factor.to_f64()) as usize;
-        let lineitem_rows = (6000000.0 * self.scale_factor.to_f64()) as usize;
+        let orders_rows = (1500000.0 * self.scale_factor.as_f64()) as usize;
+        let lineitem_rows = (6000000.0 * self.scale_factor.as_f64()) as usize;
 
-        conn.execute(&format!(
-            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice INTEGER, l_discount INTEGER, l_tax INTEGER, l_returnflag TEXT, l_shipmode TEXT)"),
+        conn.execute(
+            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice INTEGER, l_discount INTEGER, l_tax INTEGER, l_returnflag TEXT, l_shipmode TEXT)",
             [],
         ).ok();
 
-        conn.execute(&format!(
-            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice INTEGER, o_orderdate INTEGER)"),
+        conn.execute(
+            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice INTEGER, o_orderdate INTEGER)",
             [],
         ).ok();
 
@@ -370,7 +370,7 @@ impl TpchBenchmark {
             })
             .ok();
 
-        let sf = self.scale_factor.to_f64();
+        let sf = self.scale_factor.as_f64();
         let orders_rows = (1500000.0 * sf) as usize;
         let lineitem_rows = (6000000.0 * sf) as usize;
 
@@ -491,7 +491,7 @@ pub fn run_all_scenarios(sf: ScaleFactor) {
         .map(|p| p.get())
         .unwrap_or(4);
 
-    println!("\nRunning all TPC-H scenarios with SF={}", sf.to_str());
+    println!("\nRunning all TPC-H scenarios with SF={}", sf.as_str());
     println!("CPU cores: {}", threads_count);
 
     for scenario in scenarios {
@@ -520,7 +520,7 @@ pub fn run_sf_comparison() {
 
         println!(
             "\nSF={}: Total={:.2}ms, QPS={:.2}",
-            sf.to_str(),
+            sf.as_str(),
             result.summary.total_sqlrustgo_ms,
             result.summary.qps
         );
@@ -542,18 +542,18 @@ mod tests {
 
     #[test]
     fn test_scale_factor_conversion() {
-        assert_eq!(ScaleFactor::SF01.to_f64(), 0.1);
-        assert_eq!(ScaleFactor::SF1.to_f64(), 1.0);
-        assert_eq!(ScaleFactor::SF01.to_str(), "0.1");
-        assert_eq!(ScaleFactor::SF1.to_str(), "1");
+        assert_eq!(ScaleFactor::SF01.as_f64(), 0.1);
+        assert_eq!(ScaleFactor::SF1.as_f64(), 1.0);
+        assert_eq!(ScaleFactor::SF01.as_str(), "0.1");
+        assert_eq!(ScaleFactor::SF1.as_str(), "1");
     }
 
     #[test]
     fn test_scenario_conversion() {
-        assert_eq!(TestScenario::SingleThread.to_str(), "single_thread");
-        assert_eq!(TestScenario::MultiThread.to_str(), "multi_thread");
-        assert_eq!(TestScenario::CacheHit.to_str(), "cache_hit");
-        assert_eq!(TestScenario::CacheMiss.to_str(), "cache_miss");
+        assert_eq!(TestScenario::SingleThread.as_str(), "single_thread");
+        assert_eq!(TestScenario::MultiThread.as_str(), "multi_thread");
+        assert_eq!(TestScenario::CacheHit.as_str(), "cache_hit");
+        assert_eq!(TestScenario::CacheMiss.as_str(), "cache_miss");
     }
 
     #[test]
