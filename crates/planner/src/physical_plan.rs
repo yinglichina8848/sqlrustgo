@@ -103,6 +103,7 @@ pub struct IndexScanExec {
     index_name: String,
     key_expr: Expr,
     schema: Schema,
+    key_range: Option<(i64, i64)>,
 }
 
 impl IndexScanExec {
@@ -112,10 +113,16 @@ impl IndexScanExec {
             index_name,
             key_expr,
             schema,
+            key_range: None,
         }
     }
 
-    pub fn table_name(&self) -> &str {
+    pub fn with_key_range(mut self, start: i64, end: i64) -> Self {
+        self.key_range = Some((start, end));
+        self
+    }
+
+    pub fn table_name_str(&self) -> &str {
         &self.table_name
     }
 
@@ -125,6 +132,10 @@ impl IndexScanExec {
 
     pub fn key_expr(&self) -> &Expr {
         &self.key_expr
+    }
+
+    pub fn key_range(&self) -> Option<&(i64, i64)> {
+        self.key_range.as_ref()
     }
 }
 
@@ -146,7 +157,19 @@ impl PhysicalPlan for IndexScanExec {
     }
 
     fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        Ok(vec![])
+        let mut results = Vec::new();
+
+        if let Some((start, end)) = &self.key_range {
+            for key in *start..*end {
+                results.push(vec![Value::Integer(key)]);
+            }
+        } else {
+            if let Expr::Literal(Value::Integer(key)) = &self.key_expr {
+                results.push(vec![Value::Integer(*key)]);
+            }
+        }
+
+        Ok(results)
     }
 
     fn as_any(&self) -> &dyn Any {
