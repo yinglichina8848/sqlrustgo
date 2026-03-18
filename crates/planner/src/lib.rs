@@ -63,6 +63,7 @@ pub enum Operator {
     Or,
     Not,
     Like,
+    Concatenate,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -272,6 +273,7 @@ impl fmt::Display for Operator {
             Operator::Or => write!(f, "OR"),
             Operator::Not => write!(f, "NOT"),
             Operator::Like => write!(f, "LIKE"),
+            Operator::Concatenate => write!(f, "||"),
         }
     }
 }
