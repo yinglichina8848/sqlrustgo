@@ -1149,6 +1149,14 @@ impl StorageEngine for FileStorage {
 
         Ok(())
     }
+
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
+        self.search_index(table, column, key)
+    }
+
+    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
+        self.range_index(table, column, start, end)
+    }
 }
 
 #[cfg(test)]
