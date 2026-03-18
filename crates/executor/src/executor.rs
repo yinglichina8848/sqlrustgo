@@ -620,6 +620,7 @@ impl VolcanoExecutor for SortVolcanoExecutor {
     }
 }
 
+#[allow(dead_code)]
 pub struct SortMergeJoinExecutor {
     left: Box<dyn VolcanoExecutor>,
     right: Box<dyn VolcanoExecutor>,
