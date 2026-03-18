@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 
 pub struct SqlNormalizer;
 
+#[allow(clippy::if_same_then_else)]
 impl SqlNormalizer {
     pub fn normalize(sql: &str) -> String {
         let mut result = String::with_capacity(sql.len());
@@ -64,7 +65,10 @@ impl SqlNormalizer {
                         params.push(Value::Integer(n));
                     } else if let Ok(f) = current_param.parse::<f64>() {
                         params.push(Value::Float(f));
+                    } else {
+                        params.push(Value::Text(current_param.clone()));
                     }
+                    normalized.push('?');
                     current_param.clear();
                 }
                 normalized.push(c.to_ascii_lowercase());
@@ -74,6 +78,10 @@ impl SqlNormalizer {
         if !current_param.is_empty() {
             if let Ok(n) = current_param.parse::<i64>() {
                 params.push(Value::Integer(n));
+                normalized.push('?');
+            } else if let Ok(f) = current_param.parse::<f64>() {
+                params.push(Value::Float(f));
+                normalized.push('?');
             }
         }
 
