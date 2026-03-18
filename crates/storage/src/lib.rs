@@ -6,6 +6,7 @@ pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 pub mod engine;
 pub mod file_storage;
+pub mod heap;
 pub mod page;
 pub mod wal;
 
@@ -15,6 +16,7 @@ pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use engine::{ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo};
 pub use file_storage::FileStorage;
+pub use heap::{HeapStorage, RowId};
 pub use page::Page;
 pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
 
