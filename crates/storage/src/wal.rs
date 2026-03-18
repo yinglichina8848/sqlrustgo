@@ -444,6 +444,26 @@ impl WalManager {
 
         writer.append(&entry)
     }
+
+    /// Log rollback
+    pub fn log_rollback(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Rollback,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
 }
 
 #[cfg(test)]
@@ -546,8 +566,160 @@ mod tests {
     fn test_wal_entry_type() {
         assert_eq!(WalEntryType::from_u8(1), Some(WalEntryType::Begin));
         assert_eq!(WalEntryType::from_u8(2), Some(WalEntryType::Insert));
+        assert_eq!(WalEntryType::from_u8(3), Some(WalEntryType::Update));
+        assert_eq!(WalEntryType::from_u8(4), Some(WalEntryType::Delete));
         assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
+        assert_eq!(WalEntryType::from_u8(6), Some(WalEntryType::Rollback));
+        assert_eq!(WalEntryType::from_u8(7), Some(WalEntryType::Checkpoint));
         assert_eq!(WalEntryType::from_u8(99), None);
+    }
+
+    #[test]
+    fn test_wal_entry_with_empty_data() {
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 100,
+            key: Some(vec![]),
+            data: None,
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.tx_id, restored.tx_id);
+        assert_eq!(entry.data, restored.data);
+    }
+
+    #[test]
+    fn test_wal_entry_large_data() {
+        let large_data = vec![0u8; 10000];
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 100,
+            key: Some(vec![1, 2, 3, 4]),
+            data: Some(large_data.clone()),
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let bytes = entry.to_bytes();
+        let _restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.data.as_ref().unwrap().len(), 10000);
+    }
+
+    #[test]
+    fn test_wal_writer_current_lsn() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_lsn.wal");
+
+        let mut writer = WalWriter::new(&wal_path).unwrap();
+
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Begin,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let lsn1 = writer.append(&entry).unwrap();
+        let lsn2 = writer.append(&entry).unwrap();
+
+        assert_eq!(lsn1, 0);
+        assert_eq!(lsn2, 1);
+    }
+
+    #[test]
+    fn test_wal_manager_log_rollback() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_rollback.wal");
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_rollback(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[2].entry_type, WalEntryType::Rollback);
+    }
+
+    #[test]
+    fn test_wal_manager_log_checkpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_checkpoint.wal");
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.checkpoint(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].entry_type, WalEntryType::Checkpoint);
+    }
+
+    #[test]
+    fn test_wal_reader_read_from_lsn() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_read_from.wal");
+
+        // Write multiple entries
+        {
+            let mut manager = WalManager::new(wal_path.clone());
+            for i in 0u64..5 {
+                let entry = WalEntry {
+                    tx_id: 1,
+                    entry_type: WalEntryType::Insert,
+                    table_id: 1,
+                    key: Some(vec![i as u8]),
+                    data: Some(vec![i as u8 * 10]),
+                    lsn: i,
+                    timestamp: 1234567890 + i,
+                };
+                let _ = manager.get_writer().unwrap().append(&entry);
+            }
+        }
+
+        // Read from LSN 2
+        let mut reader = WalManager::new(wal_path).get_reader().unwrap();
+        let entries = reader.read_from(2).unwrap();
+
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].lsn, 2);
+    }
+
+    #[test]
+    fn test_wal_entry_from_bytes_truncated() {
+        // Test with truncated data
+        let result = WalEntry::from_bytes(&[1, 2, 3]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_wal_multiple_transactions() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_multi_tx.wal");
+
+        let manager = WalManager::new(wal_path);
+
+        // Transaction 1
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        // Transaction 2
+        let _ = manager.log_begin(2).unwrap();
+        let _ = manager.log_insert(2, 1, vec![2], vec![20]).unwrap();
+        let _ = manager.log_commit(2).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 6);
     }
 
     // PB-03: WAL Performance Benchmarks
