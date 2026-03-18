@@ -19,7 +19,7 @@ pub struct BufferPool {
 }
 
 /// Buffer pool statistics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BufferPoolStats {
     pub hits: u64,
     pub misses: u64,
@@ -265,6 +265,168 @@ impl MemoryPool {
 impl Default for MemoryPool {
     fn default() -> Self {
         Self::new(4096) // Default 4KB blocks
+    }
+}
+
+/// LRU-K Buffer Pool with enhanced eviction algorithm
+/// LRU-K tracks the last K accesses to each page, better handling of access patterns
+pub struct BufferPoolLruK {
+    /// Page storage
+    pages: Mutex<HashMap<u32, Arc<Page>>>,
+    /// K value - number of recent accesses to track
+    k_value: usize,
+    /// Access history: page_id -> list of access timestamps
+    access_history: Mutex<HashMap<u32, Vec<u64>>>,
+    /// Global access counter
+    access_counter: Mutex<u64>,
+    /// Capacity
+    capacity: usize,
+    /// Statistics
+    stats: RwLock<BufferPoolStats>,
+}
+
+impl BufferPoolLruK {
+    /// Create a new LRU-K buffer pool
+    pub fn new(capacity: usize, k: usize) -> Self {
+        Self {
+            pages: Mutex::new(HashMap::new()),
+            k_value: k,
+            access_history: Mutex::new(HashMap::new()),
+            access_counter: Mutex::new(0),
+            capacity,
+            stats: RwLock::new(BufferPoolStats::default()),
+        }
+    }
+
+    /// Get a page - returns None if not in pool
+    pub fn get(&self, page_id: u32) -> Option<Arc<Page>> {
+        let pages = self.pages.lock().unwrap();
+
+        if let Some(page) = pages.get(&page_id).cloned() {
+            // Record access
+            self.record_access(page_id);
+
+            // Update stats
+            let mut stats = self.stats.write().unwrap();
+            stats.hits += 1;
+
+            Some(page)
+        } else {
+            // Update stats
+            let mut stats = self.stats.write().unwrap();
+            stats.misses += 1;
+
+            None
+        }
+    }
+
+    /// Record a page access for LRU-K tracking
+    fn record_access(&self, page_id: u32) {
+        let mut counter = self.access_counter.lock().unwrap();
+        *counter += 1;
+        let timestamp = *counter;
+
+        let mut history = self.access_history.lock().unwrap();
+        let entry = history.entry(page_id).or_insert_with(Vec::new);
+        entry.push(timestamp);
+
+        // Keep only last K accesses
+        if entry.len() > self.k_value {
+            entry.remove(0);
+        }
+    }
+
+    /// Get or load a page
+    pub fn get_or_load<F>(&self, page_id: u32, loader: F) -> Arc<Page>
+    where
+        F: FnOnce() -> Arc<Page>,
+    {
+        if let Some(page) = self.get(page_id) {
+            return page;
+        }
+
+        // Load page
+        let page = loader();
+        self.insert(page.clone());
+        page
+    }
+
+    /// Insert a page into the pool
+    pub fn insert(&self, page: Arc<Page>) {
+        let page_id = page.page_id();
+        let mut pages = self.pages.lock().unwrap();
+
+        // Check capacity
+        if pages.len() >= self.capacity && !pages.contains_key(&page_id) {
+            // Evict using LRU-K algorithm
+            self.evict(&mut pages);
+        }
+
+        pages.insert(page_id, page);
+        self.record_access(page_id);
+    }
+
+    /// Evict a page using LRU-K algorithm
+    fn evict(&self, pages: &mut HashMap<u32, Arc<Page>>) {
+        let history = self.access_history.lock().unwrap();
+
+        // Find page with oldest K-th access (earliest access in their K-history)
+        let victim = history
+            .iter()
+            .filter(|(id, _)| pages.contains_key(*id))
+            .min_by_key(|(_, accesses)| {
+                if accesses.is_empty() {
+                    u64::MAX
+                } else {
+                    accesses[0]
+                }
+            })
+            .map(|(id, _)| *id);
+
+        if let Some(page_id) = victim {
+            pages.remove(&page_id);
+            let mut stats = self.stats.write().unwrap();
+            stats.evictions += 1;
+        }
+    }
+
+    /// Get pool size
+    pub fn len(&self) -> usize {
+        self.pages.lock().unwrap().len()
+    }
+
+    /// Check if pool is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Get capacity
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Get statistics
+    pub fn stats(&self) -> BufferPoolStats {
+        self.stats.read().unwrap().clone()
+    }
+
+    /// Get hit rate
+    pub fn hit_rate(&self) -> f64 {
+        self.stats.read().unwrap().hit_rate()
+    }
+
+    /// Reset statistics
+    pub fn reset_stats(&self) {
+        let mut stats = self.stats.write().unwrap();
+        *stats = BufferPoolStats::default();
+    }
+
+    /// Clear the pool
+    pub fn clear(&self) {
+        let mut pages = self.pages.lock().unwrap();
+        pages.clear();
+        let mut history = self.access_history.lock().unwrap();
+        history.clear();
     }
 }
 
@@ -550,5 +712,67 @@ mod tests {
             prefetch_hits: 0,
         };
         assert_eq!(stats.hit_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_lruk_buffer_pool_creation() {
+        let pool = BufferPoolLruK::new(100, 2);
+        assert_eq!(pool.capacity(), 100);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn test_lruk_buffer_pool_insert_and_get() {
+        let pool = BufferPoolLruK::new(10, 2);
+
+        let page = Arc::new(Page::new_data(1, 100));
+        pool.insert(page);
+
+        assert_eq!(pool.len(), 1);
+        assert!(pool.get(1).is_some());
+    }
+
+    #[test]
+    fn test_lruk_buffer_pool_eviction() {
+        let pool = BufferPoolLruK::new(2, 2);
+
+        // Insert 3 pages, should evict 1
+        let page1 = Arc::new(Page::new_data(1, 100));
+        let page2 = Arc::new(Page::new_data(2, 100));
+        let page3 = Arc::new(Page::new_data(3, 100));
+
+        pool.insert(page1);
+        pool.insert(page2);
+        pool.insert(page3);
+
+        // Pool should have 2 pages
+        assert_eq!(pool.len(), 2);
+    }
+
+    #[test]
+    fn test_lruk_buffer_pool_hit_rate() {
+        let pool = BufferPoolLruK::new(10, 2);
+
+        let page = Arc::new(Page::new_data(1, 100));
+        pool.insert(page);
+
+        // Access multiple times
+        pool.get(1);
+        pool.get(1);
+        pool.get(1);
+
+        assert!(pool.hit_rate() > 0.0);
+    }
+
+    #[test]
+    fn test_lruk_buffer_pool_clear() {
+        let pool = BufferPoolLruK::new(10, 2);
+
+        let page = Arc::new(Page::new_data(1, 100));
+        pool.insert(page);
+
+        pool.clear();
+
+        assert!(pool.is_empty());
     }
 }
