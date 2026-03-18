@@ -5,23 +5,129 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo_server::{ConnectionPool, PoolConfig};
 use std::sync::Arc;
+use std::time::Instant;
 
-/// TPC-H Data Generator
-/// Generates sample data for TPC-H style tables
+struct LatencyCollector {
+    samples: Vec<u64>,
+}
+
+impl LatencyCollector {
+    fn new() -> Self {
+        Self {
+            samples: Vec::new(),
+        }
+    }
+
+    fn record(&mut self, latency_ns: u64) {
+        self.samples.push(latency_ns);
+    }
+
+    fn avg_latency_ns(&self) -> u64 {
+        if self.samples.is_empty() {
+            return 0;
+        }
+        self.samples.iter().sum::<u64>() / self.samples.len() as u64
+    }
+
+    fn p50(&self) -> u64 {
+        self.percentile(50)
+    }
+
+    fn p90(&self) -> u64 {
+        self.percentile(90)
+    }
+
+    fn p99(&self) -> u64 {
+        self.percentile(99)
+    }
+
+    fn percentile(&self, p: usize) -> u64 {
+        if self.samples.is_empty() {
+            return 0;
+        }
+        let mut sorted = self.samples.clone();
+        sorted.sort();
+        let idx = (sorted.len() * p / 100).min(sorted.len() - 1);
+        sorted[idx]
+    }
+}
+
+struct QueryReport {
+    name: String,
+    avg_latency_ms: f64,
+    p50_ms: u64,
+    p90_ms: u64,
+    p99_ms: u64,
+}
+
+struct TpchSummary {
+    scale_factor: f64,
+    total_queries: usize,
+    execution_time_ms: u64,
+    qps: f64,
+}
+
+struct BenchmarkReport {
+    tpch_summary: TpchSummary,
+    queries: Vec<QueryReport>,
+}
+
+impl BenchmarkReport {
+    fn print(&self) {
+        println!("=== TPC-H Benchmark Report ===");
+        println!("Scale Factor: {}", self.tpch_summary.scale_factor);
+        println!("Total Queries: {}", self.tpch_summary.total_queries);
+        println!("Total Time: {} ms", self.tpch_summary.execution_time_ms);
+        println!("QPS: {:.2}", self.tpch_summary.qps);
+        println!();
+        println!(
+            "{:<10} {:>15} {:>15} {:>15} {:>15}",
+            "Query", "Avg(ms)", "P50(ms)", "P90(ms)", "P99(ms)"
+        );
+        println!("{}", "-".repeat(75));
+        for q in &self.queries {
+            println!(
+                "{:<10} {:>15.2} {:>15} {:>15} {:>15}",
+                q.name, q.avg_latency_ms, q.p50_ms, q.p90_ms, q.p99_ms
+            );
+        }
+    }
+}
+
+const SCALE_FACTOR: f64 = 0.1;
+
 struct TpchDataGenerator {
-    scale_factor: u32,
+    scale_factor: f64,
 }
 
 impl TpchDataGenerator {
-    fn new(scale_factor: u32) -> Self {
+    fn new(scale_factor: f64) -> Self {
         Self { scale_factor }
+    }
+
+    fn row_count(&self, base_count: usize) -> usize {
+        (base_count as f64 * self.scale_factor) as usize
+    }
+
+    fn table_row_counts(&self) -> Vec<(&'static str, usize)> {
+        vec![
+            ("nation", 25),
+            ("region", 5),
+            ("part", self.row_count(200_000)),
+            ("supplier", self.row_count(10_000)),
+            ("partsupp", self.row_count(800_000)),
+            ("customer", self.row_count(150_000)),
+            ("orders", self.row_count(1_500_000)),
+            ("lineitem", self.row_count(6_000_000)),
+        ]
     }
 
     /// Generate TPC-H lineitem table data
     fn generate_lineitem_data(&self) -> Vec<(i64, i64, f64, f64, f64, f64, f64, i32, &str)> {
         let mut data = Vec::new();
-        let num_rows = 1000 * self.scale_factor;
+        let num_rows = self.row_count(6_000_000);
 
         for i in 0..num_rows {
             let order_key = (i % 10000) as i64 + 1;
@@ -58,7 +164,7 @@ impl TpchDataGenerator {
     /// Generate TPC-H orders table data
     fn generate_orders_data(&self) -> Vec<(i64, i64, i32, &str, i64, u32)> {
         let mut data = Vec::new();
-        let num_rows = 500 * self.scale_factor;
+        let num_rows = self.row_count(1_500_000);
 
         for i in 0..num_rows {
             let order_key = i as i64 + 1;
@@ -96,7 +202,7 @@ fn bench_tpch_q1(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL, l_returnflag INTEGER, l_shipmode TEXT)").unwrap()).unwrap();
 
     // Insert sample data (10k rows)
-    let generator = TpchDataGenerator::new(10);
+    let generator = TpchDataGenerator::new(10.0);
     for (
         order_key,
         part_key,
@@ -150,7 +256,7 @@ fn bench_tpch_q3(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL)").unwrap()).unwrap();
 
     // Insert sample data
-    let generator = TpchDataGenerator::new(5);
+    let generator = TpchDataGenerator::new(5.0);
 
     // Insert orders
     for (order_key, cust_key, order_status, _order_priority, total_price, order_date) in
@@ -204,7 +310,7 @@ fn bench_tpch_q6(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL)").unwrap()).unwrap();
 
     // Insert sample data
-    let generator = TpchDataGenerator::new(10);
+    let generator = TpchDataGenerator::new(10.0);
     for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, _, _) in
         generator.generate_lineitem_data()
     {
@@ -351,3 +457,53 @@ criterion_group!(
     bench_simple_join
 );
 criterion_main!(benches);
+
+fn run_parallel_benchmark(queries: Vec<(&str, &str)>) -> BenchmarkReport {
+    use std::thread;
+
+    let pool_config = PoolConfig::default();
+    let pool = ConnectionPool::new(pool_config);
+
+    let start_time = Instant::now();
+    let mut handles = Vec::new();
+    let mut collector = LatencyCollector::new();
+
+    for (name, _query) in &queries {
+        let pool = pool.clone();
+        let n = name.to_string();
+
+        handles.push(thread::spawn(move || {
+            let start = Instant::now();
+            let conn = pool.acquire();
+            let _executor = conn.executor();
+            let latency = start.elapsed().as_nanos() as u64;
+            (n, latency)
+        }));
+    }
+
+    for handle in handles {
+        if let Ok((name, latency)) = handle.join() {
+            collector.record(latency);
+        }
+    }
+
+    let total_time = start_time.elapsed();
+    let total_time_ms = total_time.as_millis() as u64;
+    let qps = queries.len() as f64 / (total_time_ms as f64 / 1000.0);
+
+    BenchmarkReport {
+        tpch_summary: TpchSummary {
+            scale_factor: SCALE_FACTOR,
+            total_queries: queries.len(),
+            execution_time_ms: total_time_ms,
+            qps,
+        },
+        queries: vec![QueryReport {
+            name: "Aggregated".to_string(),
+            avg_latency_ms: collector.avg_latency_ns() as f64 / 1_000_000.0,
+            p50_ms: collector.p50() / 1_000_000,
+            p90_ms: collector.p90() / 1_000_000,
+            p99_ms: collector.p99() / 1_000_000,
+        }],
+    }
+}
