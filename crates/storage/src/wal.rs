@@ -1,0 +1,515 @@
+//! Write-Ahead Log (WAL) for durability
+//!
+//! The WAL ensures durability by logging all modifications before applying them.
+//! This allows recovery after a crash.
+
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::PathBuf;
+
+/// WAL magic number for validation
+const WAL_MAGIC: u32 = 0x57414C01; // "WAL" + version 1
+/// WAL version
+const WAL_VERSION: u16 = 1;
+
+/// WAL entry types
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WalEntryType {
+    /// Begin transaction
+    Begin = 1,
+    /// Insert row
+    Insert = 2,
+    /// Update row
+    Update = 3,
+    /// Delete row
+    Delete = 4,
+    /// Commit transaction
+    Commit = 5,
+    /// Rollback transaction
+    Rollback = 6,
+    /// Checkpoint
+    Checkpoint = 7,
+}
+
+impl WalEntryType {
+    fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            1 => Some(WalEntryType::Begin),
+            2 => Some(WalEntryType::Insert),
+            3 => Some(WalEntryType::Update),
+            4 => Some(WalEntryType::Delete),
+            5 => Some(WalEntryType::Commit),
+            6 => Some(WalEntryType::Rollback),
+            7 => Some(WalEntryType::Checkpoint),
+            _ => None,
+        }
+    }
+}
+
+/// WAL entry
+#[derive(Debug, Clone)]
+pub struct WalEntry {
+    /// Transaction ID
+    pub tx_id: u64,
+    /// Entry type
+    pub entry_type: WalEntryType,
+    /// Table ID
+    pub table_id: u64,
+    /// Row key (for update/delete)
+    pub key: Option<Vec<u8>>,
+    /// Row data (for insert/update)
+    pub data: Option<Vec<u8>>,
+    /// LSN (Log Sequence Number)
+    pub lsn: u64,
+    /// Timestamp
+    pub timestamp: u64,
+}
+
+impl WalEntry {
+    /// Serialize entry to bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // LSN (8 bytes)
+        bytes.extend_from_slice(&self.lsn.to_le_bytes());
+        // Timestamp (8 bytes)
+        bytes.extend_from_slice(&self.timestamp.to_le_bytes());
+        // Transaction ID (8 bytes)
+        bytes.extend_from_slice(&self.tx_id.to_le_bytes());
+        // Entry type (1 byte)
+        bytes.push(self.entry_type as u8);
+        // Table ID (8 bytes)
+        bytes.extend_from_slice(&self.table_id.to_le_bytes());
+
+        // Key length + key (if present)
+        match &self.key {
+            Some(k) => {
+                bytes.extend_from_slice(&(k.len() as u32).to_le_bytes());
+                bytes.extend_from_slice(k);
+            }
+            None => {
+                bytes.extend_from_slice(&0u32.to_le_bytes());
+            }
+        }
+
+        // Data length + data (if present)
+        match &self.data {
+            Some(d) => {
+                bytes.extend_from_slice(&(d.len() as u32).to_le_bytes());
+                bytes.extend_from_slice(d);
+            }
+            None => {
+                bytes.extend_from_slice(&0u32.to_le_bytes());
+            }
+        }
+
+        bytes
+    }
+
+    /// Deserialize entry from bytes
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 34 {
+            return None;
+        }
+
+        let mut offset = 0;
+
+        // LSN
+        let lsn = u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]);
+        offset += 8;
+
+        // Timestamp
+        let timestamp = u64::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]);
+        offset += 8;
+
+        // Transaction ID
+        let tx_id = u64::from_le_bytes([bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23]]);
+        offset += 8;
+
+        // Entry type
+        let entry_type = WalEntryType::from_u8(bytes[offset])?;
+        offset += 1;
+
+        // Table ID
+        let table_id = u64::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3], bytes[offset+4], bytes[offset+5], bytes[offset+6], bytes[offset+7]]);
+        offset += 8;
+
+        // Key
+        let key_len = u32::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]]) as usize;
+        offset += 4;
+        let key = if key_len > 0 {
+            Some(bytes[offset..offset + key_len].to_vec())
+        } else {
+            None
+        };
+        offset += key_len;
+
+        // Data
+        if offset + 4 > bytes.len() {
+            return None;
+        }
+        let data_len = u32::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]]) as usize;
+        offset += 4;
+        let data = if data_len > 0 && offset + data_len <= bytes.len() {
+            Some(bytes[offset..offset + data_len].to_vec())
+        } else {
+            None
+        };
+
+        Some(WalEntry {
+            tx_id,
+            entry_type,
+            table_id,
+            key,
+            data,
+            lsn,
+            timestamp,
+        })
+    }
+}
+
+/// WAL writer
+pub struct WalWriter {
+    writer: BufWriter<File>,
+    lsn: u64,
+}
+
+impl WalWriter {
+    /// Create a new WAL writer
+    pub fn new(path: &PathBuf) -> std::io::Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+
+        let writer = BufWriter::new(file);
+
+        Ok(Self { writer, lsn: 0 })
+    }
+
+    /// Append an entry to the WAL
+    pub fn append(&mut self, entry: &WalEntry) -> std::io::Result<u64> {
+        let lsn = self.lsn;
+        let bytes = entry.to_bytes();
+
+        // Write length prefix (4 bytes)
+        self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
+        // Write entry data
+        self.writer.write_all(&bytes)?;
+        // Flush to ensure durability
+        self.writer.flush()?;
+
+        self.lsn += 1;
+        Ok(lsn)
+    }
+
+    /// Get current LSN
+    pub fn current_lsn(&self) -> u64 {
+        self.lsn
+    }
+}
+
+/// WAL reader
+pub struct WalReader {
+    reader: BufReader<File>,
+}
+
+impl WalReader {
+    /// Create a new WAL reader
+    pub fn new(path: &PathBuf) -> std::io::Result<Self> {
+        let file = OpenOptions::new()
+            .read(true)
+            .open(path)?;
+
+        let reader = BufReader::new(file);
+
+        Ok(Self { reader })
+    }
+
+    /// Read all entries from WAL
+    pub fn read_all(&mut self) -> std::io::Result<Vec<WalEntry>> {
+        let mut entries = Vec::new();
+
+        loop {
+            // Read length prefix
+            let mut len_bytes = [0u8; 4];
+            match self.reader.read_exact(&mut len_bytes) {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
+            }
+
+            let len = u32::from_le_bytes(len_bytes) as usize;
+
+            // Read entry data
+            let mut data = vec![0u8; len];
+            self.reader.read_exact(&mut data)?;
+
+            // Deserialize entry
+            if let Some(entry) = WalEntry::from_bytes(&data) {
+                entries.push(entry);
+            }
+        }
+
+        Ok(entries)
+    }
+
+    /// Read entries from a specific LSN
+    pub fn read_from(&mut self, start_lsn: u64) -> std::io::Result<Vec<WalEntry>> {
+        let all_entries = self.read_all()?;
+        Ok(all_entries.into_iter().filter(|e| e.lsn >= start_lsn).collect())
+    }
+}
+
+/// WAL manager for recovery
+pub struct WalManager {
+    wal_path: PathBuf,
+}
+
+impl WalManager {
+    /// Create a new WAL manager
+    pub fn new(wal_path: PathBuf) -> Self {
+        Self { wal_path }
+    }
+
+    /// Get WAL writer
+    pub fn get_writer(&self) -> std::io::Result<WalWriter> {
+        WalWriter::new(&self.wal_path)
+    }
+
+    /// Get WAL reader
+    pub fn get_reader(&self) -> std::io::Result<WalReader> {
+        WalReader::new(&self.wal_path)
+    }
+
+    /// Recover from WAL
+    pub fn recover(&self) -> std::io::Result<Vec<WalEntry>> {
+        let mut reader = self.get_reader()?;
+        reader.read_all()
+    }
+
+    /// Create a checkpoint
+    pub fn checkpoint(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Checkpoint,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+
+    /// Log transaction begin
+    pub fn log_begin(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Begin,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+
+    /// Log transaction commit
+    pub fn log_commit(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Commit,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+
+    /// Log insert
+    pub fn log_insert(&self, tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8>) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Insert,
+            table_id,
+            key: Some(key),
+            data: Some(data),
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+
+    /// Log update
+    pub fn log_update(&self, tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8>) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Update,
+            table_id,
+            key: Some(key),
+            data: Some(data),
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+
+    /// Log delete
+    pub fn log_delete(&self, tx_id: u64, table_id: u64, key: Vec<u8>) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Delete,
+            table_id,
+            key: Some(key),
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_wal_entry_serialization() {
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 100,
+            key: Some(vec![1, 2, 3, 4]),
+            data: Some(vec![10, 20, 30]),
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.tx_id, restored.tx_id);
+        assert_eq!(entry.entry_type, restored.entry_type);
+        assert_eq!(entry.table_id, restored.table_id);
+        assert_eq!(entry.key, restored.key);
+        assert_eq!(entry.data, restored.data);
+    }
+
+    #[test]
+    fn test_wal_write_read() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test.wal");
+
+        // Write entries
+        {
+            let mut writer = WalWriter::new(&wal_path).unwrap();
+
+            let entry1 = WalEntry {
+                tx_id: 1,
+                entry_type: WalEntryType::Begin,
+                table_id: 0,
+                key: None,
+                data: None,
+                lsn: 0,
+                timestamp: 1234567890,
+            };
+
+            writer.append(&entry1).unwrap();
+
+            let entry2 = WalEntry {
+                tx_id: 1,
+                entry_type: WalEntryType::Insert,
+                table_id: 100,
+                key: Some(vec![1]),
+                data: Some(vec![10, 20]),
+                lsn: 1,
+                timestamp: 1234567891,
+            };
+
+            writer.append(&entry2).unwrap();
+        }
+
+        // Read entries
+        let mut reader = WalReader::new(&wal_path).unwrap();
+        let entries = reader.read_all().unwrap();
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].entry_type, WalEntryType::Begin);
+        assert_eq!(entries[1].entry_type, WalEntryType::Insert);
+    }
+
+    #[test]
+    fn test_wal_manager() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test.wal");
+
+        let manager = WalManager::new(wal_path);
+
+        // Log begin
+        let _lsn = manager.log_begin(1).unwrap();
+
+        // Log insert
+        let _lsn = manager.log_insert(1, 100, vec![1], vec![10]).unwrap();
+
+        // Log commit
+        let _lsn = manager.log_commit(1).unwrap();
+
+        // Recover
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 3);
+
+        // Verify entry types
+        assert_eq!(entries[0].entry_type, WalEntryType::Begin);
+        assert_eq!(entries[1].entry_type, WalEntryType::Insert);
+        assert_eq!(entries[2].entry_type, WalEntryType::Commit);
+    }
+
+    #[test]
+    fn test_wal_entry_type() {
+        assert_eq!(WalEntryType::from_u8(1), Some(WalEntryType::Begin));
+        assert_eq!(WalEntryType::from_u8(2), Some(WalEntryType::Insert));
+        assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
+        assert_eq!(WalEntryType::from_u8(99), None);
+    }
+}
