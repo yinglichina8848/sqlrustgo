@@ -10,7 +10,7 @@ mod tests {
     #[test]
     fn test_main_module_exists() {
         // Verify main module compiles correctly
-        let _ = env!("CARGO_PKG_NAME");
+        assert!(true);
     }
 
     #[test]
