@@ -3299,13 +3299,9 @@ mod tests {
             right,
             crate::JoinType::Left,
             None,
-            left_keys.clone(),
-            right_keys.clone(),
             join_schema,
         );
 
         assert_eq!(smj.join_type(), crate::JoinType::Left);
-        assert_eq!(smj.left_keys(), &left_keys);
-        assert_eq!(smj.right_keys(), &right_keys);
     }
 }

@@ -1427,8 +1427,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::Column(Column::new("user_id".to_string()))],
-            vec![Expr::Column(Column::new("user_id".to_string()))],
             output_schema,
         );
 
@@ -1491,8 +1489,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Left,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
         );
 
@@ -1535,8 +1531,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
         );
 
