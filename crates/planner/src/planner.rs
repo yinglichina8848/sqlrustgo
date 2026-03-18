@@ -657,22 +657,22 @@ mod tests {
 
 fn select_join_algorithm(
     _cost_model: &(),
-    left_rows: u64,
-    right_rows: u64,
-    join_type: &crate::JoinType,
+    _left_rows: u64,
+    _right_rows: u64,
+    _join_type: &crate::JoinType,
 ) -> String {
     // Use HashJoin by default for stability
     // TODO: Re-enable SortMergeJoin after more testing
     "hash_join".to_string()
 }
 
-fn estimate_output_rows(plan: &dyn PhysicalPlan) -> Option<u64> {
+fn estimate_output_rows(_plan: &dyn PhysicalPlan) -> Option<u64> {
     // Simple heuristic: estimate based on plan type
     // In a full implementation, this would use statistics
     Some(1000) // Default estimate
 }
 
-fn should_use_index(table_name: &str) -> bool {
+fn should_use_index(_table_name: &str) -> bool {
     // Disabled for now - IndexScan not fully implemented
     // Will re-enable after proper implementation
     false

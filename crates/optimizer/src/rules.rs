@@ -854,6 +854,7 @@ impl JoinReordering {
 }
 
 /// IndexSelect rule - chooses between index scan and table scan based on cost
+#[allow(dead_code)]
 pub struct IndexSelect {
     cost_model: crate::SimpleCostModel,
     available_indexes: Vec<(String, String)>,
@@ -918,6 +919,7 @@ impl Rule<Plan> for IndexSelect {
         "IndexSelect"
     }
 
+    #[allow(clippy::replace_box)]
     fn apply(&self, plan: &mut Plan) -> bool {
         match plan {
             Plan::Filter { input, predicate } => {

@@ -1504,12 +1504,14 @@ mod tests {
         let storage = MemoryStorage::new();
         let executor = LocalExecutor::new(&storage);
 
-        let left_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
-        let right_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
+        let left_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let right_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
         let join_schema = Schema::new(vec![
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),

@@ -115,20 +115,26 @@ fn handle_request(
                 "/health/live" => {
                     let body = serde_json::json!({
                         "status": "healthy",
-                    }).to_string();
+                    })
+                    .to_string();
                     ("HTTP/1.1 200 OK", "application/json", body)
                 }
                 "/health/ready" => {
                     let body = serde_json::json!({
                         "status": "ready",
                         "version": version,
-                    }).to_string();
+                    })
+                    .to_string();
                     ("HTTP/1.1 200 OK", "application/json", body)
                 }
                 "/metrics" => {
                     let registry = metrics_registry.read().unwrap();
                     let prometheus_output = registry.to_prometheus_format();
-                    ("HTTP/1.1 200 OK", "text/plain; version=0.0.4", prometheus_output)
+                    (
+                        "HTTP/1.1 200 OK",
+                        "text/plain; version=0.0.4",
+                        prometheus_output,
+                    )
                 }
                 _ => (
                     "HTTP/1.1 404 Not Found",
@@ -136,14 +142,23 @@ fn handle_request(
                     serde_json::json!({
                         "error": "Not Found",
                         "message": format!("Path '{}' not found", path)
-                    }).to_string()
+                    })
+                    .to_string(),
                 ),
             }
         } else {
-            ("HTTP/1.1 400 Bad Request", "application/json", r#"{"error": "Bad Request"}"#.to_string())
+            (
+                "HTTP/1.1 400 Bad Request",
+                "application/json",
+                r#"{"error": "Bad Request"}"#.to_string(),
+            )
         }
     } else {
-        ("HTTP/1.1 400 Bad Request", "application/json", r#"{"error": "Bad Request"}"#.to_string())
+        (
+            "HTTP/1.1 400 Bad Request",
+            "application/json",
+            r#"{"error": "Bad Request"}"#.to_string(),
+        )
     };
 
     let response = format!(
@@ -172,8 +187,7 @@ mod tests {
 
     #[test]
     fn test_http_server_with_version() {
-        let server = HttpServer::new("127.0.0.1", 8080)
-            .with_version("2.0.0");
+        let server = HttpServer::new("127.0.0.1", 8080).with_version("2.0.0");
         assert_eq!(server.version, "2.0.0");
     }
 }
