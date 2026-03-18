@@ -34,6 +34,8 @@ pub enum Value {
     Blob(Vec<u8>),
     /// Date value (days since UNIX epoch)
     Date(i32),
+    /// Timestamp value (microseconds since UNIX epoch)
+    Timestamp(i64),
 }
 
 impl Hash for Value {
@@ -52,6 +54,7 @@ impl Hash for Value {
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
             Value::Date(d) => d.hash(state),
+            Value::Timestamp(ts) => ts.hash(state),
         }
     }
 }
@@ -66,6 +69,7 @@ impl PartialEq for Value {
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
             (Value::Date(a), Value::Date(b)) => a == b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
             _ => false,
         }
     }
@@ -102,6 +106,7 @@ impl Value {
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
             Value::Date(d) => d.to_string(),
+            Value::Timestamp(ts) => ts.to_string(),
         }
     }
 
@@ -115,6 +120,7 @@ impl Value {
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
             Value::Date(_) => "DATE",
+            Value::Timestamp(_) => "TIMESTAMP",
         }
     }
 
@@ -132,6 +138,82 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Create a Timestamp value from micros since epoch
+    pub fn timestamp(micros: i64) -> Self {
+        Value::Timestamp(micros)
+    }
+
+    /// Get timestamp value if this is a Timestamp
+    pub fn as_timestamp(&self) -> Option<i64> {
+        match self {
+            Value::Timestamp(ts) => Some(*ts),
+            _ => None,
+        }
+    }
+
+    /// Convert timestamp to formatted string YYYY-MM-DD HH:MM:SS
+    pub fn timestamp_to_string(&self) -> Option<String> {
+        match self {
+            Value::Timestamp(micros) => Some(timestamp_to_datetime_string(*micros)),
+            _ => None,
+        }
+    }
+}
+
+/// Convert microseconds since epoch to YYYY-MM-DD HH:MM:SS format
+fn timestamp_to_datetime_string(micros: i64) -> String {
+    const MICROS_PER_SEC: i64 = 1_000_000;
+    const SECS_PER_DAY: i64 = 86400;
+
+    let total_secs = micros / MICROS_PER_SEC;
+    let days_since_epoch = total_secs / SECS_PER_DAY;
+    let secs_of_day = total_secs % SECS_PER_DAY;
+
+    let mut year = 1970;
+    let mut remaining_days = days_since_epoch;
+
+    while remaining_days >= 365 {
+        let leap = if is_leap_year(year) { 366 } else { 365 };
+        if remaining_days >= leap {
+            remaining_days -= leap;
+            year += 1;
+        } else {
+            break;
+        }
+    }
+
+    let (month, day) = days_to_month_day(remaining_days as u32, is_leap_year(year));
+
+    let hours = secs_of_day / 3600;
+    let minutes = (secs_of_day % 3600) / 60;
+    let seconds = secs_of_day % 60;
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        year, month, day, hours, minutes, seconds
+    )
+}
+
+fn is_leap_year(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+fn days_to_month_day(days: u32, leap_year: bool) -> (u32, u32) {
+    let days_in_months: [u32; 12] = if leap_year {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    let mut remaining = days;
+    for (i, &days_in_month) in days_in_months.iter().enumerate() {
+        if remaining < days_in_month {
+            return ((i + 1) as u32, remaining + 1);
+        }
+        remaining -= days_in_month;
+    }
+    (12, 31)
 }
 
 impl fmt::Display for Value {
@@ -231,6 +313,7 @@ mod tests {
             Value::Text("hello".to_string())
         );
         assert_eq!(Value::Blob(vec![1, 2, 3]), Value::Blob(vec![1, 2, 3]));
+        assert_eq!(Value::Timestamp(1000000), Value::Timestamp(1000000));
     }
 
     #[test]
@@ -241,6 +324,7 @@ mod tests {
         assert_ne!(Value::Float(1.0), Value::Float(2.0));
         assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
         assert_ne!(Value::Blob(vec![1]), Value::Blob(vec![2]));
+        assert_ne!(Value::Timestamp(1), Value::Timestamp(2));
     }
 
     #[test]
@@ -405,5 +489,76 @@ mod tests {
         d2.hash(&mut h2);
 
         assert_eq!(h1.finish(), h2.finish());
+    }
+
+    // Timestamp tests
+    #[test]
+    fn test_value_timestamp_basic() {
+        let ts = Value::Timestamp(0);
+        assert_eq!(ts.type_name(), "TIMESTAMP");
+    }
+
+    #[test]
+    fn test_value_timestamp_equality() {
+        let t1 = Value::Timestamp(1000000);
+        let t2 = Value::Timestamp(1000000);
+        let t3 = Value::Timestamp(2000000);
+        assert_eq!(t1, t2);
+        assert_ne!(t1, t3);
+    }
+
+    #[test]
+    fn test_value_timestamp_to_sql_string() {
+        let ts = Value::Timestamp(1000000);
+        assert_eq!(ts.to_sql_string(), "1000000");
+    }
+
+    #[test]
+    fn test_value_timestamp_helper() {
+        let ts = Value::timestamp(1000000);
+        assert_eq!(ts.as_timestamp(), Some(1000000));
+    }
+
+    #[test]
+    fn test_value_timestamp_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+
+        let t1 = Value::Timestamp(1000000);
+        let t2 = Value::Timestamp(1000000);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+
+        t1.hash(&mut h1);
+        t2.hash(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_timestamp_to_string() {
+        let ts = Value::Timestamp(0); // 1970-01-01 00:00:00
+        let s = ts.timestamp_to_string();
+        assert!(s.is_some());
+        assert_eq!(s.unwrap(), "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_timestamp_to_string_known_date() {
+        // 2020-01-01 00:00:00 UTC = 1577836800 seconds
+        let micros = 1577836800i64 * 1_000_000;
+        let ts = Value::Timestamp(micros);
+        let s = ts.timestamp_to_string();
+        assert!(s.is_some());
+        assert_eq!(s.unwrap(), "2020-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_is_leap_year() {
+        assert!(is_leap_year(2020));
+        assert!(is_leap_year(2000));
+        assert!(!is_leap_year(2019));
+        assert!(!is_leap_year(2100));
     }
 }
