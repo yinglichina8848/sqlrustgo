@@ -126,6 +126,10 @@ harness = false
 name = "tpch_benchmark"
 path = "benches/tpch_comprehensive_main.rs"
 
+[dependencies.rusqlite]
+version = "0.32"
+features = ["bundled"]
+
 [[test]]
 name = "optimizer_rules_test"
 path = "tests/optimizer_rules_test.rs"
