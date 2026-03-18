@@ -372,6 +372,11 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&d.to_le_bytes());
             bytes
         }
+        Value::Timestamp(ts) => {
+            let mut bytes = vec![0x08];
+            bytes.extend_from_slice(&ts.to_le_bytes());
+            bytes
+        }
     }
 }
 
@@ -418,6 +423,12 @@ pub fn bytes_to_value(data: &[u8]) -> Option<Value> {
         0x07 if data.len() >= 5 => {
             let d = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
             Some(Value::Date(d))
+        }
+        0x08 if data.len() >= 9 => {
+            let ts = i64::from_le_bytes([
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+            ]);
+            Some(Value::Timestamp(ts))
         }
         _ => None,
     }

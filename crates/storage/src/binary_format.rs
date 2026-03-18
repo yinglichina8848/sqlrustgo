@@ -184,6 +184,11 @@ impl BinaryFormat for Value {
                 result.extend_from_slice(&helpers::write_i32(*d));
                 result
             }
+            Value::Timestamp(ts) => {
+                let mut result = vec![7u8];
+                result.extend_from_slice(&helpers::write_i64(*ts));
+                result
+            }
         }
     }
 
@@ -207,6 +212,7 @@ impl BinaryFormat for Value {
                 Ok(Value::Blob(blob_data))
             }
             6 => Ok(Value::Date(helpers::read_i32(&data[1..])?)),
+            7 => Ok(Value::Timestamp(helpers::read_i64(&data[1..])?)),
             _ => Err(BinaryFormatError::InvalidFormat(format!(
                 "Unknown type indicator: {}",
                 data[0]
