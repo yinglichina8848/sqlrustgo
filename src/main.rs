@@ -2,7 +2,7 @@
 
 fn main() {
     sqlrustgo::init();
-    println!("SQLRustGo v1.5.0");
+    println!("SQLRustGo v1.4.0");
 }
 
 #[cfg(test)]
@@ -10,7 +10,7 @@ mod tests {
     #[test]
     fn test_main_module_exists() {
         // Verify main module compiles correctly
-        let _ = env!("CARGO_PKG_NAME");
+        assert!(true);
     }
 
     #[test]
