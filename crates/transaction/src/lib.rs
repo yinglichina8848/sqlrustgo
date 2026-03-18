@@ -1,9 +1,12 @@
 // SQLRustGo transaction module
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_transaction_module_exists() {
-        // Placeholder for future transaction implementation
-    }
-}
+pub mod manager;
+pub mod mvcc;
+
+pub use manager::{
+    IsolationLevel, TransactionCommand, TransactionContext, TransactionError, TransactionManager,
+};
+
+pub use mvcc::{
+    MvccEngine, RowVersion, Snapshot, Transaction, TransactionStatus, TxId, INVALID_TX_ID,
+};
