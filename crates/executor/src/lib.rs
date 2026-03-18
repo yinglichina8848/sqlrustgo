@@ -16,6 +16,8 @@ pub use executor::{
 pub use executor_metrics::ExecutorMetrics;
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
+pub use query_cache::{QueryCache, QueryCacheStats};
+pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use vectorization::{BatchIterator, RecordBatch, Vector, VectorizedExecutor};
 
 // Test framework modules - publicly accessible
