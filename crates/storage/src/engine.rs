@@ -70,6 +70,12 @@ pub trait StorageEngine: Send + Sync {
 
     /// Drop an index from a table
     fn drop_table_index(&self, table: &str, column: &str) -> SqlResult<()>;
+
+    /// Search using index - returns row IDs matching the key
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32>;
+
+    /// Range query using index - returns row IDs in range [start, end)
+    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -162,6 +168,14 @@ impl StorageEngine for MemoryStorage {
 
     fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
         Ok(())
+    }
+
+    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Option<u32> {
+        None
+    }
+
+    fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
+        Vec::new()
     }
 }
 
