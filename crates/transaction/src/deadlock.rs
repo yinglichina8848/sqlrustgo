@@ -90,6 +90,18 @@ mod tests {
     }
 
     #[test]
+    fn test_with_timeout() {
+        let detector = DeadlockDetector::with_timeout(Duration::from_secs(10));
+        assert_eq!(detector.get_timeout(), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_default() {
+        let detector = DeadlockDetector::default();
+        assert!(detector.waits_for.is_empty());
+    }
+
+    #[test]
     fn test_add_edge() {
         let mut detector = DeadlockDetector::new();
         detector.add_edge(TxId::new(1), TxId::new(2));
@@ -101,6 +113,47 @@ mod tests {
     }
 
     #[test]
+    fn test_add_multiple_edges() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(1), TxId::new(3));
+        assert_eq!(detector.waits_for.get(&TxId::new(1)).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_remove_edges_for() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+
+        detector.remove_edges_for(TxId::new(1));
+
+        assert!(!detector.waits_for.contains_key(&TxId::new(1)));
+        assert!(
+            detector.waits_for.get(&TxId::new(2)).is_none()
+                || !detector
+                    .waits_for
+                    .get(&TxId::new(2))
+                    .unwrap()
+                    .contains(&TxId::new(1))
+        );
+    }
+
+    #[test]
+    fn test_remove_edges_for_removes_from_holders() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(1));
+
+        detector.remove_edges_for(TxId::new(1));
+
+        assert!(detector
+            .waits_for
+            .get(&TxId::new(2))
+            .map_or(true, |h| !h.contains(&TxId::new(1))));
+    }
+
+    #[test]
     fn test_detect_cycle() {
         let mut detector = DeadlockDetector::new();
         detector.add_edge(TxId::new(1), TxId::new(2));
@@ -109,12 +162,102 @@ mod tests {
 
         let cycle = detector.detect_cycle(TxId::new(1));
         assert!(cycle.is_some());
+        let cycle = cycle.unwrap();
+        assert!(cycle.contains(&TxId::new(1)));
+        assert!(cycle.contains(&TxId::new(2)));
+        assert!(cycle.contains(&TxId::new(3)));
+    }
+
+    #[test]
+    fn test_detect_cycle_from_different_start() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+        detector.add_edge(TxId::new(3), TxId::new(1));
+
+        let cycle = detector.detect_cycle(TxId::new(2));
+        assert!(cycle.is_some());
     }
 
     #[test]
     fn test_no_cycle() {
         let mut detector = DeadlockDetector::new();
         detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+
+        let cycle = detector.detect_cycle(TxId::new(1));
+        assert!(cycle.is_none());
+    }
+
+    #[test]
+    fn test_no_cycle_linear_chain() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+        detector.add_edge(TxId::new(3), TxId::new(4));
+        detector.add_edge(TxId::new(4), TxId::new(5));
+
+        assert!(detector.detect_cycle(TxId::new(1)).is_none());
+        assert!(detector.detect_cycle(TxId::new(5)).is_none());
+    }
+
+    #[test]
+    fn test_self_loop() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(1));
+
+        let cycle = detector.detect_cycle(TxId::new(1));
+        assert!(cycle.is_some());
+        assert_eq!(cycle.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_two_node_cycle() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(1));
+
+        let cycle = detector.detect_cycle(TxId::new(1));
+        assert!(cycle.is_some());
+        assert_eq!(cycle.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_detect_cycle_no_waiters() {
+        let detector = DeadlockDetector::new();
+        let cycle = detector.detect_cycle(TxId::new(999));
+        assert!(cycle.is_none());
+    }
+
+    #[test]
+    fn test_partial_cycle() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+        detector.add_edge(TxId::new(3), TxId::new(2));
+
+        let cycle = detector.detect_cycle(TxId::new(1));
+        assert!(cycle.is_some());
+    }
+
+    #[test]
+    fn test_complex_wait_for_graph() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(2), TxId::new(3));
+        detector.add_edge(TxId::new(3), TxId::new(4));
+        detector.add_edge(TxId::new(4), TxId::new(5));
+        detector.add_edge(TxId::new(5), TxId::new(2));
+
+        let cycle = detector.detect_cycle(TxId::new(1));
+        assert!(cycle.is_some());
+    }
+
+    #[test]
+    fn test_visited_contains_current() {
+        let mut detector = DeadlockDetector::new();
+        detector.add_edge(TxId::new(1), TxId::new(2));
+        detector.add_edge(TxId::new(1), TxId::new(3));
         detector.add_edge(TxId::new(2), TxId::new(3));
 
         let cycle = detector.detect_cycle(TxId::new(1));
