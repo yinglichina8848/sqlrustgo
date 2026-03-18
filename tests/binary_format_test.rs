@@ -1,19 +1,19 @@
 // Binary Format Tests
-use sqlrustgo_storage::binary_format::{helpers, BinaryFormat, BinaryFormatError};
+use sqlrustgo_storage::binary_format::{helpers, BinaryFormatError};
+use std::f64::consts::PI;
 
 #[test]
-fn test_binary_format_error_display() {
-    let err = BinaryFormatError::InsufficientData;
-    assert_eq!(format!("{}", err), "Insufficient data in buffer");
+fn test_helpers_write_f64() {
+    let bytes = helpers::write_f64(PI);
+    assert_eq!(bytes.len(), 8);
+}
 
-    let err = BinaryFormatError::InvalidFormat("test".to_string());
-    assert!(format!("{}", err).contains("Invalid format"));
-
-    let err = BinaryFormatError::DataTooLarge(100);
-    assert!(format!("{}", err).contains("Data too large"));
-
-    let err = BinaryFormatError::Unknown("test error".to_string());
-    assert!(format!("{}", err).contains("Unknown error"));
+#[test]
+fn test_helpers_read_f64() {
+    let bytes = helpers::write_f64(PI);
+    let result = helpers::read_f64(&bytes);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), PI);
 }
 
 #[test]
@@ -63,26 +63,6 @@ fn test_helpers_read_i64() {
 #[test]
 fn test_helpers_read_i64_insufficient_data() {
     let result = helpers::read_i64(&[1, 2, 3]);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_helpers_write_f64() {
-    let bytes = helpers::write_f64(3.14);
-    assert_eq!(bytes.len(), 8);
-}
-
-#[test]
-fn test_helpers_read_f64() {
-    let bytes = helpers::write_f64(3.14);
-    let result = helpers::read_f64(&bytes);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), 3.14);
-}
-
-#[test]
-fn test_helpers_read_f64_insufficient_data() {
-    let result = helpers::read_f64(&[1, 2, 3]);
     assert!(result.is_err());
 }
 

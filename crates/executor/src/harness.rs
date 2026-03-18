@@ -292,9 +292,18 @@ pub mod fixtures {
         storage.insert(
             "customer",
             vec![
-                vec![Value::Integer(1), Value::Text("Customer#000000001".to_string())],
-                vec![Value::Integer(2), Value::Text("Customer#000000002".to_string())],
-                vec![Value::Integer(3), Value::Text("Customer#000000003".to_string())],
+                vec![
+                    Value::Integer(1),
+                    Value::Text("Customer#000000001".to_string()),
+                ],
+                vec![
+                    Value::Integer(2),
+                    Value::Text("Customer#000000002".to_string()),
+                ],
+                vec![
+                    Value::Integer(3),
+                    Value::Text("Customer#000000003".to_string()),
+                ],
             ],
         )?;
 

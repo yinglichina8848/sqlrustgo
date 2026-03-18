@@ -117,7 +117,7 @@ impl Page {
 
         // Calculate checksum for all bytes except checksum field (offset 12-15)
         for i in 0..PAGE_SIZE {
-            if i >= 12 && i < 16 {
+            if (12..16).contains(&i) {
                 continue; // Skip checksum field
             }
             checksum = checksum.wrapping_add(self.data[i] as u32 * multiplier);

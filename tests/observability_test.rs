@@ -35,8 +35,7 @@ mod tests {
     #[test]
     fn test_health_checker_uptime() {
         let checker = HealthChecker::new("1.3.0");
-        let uptime = checker.uptime_seconds();
-        assert!(uptime >= 0);
+        let _uptime = checker.uptime_seconds();
     }
 
     #[test]

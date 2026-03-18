@@ -4,12 +4,14 @@
 //! This allows recovery after a crash.
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 
 /// WAL magic number for validation
+#[allow(dead_code)]
 const WAL_MAGIC: u32 = 0x57414C01; // "WAL" + version 1
 /// WAL version
+#[allow(dead_code)]
 const WAL_VERSION: u16 = 1;
 
 /// WAL entry types
@@ -115,15 +117,21 @@ impl WalEntry {
         let mut offset = 0;
 
         // LSN
-        let lsn = u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]);
+        let lsn = u64::from_le_bytes([
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ]);
         offset += 8;
 
         // Timestamp
-        let timestamp = u64::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]);
+        let timestamp = u64::from_le_bytes([
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        ]);
         offset += 8;
 
         // Transaction ID
-        let tx_id = u64::from_le_bytes([bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23]]);
+        let tx_id = u64::from_le_bytes([
+            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
+        ]);
         offset += 8;
 
         // Entry type
@@ -131,11 +139,25 @@ impl WalEntry {
         offset += 1;
 
         // Table ID
-        let table_id = u64::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3], bytes[offset+4], bytes[offset+5], bytes[offset+6], bytes[offset+7]]);
+        let table_id = u64::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+            bytes[offset + 4],
+            bytes[offset + 5],
+            bytes[offset + 6],
+            bytes[offset + 7],
+        ]);
         offset += 8;
 
         // Key
-        let key_len = u32::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]]) as usize;
+        let key_len = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
         offset += 4;
         let key = if key_len > 0 {
             Some(bytes[offset..offset + key_len].to_vec())
@@ -148,7 +170,12 @@ impl WalEntry {
         if offset + 4 > bytes.len() {
             return None;
         }
-        let data_len = u32::from_le_bytes([bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]]) as usize;
+        let data_len = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
         offset += 4;
         let data = if data_len > 0 && offset + data_len <= bytes.len() {
             Some(bytes[offset..offset + data_len].to_vec())
@@ -177,10 +204,7 @@ pub struct WalWriter {
 impl WalWriter {
     /// Create a new WAL writer
     pub fn new(path: &PathBuf) -> std::io::Result<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
 
         let writer = BufWriter::new(file);
 
@@ -217,9 +241,7 @@ pub struct WalReader {
 impl WalReader {
     /// Create a new WAL reader
     pub fn new(path: &PathBuf) -> std::io::Result<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .open(path)?;
+        let file = OpenOptions::new().read(true).open(path)?;
 
         let reader = BufReader::new(file);
 
@@ -257,7 +279,10 @@ impl WalReader {
     /// Read entries from a specific LSN
     pub fn read_from(&mut self, start_lsn: u64) -> std::io::Result<Vec<WalEntry>> {
         let all_entries = self.read_all()?;
-        Ok(all_entries.into_iter().filter(|e| e.lsn >= start_lsn).collect())
+        Ok(all_entries
+            .into_iter()
+            .filter(|e| e.lsn >= start_lsn)
+            .collect())
     }
 }
 
@@ -349,7 +374,13 @@ impl WalManager {
     }
 
     /// Log insert
-    pub fn log_insert(&self, tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8>) -> std::io::Result<u64> {
+    pub fn log_insert(
+        &self,
+        tx_id: u64,
+        table_id: u64,
+        key: Vec<u8>,
+        data: Vec<u8>,
+    ) -> std::io::Result<u64> {
         let mut writer = self.get_writer()?;
 
         let entry = WalEntry {
@@ -369,7 +400,13 @@ impl WalManager {
     }
 
     /// Log update
-    pub fn log_update(&self, tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8>) -> std::io::Result<u64> {
+    pub fn log_update(
+        &self,
+        tx_id: u64,
+        table_id: u64,
+        key: Vec<u8>,
+        data: Vec<u8>,
+    ) -> std::io::Result<u64> {
         let mut writer = self.get_writer()?;
 
         let entry = WalEntry {
@@ -542,7 +579,11 @@ mod tests {
         println!("WAL 1000 INSERT (1KB): {:?}", elapsed);
 
         // Target: <2s
-        assert!(elapsed.as_secs_f64() < 2.0, "WAL INSERT too slow: {:?}", elapsed);
+        assert!(
+            elapsed.as_secs_f64() < 2.0,
+            "WAL INSERT too slow: {:?}",
+            elapsed
+        );
     }
 
     #[test]
@@ -572,7 +613,11 @@ mod tests {
         println!("WAL 100 UPDATE (10KB): {:?}", elapsed);
 
         // Target: <1s
-        assert!(elapsed.as_secs_f64() < 1.0, "WAL UPDATE too slow: {:?}", elapsed);
+        assert!(
+            elapsed.as_secs_f64() < 1.0,
+            "WAL UPDATE too slow: {:?}",
+            elapsed
+        );
     }
 
     #[test]
@@ -603,10 +648,18 @@ mod tests {
         let entries = manager.recover().unwrap();
         let elapsed = start.elapsed();
 
-        println!("WAL Recovery 1MB: {:?} ({} entries)", elapsed, entries.len());
+        println!(
+            "WAL Recovery 1MB: {:?} ({} entries)",
+            elapsed,
+            entries.len()
+        );
 
         // Target: <5s for 1GB, so ~0.005s for 1MB
-        assert!(elapsed.as_secs_f64() < 0.1, "WAL Recovery too slow: {:?}", elapsed);
+        assert!(
+            elapsed.as_secs_f64() < 0.1,
+            "WAL Recovery too slow: {:?}",
+            elapsed
+        );
     }
 
     #[test]
@@ -634,13 +687,22 @@ mod tests {
         let total_bytes = 10000 * (4 + 512) as u64; // key + data
         let throughput_mbps = (total_bytes as f64 / 1_000_000.0) / elapsed.as_secs_f64();
 
-        println!("WAL Throughput: {:.2} MB/s ({:?} for {} entries)",
-            throughput_mbps, elapsed, 10000);
+        println!(
+            "WAL Throughput: {:.2} MB/s ({:?} for {} entries)",
+            throughput_mbps, elapsed, 10000
+        );
 
         // Target: >= 50 MB/s (relaxed for debug builds)
         // Note: In release builds, throughput should be >= 50 MB/s
-        println!("WAL Throughput: {:.2} MB/s (target: >= 50 MB/s in release)", throughput_mbps);
+        println!(
+            "WAL Throughput: {:.2} MB/s (target: >= 50 MB/s in release)",
+            throughput_mbps
+        );
         // Debug builds have significant overhead, only assert minimum viability
-        assert!(throughput_mbps >= 5.0, "WAL throughput too low: {:.2} MB/s", throughput_mbps);
+        assert!(
+            throughput_mbps >= 5.0,
+            "WAL throughput too low: {:.2} MB/s",
+            throughput_mbps
+        );
     }
 }
