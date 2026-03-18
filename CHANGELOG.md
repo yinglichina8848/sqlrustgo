@@ -142,6 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新**: v1.5.0 Release Notes
 - **新**: v1.5.0 性能测试报告
 - **新**: v1.5.0 集成测试报告
+>>>>>>> origin/main
 
 ## [1.4.0] - 2026-03-17
 
