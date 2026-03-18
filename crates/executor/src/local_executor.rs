@@ -2,9 +2,10 @@
 //!
 //! Implements the Executor trait for local execution using StorageEngine.
 
+#[allow(unused_imports)]
 use sqlrustgo_planner::{
     AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
-    ProjectionExec,
+    ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -30,6 +31,7 @@ impl<'a> LocalExecutor<'a> {
             "Filter" => self.execute_filter(plan),
             "Aggregate" => self.execute_aggregate(plan),
             "HashJoin" => self.execute_hash_join(plan),
+            "SortMergeJoin" => self.execute_sort_merge_join(plan),
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
             _ => Ok(ExecutorResult::empty()),
@@ -347,6 +349,82 @@ impl<'a> LocalExecutor<'a> {
             _ => Ok(ExecutorResult::empty()),
         }
     }
+
+    /// Execute sort merge join
+    fn execute_sort_merge_join(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_planner::SortMergeJoinExec;
+
+        let children = plan.children();
+        if children.len() < 2 {
+            return Ok(ExecutorResult::empty());
+        }
+
+        let left_result = self.execute(children[0])?;
+        let right_result = self.execute(children[1])?;
+
+        let sort_merge_join = plan.as_any().downcast_ref::<SortMergeJoinExec>();
+
+        let (join_type, condition) = match sort_merge_join {
+            Some(smj) => (smj.join_type(), smj.condition()),
+            None => return Ok(ExecutorResult::empty()),
+        };
+
+        let condition = match condition {
+            Some(c) => c,
+            None => {
+                return Ok(ExecutorResult::new(
+                    cartesian_product(&left_result.rows, &right_result.rows),
+                    0,
+                ));
+            }
+        };
+
+        let left_schema = children[0].schema();
+        let right_schema = children[1].schema();
+
+        match join_type {
+            JoinType::Inner => {
+                let matched = sort_merge_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+                Ok(ExecutorResult::new(matched, 0))
+            }
+            JoinType::Left => {
+                let matched = sort_merge_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+                let matched_keys: std::collections::HashSet<Vec<Value>> = matched
+                    .iter()
+                    .map(|m| m.iter().take(left_schema.fields.len()).cloned().collect())
+                    .collect();
+                let left_only: Vec<Vec<Value>> = left_result
+                    .rows
+                    .iter()
+                    .filter(|lrow| {
+                        let key: Vec<Value> = lrow.to_vec();
+                        !matched_keys.contains(&key)
+                    })
+                    .map(|lrow| {
+                        let mut row = lrow.clone();
+                        row.extend(vec![Value::Null; right_schema.fields.len()]);
+                        row
+                    })
+                    .collect();
+                let mut results = matched;
+                results.extend(left_only);
+                Ok(ExecutorResult::new(results, 0))
+            }
+            _ => Ok(ExecutorResult::empty()),
+        }
+    }
 }
 
 fn cartesian_product(left: &[Vec<Value>], right: &[Vec<Value>]) -> Vec<Vec<Value>> {
@@ -391,6 +469,92 @@ fn hash_inner_join(
             {
                 results.push(combined);
             }
+        }
+    }
+
+    results
+}
+
+fn sort_merge_inner_join(
+    left: &[Vec<Value>],
+    right: &[Vec<Value>],
+    condition: &sqlrustgo_planner::Expr,
+    left_schema: &sqlrustgo_planner::Schema,
+    right_schema: &sqlrustgo_planner::Schema,
+) -> Vec<Vec<Value>> {
+    let mut results = Vec::new();
+
+    // Sort both inputs by the join key for merge join
+    let mut left_sorted: Vec<Vec<Value>> = left.to_vec();
+    let mut right_sorted: Vec<Vec<Value>> = right.to_vec();
+
+    // Sort by first column (join key)
+    left_sorted.sort_by(|a, b| {
+        let a_key = a.first().unwrap_or(&Value::Null);
+        let b_key = b.first().unwrap_or(&Value::Null);
+        match (a_key, b_key) {
+            (Value::Integer(ai), Value::Integer(bi)) => ai.cmp(bi),
+            (Value::Text(ai), Value::Text(bi)) => ai.cmp(bi),
+            _ => std::cmp::Ordering::Equal,
+        }
+    });
+
+    right_sorted.sort_by(|a, b| {
+        let a_key = a.first().unwrap_or(&Value::Null);
+        let b_key = b.first().unwrap_or(&Value::Null);
+        match (a_key, b_key) {
+            (Value::Integer(ai), Value::Integer(bi)) => ai.cmp(bi),
+            (Value::Text(ai), Value::Text(bi)) => ai.cmp(bi),
+            _ => std::cmp::Ordering::Equal,
+        }
+    });
+
+    // Merge join
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < left_sorted.len() && j < right_sorted.len() {
+        let lrow = &left_sorted[i];
+        let rrow = &right_sorted[j];
+
+        let lkey = lrow.first().unwrap_or(&Value::Null);
+        let rkey = rrow.first().unwrap_or(&Value::Null);
+
+        let cmp = match (lkey, rkey) {
+            (Value::Integer(li), Value::Integer(ri)) => li.cmp(ri),
+            (Value::Text(li), Value::Text(ri)) => li.cmp(ri),
+            _ => std::cmp::Ordering::Equal,
+        };
+
+        if cmp == std::cmp::Ordering::Equal {
+            // Found match - check condition and add
+            let mut combined = lrow.clone();
+            combined.extend(rrow.clone());
+
+            let full_schema = sqlrustgo_planner::Schema::new(
+                left_schema
+                    .fields
+                    .iter()
+                    .chain(right_schema.fields.iter())
+                    .cloned()
+                    .collect(),
+            );
+
+            if condition
+                .evaluate(&combined, &full_schema)
+                .map(|v| v.to_bool())
+                .unwrap_or(false)
+            {
+                results.push(combined);
+            }
+
+            // Advance both for equal keys (handles duplicates)
+            i += 1;
+            j += 1;
+        } else if cmp == std::cmp::Ordering::Less {
+            i += 1;
+        } else {
+            j += 1;
         }
     }
 
@@ -445,8 +609,8 @@ impl<'a> Executor for LocalExecutor<'a> {
 mod tests {
     use super::*;
     use sqlrustgo_planner::{
-        AggregateExec, AggregateFunction, Expr, Field, FilterExec, Operator, PhysicalPlan,
-        ProjectionExec, Schema, SeqScanExec,
+        AggregateExec, AggregateFunction, Column, Expr, Field, FilterExec, Operator, PhysicalPlan,
+        ProjectionExec, Schema, SeqScanExec, SortMergeJoinExec,
     };
     use sqlrustgo_storage::MemoryStorage;
     use std::any::Any;
@@ -1203,5 +1367,175 @@ mod tests {
         let result = executor.execute(&hash_join);
         // Left join should complete without error
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_sort_merge_join_inner() {
+        use sqlrustgo_planner::{Expr, JoinType, Operator, SortMergeJoinExec};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![
+                    vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                    vec![Value::Integer(2), Value::Text("Bob".to_string())],
+                ],
+            )
+            .unwrap();
+        storage
+            .insert(
+                "orders",
+                vec![
+                    vec![Value::Integer(1), Value::Integer(100), Value::Integer(1)],
+                    vec![Value::Integer(2), Value::Integer(200), Value::Integer(1)],
+                    vec![Value::Integer(3), Value::Integer(300), Value::Integer(2)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("order_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("amount".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("order_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("amount".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("user_id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let left_scan = SeqScanExec::new("users".to_string(), left_schema.clone());
+        let right_scan = SeqScanExec::new("orders".to_string(), right_schema.clone());
+
+        let join_condition = Some(Expr::BinaryExpr {
+            left: Box::new(Expr::Column(Column::new("user_id".to_string()))),
+            op: Operator::Eq,
+            right: Box::new(Expr::Column(Column::new("user_id".to_string()))),
+        });
+
+        let sort_merge_join = SortMergeJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Inner,
+            join_condition,
+            output_schema,
+        );
+
+        let result = executor.execute(&sort_merge_join).unwrap();
+        // Should have 2 matching rows (user_id=1 has 2 orders, user_id=2 has 1 order)
+        assert!(result.rows.len() >= 2);
+    }
+
+    #[test]
+    fn test_execute_sort_merge_join_left() {
+        use sqlrustgo_planner::{Expr, JoinType, Operator, SortMergeJoinExec};
+
+        let mut left_storage = MemoryStorage::new();
+        left_storage
+            .insert(
+                "left_table",
+                vec![
+                    vec![Value::Integer(1), Value::Text("A".to_string())],
+                    vec![Value::Integer(2), Value::Text("B".to_string())],
+                ],
+            )
+            .unwrap();
+
+        let mut right_storage = MemoryStorage::new();
+        right_storage
+            .insert(
+                "right_table",
+                vec![vec![Value::Integer(1), Value::Text("X".to_string())]],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&left_storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+
+        let left_scan = SeqScanExec::new("left_table".to_string(), left_schema);
+        let right_scan = SeqScanExec::new("right_table".to_string(), right_schema);
+
+        let join_condition = Some(Expr::BinaryExpr {
+            left: Box::new(Expr::column("id")),
+            op: Operator::Eq,
+            right: Box::new(Expr::column("id")),
+        });
+
+        let sort_merge_join = SortMergeJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Left,
+            join_condition,
+            join_schema,
+        );
+
+        let result = executor.execute(&sort_merge_join);
+        // Left join should complete without error
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_sort_merge_join_empty() {
+        use sqlrustgo_planner::{Expr, JoinType, Operator, SortMergeJoinExec};
+
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let right_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let left_scan = SeqScanExec::new("empty_table".to_string(), left_schema);
+        let right_scan = SeqScanExec::new("right_table".to_string(), right_schema);
+
+        let join_condition = Some(Expr::BinaryExpr {
+            left: Box::new(Expr::column("id")),
+            op: Operator::Eq,
+            right: Box::new(Expr::column("id")),
+        });
+
+        let sort_merge_join = SortMergeJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Inner,
+            join_condition,
+            join_schema,
+        );
+
+        let result = executor.execute(&sort_merge_join);
+        assert!(result.is_ok());
+        assert!(result.unwrap().rows.is_empty());
     }
 }
