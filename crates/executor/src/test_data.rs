@@ -292,6 +292,42 @@ impl TestDataSet {
             vec![Value::Text("C".to_string()), Value::Integer(500)],
         ]
     }
+
+    /// Get TPC-H Q1 lineitem dataset
+    /// Columns: l_returnflag, l_linestatus, l_quantity
+    pub fn lineitem_q1() -> Vec<Vec<Value>> {
+        vec![
+            vec![Value::Text("N".to_string()), Value::Text("O".to_string()), Value::Integer(10)],
+            vec![Value::Text("N".to_string()), Value::Text("O".to_string()), Value::Integer(20)],
+            vec![Value::Text("N".to_string()), Value::Text("O".to_string()), Value::Integer(30)],
+            vec![Value::Text("R".to_string()), Value::Text("F".to_string()), Value::Integer(15)],
+            vec![Value::Text("R".to_string()), Value::Text("F".to_string()), Value::Integer(25)],
+        ]
+    }
+
+    /// Get TPC-H Q3 orders dataset
+    /// Columns: o_orderkey, o_custkey, o_orderdate (as integer YYYYMMDD)
+    pub fn orders_q3() -> Vec<Vec<Value>> {
+        vec![
+            vec![Value::Integer(1), Value::Integer(100), Value::Integer(19950315)],
+            vec![Value::Integer(2), Value::Integer(200), Value::Integer(19950320)],
+            vec![Value::Integer(3), Value::Integer(300), Value::Integer(19950401)],
+            vec![Value::Integer(4), Value::Integer(400), Value::Integer(19950228)],
+            vec![Value::Integer(5), Value::Integer(500), Value::Integer(19950310)],
+        ]
+    }
+
+    /// Get TPC-H Q6 lineitem dataset
+    /// Columns: l_shipdate (as integer YYYYMMDD), l_discount, l_quantity, l_extendedprice
+    pub fn lineitem_q6() -> Vec<Vec<Value>> {
+        vec![
+            vec![Value::Integer(19940615), Value::Float(0.06), Value::Integer(10), Value::Float(100.0)],
+            vec![Value::Integer(19940820), Value::Float(0.04), Value::Integer(20), Value::Float(200.0)],
+            vec![Value::Integer(19941005), Value::Float(0.08), Value::Integer(30), Value::Float(300.0)],
+            vec![Value::Integer(19941225), Value::Float(0.05), Value::Integer(15), Value::Float(150.0)],
+            vec![Value::Integer(19950110), Value::Float(0.07), Value::Integer(25), Value::Float(250.0)],
+        ]
+    }
 }
 
 #[cfg(test)]
