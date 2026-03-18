@@ -1300,4 +1300,158 @@ mod tests {
         let deleted = manager.cleanup_old_archives(10).unwrap();
         assert_eq!(deleted, 0);
     }
+
+    #[test]
+    fn test_wal_entry_type_coverage() {
+        assert_eq!(WalEntryType::from_u8(1), Some(WalEntryType::Begin));
+        assert_eq!(WalEntryType::from_u8(2), Some(WalEntryType::Insert));
+        assert_eq!(WalEntryType::from_u8(3), Some(WalEntryType::Update));
+        assert_eq!(WalEntryType::from_u8(4), Some(WalEntryType::Delete));
+        assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
+        assert_eq!(WalEntryType::from_u8(6), Some(WalEntryType::Rollback));
+        assert_eq!(WalEntryType::from_u8(7), Some(WalEntryType::Checkpoint));
+        assert_eq!(WalEntryType::from_u8(0), None);
+        assert_eq!(WalEntryType::from_u8(8), None);
+    }
+
+    #[test]
+    fn test_wal_entry_empty_key_data() {
+        let entry = WalEntry {
+            tx_id: 42,
+            entry_type: WalEntryType::Update,
+            table_id: 5,
+            key: Some(vec![]),
+            data: Some(vec![]),
+            lsn: 10,
+            timestamp: 9876543210,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.tx_id, restored.tx_id);
+    }
+
+    #[test]
+    fn test_wal_entry_only_key() {
+        let entry = WalEntry {
+            tx_id: 100,
+            entry_type: WalEntryType::Delete,
+            table_id: 7,
+            key: Some(vec![1, 2, 3, 4, 5]),
+            data: None,
+            lsn: 5,
+            timestamp: 1111111111,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.tx_id, restored.tx_id);
+    }
+
+    #[test]
+    fn test_wal_entry_only_data() {
+        let entry = WalEntry {
+            tx_id: 200,
+            entry_type: WalEntryType::Insert,
+            table_id: 8,
+            key: None,
+            data: Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1]),
+            lsn: 15,
+            timestamp: 2222222222,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(entry.tx_id, restored.tx_id);
+    }
+
+    #[test]
+    fn test_wal_entry_truncated_v2() {
+        assert!(WalEntry::from_bytes(&[]).is_none());
+        assert!(WalEntry::from_bytes(&[0; 10]).is_none());
+    }
+
+    #[test]
+    fn test_wal_writer_append_100_entries() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_100_append.wal");
+
+        let mut writer = WalWriter::new(&wal_path).unwrap();
+
+        for i in 0..100 {
+            let entry = WalEntry {
+                tx_id: i,
+                entry_type: WalEntryType::Insert,
+                table_id: 1,
+                key: Some(vec![i as u8]),
+                data: Some(vec![i as u8 * 2]),
+                lsn: i as u64,
+                timestamp: i as u64 + 1000,
+            };
+            writer.append(&entry).unwrap();
+        }
+
+        assert_eq!(writer.current_lsn(), 100);
+    }
+
+    #[test]
+    fn test_wal_5_transactions() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_5tx.wal");
+
+        let manager = WalManager::new(wal_path);
+
+        for tx_id in 1..=5 {
+            let _ = manager.log_begin(tx_id).unwrap();
+            let _ = manager
+                .log_insert(tx_id, 1, vec![tx_id as u8], vec![tx_id as u8 * 10])
+                .unwrap();
+            let _ = manager.log_commit(tx_id).unwrap();
+        }
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 15);
+    }
+
+    #[test]
+    fn test_wal_mixed_ops() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_mixed2.wal");
+
+        let manager = WalManager::new(wal_path);
+
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_update(1, 1, vec![1], vec![20]).unwrap();
+        let _ = manager.log_delete(1, 1, vec![2]).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        let _ = manager.log_begin(2).unwrap();
+        let _ = manager.log_insert(2, 1, vec![3], vec![30]).unwrap();
+        let _ = manager.log_rollback(2).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert!(entries.len() >= 6);
+    }
+
+    #[test]
+    fn test_wal_large_100k() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_100k.wal");
+
+        let large_data = vec![0u8; 100000];
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager
+            .log_insert(1, 1, vec![1], large_data.clone())
+            .unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 3);
+    }
 }

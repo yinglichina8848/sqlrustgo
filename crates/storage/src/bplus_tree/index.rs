@@ -1384,9 +1384,12 @@ mod tests {
 
         let stats = index.usage_stats();
 
-        let stats = index.usage_stats();
-
         assert_eq!(stats.num_entries, 2);
+    }
+
+    #[test]
+    fn test_composite_btree_index_insert() {
+        let mut index = CompositeBTreeIndex::new(2);
     }
 
     // Full-text search index tests
@@ -1567,5 +1570,11 @@ mod tests {
         assert!(!results.contains(&2));
         assert!(results.contains(&3));
         assert!(!results.contains(&4));
+    }
+
+    #[test]
+    fn test_composite_key_creation() {
+        let key = CompositeKey::new(vec![1, 2, 3]);
+        assert_eq!(key.columns.len(), 3);
     }
 }
