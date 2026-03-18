@@ -429,4 +429,258 @@ mod tests {
         let cycle = lock_manager.detect_deadlock(TxId::new(2));
         assert!(cycle.is_some());
     }
+
+    #[test]
+    fn test_deadlock_detection_no_cycle() {
+        use crate::deadlock::DeadlockDetector;
+        let detector = Arc::new(RwLock::new(DeadlockDetector::new()));
+        let mut lock_manager = LockManager::with_deadlock_detector(detector.clone());
+
+        lock_manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Exclusive)
+            .unwrap();
+        lock_manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        let cycle = lock_manager.detect_deadlock(TxId::new(2));
+        assert!(cycle.is_none());
+    }
+
+    #[test]
+    fn test_lock_upgrade_failure_multiple_holders() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Shared)
+            .unwrap();
+
+        let result = manager.upgrade_lock(TxId::new(1), vec![1]);
+        assert!(matches!(result, Err(LockError::LockUpgradeFailed)));
+    }
+
+    #[test]
+    fn test_lock_upgrade_failure_with_waiters() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(3), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        let result = manager.upgrade_lock(TxId::new(1), vec![1]);
+        assert!(matches!(result, Err(LockError::LockUpgradeFailed)));
+    }
+
+    #[test]
+    fn test_lock_upgrade_failure_not_owner() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+
+        let result = manager.upgrade_lock(TxId::new(2), vec![1]);
+        assert!(matches!(result, Err(LockError::LockUpgradeFailed)));
+    }
+
+    #[test]
+    fn test_release_lock_nonexistent() {
+        let mut manager = LockManager::new();
+
+        let result = manager.release_lock(TxId::new(1), &vec![1]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_lock_error_display() {
+        let err_deadlock = LockError::Deadlock;
+        let err_upgrade = LockError::LockUpgradeFailed;
+        let err_not_held = LockError::LockNotHeld;
+        let err_timeout = LockError::LockTimeout;
+
+        assert_eq!(err_deadlock.to_string(), "deadlock detected");
+        assert_eq!(err_upgrade.to_string(), "lock upgrade failed");
+        assert_eq!(err_not_held.to_string(), "lock not held by transaction");
+        assert_eq!(err_timeout.to_string(), "lock acquisition timeout");
+    }
+
+    #[test]
+    fn test_release_all_locks_empty() {
+        let mut manager = LockManager::new();
+
+        let released = manager.release_all_locks(TxId::new(999)).unwrap();
+        assert!(released.is_empty());
+    }
+
+    #[test]
+    fn test_is_locked() {
+        let mut manager = LockManager::new();
+        let key = vec![1];
+
+        assert!(!manager.is_locked(&key));
+
+        manager
+            .acquire_lock(TxId::new(1), key.clone(), LockMode::Shared)
+            .unwrap();
+
+        assert!(manager.is_locked(&key));
+    }
+
+    #[test]
+    fn test_get_lock_count() {
+        let mut manager = LockManager::new();
+
+        assert_eq!(manager.get_lock_count(), 0);
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+
+        assert_eq!(manager.get_lock_count(), 1);
+    }
+
+    #[test]
+    fn test_get_tx_lock_count() {
+        let mut manager = LockManager::new();
+
+        assert_eq!(manager.get_tx_lock_count(TxId::new(1)), 0);
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(1), vec![2], LockMode::Shared)
+            .unwrap();
+
+        assert_eq!(manager.get_tx_lock_count(TxId::new(1)), 2);
+    }
+
+    #[test]
+    fn test_lock_info_can_grant() {
+        let info = LockInfo::new(vec![1], LockMode::Shared);
+        assert!(info.can_grant(LockMode::Shared, TxId::new(1)));
+        assert!(info.can_grant(LockMode::Exclusive, TxId::new(1)));
+    }
+
+    #[test]
+    fn test_lock_info_can_grant_with_existing_holders() {
+        let mut info = LockInfo::new(vec![1], LockMode::Shared);
+        info.add_holder(TxId::new(1));
+        assert!(info.can_grant(LockMode::Shared, TxId::new(2)));
+        assert!(!info.can_grant(LockMode::Exclusive, TxId::new(2)));
+    }
+
+    #[test]
+    fn test_lock_info_waiters_prevent_grant() {
+        let mut info = LockInfo::new(vec![1], LockMode::Shared);
+        info.add_holder(TxId::new(1));
+        info.add_waiter(TxId::new(2), LockMode::Exclusive);
+        assert!(!info.can_grant(LockMode::Shared, TxId::new(3)));
+    }
+
+    #[test]
+    fn test_lock_request_new() {
+        let request = LockRequest::new(TxId::new(1), vec![1, 2, 3], LockMode::Shared);
+        assert_eq!(request.tx_id, TxId::new(1));
+        assert_eq!(request.key, vec![1, 2, 3]);
+        assert_eq!(request.mode, LockMode::Shared);
+        assert!(!request.granted);
+    }
+
+    #[test]
+    fn test_lock_info_add_remove_waiter() {
+        let mut info = LockInfo::new(vec![1], LockMode::Exclusive);
+        info.add_waiter(TxId::new(1), LockMode::Shared);
+        info.add_waiter(TxId::new(1), LockMode::Shared);
+        assert_eq!(info.waiters.len(), 1);
+
+        info.remove_waiter(TxId::new(1));
+        assert!(info.waiters.is_empty());
+    }
+
+    #[test]
+    fn test_release_lock_with_waiters_shared_to_exclusive() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        manager.release_lock(TxId::new(1), &vec![1]).unwrap();
+
+        let lock_info = manager.locks.get(&vec![1]).unwrap();
+        assert!(lock_info.holders.contains(&TxId::new(2)));
+        assert_eq!(lock_info.mode, LockMode::Exclusive);
+    }
+
+    #[test]
+    fn test_release_lock_removes_empty_lock() {
+        let mut manager = LockManager::new();
+        let key = vec![1];
+
+        manager
+            .acquire_lock(TxId::new(1), key.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager.release_lock(TxId::new(1), &key).unwrap();
+
+        assert!(manager.locks.get(&key).is_none());
+    }
+
+    #[test]
+    fn test_release_all_locks_grants_to_waiter() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        let released = manager.release_all_locks(TxId::new(1)).unwrap();
+        assert!(released.contains(&vec![1]));
+    }
+
+    #[test]
+    fn test_has_exclusive_lock() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        assert!(manager.has_exclusive_lock(&vec![1], TxId::new(1)));
+        assert!(!manager.has_exclusive_lock(&vec![1], TxId::new(2)));
+        assert!(!manager.has_exclusive_lock(&vec![2], TxId::new(1)));
+    }
+
+    #[test]
+    fn test_is_locked_by_tx() {
+        let mut manager = LockManager::new();
+
+        manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Shared)
+            .unwrap();
+
+        assert!(manager.is_locked_by_tx(&vec![1], TxId::new(1)));
+        assert!(!manager.is_locked_by_tx(&vec![1], TxId::new(2)));
+    }
+
+    #[test]
+    fn test_lock_manager_default() {
+        let manager = LockManager::default();
+        assert_eq!(manager.get_lock_count(), 0);
+    }
 }
