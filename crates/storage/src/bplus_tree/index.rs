@@ -1,6 +1,7 @@
 //! Disk-based B+Tree index implementation
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 const BTREE_ORDER: usize = 64;
 const MAX_KEYS_PER_NODE: usize = BTREE_ORDER - 1;
@@ -10,6 +11,13 @@ const NODE_TYPE_INTERNAL: u8 = 1;
 const NODE_TYPE_LEAF: u8 = 2;
 
 const PAGE_DATA_SIZE: usize = 4096 - 64;
+
+/// Unique index constraint violation error
+#[derive(Debug, Clone, Error)]
+#[error("unique constraint violation: key {key} already exists")]
+pub struct UniqueConstraintViolation {
+    pub key: i64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub i64);
@@ -134,6 +142,8 @@ pub struct BTreeMetadata {
     pub first_leaf: Option<u32>,
     pub num_entries: u64,
     pub height: u32,
+    /// Whether this is a unique index
+    pub is_unique: bool,
 }
 
 pub struct BTreeIndex {
@@ -186,6 +196,28 @@ impl BTreeIndex {
 
         self.insert_into_node(self.metadata.root_page_id.unwrap(), key, value);
         self.metadata.num_entries += 1;
+        self.dirty = true;
+    }
+
+    /// Insert a key-value pair into a unique index
+    /// Returns Ok(()) if inserted successfully, Err if key already exists
+    pub fn insert_unique(&mut self, key: i64, value: u32) -> Result<(), UniqueConstraintViolation> {
+        // Check if key already exists
+        if self.search(key).is_some() {
+            return Err(UniqueConstraintViolation { key });
+        }
+        self.insert(key, value);
+        Ok(())
+    }
+
+    /// Check if this is a unique index
+    pub fn is_unique(&self) -> bool {
+        self.metadata.is_unique
+    }
+
+    /// Set the unique flag on this index
+    pub fn set_unique(&mut self, unique: bool) {
+        self.metadata.is_unique = unique;
         self.dirty = true;
     }
 
@@ -771,5 +803,72 @@ mod tests {
     fn test_deserialize_invalid_data() {
         let result = deserialize_node(&[1, 2, 3]);
         assert!(result.is_none());
+    }
+
+    // Tests for unique index
+
+    #[test]
+    fn test_btree_index_is_unique_default() {
+        let index = BTreeIndex::new();
+        assert!(!index.is_unique());
+    }
+
+    #[test]
+    fn test_btree_index_set_unique() {
+        let mut index = BTreeIndex::new();
+        assert!(!index.is_unique());
+
+        index.set_unique(true);
+        assert!(index.is_unique());
+
+        index.set_unique(false);
+        assert!(!index.is_unique());
+    }
+
+    #[test]
+    fn test_btree_index_insert_unique_success() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // First insert should succeed
+        let result = index.insert_unique(1, 100);
+        assert!(result.is_ok());
+        assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn test_btree_index_insert_unique_duplicate() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // First insert
+        index.insert_unique(1, 100).unwrap();
+
+        // Duplicate key should fail
+        let result = index.insert_unique(1, 200);
+        assert!(result.is_err());
+        match result {
+            Err(UniqueConstraintViolation { key }) => {
+                assert_eq!(key, 1);
+            }
+            _ => panic!("expected UniqueConstraintViolation"),
+        }
+    }
+
+    #[test]
+    fn test_btree_index_insert_unique_multiple() {
+        let mut index = BTreeIndex::new();
+        index.set_unique(true);
+
+        // Insert multiple unique keys
+        assert!(index.insert_unique(1, 100).is_ok());
+        assert!(index.insert_unique(2, 200).is_ok());
+        assert!(index.insert_unique(3, 300).is_ok());
+
+        assert_eq!(index.len(), 3);
+
+        // Try to insert duplicate
+        assert!(index.insert_unique(2, 999).is_err());
+        assert_eq!(index.len(), 3);
     }
 }
