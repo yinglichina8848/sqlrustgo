@@ -1155,11 +1155,11 @@ mod tests {
 
         let stats = index.usage_stats();
 
-        let stats = index.usage_stats();
-
         assert_eq!(stats.num_entries, 2);
     }
-}
+
+    #[test]
+    fn test_composite_btree_index_insert() {
         let mut index = CompositeBTreeIndex::new(2);
 
         // Insert composite keys
@@ -1255,9 +1255,6 @@ mod tests {
         assert!(index.insert_unique(2, 999).is_err());
         assert_eq!(index.len(), 3);
     }
-}
-
-    // Tests for composite index
 
     #[test]
     fn test_composite_key_creation() {
@@ -1321,7 +1318,5 @@ mod tests {
         let stats = index.usage_stats();
 
         assert_eq!(stats.num_entries, 2);
-    }
-}
     }
 }
