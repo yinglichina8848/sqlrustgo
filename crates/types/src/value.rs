@@ -126,6 +126,18 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Estimate memory size in bytes
+    pub fn estimate_memory_size(&self) -> usize {
+        match self {
+            Value::Null => 0,
+            Value::Boolean(_) => 1,
+            Value::Integer(_) => 8,
+            Value::Float(_) => 8,
+            Value::Text(s) => s.capacity(),
+            Value::Blob(b) => b.capacity(),
+        }
+    }
 }
 
 impl fmt::Display for Value {
