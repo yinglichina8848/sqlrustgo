@@ -181,6 +181,7 @@ impl PhysicalPlan for IndexScanExec {
         &self.table_name
     }
 
+    #[allow(clippy::collapsible_match)]
     fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
         match &self.storage {
             Some(storage) => {
