@@ -91,8 +91,8 @@ impl HttpServer {
 }
 
 /// Handle incoming HTTP request
-fn handle_request(
-    stream: &mut std::net::TcpStream,
+fn handle_request<T: Read + Write>(
+    stream: &mut T,
     version: &str,
     metrics_registry: &Arc<RwLock<MetricsRegistry>>,
 ) -> Result<(), std::io::Error> {
@@ -179,6 +179,39 @@ fn handle_request(
 mod tests {
     use super::*;
 
+    struct MockTcpStream {
+        read_data: Vec<u8>,
+        write_buffer: Vec<u8>,
+    }
+
+    impl MockTcpStream {
+        fn new(request: &str) -> Self {
+            Self {
+                read_data: request.as_bytes().to_vec(),
+                write_buffer: Vec::new(),
+            }
+        }
+    }
+
+    impl Read for MockTcpStream {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let len = std::cmp::min(buf.len(), self.read_data.len());
+            buf[..len].copy_from_slice(&self.read_data[..len]);
+            self.read_data.drain(..len);
+            Ok(len)
+        }
+    }
+
+    impl Write for MockTcpStream {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.write_buffer.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn test_http_server_creation() {
         let server = HttpServer::new("127.0.0.1", 8080);
@@ -217,5 +250,88 @@ mod tests {
         let server2 = HttpServer::new("127.0.0.1", 9000);
         assert_eq!(server1.port, 8080);
         assert_eq!(server2.port, 9000);
+    }
+
+    #[test]
+    fn test_handle_request_health_live() {
+        let request = "GET /health/live HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("application/json"));
+        assert!(response.contains("healthy"));
+    }
+
+    #[test]
+    fn test_handle_request_health_ready() {
+        let request = "GET /health/ready HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("application/json"));
+        assert!(response.contains("ready"));
+        assert!(response.contains("1.4.0"));
+    }
+
+    #[test]
+    fn test_handle_request_metrics() {
+        let request = "GET /metrics HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("text/plain"));
+    }
+
+    #[test]
+    fn test_handle_request_not_found() {
+        let request = "GET /invalid/path HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 404 Not Found"));
+        assert!(response.contains("Not Found"));
+    }
+
+    #[test]
+    fn test_handle_request_bad_request_empty() {
+        let request = "";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_request_bad_request_no_path() {
+        let request = "GET \r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 400 Bad Request"));
     }
 }
