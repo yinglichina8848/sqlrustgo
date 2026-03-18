@@ -131,3 +131,28 @@ pub struct QueryCacheStats {
 
 unsafe impl Send for QueryCache {}
 unsafe impl Sync for QueryCache {}
+
+const MAX_RESULT_SIZE_BYTES: usize = 1024 * 1024; // 1MB
+const MAX_RESULT_ROWS: usize = 1000;
+
+pub fn should_cache(result: &crate::ExecutorResult) -> bool {
+    if result.rows.is_empty() {
+        return false;
+    }
+
+    if result.rows.len() > MAX_RESULT_ROWS {
+        return false;
+    }
+
+    let mut size = 0;
+    for row in &result.rows {
+        for val in row {
+            size += val.estimate_memory_size();
+            if size > MAX_RESULT_SIZE_BYTES {
+                return false;
+            }
+        }
+    }
+
+    true
+}
