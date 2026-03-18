@@ -73,7 +73,7 @@ impl TpchDataGenerator {
             };
             let _clerk = format!("Clerk{:05}", i % 1000);
             let total_price = (i as f64 * 10.0).round() as i64;
-            let order_date = 87600u32 + (i % 2000) as u32;  // Days from 1992-01-01
+            let order_date = 87600u32 + (i % 2000) as u32; // Days from 1992-01-01
 
             data.push((
                 order_key,
@@ -97,11 +97,34 @@ fn bench_tpch_q1(c: &mut Criterion) {
 
     // Insert sample data (10k rows)
     let generator = TpchDataGenerator::new(10);
-    for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, return_flag, _ship_mode) in generator.generate_lineitem_data() {
-        engine.execute(parse(&format!(
-            "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, {}, 'N')",
-            order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32, discount as i32, tax as i32, return_flag
-        )).unwrap()).unwrap();
+    for (
+        order_key,
+        part_key,
+        supp_key,
+        quantity,
+        extended_price,
+        discount,
+        tax,
+        return_flag,
+        _ship_mode,
+    ) in generator.generate_lineitem_data()
+    {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, {}, 'N')",
+                    order_key,
+                    part_key,
+                    supp_key as i32,
+                    quantity as i32,
+                    extended_price as i32,
+                    discount as i32,
+                    tax as i32,
+                    return_flag
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     let mut group = c.benchmark_group("tpch_q1");
@@ -130,19 +153,33 @@ fn bench_tpch_q3(c: &mut Criterion) {
     let generator = TpchDataGenerator::new(5);
 
     // Insert orders
-    for (order_key, cust_key, order_status, _order_priority, total_price, order_date) in generator.generate_orders_data() {
-        engine.execute(parse(&format!(
-            "INSERT INTO orders VALUES ({}, {}, {}, '1-URGENT', {}, {})",
-            order_key, cust_key, order_status, total_price, order_date
-        )).unwrap()).unwrap();
+    for (order_key, cust_key, order_status, _order_priority, total_price, order_date) in
+        generator.generate_orders_data()
+    {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO orders VALUES ({}, {}, {}, '1-URGENT', {}, {})",
+                    order_key, cust_key, order_status, total_price, order_date
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     // Insert lineitem
-    for (order_key, part_key, supp_key, quantity, extended_price, _, _, _, _) in generator.generate_lineitem_data() {
-        engine.execute(parse(&format!(
-            "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {})",
-            order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32
-        )).unwrap()).unwrap();
+    for (order_key, part_key, supp_key, quantity, extended_price, _, _, _, _) in
+        generator.generate_lineitem_data()
+    {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {})",
+                    order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     let mut group = c.benchmark_group("tpch_q3");
@@ -168,11 +205,24 @@ fn bench_tpch_q6(c: &mut Criterion) {
 
     // Insert sample data
     let generator = TpchDataGenerator::new(10);
-    for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, _, _) in generator.generate_lineitem_data() {
-        engine.execute(parse(&format!(
-            "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {})",
-            order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32, discount as i32, tax as i32
-        )).unwrap()).unwrap();
+    for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, _, _) in
+        generator.generate_lineitem_data()
+    {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {})",
+                    order_key,
+                    part_key,
+                    supp_key as i32,
+                    quantity as i32,
+                    extended_price as i32,
+                    discount as i32,
+                    tax as i32
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     let mut group = c.benchmark_group("tpch_q6");
@@ -193,32 +243,47 @@ fn bench_tpch_q6(c: &mut Criterion) {
 fn bench_simple_aggregation(c: &mut Criterion) {
     let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
 
-    engine.execute(parse("CREATE TABLE sales (id INTEGER, amount REAL, category TEXT)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE sales (id INTEGER, amount REAL, category TEXT)").unwrap())
+        .unwrap();
 
     for i in 0..10000 {
-        engine.execute(parse(&format!(
-            "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
-            i, i as f64 * 10.0, i % 10
-        )).unwrap()).unwrap();
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
+                    i,
+                    i as f64 * 10.0,
+                    i % 10
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     let mut group = c.benchmark_group("aggregation");
 
     group.bench_function("sum_amount_10k", |b| {
         b.iter(|| {
-            engine.execute(parse("SELECT SUM(amount) FROM sales").unwrap()).unwrap()
+            engine
+                .execute(parse("SELECT SUM(amount) FROM sales").unwrap())
+                .unwrap()
         });
     });
 
     group.bench_function("avg_amount_10k", |b| {
         b.iter(|| {
-            engine.execute(parse("SELECT AVG(amount) FROM sales").unwrap()).unwrap()
+            engine
+                .execute(parse("SELECT AVG(amount) FROM sales").unwrap())
+                .unwrap()
         });
     });
 
     group.bench_function("count_all_10k", |b| {
         b.iter(|| {
-            engine.execute(parse("SELECT COUNT(*) FROM sales").unwrap()).unwrap()
+            engine
+                .execute(parse("SELECT COUNT(*) FROM sales").unwrap())
+                .unwrap()
         });
     });
 
@@ -229,21 +294,39 @@ fn bench_simple_aggregation(c: &mut Criterion) {
 fn bench_simple_join(c: &mut Criterion) {
     let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
 
-    engine.execute(parse("CREATE TABLE customers (id INTEGER, name TEXT)").unwrap()).unwrap();
-    engine.execute(parse("CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount REAL)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE customers (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+    engine
+        .execute(
+            parse("CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount REAL)").unwrap(),
+        )
+        .unwrap();
 
     for i in 0..1000 {
-        engine.execute(parse(&format!(
-            "INSERT INTO customers VALUES ({}, 'customer{}')",
-            i, i
-        )).unwrap()).unwrap();
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO customers VALUES ({}, 'customer{}')",
+                    i, i
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     for i in 0..5000 {
-        engine.execute(parse(&format!(
-            "INSERT INTO orders VALUES ({}, {}, {})",
-            i, i % 1000, i as f64 * 10.0
-        )).unwrap()).unwrap();
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO orders VALUES ({}, {}, {})",
+                    i,
+                    i % 1000,
+                    i as f64 * 10.0
+                ))
+                .unwrap(),
+            )
+            .unwrap();
     }
 
     let mut group = c.benchmark_group("join");

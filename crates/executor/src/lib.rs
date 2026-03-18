@@ -7,7 +7,10 @@ pub mod local_executor;
 pub mod test_framework;
 pub mod vectorization;
 
-pub use executor::{execute_collect, Executor, ExecutorResult, SortMergeJoinVolcanoExecutor, VolIterator, VolcanoExecutor};
+pub use executor::{
+    execute_collect, Executor, ExecutorResult, SortMergeJoinVolcanoExecutor, VolIterator,
+    VolcanoExecutor,
+};
 pub use executor_metrics::ExecutorMetrics;
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
