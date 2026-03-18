@@ -7,6 +7,51 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use sqlrustgo::{parse, ExecutionEngine};
 use std::sync::Arc;
 
+struct LatencyCollector {
+    samples: Vec<u64>,
+}
+
+impl LatencyCollector {
+    fn new() -> Self {
+        Self {
+            samples: Vec::new(),
+        }
+    }
+
+    fn record(&mut self, latency_ns: u64) {
+        self.samples.push(latency_ns);
+    }
+
+    fn avg_latency_ns(&self) -> u64 {
+        if self.samples.is_empty() {
+            return 0;
+        }
+        self.samples.iter().sum::<u64>() / self.samples.len() as u64
+    }
+
+    fn p50(&self) -> u64 {
+        self.percentile(50)
+    }
+
+    fn p90(&self) -> u64 {
+        self.percentile(90)
+    }
+
+    fn p99(&self) -> u64 {
+        self.percentile(99)
+    }
+
+    fn percentile(&self, p: usize) -> u64 {
+        if self.samples.is_empty() {
+            return 0;
+        }
+        let mut sorted = self.samples.clone();
+        sorted.sort();
+        let idx = (sorted.len() * p / 100).min(sorted.len() - 1);
+        sorted[idx]
+    }
+}
+
 const SCALE_FACTOR: f64 = 0.1;
 
 struct TpchDataGenerator {
@@ -113,7 +158,7 @@ fn bench_tpch_q1(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL, l_returnflag INTEGER, l_shipmode TEXT)").unwrap()).unwrap();
 
     // Insert sample data (10k rows)
-    let generator = TpchDataGenerator::new(10);
+    let generator = TpchDataGenerator::new(10.0);
     for (
         order_key,
         part_key,
@@ -167,7 +212,7 @@ fn bench_tpch_q3(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL)").unwrap()).unwrap();
 
     // Insert sample data
-    let generator = TpchDataGenerator::new(5);
+    let generator = TpchDataGenerator::new(5.0);
 
     // Insert orders
     for (order_key, cust_key, order_status, _order_priority, total_price, order_date) in
@@ -221,7 +266,7 @@ fn bench_tpch_q6(c: &mut Criterion) {
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL)").unwrap()).unwrap();
 
     // Insert sample data
-    let generator = TpchDataGenerator::new(10);
+    let generator = TpchDataGenerator::new(10.0);
     for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, _, _) in
         generator.generate_lineitem_data()
     {
