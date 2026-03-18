@@ -135,11 +135,41 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 | [v1.4.0 RELEASE_NOTES.md](./v1.4.0/RELEASE_NOTES.md) | v1.4.0 发行说明 |
 | [v1.5.0 VERSION_PLAN.md](./v1.5.0/VERSION_PLAN.md) | v1.5.0 版本计划 |
 | [v1.5.0 DEVELOPMENT_PLAN.md](./v1.5.0/DEVELOPMENT_PLAN.md) | v1.5.0 开发计划 |
+| [v1.5.0 PERFORMANCE_BENCHMARK_PLAN.md](./v1.5.0/PERFORMANCE_BENCHMARK_PLAN.md) | v1.5.0 性能测试计划 |
+| [v1.5.0 RELEASE_GATE_CHECKLIST.md](./v1.5.0/RELEASE_GATE_CHECKLIST.md) | v1.5.0 门禁检查清单 |
 | [v1.6.0 VERSION_PLAN.md](./v1.6.0/VERSION_PLAN.md) | v1.6.0 版本计划 |
 
 ---
 
-## 十、变更历史
+## 十、v1.5.0 开发进度
+
+> 更新日期: 2026-03-18
+
+### 功能进度
+
+| 任务 | 功能 | 状态 | PR |
+|------|------|------|-----|
+| S-01 | 页式存储 | ✅ | #563 |
+| S-02 | 缓冲池 | ✅ | #564 |
+| S-03 | WAL | ✅ | #566 |
+| S-04 | 表堆存储 | ✅ | #569 |
+| I-01 | B+Tree 索引 | ✅ | #565 |
+| I-02 | IndexScan | ✅ | #568 |
+| E-01 | 常量折叠增强 | ⏳ | - |
+| E-02 | 表达式简化 | ⏳ | - |
+| ST-01 | 基础统计信息 | ⏳ | - |
+
+### 性能目标
+
+| 指标 | 目标 |
+|------|------|
+| 缓冲池命中率 | ≥80% |
+| 索引点查 | ≥10x SeqScan |
+| WAL 恢复 | <5s (1GB) |
+
+---
+
+## 十一、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
@@ -147,7 +177,8 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 | 1.1 | 2026-03-12 | 根据 DeepSeek 评估更新 |
 | 2.0 | 2026-03-13 | 重构版本路线图（v1.x/v2.x/v3.x） |
 | 3.0 | 2026-03-13 | 工程优化版，综合 DeepSeek + ChatGPT 评审意见 |
-| 4.0 | 2026-03-18 | 整合 v1.x 版本（v1.4-v1.6），修正 v1.5 为存储引擎版本，更新可观测性演进，修正成熟度路线 |
+| 4.0 | 2026-03-18 | 整合 v1.x 版本（v1.4-v1.6），修正 v1.5 为存储引擎版本 |
+| 4.1 | 2026-03-18 | 添加 v1.5.0 开发进度，存储引擎核心已完成 |
 
 ---
 
