@@ -159,6 +159,25 @@ impl TableStats {
             .unwrap_or(0.1) // Default selectivity when no stats
     }
 
+    /// Get row count
+    pub fn row_count(&self) -> u64 {
+        self.row_count
+    }
+
+    /// Get page count (estimated from size_bytes, assuming 4KB page)
+    pub fn page_count(&self) -> u64 {
+        if self.size_bytes == 0 {
+            1
+        } else {
+            std::cmp::max(self.size_bytes / 4096, 1)
+        }
+    }
+
+    /// Get column statistics by name (alias for column())
+    pub fn column_stats(&self, column: &str) -> Option<&ColumnStats> {
+        self.column(column)
+    }
+
     /// Add multiple column stats at once
     pub fn with_column_stats(mut self, stats: HashMap<String, ColumnStats>) -> Self {
         self.column_stats = stats;

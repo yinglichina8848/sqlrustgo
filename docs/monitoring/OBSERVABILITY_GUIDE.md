@@ -1,8 +1,9 @@
 # SQLRustGo 可观测性 API 开发指南
 
-> **版本**: 1.0
+> **版本**: 1.1
 > **创建日期**: 2026-03-15
-> **状态**: 🔄 开发中
+> **更新时间**: 2026-03-15
+> **状态**: ✅ 已完成 (M-003, M-004)
 
 ---
 
@@ -203,6 +204,67 @@ sqlrustgo_query_duration_seconds_bucket{le="1"} 1000
 | `sqlrustgo_buffer_pool_hits_total` | Counter | 缓存命中数 |
 | `sqlrustgo_buffer_pool_misses_total` | Counter | 缓存未命中数 |
 
+### 3.3 集成 actix-web
+
+在 Cargo.toml 中添加依赖：
+
+```toml
+[dependencies]
+actix-web = "4"
+actix-rt = "2"
+sqlrustgo-server = { path = "crates/server" }
+```
+
+### 3.4 配置 Metrics Endpoint
+
+```rust
+use actix_web::{web, App, HttpServer, Responder};
+use sqlrustgo_server::metrics_endpoint::{configure_metrics_scope, MetricsRegistry};
+use sqlrustgo_common::metrics::DefaultMetrics;
+use std::sync::{Arc, RwLock};
+
+async fn metrics() -> impl Responder {
+    // 获取全局 MetricsRegistry
+    let registry = get_global_registry();
+    let output = registry.read().unwrap().to_prometheus_format();
+    
+    HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4; charset=utf-8")
+        .body(output)
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .route("/metrics", web::get().to(metrics))
+    })
+    .bind("127.0.0.1:5432")?
+    .run()
+    .await
+}
+```
+
+### 3.5 MetricsRegistry API
+
+```rust
+use sqlrustgo_server::metrics_endpoint::MetricsRegistry;
+
+// 创建新的注册表
+let mut registry = MetricsRegistry::new();
+
+// 注册 Metrics collector
+let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+registry.register_metrics(metrics);
+
+// 注册自定义指标
+registry.register_custom_metric("build_info".to_string(), "version=\"1.4.0\"".to_string());
+
+// 导出 Prometheus 格式
+let output = registry.to_prometheus_format();
+println!("{}", output);
+```
+
 ---
 
 ## 4. Metrics Trait
@@ -387,31 +449,98 @@ mod tests {
 }
 ```
 
+### 6.3 MetricsRegistry 单元测试
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlrustgo_common::metrics::DefaultMetrics;
+
+    #[test]
+    fn test_metrics_registry_creation() {
+        let registry = MetricsRegistry::new();
+        assert!(registry.to_prometheus_format().is_empty());
+    }
+
+    #[test]
+    fn test_metrics_registry_with_default_metrics() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_query("SELECT", 100);
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("sqlrustgo_queries"));
+    }
+
+    #[actix_web::test]
+    async fn test_metrics_endpoint_handler() {
+        let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
+        {
+            let mut m = metrics.write().unwrap();
+            m.record_query("SELECT", 100);
+        }
+
+        let mut registry = MetricsRegistry::new();
+        registry.register_metrics(metrics);
+        
+        let registry = Arc::new(RwLock::new(registry));
+        
+        let app = actix_web::test::init_service(
+            actix_web::App::new()
+                .app_data(web::Data::new(registry))
+                .configure(configure_metrics_scope)
+        ).await;
+
+        let req = actix_web::test::TestRequest::get()
+            .uri("/metrics")
+            .to_request();
+
+        let resp = actix_web::test::call_service(&app, req).await;
+        assert!(resp.status().is_success());
+
+        let body = actix_web::test::read_body(resp).await;
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("sqlrustgo"));
+    }
+}
+```
+
 ---
 
 ## 7. 检查清单
 
 ### 7.1 功能实现检查
 
-- [ ] HealthChecker 实现
-- [ ] /health/live 端点返回 200 + {"status": "alive"}
-- [ ] /health/ready 端点返回 200 + 所有组件状态
-- [ ] /health 端点返回完整健康报告
-- [ ] Metrics trait 定义
-- [ ] BufferPoolMetrics 实现
-- [ ] ExecutorMetrics 实现
-- [ ] NetworkMetrics 实现
-- [ ] MetricsRegistry 实现
-- [ ] /metrics 端点返回 Prometheus 格式
+- [x] HealthChecker 实现
+- [x] /health/live 端点返回 200 + {"status": "alive"}
+- [x] /health/ready 端点返回 200 + 所有组件状态
+- [x] /health 端点返回完整健康报告
+- [x] Metrics trait 定义
+- [x] BufferPoolMetrics 实现
+- [x] ExecutorMetrics 实现
+- [x] NetworkMetrics 实现
+- [x] MetricsRegistry 实现
+- [x] /metrics 端点返回 Prometheus 格式
+- [x] actix-web 集成 (M-004)
+- [x] configure_metrics_scope 配置函数 (M-004)
+- [x] metrics_handler HTTP handler (M-004)
 
 ### 7.2 测试检查
 
-- [ ] Metrics 单元测试 (每个 Metrics 实现 ≥ 3 个测试)
-- [ ] HealthChecker 单元测试 (≥ 3 个测试)
-- [ ] /health/live HTTP 集成测试
-- [ ] /health/ready HTTP 集成测试
-- [ ] /health HTTP 集成测试
-- [ ] /metrics HTTP 集成测试
+- [x] Metrics 单元测试 (每个 Metrics 实现 ≥ 3 个测试)
+- [x] HealthChecker 单元测试 (≥ 3 个测试)
+- [x] /health/live HTTP 集成测试
+- [x] /health/ready HTTP 集成测试
+- [x] /health HTTP 集成测试
+- [x] /metrics HTTP 集成测试
+- [x] MetricsRegistry 单元测试
+- [x] metrics_handler 集成测试 (actix-web)
 - [ ] Grafana Dashboard JSON 验证测试
 - [ ] Prometheus Alerts YAML 验证测试
 
