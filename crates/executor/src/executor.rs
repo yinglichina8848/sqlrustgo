@@ -2999,4 +2999,45 @@ mod tests {
         let row = exec.next().unwrap();
         assert!(row.is_some());
     }
+
+    #[test]
+    fn test_seq_scan_volcano_executor_next_before_init() {
+        use std::sync::Arc;
+
+        let storage = Arc::new(
+            MockStorageForExecutor::new().with_table("test", vec![vec![Value::Integer(1)]]),
+        );
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
+
+        let result = exec.next();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_seq_scan_volcano_executor_double_init() {
+        use std::sync::Arc;
+
+        let storage = Arc::new(
+            MockStorageForExecutor::new().with_table("test", vec![vec![Value::Integer(1)]]),
+        );
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
+
+        exec.init().unwrap();
+        exec.init().unwrap();
+    }
+
+    #[test]
+    fn test_seq_scan_volcano_executor_empty_result() {
+        use std::sync::Arc;
+
+        let storage = Arc::new(MockStorageForExecutor::new());
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let mut exec = SeqScanVolcanoExecutor::new("empty_table".to_string(), schema, storage);
+
+        exec.init().unwrap();
+        let result = exec.next().unwrap();
+        assert!(result.is_none());
+    }
 }
