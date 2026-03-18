@@ -3,8 +3,10 @@
 //! This module provides row-level locking for concurrent transaction control,
 //! including shared locks (read) and exclusive locks (write).
 
+use crate::deadlock::DeadlockDetector;
 use crate::mvcc::TxId;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LockMode {
@@ -88,6 +90,7 @@ impl LockInfo {
 pub struct LockManager {
     locks: HashMap<Vec<u8>, LockInfo>,
     tx_locks: HashMap<TxId, HashSet<Vec<u8>>>,
+    deadlock_detector: Arc<RwLock<DeadlockDetector>>,
 }
 
 impl LockManager {
@@ -95,7 +98,21 @@ impl LockManager {
         Self {
             locks: HashMap::new(),
             tx_locks: HashMap::new(),
+            deadlock_detector: Arc::new(RwLock::new(DeadlockDetector::new())),
         }
+    }
+
+    pub fn with_deadlock_detector(detector: Arc<RwLock<DeadlockDetector>>) -> Self {
+        Self {
+            locks: HashMap::new(),
+            tx_locks: HashMap::new(),
+            deadlock_detector: detector,
+        }
+    }
+
+    pub fn detect_deadlock(&self, blocked_tx: TxId) -> Option<Vec<TxId>> {
+        let detector = self.deadlock_detector.read().unwrap();
+        detector.detect_cycle(blocked_tx)
     }
 
     pub fn acquire_lock(
@@ -122,15 +139,18 @@ impl LockManager {
         }
     }
 
+    #[allow(clippy::collapsible_if)]
     pub fn upgrade_lock(&mut self, tx_id: TxId, key: Vec<u8>) -> Result<LockGrantMode, LockError> {
         if let Some(lock) = self.locks.get_mut(&key) {
-            if lock.holders.contains(&tx_id) && lock.mode == LockMode::Shared {
-                if lock.holders.len() == 1 && lock.waiters.is_empty() {
-                    lock.holders.clear();
-                    lock.holders.insert(tx_id);
-                    lock.mode = LockMode::Exclusive;
-                    return Ok(LockGrantMode::Granted);
-                }
+            if lock.holders.contains(&tx_id)
+                && lock.mode == LockMode::Shared
+                && lock.holders.len() == 1
+                && lock.waiters.is_empty()
+            {
+                lock.holders.clear();
+                lock.holders.insert(tx_id);
+                lock.mode = LockMode::Exclusive;
+                return Ok(LockGrantMode::Granted);
             }
         }
         Err(LockError::LockUpgradeFailed)
@@ -379,5 +399,34 @@ mod tests {
         let result = manager.acquire_lock(TxId::new(2), key.clone(), LockMode::Shared);
 
         assert!(matches!(result, Ok(LockGrantMode::Granted)));
+    }
+
+    #[test]
+    fn test_lock_with_deadlock_detection() {
+        use crate::deadlock::DeadlockDetector;
+        let detector = Arc::new(RwLock::new(DeadlockDetector::new()));
+        let mut lock_manager = LockManager::with_deadlock_detector(detector.clone());
+
+        lock_manager
+            .acquire_lock(TxId::new(1), vec![1], LockMode::Exclusive)
+            .unwrap();
+        lock_manager
+            .acquire_lock(TxId::new(2), vec![2], LockMode::Exclusive)
+            .unwrap();
+        lock_manager
+            .acquire_lock(TxId::new(1), vec![2], LockMode::Exclusive)
+            .unwrap();
+        lock_manager
+            .acquire_lock(TxId::new(2), vec![1], LockMode::Exclusive)
+            .unwrap();
+
+        {
+            let mut detector = detector.write().unwrap();
+            detector.add_edge(TxId::new(2), TxId::new(1));
+            detector.add_edge(TxId::new(1), TxId::new(2));
+        }
+
+        let cycle = lock_manager.detect_deadlock(TxId::new(2));
+        assert!(cycle.is_some());
     }
 }
