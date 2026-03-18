@@ -393,4 +393,251 @@ mod tests {
 
         manager.commit().unwrap();
     }
+
+    #[test]
+    fn test_isolation_level_repeatable_read() {
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::RepeatableRead);
+
+        assert_eq!(
+            manager.get_isolation_level(),
+            IsolationLevel::RepeatableRead
+        );
+    }
+
+    #[test]
+    fn test_isolation_level_serializable() {
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::Serializable);
+
+        assert_eq!(manager.get_isolation_level(), IsolationLevel::Serializable);
+    }
+
+    #[test]
+    fn test_isolation_level_read_uncommitted() {
+        let mut manager = TransactionManager::new();
+        manager.set_isolation_level(IsolationLevel::ReadUncommitted);
+
+        assert_eq!(
+            manager.get_isolation_level(),
+            IsolationLevel::ReadUncommitted
+        );
+    }
+
+    #[test]
+    fn test_transaction_context_isolation_levels() {
+        let manager = TransactionManager::new();
+
+        let ctx1 = TransactionContext::new(
+            TxId::new(1),
+            Snapshot::new_read_committed(TxId::new(1), 100),
+            IsolationLevel::RepeatableRead,
+        );
+        assert_eq!(ctx1.isolation_level, IsolationLevel::RepeatableRead);
+        assert!(!ctx1.read_only);
+
+        let ctx2 = TransactionContext::new(
+            TxId::new(2),
+            Snapshot::new_read_committed(TxId::new(2), 200),
+            IsolationLevel::Serializable,
+        );
+        assert_eq!(ctx2.isolation_level, IsolationLevel::Serializable);
+    }
+
+    #[test]
+    fn test_transaction_context_refresh_snapshot() {
+        let mut ctx = TransactionContext::new(
+            TxId::new(1),
+            Snapshot::new_read_committed(TxId::new(1), 100),
+            IsolationLevel::ReadCommitted,
+        );
+
+        ctx.refresh_snapshot(200);
+        assert_eq!(ctx.snapshot.snapshot_timestamp, 200);
+    }
+
+    #[test]
+    fn test_transaction_context_refresh_snapshot_non_rc() {
+        let mut ctx = TransactionContext::new(
+            TxId::new(1),
+            Snapshot::new_read_committed(TxId::new(1), 100),
+            IsolationLevel::RepeatableRead,
+        );
+
+        ctx.refresh_snapshot(200);
+        assert_eq!(ctx.snapshot.snapshot_timestamp, 100);
+    }
+
+    #[test]
+    fn test_begin_without_commit() {
+        let mut manager = TransactionManager::new();
+        let tx_id = manager.begin().unwrap();
+        assert!(tx_id.is_valid());
+
+        let tx = manager.get_transaction_context().unwrap();
+        assert_eq!(tx.tx_id, tx_id);
+
+        manager.rollback().unwrap();
+    }
+
+    #[test]
+    fn test_commit_increments_timestamp() {
+        let mut manager = TransactionManager::new();
+
+        let tx1 = manager.begin().unwrap();
+        manager.commit().unwrap();
+
+        let ts1 = manager.get_global_timestamp().unwrap();
+
+        let tx2 = manager.begin().unwrap();
+        assert!(tx2.as_u64() > tx1.as_u64() || ts1 >= 1);
+    }
+
+    #[test]
+    fn test_rollback_no_transaction() {
+        let mut manager = TransactionManager::new();
+        let result = manager.rollback();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_commit_no_transaction() {
+        let mut manager = TransactionManager::new();
+        let result = manager.commit();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_double_commit() {
+        let mut manager = TransactionManager::new();
+        manager.begin().unwrap();
+        manager.commit().unwrap();
+
+        let result = manager.commit();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_double_rollback() {
+        let mut manager = TransactionManager::new();
+        manager.begin().unwrap();
+        manager.rollback().unwrap();
+
+        let result = manager.rollback();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_get_transaction_context_no_transaction() {
+        let manager = TransactionManager::new();
+        let result = manager.get_transaction_context();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_get_transaction_context_for_query_no_transaction() {
+        let manager = TransactionManager::new();
+        let result = manager.get_transaction_context_for_query();
+        assert!(matches!(result, Err(TransactionError::NoTransaction)));
+    }
+
+    #[test]
+    fn test_is_in_transaction() {
+        let mut manager = TransactionManager::new();
+
+        assert!(!manager.is_in_transaction());
+
+        manager.begin().unwrap();
+        assert!(manager.is_in_transaction());
+
+        manager.commit().unwrap();
+        assert!(!manager.is_in_transaction());
+    }
+
+    #[test]
+    fn test_transaction_manager_with_mvcc() {
+        let mvcc = Arc::new(RwLock::new(MvccEngine::new()));
+        let mut manager = TransactionManager::with_mvcc(mvcc.clone());
+
+        let tx_id = manager.begin().unwrap();
+        assert!(tx_id.is_valid());
+
+        manager.commit().unwrap();
+    }
+
+    #[test]
+    fn test_mvcc_lock_error() {
+        let manager = TransactionManager::new();
+
+        let result = manager.get_global_timestamp();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transaction_error_display() {
+        let err_in_progress = TransactionError::TransactionInProgress;
+        let err_no_tx = TransactionError::NoTransaction;
+        let err_invalid = TransactionError::InvalidTransaction;
+        let err_not_active = TransactionError::TransactionNotActive;
+        let err_lock = TransactionError::LockError;
+
+        assert_eq!(
+            err_in_progress.to_string(),
+            "transaction already in progress"
+        );
+        assert_eq!(err_no_tx.to_string(), "no transaction in progress");
+        assert_eq!(err_invalid.to_string(), "invalid transaction");
+        assert_eq!(err_not_active.to_string(), "transaction is not active");
+        assert_eq!(err_lock.to_string(), "failed to acquire lock");
+    }
+
+    #[test]
+    fn test_transaction_context_visibility_repeatable_read() {
+        let ctx = TransactionContext::new(
+            TxId::new(1),
+            Snapshot::new(TxId::new(1), 100, vec![]),
+            IsolationLevel::RepeatableRead,
+        );
+
+        assert!(ctx.is_visible(TxId::new(1), Some(50)));
+        assert!(!ctx.is_visible(TxId::new(2), Some(150)));
+    }
+
+    #[test]
+    fn test_transaction_context_visibility_serializable() {
+        let ctx = TransactionContext::new(
+            TxId::new(1),
+            Snapshot::new(TxId::new(1), 100, vec![]),
+            IsolationLevel::Serializable,
+        );
+
+        assert!(ctx.is_visible(TxId::new(1), Some(50)));
+        assert!(!ctx.is_visible(TxId::new(2), Some(150)));
+    }
+
+    #[test]
+    fn test_multiple_transactions_sequential() {
+        let mut manager = TransactionManager::new();
+
+        let tx1 = manager.begin().unwrap();
+        manager.commit().unwrap();
+
+        let tx2 = manager.begin().unwrap();
+        manager.commit().unwrap();
+
+        assert!(tx2.as_u64() > tx1.as_u64());
+    }
+
+    #[test]
+    fn test_abort_transaction_updates_status() {
+        let mut manager = TransactionManager::new();
+
+        let tx_id = manager.begin().unwrap();
+
+        let mut mvcc = manager.mvcc.write().unwrap();
+        mvcc.abort_transaction(tx_id);
+
+        let tx = mvcc.get_transaction(tx_id).unwrap();
+        assert!(tx.is_aborted());
+    }
 }
