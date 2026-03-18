@@ -263,10 +263,10 @@ fn test_sequential_vs_index_scan_characteristics() {
         "IndexScan: name={}, children={}, has_range={}",
         index_name,
         index_children.len(),
-        index_range.is_some()
+        index_range.0.is_some() || index_range.1.is_some()
     );
 
-    assert!(index_range.is_some());
+    assert!(index_range.0.is_some() || index_range.1.is_some());
 
     println!("✓ Sequential vs Index scan characteristics verified");
 }

@@ -5,54 +5,107 @@ SQLRustGo 的所有显着更改都将记录在此文件中。
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-03-13
+## [开发中] v1.6.0
+
+> 代号: 事务隔离 & 性能优化
+> 目标: L3+ Transaction Ready
 
 ### Added
 
-- **架构**：带有 RecordBatch 的矢量化执行引擎
-- **架构**：可插拔存储后端的 StorageEngine 特征
-- **架构**：文件存储和内存存储实现
-- **架构**：带有统计信息的基于成本的优化器（CBO）
-- **功能**：用于统计收集的 ANALYZE 命令
-- **功能**：带有表/列统计信息的简化 CBO
-- **功能**：用于嵌入式使用的 LocalExecutor
-- **功能**：HashJoinExec 表连接实现
-- **功能**：聚合函数 (COUNT, SUM, AVG, MIN, MAX)
-- **功能**：ProjectionExec 列投影 (Wildcard, Alias, BinaryExpr)
-- **功能**：FilterExec 谓词过滤
-- **功能**：SeqScanExec 全表扫描
-- **优化器**：Predicate Pushdown 谓词下推
-- **优化器**：Projection Pruning 投影裁剪
-- **优化器**：Constant Folding 常量折叠
-- **优化器**：Expression Simplification 表达式简化
-- **优化器**：Join Reordering 连接重排序
-- **测试**：LocalExecutor 测试框架
-- **测试**：覆盖率提升至 80%+
+#### 事务支持 (T-01 ~ T-06)
 
-### Changed
+- **T-01**: MVCC 骨架 (快照隔离、版本链管理)
+- **T-02**: 事务管理器 (BEGIN/COMMIT/ROLLBACK)
+- **T-03**: READ COMMITTED 隔离级别
+- **T-04**: 行级锁 (排他锁、共享锁)
+- **T-05**: 死锁检测
+- **T-06**: SAVEPOINT 支持
 
-- **重构**：存储层抽象
-- **重构**：统计基础设施
-- **重构**：PhysicalPlan execute() 方法实现
+#### WAL 改进 (W-01 ~ W-03)
 
-### Fixed
+- **W-01**: WAL 并发写入
+- **W-02**: 检查点优化
+- **W-03**: WAL 归档
 
-- **修复**：Optimizer 规则测试编译错误
-- **修复**：CI 配置完善 (release/* 分支触发)
-- **修复**：Benchmark 编译适配
+#### 索引增强 (I-03 ~ I-06)
 
-### Security
+- **I-03**: 唯一索引
+- **I-04**: 复合索引
+- **I-05**: 索引统计
+- **I-06**: 全文索引
 
-- **审核**：依赖审核已通过（无高严重性漏洞）
+#### 性能优化 (P-01 ~ P-04)
+
+- **P-01**: 查询缓存
+- **P-02**: 连接池
+- **P-03**: TPC-H 基准测试
+- **P-04**: SIMD 优化
+
+#### 数据类型 (D-01 ~ D-04)
+
+- **D-01**: DATE 类型
+- **D-02**: TIMESTAMP 类型
+- **D-03**: BLOB 类型
+- **D-04**: BOOLEAN 增强
+
+#### REPL 增强 (R-01 ~ R-04)
+
+- **R-01**: .tables 命令
+- **R-02**: .schema 命令
+- **R-03**: .indexes 命令
+- **R-04**: 语法高亮
+
+### Performance 目标
+
+- WAL 吞吐量: ≥500 MB/s (v1.5 基线 366 MB/s)
+- TPC-H Q1: ≥1.5x (v1.5 基线)
+- 事务并发: ≥3x (v1.5 基线)
+- 查询缓存命中率: ≥80%
 
 ### Documentation
 
-- **新**: v1.2.0 Release Notes
-- **新增**：v1.2.0 升级指南
-- **新**：v1.2.0 成熟度评估
-- **新**：v1.2.0 测试计划（目标覆盖率超过 85%）
-- **新增**：v1.2.0 性能测试报告
-- **新增**：覆盖率改进计划
+- **新**: v1.6.0 Release Notes
+- **新**: v1.6.0 CHANGE_LOG
+- **新**: v1.6.0 开发计划
+- **新**: v1.6.0 发布门禁检查清单
+- **新**: v1.6.0 迁移指南
+- **新**: v1.6.0 API 变更文档
+
+## [1.5.0] - 2026-03-18 (GA)
+
+### Added
+
+- **架构**：存储引擎完整重构
+  - 页式存储 (S-01)
+  - 缓冲池 LRU 缓存 (S-02)
+  - WAL 预写日志 (S-03)
+  - 表堆存储 (S-04)
+- **索引**：B+Tree 索引 (I-01) 和 IndexScan 算子 (I-02)
+- **表达式**：常量折叠增强 (E-01) 和表达式简化 (E-02)
+- **统计**：基础统计信息收集 (ST-01)
+- **测试**：性能基准测试 (PB-01 ~ PB-05)
+  - PB-01: 缓冲池命中率
+  - PB-03: WAL 性能
+  - PB-04: 页读写吞吐量
+  - PB-05: TPC-H 查询
+- **集成测试**：存储引擎和索引集成测试
+
+### Performance
+
+- WAL 吞吐量: 366 MB/s
+- 顺序读: 3777 MB/s
+- 缓冲池命中率: 100%
+- 整体覆盖率: 90.46%
+
+### Security
+
+- **审核**: cargo audit 通过 (无漏洞)
+
+### Documentation
+
+- **新**: v1.5.0 Release Notes
+- **新**: v1.5.0 性能测试报告
+- **新**: v1.5.0 集成测试报告
 
 ## [1.5.0] - 2026-03-18 (GA)
 
@@ -161,7 +214,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新**：v1.3.0 版本计划
 - **新**：v1.3.0 开发计划
 
-## [未发布]
+## [1.2.0] - 2026-03-13
+
+### Added
+
+- **架构**：带有 RecordBatch 的矢量化执行引擎
+- **架构**：可插拔存储后端的 StorageEngine 特征
+- **架构**：文件存储和内存存储实现
+- **架构**：带有统计信息的基于成本的优化器（CBO）
+- **功能**：用于统计收集的 ANALYZE 命令
+- **功能**：带有表/列统计信息的简化 CBO
+- **功能**：用于嵌入式使用的 LocalExecutor
+- **功能**：HashJoinExec 表连接实现
+- **功能**：聚合函数 (COUNT, SUM, AVG, MIN, MAX)
+- **功能**：ProjectionExec 列投影 (Wildcard, Alias, BinaryExpr)
+- **功能**：FilterExec 谓词过滤
+- **功能**：SeqScanExec 全表扫描
+- **优化器**：Predicate Pushdown 谓词下推
+- **优化器**：Projection Pruning 投影裁剪
+- **优化器**：Constant Folding 常量折叠
+- **优化器**：Expression Simplification 表达式简化
+- **优化器**：Join Reordering 连接重排序
+- **测试**：LocalExecutor 测试框架
+- **测试**：覆盖率提升至 80%+
+
+### Changed
+
+- **重构**：存储层抽象
+- **重构**：统计基础设施
+- **重构**：PhysicalPlan execute() 方法实现
+
+### Fixed
+
+- **修复**：Optimizer 规则测试编译错误
+- **修复**：CI 配置完善 (release/* 分支触发)
+- **修复**：Benchmark 编译适配
+
+### Security
+
+- **审核**：依赖审核已通过（无高严重性漏洞）
+
+### Documentation
+
+- **新**: v1.2.0 Release Notes
+- **新增**：v1.2.0 升级指南
+- **新**：v1.2.0 成熟度评估
+- **新**：v1.2.0 测试计划（目标覆盖率超过 85%）
+- **新增**：v1.2.0 性能测试报告
+- **新增**：覆盖率改进计划
+
+## [1.1.0] - 2026-03-05
 
 ### Added
 
@@ -176,12 +278,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **测试**：使用 Criterion 的性能基准框架
 - **测试**：测试覆盖率提高至 90.66%
 
-### 已更改
+### Changed
 
 - **重构**：用执行器中正确的错误传播替换了 unwrap
 - **重构**：改进了 SqlResult<T> 的错误处理
-- **文档**：使用正确的分支工作流程更新了门检查表
-- **文档**：重新整理教材（学生/助教分离）
 
 ### Fixed
 
@@ -189,35 +289,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **修复**：Rust 2021 兼容性（let 链语法）
 - **修复**：代码格式问题
 
-＃＃＃ 安全
+### Security
 
 - **审核**：依赖审核已通过
 - **审计**：无敏感信息泄露
 
-### 文档
-
-- **新**：DeepSeek 评估报告
-- **新**：v1.1.0-draft 的改进计划
-- **新**：AI-CLI 协作通知
-- **新**：v1.3.0 版本计划，带有可观察性轨道
-- **新增**：2.0架构设计文档
-- **新**：分布式界面设计（3.0预览版）
-- **新**：教学实践材料（学生/助教手册）
-
 ## [1.0.0] - 2026-02-22
-
-### Added
-
-- **核心**：支持 SELECT、INSERT、UPDATE、DELETE 的 SQL 解析器
-- **核心**：B+树存储引擎
-- **核心**：WAL 事务支持
-- **核心**：基本查询执行
-- **测试**：单元测试框架
-- **文档**：初始文档
-
-### 已更改
-
-- 初始版本
 
 ---
 
@@ -225,7 +302,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 日期 | 成熟度 | 说明 |
 |------|------|--------|------|
-| **v1.5.0** | 2026-03-18 | **L3+ GA** | **存储引擎、索引、表达式优化** |
+| **v1.6.0** | TBD | **L3+ 开发中** | **事务隔离、性能优化** |
+| v1.5.0 | 2026-03-18 | L3+ GA | 存储引擎、索引、表达式优化 |
 | v1.4.0 | 2026-03-17 | L3+ | 存储引擎重构、索引、表达式优化 |
 | v1.3.0 | 2026-03-15 | L4 | 企业功能、可观察性 |
 | v1.2.0 | 2026-03-13 | L3+ | 矢量化、CBO、存储抽象 |
@@ -236,9 +314,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 路线图
 
+- **v1.6.0**: 🔨 开发中 (MVCC、事务隔离、WAL 改进)
 - **v1.5.0**: ✅ GA 发布 (2026-03-18)
-- **v1.6.0**: 规划中 (MVCC、事务隔离)
-- **v2.0**: 分布式架构
+- **v2.0**: 分布式架构 (前置: v1.6.0 MVCC)
 
 ---
 
