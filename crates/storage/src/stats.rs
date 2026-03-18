@@ -289,4 +289,111 @@ mod tests {
 
         assert!(manager.get_table_stats("users").is_none());
     }
+
+    #[test]
+    fn test_table_stats_set_page_count() {
+        let mut stats = TableStats::new("test".to_string());
+        stats.set_page_count(10);
+        assert_eq!(stats.page_count, 10);
+        assert!(stats.last_updated > 0);
+    }
+
+    #[test]
+    fn test_table_stats_set_table_size() {
+        let mut stats = TableStats::new("test".to_string());
+        stats.set_table_size(4096);
+        assert_eq!(stats.table_size, 4096);
+        assert!(stats.last_updated > 0);
+    }
+
+    #[test]
+    fn test_table_stats_add_column_stats() {
+        let mut stats = TableStats::new("test".to_string());
+        let col_stats = ColumnStats::new("age".to_string());
+        stats.add_column_stats("age".to_string(), col_stats);
+        assert!(stats.column_stats.contains_key("age"));
+    }
+
+    #[test]
+    fn test_stats_manager_update_page_count() {
+        let mut manager = StatsManager::new();
+        manager.get_or_create_table("users");
+        manager.update_page_count("users", 5);
+
+        let stats = manager.get_table_stats("users").unwrap();
+        assert_eq!(stats.page_count, 5);
+    }
+
+    #[test]
+    fn test_stats_manager_update_table_size() {
+        let mut manager = StatsManager::new();
+        manager.get_or_create_table("users");
+        manager.update_table_size("users", 8192);
+
+        let stats = manager.get_table_stats("users").unwrap();
+        assert_eq!(stats.table_size, 8192);
+    }
+
+    #[test]
+    fn test_stats_manager_update_column_stats() {
+        let mut manager = StatsManager::new();
+        manager.update_column_stats("users", "age", Some(&[30, 0, 0, 0]), 4);
+
+        let stats = manager.get_table_stats("users").unwrap();
+        let col_stats = stats.column_stats.get("age").unwrap();
+        assert_eq!(col_stats.distinct_count, 1);
+    }
+
+    #[test]
+    fn test_stats_manager_clear() {
+        let mut manager = StatsManager::new();
+        manager.get_or_create_table("users");
+        manager.get_or_create_table("orders");
+        manager.clear();
+
+        assert!(manager.list_tables().is_empty());
+    }
+
+    #[test]
+    fn test_column_stats_min_max_update() {
+        let mut stats = ColumnStats::new("id".to_string());
+        stats.update(Some(&[10, 0, 0, 0]), 4);
+        stats.update(Some(&[5, 0, 0, 0]), 4);
+        stats.update(Some(&[20, 0, 0, 0]), 4);
+
+        assert_eq!(stats.distinct_count, 3);
+        assert_eq!(stats.min_value, Some(vec![5, 0, 0, 0]));
+        assert_eq!(stats.max_value, Some(vec![20, 0, 0, 0]));
+    }
+
+    #[test]
+    fn test_column_stats_avg_size() {
+        let mut stats = ColumnStats::new("data".to_string());
+        stats.update(Some(&[1, 2, 3]), 3);
+        stats.update(Some(&[1, 2, 3, 4]), 4);
+
+        assert_eq!(stats.distinct_count, 2);
+        assert!((stats.avg_size - 3.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_table_stats_multiple_updates() {
+        let mut stats = TableStats::new("test".to_string());
+        let initial_time = stats.last_updated;
+
+        stats.set_row_count(100);
+        assert!(stats.last_updated >= initial_time);
+
+        stats.set_page_count(5);
+        assert!(stats.last_updated >= initial_time);
+
+        stats.set_table_size(1024);
+        assert!(stats.last_updated >= initial_time);
+    }
+
+    #[test]
+    fn test_stats_manager_nonexistent_table() {
+        let manager = StatsManager::new();
+        assert!(manager.get_table_stats("nonexistent").is_none());
+    }
 }

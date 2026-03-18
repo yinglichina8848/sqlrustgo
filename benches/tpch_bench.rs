@@ -13,15 +13,13 @@ struct TpchDataGenerator {
     scale_factor: u32,
 }
 
-type LineItemRow = (i64, i64, f64, f64, f64, f64, f64, i32, &'static str);
-
 impl TpchDataGenerator {
     fn new(scale_factor: u32) -> Self {
         Self { scale_factor }
     }
 
     /// Generate TPC-H lineitem table data
-    fn generate_lineitem_data(&self) -> Vec<LineItemRow> {
+    fn generate_lineitem_data(&self) -> Vec<(i64, i64, f64, f64, f64, f64, f64, i32, &str)> {
         let mut data = Vec::new();
         let num_rows = 1000 * self.scale_factor;
 
@@ -75,7 +73,7 @@ impl TpchDataGenerator {
             };
             let _clerk = format!("Clerk{:05}", i % 1000);
             let total_price = (i as f64 * 10.0).round() as i64;
-            let order_date = 87600u32 + (i % 2000); // Days from 1992-01-01
+            let order_date = 87600u32 + (i % 2000) as u32; // Days from 1992-01-01
 
             data.push((
                 order_key,

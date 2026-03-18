@@ -41,11 +41,6 @@
 #### 可观测性
 - **功能**: Metrics trait 定义 (M-001) ✅ 已完成
 - **功能**: BufferPool 指标收集 (M-002) ✅ 已完成
-- **功能**: ExecutorMetrics 指标收集 (M-003) ✅ 已完成
-- **功能**: NetworkMetrics 网络指标 (M-004) ✅ 已完成
-- **功能**: MetricsRegistry 指标注册表 (M-005) ✅ 已完成
-- **功能**: Grafana Dashboard (M-006) ✅ 已完成
-- **功能**: Alert Rules (M-007) ✅ 已完成
 - **功能**: /health/live 端点 (H-001) ✅ 已完成
 - **功能**: /health/ready 端点 (H-002) ✅ 已完成
 - **功能**: /health 综合端点 (H-004) ✅ 已完成
