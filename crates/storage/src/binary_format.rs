@@ -81,6 +81,21 @@ pub mod helpers {
         Ok(i64::from_be_bytes(bytes))
     }
 
+    /// Write a i32 to bytes in big-endian format
+    pub fn write_i32(value: i32) -> [u8; 4] {
+        value.to_be_bytes()
+    }
+
+    /// Read a i32 from bytes in big-endian format
+    pub fn read_i32(data: &[u8]) -> Result<i32, BinaryFormatError> {
+        if data.len() < 4 {
+            return Err(BinaryFormatError::InsufficientData);
+        }
+        let mut bytes = [0u8; 4];
+        bytes.copy_from_slice(&data[..4]);
+        Ok(i32::from_be_bytes(bytes))
+    }
+
     /// Write a f64 to bytes in big-endian format
     pub fn write_f64(value: f64) -> [u8; 8] {
         value.to_be_bytes()
@@ -164,6 +179,11 @@ impl BinaryFormat for Value {
                 result.extend_from_slice(b);
                 result
             }
+            Value::Date(d) => {
+                let mut result = vec![6u8];
+                result.extend_from_slice(&helpers::write_i32(*d));
+                result
+            }
         }
     }
 
@@ -186,6 +206,7 @@ impl BinaryFormat for Value {
                 let blob_data = data[9..9 + len].to_vec();
                 Ok(Value::Blob(blob_data))
             }
+            6 => Ok(Value::Date(helpers::read_i32(&data[1..])?)),
             _ => Err(BinaryFormatError::InvalidFormat(format!(
                 "Unknown type indicator: {}",
                 data[0]
