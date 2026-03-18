@@ -26,9 +26,12 @@ fn test_index_scan_basic() {
     // Execute - verify can be called without error
     let _results = index_scan.execute().unwrap();
 
+    // Verify the plan was created correctly
+    assert_eq!(index_scan.name(), "IndexScan");
+    assert_eq!(index_scan.index_name(), "idx_id");
     // Verify schema is correct
     assert_eq!(index_scan.schema().fields.len(), 2);
-    println!("✓ IndexScan basic: schema verified, execute() works");
+    println!("✓ IndexScan basic: verified, execute() works");
 }
 
 #[test]
@@ -50,11 +53,11 @@ fn test_index_scan_range_query() {
     // Execute - verify can be called without error
     let results = index_scan.execute().unwrap();
 
-    // Verify key range is set correctly
+    // Verify the range was set correctly
     let (min, max) = index_scan.key_range();
     assert_eq!(min, Some(100));
     assert_eq!(max, Some(200));
-    println!("✓ IndexScan range: key range verified, execute() works");
+    println!("✓ IndexScan range: verified, execute() works");
 }
 
 #[test]
