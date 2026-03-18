@@ -24,6 +24,7 @@ ctrlc.workspace = true
 async-trait.workspace = true
 actix-web = "4"
 actix-rt = "2"
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 tempfile.workspace = true

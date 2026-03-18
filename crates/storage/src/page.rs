@@ -367,6 +367,16 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(blob);
             bytes
         }
+        Value::Date(d) => {
+            let mut bytes = vec![0x07];
+            bytes.extend_from_slice(&d.to_le_bytes());
+            bytes
+        }
+        Value::Timestamp(ts) => {
+            let mut bytes = vec![0x08];
+            bytes.extend_from_slice(&ts.to_le_bytes());
+            bytes
+        }
     }
 }
 
@@ -409,6 +419,16 @@ pub fn bytes_to_value(data: &[u8]) -> Option<Value> {
             } else {
                 None
             }
+        }
+        0x07 if data.len() >= 5 => {
+            let d = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+            Some(Value::Date(d))
+        }
+        0x08 if data.len() >= 9 => {
+            let ts = i64::from_le_bytes([
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+            ]);
+            Some(Value::Timestamp(ts))
         }
         _ => None,
     }
@@ -791,7 +811,9 @@ mod tests {
 
     #[test]
     fn test_bytes_to_value_text_v2() {
-        let bytes = vec![0x02, 5, 0, 0, 0, 0, 0, 0, 0, 'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8];
+        let bytes = vec![
+            0x02, 5, 0, 0, 0, 0, 0, 0, 0, 'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8,
+        ];
         let value = bytes_to_value(&bytes);
         assert!(value.is_some());
     }

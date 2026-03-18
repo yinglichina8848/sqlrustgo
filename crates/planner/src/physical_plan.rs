@@ -103,6 +103,8 @@ pub struct IndexScanExec {
     index_name: String,
     key_expr: Expr,
     schema: Schema,
+    key_range_min: Option<i64>,
+    key_range_max: Option<i64>,
 }
 
 impl IndexScanExec {
@@ -112,7 +114,15 @@ impl IndexScanExec {
             index_name,
             key_expr,
             schema,
+            key_range_min: None,
+            key_range_max: None,
         }
+    }
+
+    pub fn with_key_range(mut self, min: i64, max: i64) -> Self {
+        self.key_range_min = Some(min);
+        self.key_range_max = Some(max);
+        self
     }
 
     pub fn table_name(&self) -> &str {
@@ -125,6 +135,10 @@ impl IndexScanExec {
 
     pub fn key_expr(&self) -> &Expr {
         &self.key_expr
+    }
+
+    pub fn key_range(&self) -> (Option<i64>, Option<i64>) {
+        (self.key_range_min, self.key_range_max)
     }
 }
 
@@ -723,6 +737,8 @@ pub struct SortMergeJoinExec {
     join_type: crate::JoinType,
     condition: Option<Expr>,
     schema: Schema,
+    left_keys: Vec<Expr>,
+    right_keys: Vec<Expr>,
 }
 
 impl SortMergeJoinExec {
@@ -732,6 +748,8 @@ impl SortMergeJoinExec {
         join_type: crate::JoinType,
         condition: Option<Expr>,
         schema: Schema,
+        left_keys: Vec<Expr>,
+        right_keys: Vec<Expr>,
     ) -> Self {
         Self {
             left,
@@ -739,6 +757,8 @@ impl SortMergeJoinExec {
             join_type,
             condition,
             schema,
+            left_keys,
+            right_keys,
         }
     }
 
@@ -756,6 +776,14 @@ impl SortMergeJoinExec {
 
     pub fn condition(&self) -> Option<&Expr> {
         self.condition.as_ref()
+    }
+
+    pub fn left_keys(&self) -> &Vec<Expr> {
+        &self.left_keys
+    }
+
+    pub fn right_keys(&self) -> &Vec<Expr> {
+        &self.right_keys
     }
 }
 
@@ -3277,6 +3305,8 @@ mod tests {
             crate::JoinType::Left,
             None,
             join_schema,
+            left_keys.clone(),
+            right_keys.clone(),
         );
 
         assert_eq!(smj.join_type(), crate::JoinType::Left);
