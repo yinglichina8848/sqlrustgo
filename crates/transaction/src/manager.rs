@@ -4,6 +4,7 @@
 //! transaction lifecycle: BEGIN, COMMIT, ROLLBACK.
 
 use crate::mvcc::{MvccEngine, Snapshot, TxId};
+use crate::savepoint::{SavepointError, SavepointManager};
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -63,6 +64,7 @@ pub struct TransactionManager {
     mvcc: Arc<RwLock<MvccEngine>>,
     current_tx: Option<TxId>,
     isolation_level: IsolationLevel,
+    savepoint_manager: SavepointManager,
 }
 
 impl TransactionManager {
@@ -71,6 +73,7 @@ impl TransactionManager {
             mvcc: Arc::new(RwLock::new(MvccEngine::new())),
             current_tx: None,
             isolation_level: IsolationLevel::ReadCommitted,
+            savepoint_manager: SavepointManager::new(),
         }
     }
 
@@ -79,6 +82,7 @@ impl TransactionManager {
             mvcc,
             current_tx: None,
             isolation_level: IsolationLevel::ReadCommitted,
+            savepoint_manager: SavepointManager::new(),
         }
     }
 
@@ -206,6 +210,18 @@ impl TransactionManager {
                 self.isolation_level,
             )),
         }
+    }
+
+    pub fn savepoint(&mut self, name: String) -> Result<(), SavepointError> {
+        self.savepoint_manager.savepoint(name)
+    }
+
+    pub fn rollback_to(&mut self, name: String) -> Result<(), SavepointError> {
+        self.savepoint_manager.rollback_to(&name)
+    }
+
+    pub fn release_savepoint(&mut self, name: String) -> Result<(), SavepointError> {
+        self.savepoint_manager.release_savepoint(&name)
     }
 }
 
