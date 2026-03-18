@@ -327,7 +327,7 @@ impl BufferPoolLruK {
         let timestamp = *counter;
 
         let mut history = self.access_history.lock().unwrap();
-        let entry = history.entry(page_id).or_insert_with(Vec::new);
+        let entry = history.entry(page_id).or_default();
         entry.push(timestamp);
 
         // Keep only last K accesses
