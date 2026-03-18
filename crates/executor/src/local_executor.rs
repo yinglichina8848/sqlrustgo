@@ -10,21 +10,108 @@ use sqlrustgo_planner::{
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
+use crate::query_cache::should_cache;
+use crate::query_cache::QueryCache;
+use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
+use crate::sql_normalizer::SqlNormalizer;
 use crate::{Executor, ExecutorResult};
+
+use parking_lot::RwLock;
+use std::sync::Arc;
+use std::time::Instant;
 
 /// LocalExecutor - executes physical plans using StorageEngine
 pub struct LocalExecutor<'a> {
     storage: &'a dyn StorageEngine,
+    cache: Arc<RwLock<QueryCache>>,
+    cache_config: QueryCacheConfig,
 }
 
 impl<'a> LocalExecutor<'a> {
     /// Create a new LocalExecutor with the given storage engine
     pub fn new(storage: &'a dyn StorageEngine) -> Self {
-        Self { storage }
+        Self {
+            storage,
+            cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
+        }
+    }
+
+    /// Create a LocalExecutor with custom cache config
+    pub fn with_cache_config(storage: &'a dyn StorageEngine, config: QueryCacheConfig) -> Self {
+        Self {
+            storage,
+            cache: Arc::new(RwLock::new(QueryCache::new(config.clone()))),
+            cache_config: config,
+        }
+    }
+
+    /// Invalidate cache for a specific table
+    pub fn invalidate_table(&self, table: &str) {
+        self.cache.write().invalidate_table(table);
+    }
+
+    /// Clear all cached query results
+    pub fn clear_cache(&self) {
+        self.cache.write().clear();
+    }
+
+    /// Get cache key from SQL and params
+    fn get_cache_key(&self, sql: &str, params: &[Value]) -> CacheKey {
+        let (normalized, extracted) = SqlNormalizer::from_literal(sql);
+        let mut all_params = extracted;
+        all_params.extend_from_slice(params);
+        let hash = SqlNormalizer::hash_params(&all_params);
+        CacheKey {
+            normalized_sql: normalized,
+            params_hash: hash,
+        }
     }
 
     /// Execute a physical plan and return results
     pub fn execute(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        self.execute_with_cache(plan, "", &[])
+    }
+
+    /// Execute with cache support using SQL and parameters
+    pub fn execute_with_cache(
+        &self,
+        plan: &dyn PhysicalPlan,
+        sql: &str,
+        params: &[Value],
+    ) -> SqlResult<ExecutorResult> {
+        if self.cache_config.enabled && !sql.is_empty() {
+            let cache_key = self.get_cache_key(sql, params);
+            if let Some(result) = self.cache.write().get(&cache_key) {
+                return Ok(result);
+            }
+
+            let result = match plan.name() {
+                "SeqScan" => self.execute_seq_scan(plan),
+                "Projection" => self.execute_projection(plan),
+                "Filter" => self.execute_filter(plan),
+                "Aggregate" => self.execute_aggregate(plan),
+                "HashJoin" => self.execute_hash_join(plan),
+                "SortMergeJoin" => self.execute_sort_merge_join(plan),
+                "Sort" => self.execute_sort(plan),
+                "Limit" => self.execute_limit(plan),
+                _ => Ok(ExecutorResult::empty()),
+            }?;
+
+            if should_cache(&result) {
+                let tables = self.extract_tables(plan);
+                let entry = CacheEntry {
+                    result: result.clone(),
+                    tables,
+                    created_at: Instant::now(),
+                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                };
+                self.cache.write().put(cache_key, entry, vec![]);
+            }
+
+            return Ok(result);
+        }
+
         match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
             "Projection" => self.execute_projection(plan),
@@ -36,6 +123,17 @@ impl<'a> LocalExecutor<'a> {
             "Limit" => self.execute_limit(plan),
             _ => Ok(ExecutorResult::empty()),
         }
+    }
+
+    fn extract_tables(&self, plan: &dyn PhysicalPlan) -> Vec<String> {
+        let mut tables = Vec::new();
+        if !plan.table_name().is_empty() {
+            tables.push(plan.table_name().to_string());
+        }
+        for child in plan.children() {
+            tables.extend(self.extract_tables(child));
+        }
+        tables
     }
 
     /// Execute sequential scan
@@ -1427,8 +1525,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::Column(Column::new("user_id".to_string()))],
-            vec![Expr::Column(Column::new("user_id".to_string()))],
             output_schema,
         );
 
@@ -1491,8 +1587,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Left,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
         );
 
@@ -1535,8 +1629,6 @@ mod tests {
             Box::new(right_scan),
             JoinType::Inner,
             join_condition,
-            vec![Expr::column("id")],
-            vec![Expr::column("id")],
             join_schema,
         );
 
