@@ -1,0 +1,291 @@
+.
+├── 2026-02-13-sqlcc-rust-impl-plan.md
+├── 2026-02-13-sqlcc-rust-redesign-design.md
+├── AI_COLLABORATION_GUIDE.md
+├── AI增强软件工程
+│   ├── AI_AGENT_PROMPTS.md
+│   ├── chatGPT- AI协作开发-对话记录
+│   ├── chatGPT-版本规划-对话记录.docx
+│   ├── chatGPT-版本规划-对话记录.md
+│   ├── Copilot-Github评估报告.md
+│   ├── GitHub多账号配置指南.md
+│   ├── MULTI_AGENT_CONFIG.md
+│   └── MULTI_IDENTITY_DEVELOPMENT_MODEL.md
+├── architecture
+│   ├── ARCHITECTURE_OVERVIEW.md
+│   ├── ARCHITECTURE.md
+│   ├── cascades_optimizer_design.md
+│   ├── CASCADES_OPTIMIZER.md
+│   ├── DIRECTORY_STRUCTURE.md
+│   ├── DISTRIBUTED_EXECUTION.md
+│   ├── distributed_scheduler_design.md
+│   └── sqlrustgo_architecture.md
+├── ARCHITECTURE_EVOLUTION.md
+├── architecture.md
+├── benchmark_report.md
+├── BRANCH_GOVERNANCE.md
+├── coverage_improvement_plan.md
+├── ENGINEERING_AUTOMATION.md
+├── governance
+│   ├── AI_COLLABORATION.md
+│   ├── BRANCH_CLEANUP_REPORT_20260222.md
+│   ├── CONTRIBUTING.md
+│   ├── enterprise-github-minimal-permission-model.md
+│   ├── enterprise-github-permissions-implementation-plan.md
+│   ├── enterprise-governance-best-practices.md
+│   ├── enterprise-permission-validation-checklist.md
+│   ├── GA_RELEASE_TIMELINE.md
+│   ├── github-identity-separation-implementation.md
+│   ├── IMMUTABLE_RELEASE_ARCHITECTURE.md
+│   ├── PERMISSION_CHECK_REPORT_20260222.md
+│   ├── PERMISSION_MATRIX.md
+│   ├── RC_TO_GA_GATE_CHECKLIST.md
+│   ├── RELEASE_LIFECYCLE.md
+│   ├── RELEASE_POLICY.md
+│   ├── v1.0-ga-final-state.md
+│   └── v1.0-release-retrospective.md
+├── plans
+│   ├── 2026-02-14-sqlrustgo-feature-completion.md
+│   ├── 2026-02-16-collaboration-workflow.md
+│   ├── 2026-02-16-docs-testing-plan.md
+│   └── 2026-02-16-parallel-development-guide.md
+├── RC_BRANCH_PROTECTION.md
+├── README.md
+├── RELEASE_GATES_COMPREHENSIVE.md
+├── RELEASE_NORMALIZATION.md
+├── releases
+│   ├── LONG_TERM_ROADMAP.md
+│   ├── v1.0.0
+│   │   ├── 00-release-summary.md
+│   │   ├── 00-tag-history-note.md
+│   │   ├── 01-release-notes.md
+│   │   └── 10-approval-record.md
+│   ├── v1.1.0
+│   │   ├── AI_CLI_COLLABORATION_NOTICE.md
+│   │   ├── API_DOCUMENTATION.md
+│   │   ├── B-002_INSTALL_TEST.md
+│   │   ├── CODE_QUALITY_AUDIT.md
+│   │   ├── DEEPSEEK_EVALUATION.md
+│   │   ├── HEALTH_CHECK_SPECIFICATION.md
+│   │   ├── IMPROVEMENT_PLAN.md
+│   │   ├── LOGGING_SPECIFICATION.md
+│   │   ├── MATURITY_ASSESSMENT.md
+│   │   ├── MONITORING_SPECIFICATION.md
+│   │   ├── PERFORMANCE_BENCHMARK.md
+│   │   ├── PERFORMANCE_REPORT.md
+│   │   ├── RC_PERFORMANCE_REPORT.md
+│   │   ├── RC-001_GATE_CHECK_A.md
+│   │   ├── RC-002_COVERAGE.md
+│   │   ├── RELEASE_GATE_CHECKLIST.md
+│   │   ├── RELEASE_NOTES.md
+│   │   ├── SECURITY_AUDIT.md
+│   │   ├── UPGRADE_GUIDE.md
+│   │   └── USER_MANUAL.md
+│   ├── v1.2.0
+│   │   ├── ALGORITHM_DOCUMENTATION.md
+│   │   ├── ANALYSIS_REPORT.md
+│   │   ├── API_DOCUMENTATION.md
+│   │   ├── ARCHITECTURE_DIAGRAM.md
+│   │   ├── ARCHITECTURE_REFACTORING_PLAN.md
+│   │   ├── BRANCH_MANAGEMENT_PLAN.md
+│   │   ├── BRANCH_RECOVERY.md
+│   │   ├── BRANCH_STAGE_GOVERNANCE.md
+│   │   ├── DIRECTORY_AND_BRANCH_GOVERNANCE_REPORT.md
+│   │   ├── DRAFT_COMPLETION_TASKS.md
+│   │   ├── INTERFACE_CONTRACT.md
+│   │   ├── MATURITY_ASSESSMENT.md
+│   │   ├── PERFORMANCE_REPORT.md
+│   │   ├── PHASE_TRANSITION_ANNOUNCEMENT.md
+│   │   ├── README.md
+│   │   ├── RELEASE_GATE_CHECKLIST.md
+│   │   ├── RELEASE_NOTES.md
+│   │   ├── TASK_MATRIX.md
+│   │   ├── TEST_PLAN.md
+│   │   ├── UPGRADE_GUIDE.md
+│   │   └── VERSION_PLAN.md
+│   ├── v1.3.0
+│   │   ├── CHANGE_LOG.md
+│   │   ├── COVERAGE_TEST_TEMPLATE.md
+│   │   ├── CRAFT_PLAN.md
+│   │   ├── DEVELOPMENT_PLAN.md
+│   │   ├── HEALTH_CHECK_SPECIFICATION.md
+│   │   ├── PERFORMANCE_TEST_TEMPLATE.md
+│   │   ├── RELEASE_GATE_CHECKLIST.md
+│   │   ├── RELEASE_NOTES.md
+│   │   ├── TASK_MATRIX.md
+│   │   ├── TEST_PLAN.md
+│   │   ├── VERSION_PLAN.md
+│   │   └── WORK_JOURNAL_TEMPLATE.md
+│   ├── v1.4.0
+│   │   └── VERSION_PLAN.md
+│   ├── v1.5.0
+│   │   └── VERSION_PLAN.md
+│   ├── v1.6.0
+│   │   └── VERSION_PLAN.md
+│   └── VERSION_ROADMAP.md
+├── ROADMAP.md
+├── t.txt
+├── v1.0
+│   ├── beta
+│   │   └── FROZEN_STATUS.md
+│   ├── rc1
+│   │   └── 验收文档
+│   │       ├── 安装包
+│   │       │   ├── INSTALL_TEST.md
+│   │       │   └── 安装包测试模板.md
+│   │       ├── 测试报告
+│   │       │   └── 测试报告模板.md
+│   │       ├── 门禁验收
+│   │       │   ├── ISSUE_19_REVIEW_COMMENTS.md
+│   │       │   ├── PROTECTION_RULES.md
+│   │       │   ├── RC1_PLAN.md
+│   │       │   ├── RC1门禁验收清单.md
+│   │       │   └── SECURITY_REPORT.md
+│   │       └── 文档构建
+│   │           └── 文档构建测试模板.md
+│   ├── README.md
+│   └── v1.1.0-beta
+│       ├── daily-template.md
+│       ├── developer
+│       │   └── README.md
+│       ├── handbook-student.md
+│       ├── handbook-ta.md
+│       ├── pr-evidence.md
+│       ├── README.md
+│       ├── task-board.md
+│       ├── testing
+│       │   └── README.md
+│       └── user
+│           └── README.md
+├── v1.2.0_gate_check_spec.md
+├── v2.0
+│   ├── AI_CLI_GUIDE.md
+│   ├── AI_CLI_PROMPT.md
+│   ├── ARCHITECTURE_V2.md
+│   ├── BENCHMARK_FRAMEWORK.md
+│   ├── BRANCH_STRATEGY.md
+│   ├── CASCADES_OPTIMIZER.md
+│   ├── COMPLETENESS_CHECK.md
+│   ├── COVERAGE_PLAN.md
+│   ├── DISTRIBUTED_INTERFACE_DESIGN.md
+│   ├── DISTRIBUTED_RESERVATION.md
+│   ├── RISK_MATRIX.md
+│   ├── SQLRUSTGO_2_0_ROADMAP.md
+│   ├── TECH_ROADMAP.md
+│   ├── WHITEPAPER.md
+│   └── 网络设计
+│       └── NETWORK_ENHANCEMENT_PLAN.md
+├── VERSION_PROMOTION_SOP.md
+├── whitepaper
+│   ├── sqlrustgo_1.2_interface_freeze.md
+│   ├── sqlrustgo_1.2_release_whitepaper.md
+│   ├── sqlrustgo_2.0_distributed_framework.md
+│   └── sqlrustgo_tech_debt_forecast.md
+├── 对话记录.md
+├── 教学计划
+│   ├── AI增强软件工程-教学进度计划.docx
+│   ├── AI增强软件工程-教学进度计划.md
+│   ├── PPT
+│   │   ├── 第10讲-PR工作流与项目成熟度评估.md
+│   │   ├── 第10讲-PR工作流与项目成熟度评估.pptx
+│   │   ├── 第11讲-CI-CD与OpenClaw自动化.md
+│   │   ├── 第11讲-CI-CD与OpenClaw自动化.pptx
+│   │   ├── 第12讲-性能优化与重构.md
+│   │   ├── 第12讲-性能优化与重构.pptx
+│   │   ├── 第13讲-安全扫描与审计.md
+│   │   ├── 第13讲-安全扫描与审计.pptx
+│   │   ├── 第14讲-发布门禁与检查清单.md
+│   │   ├── 第14讲-发布门禁与检查清单.pptx
+│   │   ├── 第15讲-版本发布与长期规划.md
+│   │   ├── 第15讲-版本发布与长期规划.pptx
+│   │   ├── 第16讲-项目展示与职业发展.md
+│   │   ├── 第16讲-项目展示与职业发展.pptx
+│   │   ├── 第1讲-软件工程概述与项目导论.md
+│   │   ├── 第1讲-软件工程概述与项目导论.pptx
+│   │   ├── 第2讲-结构化分析、设计与实现.md
+│   │   ├── 第3讲-面向对象设计与类图.md
+│   │   ├── 第3讲-面向对象设计与类图.pptx
+│   │   ├── 第4讲-顺序图状态图与架构设计.md
+│   │   ├── 第4讲-顺序图状态图与架构设计.pptx
+│   │   ├── 第5讲-架构设计原理与SQLRustGo架构.md
+│   │   ├── 第5讲-架构设计原理与SQLRustGo架构.pptx
+│   │   ├── 第6讲-功能模块划分与接口设计.md
+│   │   ├── 第6讲-功能模块划分与接口设计.pptx
+│   │   ├── 第7讲-AI辅助核心模块实现.md
+│   │   ├── 第7讲-AI辅助核心模块实现.pptx
+│   │   ├── 第8讲-测试驱动开发与Alpha版本.md
+│   │   ├── 第8讲-测试驱动开发与Alpha版本.pptx
+│   │   ├── 第9讲-软件治理与分支策略.md
+│   │   └── 第9讲-软件治理与分支策略.pptx
+│   ├── PPT大纲
+│   │   ├── 第二单元-核心模块开发与测试.md
+│   │   ├── 第二单元-核心模块开发与测试.pptx
+│   │   ├── 第一单元-项目启动与基础开发.md
+│   │   └── 第一单元-项目启动与基础开发.pptx
+│   ├── 教材大纲.docx
+│   ├── 教材大纲.md
+│   ├── 教学设计.docx
+│   ├── 教学设计.md
+│   ├── 教学实施.docx
+│   ├── 教学实施.md
+│   ├── 课程特色创新.md
+│   ├── 课程特色创新.pptx
+│   ├── 李莹课表.docx
+│   ├── 李莹课表.md
+│   ├── 上半学期PPT大纲.docx
+│   ├── 上半学期PPT大纲.md
+│   ├── 上机实验指导书.docx
+│   ├── 上机实验指导书.md
+│   ├── 实验报告模版.docx
+│   ├── 实验报告模版.md
+│   ├── 细化教学框架-v2.docx
+│   ├── 细化教学框架-v2.md
+│   ├── 细化教学框架-v3.docx
+│   ├── 细化教学框架-v3.md
+│   ├── 下半学期PPT大纲.docx
+│   ├── 下半学期PPT大纲.md
+│   ├── 整体教学框架.docx
+│   ├── 整体教学框架.md
+│   ├── 智慧树-教学内容.md
+│   ├── 智慧树-教学日历.md
+│   ├── 智慧树-教学设计样例.docx
+│   ├── 智慧树-教学设计样例.md
+│   ├── 智慧树-教学设计样例.pptx
+│   ├── 智慧树-教学重点难点.md
+│   ├── 智慧树-考核标准.md
+│   ├── 智慧树-课程教案.docx
+│   ├── 智慧树-课程教案.md
+│   ├── 智慧树-课程教案.pptx
+│   ├── 智慧树-课程介绍.md
+│   ├── 智慧树-课程目标.docx
+│   ├── 智慧树-课程目标.md
+│   └── 智慧树-课程目标.pptx
+├── 教学实践
+│   ├── README.md
+│   ├── templates
+│   │   └── daily-template.md
+│   ├── v1.1.0-beta
+│   │   ├── developer
+│   │   │   └── README.md
+│   │   ├── handbook-student.md
+│   │   ├── handbook-ta.md
+│   │   ├── pr-evidence.md
+│   │   ├── README.md
+│   │   ├── task-board.md
+│   │   ├── testing
+│   │   │   └── README.md
+│   │   └── user
+│   │       └── README.md
+│   ├── 学生操作手册
+│   │   ├── README.md
+│   │   ├── week-01-环境搭建.md
+│   │   └── week-02-需求文档.md
+│   └── 助教检查手册
+│       ├── README.md
+│       ├── templates
+│       │   ├── pr-evidence-template.md
+│       │   └── score-template.md
+│       └── week-01-检查清单.md
+└── 文档中文化推进说明.md
+
+40 directories, 249 files

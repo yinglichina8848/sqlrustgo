@@ -16,11 +16,14 @@ sqlrustgo-catalog.workspace = true
 sqlrustgo-transaction.workspace = true
 tokio.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 log.workspace = true
 env_logger.workspace = true
 ctrlc.workspace = true
 async-trait.workspace = true
+actix-web = "4"
+actix-rt = "2"
 
 [dev-dependencies]
 tempfile.workspace = true
