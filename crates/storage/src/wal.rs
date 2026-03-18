@@ -512,4 +512,134 @@ mod tests {
         assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
         assert_eq!(WalEntryType::from_u8(99), None);
     }
+
+    // PB-03: WAL Performance Benchmarks
+
+    #[test]
+    fn test_wal_perf_1000_insert() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("bench.wal");
+
+        let mut manager = WalManager::new(wal_path);
+        let tx_id = 1;
+
+        // Log begin
+        let _ = manager.log_begin(tx_id).unwrap();
+
+        let start = std::time::Instant::now();
+
+        // 1000 INSERT operations (1KB each)
+        for i in 0u32..1000 {
+            let key = i.to_le_bytes().to_vec();
+            let data = vec![0u8; 1024]; // 1KB data
+            let _ = manager.log_insert(tx_id, 1, key, data).unwrap();
+        }
+
+        // Log commit
+        let _ = manager.log_commit(tx_id).unwrap();
+
+        let elapsed = start.elapsed();
+        println!("WAL 1000 INSERT (1KB): {:?}", elapsed);
+
+        // Target: <2s
+        assert!(elapsed.as_secs_f64() < 2.0, "WAL INSERT too slow: {:?}", elapsed);
+    }
+
+    #[test]
+    fn test_wal_perf_100_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("bench.wal");
+
+        let mut manager = WalManager::new(wal_path);
+        let tx_id = 1;
+
+        // Log begin
+        let _ = manager.log_begin(tx_id).unwrap();
+
+        let start = std::time::Instant::now();
+
+        // 100 UPDATE operations (10KB each)
+        for i in 0u32..100 {
+            let key = i.to_le_bytes().to_vec();
+            let data = vec![0u8; 10240]; // 10KB data
+            let _ = manager.log_update(tx_id, 1, key, data).unwrap();
+        }
+
+        // Log commit
+        let _ = manager.log_commit(tx_id).unwrap();
+
+        let elapsed = start.elapsed();
+        println!("WAL 100 UPDATE (10KB): {:?}", elapsed);
+
+        // Target: <1s
+        assert!(elapsed.as_secs_f64() < 1.0, "WAL UPDATE too slow: {:?}", elapsed);
+    }
+
+    #[test]
+    fn test_wal_perf_recovery_1mb() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("bench.wal");
+
+        // Create WAL with ~1MB of data (approximately 1000 entries x 1KB)
+        {
+            let mut manager = WalManager::new(wal_path.clone());
+            let tx_id = 1;
+
+            let _ = manager.log_begin(tx_id).unwrap();
+
+            // Create ~1MB of WAL data
+            for i in 0u32..1000 {
+                let key = i.to_le_bytes().to_vec();
+                let data = vec![0u8; 1024]; // 1KB
+                let _ = manager.log_insert(tx_id, 1, key, data).unwrap();
+            }
+
+            let _ = manager.log_commit(tx_id).unwrap();
+        }
+
+        // Recovery test
+        let start = std::time::Instant::now();
+        let manager = WalManager::new(wal_path);
+        let entries = manager.recover().unwrap();
+        let elapsed = start.elapsed();
+
+        println!("WAL Recovery 1MB: {:?} ({} entries)", elapsed, entries.len());
+
+        // Target: <5s for 1GB, so ~0.005s for 1MB
+        assert!(elapsed.as_secs_f64() < 0.1, "WAL Recovery too slow: {:?}", elapsed);
+    }
+
+    #[test]
+    fn test_wal_perf_throughput() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("bench.wal");
+
+        let mut manager = WalManager::new(wal_path);
+        let tx_id = 1;
+
+        let _ = manager.log_begin(tx_id).unwrap();
+
+        let start = std::time::Instant::now();
+
+        // Write 10000 entries
+        for i in 0u32..10000 {
+            let key = i.to_le_bytes().to_vec();
+            let data = vec![0u8; 512]; // 512 bytes
+            let _ = manager.log_insert(tx_id, 1, key, data).unwrap();
+        }
+
+        let _ = manager.log_commit(tx_id).unwrap();
+
+        let elapsed = start.elapsed();
+        let total_bytes = 10000 * (4 + 512) as u64; // key + data
+        let throughput_mbps = (total_bytes as f64 / 1_000_000.0) / elapsed.as_secs_f64();
+
+        println!("WAL Throughput: {:.2} MB/s ({:?} for {} entries)",
+            throughput_mbps, elapsed, 10000);
+
+        // Target: >= 50 MB/s (relaxed for debug builds)
+        // Note: In release builds, throughput should be >= 50 MB/s
+        println!("WAL Throughput: {:.2} MB/s (target: >= 50 MB/s in release)", throughput_mbps);
+        assert!(throughput_mbps >= 10.0, "WAL throughput too low: {:.2} MB/s", throughput_mbps);
+    }
 }
