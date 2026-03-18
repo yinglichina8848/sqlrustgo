@@ -641,6 +641,17 @@ impl ExpressionSimplification {
                 if let Expr::Literal(Value::Boolean(false)) = right {
                     return Some(Expr::Literal(Value::Boolean(false)));
                 }
+                // NULL AND x = NULL
+                if let Expr::Literal(Value::Null) = left {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                if let Expr::Literal(Value::Null) = right {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                // x AND x = x (redundant)
+                if left == right {
+                    return Some(left.clone());
+                }
             }
             Operator::Or => {
                 // false OR x = x
@@ -659,17 +670,64 @@ impl ExpressionSimplification {
                 if let Expr::Literal(Value::Boolean(true)) = right {
                     return Some(Expr::Literal(Value::Boolean(true)));
                 }
+                // NULL OR x = x
+                if let Expr::Literal(Value::Null) = left {
+                    return Some(right.clone());
+                }
+                if let Expr::Literal(Value::Null) = right {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                // x OR x = x (redundant)
+                if left == right {
+                    return Some(left.clone());
+                }
             }
             Operator::Eq => {
+                // NULL = NULL = NULL
+                if let Expr::Literal(Value::Null) = left {
+                    if let Expr::Literal(Value::Null) = right {
+                        return Some(Expr::Literal(Value::Null));
+                    }
+                }
                 // x = x = true
                 if left == right {
                     return Some(Expr::Literal(Value::Boolean(true)));
                 }
             }
             Operator::NotEq => {
+                // NULL <> NULL = NULL
+                if let Expr::Literal(Value::Null) = left {
+                    if let Expr::Literal(Value::Null) = right {
+                        return Some(Expr::Literal(Value::Null));
+                    }
+                }
                 // x <> x = false
                 if left == right {
                     return Some(Expr::Literal(Value::Boolean(false)));
+                }
+            }
+            Operator::Gt | Operator::Lt | Operator::GtEq | Operator::LtEq => {
+                if let Expr::Literal(Value::Null) = left {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                if let Expr::Literal(Value::Null) = right {
+                    return Some(Expr::Literal(Value::Null));
+                }
+            }
+            Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide => {
+                if let Expr::Literal(Value::Null) = left {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                if let Expr::Literal(Value::Null) = right {
+                    return Some(Expr::Literal(Value::Null));
+                }
+            }
+            Operator::Like => {
+                if let Expr::Literal(Value::Null) = left {
+                    return Some(Expr::Literal(Value::Null));
+                }
+                if let Expr::Literal(Value::Null) = right {
+                    return Some(Expr::Literal(Value::Null));
                 }
             }
             _ => {}
@@ -732,6 +790,16 @@ impl ExpressionSimplification {
             } = expr
             {
                 return Some((**inner).clone());
+            }
+            // NOT NULL = NULL
+            if let Expr::Literal(Value::Null) = expr {
+                return Some(Expr::Literal(Value::Null));
+            }
+        }
+        if *op == Operator::Minus {
+            // -NULL = NULL
+            if let Expr::Literal(Value::Null) = expr {
+                return Some(Expr::Literal(Value::Null));
             }
         }
         None
