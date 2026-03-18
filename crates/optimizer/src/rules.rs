@@ -100,6 +100,7 @@ pub enum Operator {
     Or,
     Not,
     Like,
+    Concatenate,
 }
 
 impl Plan {
@@ -463,13 +464,51 @@ impl ConstantFolding {
             (Operator::Lt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l < r)),
             (Operator::GtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l >= r)),
             (Operator::LtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Plus, Value::Float(l), Value::Float(r)) => Some(Value::Float(l + r)),
+            (Operator::Minus, Value::Float(l), Value::Float(r)) => Some(Value::Float(l - r)),
+            (Operator::Multiply, Value::Float(l), Value::Float(r)) => Some(Value::Float(l * r)),
+            (Operator::Divide, Value::Float(l), Value::Float(r)) => {
+                if *r != 0.0 {
+                    Some(Value::Float(l / r))
+                } else {
+                    None
+                }
+            }
+            (Operator::Eq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Eq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::String(l), Value::String(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::String(l), Value::String(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Concatenate, Value::String(l), Value::String(r)) => {
+                Some(Value::String(format!("{}{}", l, r)))
+            }
+            (Operator::Like, Value::String(s), Value::String(pattern)) => {
+                Some(Value::Boolean(self.eval_like(s, pattern)))
+            }
             _ => None,
+        }
+    }
+
+    fn eval_like(&self, s: &str, pattern: &str) -> bool {
+        let pattern = pattern.replace('%', ".*").replace('_', ".");
+        if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern)) {
+            re.is_match(s)
+        } else {
+            false
         }
     }
 
     fn eval_unary_op(&self, op: &Operator, value: &Value) -> Option<Value> {
         match (op, value) {
             (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
+            (Operator::Minus, Value::Float(n)) => Some(Value::Float(-n)),
             (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
             _ => None,
         }
@@ -784,6 +823,31 @@ impl ExpressionSimplification {
             (Operator::Lt, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l < r)),
             (Operator::GtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l >= r)),
             (Operator::LtEq, Value::Integer(l), Value::Integer(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Plus, Value::Float(l), Value::Float(r)) => Some(Value::Float(l + r)),
+            (Operator::Minus, Value::Float(l), Value::Float(r)) => Some(Value::Float(l - r)),
+            (Operator::Multiply, Value::Float(l), Value::Float(r)) => Some(Value::Float(l * r)),
+            (Operator::Divide, Value::Float(l), Value::Float(r)) => {
+                if *r != 0.0 {
+                    Some(Value::Float(l / r))
+                } else {
+                    None
+                }
+            }
+            (Operator::Eq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::Float(l), Value::Float(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Eq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l == r)),
+            (Operator::NotEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l != r)),
+            (Operator::Gt, Value::String(l), Value::String(r)) => Some(Value::Boolean(l > r)),
+            (Operator::Lt, Value::String(l), Value::String(r)) => Some(Value::Boolean(l < r)),
+            (Operator::GtEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l >= r)),
+            (Operator::LtEq, Value::String(l), Value::String(r)) => Some(Value::Boolean(l <= r)),
+            (Operator::Concatenate, Value::String(l), Value::String(r)) => {
+                Some(Value::String(format!("{}{}", l, r)))
+            }
             _ => None,
         }
     }
@@ -791,6 +855,7 @@ impl ExpressionSimplification {
     fn eval_unary_op(&self, op: &Operator, value: &Value) -> Option<Value> {
         match (op, value) {
             (Operator::Minus, Value::Integer(n)) => Some(Value::Integer(-n)),
+            (Operator::Minus, Value::Float(n)) => Some(Value::Float(-n)),
             (Operator::Not, Value::Boolean(b)) => Some(Value::Boolean(!b)),
             _ => None,
         }
@@ -2107,5 +2172,145 @@ mod tests {
         };
         let simplified = rule.simplify_expr(&expr);
         assert!(matches!(simplified, Expr::Literal(Value::Null)));
+    }
+
+    // E-01: Float/String constant folding tests
+
+    #[test]
+    fn test_constant_folding_float_arithmetic() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Float(1.5))),
+                op: Operator::Plus,
+                right: Box::new(Expr::Literal(Value::Float(2.5))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Projection { expr, .. } = &plan {
+            assert_eq!(expr.len(), 1);
+            if let Expr::Literal(Value::Float(v)) = &expr[0] {
+                assert!((v - 4.0).abs() < f64::EPSILON);
+            } else {
+                panic!("Expected Float literal");
+            }
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_float_division() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Float(10.0))),
+                op: Operator::Divide,
+                right: Box::new(Expr::Literal(Value::Float(2.0))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Projection { expr, .. } = &plan {
+            if let Expr::Literal(Value::Float(v)) = &expr[0] {
+                assert!((v - 5.0).abs() < f64::EPSILON);
+            }
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_float_comparison() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::Float(1.5))),
+                op: Operator::Gt,
+                right: Box::new(Expr::Literal(Value::Float(2.0))),
+            },
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Filter { predicate, .. } = &plan {
+            assert!(matches!(predicate, Expr::Literal(Value::Boolean(false))));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_string_concatenation() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::String("Hello".to_string()))),
+                op: Operator::Concatenate,
+                right: Box::new(Expr::Literal(Value::String(" World".to_string()))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Projection { expr, .. } = &plan {
+            if let Expr::Literal(Value::String(s)) = &expr[0] {
+                assert_eq!(s, "Hello World");
+            }
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_string_comparison() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::String("abc".to_string()))),
+                op: Operator::Eq,
+                right: Box::new(Expr::Literal(Value::String("abc".to_string()))),
+            },
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Filter { predicate, .. } = &plan {
+            assert!(matches!(predicate, Expr::Literal(Value::Boolean(true))));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_string_like() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal(Value::String("hello".to_string()))),
+                op: Operator::Like,
+                right: Box::new(Expr::Literal(Value::String("h%".to_string()))),
+            },
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Filter { predicate, .. } = &plan {
+            assert!(matches!(predicate, Expr::Literal(Value::Boolean(true))));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_float_unary_minus() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::UnaryExpr {
+                op: Operator::Minus,
+                expr: Box::new(Expr::Literal(Value::Float(5.5))),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let Plan::Projection { expr, .. } = &plan {
+            if let Expr::Literal(Value::Float(v)) = &expr[0] {
+                assert!((v - (-5.5)).abs() < f64::EPSILON);
+            } else {
+                panic!("Expected Float literal");
+            }
+        }
     }
 }
