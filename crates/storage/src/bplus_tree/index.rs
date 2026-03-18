@@ -1,5 +1,6 @@
 //! Disk-based B+Tree index implementation
 
+use std::collections::{BTreeMap, HashSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -800,6 +801,234 @@ pub fn deserialize_node(data: &[u8]) -> Option<BTreeNode> {
     Some(node)
 }
 
+// ============================================================================
+// Full-Text Search Index (FTS)
+// ============================================================================
+
+/// Metadata for full-text search index
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullTextMetadata {
+    pub column_name: String,
+    pub num_documents: u64,
+    pub num_terms: u64,
+    pub is_dirty: bool,
+}
+
+impl Default for FullTextMetadata {
+    fn default() -> Self {
+        Self {
+            column_name: String::new(),
+            num_documents: 0,
+            num_terms: 0,
+            is_dirty: true,
+        }
+    }
+}
+
+impl FullTextMetadata {
+    pub fn new(column_name: &str) -> Self {
+        Self {
+            column_name: column_name.to_string(),
+            num_documents: 0,
+            num_terms: 0,
+            is_dirty: true,
+        }
+    }
+}
+
+/// Posting list - stores document IDs that contain a term
+/// DocIDs must be kept sorted for efficient intersection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostingList {
+    pub doc_ids: Vec<u32>,
+}
+
+impl PostingList {
+    pub fn new() -> Self {
+        Self { doc_ids: Vec::new() }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            doc_ids: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Add a document ID, keeping the list sorted
+    pub fn add_doc_id(&mut self, doc_id: u32) {
+        // Binary search to find insertion point
+        match self.doc_ids.binary_search(&doc_id) {
+            Ok(_) => {} // Already exists, skip
+            Err(pos) => self.doc_ids.insert(pos, doc_id),
+        }
+    }
+
+    /// Check if contains a document
+    pub fn contains(&self, doc_id: u32) -> bool {
+        self.doc_ids.binary_search(&doc_id).is_ok()
+    }
+}
+
+impl Default for PostingList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Full-text search index using inverted index
+/// Uses BTreeMap to support term ordering and future prefix queries
+pub struct FullTextIndex {
+    pub metadata: FullTextMetadata,
+    /// Inverted index: term -> posting list
+    pub inverted_index: BTreeMap<String, PostingList>,
+    /// Lazy deletion set
+    deleted_docs: HashSet<u32>,
+    dirty: bool,
+}
+
+impl FullTextIndex {
+    /// Create a new full-text index
+    pub fn new(column_name: &str) -> Self {
+        Self {
+            metadata: FullTextMetadata::new(column_name),
+            inverted_index: BTreeMap::new(),
+            deleted_docs: HashSet::new(),
+            dirty: true,
+        }
+    }
+
+    /// Check if index is dirty
+    pub fn is_dirty(&self) -> bool {
+        self.dirty || self.metadata.is_dirty
+    }
+
+    /// Tokenize text into terms
+    fn tokenize(text: &str) -> Vec<String> {
+        text.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|t| t.len() >= 2)
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    /// Insert a document into the full-text index
+    pub fn insert(&mut self, doc_id: u32, text: &str) {
+        let terms = Self::tokenize(text);
+
+        // Update document count
+        self.metadata.num_documents += 1;
+        self.metadata.is_dirty = true;
+        self.dirty = true;
+
+        // Add document to each term's posting list
+        for term in terms {
+            let entry = self.inverted_index.entry(term).or_insert_with(PostingList::new);
+            entry.add_doc_id(doc_id);
+        }
+
+        // Update unique term count
+        self.metadata.num_terms = self.inverted_index.len() as u64;
+    }
+
+    /// Lazy delete - mark document as deleted without immediate removal
+    pub fn delete(&mut self, doc_id: u32) {
+        self.deleted_docs.insert(doc_id);
+        self.dirty = true;
+    }
+
+    /// Check if a document is deleted
+    fn is_deleted(&self, doc_id: u32) -> bool {
+        self.deleted_docs.contains(&doc_id)
+    }
+
+    /// Filter deleted documents from results
+    fn filter_deleted(&self, doc_ids: &[u32]) -> Vec<u32> {
+        doc_ids.iter().copied().filter(|id| !self.is_deleted(*id)).collect()
+    }
+
+    /// Intersect two sorted posting lists (AND operation)
+    fn intersect(a: &[u32], b: &[u32]) -> Vec<u32> {
+        let mut result = Vec::with_capacity(std::cmp::min(a.len(), b.len()));
+        let mut i = 0;
+        let mut j = 0;
+
+        while i < a.len() && j < b.len() {
+            if a[i] == b[j] {
+                result.push(a[i]);
+                i += 1;
+                j += 1;
+            } else if a[i] < b[j] {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+
+        result
+    }
+
+    /// Search for documents containing ALL query terms (AND)
+    pub fn search(&self, query: &str) -> Vec<u32> {
+        let terms = Self::tokenize(query);
+
+        if terms.is_empty() {
+            return Vec::new();
+        }
+
+        // Get posting lists for each term
+        let posting_lists: Vec<&Vec<u32>> = terms
+            .iter()
+            .filter_map(|term| {
+                self.inverted_index.get(term).map(|pl| &pl.doc_ids)
+            })
+            .collect();
+
+        // If no terms found, return empty
+        if posting_lists.is_empty() {
+            return Vec::new();
+        }
+
+        // Start with first term's posting list
+        let mut result = posting_lists[0].clone();
+
+        // Intersect with other terms
+        for posting_list in &posting_lists[1..] {
+            result = Self::intersect(&result, posting_list);
+        }
+
+        // Filter deleted documents
+        self.filter_deleted(&result)
+    }
+
+    /// Get the number of documents containing a term
+    pub fn term_frequency(&self, term: &str) -> usize {
+        self.inverted_index
+            .get(&term.to_lowercase())
+            .map(|pl| pl.doc_ids.len())
+            .unwrap_or(0)
+    }
+
+    /// Get all indexed terms
+    pub fn terms(&self) -> Vec<String> {
+        self.inverted_index.keys().cloned().collect()
+    }
+
+    /// Get number of documents
+    pub fn num_documents(&self) -> u64 {
+        self.metadata.num_documents
+    }
+
+    /// Get number of unique terms
+    pub fn num_terms(&self) -> u64 {
+        self.metadata.num_terms
+    }
+
+    /// Check if index is empty
+    pub fn is_empty(&self) -> bool {
+        self.metadata.num_documents == 0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1159,169 +1388,184 @@ mod tests {
 
         assert_eq!(stats.num_entries, 2);
     }
-}
-        let mut index = CompositeBTreeIndex::new(2);
 
-        // Insert composite keys
-        index.insert(CompositeKey::new(vec![1, 1]), 100);
-        index.insert(CompositeKey::new(vec![1, 2]), 200);
-        index.insert(CompositeKey::new(vec![2, 1]), 300);
+    // Full-text search index tests
 
-        assert_eq!(index.len(), 3);
-        assert!(!index.is_empty());
+    #[test]
+    fn test_fts_index_new() {
+        let index = FullTextIndex::new("content");
+        assert!(index.is_empty());
+        assert_eq!(index.num_documents(), 0);
+        assert_eq!(index.num_terms(), 0);
     }
 
     #[test]
-    fn test_composite_btree_index_search() {
-        let mut index = CompositeBTreeIndex::new(2);
-
-        // Insert with unique first column
-        index.insert(CompositeKey::new(vec![1, 1]), 100);
-        index.insert(CompositeKey::new(vec![2, 2]), 200);
-        index.insert(CompositeKey::new(vec![3, 1]), 300);
-
-        // Search for existing key
-        let result = index.search(&CompositeKey::new(vec![2, 2]));
-        assert_eq!(result, Some(200));
-
-        // Search for non-existing key (different first column)
-        let result = index.search(&CompositeKey::new(vec![5, 1]));
-        assert_eq!(result, None);
-    }
-
-    // Tests for unique index
-
-    #[test]
-    fn test_btree_index_is_unique_default() {
-        let index = BTreeIndex::new();
-        assert!(!index.is_unique());
+    fn test_fts_tokenize() {
+        let tokens = FullTextIndex::tokenize("Hello World!");
+        assert_eq!(tokens, vec!["hello", "world"]);
     }
 
     #[test]
-    fn test_btree_index_set_unique() {
-        let mut index = BTreeIndex::new();
-        assert!(!index.is_unique());
-
-        index.set_unique(true);
-        assert!(index.is_unique());
-
-        index.set_unique(false);
-        assert!(!index.is_unique());
+    fn test_fts_tokenize_chinese() {
+        // Current tokenization includes Unicode letters (including Chinese)
+        // This is a known limitation for P2 - future versions can use proper segmentation
+        let tokens = FullTextIndex::tokenize("你好 World 123");
+        // At minimum, English tokens should be present
+        assert!(tokens.contains(&"world".to_string()));
+        assert!(tokens.contains(&"123".to_string()));
     }
 
     #[test]
-    fn test_btree_index_insert_unique_success() {
-        let mut index = BTreeIndex::new();
-        index.set_unique(true);
-
-        // First insert should succeed
-        let result = index.insert_unique(1, 100);
-        assert!(result.is_ok());
-        assert_eq!(index.len(), 1);
+    fn test_fts_tokenize_punctuation() {
+        let tokens = FullTextIndex::tokenize("hello,world!test-case");
+        assert_eq!(tokens, vec!["hello", "world", "test", "case"]);
     }
 
     #[test]
-    fn test_btree_index_insert_unique_duplicate() {
-        let mut index = BTreeIndex::new();
-        index.set_unique(true);
-
-        // First insert
-        index.insert_unique(1, 100).unwrap();
-
-        // Duplicate key should fail
-        let result = index.insert_unique(1, 200);
-        assert!(result.is_err());
-        match result {
-            Err(UniqueConstraintViolation { key }) => {
-                assert_eq!(key, 1);
-            }
-            _ => panic!("expected UniqueConstraintViolation"),
-        }
+    fn test_fts_tokenize_short_words() {
+        // Words shorter than 2 chars should be filtered
+        let tokens = FullTextIndex::tokenize("a b c hello");
+        assert_eq!(tokens, vec!["hello"]);
     }
 
     #[test]
-    fn test_btree_index_unique_insert_multiple() {
-        let mut index = BTreeIndex::new();
-        index.set_unique(true);
+    fn test_fts_insert() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+        index.insert(2, "hello rust");
 
-        // Insert multiple unique keys
-        assert!(index.insert_unique(1, 100).is_ok());
-        assert!(index.insert_unique(2, 200).is_ok());
-        assert!(index.insert_unique(3, 300).is_ok());
-
-        assert_eq!(index.len(), 3);
-
-        // Try to insert duplicate
-        assert!(index.insert_unique(2, 999).is_err());
-        assert_eq!(index.len(), 3);
-    }
-}
-
-    // Tests for composite index
-
-    #[test]
-    fn test_composite_key_creation() {
-        let key = CompositeKey::new(vec![1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
+        assert_eq!(index.num_documents(), 2);
+        assert!(index.num_terms() >= 2);
     }
 
     #[test]
-    fn test_index_stats_selectivity_empty() {
-        let stats = IndexStats::default();
-        assert_eq!(stats.selectivity(), 1.0);
+    fn test_fts_search_single_term() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+        index.insert(2, "hello rust");
+        index.insert(3, "goodbye world");
+
+        let results = index.search("hello");
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&1));
+        assert!(results.contains(&2));
     }
 
     #[test]
-    fn test_index_stats_selectivity() {
-        let mut stats = IndexStats::new();
-        stats.num_entries = 100;
-        stats.cardinality = 50;
-        assert_eq!(stats.selectivity(), 0.5);
+    fn test_fts_search_and() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+        index.insert(2, "hello rust");
+        index.insert(3, "goodbye world");
+
+        // Search for "hello world" - should return only doc 1
+        let results = index.search("hello world");
+        assert_eq!(results, vec![1]);
     }
 
     #[test]
-    fn test_index_stats_selectivity_clamped() {
-        let mut stats = IndexStats::new();
-        stats.num_entries = 100;
-        stats.cardinality = 150; // More unique than entries
-        assert_eq!(stats.selectivity(), 1.0); // Should clamp to 1.0
+    fn test_fts_search_no_match() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+
+        let results = index.search("missing");
+        assert!(results.is_empty());
     }
 
     #[test]
-    fn test_btree_index_collect_stats_empty() {
-        let index = BTreeIndex::new();
-        let stats = index.collect_stats();
+    fn test_fts_search_case_insensitive() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "Hello World");
 
-        assert_eq!(stats.num_entries, 0);
-        assert_eq!(stats.height, 0);
+        let results = index.search("HELLO");
+        assert_eq!(results, vec![1]);
     }
 
     #[test]
-    fn test_btree_index_collect_stats() {
-        let mut index = BTreeIndex::new();
+    fn test_fts_delete_lazy() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+        index.insert(2, "hello rust");
 
-        // Insert some entries
-        for i in 1..=10 {
-            index.insert(i, i as u32);
-        }
+        // Lazy delete - mark as deleted but keep in index
+        index.delete(1);
 
-        let stats = index.collect_stats();
-
-        assert_eq!(stats.num_entries, 10);
-        assert!(stats.height >= 1);
-        assert!(stats.total_nodes >= 1);
+        // Search should filter out deleted document
+        let results = index.search("hello");
+        assert_eq!(results, vec![2]);
     }
 
     #[test]
-    fn test_btree_index_usage_stats() {
-        let mut index = BTreeIndex::new();
-        index.insert(1, 100);
-        index.insert(2, 200);
+    fn test_fts_term_frequency() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world hello");
+        index.insert(2, "hello rust");
+        index.insert(3, "world test");
 
-        let stats = index.usage_stats();
-
-        assert_eq!(stats.num_entries, 2);
+        assert_eq!(index.term_frequency("hello"), 2);
+        assert_eq!(index.term_frequency("world"), 2);
+        assert_eq!(index.term_frequency("rust"), 1);
+        assert_eq!(index.term_frequency("missing"), 0);
     }
-}
+
+    #[test]
+    fn test_fts_terms() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "hello world");
+        index.insert(2, "hello rust");
+
+        let terms = index.terms();
+        assert!(terms.contains(&"hello".to_string()));
+        assert!(terms.contains(&"world".to_string()));
+        assert!(terms.contains(&"rust".to_string()));
+    }
+
+    #[test]
+    fn test_fts_posting_list_sorted() {
+        let mut pl = PostingList::new();
+        pl.add_doc_id(5);
+        pl.add_doc_id(2);
+        pl.add_doc_id(8);
+        pl.add_doc_id(2); // Duplicate should be ignored
+
+        assert_eq!(pl.doc_ids, vec![2, 5, 8]);
+    }
+
+    #[test]
+    fn test_fts_intersect() {
+        let a = vec![1, 2, 3, 4, 5];
+        let b = vec![3, 4, 5, 6, 7];
+
+        let result = FullTextIndex::intersect(&a, &b);
+        assert_eq!(result, vec![3, 4, 5]);
+    }
+
+    #[test]
+    fn test_fts_intersect_no_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+
+        let result = FullTextIndex::intersect(&a, &b);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_fts_complex_query() {
+        let mut index = FullTextIndex::new("content");
+        index.insert(1, "SQL database systems");
+        index.insert(2, "database PostgreSQL systems");
+        index.insert(3, "SQL query database optimization");
+        index.insert(4, "database indexing");
+
+        // Find documents with both "SQL" AND "database"
+        let results = index.search("SQL database");
+        // Doc 1: "SQL database" - match
+        // Doc 2: "database PostgreSQL" - no "SQL"
+        // Doc 3: "SQL query database" - match (both SQL and database)
+        // Doc 4: "database" only - no "SQL"
+        assert!(results.contains(&1));
+        assert!(!results.contains(&2));
+        assert!(results.contains(&3));
+        assert!(!results.contains(&4));
     }
 }
