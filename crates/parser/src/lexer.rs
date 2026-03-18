@@ -239,6 +239,8 @@ impl<'a> Lexer<'a> {
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "NULL" => Token::Null,
+                    "DATE" => Token::Date,
+                    "TIMESTAMP" => Token::Timestamp,
                     "COUNT" => Token::Count,
                     "SUM" => Token::Sum,
                     "AVG" => Token::Avg,
@@ -803,5 +805,31 @@ mod tests {
     fn test_lexer_string_with_escaped_quote() {
         let tokens = tokenize("'it''s'");
         assert!(matches!(&tokens[0], Token::StringLiteral(s) if s == "it''s"));
+    }
+
+    #[test]
+    fn test_lexer_date_keyword() {
+        let tokens = tokenize("DATE");
+        assert!(matches!(&tokens[0], Token::Date));
+    }
+
+    #[test]
+    fn test_lexer_timestamp_keyword() {
+        let tokens = tokenize("TIMESTAMP");
+        assert!(matches!(&tokens[0], Token::Timestamp));
+    }
+
+    #[test]
+    fn test_lexer_date_type_in_create() {
+        let sql = "CREATE TABLE t (d DATE, ts TIMESTAMP)";
+        let tokens = tokenize(sql);
+        assert!(matches!(&tokens[5], Token::Date));
+        // Find TIMESTAMP position (after comma and ts identifier)
+        let ts_pos = tokens.iter().position(|t| matches!(t, Token::Timestamp));
+        assert!(
+            ts_pos.is_some(),
+            "TIMESTAMP not found in tokens: {:?}",
+            tokens
+        );
     }
 }
