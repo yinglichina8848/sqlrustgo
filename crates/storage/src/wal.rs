@@ -637,7 +637,7 @@ impl WalArchiveManager {
 
         let wal_files: Vec<_> = std::fs::read_dir(&self.wal_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "wal"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "wal"))
             .filter(|e| {
                 if let Ok(metadata) = e.metadata() {
                     if let Ok(modified) = metadata.modified() {

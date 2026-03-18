@@ -1,7 +1,5 @@
 use std::time::{Duration, Instant};
 
-use sqlrustgo_types::Value;
-
 #[derive(Debug, Clone)]
 pub struct QueryCacheConfig {
     pub max_entries: usize,
