@@ -178,4 +178,102 @@ mod tests {
         metrics.record_rows(100);
         assert_eq!(metrics.rows_processed(), 100);
     }
+
+    #[test]
+    fn test_buffer_pool_metrics_buffer_pool_stats() {
+        let pool = Arc::new(BufferPool::new(100));
+        let metrics = BufferPoolMetrics::new(pool);
+
+        let stats = metrics.buffer_pool_stats();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_record_error_with_type() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_error_with_type("timeout");
+        assert_eq!(metrics.queries_failed(), 1);
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_record_bytes_read() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_bytes_read(1024);
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_record_bytes_written() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_bytes_written(2048);
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_record_cache_hit() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_cache_hit();
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_record_cache_miss() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_cache_miss();
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_get_metric_unknown() {
+        let pool = Arc::new(BufferPool::new(100));
+        let metrics = BufferPoolMetrics::new(pool);
+
+        let result = metrics.get_metric("unknown_metric");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_get_metric_names() {
+        let pool = Arc::new(BufferPool::new(100));
+        let metrics = BufferPoolMetrics::new(pool);
+
+        let names = metrics.get_metric_names();
+        assert!(names.contains(&"queries_total".to_string()));
+        assert!(names.contains(&"buffer_pool_hits".to_string()));
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_multiple_queries() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_query("SELECT", 10);
+        metrics.record_query("INSERT", 5);
+        metrics.record_query("UPDATE", 3);
+
+        assert_eq!(metrics.queries_total(), 3);
+    }
+
+    #[test]
+    fn test_buffer_pool_metrics_reset_clears_all() {
+        let pool = Arc::new(BufferPool::new(100));
+        let mut metrics = BufferPoolMetrics::new(pool);
+
+        metrics.record_query("SELECT", 10);
+        metrics.record_error();
+        metrics.record_rows(100);
+
+        metrics.reset();
+
+        assert_eq!(metrics.queries_total(), 0);
+        assert_eq!(metrics.queries_failed(), 0);
+        assert_eq!(metrics.rows_processed(), 0);
+    }
 }
