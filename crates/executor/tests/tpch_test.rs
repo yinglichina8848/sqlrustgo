@@ -5,9 +5,7 @@
 #[cfg(test)]
 mod tests {
     use sqlrustgo_executor::{
-        harness::TestHarness,
-        mock_storage::MockStorage,
-        test_data::TestDataSet,
+        harness::TestHarness, mock_storage::MockStorage, test_data::TestDataSet,
     };
     use sqlrustgo_planner::{
         physical_plan::{FilterExec, LimitExec, ProjectionExec, SeqScanExec},
@@ -55,7 +53,11 @@ mod tests {
         let result = harness.execute(plan.as_ref()).unwrap();
         let elapsed = start.elapsed();
 
-        println!("TPC-H Q1 (Projection): {:?} ({} rows)", elapsed, result.rows.len());
+        println!(
+            "TPC-H Q1 (Projection): {:?} ({} rows)",
+            elapsed,
+            result.rows.len()
+        );
 
         assert!(!result.rows.is_empty());
         assert!(elapsed.as_secs_f64() < 1.0);
@@ -104,7 +106,11 @@ mod tests {
         let result = harness.execute(plan.as_ref()).unwrap();
         let elapsed = start.elapsed();
 
-        println!("TPC-H Q3 (Filter+Limit): {:?} ({} rows)", elapsed, result.rows.len());
+        println!(
+            "TPC-H Q3 (Filter+Limit): {:?} ({} rows)",
+            elapsed,
+            result.rows.len()
+        );
 
         assert!(result.rows.len() <= 3);
         assert!(elapsed.as_secs_f64() < 1.0);
@@ -146,7 +152,11 @@ mod tests {
         let result = harness.execute(plan.as_ref()).unwrap();
         let elapsed = start.elapsed();
 
-        println!("TPC-H Q6 (Filter): {:?} ({} rows)", elapsed, result.rows.len());
+        println!(
+            "TPC-H Q6 (Filter): {:?} ({} rows)",
+            elapsed,
+            result.rows.len()
+        );
 
         assert!(!result.rows.is_empty());
         assert!(elapsed.as_secs_f64() < 1.0);
@@ -222,9 +232,16 @@ mod tests {
         }
 
         let avg_time_ms = (total_time.as_secs_f64() * 1000.0) / 100.0;
-        println!("TPC-H Performance: 100 scans avg time: {:.2}ms", avg_time_ms);
+        println!(
+            "TPC-H Performance: 100 scans avg time: {:.2}ms",
+            avg_time_ms
+        );
 
         // Each scan should be fast
-        assert!(avg_time_ms < 10.0, "Queries too slow: {:.2}ms avg", avg_time_ms);
+        assert!(
+            avg_time_ms < 10.0,
+            "Queries too slow: {:.2}ms avg",
+            avg_time_ms
+        );
     }
 }

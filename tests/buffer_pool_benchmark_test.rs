@@ -99,7 +99,6 @@ fn test_buffer_pool_hit_rate_random_access() {
     pool.reset_stats();
 
     // Random access 10000 times (accessing 1000 different pages, only 10 in pool)
-    use std::collections::HashSet;
     let mut rng: u64 = 12345;
     for _ in 0..10000 {
         rng = rng.wrapping_mul(1103515245).wrapping_add(12345);

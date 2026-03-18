@@ -1,5 +1,6 @@
 // Tests for optimizer rules
 use sqlrustgo_optimizer::rules::{Expr, JoinType, Operator, Plan, Value};
+use std::f64::consts::PI;
 
 #[test]
 fn test_plan_table_scan() {
@@ -108,7 +109,7 @@ fn test_value_debug() {
     let v = Value::Integer(42);
     assert!(format!("{:?}", v).contains("Integer"));
 
-    let v2 = Value::Float(3.14);
+    let v2 = Value::Float(PI);
     assert!(format!("{:?}", v2).contains("Float"));
 
     let v3 = Value::Boolean(true);

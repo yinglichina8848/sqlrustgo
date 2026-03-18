@@ -1,5 +1,5 @@
 // Buffer Pool Tests
-use sqlrustgo_storage::buffer_pool::{BufferPool, BufferPoolStats, MemoryPool};
+use sqlrustgo_storage::buffer_pool::{BufferPool, MemoryPool};
 use sqlrustgo_storage::page::Page;
 use std::sync::Arc;
 
