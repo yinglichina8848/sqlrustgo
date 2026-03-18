@@ -45,6 +45,7 @@ lru-cache = "0.1.2"
 ctrlc = "3.5.2"
 parking_lot = "0.12"
 serde_json = "1.0"
+num_cpus = "1.17"
 tempfile = "3.25.0"
 criterion = "0.5"
 miniz_oxide = "0.7"
@@ -120,6 +121,14 @@ harness = false
 [[bench]]
 name = "bench_cbo"
 harness = false
+
+[[bin]]
+name = "tpch_benchmark"
+path = "benches/tpch_comprehensive_main.rs"
+
+[dependencies.rusqlite]
+version = "0.32"
+features = ["bundled"]
 
 [[test]]
 name = "optimizer_rules_test"

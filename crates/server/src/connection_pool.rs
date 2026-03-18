@@ -21,8 +21,7 @@ impl std::fmt::Debug for PooledSession {
 }
 
 impl PooledSession {
-    pub fn new() -> Self {
-        let storage = Arc::new(MemoryStorage::new());
+    pub fn new(storage: Arc<MemoryStorage>) -> Self {
         let storage_ptr = Arc::as_ptr(&storage);
         let executor = LocalExecutor::new(unsafe { &*storage_ptr });
         Self {
@@ -40,18 +39,18 @@ impl PooledSession {
 
 impl Default for PooledSession {
     fn default() -> Self {
-        Self::new()
+        let storage = Arc::new(MemoryStorage::new());
+        Self::new(storage)
     }
 }
 
 impl Clone for PooledSession {
     fn clone(&self) -> Self {
-        let storage = Arc::new(MemoryStorage::new());
-        let storage_ptr = Arc::as_ptr(&storage);
+        let storage_ptr = Arc::as_ptr(&self.storage);
         let executor = LocalExecutor::new(unsafe { &*storage_ptr });
         Self {
             executor,
-            storage,
+            storage: Arc::clone(&self.storage),
             transaction_id: None,
             in_use: false,
         }
@@ -60,6 +59,7 @@ impl Clone for PooledSession {
 
 #[derive(Clone)]
 pub struct ConnectionPool {
+    shared_storage: Arc<MemoryStorage>,
     #[allow(dead_code)]
     sessions: Arc<Vec<PooledSession>>,
     available: Sender<PooledSession>,
@@ -69,16 +69,18 @@ pub struct ConnectionPool {
 
 impl ConnectionPool {
     pub fn new(config: PoolConfig) -> Self {
+        let shared_storage = Arc::new(MemoryStorage::new());
         let (available, received) = bounded(config.size);
         let mut sessions = Vec::with_capacity(config.size);
 
         for _ in 0..config.size {
-            let session = PooledSession::new();
-            let _ = available.send(session);
-            sessions.push(PooledSession::new());
+            let session = PooledSession::new(Arc::clone(&shared_storage));
+            let _ = available.send(session.clone());
+            sessions.push(session);
         }
 
         Self {
+            shared_storage,
             sessions: Arc::new(sessions),
             available,
             received,
