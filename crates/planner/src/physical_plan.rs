@@ -8,9 +8,11 @@ use crate::AggregateFunction;
 use crate::Expr;
 use crate::Operator;
 use crate::Schema;
+use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::Value;
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
@@ -96,7 +98,7 @@ impl PhysicalPlan for SeqScanExec {
 }
 
 /// Index scan execution operator - uses index instead of full table scan
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[allow(dead_code)]
 pub struct IndexScanExec {
     table_name: String,
@@ -105,6 +107,7 @@ pub struct IndexScanExec {
     schema: Schema,
     key_range_min: Option<i64>,
     key_range_max: Option<i64>,
+    storage: Option<Arc<dyn StorageEngine>>,
 }
 
 impl IndexScanExec {
@@ -116,6 +119,25 @@ impl IndexScanExec {
             schema,
             key_range_min: None,
             key_range_max: None,
+            storage: None,
+        }
+    }
+
+    pub fn with_storage(
+        table_name: String,
+        index_name: String,
+        key_expr: Expr,
+        schema: Schema,
+        storage: Arc<dyn StorageEngine>,
+    ) -> Self {
+        Self {
+            table_name,
+            index_name,
+            key_expr,
+            schema,
+            key_range_min: None,
+            key_range_max: None,
+            storage: Some(storage),
         }
     }
 
@@ -160,7 +182,41 @@ impl PhysicalPlan for IndexScanExec {
     }
 
     fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        Ok(vec![])
+        match &self.storage {
+            Some(storage) => {
+                let key_value = match &self.key_expr {
+                    Expr::Literal(v) => match v {
+                        sqlrustgo_types::Value::Integer(i) => *i,
+                        _ => return Ok(vec![]),
+                    },
+                    _ => return Ok(vec![]),
+                };
+
+                if let Some(min) = self.key_range_min {
+                    let max = self.key_range_max.unwrap_or(min);
+                    let row_ids = storage.range_index(&self.table_name, &self.index_name, min, max);
+                    let mut results = Vec::new();
+                    let all_rows = storage.scan(&self.table_name).map_err(|e| e.to_string())?;
+                    for row_id in row_ids {
+                        if (row_id as usize) < all_rows.len() {
+                            results.push(all_rows[row_id as usize].clone());
+                        }
+                    }
+                    Ok(results)
+                } else {
+                    if let Some(row_id) =
+                        storage.search_index(&self.table_name, &self.index_name, key_value)
+                    {
+                        let all_rows = storage.scan(&self.table_name).map_err(|e| e.to_string())?;
+                        if (row_id as usize) < all_rows.len() {
+                            return Ok(vec![all_rows[row_id as usize].clone()]);
+                        }
+                    }
+                    Ok(vec![])
+                }
+            }
+            None => Ok(vec![]),
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
