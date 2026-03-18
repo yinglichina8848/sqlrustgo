@@ -99,8 +99,8 @@ impl TpchBenchmark {
 
         let queries = self.get_tpch_queries();
 
-        let sqlite_ms = self.run_sqlite_benchmark(&queries);
-        let avg_sqlite_per_query = sqlite_ms / queries.len() as f64;
+        let sqlite_times = self.run_sqlite_benchmark(&queries);
+        let total_sqlite_ms: f64 = sqlite_times.iter().sum();
 
         let (results, cache_hit_count) = match self.scenario {
             TestScenario::SingleThread => {
@@ -122,8 +122,8 @@ impl TpchBenchmark {
         };
 
         let mut results = results;
-        for r in &mut results {
-            r.sqlite_ms = Some(avg_sqlite_per_query);
+        for (r, sqlite_ms) in results.iter_mut().zip(sqlite_times.iter()) {
+            r.sqlite_ms = Some(*sqlite_ms);
         }
 
         let total_sqlrustgo_ms: f64 = results.iter().map(|r| r.sqlrustgo_ms).sum();
@@ -146,7 +146,7 @@ impl TpchBenchmark {
             results,
             summary: BenchmarkSummary {
                 total_sqlrustgo_ms,
-                total_sqlite_ms: Some(sqlite_ms),
+                total_sqlite_ms: Some(total_sqlite_ms),
                 cache_hit_rate,
                 qps,
             },
@@ -223,24 +223,21 @@ impl TpchBenchmark {
         (results, 0)
     }
 
-    fn run_sqlite_benchmark(&self, queries: &[(&str, &str)]) -> f64 {
+    fn run_sqlite_benchmark(&self, queries: &[(&str, &str)]) -> Vec<f64> {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
-
-        conn.execute("CREATE TABLE lineitem AS SELECT * FROM (VALUES ", [])
-            .ok();
 
         let orders_rows = (1500000.0 * self.scale_factor.to_f64()) as usize;
         let lineitem_rows = (6000000.0 * self.scale_factor.to_f64()) as usize;
 
-        conn.execute(&format!(
-            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice INTEGER, l_discount INTEGER, l_tax INTEGER, l_returnflag TEXT, l_shipmode TEXT)"),
+        conn.execute(
+            "CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey INTEGER, l_quantity INTEGER, l_extendedprice INTEGER, l_discount INTEGER, l_tax INTEGER, l_returnflag TEXT, l_shipmode TEXT)",
             [],
-        ).ok();
+        ).unwrap();
 
-        conn.execute(&format!(
-            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice INTEGER, o_orderdate INTEGER)"),
+        conn.execute(
+            "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus TEXT, o_totalprice INTEGER, o_orderdate INTEGER)",
             [],
-        ).ok();
+        ).unwrap();
 
         let mut stmt = conn
             .prepare("INSERT INTO lineitem VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
@@ -274,13 +271,13 @@ impl TpchBenchmark {
             .ok();
         }
 
-        let mut total_ms = 0.0;
+        let mut query_times = Vec::new();
         for (_, sql) in queries {
             let start = Instant::now();
             let _ = conn.query_row(sql, [], |_| Ok(()));
-            total_ms += start.elapsed().as_secs_f64() * 1000.0;
+            query_times.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        total_ms
+        query_times
     }
 
     fn generate_data(&self, storage: &mut sqlrustgo::MemoryStorage) {
