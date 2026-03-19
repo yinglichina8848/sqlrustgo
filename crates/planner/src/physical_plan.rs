@@ -3368,4 +3368,67 @@ mod tests {
 
         assert_eq!(smj.join_type(), crate::JoinType::Left);
     }
+
+    #[test]
+    fn test_index_scan_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let scan = IndexScanExec::new(
+            "users".to_string(),
+            "idx_id".to_string(),
+            Expr::literal(Value::Integer(42)),
+            schema.clone(),
+        );
+
+        assert_eq!(scan.table_name(), "users");
+        assert_eq!(scan.index_name(), "idx_id");
+        assert_eq!(scan.name(), "IndexScan");
+    }
+
+    #[test]
+    fn test_aggregate_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let agg = AggregateExec::new(input, vec![Expr::column("id")], vec![], schema.clone());
+
+        let _ = agg.group_expr();
+        let _ = agg.aggregate_expr();
+    }
+
+    #[test]
+    fn test_hash_join_condition() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema.clone()));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema.clone()));
+
+        let join_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let condition = Some(Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::Eq,
+            Expr::column("id"),
+        ));
+
+        let hash_join =
+            HashJoinExec::new(left, right, crate::JoinType::Inner, condition, join_schema);
+
+        let _ = hash_join.join_type();
+        let _ = hash_join.condition();
+    }
+
+    #[test]
+    fn test_sort_methods() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
+        let sort_exprs = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_exprs);
+
+        let _ = sort.sort_expr();
+        let _ = sort.input();
+    }
 }
