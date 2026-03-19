@@ -1202,6 +1202,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "性能测试，仅在 release 模式下运行"]
     fn test_wal_perf_throughput() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
@@ -1231,15 +1232,13 @@ mod tests {
             throughput_mbps, elapsed, 10000
         );
 
-        // Target: >= 50 MB/s (relaxed for debug builds)
-        // Note: In release builds, throughput should be >= 50 MB/s
+        // Target: >= 50 MB/s in release builds
         println!(
             "WAL Throughput: {:.2} MB/s (target: >= 50 MB/s in release)",
             throughput_mbps
         );
-        // Debug builds have significant overhead, only assert minimum viability
         assert!(
-            throughput_mbps >= 5.0,
+            throughput_mbps >= 50.0,
             "WAL throughput too low: {:.2} MB/s",
             throughput_mbps
         );
