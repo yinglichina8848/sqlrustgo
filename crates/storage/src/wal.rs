@@ -195,7 +195,7 @@ impl WalEntry {
     }
 }
 
-/// WAL writer
+/// WAL writer - 预写日志，使用批量写入提高性能
 pub struct WalWriter {
     writer: BufWriter<File>,
     lsn: u64,
@@ -205,26 +205,27 @@ impl WalWriter {
     /// Create a new WAL writer
     pub fn new(path: &PathBuf) -> std::io::Result<Self> {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
-
         let writer = BufWriter::new(file);
 
         Ok(Self { writer, lsn: 0 })
     }
 
-    /// Append an entry to the WAL
+    /// Append an entry to the WAL (batched write, no auto flush)
     pub fn append(&mut self, entry: &WalEntry) -> std::io::Result<u64> {
         let lsn = self.lsn;
         let bytes = entry.to_bytes();
 
-        // Write length prefix (4 bytes)
         self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
-        // Write entry data
         self.writer.write_all(&bytes)?;
-        // Flush to ensure durability
-        self.writer.flush()?;
 
         self.lsn += 1;
         Ok(lsn)
+    }
+
+    /// Flush to disk (call on commit)
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()?;
+        Ok(())
     }
 
     /// Get current LSN
@@ -353,7 +354,7 @@ impl WalManager {
         writer.append(&entry)
     }
 
-    /// Log transaction commit
+    /// Log transaction commit (flush on commit for durability)
     pub fn log_commit(&self, tx_id: u64) -> std::io::Result<u64> {
         let mut writer = self.get_writer()?;
 
@@ -370,7 +371,9 @@ impl WalManager {
                 .as_secs(),
         };
 
-        writer.append(&entry)
+        writer.append(&entry)?;
+        writer.flush()?; // Flush on commit for durability
+        Ok(writer.current_lsn() - 1)
     }
 
     /// Log insert
@@ -1202,7 +1205,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "性能测试，仅在 release 模式下手动运行"]
     fn test_wal_perf_throughput() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
@@ -1232,7 +1234,7 @@ mod tests {
             throughput_mbps, elapsed, 10000
         );
 
-        // Target: >= 5 MB/s (每次写入都 flush 的实际性能)
+        // Target: >= 5 MB/s (flush on every write for compatibility)
         println!(
             "WAL Throughput: {:.2} MB/s (target: >= 5 MB/s)",
             throughput_mbps
