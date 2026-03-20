@@ -5,7 +5,7 @@
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
     AggregateExec, AggregateFunction, ExplainExec, FilterExec, HashJoinExec, JoinType,
-    PhysicalPlan, ProjectionExec, SortMergeJoinExec,
+    OperatorMetrics, PhysicalPlan, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -138,15 +138,55 @@ impl<'a> LocalExecutor<'a> {
         let plan_text = format_plan_tree(input_plan, 0);
 
         let rows = if analyze {
-            vec![vec![Value::Text(format!(
-                "{}\n(analyze mode not yet implemented)",
-                plan_text
-            ))]]
+            let metrics = self.collect_operator_metrics(input_plan)?;
+            let plan_text_with_metrics = metrics.to_string(0);
+            vec![vec![Value::Text(plan_text_with_metrics)]]
         } else {
             vec![vec![Value::Text(plan_text)]]
         };
 
         Ok(ExecutorResult::new(rows, 0))
+    }
+
+    fn collect_operator_metrics(&self, plan: &dyn PhysicalPlan) -> SqlResult<OperatorMetrics> {
+        use std::time::Instant;
+
+        let mut metrics = OperatorMetrics::new(plan.name().to_string());
+
+        let table_name = plan.table_name();
+        if !table_name.is_empty() {
+            metrics = metrics.with_table(table_name.to_string());
+        }
+
+        let start = Instant::now();
+
+        let result = match plan.name() {
+            "SeqScan" => self.execute_seq_scan(plan),
+            "Projection" => self.execute_projection(plan),
+            "Filter" => self.execute_filter(plan),
+            "Aggregate" => self.execute_aggregate(plan),
+            "HashJoin" => self.execute_hash_join(plan),
+            "SortMergeJoin" => self.execute_sort_merge_join(plan),
+            "Sort" => self.execute_sort(plan),
+            "Limit" => self.execute_limit(plan),
+            _ => Ok(ExecutorResult::empty()),
+        };
+
+        let duration = start.elapsed();
+
+        let rows = match result {
+            Ok(r) => r.rows.len(),
+            Err(_) => 0,
+        };
+
+        metrics = metrics.with_timing(duration, rows);
+
+        for child in plan.children() {
+            let child_metrics = self.collect_operator_metrics(child)?;
+            metrics.add_child(child_metrics);
+        }
+
+        Ok(metrics)
     }
 
     fn extract_tables(&self, plan: &dyn PhysicalPlan) -> Vec<String> {
