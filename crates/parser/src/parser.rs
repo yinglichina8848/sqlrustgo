@@ -21,12 +21,31 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Select(SelectStatement),
+    SetOperation(SetOperation),
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
+    CreateView(CreateViewStatement),
     Analyze(AnalyzeStatement),
+}
+
+/// Set operation type for UNION, INTERSECT, EXCEPT
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperationType {
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
+}
+
+/// Set operation combining multiple SELECT statements
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetOperation {
+    pub op_type: SetOperationType,
+    pub left: Box<SelectStatement>,
+    pub right: Box<SelectStatement>,
 }
 
 /// ANALYZE statement for collecting statistics
@@ -124,6 +143,13 @@ pub struct DropTableStatement {
     pub name: String,
 }
 
+/// CREATE VIEW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStatement {
+    pub name: String,
+    pub query: String,
+}
+
 /// Column definition
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -189,7 +215,7 @@ impl Parser {
             Some(Token::Insert) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
-            Some(Token::Create) => self.parse_create_table(),
+            Some(Token::Create) => self.parse_create(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
@@ -277,13 +303,67 @@ impl Parser {
             None
         };
 
-        Ok(Statement::Select(SelectStatement {
+        let base_select = SelectStatement {
             columns,
             table,
             where_clause,
             join_clause: None,
             aggregates,
-        }))
+        };
+
+        // Check for set operations (UNION, INTERSECT, EXCEPT)
+        match self.current() {
+            Some(Token::Union) => {
+                self.next(); // consume UNION
+                let all = matches!(self.current(), Some(Token::All));
+                if all {
+                    self.next(); // consume ALL
+                }
+                // Recursively parse the next SELECT statement
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    Statement::SetOperation(_) => {
+                        return Err("Nested set operations not yet supported".to_string())
+                    }
+                    _ => return Err("Expected SELECT after UNION".to_string()),
+                };
+                let op_type = if all {
+                    SetOperationType::UnionAll
+                } else {
+                    SetOperationType::Union
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            Some(Token::Intersect) => {
+                self.next(); // consume INTERSECT
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    _ => return Err("Expected SELECT after INTERSECT".to_string()),
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type: SetOperationType::Intersect,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            Some(Token::Except) => {
+                self.next(); // consume EXCEPT
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    _ => return Err("Expected SELECT after EXCEPT".to_string()),
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type: SetOperationType::Except,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            _ => Ok(Statement::Select(base_select)),
+        }
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
@@ -601,9 +681,23 @@ impl Parser {
         }))
     }
 
-    fn parse_create_table(&mut self) -> Result<Statement, String> {
+    fn parse_create(&mut self) -> Result<Statement, String> {
         self.expect(Token::Create)?;
-        self.expect(Token::Table)?;
+
+        match self.current() {
+            Some(Token::Table) => {
+                self.next();
+                self.parse_create_table()
+            }
+            Some(Token::View) => {
+                self.next();
+                self.parse_create_view()
+            }
+            _ => Err("Expected TABLE or VIEW after CREATE".to_string()),
+        }
+    }
+
+    fn parse_create_table(&mut self) -> Result<Statement, String> {
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -668,6 +762,31 @@ impl Parser {
         };
 
         Ok(Statement::DropTable(DropTableStatement { name }))
+    }
+
+    fn parse_create_view(&mut self) -> Result<Statement, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected view name".to_string()),
+        };
+
+        self.expect(Token::As)?;
+
+        let mut query_parts = Vec::new();
+        while let Some(token) = self.current() {
+            match token {
+                Token::Semicolon => {
+                    break;
+                }
+                _ => {
+                    query_parts.push(token.to_string());
+                    self.next();
+                }
+            }
+        }
+
+        let query = query_parts.join(" ");
+        Ok(Statement::CreateView(CreateViewStatement { name, query }))
     }
 
     fn parse_analyze(&mut self) -> Result<Statement, String> {
