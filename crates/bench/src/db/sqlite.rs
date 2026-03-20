@@ -53,7 +53,7 @@ impl SqliteDB {
 impl Database for SqliteDB {
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("SELECT * FROM accounts WHERE id = ?1", [key])?;
+        conn.query_row("SELECT * FROM accounts WHERE id = ?1", [key], |_row| Ok(()))?;
         Ok(())
     }
 

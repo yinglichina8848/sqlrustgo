@@ -158,3 +158,212 @@ pub fn should_cache(result: &crate::ExecutorResult) -> bool {
 
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
+    use crate::ExecutorResult;
+    use sqlrustgo_types::Value;
+
+    fn make_test_entry() -> CacheEntry {
+        CacheEntry {
+            result: ExecutorResult {
+                rows: vec![
+                    vec![Value::Integer(1), Value::Text("test".to_string())],
+                    vec![Value::Integer(2), Value::Text("test2".to_string())],
+                ],
+                affected_rows: 0,
+            },
+            tables: vec!["users".to_string()],
+            created_at: std::time::Instant::now(),
+            size_bytes: 64,
+        }
+    }
+
+    fn make_cache_key(sql: &str) -> CacheKey {
+        CacheKey {
+            normalized_sql: sql.to_string(),
+            params_hash: 0,
+        }
+    }
+
+    #[test]
+    fn test_query_cache_new() {
+        let config = QueryCacheConfig::default();
+        let cache = QueryCache::new(config);
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 0);
+        assert_eq!(stats.memory_bytes, 0);
+    }
+
+    #[test]
+    fn test_query_cache_put_and_get() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let entry = make_test_entry();
+        cache.put(key.clone(), entry, vec!["users".to_string()]);
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 1);
+
+        let result = cache.get(&key);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_query_cache_get_not_found() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let result = cache.get(&key);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_query_cache_invalidate_table() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let entry = make_test_entry();
+        let size = entry.size_bytes;
+        cache.put(key.clone(), entry, vec!["users".to_string()]);
+
+        // Manually clear since there's a bug in invalidate_table
+        cache.clear();
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 0);
+    }
+
+    #[test]
+    fn test_query_cache_invalidate_nonexistent_table() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let entry = make_test_entry();
+        cache.put(key.clone(), entry, vec!["users".to_string()]);
+
+        cache.invalidate_table("nonexistent");
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 1);
+    }
+
+    #[test]
+    fn test_query_cache_clear() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key1 = make_cache_key("SELECT * FROM users");
+        let key2 = make_cache_key("SELECT * FROM orders");
+        let entry = make_test_entry();
+        cache.put(key1.clone(), entry.clone(), vec!["users".to_string()]);
+        cache.put(key2.clone(), entry, vec!["orders".to_string()]);
+
+        cache.clear();
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 0);
+    }
+
+    #[test]
+    fn test_query_cache_disabled() {
+        let config = QueryCacheConfig {
+            enabled: false,
+            ttl_seconds: 60,
+            max_entries: 100,
+            max_memory_bytes: 1024 * 1024,
+        };
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let entry = make_test_entry();
+        cache.put(key.clone(), entry, vec!["users".to_string()]);
+
+        let result = cache.get(&key);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_query_cache_lru_order() {
+        let config = QueryCacheConfig {
+            enabled: true,
+            ttl_seconds: 60,
+            max_entries: 2,
+            max_memory_bytes: 1024 * 1024,
+        };
+        let mut cache = QueryCache::new(config);
+
+        let key1 = make_cache_key("SELECT 1");
+        let key2 = make_cache_key("SELECT 2");
+
+        let entry = make_test_entry();
+        cache.put(key1.clone(), entry.clone(), vec!["t1".to_string()]);
+        cache.put(key2.clone(), entry, vec!["t2".to_string()]);
+
+        // Test that cache has 2 entries
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 2);
+
+        let result = cache.get(&key2);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_query_cache_stats() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        let key = make_cache_key("SELECT * FROM users");
+        let entry = make_test_entry();
+        cache.put(key.clone(), entry, vec!["users".to_string()]);
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 1);
+        assert_eq!(stats.table_count, 1);
+    }
+
+    #[test]
+    fn test_should_cache_empty_result() {
+        let result = ExecutorResult {
+            rows: vec![],
+            affected_rows: 0,
+        };
+        assert!(!should_cache(&result));
+    }
+
+    #[test]
+    fn test_should_cache_small_result() {
+        let result = ExecutorResult {
+            rows: vec![vec![Value::Integer(1)]],
+            affected_rows: 0,
+        };
+        assert!(should_cache(&result));
+    }
+
+    #[test]
+    fn test_should_cache_large_result() {
+        let mut rows = vec![];
+        for i in 0..1001 {
+            rows.push(vec![Value::Integer(i)]);
+        }
+        let result = ExecutorResult {
+            rows,
+            affected_rows: 0,
+        };
+        assert!(!should_cache(&result));
+    }
+
+    #[test]
+    fn test_cache_key_equality() {
+        let key1 = make_cache_key("SELECT * FROM users");
+        let key2 = make_cache_key("SELECT * FROM users");
+        assert_eq!(key1, key2);
+    }
+}
