@@ -233,6 +233,7 @@ impl<'a> Lexer<'a> {
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
                     "ANALYZE" => Token::Analyze,
+                    "EXPLAIN" => Token::Explain,
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
                     "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
