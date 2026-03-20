@@ -152,4 +152,21 @@ mod tests {
         assert_eq!(stats.max(), Some(50));
         assert_eq!(stats.avg(), 30.0);
     }
+
+    #[test]
+    fn test_latency_stats_with_capacity() {
+        let stats = LatencyStats::with_capacity(100);
+        assert_eq!(stats.count(), 0);
+    }
+
+    #[test]
+    fn test_latency_stats_percentile_high() {
+        let mut stats = LatencyStats::new();
+        for i in 1..=1000 {
+            stats.record(i);
+        }
+        assert!(stats.p50() > 0);
+        assert!(stats.p95() > 0);
+        assert!(stats.p99() > 0);
+    }
 }
