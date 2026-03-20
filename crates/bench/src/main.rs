@@ -19,6 +19,7 @@ mod db;
 mod metrics;
 mod runner;
 mod workload;
+mod memory;
 
 use anyhow::Result;
 use clap::Parser;
