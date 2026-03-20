@@ -9,10 +9,12 @@ members = [
     "crates/catalog",
     "crates/transaction",
     "crates/server",
+    "crates/bench",
+    "crates/bench-cli",
 ]
 
 [workspace.package]
-version = "1.6.0"
+version = "1.6.1"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -49,6 +51,7 @@ num_cpus = "1.17"
 tempfile = "3.25.0"
 criterion = "0.8"
 miniz_oxide = "0.7"
+rand = "0.8"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -122,6 +125,10 @@ harness = false
 
 [[bench]]
 name = "bench_cbo"
+harness = false
+
+[[bench]]
+name = "tpch_bench"
 harness = false
 
 [[bin]]

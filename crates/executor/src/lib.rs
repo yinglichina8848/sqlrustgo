@@ -7,6 +7,7 @@ pub mod local_executor;
 pub mod query_cache;
 pub mod query_cache_config;
 pub mod query_cache_metrics;
+pub mod session_config;
 pub mod sql_normalizer;
 pub mod test_framework;
 pub mod vectorization;

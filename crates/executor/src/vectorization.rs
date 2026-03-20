@@ -177,4 +177,11 @@ mod tests {
         v.resize(5, 0);
         assert_eq!(v.len(), 5);
     }
+
+    #[test]
+    fn test_vector_iter() {
+        let v = Vector::from_vec(vec![1, 2, 3]);
+        let sum: i32 = v.iter().sum();
+        assert_eq!(sum, 6);
+    }
 }

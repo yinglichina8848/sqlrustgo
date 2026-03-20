@@ -18,8 +18,8 @@ pub struct StreamingConfig {
 impl Default for StreamingConfig {
     fn default() -> Self {
         Self {
-            batch_size: 10000,          // 10k rows per batch
-            max_memory_bytes: 500 * 1024 * 1024,  // 500MB
+            batch_size: 10000,                   // 10k rows per batch
+            max_memory_bytes: 500 * 1024 * 1024, // 500MB
             streaming_enabled: true,
             prefetch_batches: 2,
         }
@@ -49,7 +49,7 @@ impl StreamingConfig {
 
     /// SF10 configuration (60M rows, ~6GB) - requires streaming
     pub fn sf10() -> Self {
-        Self::new(100000, 500)  // Limit to 500MB memory
+        Self::new(100000, 500) // Limit to 500MB memory
     }
 }
 

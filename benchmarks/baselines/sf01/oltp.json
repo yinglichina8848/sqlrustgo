@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-03-20T15:25:58.972022+00:00",
+  "version": "1.6.0",
+  "workload": "oltp",
+  "config": {
+    "duration": 10,
+    "threads": 1,
+    "workload": "read"
+  },
+  "metrics": {
+    "total_time_ms": 0,
+    "iterations": 10,
+    "avg_latency_ms": 0.0,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "min_ms": 0.0,
+    "max_ms": 0.0,
+    "qps": null
+  },
+  "queries": []
+}

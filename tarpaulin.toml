@@ -1,0 +1,12 @@
+# Tarpaulin configuration for test coverage
+# Excludes benchmarks and examples from coverage
+
+[tarpaulin]
+output-dir = "target/tarpaulin"
+all = true
+clean = true
+timeout = 300
+exclude-files = [
+    "benches/*",
+    "examples/*",
+]
