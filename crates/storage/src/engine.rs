@@ -38,7 +38,12 @@ pub trait StorageEngine: Send + Sync {
 
     /// Scan rows in batches for streaming (memory-efficient)
     /// Returns (records, total_count, has_more)
-    fn scan_batch(&self, table: &str, offset: usize, limit: usize) -> SqlResult<(Vec<Record>, usize, bool)> {
+    fn scan_batch(
+        &self,
+        table: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<(Vec<Record>, usize, bool)> {
         let all_records = self.scan(table)?;
         let total = all_records.len();
         let has_more = offset + limit < total;
@@ -380,6 +385,60 @@ mod tests {
     fn test_record_index() {
         let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
         assert_eq!(record[0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_memory_storage_with_callback() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        let storage = MemoryStorage::with_callback(Box::new(move |_table| {
+            counter_clone.fetch_add(1, Ordering::SeqCst);
+        }));
+
+        assert!(storage.write_callback.is_some());
+    }
+
+    #[test]
+    fn test_memory_storage_scan_batch() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![
+                vec![Value::Integer(1)],
+                vec![Value::Integer(2)],
+                vec![Value::Integer(3)],
+                vec![Value::Integer(4)],
+                vec![Value::Integer(5)],
+            ],
+        );
+
+        let (batch, total, has_more) = storage.scan_batch("users", 0, 2).unwrap();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(total, 5);
+        assert!(has_more);
+
+        let (batch, total, has_more) = storage.scan_batch("users", 2, 2).unwrap();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(total, 5);
+        assert!(has_more);
+
+        let (batch, total, has_more) = storage.scan_batch("users", 4, 2).unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(total, 5);
+        assert!(!has_more);
+    }
+
+    #[test]
+    fn test_memory_storage_scan_batch_empty() {
+        let storage = MemoryStorage::new();
+        let (batch, total, has_more) = storage.scan_batch("nonexistent", 0, 10).unwrap();
+        assert!(batch.is_empty());
+        assert_eq!(total, 0);
+        assert!(!has_more);
     }
 }
 
