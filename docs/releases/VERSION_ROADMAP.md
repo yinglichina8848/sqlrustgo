@@ -1,6 +1,6 @@
 # SQLRustGo 版本演化计划
 
-> **版本**: v6.0
+> **版本**: v7.0
 > **更新日期**: 2026-03-21
 > **战略定位**: 教学数据库产品（Teaching DBMS）
 > **核心原则**: 替代 MySQL 教学，差异化超越
@@ -20,7 +20,7 @@
 
 🎯 最终目标：
 
-v1.9 = 可替代 MySQL（教学 + 上机）
+v1.7 = 可替代 MySQL（教学 + 上机）← 合并 v1.8 + v1.9
 v2.0 = 明显优于 MySQL（教学体验 + 分析能力）
 ```
 
@@ -42,80 +42,55 @@ v2.0 = 明显优于 MySQL（教学体验 + 分析能力）
 ### 战略总览
 
 ```
-v1.6 ✅      v1.7        v1.8         v1.9         v2.0
- Benchmark   SQL+可观测   MySQL兼容    稳定落地     高性能分析
- 修复       补完        ⭐核心        ⭐⭐⭐
-           能讲清      可替代         课程使用    超越MySQL
-           执行过程     MySQL教学
+v1.6 ✅      v1.7 (合并版)                    v2.0
+  Benchmark   SQL+可观测+MySQL兼容+稳定+教学   高性能分析
+  修复        ⭐⭐⭐ 全面替代 MySQL 教学         超越MySQL
 ```
 
 ### 详细版本规划
 
 | 版本 | 代号 | 核心目标 | 关键功能 |
 |------|------|----------|----------|
-| **v1.7** | **SQL+可观测补完** | 能讲清执行过程 | EXPLAIN ANALYZE, UNION, VIEW |
-| **v1.8** | **MySQL 教学兼容** | 可替代 MySQL | FOREIGN KEY, MySQL 语法, CLI, MySQL 协议 |
-| **v1.9** | **稳定+教学落地** | 正式课程使用 | 稳定性, ≥85%覆盖, 教学文档 |
+| **v1.7** | **MySQL 教学替代版** | 可替代 MySQL | UNION/VIEW, EXPLAIN ANALYZE, FOREIGN KEY, AUTO_INCREMENT, CLI, WAL, ≥85%覆盖 |
 | **v2.0** | **高性能分析** | 超越 MySQL | 向量化, 列存, 可视化执行 |
 
----
+### v1.7 Epics (合并版)
 
-## 四、SQL-92 分阶段覆盖
-
-```
-v1.7 (60%)     v1.8 (90%)      v1.9 (100%)
-┌─────────┐     ┌─────────┐      ┌─────────┐
-│ 核心子集│ →   │ 高级扩展│  →   │ 全覆盖  │
-│ +可观测 │     │ +兼容  │      │ +稳定   │
-└─────────┘     └─────────┘      └─────────┘
-```
-
-### v1.7: SQL 核心补完
-
-| 类别 | 功能 | 状态 |
-|------|------|------|
-| 查询 | SELECT, WHERE, GROUP BY, ORDER BY, LIMIT | ✅ |
-| DML | INSERT, UPDATE, DELETE | ✅ |
-| DDL | CREATE TABLE, DROP TABLE | ✅ |
-| 事务 | BEGIN, COMMIT, ROLLBACK | ✅ |
-| **新增** | **UNION, UNION ALL, VIEW** | **🔄** |
-| **新增** | **EXPLAIN, EXPLAIN ANALYZE** | **🔄** |
-
-### v1.8: MySQL 教学兼容
-
-| 类别 | 功能 | 状态 |
-|------|------|------|
-| **新增** | **FOREIGN KEY** | **🔄** |
-| **新增** | **AUTO_INCREMENT** | **🔄** |
-| **新增** | **SHOW TABLES, DESCRIBE** | **🔄** |
-| **新增** | **LIMIT offset, count** | **🔄** |
-| **新增** | **NOW(), COUNT(), DATE_FORMAT()** | **🔄** |
-| JOIN | INNER, LEFT, RIGHT, CROSS | 🔄 |
-
-### v1.9: 全覆盖 + 稳定
-
-| 类别 | 功能 | 状态 |
-|------|------|------|
-| 完整 | SQL-92 100% | 🔄 |
-| 过程 | 存储过程基础 | 🔄 |
-| 稳定 | WAL 恢复, Crash 安全 | 🔄 |
-| 教学 | 实验文档, 标准数据集 | 🔄 |
+| Epic | 名称 | 来源版本 |
+|------|------|----------|
+| Epic-01 | SQL 补完 | 原 v1.7 |
+| Epic-02 | 可观测性 | 原 v1.7 |
+| Epic-03 | Benchmark 完善 | 原 v1.7 |
+| Epic-04 | 错误系统 | 原 v1.7 |
+| Epic-05 | 约束与外键 | 原 v1.8 |
+| Epic-06 | MySQL 兼容语法 | 原 v1.8 |
+| Epic-07 | CLI 工具完善 | 原 v1.8 |
+| Epic-08 | 稳定性强化 | 原 v1.9 |
+| Epic-09 | 覆盖率提升 | 原 v1.9 |
+| Epic-10 | 教学支持 | 原 v1.9 |
 
 ---
 
-## 五、v1.8 核心版本详解（MySQL 教学兼容）
+## 四、v1.7 核心版本详解（MySQL 教学替代版）
 
-### 🔥 硬性要求（必须完成）
+### 🔥 一站式替代 MySQL 教学
 
-#### 1️⃣ 外键（最重要）
+#### Epic-01~04: SQL + 可观测性（原 v1.7）
+
+| 功能 | 说明 |
+|------|------|
+| UNION, UNION ALL, INTERSECT, EXCEPT | 集合运算 |
+| VIEW | 视图支持 |
+| EXPLAIN, EXPLAIN ANALYZE | 执行计划可视化 |
+| MySQL 风格错误 | Unknown column, Table not found, Duplicate key |
+
+#### Epic-05: 约束与外键（原 v1.8）
 
 ```sql
 FOREIGN KEY (user_id) REFERENCES users(id)
 ```
 
-> 没这个 = 不能做数据库设计实验
-
-#### 2️⃣ MySQL 兼容语法
+#### Epic-06: MySQL 兼容语法（原 v1.8）
 
 ```sql
 -- AUTO_INCREMENT
@@ -130,9 +105,12 @@ SELECT * FROM orders LIMIT 10, 20;
 -- SHOW / DESCRIBE
 SHOW TABLES;
 DESCRIBE orders;
+
+-- 常用函数
+NOW(), COUNT(), DATE_FORMAT()
 ```
 
-#### 3️⃣ CLI 工具
+#### Epic-07: CLI 工具完善（原 v1.8）
 
 ```bash
 sqlrustgo
@@ -143,32 +121,17 @@ sqlrustgo
 .indexes orders
 ```
 
-#### 4️⃣ MySQL 协议（强烈建议）
-
-```
-支持 DBeaver, MySQL Workbench 连接
-```
-
-**完成后效果**：
-> 💥 SQLRustGo 可以"假装 MySQL"被工具连接
-
----
-
-## 六、v1.9 核心版本详解（稳定+教学落地）
-
-### 🔥 稳定 + 教学支持
-
-#### 1️⃣ 稳定性
+#### Epic-08: 稳定性强化（原 v1.9）
 
 - WAL 恢复强化
 - Crash 安全
 - 长时间运行测试
 
-#### 2️⃣ 覆盖率
+#### Epic-09: 覆盖率提升（原 v1.9）
 
 - ≥ 85%
 
-#### 3️⃣ 教学模式（建议加🔥）
+#### Epic-10: 教学支持（原 v1.9）
 
 ```bash
 SQLRUSTGO_TEACHING_MODE=1
@@ -179,15 +142,14 @@ SQLRUSTGO_TEACHING_MODE=1
 - 强制 EXPLAIN 输出
 - 更详细日志
 
-#### 4️⃣ 教学支持
-
+教学资源：
 - 12 个标准实验
 - MySQL → SQLRustGo 对照表
 - Lab 文档
 
 ---
 
-## 七、v2.0 核心版本详解（高性能分析）
+## 五、v2.0 核心版本详解（高性能分析）
 
 ### 🔥 超越 MySQL
 
@@ -224,49 +186,46 @@ impl AggregateFunction for Sum<i32> {
 
 ---
 
-## 八、可观测性演进
+## 六、可观测性演进
 
 | 版本 | 新增可观测能力 |
 |------|----------------|
-| v1.7 | **EXPLAIN ANALYZE**（核心亮点）, 算子级耗时 |
-| v1.8 | MySQL 兼容 CLI, 索引信息 |
-| v1.9 | 教学模式, 详细执行日志 |
-| v2.0 | 向量化 trace, 可视化 pipeline |
+| v1.7 | **EXPLAIN ANALYZE**（核心亮点）, 算子级耗时, 教学模式 |
 
 ---
 
-## 九、成熟度演进
+## 七、成熟度演进
 
 ```
 L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical DB)
-                  v1.7                    v1.9                 v2.0
-              能讲清执行             可替代MySQL教学        超越MySQL
+                   v1.7                    v2.0
+               能替代MySQL教学          超越MySQL
 ```
 
 ---
 
-## 十、风险与应对
+## 八、风险与应对
 
 | 风险 | 影响 | 缓解措施 |
 |------|------|----------|
 | 试图完全兼容 MySQL | 极高 | ❌ 禁止！只兼容"教材" |
-| MySQL 协议实现难度 | 高 | v1.8 先做 CLI，协议可选 |
+| MySQL 协议实现难度 | 高 | 先做 CLI，协议可选 |
 | 教学文档工作量 | 中 | 参考现有 MySQL 教材 |
 | 向量化开发难度 | 高 | v2.0 预留充足时间 |
 
 ---
 
-## 十一、版本号与分支策略
+## 九、版本号与分支策略
 
 | 策略 | 说明 |
 |------|------|
-| 开发分支 | develop/v1.7.0、develop/v1.8.0 等 |
-| 发布分支 | release/v1.7.0、release/v1.8.0 等 |
+| 开发分支 | develop/v1.7.0, develop/v2.0 |
+| 发布分支 | release/v1.7.0, release/v2.0 |
 | 主分支 | main 始终指向最新稳定版 |
 
 ---
 
-## 十二、一句顶级结论
+## 十、一句顶级结论
 
 ```
 💥 你现在不是在做数据库
@@ -275,7 +234,7 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 
 ---
 
-## 十三、关联文档
+## 十一、关联文档
 
 | 文档 | 说明 |
 |------|------|
@@ -284,7 +243,7 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 
 ---
 
-## 十四、变更历史
+## 十二、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
@@ -293,7 +252,8 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 | 3.0 | 2026-03-13 | 工程优化版 |
 | 4.0 | 2026-03-18 | 整合 v1.x 版本 |
 | 5.0 | 2026-03-21 | SQL-92 路线图 |
-| **6.0** | **2026-03-21** | **教学 DBMS 战略定位** |
+| 6.0 | 2026-03-21 | 教学 DBMS 战略定位 |
+| **7.0** | **2026-03-21** | **v1.7 合并 v1.8+v1.9，v2.0 独立** |
 
 ---
 
