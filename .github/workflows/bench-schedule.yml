@@ -1,0 +1,50 @@
+name: Benchmark Schedule
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Monday at midnight UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  full-benchmark:
+    name: Full Benchmark Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build bench-cli
+        run: cargo build --release -p sqlrustgo-bench-cli
+
+      - name: Run SF=0.1 benchmarks
+        run: |
+          mkdir -p benchmarks/results/sf01
+          ./target/release/benchmark tpch --sf 0.1 --output benchmarks/results/sf01/tpch.json
+          ./target/release/benchmark oltp --sf 0.1 --output benchmarks/results/sf01/oltp.json
+          ./target/release/benchmark custom --sf 0.1 --output benchmarks/results/sf01/custom.json
+
+      - name: Run SF=1 benchmarks
+        run: |
+          mkdir -p benchmarks/results/sf1
+          ./target/release/benchmark tpch --sf 1 --output benchmarks/results/sf1/tpch.json
+          ./target/release/benchmark oltp --sf 1 --output benchmarks/results/sf1/oltp.json
+          ./target/release/benchmark custom --sf 1 --output benchmarks/results/sf1/custom.json
+
+      - name: Run SF=10 benchmarks
+        run: |
+          mkdir -p benchmarks/results/sf10
+          ./target/release/benchmark tpch --sf 10 --output benchmarks/results/sf10/tpch.json
+          ./target/release/benchmark oltp --sf 10 --output benchmarks/results/sf10/oltp.json
+          ./target/release/benchmark custom --sf 10 --output benchmarks/results/sf10/custom.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-full
+          path: benchmarks/results/
