@@ -57,6 +57,84 @@ impl BenchArgs {
 
     /// Get SQLite database path or use default
     pub fn get_sqlite_path(&self) -> String {
-        self.sqlite_path.clone().unwrap_or_else(|| "bench.db".to_string())
+        self.sqlite_path
+            .clone()
+            .unwrap_or_else(|| "bench.db".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bench_args_defaults() {
+        let args = BenchArgs::parse_from(["bench", "--db", "sqlrustgo"]);
+        assert_eq!(args.db, "sqlrustgo");
+        assert_eq!(args.workload, "oltp");
+        assert_eq!(args.threads, 10);
+        assert_eq!(args.duration, 60);
+        assert_eq!(args.scale, 10000);
+        assert!(!args.enable_cache);
+        assert_eq!(args.output, "json");
+    }
+
+    #[test]
+    fn test_bench_args_custom() {
+        let args = BenchArgs::parse_from([
+            "bench",
+            "--db",
+            "postgres",
+            "--workload",
+            "tpch",
+            "--threads",
+            "4",
+            "--duration",
+            "30",
+            "--scale",
+            "5000",
+            "--enable-cache",
+            "--output",
+            "text",
+        ]);
+        assert_eq!(args.db, "postgres");
+        assert_eq!(args.workload, "tpch");
+        assert_eq!(args.threads, 4);
+        assert_eq!(args.duration, 30);
+        assert_eq!(args.scale, 5000);
+        assert!(args.enable_cache);
+        assert_eq!(args.output, "text");
+    }
+
+    #[test]
+    fn test_bench_args_pg_conn() {
+        let args = BenchArgs::parse_from(["bench", "--pg-conn", "host=localhost user=test"]);
+        assert_eq!(args.get_pg_conn(), "host=localhost user=test");
+    }
+
+    #[test]
+    fn test_bench_args_pg_conn_default() {
+        let args = BenchArgs::parse_from(["bench"]);
+        let conn = args.get_pg_conn();
+        assert!(conn.contains("host=localhost"));
+        assert!(conn.contains("user=postgres"));
+    }
+
+    #[test]
+    fn test_bench_args_sqlite_path() {
+        let args = BenchArgs::parse_from(["bench", "--sqlite-path", "/tmp/test.db"]);
+        assert_eq!(args.get_sqlite_path(), "/tmp/test.db");
+    }
+
+    #[test]
+    fn test_bench_args_sqlite_path_default() {
+        let args = BenchArgs::parse_from(["bench"]);
+        assert_eq!(args.get_sqlite_path(), "bench.db");
+    }
+
+    #[test]
+    fn test_bench_args_sqlrustgo_addr() {
+        let args = BenchArgs::parse_from(["bench", "--sqlrustgo-addr", "192.168.1.1:4000"]);
+        assert_eq!(args.sqlrustgo_addr, "192.168.1.1:4000");
     }
 }
