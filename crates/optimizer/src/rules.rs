@@ -1593,6 +1593,69 @@ mod tests {
     }
 
     #[test]
+    fn test_plan_get_child_mut_filter() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_projection() {
+        let mut plan = Plan::Projection {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_join() {
+        let mut plan = Plan::Join {
+            join_type: JoinType::Inner,
+            left: Box::new(Plan::EmptyRelation),
+            right: Box::new(Plan::EmptyRelation),
+            condition: None,
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_aggregate() {
+        let mut plan = Plan::Aggregate {
+            group_by: vec![],
+            aggregates: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_sort() {
+        let mut plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_limit() {
+        let mut plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
     fn test_join_reordering_new() {
         let rule = JoinReordering::new();
         assert_eq!(rule.name(), "JoinReordering");
@@ -1933,5 +1996,53 @@ mod tests {
         };
         let simplified = rule.simplify_expr(&expr);
         assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_index_select_new() {
+        let rule = IndexSelect::new();
+        assert_eq!(rule.name(), "IndexSelect");
+    }
+
+    #[test]
+    fn test_index_select_with_index() {
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+
+        let eq_predicate = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("id".to_string())),
+            op: Operator::Eq,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        };
+
+        let should_use = rule.should_use_index("users", &eq_predicate);
+        assert!(should_use);
+    }
+
+    #[test]
+    fn test_index_select_with_non_eq_predicate() {
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+
+        let gt_predicate = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("id".to_string())),
+            op: Operator::Gt,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        };
+
+        let should_use = rule.should_use_index("users", &gt_predicate);
+        assert!(!should_use);
+    }
+
+    #[test]
+    fn test_index_select_nonexistent_table() {
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+
+        let eq_predicate = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("id".to_string())),
+            op: Operator::Eq,
+            right: Box::new(Expr::Literal(Value::Integer(1))),
+        };
+
+        let should_use = rule.should_use_index("orders", &eq_predicate);
+        assert!(!should_use);
     }
 }

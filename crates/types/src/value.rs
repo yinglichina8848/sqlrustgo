@@ -575,4 +575,46 @@ mod tests {
         assert!(!is_leap_year(2019));
         assert!(!is_leap_year(2100));
     }
+
+    #[test]
+    fn test_value_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v1 = Value::Integer(42);
+        let v2 = Value::Integer(42);
+        let v3 = Value::Integer(100);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        let mut h3 = DefaultHasher::new();
+
+        v1.hash(&mut h1);
+        v2.hash(&mut h2);
+        v3.hash(&mut h3);
+
+        assert_eq!(h1.finish(), h2.finish());
+        assert_ne!(h1.finish(), h3.finish());
+
+        let v4 = Value::Text("hello".to_string());
+        let mut h4 = DefaultHasher::new();
+        v4.hash(&mut h4);
+        assert!(h4.finish() != h1.finish());
+    }
+
+    #[test]
+    fn test_value_hash_nan() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let nan = Value::Float(f64::NAN);
+        let mut h1 = DefaultHasher::new();
+        nan.hash(&mut h1);
+
+        let nan2 = Value::Float(f64::NAN);
+        let mut h2 = DefaultHasher::new();
+        nan2.hash(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
+    }
 }

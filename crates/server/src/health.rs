@@ -327,4 +327,56 @@ mod tests {
         assert_eq!(health.name, "system");
         assert_eq!(health.status, HealthStatus::Healthy);
     }
+
+    #[test]
+    fn test_comprehensive_health_report_new() {
+        use std::collections::HashMap;
+
+        let mut components = HashMap::new();
+        components.insert(
+            "test".to_string(),
+            ComponentHealth::new("test", HealthStatus::Healthy),
+        );
+
+        let report = ComprehensiveHealthReport::new(
+            HealthStatus::Healthy,
+            "1.3.0".to_string(),
+            100,
+            components,
+            None,
+        );
+
+        assert_eq!(report.status, HealthStatus::Healthy);
+        assert_eq!(report.version, "1.3.0");
+        assert_eq!(report.uptime_seconds, 100);
+        assert!(report.timestamp > 0);
+    }
+
+    #[test]
+    fn test_comprehensive_health_report_with_metrics() {
+        use std::collections::HashMap;
+
+        let components = HashMap::new();
+        let metrics = Some(HealthMetrics {
+            queries_total: 100,
+            queries_failed: 5,
+            avg_query_ms: 5.0,
+        });
+
+        let report = ComprehensiveHealthReport::new(
+            HealthStatus::Healthy,
+            "1.3.0".to_string(),
+            100,
+            components,
+            metrics,
+        );
+
+        assert!(report.metrics.is_some());
+    }
+
+    #[test]
+    fn test_component_health_with_latency_none() {
+        let health = ComponentHealth::new("test", HealthStatus::Healthy);
+        assert_eq!(health.latency_ms, None);
+    }
 }
