@@ -35,6 +35,7 @@ impl LatencyStats {
         self.sorted = false;
     }
 
+    #[allow(dead_code)]
     fn sort(&mut self) {
         if !self.sorted {
             self.samples.sort();
@@ -46,12 +47,15 @@ impl LatencyStats {
         if self.samples.is_empty() {
             return 0;
         }
-        if self.samples.len() == 1 {
-            return self.samples[0];
+        // Must sort first for accurate percentile
+        let mut sorted = self.samples.clone();
+        sorted.sort();
+        if sorted.len() == 1 {
+            return sorted[0];
         }
 
-        let idx = ((self.samples.len() - 1) as f64 * p) as usize;
-        self.samples[idx.min(self.samples.len() - 1)]
+        let idx = ((sorted.len() - 1) as f64 * p) as usize;
+        sorted[idx.min(sorted.len() - 1)]
     }
 
     pub fn count(&self) -> usize {

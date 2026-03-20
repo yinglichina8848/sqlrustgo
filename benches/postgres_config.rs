@@ -41,9 +41,10 @@ impl PostgresConfig {
     }
 
     pub fn docker() -> Self {
-        let mut config = Self::default();
-        config.host = "127.0.0.1".to_string();
-        config
+        Self {
+            host: "127.0.0.1".to_string(),
+            ..Self::default()
+        }
     }
 }
 
