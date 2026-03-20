@@ -87,6 +87,11 @@ pub enum LogicalPlan {
     },
     /// Drop table
     DropTable { table_name: String, if_exists: bool },
+    /// Explain query plan
+    Explain {
+        input: Box<LogicalPlan>,
+        analyze: bool,
+    },
 }
 
 impl LogicalPlan {
@@ -108,6 +113,7 @@ impl LogicalPlan {
             LogicalPlan::Update { .. } => Schema::empty(),
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
+            LogicalPlan::Explain { input, .. } => input.schema(),
         }
     }
 }

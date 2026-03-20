@@ -30,6 +30,7 @@ pub enum Token {
     Grant,
     Revoke,
     Analyze,
+    Explain,
 
     // Aggregate Functions
     Count,
@@ -121,6 +122,7 @@ impl fmt::Display for Token {
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            Token::Explain => write!(f, "EXPLAIN"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -190,6 +192,7 @@ pub fn is_keyword(s: &str) -> bool {
             | "ROLLBACK"
             | "GRANT"
             | "REVOKE"
+            | "EXPLAIN"
             | "INTEGER"
             | "TEXT"
             | "FLOAT"
@@ -231,6 +234,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ROLLBACK" => Some(Token::Rollback),
         "GRANT" => Some(Token::Grant),
         "REVOKE" => Some(Token::Revoke),
+        "EXPLAIN" => Some(Token::Explain),
         "INTEGER" => Some(Token::Integer),
         "TEXT" => Some(Token::Text),
         "FLOAT" => Some(Token::Float),

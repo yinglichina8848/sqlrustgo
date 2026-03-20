@@ -6,6 +6,7 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
+use crate::Field;
 use crate::Operator;
 use crate::Schema;
 use sqlrustgo_storage::StorageEngine;
@@ -942,6 +943,50 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Explain execution operator - shows query execution plan
+pub struct ExplainExec {
+    input: Box<dyn PhysicalPlan>,
+    analyze: bool,
+    schema: Schema,
+}
+
+impl ExplainExec {
+    pub fn new(input: Box<dyn PhysicalPlan>, analyze: bool) -> Self {
+        let schema = Schema::new(vec![Field::new("plan".to_string(), crate::DataType::Text)]);
+        Self {
+            input,
+            analyze,
+            schema,
+        }
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
+    pub fn analyze(&self) -> bool {
+        self.analyze
+    }
+}
+
+impl PhysicalPlan for ExplainExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.input.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Explain"
     }
 
     fn as_any(&self) -> &dyn Any {

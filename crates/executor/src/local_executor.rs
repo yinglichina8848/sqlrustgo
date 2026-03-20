@@ -4,8 +4,8 @@
 
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
-    ProjectionExec, SortMergeJoinExec,
+    AggregateExec, AggregateFunction, ExplainExec, FilterExec, HashJoinExec, JoinType,
+    PhysicalPlan, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -95,6 +95,7 @@ impl<'a> LocalExecutor<'a> {
                 "SortMergeJoin" => self.execute_sort_merge_join(plan),
                 "Sort" => self.execute_sort(plan),
                 "Limit" => self.execute_limit(plan),
+                "Explain" => self.execute_explain(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
 
@@ -121,8 +122,31 @@ impl<'a> LocalExecutor<'a> {
             "SortMergeJoin" => self.execute_sort_merge_join(plan),
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
+            "Explain" => self.execute_explain(plan),
             _ => Ok(ExecutorResult::empty()),
         }
+    }
+
+    fn execute_explain(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        let explain_plan = plan.as_any().downcast_ref::<ExplainExec>().ok_or_else(|| {
+            sqlrustgo_types::SqlError::ExecutionError("Failed to downcast ExplainExec".to_string())
+        })?;
+
+        let input_plan = explain_plan.input();
+        let analyze = explain_plan.analyze();
+
+        let plan_text = format_plan_tree(input_plan, 0);
+
+        let rows = if analyze {
+            vec![vec![Value::Text(format!(
+                "{}\n(analyze mode not yet implemented)",
+                plan_text
+            ))]]
+        } else {
+            vec![vec![Value::Text(plan_text)]]
+        };
+
+        Ok(ExecutorResult::new(rows, 0))
     }
 
     fn extract_tables(&self, plan: &dyn PhysicalPlan) -> Vec<String> {
@@ -1698,4 +1722,24 @@ mod tests {
         let key = executor.get_cache_key("SELECT * FROM users WHERE id = ?", &params);
         assert!(!key.normalized_sql.is_empty());
     }
+}
+
+fn format_plan_tree(plan: &dyn PhysicalPlan, indent: usize) -> String {
+    let prefix = "  ".repeat(indent);
+    let name = plan.name();
+    let table_name = plan.table_name();
+
+    let line = if table_name.is_empty() {
+        format!("{}{}", prefix, name)
+    } else {
+        format!("{}{} on {}", prefix, name, table_name)
+    };
+
+    let mut result = vec![line];
+
+    for child in plan.children() {
+        result.push(format_plan_tree(child, indent + 1));
+    }
+
+    result.join("\n")
 }
