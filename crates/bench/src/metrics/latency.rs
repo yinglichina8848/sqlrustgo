@@ -87,7 +87,6 @@ mod tests {
     fn test_latency_recorder() {
         let recorder = LatencyRecorder::new();
 
-        // Record some samples
         for _ in 0..1000 {
             recorder.record(100);
         }
@@ -95,5 +94,79 @@ mod tests {
         let stats = recorder.snapshot();
         assert_eq!(stats.count, 1000);
         assert_eq!(stats.p50, 100);
+    }
+
+    #[test]
+    fn test_latency_recorder_empty() {
+        let recorder = LatencyRecorder::new();
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 0);
+    }
+
+    #[test]
+    fn test_latency_recorder_single_sample() {
+        let recorder = LatencyRecorder::new();
+        recorder.record(500);
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 1);
+        assert_eq!(stats.p50, 500);
+        assert_eq!(stats.p95, 500);
+        assert_eq!(stats.p99, 500);
+    }
+
+    #[test]
+    fn test_latency_recorder_multiple_values() {
+        let recorder = LatencyRecorder::new();
+        for i in 1..=100 {
+            recorder.record(i * 100);
+        }
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 100);
+        assert!(stats.p50 > 0);
+        assert!(stats.p95 > stats.p50);
+        assert!(stats.p99 > stats.p95);
+    }
+
+    #[test]
+    fn test_latency_recorder_varied_latency() {
+        let recorder = LatencyRecorder::new();
+        for i in 1..=1000 {
+            let latency = if i % 100 == 0 { 10000 } else { 100 };
+            recorder.record(latency);
+        }
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 1000);
+        assert!(stats.max >= stats.p50);
+    }
+
+    #[test]
+    fn test_latency_recorder_concurrent() {
+        let recorder = LatencyRecorder::new();
+        std::thread::scope(|s| {
+            for _ in 0..4 {
+                s.spawn(|| {
+                    for i in 1..=250 {
+                        recorder.record(i);
+                    }
+                });
+            }
+        });
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 1000);
+    }
+
+    #[test]
+    fn test_latency_stats_default() {
+        let stats = LatencyStats::default();
+        assert_eq!(stats.count, 0);
+        assert_eq!(stats.p50, 0);
+        assert_eq!(stats.p95, 0);
+    }
+
+    #[test]
+    fn test_latency_recorder_default() {
+        let recorder = LatencyRecorder::default();
+        let stats = recorder.snapshot();
+        assert_eq!(stats.count, 0);
     }
 }
