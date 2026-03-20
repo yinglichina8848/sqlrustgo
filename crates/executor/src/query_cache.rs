@@ -23,7 +23,8 @@ impl QueryCache {
     }
 
     pub fn get(&mut self, key: &CacheKey) -> Option<crate::ExecutorResult> {
-        if !self.config.enabled {
+        // B-04: Skip cache entirely in benchmark_mode for trusted results
+        if self.config.benchmark_mode || !self.config.enabled {
             return None;
         }
 
@@ -44,7 +45,8 @@ impl QueryCache {
     }
 
     pub fn put(&mut self, key: CacheKey, entry: CacheEntry, tables: Vec<String>) {
-        if !self.config.enabled {
+        // B-04: Skip cache entirely in benchmark_mode for trusted results
+        if self.config.benchmark_mode || !self.config.enabled {
             return;
         }
 
