@@ -17,5 +17,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tokio-postgres = "0.7"
 rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = "0.4"
 sqlrustgo = { path = "../.." }
 sqlrustgo-storage = { path = "../storage" }
