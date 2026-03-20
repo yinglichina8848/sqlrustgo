@@ -2,8 +2,8 @@
 
 use crate::db::Database;
 use async_trait::async_trait;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
 /// SQLRustGo TCP client adapter
 pub struct SqlRustGoDB {
@@ -50,11 +50,8 @@ impl Database for SqlRustGoDB {
     }
 
     async fn insert(&self, key: usize) -> anyhow::Result<()> {
-        self.execute_query(&format!(
-            "INSERT INTO accounts VALUES ({}, 100)",
-            key
-        ))
-        .await
+        self.execute_query(&format!("INSERT INTO accounts VALUES ({}, 100)", key))
+            .await
     }
 
     async fn scan(&self, start: usize, end: usize) -> anyhow::Result<()> {
