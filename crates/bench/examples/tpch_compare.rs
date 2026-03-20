@@ -18,6 +18,7 @@
 use serde::{Deserialize, Serialize};
 use sqlrustgo::{parse, ExecutionEngine};
 use sqlrustgo_storage::MemoryStorage;
+use std::io::Write;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -107,6 +108,15 @@ pub struct ComparisonResult {
 pub struct SystemResult {
     pub system: String,
     pub queries: Vec<QueryResult>,
+}
+
+impl SystemResult {
+    pub fn new(system: String) -> Self {
+        Self {
+            system,
+            queries: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -386,7 +396,7 @@ fn run_sqlite_benchmarks() -> Option<SystemResult> {
 }
 
 fn create_tables(
-    engine: &mut ExecutionEngine<MemoryStorage>,
+    engine: &mut ExecutionEngine,
     lineitem_data: &[LineItemRow],
     orders_data: &[OrdersRow],
     customer_data: &[CustomerRow],

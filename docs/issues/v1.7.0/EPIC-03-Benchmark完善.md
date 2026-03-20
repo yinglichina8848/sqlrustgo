@@ -97,9 +97,41 @@
 | `crates/bench-cli/src/reporter.rs` | JSON 序列化 |
 | `crates/bench/src/db/postgres.rs` | PostgreSQL 连接 |
 | `crates/bench/src/lib.rs` | bench crate 公共接口 |
+| `crates/bench/src/memory.rs` | 内存监控与限制 (10GB 上限) |
+| `crates/bench/src/runner.rs` | 基准测试运行器 (含内存检查) |
+
+---
+
+## 内存保护机制
+
+为防止基准测试无限占用内存导致系统不稳定，新增内存限制功能：
+
+### 功能特性
+- **默认限制**: 10GB 内存上限
+- **定期检查**: 每 1000 次操作检查一次内存使用
+- **高内存警告**: 内存使用超过 80% 时警告
+- **超限停止**: 内存使用超过 10GB 时自动停止测试
+
+### 日志输出示例
+```
+Memory limit: 10737418240 bytes (10 GB)
+Initial memory usage: 0.05 GB / 10.00 GB limit (0.5%)
+Starting workload: oltp with 4 threads for 60s
+Final memory usage: 1.23 GB / 10.00 GB limit (12.3%)
+```
+
+### JSON 输出新增字段
+```json
+{
+  "memory": {
+    "limit_bytes": 10737418240,
+    "final_usage": "1.23 GB / 10.00 GB limit (12.3%)"
+  }
+}
+```
 
 ---
 
 **关联 Issue**: BEN-01, BEN-02, BEN-03
-**总工作量**: ~250 行
+**总工作量**: ~250 行 (+ ~150 行内存保护)
 **提交**: `0e80eeb` feat(bench): EPIC-03 Benchmark 完善
