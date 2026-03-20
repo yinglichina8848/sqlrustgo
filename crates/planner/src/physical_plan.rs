@@ -14,6 +14,67 @@ use sqlrustgo_types::Value;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+#[derive(Debug, Clone, Default)]
+pub struct OperatorMetrics {
+    pub name: String,
+    pub table_name: Option<String>,
+    pub execution_time_ms: f64,
+    pub rows: usize,
+    pub children: Vec<OperatorMetrics>,
+}
+
+impl OperatorMetrics {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            table_name: None,
+            execution_time_ms: 0.0,
+            rows: 0,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn with_table(mut self, table_name: String) -> Self {
+        self.table_name = Some(table_name);
+        self
+    }
+
+    pub fn with_timing(mut self, duration: Duration, rows: usize) -> Self {
+        self.execution_time_ms = duration.as_secs_f64() * 1000.0;
+        self.rows = rows;
+        self
+    }
+
+    pub fn add_child(&mut self, child: OperatorMetrics) {
+        self.children.push(child);
+    }
+
+    pub fn to_string(&self, indent: usize) -> String {
+        let prefix = "  ".repeat(indent);
+
+        let mut line = format!("{}{}", prefix, self.name);
+        if let Some(ref table) = self.table_name {
+            line.push_str(&format!(" on {}", table));
+        }
+
+        if self.execution_time_ms > 0.0 || self.rows > 0 {
+            line.push_str(&format!(
+                " (time={:.3}ms, rows={})",
+                self.execution_time_ms, self.rows
+            ));
+        }
+
+        let mut result = vec![line];
+
+        for child in &self.children {
+            result.push(child.to_string(indent + 1));
+        }
+
+        result.join("\n")
+    }
+}
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
