@@ -107,25 +107,25 @@
 为防止基准测试无限占用内存导致系统不稳定，新增内存限制功能：
 
 ### 功能特性
-- **默认限制**: 10GB 内存上限
+- **默认限制**: 8GB 内存上限
 - **定期检查**: 每 1000 次操作检查一次内存使用
 - **高内存警告**: 内存使用超过 80% 时警告
-- **超限停止**: 内存使用超过 10GB 时自动停止测试
+- **超限停止**: 内存使用超过 8GB 时自动停止测试
 
 ### 日志输出示例
 ```
-Memory limit: 10737418240 bytes (10 GB)
-Initial memory usage: 0.05 GB / 10.00 GB limit (0.5%)
+Memory limit: 8589934592 bytes (8 GB)
+Initial memory usage: 0.05 GB / 8.00 GB limit (0.6%)
 Starting workload: oltp with 4 threads for 60s
-Final memory usage: 1.23 GB / 10.00 GB limit (12.3%)
+Final memory usage: 1.23 GB / 8.00 GB limit (15.4%)
 ```
 
 ### JSON 输出新增字段
 ```json
 {
   "memory": {
-    "limit_bytes": 10737418240,
-    "final_usage": "1.23 GB / 10.00 GB limit (12.3%)"
+    "limit_bytes": 8589934592,
+    "final_usage": "1.23 GB / 8.00 GB limit (15.4%)"
   }
 }
 ```
