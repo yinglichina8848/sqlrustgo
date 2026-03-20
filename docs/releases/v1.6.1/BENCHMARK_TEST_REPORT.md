@@ -1,7 +1,8 @@
 # SQLRustGo v1.6.1 TPC-H 性能测试报告
 
 > **测试日期**: 2026-03-20
-> **版本**: v1.6.1 (dev)
+> **版本**: v1.6.1
+> **状态**: ✅ Alpha 已发布
 > **测试环境**: macOS Apple M2
 
 ---
@@ -148,12 +149,40 @@ cargo bench --bench tpch_bench aggregation
 
 ### 7.1 短期改进
 
-- [ ] 添加 Query Cache 性能对比测试
-- [ ] 添加 TCP 模式性能测试
-- [ ] 添加 PostgreSQL 对比测试
-- [ ] 增加数据规模 (SF=10)
+- [x] 添加 Query Cache 性能对比测试 (v1.6.1 已实现 Benchmark 模式)
+- [x] 添加 TCP 模式性能测试 (通过 Connection Pool 测试)
+- [x] 添加 PostgreSQL 对比测试 (见下文 7.2)
+- [ ] 增加数据规模 (SF=10) - 待 CI 完善后执行
 
-### 7.2 长期优化
+### 7.2 数据库对比测试 ⭐ (v1.6.1 新增)
+
+v1.6.1 版本已实现与 SQLite 和 PostgreSQL 的对比测试能力：
+
+| 数据库 | 对比模式 | 状态 |
+|--------|----------|------|
+| SQLite | 统一配置 (embedded) | ✅ 已实现 |
+| PostgreSQL | 实际连接对比 | ✅ 已实现 |
+| SQLRustGo | MemoryStorage | ✅ 基线 |
+
+**对比测试命令**:
+
+```bash
+# 运行 PostgreSQL 对比
+cargo run --package bench --postgres --addr 127.0.0.1:4000
+
+# 运行 SQLite 对比
+cargo run --package bench --sqlite
+
+# 运行完整对比
+cargo run --package bench --compare --output json
+```
+
+**注意事项**:
+- PostgreSQL 对比需要实际数据库环境
+- SQLite 使用嵌入式模式，无网络开销
+- SQLRustGo 测试应关闭 Query Cache (使用 `--no-cache`)
+
+### 7.3 长期优化
 
 - [ ] 实现 SIMD 向量化
 - [ ] 优化 JOIN 算法
@@ -169,10 +198,14 @@ SQLRustGo v1.6.1 在 TPC-H 基准测试中表现优秀：
 - ✅ 聚合操作达到微秒级
 - ✅ 系统稳定性好
 - ✅ 适合嵌入式场景
+- ✅ 已建立可信 Benchmark 体系 (SQLite/PostgreSQL 对比)
 
-**建议**: 可以进入 Beta 测试阶段，进一步验证持久化存储和网络模式的性能。
+**v1.6.1 状态**: Alpha 已发布 (2026-03-20)
+
+**建议**: 可以进入 Beta 测试阶段，进一步验证持久化存储和网络模式的性能，并完善 CI 回归检测。
 
 ---
 
 *报告生成日期: 2026-03-20*
-*SQLRustGo v1.6.1 (dev)*
+*更新日期: 2026-03-21*
+*SQLRustGo v1.6.1*
