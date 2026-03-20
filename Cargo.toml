@@ -49,6 +49,7 @@ num_cpus = "1.17"
 tempfile = "3.25.0"
 criterion = "0.8"
 miniz_oxide = "0.7"
+rand = "0.8"
 
 [dev-dependencies]
 criterion = "0.8"
