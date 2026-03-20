@@ -2,9 +2,9 @@
 
 use crate::db::Database;
 use async_trait::async_trait;
-use tokio_postgres::{NoTls, Client};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_postgres::{Client, NoTls};
 
 /// PostgreSQL database adapter
 pub struct PostgresDB {

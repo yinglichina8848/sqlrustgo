@@ -13,12 +13,12 @@
 //!   --scale 10000
 //! ```
 
+mod analysis;
 mod cli;
+mod db;
+mod metrics;
 mod runner;
 mod workload;
-mod metrics;
-mod db;
-mod analysis;
 
 use anyhow::Result;
 use clap::Parser;

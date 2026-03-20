@@ -35,6 +35,7 @@ impl LatencyStats {
         self.sorted = false;
     }
 
+    #[allow(dead_code)]
     fn sort(&mut self) {
         if !self.sorted {
             self.samples.sort();
