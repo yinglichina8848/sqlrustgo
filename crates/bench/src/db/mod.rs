@@ -1,12 +1,12 @@
 //! Database adapters for benchmark
 
-pub mod sqlrustgo;
-pub mod sqlite;
 pub mod postgres;
+pub mod sqlite;
+pub mod sqlrustgo;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
-use anyhow::Result;
 
 /// Database trait for benchmark
 #[async_trait]
@@ -27,15 +27,15 @@ pub trait Database: Send + Sync {
 /// Create a database adapter
 pub async fn create_db(name: &str, config: &DbConfig) -> Result<Arc<dyn Database>> {
     match name.to_lowercase().as_str() {
-        "sqlrustgo" => {
-            Ok(Arc::new(sqlrustgo::SqlRustGoDB::new(&config.sqlrustgo_addr).await?))
-        }
+        "sqlrustgo" => Ok(Arc::new(
+            sqlrustgo::SqlRustGoDB::new(&config.sqlrustgo_addr).await?,
+        )),
         "postgres" | "postgresql" => {
             Ok(Arc::new(postgres::PostgresDB::new(&config.pg_conn).await?))
         }
-        "sqlite" => {
-            Ok(Arc::new(sqlite::SqliteDB::new(&config.sqlite_path, config.scale).await?))
-        }
+        "sqlite" => Ok(Arc::new(
+            sqlite::SqliteDB::new(&config.sqlite_path, config.scale).await?,
+        )),
         _ => panic!("Unknown database: {}", name),
     }
 }
