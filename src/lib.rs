@@ -6,8 +6,8 @@
 pub use sqlrustgo_executor::{Executor, ExecutorResult};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
-pub use sqlrustgo_parser::{parse, Lexer, Statement, Token};
-pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner};
+pub use sqlrustgo_parser::{parse, Lexer, SetOperation, Statement, Token};
+pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 use std::sync::Arc;
 
 pub use sqlrustgo_storage::{
