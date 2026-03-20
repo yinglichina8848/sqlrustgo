@@ -5,7 +5,7 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
+    AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
     ProjectionExec, SeqScanExec, SortExec, SortMergeJoinExec,
 };
 use crate::Expr;
@@ -188,6 +188,10 @@ impl DefaultPlanner {
             LogicalPlan::Union { left, .. } => {
                 // Union - use left plan as base (simplified)
                 self.create_physical_plan_internal(left)
+            }
+            LogicalPlan::Explain { input, analyze } => {
+                let input_plan = self.create_physical_plan_internal(input)?;
+                Ok(Box::new(ExplainExec::new(input_plan, *analyze)))
             }
         }
     }

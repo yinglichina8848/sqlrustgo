@@ -27,12 +27,20 @@ pub enum Statement {
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
+    Explain(ExplainStatement),
 }
 
 /// ANALYZE statement for collecting statistics
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
     pub table_name: Option<String>,
+}
+
+/// EXPLAIN statement for showing execution plan
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplainStatement {
+    pub query: Box<Statement>,
+    pub analyze: bool,
 }
 
 /// Join type
@@ -192,6 +200,7 @@ impl Parser {
             Some(Token::Create) => self.parse_create_table(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
+            Some(Token::Explain) => self.parse_explain(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -685,6 +694,25 @@ impl Parser {
 
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
     }
+
+    fn parse_explain(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Explain)?;
+
+        let analyze = match self.current() {
+            Some(Token::Analyze) => {
+                self.next();
+                true
+            }
+            _ => false,
+        };
+
+        let query = match self.current() {
+            Some(Token::Select) => Box::new(self.parse_select()?),
+            _ => return Err("EXPLAIN must be followed by a SELECT statement".to_string()),
+        };
+
+        Ok(Statement::Explain(ExplainStatement { query, analyze }))
+    }
 }
 
 /// Parse a SQL string into statements
@@ -1041,5 +1069,35 @@ mod tests {
     fn test_parse_update_single_set() {
         let result = parse("UPDATE users SET name = 'Bob'");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_explain() {
+        let result = parse("EXPLAIN SELECT id FROM users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Explain(e) => {
+                assert!(!e.analyze);
+                match *e.query {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "users");
+                    }
+                    _ => panic!("Expected SELECT in EXPLAIN"),
+                }
+            }
+            _ => panic!("Expected EXPLAIN statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_explain_analyze() {
+        let result = parse("EXPLAIN ANALYZE SELECT id FROM users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Explain(e) => {
+                assert!(e.analyze);
+            }
+            _ => panic!("Expected EXPLAIN statement"),
+        }
     }
 }
