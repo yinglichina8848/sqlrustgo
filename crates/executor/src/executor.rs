@@ -3079,4 +3079,197 @@ mod tests {
 
         assert_eq!(exec.name(), "SeqScan");
     }
+
+    #[test]
+    fn test_seq_scan_volcano_executor_as_any() {
+        use std::sync::Arc;
+
+        let storage = Arc::new(MockStorageForExecutor::new());
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
+
+        let any = exec.as_any();
+        assert!(any.is::<SeqScanVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_projection_volcano_executor_as_any() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![vec![
+            Value::Integer(1),
+            Value::Integer(100),
+        ]]));
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let expr = vec![sqlrustgo_planner::Expr::Column(
+            sqlrustgo_planner::Column::new("id".to_string()),
+        )];
+
+        let exec = ProjectionVolcanoExecutor::new(child, expr, schema, input_schema);
+        let any = exec.as_any();
+        assert!(any.is::<ProjectionVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_aggregate_volcano_executor_as_any() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![vec![
+            Value::Integer(1),
+            Value::Integer(100),
+        ]]));
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
+
+        let exec = AggregateVolcanoExecutor::new(
+            child,
+            vec![],
+            vec![sqlrustgo_planner::Expr::AggregateFunction {
+                func: sqlrustgo_planner::AggregateFunction::Count,
+                args: vec![],
+                distinct: false,
+            }],
+            schema,
+            input_schema,
+        );
+        let any = exec.as_any();
+        assert!(any.is::<AggregateVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_hash_join_volcano_executor_as_any() {
+        let left = Box::new(MockVolcanoExecutor::new());
+        let right = Box::new(MockVolcanoExecutor::new());
+        let left_schema = Schema::empty();
+        let right_schema = Schema::empty();
+        let schema = Schema::empty();
+
+        let exec = HashJoinVolcanoExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+        let any = exec.as_any();
+        assert!(any.is::<HashJoinVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_sort_merge_join_volcano_executor_as_any() {
+        let left = Box::new(MockVolcanoExecutor::new());
+        let right = Box::new(MockVolcanoExecutor::new());
+        let left_schema = Schema::empty();
+        let right_schema = Schema::empty();
+        let schema = Schema::empty();
+
+        let exec = SortMergeJoinExecutor::new(
+            left,
+            right,
+            sqlrustgo_planner::JoinType::Inner,
+            left_schema,
+            right_schema,
+            schema,
+        );
+        let any = exec.as_any();
+        assert!(any.is::<SortMergeJoinExecutor>());
+    }
+
+    #[test]
+    fn test_sort_volcano_executor_as_any() {
+        let child = Box::new(MockVolcanoExecutor::new());
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let exec = SortVolcanoExecutor::new(
+            child,
+            vec![sqlrustgo_planner::SortExpr {
+                expr: sqlrustgo_planner::Expr::Column(sqlrustgo_planner::Column::new(
+                    "id".to_string(),
+                )),
+                asc: true,
+                nulls_first: true,
+            }],
+            schema,
+            input_schema,
+        );
+        let any = exec.as_any();
+        assert!(any.is::<SortVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_filter_volcano_executor() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+        ]));
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let exec = FilterVolcanoExecutor::new(
+            child,
+            sqlrustgo_planner::Expr::BinaryExpr {
+                left: Box::new(sqlrustgo_planner::Expr::Column(
+                    sqlrustgo_planner::Column::new("id".to_string()),
+                )),
+                op: sqlrustgo_planner::Operator::Gt,
+                right: Box::new(sqlrustgo_planner::Expr::Literal(Value::Integer(1))),
+            },
+            schema,
+            input_schema.clone(),
+        );
+        assert_eq!(exec.name(), "Filter");
+    }
+
+    #[test]
+    fn test_filter_volcano_executor_as_any() {
+        let child = Box::new(MockVolcanoExecutor::new());
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let exec = FilterVolcanoExecutor::new(
+            child,
+            sqlrustgo_planner::Expr::Literal(Value::Boolean(true)),
+            schema,
+            input_schema,
+        );
+        let any = exec.as_any();
+        assert!(any.is::<FilterVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_limit_volcano_executor() {
+        let child = Box::new(MockVolcanoExecutor::with_data(vec![
+            vec![Value::Integer(1)],
+            vec![Value::Integer(2)],
+            vec![Value::Integer(3)],
+        ]));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let exec = LimitVolcanoExecutor::new(child, 2, 0, schema);
+        assert_eq!(exec.name(), "Limit");
+    }
+
+    #[test]
+    fn test_limit_volcano_executor_as_any() {
+        let child = Box::new(MockVolcanoExecutor::new());
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let exec = LimitVolcanoExecutor::new(child, 10, 0, schema);
+        let any = exec.as_any();
+        assert!(any.is::<LimitVolcanoExecutor>());
+    }
+
+    #[test]
+    fn test_mock_volcano_executor_schema() {
+        let executor = MockVolcanoExecutor::new();
+        let schema = executor.schema();
+        assert_eq!(schema.fields.len(), 2);
+    }
+
+    #[test]
+    fn test_mock_volcano_executor_as_any() {
+        let executor = MockVolcanoExecutor::new();
+        let any = executor.as_any();
+        assert!(any.is::<MockVolcanoExecutor>());
+    }
 }
