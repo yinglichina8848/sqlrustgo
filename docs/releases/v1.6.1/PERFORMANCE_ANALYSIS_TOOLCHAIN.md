@@ -336,22 +336,22 @@ bench/
 
 ### 7.1 代码
 
-- [ ] Benchmark Runner CLI
-- [ ] Metrics 收集 (JSON)
-- [ ] 自动分析引擎
-- [ ] Tracing 埋点
-- [ ] CI 回归检测
+- [x] Benchmark Runner CLI
+- [x] Metrics 收集 (JSON)
+- [x] 自动分析引擎 (文档已完成，代码见 analyze 函数)
+- [x] Tracing 埋点 (tracing crate 已集成)
+- [ ] CI 回归检测 (待开发 EPIC-05)
 
 ### 7.2 文档
 
-- [ ] 性能分析指南
-- [ ] 瓶颈定位手册
-- [ ] CI 配置说明
+- [x] 性能分析指南 (本文档)
+- [x] 瓶颈定位手册 (本文档第 2-3 节)
+- [x] CI 配置说明 (本文档第 4 节)
 
 ### 7.3 基线数据
 
-- [ ] OLTP 基线
-- [ ] TPC-H 基线
+- [x] OLTP 基线 (crates/bench)
+- [x] TPC-H 基线 (crates/bench)
 
 ---
 
@@ -359,20 +359,20 @@ bench/
 
 ### 8.1 定位能力
 
-- [ ] 精确定位锁瓶颈
-- [ ] 精确定位 WAL 瓶颈
-- [ ] 精确定位 Executor 瓶颈
+- [x] 精确定位锁瓶颈 (metrics.lock.wait_time_ratio)
+- [x] 精确定位 WAL 瓶颈 (metrics.wal.flush_time_ratio)
+- [x] 精确定位 Executor 瓶颈 (metrics.executor.cpu_time_ratio)
 
 ### 8.2 解释能力
 
-- [ ] P99 高因为锁等待
-- [ ] TPS 瓶颈在 WAL
-- [ ] CPU 在 executor
+- [x] P99 高因为锁等待 (lock.wait_time_ratio)
+- [x] TPS 瓶颈在 WAL (wal.flush_time_ratio)
+- [x] CPU 在 executor (executor.cpu_time_ratio)
 
 ### 8.3 防护能力
 
-- [ ] CI 自动检测 TPS 回归
-- [ ] CI 自动检测延迟回归
+- [ ] CI 自动检测 TPS 回归 (待开发 EPIC-05)
+- [ ] CI 自动检测延迟回归 (待开发 EPIC-05)
 
 ---
 
@@ -382,10 +382,10 @@ bench/
 
 | 能力 | 状态 |
 |------|------|
-| 能测性能 | ✅ |
-| 能定位瓶颈 | 🚀 (建立中) |
-| 能解释原因 | 🚀 (建立中) |
-| 防性能回退 | 🚀 (建立中) |
+| 能测性能 | ✅ 已实现 |
+| 能定位瓶颈 | ✅ 已实现 |
+| 能解释原因 | ✅ 已实现 |
+| 防性能回退 | ⏳ CI 待开发 |
 
 ### 最终目标
 
