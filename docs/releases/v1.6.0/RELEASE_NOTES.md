@@ -135,6 +135,8 @@ v1.5 (L3+ 持久化) → v1.6 (L3+ 事务隔离) → v2.0 (分布式)
 | 查询缓存 | - | 80% 命中率 | 新增 |
 | TPC-H Q1 | - | < 500ms | 新增 |
 
+> **⚠️ 性能数据声明**: 性能测试在 MemoryStorage + 小数据集 + Query Cache 开启条件下完成。对比基于内存 vs 磁盘，不够公平。详见 [性能报告](./PERFORMANCE_BENCHMARK_REPORT.md)。
+
 ---
 
 ## 四、测试结果
@@ -171,6 +173,17 @@ v1.5 (L3+ 持久化) → v1.6 (L3+ 事务隔离) → v2.0 (分布式)
 | BLOB/BOOLEAN | 简单数据类型 |
 | REPL 增强 | 交互体验 |
 | Serializable | 串行化隔离级别 |
+
+### 5.2 v1.6.1 改进计划
+
+详见 [v1.6.1 发布计划](../v1.6.1/RELEASE_PLAN.md)：
+
+| 改进项 | 说明 |
+|--------|------|
+| Benchmark 重构 | 统一 CLI + Workload |
+| 可信性修复 | 关闭 Query Cache |
+| 对比基准 | 引入 PostgreSQL |
+| Metrics | P50/P95/P99 延迟 |
 
 ---
 
