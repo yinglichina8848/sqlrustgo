@@ -608,6 +608,27 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 - [COMPREHENSIVE_VERIFICATION_REPORT.md](./COMPREHENSIVE_VERIFICATION_REPORT.md)
 - [POSTGRESQL_BENCHMARK_GUIDE.md](./POSTGRESQL_BENCHMARK_GUIDE.md)
 
+## 十四、PostgreSQL 对比 (PR #699)
+
+PR #699 已合并，包含:
+
+- [docs/POSTGRESQL_SETUP.md](../../POSTGRESQL_SETUP.md) - PostgreSQL 安装配置指南
+- [benchmark_results/BENCHMARK_COMPARISON_REPORT.md](../../benchmark_results/BENCHMARK_COMPARISON_REPORT.md) - SQLite 对比报告
+
+### PostgreSQL 对比测试
+
+```bash
+# 1. 安装 PostgreSQL
+brew install postgresql@15
+brew services start postgresql@15
+
+# 2. 创建数据库
+psql -U postgres -c "CREATE DATABASE tpch;"
+
+# 3. 运行测试
+cargo test -p sqlrustgo-bench -- db::postgres
+```
+
 ---
 
 *本文档由 AI 辅助分析生成*
