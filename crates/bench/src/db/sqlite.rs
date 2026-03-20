@@ -35,7 +35,10 @@ impl SqliteDB {
         if count == 0 {
             let tx = conn.unchecked_transaction()?;
             for i in 0..scale as i64 {
-                tx.execute("INSERT OR IGNORE INTO accounts (id, balance) VALUES (?1, 100)", [i])?;
+                tx.execute(
+                    "INSERT OR IGNORE INTO accounts (id, balance) VALUES (?1, 100)",
+                    [i],
+                )?;
             }
             tx.commit()?;
         }

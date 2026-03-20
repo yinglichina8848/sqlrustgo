@@ -57,6 +57,8 @@ impl BenchArgs {
 
     /// Get SQLite database path or use default
     pub fn get_sqlite_path(&self) -> String {
-        self.sqlite_path.clone().unwrap_or_else(|| "bench.db".to_string())
+        self.sqlite_path
+            .clone()
+            .unwrap_or_else(|| "bench.db".to_string())
     }
 }

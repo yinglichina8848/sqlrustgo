@@ -1,14 +1,14 @@
 //! Benchmark runner - orchestrates the benchmark execution
 
+use crate::analysis::analyze;
 use crate::cli::BenchArgs;
 use crate::db::{create_db, DbConfig};
 use crate::metrics::LatencyRecorder;
 use crate::workload::create_workload;
-use crate::analysis::analyze;
 
 use anyhow::Result;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::time::{Duration, Instant};
 
 /// Run the benchmark
