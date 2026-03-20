@@ -34,7 +34,7 @@ pub async fn create_db(name: &str, config: &DbConfig) -> Result<Arc<dyn Database
             Ok(Arc::new(postgres::PostgresDB::new(&config.pg_conn).await?))
         }
         "sqlite" => {
-            Ok(Arc::new(sqlite::SqliteDB::new(&config.sqlite_path).await?))
+            Ok(Arc::new(sqlite::SqliteDB::new(&config.sqlite_path, config.scale).await?))
         }
         _ => panic!("Unknown database: {}", name),
     }
@@ -46,6 +46,7 @@ pub struct DbConfig {
     pub sqlrustgo_addr: String,
     pub pg_conn: String,
     pub sqlite_path: String,
+    pub scale: usize,
 }
 
 impl Default for DbConfig {
@@ -54,6 +55,7 @@ impl Default for DbConfig {
             sqlrustgo_addr: "127.0.0.1:4000".to_string(),
             pg_conn: "host=localhost user=postgres password=postgres dbname=bench".to_string(),
             sqlite_path: "bench.db".to_string(),
+            scale: 10000,
         }
     }
 }
@@ -64,6 +66,7 @@ impl From<&crate::cli::BenchArgs> for DbConfig {
             sqlrustgo_addr: args.sqlrustgo_addr.clone(),
             pg_conn: args.get_pg_conn(),
             sqlite_path: args.get_sqlite_path(),
+            scale: args.scale,
         }
     }
 }
