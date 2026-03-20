@@ -1,7 +1,10 @@
 //! Database adapters for benchmark
 
+pub mod comparison;
 pub mod postgres;
+pub mod postgres_benchmark;
 pub mod sqlite;
+pub mod sqlite_benchmark;
 pub mod sqlrustgo;
 
 use anyhow::Result;
