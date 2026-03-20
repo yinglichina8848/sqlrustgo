@@ -25,37 +25,37 @@ This version does NOT introduce new features. Instead, it focuses on:
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #B-01 | 实现 Benchmark Runner CLI | ⏳ |
-| #B-02 | 实现 OLTP Workload (YCSB-like) | ⏳ |
-| #B-03 | 实现 TPC-H 基准 (Q1/Q3/Q6/Q10) | ⏳ |
+| #B-01 | 实现 Benchmark Runner CLI | ✅ 已完成 |
+| #B-02 | 实现 OLTP Workload (YCSB-like) | ✅ 已完成 |
+| #B-03 | 实现 TPC-H 基准 (Q1/Q3/Q6/Q10) | ✅ 已完成 |
 
 ### EPIC-02: Benchmark 可信性修复 (P0)
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #B-04 | 禁用 Query Cache (Benchmark 模式) | ⏳ |
-| #B-05 | 引入 PostgreSQL 对比 | ⏳ |
-| #B-06 | 统一 SQLite 配置 | ⏳ |
+| #B-04 | 禁用 Query Cache (Benchmark 模式) | ⏳ 待处理 |
+| #B-05 | 引入 PostgreSQL 对比 | ⏳ 待处理 |
+| #B-06 | 统一 SQLite 配置 | ⏳ 待处理 |
 
 ### EPIC-03: Metrics 系统 (P1)
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #B-07 | 实现延迟统计 (P50/P95/P99) | ⏳ |
-| #B-08 | 统一结果格式 (JSON) | ⏳ |
+| #B-07 | 实现延迟统计 (P50/P95/P99) | ✅ 已完成 |
+| #B-08 | 统一结果格式 (JSON) | ✅ 已完成 |
 
 ### EPIC-04: 环境标准化 (P1)
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #B-09 | Benchmark 配置模板 | ⏳ |
-| #B-10 | 数据规模校验 | ⏳ |
+| #B-09 | Benchmark 配置模板 | ✅ 已完成 |
+| #B-10 | 数据规模校验 | ✅ 已完成 |
 
 ### EPIC-05: CI 集成 (P2)
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #B-11 | Benchmark CI (轻量版) | ⏳ |
+| #B-11 | Benchmark CI (轻量版) | ⏳ 待处理 |
 
 ---
 
@@ -83,12 +83,12 @@ v1.6.1 introduces a reproducible benchmark system.
 
 ## 五、交付标准
 
-- [ ] Benchmark 可复现
+- [x] Benchmark 可复现
 - [ ] 有 PostgreSQL 对比
-- [ ] 有 P99 延迟
+- [x] 有 P99 延迟
 - [ ] Cache 默认关闭
-- [ ] 数据规模合理
-- [ ] JSON 输出
+- [x] 数据规模合理
+- [x] JSON 输出
 
 ---
 
