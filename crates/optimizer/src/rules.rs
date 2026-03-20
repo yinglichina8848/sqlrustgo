@@ -1260,6 +1260,83 @@ mod tests {
     }
 
     #[test]
+    fn test_plan_get_children_projection() {
+        let child = Plan::EmptyRelation;
+        let plan = Plan::Projection {
+            expr: vec![],
+            input: Box::new(child),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_plan_get_children_join() {
+        let left = Plan::EmptyRelation;
+        let right = Plan::EmptyRelation;
+        let plan = Plan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_plan_get_children_empty() {
+        let plan = Plan::EmptyRelation;
+        let children = plan.get_children();
+        assert!(children.is_empty());
+    }
+
+    #[test]
+    fn test_plan_get_children_filter() {
+        let input = Plan::EmptyRelation;
+        let plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(input),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_plan_get_children_aggregate() {
+        let input = Plan::EmptyRelation;
+        let plan = Plan::Aggregate {
+            group_by: vec![],
+            aggregates: vec![],
+            input: Box::new(input),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_plan_get_children_sort() {
+        let input = Plan::EmptyRelation;
+        let plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(input),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_plan_get_children_limit() {
+        let input = Plan::EmptyRelation;
+        let plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(input),
+        };
+        let children = plan.get_children();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
     fn test_constant_folding_name() {
         let rule = ConstantFolding::new();
         assert_eq!(rule.name(), "ConstantFolding");
