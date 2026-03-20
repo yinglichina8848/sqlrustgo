@@ -1,10 +1,10 @@
 //! PostgreSQL database adapter
 
 use crate::db::Database;
+use anyhow::Context;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use anyhow::Context;
 use tokio_postgres::{Client, NoTls};
 
 /// PostgreSQL database adapter

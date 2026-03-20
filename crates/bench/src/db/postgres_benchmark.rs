@@ -114,7 +114,11 @@ impl PostgresBenchmark {
     }
 
     /// Run mixed workload benchmark
-    pub async fn run_mixed(&self, operations: u64, read_ratio: f64) -> anyhow::Result<BenchmarkResult> {
+    pub async fn run_mixed(
+        &self,
+        operations: u64,
+        read_ratio: f64,
+    ) -> anyhow::Result<BenchmarkResult> {
         let pg = PostgresDB::new(&self.conn_str).await?;
         let latency_recorder = LatencyRecorder::new();
         let start = std::time::Instant::now();
