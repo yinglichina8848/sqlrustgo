@@ -5,8 +5,8 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortExec, SortMergeJoinExec,
+    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
+    ProjectionExec, SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec,
 };
 use crate::Expr;
 use crate::{Column, Schema};
@@ -176,7 +176,9 @@ impl DefaultPlanner {
                 // VALUES clause - create scan with no underlying table
                 Ok(Box::new(SeqScanExec::new(String::new(), schema.clone())))
             }
-            LogicalPlan::CreateTable { .. } | LogicalPlan::DropTable { .. } => {
+            LogicalPlan::CreateTable { .. }
+            | LogicalPlan::DropTable { .. }
+            | LogicalPlan::View { .. } => {
                 // DDL statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
@@ -185,13 +187,20 @@ impl DefaultPlanner {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
-            LogicalPlan::Union { left, .. } => {
-                // Union - use left plan as base (simplified)
-                self.create_physical_plan_internal(left)
-            }
-            LogicalPlan::Explain { input, analyze } => {
-                let input_plan = self.create_physical_plan_internal(input)?;
-                Ok(Box::new(ExplainExec::new(input_plan, *analyze)))
+            LogicalPlan::SetOperation {
+                op_type,
+                left,
+                right,
+                schema,
+            } => {
+                let left_plan = self.create_physical_plan_internal(left)?;
+                let right_plan = self.create_physical_plan_internal(right)?;
+                Ok(Box::new(SetOperationExec::new(
+                    *op_type,
+                    left_plan,
+                    right_plan,
+                    schema.clone(),
+                )))
             }
         }
     }
@@ -259,6 +268,7 @@ mod tests {
     use crate::DataType;
     use crate::Expr;
     use crate::Field;
+    use crate::SetOperationType;
 
     #[test]
     fn test_default_planner_creation() {
@@ -630,7 +640,7 @@ mod tests {
     }
 
     #[test]
-    fn test_union_physical_plan() {
+    fn test_set_operation_physical_plan() {
         let planner = DefaultPlanner::new();
         let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let left = LogicalPlan::TableScan {
@@ -643,9 +653,11 @@ mod tests {
             schema: schema.clone(),
             projection: None,
         };
-        let plan = LogicalPlan::Union {
+        let plan = LogicalPlan::SetOperation {
+            op_type: SetOperationType::Union,
             left: Box::new(left),
             right: Box::new(right),
+            schema: schema.clone(),
         };
         let result = planner.create_physical_plan(&plan);
         assert!(result.is_ok());

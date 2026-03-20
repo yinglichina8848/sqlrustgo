@@ -10,6 +10,9 @@ pub use parser::Parser;
 pub use token::Token;
 
 pub use parser::parse;
+pub use parser::CreateViewStatement;
+pub use parser::SetOperation;
+pub use parser::SetOperationType;
 pub use parser::Statement;
 
 #[cfg(test)]
@@ -41,5 +44,50 @@ mod tests {
     fn test_lexer_function() {
         let tokens = lexer::tokenize("SELECT 1");
         assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn test_parse_union() {
+        let result = parse("SELECT id FROM t1 UNION SELECT id FROM t2");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::SetOperation(_) => {}
+            _ => panic!("Expected SetOperation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_union_all() {
+        let result = parse("SELECT id FROM t1 UNION ALL SELECT id FROM t2");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::SetOperation(crate::parser::SetOperation {
+                op_type: crate::parser::SetOperationType::UnionAll,
+                ..
+            }) => {}
+            _ => panic!("Expected UnionAll"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_view() {
+        let result = parse("CREATE VIEW v AS SELECT id, name FROM users");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateView(view) => {
+                assert_eq!(view.name, "v");
+                assert!(view.query.contains("SELECT"));
+            }
+            _ => panic!("Expected CreateView"),
+        }
     }
 }
