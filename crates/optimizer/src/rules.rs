@@ -1593,6 +1593,69 @@ mod tests {
     }
 
     #[test]
+    fn test_plan_get_child_mut_filter() {
+        let mut plan = Plan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_projection() {
+        let mut plan = Plan::Projection {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_join() {
+        let mut plan = Plan::Join {
+            join_type: JoinType::Inner,
+            left: Box::new(Plan::EmptyRelation),
+            right: Box::new(Plan::EmptyRelation),
+            condition: None,
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_aggregate() {
+        let mut plan = Plan::Aggregate {
+            group_by: vec![],
+            aggregates: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_sort() {
+        let mut plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
+    fn test_plan_get_child_mut_limit() {
+        let mut plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let child = plan.get_child_mut();
+        assert!(child.is_some());
+    }
+
+    #[test]
     fn test_join_reordering_new() {
         let rule = JoinReordering::new();
         assert_eq!(rule.name(), "JoinReordering");
