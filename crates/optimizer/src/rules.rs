@@ -1997,4 +1997,166 @@ mod tests {
         let simplified = rule.simplify_expr(&expr);
         assert!(matches!(simplified, Expr::Column(_)));
     }
+
+    #[test]
+    fn test_can_push_to_left_inner() {
+        let pred = Expr::Literal(Value::Boolean(true));
+        assert!(can_push_to_left(&pred, &JoinType::Inner));
+        assert!(can_push_to_left(&pred, &JoinType::Left));
+        assert!(!can_push_to_left(&pred, &JoinType::Right));
+        assert!(!can_push_to_left(&pred, &JoinType::Full));
+    }
+
+    #[test]
+    fn test_can_push_to_right_inner() {
+        let pred = Expr::Literal(Value::Boolean(true));
+        assert!(can_push_to_right(&pred, &JoinType::Inner));
+        assert!(can_push_to_right(&pred, &JoinType::Right));
+        assert!(!can_push_to_right(&pred, &JoinType::Left));
+        assert!(!can_push_to_right(&pred, &JoinType::Full));
+    }
+
+    #[test]
+    fn test_expression_simplification_multiply_by_zero() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Multiply,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Integer(0))));
+    }
+
+    #[test]
+    fn test_expression_simplification_plus_zero() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: Operator::Plus,
+            right: Box::new(Expr::Literal(Value::Integer(0))),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_or_false_right() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(false))),
+            op: Operator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expression_simplification_and_false_right() {
+        let rule = ExpressionSimplification::new();
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal(Value::Boolean(false))),
+            op: Operator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let simplified = rule.simplify_expr(&expr);
+        assert!(matches!(simplified, Expr::Literal(Value::Boolean(false))));
+    }
+
+    #[test]
+    fn test_constant_folding_apply_empty_relation() {
+        let rule = ConstantFolding::new();
+        let mut plan = Plan::EmptyRelation;
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_apply_table_scan() {
+        let rule = ConstantFolding::new();
+        let mut plan = Plan::TableScan {
+            table_name: "t".to_string(),
+            projection: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_apply_with_columns() {
+        let mut plan = Plan::Projection {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Column("a".to_string())),
+                op: Operator::Plus,
+                right: Box::new(Expr::Column("b".to_string())),
+            }],
+            input: Box::new(Plan::EmptyRelation),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_projection_pruning_apply_with_join() {
+        let rule = ProjectionPruning::new();
+        let mut plan = Plan::Join {
+            left: Box::new(Plan::TableScan {
+                table_name: "a".to_string(),
+                projection: None,
+            }),
+            right: Box::new(Plan::TableScan {
+                table_name: "b".to_string(),
+                projection: None,
+            }),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply_with_aggregate() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Aggregate {
+            group_by: vec![],
+            aggregates: vec![],
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply_with_limit() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Limit {
+            limit: 10,
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_apply_with_sort() {
+        let rule = PredicatePushdown::new();
+        let mut plan = Plan::Sort {
+            expr: vec![],
+            input: Box::new(Plan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
 }
