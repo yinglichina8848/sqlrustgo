@@ -16,7 +16,19 @@ def load_json(path):
         return json.load(f)
 
 
+def get_metric(metrics, key):
+    """Get metric value, treating null as 0."""
+    val = metrics.get(key)
+    return 0 if val is None else val
+
+
 def compare_metric(name, baseline_val, current_val):
+    # Handle None/null values - treat null as 0
+    if baseline_val is None:
+        baseline_val = 0
+    if current_val is None:
+        current_val = 0
+
     if baseline_val == 0:
         if current_val == 0:
             return True, 0.0
@@ -61,8 +73,8 @@ def main():
         # Compare QPS
         passed, change = compare_metric(
             "QPS",
-            baseline.get("metrics", {}).get("qps", 0),
-            current.get("metrics", {}).get("qps", 0),
+            get_metric(baseline.get("metrics", {}), "qps"),
+            get_metric(current.get("metrics", {}), "qps"),
         )
         status = "PASS" if passed else "FAIL"
         print(f"{result_file.name} QPS: {change:+.1f}% [{status}]")
@@ -73,8 +85,8 @@ def main():
         # Compare P50
         passed, change = compare_metric(
             "P50",
-            baseline.get("metrics", {}).get("p50_ms", 0),
-            current.get("metrics", {}).get("p50_ms", 0),
+            get_metric(baseline.get("metrics", {}), "p50_ms"),
+            get_metric(current.get("metrics", {}), "p50_ms"),
         )
         status = "PASS" if passed else "FAIL"
         print(f"{result_file.name} P50: {change:+.1f}% [{status}]")
