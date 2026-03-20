@@ -205,11 +205,13 @@ pub struct WalWriter {
     lsn: u64,
 }
 
+const WAL_BUFFER_SIZE: usize = 256 * 1024; // 256KB buffer
+
 impl WalWriter {
     /// Create a new WAL writer
     pub fn new(path: &PathBuf) -> std::io::Result<Self> {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
-        let writer = BufWriter::new(file);
+        let writer = BufWriter::with_capacity(WAL_BUFFER_SIZE, file);
 
         Ok(Self { writer, lsn: 0 })
     }

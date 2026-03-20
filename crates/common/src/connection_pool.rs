@@ -7,7 +7,7 @@ pub struct PoolConfig {
 impl Default for PoolConfig {
     fn default() -> Self {
         Self {
-            size: num_cpus::get(),
+            size: 50,
             timeout_ms: 5000,
         }
     }
