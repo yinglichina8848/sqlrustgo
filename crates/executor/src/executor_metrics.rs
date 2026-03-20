@@ -269,4 +269,70 @@ mod tests {
         }
         assert_eq!(metrics.queries_total(), 1);
     }
+
+    #[test]
+    fn test_executor_metrics_query_duration_ns() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 5);
+        assert_eq!(metrics.query_duration_ns(), 5000000);
+    }
+
+    #[test]
+    fn test_executor_metrics_query_duration_ms() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 5);
+        assert_eq!(metrics.query_duration_ms(), 5);
+    }
+
+    #[test]
+    fn test_executor_metrics_execution_count() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_query("INSERT", 100);
+        assert_eq!(metrics.execution_count(), 2);
+    }
+
+    #[test]
+    fn test_executor_metrics_queries_by_type() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_query("SELECT", 100);
+        metrics.record_query("INSERT", 50);
+        assert_eq!(metrics.queries_by_type("SELECT"), 2);
+        assert_eq!(metrics.queries_by_type("INSERT"), 1);
+        assert_eq!(metrics.queries_by_type("UNKNOWN"), 0);
+    }
+
+    #[test]
+    fn test_executor_metrics_avg_query_duration_ms() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 2);
+        metrics.record_query("SELECT", 4);
+        assert_eq!(metrics.avg_query_duration_ms(), 3);
+    }
+
+    #[test]
+    fn test_executor_metrics_avg_query_duration_ms_zero() {
+        let metrics = ExecutorMetrics::new();
+        assert_eq!(metrics.avg_query_duration_ms(), 0);
+    }
+
+    #[test]
+    fn test_executor_metrics_success_rate_zero() {
+        let metrics = ExecutorMetrics::new();
+        assert_eq!(metrics.success_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_executor_metrics_all_types() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_query("INSERT", 100);
+        metrics.record_query("UPDATE", 100);
+        metrics.record_query("DELETE", 100);
+        assert_eq!(metrics.queries_by_type("SELECT"), 1);
+        assert_eq!(metrics.queries_by_type("INSERT"), 1);
+        assert_eq!(metrics.queries_by_type("UPDATE"), 1);
+        assert_eq!(metrics.queries_by_type("DELETE"), 1);
+    }
 }
