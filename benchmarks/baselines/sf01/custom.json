@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-03-20T15:19:48.720600+00:00",
+  "version": "1.6.0",
+  "workload": "custom",
+  "config": {
+    "file": "/dev/null",
+    "iterations": 1,
+    "parallel": 1,
+    "query_count": 0
+  },
+  "metrics": {
+    "total_time_ms": 0,
+    "iterations": 0,
+    "avg_latency_ms": 0.0,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "min_ms": 0.0,
+    "max_ms": 0.0,
+    "qps": 0.0
+  },
+  "queries": []
+}
