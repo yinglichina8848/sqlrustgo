@@ -5,6 +5,8 @@ use sqlrustgo::{parse, ExecutionEngine, StorageEngine};
 use std::sync::Arc;
 use std::time::Instant;
 
+pub const MAX_MEMORY_MB: u64 = 4096;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScaleFactor {
     SF01,
@@ -23,6 +25,21 @@ impl ScaleFactor {
         match self {
             ScaleFactor::SF01 => "0.1",
             ScaleFactor::SF1 => "1",
+        }
+    }
+
+    pub fn safe_default() -> Self {
+        ScaleFactor::SF01
+    }
+
+    pub fn is_safe(&self) -> bool {
+        self.estimate_memory_mb() <= MAX_MEMORY_MB
+    }
+
+    pub fn estimate_memory_mb(&self) -> u64 {
+        match self {
+            ScaleFactor::SF01 => 512,
+            ScaleFactor::SF1 => 4096,
         }
     }
 }
