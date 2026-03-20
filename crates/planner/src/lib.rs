@@ -13,15 +13,16 @@ pub mod planner;
 // pub mod cost;
 // pub mod executor;
 
-pub use logical_plan::LogicalPlan;
+pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
     AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec,
-    OperatorMetrics, PhysicalPlan, ProjectionExec, SeqScanExec, SortMergeJoinExec,
+    OperatorMetrics, PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec,
+    SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_types::Value;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -177,36 +178,6 @@ impl Expr {
             value.to_bool()
         } else {
             false
-        }
-    }
-
-    pub fn validate_columns(&self, schema: &Schema, location: &str) -> SqlResult<()> {
-        match self {
-            Expr::Column(col) => {
-                if schema.field_index(&col.name).is_none() {
-                    return Err(SqlError::ColumnNotFound {
-                        column: col.name.clone(),
-                        location: location.to_string(),
-                    });
-                }
-                Ok(())
-            }
-            Expr::Literal(_) => Ok(()),
-            Expr::BinaryExpr { left, right, .. } => {
-                left.validate_columns(schema, location)?;
-                right.validate_columns(schema, location)?;
-                Ok(())
-            }
-            Expr::UnaryExpr { expr, .. } => expr.validate_columns(schema, location),
-            Expr::AggregateFunction { args, .. } => {
-                for arg in args {
-                    arg.validate_columns(schema, location)?;
-                }
-                Ok(())
-            }
-            Expr::Alias { expr, .. } => expr.validate_columns(schema, location),
-            Expr::Wildcard => Ok(()),
-            Expr::QualifiedWildcard { .. } => Ok(()),
         }
     }
 }
