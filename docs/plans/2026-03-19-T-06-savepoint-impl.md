@@ -1,5 +1,10 @@
 # T-06 SAVEPOINT 实现计划
 
+> **状态**: ✅ 已完成
+> **Issue**: #642
+> **PR**: #642
+> **完成日期**: 2026-03-20
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 实现事务内保存点支持，允许部分回滚
