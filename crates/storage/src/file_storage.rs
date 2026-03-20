@@ -414,11 +414,13 @@ mod tests {
                             name: "id".to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
+                            is_unique: false,
                         },
                         ColumnDefinition {
                             name: "value".to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
+                            is_unique: false,
                         },
                     ],
                 },
@@ -480,6 +482,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -520,6 +523,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -555,6 +559,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -591,11 +596,13 @@ mod tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
                     },
                     ColumnDefinition {
                         name: "value".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
                     },
                 ],
             },
@@ -670,6 +677,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -714,6 +722,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -749,6 +758,7 @@ mod tests {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
@@ -814,6 +824,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -847,6 +858,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             },
             rows: vec![],
@@ -918,6 +930,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -1096,7 +1109,9 @@ impl StorageEngine for FileStorage {
     fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
         self.get_table(table)
             .map(|t| t.info.clone())
-            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -1116,7 +1131,9 @@ impl StorageEngine for FileStorage {
         let table = self
             .tables
             .get(table_name)
-            .ok_or_else(|| SqlError::TableNotFound(table_name.to_string()))?;
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table_name.to_string(),
+            })?;
 
         let mut index = BPlusTree::new();
         for (row_id, row) in table.rows.iter().enumerate() {
@@ -1183,6 +1200,7 @@ mod storage_engine_tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
                     }],
                 },
                 rows: vec![],
@@ -1273,6 +1291,7 @@ mod storage_engine_tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
                     }],
                 },
                 rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
@@ -1305,6 +1324,7 @@ mod storage_engine_tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
                     }],
                 },
                 rows: vec![vec![Value::Integer(1)]],

@@ -198,6 +198,10 @@ impl<'a> LocalExecutor<'a> {
         let input_schema = children[0].schema();
         let _output_schema = plan.schema();
 
+        for expr in &projection {
+            expr.validate_columns(input_schema, "select")?;
+        }
+
         let projected_rows: Vec<Vec<Value>> = child_result
             .rows
             .iter()
@@ -234,6 +238,8 @@ impl<'a> LocalExecutor<'a> {
         };
 
         let input_schema = children[0].schema();
+
+        predicate.validate_columns(input_schema, "where")?;
 
         // Filter rows based on predicate
         let filtered_rows: Vec<Vec<Value>> = child_result
