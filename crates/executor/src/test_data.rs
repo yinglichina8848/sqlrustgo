@@ -484,4 +484,42 @@ mod tests {
         let data = TestDataSet::aggregate_test_data();
         assert_eq!(data.len(), 5);
     }
+
+    #[test]
+    fn test_test_data_generator_with_float() {
+        let mut gen = TestDataGenerator::new(42);
+        let schema = Schema::new(vec![Field::new("price".to_string(), DataType::Float)]);
+        let value = gen.generate_value(&DataType::Float);
+        assert!(matches!(value, Value::Float(_)));
+    }
+
+    #[test]
+    fn test_test_data_generator_with_boolean() {
+        let mut gen = TestDataGenerator::new(42);
+        let value = gen.generate_value(&DataType::Boolean);
+        assert!(matches!(value, Value::Boolean(_)));
+    }
+
+    #[test]
+    fn test_test_data_generator_with_null() {
+        let mut gen = TestDataGenerator::new(42);
+        let value = gen.generate_value(&DataType::Null);
+        assert!(matches!(value, Value::Null));
+    }
+
+    #[test]
+    fn test_test_data_generator_unknown_type() {
+        let mut gen = TestDataGenerator::new(42);
+        let value = gen.generate_value(&DataType::Decimal);
+        assert!(matches!(value, Value::Null));
+    }
+
+    #[test]
+    fn test_test_data_generator_sequential_integers() {
+        let mut gen = TestDataGenerator::new(42);
+        let ints = gen.generate_sequential_integers(10, 5);
+        assert_eq!(ints.len(), 5);
+        assert_eq!(ints[0], Value::Integer(10));
+        assert_eq!(ints[4], Value::Integer(14));
+    }
 }

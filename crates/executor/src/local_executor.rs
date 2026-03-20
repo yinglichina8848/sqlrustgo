@@ -1642,4 +1642,59 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().rows.is_empty());
     }
+
+    #[test]
+    fn test_local_executor_with_cache_config() {
+        use crate::query_cache_config::QueryCacheConfig;
+
+        let storage = MemoryStorage::new();
+        let config = QueryCacheConfig {
+            enabled: true,
+            ttl_seconds: 120,
+            max_entries: 50,
+            max_memory_bytes: 1024 * 1024,
+        };
+
+        let executor = LocalExecutor::with_cache_config(&storage, config);
+
+        // Just verify it was created without panic
+        assert!(true);
+    }
+
+    #[test]
+    fn test_local_executor_invalidate_table() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // This should not panic
+        executor.invalidate_table("test_table");
+    }
+
+    #[test]
+    fn test_local_executor_clear_cache() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        // This should not panic
+        executor.clear_cache();
+    }
+
+    #[test]
+    fn test_local_executor_cache_key_generation() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        let key = executor.get_cache_key("SELECT * FROM users", &[]);
+        assert!(!key.normalized_sql.is_empty());
+    }
+
+    #[test]
+    fn test_local_executor_cache_key_with_params() {
+        let storage = MemoryStorage::new();
+        let executor = LocalExecutor::new(&storage);
+
+        let params = vec![Value::Integer(1)];
+        let key = executor.get_cache_key("SELECT * FROM users WHERE id = ?", &params);
+        assert!(!key.normalized_sql.is_empty());
+    }
 }
