@@ -34,12 +34,32 @@
 | AVG | 1.10 µs | ~910K ops/s | ✅ |
 | COUNT | 2.38 µs | ~420K ops/s | ✅ |
 
-### 1.4 Beta 阶段结论
+### 1.4 SQLite 对比验证
+
+| 系统 | Q1 | Q6 | 对比 |
+|------|-----|-----|------|
+| SQLRustGo | 5.36 ms | 8.08 ms | 基准 |
+| SQLite | 16 ms | 17 ms | 慢 2-3x |
+
+**结论**: SQLRustGo 比 SQLite 快约 **2-3 倍** ✅
+
+### 1.5 PostgreSQL 对比验证
+
+| 系统 | Q1 | Q6 | 状态 |
+|------|-----|-----|------|
+| SQLRustGo | 5.36 ms | 8.08 ms | 已测试 |
+| PostgreSQL | N/A | N/A | ⚠️ 需手动测试 |
+
+详见: [POSTGRESQL_BENCHMARK_GUIDE.md](./POSTGRESQL_BENCHMARK_GUIDE.md)
+
+### 1.6 Beta 阶段结论
 
 - [x] 覆盖率达标 (73.85% > 65%)
 - [x] TPC-H 查询全部通过
 - [x] 聚合操作性能优秀
+- [x] SQLite 对比完成 (快 2-3x)
 - [x] 系统稳定无崩溃
+- [ ] PostgreSQL 对比 (需手动)
 
 ---
 
