@@ -31,7 +31,7 @@ pub async fn create_db(name: &str, config: &DbConfig) -> Result<Arc<dyn Database
             Ok(Arc::new(sqlrustgo::SqlRustGoDB::new(&config.sqlrustgo_addr).await?))
         }
         "postgres" | "postgresql" => {
-            Ok(Arc::new(postgres::PostgresDB::new(&config.pg_conn).await?))
+            Ok(Arc::new(postgres::PostgresDB::new(&config.pg_conn, config.scale).await?))
         }
         "sqlite" => {
             Ok(Arc::new(sqlite::SqliteDB::new(&config.sqlite_path, config.scale).await?))

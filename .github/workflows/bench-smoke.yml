@@ -1,0 +1,75 @@
+name: Benchmark Smoke Test
+
+on:
+  push:
+    branches: [develop, release/**]
+  pull_request:
+    branches: [develop, release/**]
+  workflow_dispatch:
+
+jobs:
+  bench-smoke:
+    name: Benchmark Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build bench CLI
+        run: cargo build -p sqlrustgo-bench --release
+
+      - name: Run SQLite benchmark smoke test
+        run: |
+          # Run lightweight benchmark (10s, 2 threads)
+          timeout 30s ./target/release/sqlrustgo-bench \
+            --db sqlite \
+            --workload oltp \
+            --threads 2 \
+            --duration 10 \
+            --scale 1000 \
+            --sqlite-path /tmp/bench_smoke.db \
+            --output json > bench_result.json
+
+      - name: Verify benchmark output
+        run: |
+          # Verify JSON output contains required fields
+          cat bench_result.json
+          jq -e '.tps' bench_result.json
+          jq -e '.latency.p50' bench_result.json
+          jq -e '.latency.p99' bench_result.json
+          echo "✅ Benchmark output format verified"
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: bench_result.json
+          retention-days: 7
+
+      - name: Run SQLite benchmark with cache enabled (comparison)
+        run: |
+          timeout 30s ./target/release/sqlrustgo-bench \
+            --db sqlite \
+            --workload oltp \
+            --threads 2 \
+            --duration 10 \
+            --scale 1000 \
+            --enable-cache \
+            --sqlite-path /tmp/bench_cache.db \
+            --output json > bench_with_cache.json || true
+
+      - name: Upload cache comparison results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-cache-comparison
+          path: bench_with_cache.json
+          retention-days: 7

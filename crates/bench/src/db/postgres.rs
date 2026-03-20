@@ -13,8 +13,8 @@ pub struct PostgresDB {
 
 impl PostgresDB {
     /// Create a new PostgreSQL adapter
-    pub async fn new(conn_str: &str) -> anyhow::Result<Self> {
-        let (client, connection) = tokio_postgres::connect(conn_str, NoTls).await?;
+    pub async fn new(conn_str: &str, scale: usize) -> anyhow::Result<Self> {
+        let (mut client, connection) = tokio_postgres::connect(conn_str, NoTls).await?;
 
         // Spawn connection driver
         tokio::spawn(async move {
@@ -22,6 +22,25 @@ impl PostgresDB {
                 tracing::error!("PostgreSQL connection error: {}", e);
             }
         });
+
+        // Create table if not exists
+        client
+            .execute(
+                "CREATE TABLE IF NOT EXISTS accounts (id SERIAL PRIMARY KEY, balance INTEGER NOT NULL)",
+                &[],
+            )
+            .await?;
+
+        // Insert initial data (use ON CONFLICT DO NOTHING for idempotency)
+        let tx = client.transaction().await?;
+        for i in 0..scale as i32 {
+            tx.execute(
+                "INSERT INTO accounts (id, balance) VALUES ($1, 100) ON CONFLICT DO NOTHING",
+                &[&i],
+            )
+            .await?;
+        }
+        tx.commit().await?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
