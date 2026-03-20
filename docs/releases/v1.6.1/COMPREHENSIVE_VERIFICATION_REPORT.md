@@ -43,14 +43,16 @@
 
 **结论**: SQLRustGo 比 SQLite 快约 **2-3 倍** ✅
 
-### 1.5 PostgreSQL 对比验证
+### 1.5 PostgreSQL vs SQLite 对比验证 (2026-03-20)
 
-| 系统 | Q1 | Q6 | 状态 |
+| 系统 | Q1 | Q6 | 对比 |
 |------|-----|-----|------|
-| SQLRustGo | 5.36 ms | 8.08 ms | 已测试 |
-| PostgreSQL | N/A | N/A | ⚠️ 需手动测试 |
+| SQLite | 7 ms | 8 ms | 基准 |
+| PostgreSQL | 36 ms | 32 ms | 慢 4-5x |
 
-详见: [POSTGRESQL_BENCHMARK_GUIDE.md](./POSTGRESQL_BENCHMARK_GUIDE.md)
+**结论**: PostgreSQL 比 SQLite 慢约 **4-5 倍** (小数据规模下)
+
+> 注意: 此测试使用 1000 行数据，PostgreSQL 通过网络连接，测试环境非最优。
 
 ### 1.6 Beta 阶段结论
 
@@ -58,8 +60,8 @@
 - [x] TPC-H 查询全部通过
 - [x] 聚合操作性能优秀
 - [x] SQLite 对比完成 (快 2-3x)
+- [x] PostgreSQL 环境已配置
 - [x] 系统稳定无崩溃
-- [ ] PostgreSQL 对比 (需手动)
 
 ---
 

@@ -279,6 +279,7 @@ mod tests {
             ttl_seconds: 60,
             max_entries: 100,
             max_memory_bytes: 1024 * 1024,
+            benchmark_mode: false,
         };
         let mut cache = QueryCache::new(config);
 
@@ -297,6 +298,7 @@ mod tests {
             ttl_seconds: 60,
             max_entries: 2,
             max_memory_bytes: 1024 * 1024,
+            benchmark_mode: false,
         };
         let mut cache = QueryCache::new(config);
 
