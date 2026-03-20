@@ -28,6 +28,7 @@ jobs:
       - name: Run SQLite benchmark smoke test
         run: |
           # Run lightweight benchmark (10s, 2 threads)
+          # Extract JSON from output (between === JSON OUTPUT === and === ANALYSIS === markers)
           timeout 30s ./target/release/sqlrustgo-bench \
             --db sqlite \
             --workload oltp \
@@ -35,7 +36,7 @@ jobs:
             --duration 10 \
             --scale 1000 \
             --sqlite-path /tmp/bench_smoke.db \
-            --output json > bench_result.json
+            --output json 2>&1 | sed -n '/=== JSON OUTPUT ===/,/=== ANALYSIS ===/p' | sed '1d;$d' > bench_result.json
 
       - name: Verify benchmark output
         run: |
@@ -64,7 +65,7 @@ jobs:
             --scale 1000 \
             --enable-cache \
             --sqlite-path /tmp/bench_cache.db \
-            --output json > bench_with_cache.json || true
+            --output json 2>&1 | sed -n '/=== JSON OUTPUT ===/,/=== ANALYSIS ===/p' | sed '1d;$d' > bench_with_cache.json || true
 
       - name: Upload cache comparison results
         uses: actions/upload-artifact@v4
