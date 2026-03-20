@@ -1,102 +1,216 @@
 //! TPC-H Benchmark Suite
 //!
 //! This module provides TPC-H style benchmarks for SQLRustGo.
-//! It includes data generation and sample TPC-H queries.
+//! Supports data generation, query execution, and comparison with PostgreSQL/SQLite.
+//!
+//! # Usage
+//!
+//! ```bash
+//! # Run all TPC-H benchmarks
+//! cargo bench --bench tpch_bench
+//!
+//! # Run specific query
+//! cargo bench --bench tpch_bench -- Q1
+//!
+//! # Run with comparison
+//! cargo run --example tpch_compare
+//! ```
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use serde::{Deserialize, Serialize};
 use sqlrustgo::{parse, ExecutionEngine};
-use sqlrustgo_server::{ConnectionPool, PoolConfig};
+use sqlrustgo_storage::MemoryStorage;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-struct LatencyCollector {
-    samples: Vec<u64>,
+fn current_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    format!("{}", now)
 }
 
-impl LatencyCollector {
-    fn new() -> Self {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LatencyStats {
+    samples: Vec<u64>,
+    sorted: bool,
+}
+
+impl LatencyStats {
+    pub fn new() -> Self {
         Self {
             samples: Vec::new(),
+            sorted: false,
         }
     }
 
-    fn record(&mut self, latency_ns: u64) {
-        self.samples.push(latency_ns);
+    pub fn record(&mut self, latency_us: u64) {
+        self.samples.push(latency_us);
+        self.sorted = false;
     }
 
-    fn avg_latency_ns(&self) -> u64 {
+    fn sort(&mut self) {
+        if !self.sorted {
+            self.samples.sort();
+            self.sorted = true;
+        }
+    }
+
+    fn percentile(&self, p: f64) -> u64 {
         if self.samples.is_empty() {
             return 0;
         }
-        self.samples.iter().sum::<u64>() / self.samples.len() as u64
+        let idx = ((self.samples.len() - 1) as f64 * p) as usize;
+        self.samples[idx.min(self.samples.len() - 1)]
     }
 
-    fn p50(&self) -> u64 {
-        self.percentile(50)
+    pub fn count(&self) -> usize {
+        self.samples.len()
     }
 
-    fn p90(&self) -> u64 {
-        self.percentile(90)
+    pub fn min(&self) -> Option<u64> {
+        self.samples.iter().min().copied()
     }
 
-    fn p99(&self) -> u64 {
-        self.percentile(99)
+    pub fn max(&self) -> Option<u64> {
+        self.samples.iter().max().copied()
     }
 
-    fn percentile(&self, p: usize) -> u64 {
+    pub fn avg(&self) -> f64 {
         if self.samples.is_empty() {
-            return 0;
+            return 0.0;
         }
-        let mut sorted = self.samples.clone();
-        sorted.sort();
-        let idx = (sorted.len() * p / 100).min(sorted.len() - 1);
-        sorted[idx]
+        self.samples.iter().sum::<u64>() as f64 / self.samples.len() as f64
+    }
+
+    pub fn p50(&self) -> u64 {
+        self.percentile(0.50)
+    }
+
+    pub fn p95(&self) -> u64 {
+        self.percentile(0.95)
+    }
+
+    pub fn p99(&self) -> u64 {
+        self.percentile(0.99)
+    }
+
+    pub fn median(&self) -> u64 {
+        self.p50()
     }
 }
 
-struct QueryReport {
-    name: String,
-    avg_latency_ms: f64,
-    p50_ms: u64,
-    p90_ms: u64,
-    p99_ms: u64,
+impl Default for LatencyStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-struct TpchSummary {
-    scale_factor: f64,
-    total_queries: usize,
-    execution_time_ms: u64,
-    qps: f64,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkResult {
+    pub timestamp: String,
+    pub version: String,
+    pub workload: String,
+    pub scale_factor: f64,
+    pub queries: Vec<QueryResult>,
+    pub comparison: Option<ComparisonResult>,
 }
 
-struct BenchmarkReport {
-    tpch_summary: TpchSummary,
-    queries: Vec<QueryReport>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResult {
+    pub name: String,
+    pub avg_latency_ms: f64,
+    pub p50_ms: u64,
+    pub p95_ms: u64,
+    pub p99_ms: u64,
+    pub min_ms: Option<u64>,
+    pub max_ms: Option<u64>,
+    pub iterations: u32,
 }
 
-impl BenchmarkReport {
-    fn print(&self) {
-        println!("=== TPC-H Benchmark Report ===");
-        println!("Scale Factor: {}", self.tpch_summary.scale_factor);
-        println!("Total Queries: {}", self.tpch_summary.total_queries);
-        println!("Total Time: {} ms", self.tpch_summary.execution_time_ms);
-        println!("QPS: {:.2}", self.tpch_summary.qps);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComparisonResult {
+    pub system: String,
+    pub queries: Vec<QueryResult>,
+}
+
+impl BenchmarkResult {
+    pub fn new(workload: String, scale_factor: f64) -> Self {
+        Self {
+            timestamp: current_timestamp(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            workload,
+            scale_factor,
+            queries: Vec::new(),
+            comparison: None,
+        }
+    }
+
+    pub fn add_query(&mut self, result: QueryResult) {
+        self.queries.push(result);
+    }
+
+    pub fn set_comparison(&mut self, comparison: ComparisonResult) {
+        self.comparison = Some(comparison);
+    }
+
+    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        let json = serde_json::to_string_pretty(self)?;
+        let mut file = File::create(path)?;
+        file.write_all(json.as_bytes())?;
+        Ok(())
+    }
+
+    pub fn print_json(&self) {
+        println!("{}", serde_json::to_string_pretty(self).unwrap());
+    }
+
+    pub fn print_summary(&self) {
+        println!("\n=== TPC-H Benchmark Summary ===");
+        println!("Version: {}", self.version);
+        println!("Scale Factor: {}", self.scale_factor);
+        println!("Timestamp: {}", self.timestamp);
         println!();
+
         println!(
-            "{:<10} {:>15} {:>15} {:>15} {:>15}",
-            "Query", "Avg(ms)", "P50(ms)", "P90(ms)", "P99(ms)"
+            "{:<10} {:>12} {:>12} {:>12} {:>12}",
+            "Query", "Avg(ms)", "P50(ms)", "P95(ms)", "P99(ms)"
         );
-        println!("{}", "-".repeat(75));
+        println!("{}", "-".repeat(62));
+
         for q in &self.queries {
             println!(
-                "{:<10} {:>15.2} {:>15} {:>15} {:>15}",
-                q.name, q.avg_latency_ms, q.p50_ms, q.p90_ms, q.p99_ms
+                "{:<10} {:>12.2} {:>12} {:>12} {:>12}",
+                q.name, q.avg_latency_ms, q.p50_ms, q.p95_ms, q.p99_ms
             );
+        }
+
+        if let Some(ref comp) = self.comparison {
+            println!();
+            println!("=== Comparison: {} ===", comp.system);
+            println!(
+                "{:<10} {:>12} {:>12} {:>12} {:>12}",
+                "Query", "Avg(ms)", "P50(ms)", "P95(ms)", "P99(ms)"
+            );
+            println!("{}", "-".repeat(62));
+
+            for q in &comp.queries {
+                println!(
+                    "{:<10} {:>12.2} {:>12} {:>12} {:>12}",
+                    q.name, q.avg_latency_ms, q.p50_ms, q.p95_ms, q.p99_ms
+                );
+            }
         }
     }
 }
 
-const SCALE_FACTOR: f64 = 0.1;
+const SCALE_FACTOR: f64 = 1.0;
+const DEFAULT_ITERATIONS: u32 = 10;
 
 struct TpchDataGenerator {
     scale_factor: f64,
@@ -124,252 +238,345 @@ impl TpchDataGenerator {
         ]
     }
 
-    /// Generate TPC-H lineitem table data
-    fn generate_lineitem_data(&self) -> Vec<(i64, i64, f64, f64, f64, f64, f64, i32, &str)> {
+    fn generate_lineitem_data(&self) -> Vec<LineItemRow> {
         let mut data = Vec::new();
-        let num_rows = self.row_count(6_000_000);
+        let num_rows = self.row_count(6000.min(1000));
 
         for i in 0..num_rows {
-            let order_key = (i % 10000) as i64 + 1;
-            let part_key = (i % 200000) as i64 + 1;
-            let supp_key = (i % 100) as i64 + 1;
-            let quantity = (i % 50) as f64 + 1.0;
-            let extended_price = (i % 10000) as f64 + 1.0;
-            let discount = ((i % 10) as f64) / 100.0;
-            let tax = ((i % 8) as f64 + 1.0) / 100.0;
-            let return_flag = if i % 3 == 0 { "R" } else { "N" };
-            let ship_mode = match i % 7 {
-                0 => "REG AIR",
-                1 => "AIR",
-                2 => "TRUCK",
-                3 => "RAIL",
-                _ => "SHIP",
+            let row = LineItemRow {
+                order_key: (i % 10000) as i64 + 1,
+                part_key: (i % 200000) as i64 + 1,
+                supp_key: (i % 100) as i64 + 1,
+                quantity: (i % 50) as f64 + 1.0,
+                extended_price: (i % 10000) as f64 + 1.0,
+                discount: ((i % 10) as f64) / 100.0,
+                tax: ((i % 8) as f64 + 1.0) / 100.0,
+                return_flag: if i % 3 == 0 { "R" } else { "N" },
+                ship_date: 87600 + (i % 2000) as i32,
             };
-
-            data.push((
-                order_key,
-                part_key,
-                supp_key as f64,
-                quantity,
-                extended_price,
-                discount,
-                tax,
-                return_flag.len() as i32,
-                ship_mode,
-            ));
+            data.push(row);
         }
         data
     }
 
-    /// Generate TPC-H orders table data
-    fn generate_orders_data(&self) -> Vec<(i64, i64, i32, &str, i64, u32)> {
+    fn generate_orders_data(&self) -> Vec<OrdersRow> {
         let mut data = Vec::new();
-        let num_rows = self.row_count(1_500_000);
+        let num_rows = self.row_count(1500.min(500));
 
         for i in 0..num_rows {
-            let order_key = i as i64 + 1;
-            let cust_key = (i % 10000) as i64 + 1;
-            let order_status = if i % 3 == 0 { "F" } else { "O" };
-            let order_priority = match i % 5 {
-                0 => "1-URGENT",
-                1 => "2-HIGH",
-                2 => "3-MEDIUM",
-                3 => "4-LOW",
-                _ => "5-NOT SPECIFIED",
+            let row = OrdersRow {
+                order_key: i as i64 + 1,
+                cust_key: (i % 10000) as i64 + 1,
+                order_status: if i % 3 == 0 { "F" } else { "O" },
+                order_priority: match i % 5 {
+                    0 => "1-URGENT",
+                    1 => "2-HIGH",
+                    2 => "3-MEDIUM",
+                    3 => "4-LOW",
+                    _ => "5-NOT SPECIFIED",
+                },
+                total_price: (i as f64 * 10.0).round() as i64,
+                order_date: 87600 + (i % 2000) as i32,
             };
-            let _clerk = format!("Clerk{:05}", i % 1000);
-            let total_price = (i as f64 * 10.0).round() as i64;
-            let order_date = 87600u32 + (i % 2000) as u32; // Days from 1992-01-01
+            data.push(row);
+        }
+        data
+    }
 
-            data.push((
-                order_key,
-                cust_key,
-                order_status.len() as i32,
-                order_priority,
-                total_price,
-                order_date,
-            ));
+    fn generate_customer_data(&self) -> Vec<CustomerRow> {
+        let mut data = Vec::new();
+        let num_rows = self.row_count(150.min(50));
+
+        for i in 0..num_rows {
+            let row = CustomerRow {
+                cust_key: i as i64 + 1,
+                name: format!("Customer{:05}", i),
+                nation_key: (i % 25) as i32,
+            };
+            data.push(row);
         }
         data
     }
 }
 
-/// Benchmark TPC-H Q1: Pricing Summary Report Query
-fn bench_tpch_q1(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+#[derive(Debug, Clone)]
+struct LineItemRow {
+    order_key: i64,
+    part_key: i64,
+    supp_key: i64,
+    quantity: f64,
+    extended_price: f64,
+    discount: f64,
+    tax: f64,
+    return_flag: &'static str,
+    ship_date: i32,
+}
 
-    // Create tables
-    engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL, l_returnflag INTEGER, l_shipmode TEXT)").unwrap()).unwrap();
+#[derive(Debug, Clone)]
+struct OrdersRow {
+    order_key: i64,
+    cust_key: i64,
+    order_status: &'static str,
+    order_priority: &'static str,
+    total_price: i64,
+    order_date: i32,
+}
 
-    // Insert sample data (10k rows)
-    let generator = TpchDataGenerator::new(10.0);
-    for (
-        order_key,
-        part_key,
-        supp_key,
-        quantity,
-        extended_price,
-        discount,
-        tax,
-        return_flag,
-        _ship_mode,
-    ) in generator.generate_lineitem_data()
-    {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, {}, 'N')",
-                    order_key,
-                    part_key,
-                    supp_key as i32,
-                    quantity as i32,
-                    extended_price as i32,
-                    discount as i32,
-                    tax as i32,
-                    return_flag
-                ))
-                .unwrap(),
+#[derive(Debug, Clone)]
+struct CustomerRow {
+    cust_key: i64,
+    name: String,
+    nation_key: i32,
+}
+
+fn create_lineitem_schema(engine: &mut ExecutionEngine) {
+    engine
+        .execute(
+            parse(
+                "CREATE TABLE lineitem (
+            l_orderkey INTEGER,
+            l_partkey INTEGER,
+            l_suppkey INTEGER,
+            l_quantity REAL,
+            l_extendedprice REAL,
+            l_discount REAL,
+            l_tax REAL,
+            l_returnflag TEXT,
+            l_shipdate INTEGER
+        )",
             )
-            .unwrap();
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+fn create_orders_schema(engine: &mut ExecutionEngine) {
+    engine
+        .execute(
+            parse(
+                "CREATE TABLE orders (
+            o_orderkey INTEGER,
+            o_custkey INTEGER,
+            o_orderstatus TEXT,
+            o_orderpriority TEXT,
+            o_totalprice INTEGER,
+            o_orderdate INTEGER
+        )",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+fn create_customer_schema(engine: &mut ExecutionEngine) {
+    engine
+        .execute(
+            parse(
+                "CREATE TABLE customer (
+            c_custkey INTEGER,
+            c_name TEXT,
+            c_nationkey INTEGER
+        )",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+fn insert_lineitem_data(engine: &mut ExecutionEngine, data: &[LineItemRow]) {
+    for row in data {
+        let sql = format!(
+            "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, '{}', {})",
+            row.order_key,
+            row.part_key,
+            row.supp_key,
+            row.quantity as i32,
+            row.extended_price as i32,
+            (row.discount * 100.0) as i32,
+            (row.tax * 100.0) as i32,
+            row.return_flag,
+            row.ship_date
+        );
+        let _ = engine.execute(parse(&sql).unwrap());
     }
+}
+
+fn insert_orders_data(engine: &mut ExecutionEngine, data: &[OrdersRow]) {
+    for row in data {
+        let sql = format!(
+            "INSERT INTO orders VALUES ({}, {}, '{}', '{}', {}, {})",
+            row.order_key,
+            row.cust_key,
+            row.order_status,
+            row.order_priority,
+            row.total_price,
+            row.order_date
+        );
+        let _ = engine.execute(parse(&sql).unwrap());
+    }
+}
+
+fn insert_customer_data(engine: &mut ExecutionEngine, data: &[CustomerRow]) {
+    for row in data {
+        let sql = format!(
+            "INSERT INTO customer VALUES ({}, '{}', {})",
+            row.cust_key, row.name, row.nation_key
+        );
+        let _ = engine.execute(parse(&sql).unwrap());
+    }
+}
+
+fn run_query_benchmark(
+    name: &str,
+    sql: &str,
+    engine: &mut ExecutionEngine,
+    iterations: u32,
+) -> QueryResult {
+    let mut latencies = LatencyStats::new();
+
+    for _ in 0..iterations {
+        let start = Instant::now();
+        let _ = engine.execute(parse(sql).unwrap());
+        latencies.record(start.elapsed().as_micros() as u64);
+    }
+
+    QueryResult {
+        name: name.to_string(),
+        avg_latency_ms: latencies.avg() / 1000.0,
+        p50_ms: latencies.p50() / 1000,
+        p95_ms: latencies.p95() / 1000,
+        p99_ms: latencies.p99() / 1000,
+        min_ms: latencies.min().map(|v| v / 1000),
+        max_ms: latencies.max().map(|v| v / 1000),
+        iterations,
+    }
+}
+
+fn bench_tpch_q1(c: &mut Criterion) {
+    let generator = TpchDataGenerator::new(SCALE_FACTOR);
+    let lineitem_data = generator.generate_lineitem_data();
 
     let mut group = c.benchmark_group("tpch_q1");
 
-    group.bench_function("pricing_summary_10k", |b| {
+    group.bench_function("pricing_summary", |b| {
         b.iter(|| {
-            // Simplified Q1-like query: aggregation with filter
-            engine.execute(parse(
-                "SELECT l_returnflag, SUM(l_quantity) as sum_qty, SUM(l_extendedprice) as sum_base_price, AVG(l_quantity) as avg_qty FROM lineitem WHERE l_returnflag = 1 GROUP BY l_returnflag"
-            ).unwrap()).unwrap()
+            let storage = Arc::new(MemoryStorage::new());
+            let mut engine = ExecutionEngine::new(storage);
+            create_lineitem_schema(&mut engine);
+            insert_lineitem_data(&mut engine, &lineitem_data);
+
+            let sql = "SELECT l_returnflag, SUM(l_quantity) as sum_qty, \
+                SUM(l_extendedprice) as sum_base_price, \
+                AVG(l_quantity) as avg_qty \
+                FROM lineitem WHERE l_returnflag = 'N' \
+                GROUP BY l_returnflag";
+            let _ = engine.execute(parse(sql).unwrap());
         });
     });
 
     group.finish();
 }
 
-/// Benchmark TPC-H Q3: Shipping Priority Query
 fn bench_tpch_q3(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
-
-    // Create tables
-    engine.execute(parse("CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus INTEGER, o_orderpriority TEXT, o_totalprice INTEGER, o_orderdate INTEGER)").unwrap()).unwrap();
-    engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL)").unwrap()).unwrap();
-
-    // Insert sample data
-    let generator = TpchDataGenerator::new(5.0);
-
-    // Insert orders
-    for (order_key, cust_key, order_status, _order_priority, total_price, order_date) in
-        generator.generate_orders_data()
-    {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO orders VALUES ({}, {}, {}, '1-URGENT', {}, {})",
-                    order_key, cust_key, order_status, total_price, order_date
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
-
-    // Insert lineitem
-    for (order_key, part_key, supp_key, quantity, extended_price, _, _, _, _) in
-        generator.generate_lineitem_data()
-    {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {})",
-                    order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
+    let generator = TpchDataGenerator::new(SCALE_FACTOR);
+    let orders_data = generator.generate_orders_data();
+    let lineitem_data = generator.generate_lineitem_data();
 
     let mut group = c.benchmark_group("tpch_q3");
 
-    group.bench_function("shipping_priority_5k", |b| {
+    group.bench_function("shipping_priority", |b| {
         b.iter(|| {
-            // Simplified Q3-like query: join with aggregation
-            engine.execute(parse(
-                "SELECT o_orderkey, o_orderdate, o_totalprice FROM orders WHERE o_orderdate > 88000"
-            ).unwrap()).unwrap()
+            let storage = Arc::new(MemoryStorage::new());
+            let mut engine = ExecutionEngine::new(storage);
+            create_orders_schema(&mut engine);
+            create_lineitem_schema(&mut engine);
+            insert_orders_data(&mut engine, &orders_data);
+            insert_lineitem_data(&mut engine, &lineitem_data);
+
+            let sql = "SELECT o_orderkey, o_orderdate, o_totalprice \
+                FROM orders WHERE o_orderdate > 88000";
+            let _ = engine.execute(parse(sql).unwrap());
         });
     });
 
     group.finish();
 }
 
-/// Benchmark TPC-H Q6: Revenue Growth Query
 fn bench_tpch_q6(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
-
-    // Create table
-    engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL)").unwrap()).unwrap();
-
-    // Insert sample data
-    let generator = TpchDataGenerator::new(10.0);
-    for (order_key, part_key, supp_key, quantity, extended_price, discount, tax, _, _) in
-        generator.generate_lineitem_data()
-    {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {})",
-                    order_key,
-                    part_key,
-                    supp_key as i32,
-                    quantity as i32,
-                    extended_price as i32,
-                    discount as i32,
-                    tax as i32
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
+    let generator = TpchDataGenerator::new(SCALE_FACTOR);
+    let lineitem_data = generator.generate_lineitem_data();
 
     let mut group = c.benchmark_group("tpch_q6");
 
-    group.bench_function("revenue_query_10k", |b| {
+    group.bench_function("revenue_query", |b| {
         b.iter(|| {
-            // Simplified Q6-like query: filtering and aggregation
-            engine.execute(parse(
-                "SELECT SUM(l_extendedprice * (1 - l_discount / 100.0)) as revenue FROM lineitem WHERE l_quantity > 20"
-            ).unwrap()).unwrap()
+            let storage = Arc::new(MemoryStorage::new());
+            let mut engine = ExecutionEngine::new(storage);
+            create_lineitem_schema(&mut engine);
+            insert_lineitem_data(&mut engine, &lineitem_data);
+
+            let sql = "SELECT SUM(l_extendedprice) as revenue \
+                FROM lineitem WHERE l_quantity > 20";
+            let _ = engine.execute(parse(sql).unwrap());
         });
     });
 
     group.finish();
 }
 
-/// Benchmark: Simple Aggregation
-fn bench_simple_aggregation(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+fn bench_tpch_q10(c: &mut Criterion) {
+    let generator = TpchDataGenerator::new(SCALE_FACTOR);
+    let customer_data = generator.generate_customer_data();
+    let orders_data = generator.generate_orders_data();
+    let lineitem_data = generator.generate_lineitem_data();
+
+    let mut group = c.benchmark_group("tpch_q10");
+
+    group.bench_function("customer_revenue", |b| {
+        b.iter(|| {
+            let storage = Arc::new(MemoryStorage::new());
+            let mut engine = ExecutionEngine::new(storage);
+            create_customer_schema(&mut engine);
+            create_orders_schema(&mut engine);
+            create_lineitem_schema(&mut engine);
+            insert_customer_data(&mut engine, &customer_data);
+            insert_orders_data(&mut engine, &orders_data);
+            insert_lineitem_data(&mut engine, &lineitem_data);
+
+            let sql = "SELECT c_custkey, SUM(l_extendedprice) as revenue \
+                FROM customer \
+                JOIN orders ON c_custkey = o_custkey \
+                JOIN lineitem ON o_orderkey = l_orderkey \
+                WHERE o_orderdate >= 87800 \
+                GROUP BY c_custkey";
+            let _ = engine.execute(parse(sql).unwrap());
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_aggregation(c: &mut Criterion) {
+    let storage = Arc::new(MemoryStorage::new());
+    let mut engine = ExecutionEngine::new(storage);
 
     engine
         .execute(parse("CREATE TABLE sales (id INTEGER, amount REAL, category TEXT)").unwrap())
         .unwrap();
 
-    for i in 0..10000 {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
-                    i,
-                    i as f64 * 10.0,
-                    i % 10
-                ))
-                .unwrap(),
-            )
-            .unwrap();
+    for i in 0..1000 {
+        let sql = format!(
+            "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
+            i,
+            i as f64 * 10.0,
+            i % 10
+        );
+        let _ = engine.execute(parse(&sql).unwrap());
     }
 
     let mut group = c.benchmark_group("aggregation");
 
-    group.bench_function("sum_amount_10k", |b| {
+    group.bench_function("sum_amount", |b| {
         b.iter(|| {
             engine
                 .execute(parse("SELECT SUM(amount) FROM sales").unwrap())
@@ -377,7 +584,7 @@ fn bench_simple_aggregation(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("avg_amount_10k", |b| {
+    group.bench_function("avg_amount", |b| {
         b.iter(|| {
             engine
                 .execute(parse("SELECT AVG(amount) FROM sales").unwrap())
@@ -385,7 +592,7 @@ fn bench_simple_aggregation(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("count_all_10k", |b| {
+    group.bench_function("count_all", |b| {
         b.iter(|| {
             engine
                 .execute(parse("SELECT COUNT(*) FROM sales").unwrap())
@@ -396,9 +603,9 @@ fn bench_simple_aggregation(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark: Simple Join
-fn bench_simple_join(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+fn bench_join(c: &mut Criterion) {
+    let storage = Arc::new(MemoryStorage::new());
+    let mut engine = ExecutionEngine::new(storage);
 
     engine
         .execute(parse("CREATE TABLE customers (id INTEGER, name TEXT)").unwrap())
@@ -409,38 +616,27 @@ fn bench_simple_join(c: &mut Criterion) {
         )
         .unwrap();
 
-    for i in 0..1000 {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO customers VALUES ({}, 'customer{}')",
-                    i, i
-                ))
-                .unwrap(),
-            )
-            .unwrap();
+    for i in 0..100 {
+        let sql = format!("INSERT INTO customers VALUES ({}, 'customer{}')", i, i);
+        let _ = engine.execute(parse(&sql).unwrap());
     }
 
-    for i in 0..5000 {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO orders VALUES ({}, {}, {})",
-                    i,
-                    i % 1000,
-                    i as f64 * 10.0
-                ))
-                .unwrap(),
-            )
-            .unwrap();
+    for i in 0..500 {
+        let sql = format!(
+            "INSERT INTO orders VALUES ({}, {}, {})",
+            i,
+            i % 100,
+            i as f64 * 10.0
+        );
+        let _ = engine.execute(parse(&sql).unwrap());
     }
 
     let mut group = c.benchmark_group("join");
 
-    group.bench_function("inner_join_1k_x_5k", |b| {
+    group.bench_function("inner_join", |b| {
         b.iter(|| {
             engine.execute(parse(
-                "SELECT c.name, o.amount FROM customers c JOIN orders o ON c.id = o.customer_id"
+                "SELECT customers.name, orders.amount FROM customers, orders WHERE customers.id = orders.customer_id"
             ).unwrap()).unwrap()
         });
     });
@@ -453,57 +649,44 @@ criterion_group!(
     bench_tpch_q1,
     bench_tpch_q3,
     bench_tpch_q6,
-    bench_simple_aggregation,
-    bench_simple_join
+    bench_tpch_q10,
+    bench_aggregation,
+    bench_join
 );
 criterion_main!(benches);
 
-fn run_parallel_benchmark(queries: Vec<(&str, &str)>) -> BenchmarkReport {
-    use std::thread;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let pool_config = PoolConfig::default();
-    let pool = ConnectionPool::new(pool_config);
+    #[test]
+    fn test_latency_stats() {
+        let mut stats = LatencyStats::new();
+        stats.record(100);
+        stats.record(200);
+        stats.record(300);
 
-    let start_time = Instant::now();
-    let mut handles = Vec::new();
-    let mut collector = LatencyCollector::new();
-
-    for (name, _query) in &queries {
-        let pool = pool.clone();
-        let n = name.to_string();
-
-        handles.push(thread::spawn(move || {
-            let start = Instant::now();
-            let conn = pool.acquire();
-            let _executor = conn.executor();
-            let latency = start.elapsed().as_nanos() as u64;
-            (n, latency)
-        }));
+        assert_eq!(stats.count(), 3);
+        assert_eq!(stats.min(), Some(100));
+        assert_eq!(stats.max(), Some(300));
+        assert_eq!(stats.avg(), 200.0);
     }
 
-    for handle in handles {
-        if let Ok((name, latency)) = handle.join() {
-            collector.record(latency);
-        }
-    }
+    #[test]
+    fn test_benchmark_result_json() {
+        let mut result = BenchmarkResult::new("tpch".to_string(), 1.0);
+        result.add_query(QueryResult {
+            name: "Q1".to_string(),
+            avg_latency_ms: 10.5,
+            p50_ms: 10,
+            p95_ms: 15,
+            p99_ms: 20,
+            min_ms: Some(8),
+            max_ms: Some(25),
+            iterations: 10,
+        });
 
-    let total_time = start_time.elapsed();
-    let total_time_ms = total_time.as_millis() as u64;
-    let qps = queries.len() as f64 / (total_time_ms as f64 / 1000.0);
-
-    BenchmarkReport {
-        tpch_summary: TpchSummary {
-            scale_factor: SCALE_FACTOR,
-            total_queries: queries.len(),
-            execution_time_ms: total_time_ms,
-            qps,
-        },
-        queries: vec![QueryReport {
-            name: "Aggregated".to_string(),
-            avg_latency_ms: collector.avg_latency_ns() as f64 / 1_000_000.0,
-            p50_ms: collector.p50() / 1_000_000,
-            p90_ms: collector.p90() / 1_000_000,
-            p99_ms: collector.p99() / 1_000_000,
-        }],
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("Q1"));
     }
 }

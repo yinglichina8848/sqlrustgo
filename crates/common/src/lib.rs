@@ -1,6 +1,8 @@
 // SQLRustGo Common Module - Common types and errors
 
+pub mod benchmark_result;
 pub mod connection_pool;
+pub mod latency_stats;
 pub mod metrics;
 pub mod metrics_aggregator;
 pub mod network_metrics;
