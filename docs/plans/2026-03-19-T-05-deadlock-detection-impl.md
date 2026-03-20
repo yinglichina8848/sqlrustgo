@@ -1,5 +1,10 @@
 # T-05 死锁检测实现计划
 
+> **状态**: ✅ 已完成
+> **Issue**: #628
+> **PR**: #642
+> **完成日期**: 2026-03-20
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 实现死锁检测机制，防止事务无限等待
