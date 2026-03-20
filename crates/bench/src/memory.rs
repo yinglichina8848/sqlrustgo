@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Default memory limit: 10GB
-pub const DEFAULT_MEMORY_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+/// Default memory limit: 8GB
+pub const DEFAULT_MEMORY_LIMIT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 /// Get current process memory usage in bytes
 /// Returns None if the operation fails (e.g., on unsupported platforms)
@@ -61,7 +61,7 @@ impl MemoryLimiter {
         }
     }
 
-    /// Create with default 10GB limit
+    /// Create with default 8GB limit
     pub fn default_limit() -> Self {
         Self::new(DEFAULT_MEMORY_LIMIT_BYTES)
     }

@@ -19,7 +19,7 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
     // Initialize memory limiter with 10GB default limit
     let memory_limiter = MemoryLimiter::default_limit();
     tracing::info!(
-        "Memory limit: {} bytes (10 GB)",
+        "Memory limit: {} bytes (8 GB)",
         memory_limiter.limit_bytes()
     );
 
