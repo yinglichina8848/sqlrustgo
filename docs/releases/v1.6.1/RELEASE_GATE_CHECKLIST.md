@@ -566,7 +566,8 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 | Benchmark CLI | ✅ | |
 | Embedded 模式 | ✅ | |
 | TCP 模式 | ✅ | |
-| PostgreSQL 对比 | ✅ | |
+| SQLite 对比 | ✅ | 快 2-3x |
+| PostgreSQL 对比 | ⚠️ | 需手动 (见指南) |
 | P50/P95/P99 | ✅ | LatencyStats |
 | JSON 输出 | ✅ | |
 | Query Cache 关闭 | ✅ | |
@@ -579,8 +580,10 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 | 测试 | ✅ | 全部通过 |
 | 覆盖率 | ✅ | 73.85% (目标 65%) |
 | 完整报告 | ✅ | COMPREHENSIVE_VERIFICATION_REPORT.md |
+| SQLite 对比 | ✅ | 快 2-3x |
+| PostgreSQL | ⚠️ | 需手动 |
 
-### release/v1.6.1 (GA 阶段) ✅ 已完成
+### release/v1.6.1 (GA 阶段) ⚠️ 待完成
 
 | 检查项 | 状态 | 备注 |
 |--------|------|------|
@@ -588,9 +591,11 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 | 测试 | ✅ | 全部通过 |
 | Clippy | ✅ | 无警告 |
 | 格式化 | ✅ | 已修复 |
-| 覆盖率 | ✅ | 73.85% |
+| 覆盖率 | ⚠️ | 73.85% (目标 80%) |
 | Benchmark CLI | ✅ | |
 | TPC-H Q1/Q3/Q6/Q10 | ✅ | |
+| SQLite 对比 | ✅ | 快 2-3x |
+| PostgreSQL 对比 | ⚠️ | 需手动 |
 | P50/P95/P99 | ✅ | |
 | JSON 输出 | ✅ | |
 | 瓶颈分析 | ✅ | 已完成 |
@@ -599,7 +604,9 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 
 ## 十三、验证报告
 
-详见: [COMPREHENSIVE_VERIFICATION_REPORT.md](./COMPREHENSIVE_VERIFICATION_REPORT.md)
+详见:
+- [COMPREHENSIVE_VERIFICATION_REPORT.md](./COMPREHENSIVE_VERIFICATION_REPORT.md)
+- [POSTGRESQL_BENCHMARK_GUIDE.md](./POSTGRESQL_BENCHMARK_GUIDE.md)
 
 ---
 
