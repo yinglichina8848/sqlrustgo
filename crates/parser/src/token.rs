@@ -22,6 +22,7 @@ pub enum Token {
     Alter,
     Index,
     On,
+    As,
     Primary,
     Key,
     Begin,
@@ -30,6 +31,11 @@ pub enum Token {
     Grant,
     Revoke,
     Analyze,
+    Union,
+    Intersect,
+    Except,
+    View,
+    All,
 
     // Aggregate Functions
     Count,
@@ -113,6 +119,7 @@ impl fmt::Display for Token {
             Token::Alter => write!(f, "ALTER"),
             Token::Index => write!(f, "INDEX"),
             Token::On => write!(f, "ON"),
+            Token::As => write!(f, "AS"),
             Token::Primary => write!(f, "PRIMARY"),
             Token::Key => write!(f, "KEY"),
             Token::Begin => write!(f, "BEGIN"),
@@ -121,6 +128,11 @@ impl fmt::Display for Token {
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            Token::Union => write!(f, "UNION"),
+            Token::Intersect => write!(f, "INTERSECT"),
+            Token::Except => write!(f, "EXCEPT"),
+            Token::View => write!(f, "VIEW"),
+            Token::All => write!(f, "ALL"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -182,7 +194,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "DROP"
             | "ALTER"
             | "INDEX"
+            | "VIEW"
             | "ON"
+            | "AS"
             | "PRIMARY"
             | "KEY"
             | "BEGIN"
@@ -244,6 +258,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "AND" => Some(Token::And),
         "OR" => Some(Token::Or),
         "NOT" => Some(Token::Not),
+        "VIEW" => Some(Token::View),
+        "AS" => Some(Token::As),
         _ => None,
     }
 }
