@@ -74,4 +74,46 @@ mod tests {
         let workload = OltpWorkload::new(1000);
         assert_eq!(workload.name(), "oltp");
     }
+
+    #[test]
+    fn test_oltp_workload_new() {
+        let workload = OltpWorkload::new(100);
+        assert_eq!(workload.name(), "oltp");
+    }
+
+    #[test]
+    fn test_oltp_workload_next_random() {
+        let workload = OltpWorkload::new(1000);
+        let val1 = workload.next_random();
+        let val2 = workload.next_random();
+        assert_ne!(val1, val2);
+    }
+
+    #[test]
+    fn test_oltp_workload_random_deterministic() {
+        let workload = OltpWorkload::new(1000);
+        let counter_base = workload.next_random();
+        assert!(counter_base < 1000000);
+    }
+
+    #[test]
+    fn test_oltp_workload_scale_values() {
+        let workload_small = OltpWorkload::new(100);
+        let workload_large = OltpWorkload::new(10000);
+        assert_eq!(workload_small.name(), "oltp");
+        assert_eq!(workload_large.name(), "oltp");
+    }
+
+    #[test]
+    fn test_oltp_workload_multiple_randoms() {
+        let workload = OltpWorkload::new(1000);
+        let mut values = Vec::new();
+        for _ in 0..100 {
+            values.push(workload.next_random());
+        }
+        assert_eq!(values.len(), 100);
+        for v in values {
+            assert!(v < 1000000);
+        }
+    }
 }

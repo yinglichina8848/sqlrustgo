@@ -1653,6 +1653,7 @@ mod tests {
             ttl_seconds: 120,
             max_entries: 50,
             max_memory_bytes: 1024 * 1024,
+            benchmark_mode: false,
         };
 
         let executor = LocalExecutor::with_cache_config(&storage, config);

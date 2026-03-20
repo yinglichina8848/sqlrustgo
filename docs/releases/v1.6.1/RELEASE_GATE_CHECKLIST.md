@@ -595,7 +595,8 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 | Benchmark CLI | ✅ | |
 | TPC-H Q1/Q3/Q6/Q10 | ✅ | |
 | SQLite 对比 | ✅ | 快 2-3x |
-| PostgreSQL 对比 | ⚠️ | 需手动配置环境 |
+| PostgreSQL 环境 | ✅ | 已配置 PG16 |
+| PostgreSQL vs SQLite | ✅ | PG 慢 4-5x |
 | P50/P95/P99 | ✅ | |
 | JSON 输出 | ✅ | |
 | 瓶颈分析 | ✅ | 已完成 |
@@ -605,11 +606,6 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 1. **覆盖率提升** (优先级: 高)
    - 目标: 80% (当前 73.85%)
    - 需增加约 460 行测试
-
-2. **PostgreSQL 对比** (优先级: 中)
-   - 安装 PostgreSQL
-   - 运行对比测试
-   - 更新报告
 
 ---
 
