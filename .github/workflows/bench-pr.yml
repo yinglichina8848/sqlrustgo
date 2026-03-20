@@ -25,18 +25,23 @@ jobs:
       - name: Build bench-cli
         run: cargo build --release -p sqlrustgo-bench-cli
 
+      - name: Create sample SQL file for custom benchmark
+        run: |
+          mkdir -p benchmarks/sql
+          echo "SELECT * FROM orders WHERE order_id = 1" > benchmarks/sql/sample.sql
+
       - name: Run TPC-H SF=0.1
         run: |
           mkdir -p benchmarks/results/sf01
-          ./target/release/benchmark tpch --sf 0.1 --output benchmarks/results/sf01/tpch.json
+          ./target/release/sqlrustgo-bench-cli tpch --scale 0.1 --iterations 3 --output benchmarks/results/sf01/tpch.json
 
       - name: Run OLTP SF=0.1
         run: |
-          ./target/release/benchmark oltp --sf 0.1 --output benchmarks/results/sf01/oltp.json
+          ./target/release/sqlrustgo-bench-cli oltp --duration 10 --threads 1 --output benchmarks/results/sf01/oltp.json
 
       - name: Run Custom SF=0.1
         run: |
-          ./target/release/benchmark custom --sf 0.1 --output benchmarks/results/sf01/custom.json
+          ./target/release/sqlrustgo-bench-cli custom --file benchmarks/sql/sample.sql --iterations 3 --output benchmarks/results/sf01/custom.json
 
       - name: Compare with baseline
         run: python scripts/compare_benchmarks.py benchmarks/baselines/sf01 benchmarks/results/sf01
