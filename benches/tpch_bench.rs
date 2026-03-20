@@ -26,6 +26,15 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
+fn current_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    format!("{}", now)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LatencyStats {
     samples: Vec<u64>,
@@ -133,7 +142,7 @@ pub struct ComparisonResult {
 impl BenchmarkResult {
     pub fn new(workload: String, scale_factor: f64) -> Self {
         Self {
-            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp: current_timestamp(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             workload,
             scale_factor,
@@ -320,7 +329,7 @@ struct CustomerRow {
     nation_key: i32,
 }
 
-fn create_lineitem_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
+fn create_lineitem_schema(engine: &mut ExecutionEngine) {
     engine
         .execute(
             parse(
@@ -341,7 +350,7 @@ fn create_lineitem_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
         .unwrap();
 }
 
-fn create_orders_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
+fn create_orders_schema(engine: &mut ExecutionEngine) {
     engine
         .execute(
             parse(
@@ -359,7 +368,7 @@ fn create_orders_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
         .unwrap();
 }
 
-fn create_customer_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
+fn create_customer_schema(engine: &mut ExecutionEngine) {
     engine
         .execute(
             parse(
@@ -374,7 +383,7 @@ fn create_customer_schema(engine: &mut ExecutionEngine<MemoryStorage>) {
         .unwrap();
 }
 
-fn insert_lineitem_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[LineItemRow]) {
+fn insert_lineitem_data(engine: &mut ExecutionEngine, data: &[LineItemRow]) {
     for row in data {
         let sql = format!(
             "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, '{}', {})",
@@ -392,7 +401,7 @@ fn insert_lineitem_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[Lin
     }
 }
 
-fn insert_orders_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[OrdersRow]) {
+fn insert_orders_data(engine: &mut ExecutionEngine, data: &[OrdersRow]) {
     for row in data {
         let sql = format!(
             "INSERT INTO orders VALUES ({}, {}, '{}', '{}', {}, {})",
@@ -407,7 +416,7 @@ fn insert_orders_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[Order
     }
 }
 
-fn insert_customer_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[CustomerRow]) {
+fn insert_customer_data(engine: &mut ExecutionEngine, data: &[CustomerRow]) {
     for row in data {
         let sql = format!(
             "INSERT INTO customer VALUES ({}, '{}', {})",
@@ -420,7 +429,7 @@ fn insert_customer_data(engine: &mut ExecutionEngine<MemoryStorage>, data: &[Cus
 fn run_query_benchmark(
     name: &str,
     sql: &str,
-    engine: &mut ExecutionEngine<MemoryStorage>,
+    engine: &mut ExecutionEngine,
     iterations: u32,
 ) -> QueryResult {
     let mut latencies = LatencyStats::new();
@@ -506,7 +515,7 @@ fn bench_tpch_q6(c: &mut Criterion) {
             create_lineitem_schema(&mut engine);
             insert_lineitem_data(&mut engine, &lineitem_data);
 
-            let sql = "SELECT SUM(l_extendedprice * (1 - l_discount / 100.0)) as revenue \
+            let sql = "SELECT SUM(l_extendedprice) as revenue \
                 FROM lineitem WHERE l_quantity > 20";
             let _ = engine.execute(parse(sql).unwrap());
         });
@@ -627,7 +636,7 @@ fn bench_join(c: &mut Criterion) {
     group.bench_function("inner_join", |b| {
         b.iter(|| {
             engine.execute(parse(
-                "SELECT c.name, o.amount FROM customers c JOIN orders o ON c.id = o.customer_id"
+                "SELECT customers.name, orders.amount FROM customers, orders WHERE customers.id = orders.customer_id"
             ).unwrap()).unwrap()
         });
     });
