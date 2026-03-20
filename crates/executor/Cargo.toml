@@ -15,7 +15,7 @@ thiserror.workspace = true
 log.workspace = true
 rand.workspace = true
 parking_lot.workspace = true
+mockall = "0.14"
 
 [dev-dependencies]
 tempfile.workspace = true
-mockall = "0.14"
