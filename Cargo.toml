@@ -212,3 +212,7 @@ path = "tests/unit/vectorization_test.rs"
 [[test]]
 name = "file_storage_test"
 path = "tests/unit/file_storage_test.rs"
+
+[[test]]
+name = "columnar_test"
+path = "tests/unit/columnar_test.rs"

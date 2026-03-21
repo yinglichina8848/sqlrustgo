@@ -184,6 +184,7 @@ impl TestTableBuilder {
                 name: name.clone(),
                 data_type: format!("{:?}", data_type),
                 nullable: false,
+                is_unique: false,
             })
             .collect();
         sqlrustgo_storage::TableInfo {

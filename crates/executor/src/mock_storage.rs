@@ -60,6 +60,7 @@ impl MockStorage {
                 name: name.clone(),
                 data_type: format!("{:?}", data_type),
                 nullable: false,
+                is_unique: false,
             })
             .collect();
 
@@ -148,7 +149,9 @@ impl StorageEngine for MockStorage {
         infos
             .get(table_name)
             .cloned()
-            .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound(table_name.to_string()))
+            .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound {
+                table: table_name.to_string(),
+            })
     }
 
     fn list_tables(&self) -> Vec<String> {
@@ -252,6 +255,7 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 }],
             })
             .unwrap();
