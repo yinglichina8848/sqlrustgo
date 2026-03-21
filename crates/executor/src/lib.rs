@@ -23,7 +23,10 @@ pub use query_cache::{QueryCache, QueryCacheStats};
 pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use query_cache_metrics::QueryCacheMetrics;
 pub use sql_normalizer::SqlNormalizer;
-pub use vectorization::{BatchIterator, RecordBatch, Vector, VectorizedExecutor};
+pub use vectorization::{
+    AggFunction, AggregateResult, BatchIterator, ColumnArray, DataChunk, RecordBatch, Vector,
+    VectorizedExecutor,
+};
 
 // Test framework modules - publicly accessible
 pub mod harness;
