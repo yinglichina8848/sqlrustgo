@@ -11,10 +11,12 @@ sqlrustgo-types.workspace = true
 sqlrustgo-planner.workspace = true
 sqlrustgo-storage.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 log.workspace = true
 rand.workspace = true
 parking_lot.workspace = true
+lazy_static = "1.4"
 
 [dev-dependencies]
 tempfile.workspace = true
