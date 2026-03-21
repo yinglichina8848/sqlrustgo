@@ -19,7 +19,7 @@ fn test_query_cache_config_builder() {
         max_memory_bytes: 50 * 1024 * 1024,
         benchmark_mode: false,
     };
-    
+
     assert!(!config.enabled);
     assert_eq!(config.max_entries, 500);
     assert_eq!(config.ttl_seconds, 600);

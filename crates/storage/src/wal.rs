@@ -172,29 +172,24 @@ impl WalEntry {
         let mut offset = 0;
 
         // Checksum (4 bytes) - Epic-08
-        let checksum = u32::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3],
-        ]);
+        let checksum = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         offset += 4;
 
         // LSN
         let lsn = u64::from_le_bytes([
-            bytes[4], bytes[5], bytes[6], bytes[7],
-            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
         ]);
         offset += 8;
 
         // Timestamp
         let timestamp = u64::from_le_bytes([
-            bytes[12], bytes[13], bytes[14], bytes[15],
-            bytes[16], bytes[17], bytes[18], bytes[19],
+            bytes[12], bytes[13], bytes[14], bytes[15], bytes[16], bytes[17], bytes[18], bytes[19],
         ]);
         offset += 8;
 
         // Transaction ID
         let tx_id = u64::from_le_bytes([
-            bytes[20], bytes[21], bytes[22], bytes[23],
-            bytes[24], bytes[25], bytes[26], bytes[27],
+            bytes[20], bytes[21], bytes[22], bytes[23], bytes[24], bytes[25], bytes[26], bytes[27],
         ]);
         offset += 8;
 
@@ -526,7 +521,10 @@ impl WalReader {
 
         let reader = BufReader::new(file);
 
-        Ok(Self { reader, path: path.clone() })
+        Ok(Self {
+            reader,
+            path: path.clone(),
+        })
     }
 
     /// Read all entries with corruption detection
@@ -569,7 +567,7 @@ impl WalReader {
 
         loop {
             let pos = self.reader.buffer().len();
-            
+
             // Read length prefix
             let mut len_bytes = [0u8; 4];
             match self.reader.read_exact(&mut len_bytes) {
@@ -670,7 +668,10 @@ impl WalManager {
 
     /// Create with sync mode
     pub fn with_sync_mode(wal_path: PathBuf, sync_mode: WalSyncMode) -> Self {
-        Self { wal_path, sync_mode }
+        Self {
+            wal_path,
+            sync_mode,
+        }
     }
 
     /// Set sync mode
@@ -698,7 +699,7 @@ impl WalManager {
     pub fn recover_with_metadata(&self) -> std::io::Result<RecoveryResult> {
         let mut reader = self.get_reader()?;
         let (entries, corrupted) = reader.read_all_with_corruption()?;
-        
+
         let last_valid_lsn = entries.last().map(|e| e.lsn).unwrap_or(0);
         let recovered_transactions = entries
             .iter()
@@ -729,7 +730,7 @@ impl WalManager {
     pub fn truncate_at(&self, lsn: u64) -> std::io::Result<()> {
         let entries = self.recover()?;
         let valid_entries: Vec<_> = entries.into_iter().filter(|e| e.lsn < lsn).collect();
-        
+
         // Rewrite WAL with valid entries
         let mut writer = self.get_writer()?;
         for entry in valid_entries {
@@ -1324,7 +1325,7 @@ mod tests {
                 data: Some(vec![10, 20]),
                 lsn: 1,
                 timestamp: 1234567891,
-            checksum: 0,
+                checksum: 0,
             };
 
             writer.append(&entry2).unwrap();

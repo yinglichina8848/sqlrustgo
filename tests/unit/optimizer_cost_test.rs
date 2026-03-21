@@ -35,10 +35,10 @@ fn test_join_cost() {
     let model = SimpleCostModel::default_model();
     let cost = model.join_cost(1000, 500, "nested_loop");
     assert!(cost > 0.0);
-    
+
     let cost_hash = model.join_cost(1000, 500, "hash_join");
     assert!(cost_hash > 0.0);
-    
+
     let cost_merge = model.join_cost(1000, 500, "merge_join");
     assert!(cost_merge > 0.0);
 }

@@ -5,16 +5,12 @@
 //! that MySQL doesn't provide - making SQLRustGo 2.0 ideal for teaching
 //! and learning query optimization.
 
-use crate::HttpServer;
 use crate::metrics_endpoint::MetricsRegistry;
-use sqlrustgo_executor::{
-    GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR, OperatorProfile, OperatorTrace, Profiler,
-    QueryProfile, QueryTrace, TraceCollector,
-};
+use sqlrustgo_executor::{OperatorProfile, QueryTrace, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
 /// Teaching Enhanced endpoints configuration
+#[derive(Clone)]
 pub struct TeachingEndpoints {
     /// Enable pipeline visualization
     pub enable_pipeline_viz: bool,
@@ -41,6 +37,7 @@ impl Default for TeachingEndpoints {
 }
 
 /// Extended HTTP server with teaching enhanced features
+#[derive(Clone)]
 pub struct TeachingHttpServer {
     host: String,
     port: u16,
@@ -83,13 +80,16 @@ impl TeachingHttpServer {
         println!("╔══════════════════════════════════════════════════════════════════╗");
         println!("║          SQLRustGo 2.0 - Teaching Enhanced Server               ║");
         println!("╠══════════════════════════════════════════════════════════════════╣");
-        println!("║  Server started on http://{}                                ║", addr);
+        println!(
+            "║  Server started on http://{}                                ║",
+            addr
+        );
         println!("╠══════════════════════════════════════════════════════════════════╣");
         println!("║  Standard Endpoints:                                             ║");
         println!("║    - GET /health/live     - Liveness probe                       ║");
         println!("║    - GET /health/ready    - Readiness probe                      ║");
         println!("║    - GET /metrics         - Prometheus metrics                   ║");
-        
+
         if self.teaching_endpoints.enable_pipeline_viz {
             println!("║                                                                   ║");
             println!("║  Teaching Enhanced Endpoints:                                    ║");
@@ -97,13 +97,13 @@ impl TeachingHttpServer {
             println!("║    - GET /teaching/pipeline/json   - Pipeline as JSON            ║");
             println!("║    - GET /teaching/trace          - Vectorized trace log         ║");
         }
-        
+
         if self.teaching_endpoints.enable_profiling {
             println!("║    - GET /teaching/profile        - Operator profiling report   ║");
             println!("║    - GET /teaching/profile/json   - Profile as JSON             ║");
             println!("║    - GET /teaching/profile/operators - Individual operator stats ║");
         }
-        
+
         println!("╚══════════════════════════════════════════════════════════════════╝");
 
         for stream in listener.incoming() {
@@ -182,19 +182,19 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
                         prometheus_output,
                     )
                 }
-                
+
                 // Teaching enhanced endpoints
                 "/teaching/pipeline" if teaching.enable_pipeline_viz => {
                     let html = generate_pipeline_html();
                     ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
                 }
-                
+
                 "/teaching/pipeline/json" if teaching.enable_pipeline_viz => {
                     let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
                     let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
                     ("HTTP/1.1 200 OK", "application/json", json)
                 }
-                
+
                 "/teaching/pipeline/latest" if teaching.enable_pipeline_viz => {
                     let trace = GLOBAL_TRACE_COLLECTOR.latest();
                     match trace {
@@ -212,41 +212,41 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
                         }
                     }
                 }
-                
+
                 "/teaching/trace" if teaching.enable_trace => {
                     let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
                     let html = generate_trace_html(&traces);
                     ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
                 }
-                
+
                 "/teaching/trace/json" if teaching.enable_trace => {
                     let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
                     let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
                     ("HTTP/1.1 200 OK", "application/json", json)
                 }
-                
+
                 "/teaching/profile" if teaching.enable_profiling => {
                     let report = GLOBAL_PROFILER.generate_report();
                     let html = generate_profile_html(&report);
                     ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
                 }
-                
+
                 "/teaching/profile/json" if teaching.enable_profiling => {
                     let json = GLOBAL_PROFILER.to_json();
                     ("HTTP/1.1 200 OK", "application/json", json)
                 }
-                
+
                 "/teaching/profile/operators" if teaching.enable_profiling => {
                     let profiles = GLOBAL_PROFILER.get_sorted_profiles();
                     let html = generate_operators_html(&profiles);
                     ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
                 }
-                
+
                 "/teaching" => {
                     let html = generate_teaching_index_html();
                     ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
                 }
-                
+
                 _ => (
                     "HTTP/1.1 404 Not Found",
                     "application/json",
@@ -288,7 +288,8 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
 
 /// Generate HTML for pipeline visualization index
 fn generate_teaching_index_html() -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>SQLRustGo 2.0 - Teaching Enhanced</title>
@@ -391,7 +392,7 @@ fn generate_teaching_index_html() -> String {
 /// Generate HTML for pipeline visualization
 fn generate_pipeline_html() -> String {
     let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
-    
+
     let mut trace_list = String::new();
     for trace in traces.iter().take(20) {
         trace_list.push_str(&format!(
@@ -408,8 +409,9 @@ fn generate_pipeline_html() -> String {
             trace.total_rows
         ));
     }
-    
-    format!(r#"<!DOCTYPE html>
+
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Pipeline Visualization - SQLRustGo 2.0</title>
@@ -470,9 +472,11 @@ fn generate_pipeline_html() -> String {
     {empty_msg}
 </body>
 </html>"#,
-        trace_list = if trace_list.is_empty() { 
-            r#"<p class="empty">No queries executed yet. Run a query to see the pipeline visualization.</p>"#.to_string() 
-        } else { String::new() },
+        trace_list = if trace_list.is_empty() {
+            r#"<p class="empty">No queries executed yet. Run a query to see the pipeline visualization.</p>"#.to_string()
+        } else {
+            String::new()
+        },
         empty_msg = ""
     )
 }
@@ -481,8 +485,9 @@ fn generate_pipeline_html() -> String {
 fn generate_pipeline_detail_html(trace: &QueryTrace) -> String {
     let viz = trace.visualize_pipeline();
     let escaped_viz = viz.replace("<", "&lt;").replace(">", "&gt;");
-    
-    format!(r#"<!DOCTYPE html>
+
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Pipeline Detail - SQLRustGo 2.0</title>
@@ -567,8 +572,9 @@ fn generate_trace_html(traces: &[QueryTrace]) -> String {
             duration = format_duration(trace.total_duration_ns)
         ));
     }
-    
-    format!(r#"<!DOCTYPE html>
+
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Vectorized Trace Log - SQLRustGo 2.0</title>
@@ -618,8 +624,11 @@ fn generate_trace_html(traces: &[QueryTrace]) -> String {
 </body>
 </html>"#,
         trace_entries = if trace_entries.is_empty() {
-            r#"<p class="empty">No traces available. Execute a query to generate traces.</p>"#.to_string()
-        } else { trace_entries },
+            r#"<p class="empty">No traces available. Execute a query to generate traces.</p>"#
+                .to_string()
+        } else {
+            trace_entries
+        },
         empty_msg = ""
     )
 }
@@ -627,8 +636,9 @@ fn generate_trace_html(traces: &[QueryTrace]) -> String {
 /// Generate HTML for profiling report
 fn generate_profile_html(report: &str) -> String {
     let escaped_report = report.replace("<", "&lt;").replace(">", "&gt;");
-    
-    format!(r#"<!DOCTYPE html>
+
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Operator Profiling - SQLRustGo 2.0</title>
@@ -695,8 +705,9 @@ fn generate_operators_html(profiles: &[OperatorProfile]) -> String {
             rps = format!("{:.0}", profile.rows_per_second)
         ));
     }
-    
-    format!(r#"<!DOCTYPE html>
+
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Operator Statistics - SQLRustGo 2.0</title>
@@ -752,8 +763,11 @@ fn generate_operators_html(profiles: &[OperatorProfile]) -> String {
 </body>
 </html>"#,
         operator_rows = if operator_rows.is_empty() {
-            r#"<p class="empty">No profiling data available. Execute some queries first.</p>"#.to_string()
-        } else { operator_rows },
+            r#"<p class="empty">No profiling data available. Execute some queries first.</p>"#
+                .to_string()
+        } else {
+            operator_rows
+        },
         empty_msg = ""
     )
 }
@@ -805,8 +819,7 @@ mod tests {
             max_traces: 100,
             max_profiles: 50,
         };
-        let server = TeachingHttpServer::new("127.0.0.1", 8080)
-            .with_teaching_endpoints(endpoints);
+        let server = TeachingHttpServer::new("127.0.0.1", 8080).with_teaching_endpoints(endpoints);
         assert_eq!(server.port, 8080);
     }
 

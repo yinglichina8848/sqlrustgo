@@ -10,11 +10,13 @@ use sqlrustgo_planner::{
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
+use crate::operator_profile::OperatorProfile;
+use crate::pipeline_trace::{OperatorTrace, QueryTrace};
 use crate::query_cache::should_cache;
 use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use crate::sql_normalizer::SqlNormalizer;
-use crate::{Executor, ExecutorResult};
+use crate::{Executor, ExecutorResult, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -80,24 +82,18 @@ impl<'a> LocalExecutor<'a> {
         sql: &str,
         params: &[Value],
     ) -> SqlResult<ExecutorResult> {
+        // Start query tracing
+        let query_start = Instant::now();
+        let mut query_trace = QueryTrace::new(sql);
+        
+        // Check cache first
         if self.cache_config.enabled && !sql.is_empty() {
             let cache_key = self.get_cache_key(sql, params);
             if let Some(result) = self.cache.write().get(&cache_key) {
                 return Ok(result);
             }
 
-            let result = match plan.name() {
-                "SeqScan" => self.execute_seq_scan(plan),
-                "Projection" => self.execute_projection(plan),
-                "Filter" => self.execute_filter(plan),
-                "Aggregate" => self.execute_aggregate(plan),
-                "HashJoin" => self.execute_hash_join(plan),
-                "SortMergeJoin" => self.execute_sort_merge_join(plan),
-                "Sort" => self.execute_sort(plan),
-                "Limit" => self.execute_limit(plan),
-                "Explain" => self.execute_explain(plan),
-                _ => Ok(ExecutorResult::empty()),
-            }?;
+            let result = self.execute_plan_with_tracing(plan, sql, &mut query_trace)?;
 
             if should_cache(&result) {
                 let tables = self.extract_tables(plan);
@@ -110,10 +106,33 @@ impl<'a> LocalExecutor<'a> {
                 self.cache.write().put(cache_key, entry, vec![]);
             }
 
+            // Record trace
+            query_trace.finish(query_start.elapsed());
+            GLOBAL_TRACE_COLLECTOR.record(query_trace);
+            
             return Ok(result);
         }
 
-        match plan.name() {
+        let result = self.execute_plan_with_tracing(plan, sql, &mut query_trace)?;
+        
+        // Record trace
+        query_trace.finish(query_start.elapsed());
+        GLOBAL_TRACE_COLLECTOR.record(query_trace);
+        
+        Ok(result)
+    }
+    
+    /// Execute plan with tracing and profiling
+    fn execute_plan_with_tracing(
+        &self,
+        plan: &dyn PhysicalPlan,
+        sql: &str,
+        query_trace: &mut QueryTrace,
+    ) -> SqlResult<ExecutorResult> {
+        let query_start = Instant::now();
+        
+        // Execute the plan
+        let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
@@ -124,7 +143,30 @@ impl<'a> LocalExecutor<'a> {
             "Limit" => self.execute_limit(plan),
             "Explain" => self.execute_explain(plan),
             _ => Ok(ExecutorResult::empty()),
-        }
+        };
+        
+        // Record profiling
+        let duration = query_start.elapsed();
+        let rows = result.as_ref().map(|r| r.rows.len()).unwrap_or(0);
+        let batches = 1; // Simplified batch count
+        
+        GLOBAL_PROFILER.record(
+            plan.name(),
+            plan.name(),
+            duration.as_nanos() as u64,
+            rows,
+            batches,
+        );
+        
+        // Build trace
+        let mut root_trace = OperatorTrace::new(plan.name(), plan.name());
+        root_trace.start(query_start);
+        root_trace.finish(query_start);
+        root_trace.record_rows(rows);
+        root_trace.record_batch();
+        query_trace.set_root(root_trace);
+        
+        result
     }
 
     fn execute_explain(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
