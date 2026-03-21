@@ -99,11 +99,17 @@ impl WalEntry {
         self.table_id.hash(&mut hasher);
         self.lsn.hash(&mut hasher);
         self.timestamp.hash(&mut hasher);
+        // Only hash non-empty key/data to match serialization behavior
+        // (empty vec and None serialize to the same bytes)
         if let Some(ref k) = self.key {
-            k.hash(&mut hasher);
+            if !k.is_empty() {
+                k.hash(&mut hasher);
+            }
         }
         if let Some(ref d) = self.data {
-            d.hash(&mut hasher);
+            if !d.is_empty() {
+                d.hash(&mut hasher);
+            }
         }
         hasher.finish() as u32
     }
