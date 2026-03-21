@@ -261,6 +261,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -285,11 +286,13 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
+                    is_unique: false,
                 },
             ],
         };
@@ -329,6 +332,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             }],
         };
         storage.create_table(&info).unwrap();
