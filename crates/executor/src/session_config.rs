@@ -21,8 +21,8 @@ impl Default for SessionConfig {
         Self {
             benchmark_mode,
             teaching_mode,
-            cache_enabled: !benchmark_mode,
-            stats_enabled: !benchmark_mode,
+            cache_enabled: !benchmark_mode && !teaching_mode,
+            stats_enabled: !benchmark_mode && !teaching_mode,
         }
     }
 }
@@ -77,6 +77,7 @@ mod tests {
     #[test]
     fn test_teaching_mode_from_env() {
         std::env::remove_var("SQLRUSTGO_BENCHMARK_MODE");
+        std::env::remove_var("SQLRUSTGO_TEACHING_MODE");
         std::env::set_var("SQLRUSTGO_TEACHING_MODE", "1");
         let config = SessionConfig::default();
         assert!(!config.benchmark_mode);
