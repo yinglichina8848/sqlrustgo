@@ -6,7 +6,6 @@
 
 use crate::AggregateFunction;
 use crate::Expr;
-use crate::Field;
 use crate::Operator;
 use crate::Schema;
 use sqlrustgo_storage::StorageEngine;
@@ -14,6 +13,67 @@ use sqlrustgo_types::Value;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+#[derive(Debug, Clone, Default)]
+pub struct OperatorMetrics {
+    pub name: String,
+    pub table_name: Option<String>,
+    pub execution_time_ms: f64,
+    pub rows: usize,
+    pub children: Vec<OperatorMetrics>,
+}
+
+impl OperatorMetrics {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            table_name: None,
+            execution_time_ms: 0.0,
+            rows: 0,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn with_table(mut self, table_name: String) -> Self {
+        self.table_name = Some(table_name);
+        self
+    }
+
+    pub fn with_timing(mut self, duration: Duration, rows: usize) -> Self {
+        self.execution_time_ms = duration.as_secs_f64() * 1000.0;
+        self.rows = rows;
+        self
+    }
+
+    pub fn add_child(&mut self, child: OperatorMetrics) {
+        self.children.push(child);
+    }
+
+    pub fn to_string(&self, indent: usize) -> String {
+        let prefix = "  ".repeat(indent);
+
+        let mut line = format!("{}{}", prefix, self.name);
+        if let Some(ref table) = self.table_name {
+            line.push_str(&format!(" on {}", table));
+        }
+
+        if self.execution_time_ms > 0.0 || self.rows > 0 {
+            line.push_str(&format!(
+                " (time={:.3}ms, rows={})",
+                self.execution_time_ms, self.rows
+            ));
+        }
+
+        let mut result = vec![line];
+
+        for child in &self.children {
+            result.push(child.to_string(indent + 1));
+        }
+
+        result.join("\n")
+    }
+}
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
@@ -950,43 +1010,98 @@ impl PhysicalPlan for LimitExec {
     }
 }
 
-/// Explain execution operator - shows query execution plan
-pub struct ExplainExec {
-    input: Box<dyn PhysicalPlan>,
-    analyze: bool,
+#[allow(dead_code)]
+pub struct SetOperationExec {
+    op_type: crate::SetOperationType,
+    left: Box<dyn PhysicalPlan>,
+    right: Box<dyn PhysicalPlan>,
     schema: Schema,
 }
 
-impl ExplainExec {
-    pub fn new(input: Box<dyn PhysicalPlan>, analyze: bool) -> Self {
-        let schema = Schema::new(vec![Field::new("plan".to_string(), crate::DataType::Text)]);
+impl SetOperationExec {
+    pub fn new(
+        op_type: crate::SetOperationType,
+        left: Box<dyn PhysicalPlan>,
+        right: Box<dyn PhysicalPlan>,
+        schema: Schema,
+    ) -> Self {
         Self {
-            input,
-            analyze,
+            op_type,
+            left,
+            right,
             schema,
         }
     }
 
-    pub fn input(&self) -> &dyn PhysicalPlan {
-        self.input.as_ref()
+    pub fn op_type(&self) -> crate::SetOperationType {
+        self.op_type
     }
 
-    pub fn analyze(&self) -> bool {
-        self.analyze
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
     }
 }
 
-impl PhysicalPlan for ExplainExec {
+impl PhysicalPlan for SetOperationExec {
     fn schema(&self) -> &Schema {
         &self.schema
     }
 
     fn children(&self) -> Vec<&dyn PhysicalPlan> {
-        vec![self.input.as_ref()]
+        vec![self.left.as_ref(), self.right.as_ref()]
     }
 
     fn name(&self) -> &str {
-        "Explain"
+        match self.op_type {
+            crate::SetOperationType::Union => "Union",
+            crate::SetOperationType::UnionAll => "UnionAll",
+            crate::SetOperationType::Intersect => "Intersect",
+            crate::SetOperationType::Except => "Except",
+        }
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let left_results = self.left.execute()?;
+        let right_results = self.right.execute()?;
+
+        match self.op_type {
+            crate::SetOperationType::UnionAll => {
+                let mut results = left_results;
+                results.extend(right_results);
+                Ok(results)
+            }
+            crate::SetOperationType::Union => {
+                let mut combined = left_results;
+                combined.extend(right_results);
+                let mut unique: Vec<Vec<Value>> = Vec::new();
+                for row in combined {
+                    if !unique.contains(&row) {
+                        unique.push(row);
+                    }
+                }
+                Ok(unique)
+            }
+            crate::SetOperationType::Intersect => {
+                let right_set: std::collections::HashSet<_> = right_results.iter().collect();
+                let results: Vec<Vec<Value>> = left_results
+                    .into_iter()
+                    .filter(|row| right_set.contains(row))
+                    .collect();
+                Ok(results)
+            }
+            crate::SetOperationType::Except => {
+                let right_set: std::collections::HashSet<_> = right_results.iter().collect();
+                let results: Vec<Vec<Value>> = left_results
+                    .into_iter()
+                    .filter(|row| !right_set.contains(row))
+                    .collect();
+                Ok(results)
+            }
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -3475,5 +3590,70 @@ mod tests {
 
         let _ = sort.sort_expr();
         let _ = sort.input();
+    }
+
+    #[test]
+    fn test_set_operation_exec_union_all() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
+        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
+
+        let exec = SetOperationExec::new(
+            crate::SetOperationType::UnionAll,
+            left_input,
+            right_input,
+            schema,
+        );
+
+        assert_eq!(exec.name(), "UnionAll");
+        assert_eq!(exec.children().len(), 2);
+    }
+
+    #[test]
+    fn test_set_operation_exec_union() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
+        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
+
+        let exec = SetOperationExec::new(
+            crate::SetOperationType::Union,
+            left_input,
+            right_input,
+            schema,
+        );
+
+        assert_eq!(exec.name(), "Union");
+    }
+
+    #[test]
+    fn test_set_operation_exec_intersect() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
+        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
+
+        let exec = SetOperationExec::new(
+            crate::SetOperationType::Intersect,
+            left_input,
+            right_input,
+            schema,
+        );
+
+        assert_eq!(exec.name(), "Intersect");
+    }
+
+    #[test]
+    fn test_set_operation_exec_except() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
+        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
+
+        let exec = SetOperationExec::new(
+            crate::SetOperationType::Except,
+            left_input,
+            right_input,
+            schema,
+        );
+
+        assert_eq!(exec.name(), "Except");
     }
 }

@@ -6,6 +6,15 @@ use crate::Expr;
 use crate::Schema;
 use sqlrustgo_types::Value;
 
+/// Set operation type
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SetOperationType {
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
+}
+
 /// Logical plan node types
 #[derive(Debug, Clone, PartialEq)]
 pub enum LogicalPlan {
@@ -56,17 +65,19 @@ pub enum LogicalPlan {
         values: Vec<Vec<Value>>,
         schema: Schema,
     },
+    /// Set operation (UNION, INTERSECT, EXCEPT)
+    SetOperation {
+        op_type: SetOperationType,
+        left: Box<LogicalPlan>,
+        right: Box<LogicalPlan>,
+        schema: Schema,
+    },
     /// Empty relation
     EmptyRelation,
     /// Subquery
     Subquery {
         subquery: Box<LogicalPlan>,
         alias: String,
-    },
-    /// Union
-    Union {
-        left: Box<LogicalPlan>,
-        right: Box<LogicalPlan>,
     },
     /// Update statement
     Update {
@@ -87,10 +98,11 @@ pub enum LogicalPlan {
     },
     /// Drop table
     DropTable { table_name: String, if_exists: bool },
-    /// Explain query plan
-    Explain {
-        input: Box<LogicalPlan>,
-        analyze: bool,
+    /// View (virtual table)
+    View {
+        view_name: String,
+        query: String,
+        schema: Schema,
     },
 }
 
@@ -102,6 +114,7 @@ impl LogicalPlan {
             LogicalPlan::Projection { schema, .. } => schema.clone(),
             LogicalPlan::Aggregate { schema, .. } => schema.clone(),
             LogicalPlan::Values { schema, .. } => schema.clone(),
+            LogicalPlan::SetOperation { schema, .. } => schema.clone(),
             LogicalPlan::CreateTable { schema, .. } => schema.clone(),
             LogicalPlan::EmptyRelation => Schema::empty(),
             LogicalPlan::Join { .. } => Schema::empty(),
@@ -109,11 +122,10 @@ impl LogicalPlan {
             LogicalPlan::Sort { input, .. } => input.schema(),
             LogicalPlan::Limit { input, .. } => input.schema(),
             LogicalPlan::Subquery { subquery, .. } => subquery.schema(),
-            LogicalPlan::Union { left, .. } => left.schema(),
             LogicalPlan::Update { .. } => Schema::empty(),
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
-            LogicalPlan::Explain { input, .. } => input.schema(),
+            LogicalPlan::View { schema, .. } => schema.clone(),
         }
     }
 }

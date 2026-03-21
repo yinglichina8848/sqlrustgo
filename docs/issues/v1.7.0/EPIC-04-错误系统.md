@@ -19,13 +19,17 @@
 **描述**: 实现 MySQL 风格的 Unknown column 错误
 
 **Acceptance Criteria**:
-- [ ] 引用不存在的列时返回错误
-- [ ] 错误信息包含列名和表名
+- [x] 引用不存在的列时返回错误
+- [x] 错误信息包含列名和表名
 
 **错误格式**:
 ```
 ERROR 1054 (42S22): Unknown column 'xxx' in 'field list'
 ```
+
+**实现**:
+- 在 `crates/planner/src/lib.rs` 添加 `validate_columns` 方法
+- 在 `crates/executor/src/local_executor.rs` 的 `execute_projection` 和 `execute_filter` 中调用验证
 
 ---
 
@@ -37,13 +41,16 @@ ERROR 1054 (42S22): Unknown column 'xxx' in 'field list'
 **描述**: 实现 MySQL 风格的表不存在错误
 
 **Acceptance Criteria**:
-- [ ] 引用不存在的表时返回错误
-- [ ] 错误信息包含表名
+- [x] 引用不存在的表时返回错误
+- [x] 错误信息包含表名
 
 **错误格式**:
 ```
 ERROR 1146 (42S02): Table 'xxx' doesn't exist
 ```
+
+**实现**:
+- 在 `crates/storage/src/engine.rs` 的 `get_table_info` 中实现
 
 ---
 
@@ -55,13 +62,17 @@ ERROR 1146 (42S02): Table 'xxx' doesn't exist
 **描述**: 实现 MySQL 风格的重复键错误
 
 **Acceptance Criteria**:
-- [ ] 违反 UNIQUE 约束时返回错误
-- [ ] 错误信息包含键值
+- [x] 违反 UNIQUE 约束时返回错误
+- [x] 错误信息包含键值
 
 **错误格式**:
 ```
 ERROR 1062 (23000): Duplicate entry 'xxx' for key 'yyy'
 ```
+
+**实现**:
+- 在 `crates/storage/src/engine.rs` 的 `ColumnDefinition` 添加 `is_unique` 字段
+- 在 `MemoryStorage::insert` 中检查 UNIQUE 约束
 
 ---
 

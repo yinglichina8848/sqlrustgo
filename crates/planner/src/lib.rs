@@ -13,11 +13,12 @@ pub mod planner;
 // pub mod cost;
 // pub mod executor;
 
-pub use logical_plan::LogicalPlan;
+pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortMergeJoinExec,
+    AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec,
+    OperatorMetrics, PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec,
+    SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
