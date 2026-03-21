@@ -3,13 +3,14 @@
 //! Converts logical plans to physical execution plans.
 
 use crate::logical_plan::LogicalPlan;
-use crate::optimizer::{DefaultOptimizer, Optimizer};
+use crate::optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer};
 use crate::physical_plan::{
     AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
     ProjectionExec, SeqScanExec, SortExec, SortMergeJoinExec,
 };
 use crate::Expr;
 use crate::{Column, Schema};
+use std::env;
 use thiserror::Error;
 
 /// Planner errors
@@ -36,15 +37,36 @@ pub trait Planner {
     fn optimize(&mut self, logical_plan: LogicalPlan) -> PlannerResult<Box<dyn PhysicalPlan>>;
 }
 
+/// Check if teaching mode is enabled via environment variable
+fn is_teaching_mode() -> bool {
+    env::var("SQLRUSTGO_TEACHING_MODE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
 /// Default planner implementation
 pub struct DefaultPlanner {
     optimizer: DefaultOptimizer,
+    noop_optimizer: NoOpOptimizer,
+    use_noop: bool,
 }
 
 impl DefaultPlanner {
     pub fn new() -> Self {
+        let teaching_mode = is_teaching_mode();
         Self {
             optimizer: DefaultOptimizer::new(),
+            noop_optimizer: NoOpOptimizer::new(),
+            use_noop: teaching_mode,
+        }
+    }
+
+    /// Create a new planner with explicit teaching mode setting
+    pub fn with_teaching_mode(teaching_mode: bool) -> Self {
+        Self {
+            optimizer: DefaultOptimizer::new(),
+            noop_optimizer: NoOpOptimizer::new(),
+            use_noop: teaching_mode,
         }
     }
 
@@ -212,11 +234,16 @@ impl Planner for DefaultPlanner {
     }
 
     fn optimize(&mut self, logical_plan: LogicalPlan) -> PlannerResult<Box<dyn PhysicalPlan>> {
-        // First optimize the logical plan
-        let optimized = self
-            .optimizer
-            .optimize(logical_plan)
-            .map_err(|e| PlannerError::OptimizationFailed(e.to_string()))?;
+        // In teaching mode, skip optimization to show original execution plan
+        let optimized = if self.use_noop {
+            self.noop_optimizer
+                .optimize(logical_plan)
+                .map_err(|e| PlannerError::OptimizationFailed(e.to_string()))?
+        } else {
+            self.optimizer
+                .optimize(logical_plan)
+                .map_err(|e| PlannerError::OptimizationFailed(e.to_string()))?
+        };
 
         // Then convert to physical plan
         self.create_physical_plan_internal(&optimized)
