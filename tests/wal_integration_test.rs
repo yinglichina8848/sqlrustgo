@@ -22,6 +22,7 @@ fn make_entry(
         data,
         lsn: 0,
         timestamp: 1234567890,
+        checksum: 0,
     }
 }
 
