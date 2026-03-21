@@ -1,6 +1,5 @@
 // File Storage Tests
-use sqlrustgo_storage::bplus_tree::index::BPlusTree;
-use sqlrustgo_storage::file_storage::{FileStorage, TableData};
+use sqlrustgo_storage::file_storage::FileStorage;
 use tempfile::TempDir;
 
 fn create_temp_dir() -> TempDir {
@@ -89,6 +88,6 @@ fn test_file_storage_range_index() {
     let dir = create_temp_dir();
     let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
 
-    let result = storage.range_index("table", "column", 1..=10);
+    let result = storage.range_index("table", "column", 1, 10);
     assert!(result.is_empty());
 }

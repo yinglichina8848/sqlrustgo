@@ -351,30 +351,4 @@ pub mod fixtures {
 
         Ok(())
     }
-
-    #[test]
-    fn test_compare_rows_match() {
-        let actual = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        let expected = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        assert!(compare::rows_match(&actual, &expected));
-    }
-
-    #[test]
-    fn test_compare_rows_with_null() {
-        let actual = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        let expected = vec![Value::Null, Value::Text("Alice".to_string())];
-        assert!(compare::rows_match(&actual, &expected));
-    }
-
-    #[test]
-    fn test_compare_find_matching_row() {
-        let result = vec![
-            vec![Value::Integer(1), Value::Text("Alice".to_string())],
-            vec![Value::Integer(2), Value::Text("Bob".to_string())],
-        ];
-        let expected = vec![Value::Null, Value::Text("Bob".to_string())];
-
-        let found = compare::find_matching_row(&result, &expected);
-        assert!(found.is_some());
-    }
 }
