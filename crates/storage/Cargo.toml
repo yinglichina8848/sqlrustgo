@@ -14,6 +14,7 @@ thiserror.workspace = true
 log.workspace = true
 async-trait.workspace = true
 miniz_oxide.workspace = true
+fnv.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
