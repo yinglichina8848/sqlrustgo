@@ -1,9 +1,7 @@
 // Query Cache Tests
 use sqlrustgo_executor::query_cache::QueryCache;
-use sqlrustgo_executor::query_cache_config::{
-    CacheEntry, CacheKey, QueryCacheConfig, QueryCacheStats,
-};
-use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_executor::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
+use sqlrustgo_executor::{ExecutorResult, QueryCacheStats};
 use std::time::Instant;
 
 #[test]
