@@ -5,6 +5,7 @@ use crate::cli::BenchArgs;
 use crate::db::{create_db, DbConfig};
 use crate::metrics::LatencyRecorder;
 use crate::workload::create_workload;
+use crate::memory::MemoryLimiter;
 
 use anyhow::Result;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,6 +15,17 @@ use tokio::time::{Duration, Instant};
 /// Run the benchmark
 pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
     tracing::info!("Starting benchmark: {:?}", args);
+
+    // Initialize memory limiter with 10GB default limit
+    let memory_limiter = MemoryLimiter::default_limit();
+    tracing::info!(
+        "Memory limit: {} bytes (8 GB)",
+        memory_limiter.limit_bytes()
+    );
+
+    // Initial memory check
+    let initial_memory = memory_limiter.get_current_usage_string();
+    tracing::info!("Initial memory usage: {}", initial_memory);
 
     // Check if cache is disabled (benchmark mode)
     if !args.enable_cache {
@@ -41,6 +53,7 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
     // Run benchmark
     let start = Instant::now();
     let duration = Duration::from_secs(args.duration);
+    let check_interval = 1000; // Check memory every 1000 operations
 
     let mut handles = vec![];
 
@@ -49,6 +62,7 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
         let workload = workload.clone();
         let latency = latency.clone();
         let ops_count = ops_count.clone();
+        let memory_limiter = MemoryLimiter::default_limit();
 
         let handle = tokio::spawn(async move {
             while Instant::now().duration_since(start) < duration {
@@ -58,7 +72,23 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
                     Ok(_) => {
                         let elapsed = t0.elapsed().as_micros() as u64;
                         latency.record(elapsed);
-                        ops_count.fetch_add(1, Ordering::Relaxed);
+                        let count = ops_count.fetch_add(1, Ordering::Relaxed);
+
+                        // Check memory every `check_interval` operations
+                        if count > 0 && count % check_interval == 0 {
+                            if memory_limiter.is_exceeded() {
+                                tracing::error!(
+                                    "❌ Memory limit exceeded! Current: {}",
+                                    memory_limiter.get_current_usage_string()
+                                );
+                                tracing::error!(
+                                    "❌ Stopping benchmark to prevent system instability"
+                                );
+                                break;
+                            }
+                            // Warn if memory usage is high
+                            memory_limiter.check_and_warn();
+                        }
                     }
                     Err(e) => {
                         tracing::debug!("Operation error: {}", e);
@@ -74,6 +104,12 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
     for h in handles {
         h.await?;
     }
+
+    // Final memory check
+    tracing::info!(
+        "Final memory usage: {}",
+        memory_limiter.get_current_usage_string()
+    );
 
     // Calculate results
     let elapsed_secs = start.elapsed().as_secs_f64();
@@ -107,6 +143,10 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
             "scale": args.scale,
             "tps": tps,
             "total_ops": total_ops,
+            "memory": {
+                "limit_bytes": memory_limiter.limit_bytes(),
+                "final_usage": memory_limiter.get_current_usage_string()
+            },
             "latency": {
                 "p50": stats.p50,
                 "p95": stats.p95,

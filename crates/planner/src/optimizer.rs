@@ -401,6 +401,18 @@ impl Optimizer for DefaultOptimizer {
 /// No-op optimizer that returns the plan unchanged
 pub struct NoOpOptimizer;
 
+impl NoOpOptimizer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for NoOpOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Optimizer for NoOpOptimizer {
     fn optimize(&mut self, plan: LogicalPlan) -> OptimizerResult<LogicalPlan> {
         Ok(plan)

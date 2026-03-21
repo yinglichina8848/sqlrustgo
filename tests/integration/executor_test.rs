@@ -28,3 +28,22 @@ fn test_executor_result_affected_rows() {
     let result = ExecutorResult::new(vec![], 100);
     assert_eq!(result.affected_rows, 100);
 }
+
+#[test]
+fn test_operator_metrics() {
+    use sqlrustgo_planner::OperatorMetrics;
+    use std::time::Duration;
+
+    let mut metrics = OperatorMetrics::new("SeqScan".to_string())
+        .with_table("users".to_string())
+        .with_timing(Duration::from_millis(10), 100);
+
+    let child =
+        OperatorMetrics::new("Filter".to_string()).with_timing(Duration::from_millis(5), 50);
+    metrics.add_child(child);
+
+    let output = metrics.to_string(0);
+    assert!(output.contains("SeqScan"));
+    assert!(output.contains("time="));
+    assert!(output.contains("rows=100"));
+}
