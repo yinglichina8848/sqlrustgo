@@ -7,12 +7,16 @@
 pub mod cost;
 pub mod network_cost;
 pub mod plan;
+pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 
 pub use cost::SimpleCostModel;
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
+pub use projection_pushdown::{
+    ColumnPruner, ProjectionPushdownConfig, ProjectionPushdownOptimizer, ProjectionPushdownRule,
+};
 pub use rules::{
     ConstantFolding, Expr, ExpressionSimplification, IndexSelect, JoinReordering, JoinType,
     MatchResult, Operator, Plan, PlanPattern, PredicatePushdown, ProjectionPruning, RuleContext,
