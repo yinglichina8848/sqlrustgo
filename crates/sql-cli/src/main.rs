@@ -3,10 +3,12 @@
 //! A MySQL-compatible interactive SQL shell
 
 use rustyline::Editor;
-use sqlrustgo_parser::{parse, Statement};
-use sqlrustgo_parser::parser::{SelectStatement, InsertStatement, CreateTableStatement, DropTableStatement, Expression};
-use sqlrustgo_storage::{MemoryStorage, StorageEngine, TableInfo, ColumnDefinition};
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_parser::parser::{
+    CreateTableStatement, DropTableStatement, Expression, InsertStatement, SelectStatement,
+};
+use sqlrustgo_parser::{parse, Statement};
+use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 
 mod commands;
@@ -22,7 +24,7 @@ fn main() {
 
     // Initialize storage engine
     let mut storage = MemoryStorage::new();
-    
+
     // Pre-populate with some sample data for testing
     setup_sample_data(&mut storage);
 
@@ -102,106 +104,127 @@ fn main() {
 fn execute_sql(sql: &str, storage: &mut dyn StorageEngine) -> Result<ExecutorResult, String> {
     // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
-    
+
     // For now, implement simple execution for SELECT queries
     match statement {
-        Statement::Select(select) => {
-            execute_select(&select, storage)
-        }
-        Statement::Insert(insert) => {
-            execute_insert(&insert, storage)
-        }
-        Statement::CreateTable(create) => {
-            execute_create_table(&create, storage)
-        }
-        Statement::DropTable(drop) => {
-            execute_drop_table(&drop, storage)
-        }
-        _ => {
-            Err("Only SELECT, INSERT, CREATE TABLE, and DROP TABLE are supported".to_string())
-        }
+        Statement::Select(select) => execute_select(&select, storage),
+        Statement::Insert(insert) => execute_insert(&insert, storage),
+        Statement::CreateTable(create) => execute_create_table(&create, storage),
+        Statement::DropTable(drop) => execute_drop_table(&drop, storage),
+        _ => Err("Only SELECT, INSERT, CREATE TABLE, and DROP TABLE are supported".to_string()),
     }
 }
 
 /// Execute SELECT query
-fn execute_select(select: &SelectStatement, storage: &dyn StorageEngine) -> Result<ExecutorResult, String> {
+fn execute_select(
+    select: &SelectStatement,
+    storage: &dyn StorageEngine,
+) -> Result<ExecutorResult, String> {
     let table_name = &select.table;
-    
+
     // Check if table exists
     if !storage.has_table(table_name) {
         return Err(format!("Table '{}' not found", table_name));
     }
-    
+
     // Get table info for schema
-    let table_info = storage.get_table_info(table_name).map_err(|e| e.to_string())?;
-    
+    let table_info = storage
+        .get_table_info(table_name)
+        .map_err(|e| e.to_string())?;
+
     // Scan all rows
     let rows = storage.scan(table_name).map_err(|e| e.to_string())?;
-    
+
     // If there are columns specified, filter them
     let result_rows: Vec<Vec<Value>> = if select.columns.is_empty() {
         rows
     } else {
         // Map column names to indices
-        let col_indices: Vec<usize> = select.columns.iter().filter_map(|col| {
-            table_info.columns.iter().position(|c| c.name == col.name)
-        }).collect();
-        
-        rows.into_iter().map(|row| {
-            col_indices.iter().map(|&i| row.get(i).cloned().unwrap_or(Value::Null)).collect()
-        }).collect()
+        let col_indices: Vec<usize> = select
+            .columns
+            .iter()
+            .filter_map(|col| table_info.columns.iter().position(|c| c.name == col.name))
+            .collect();
+
+        rows.into_iter()
+            .map(|row| {
+                col_indices
+                    .iter()
+                    .map(|&i| row.get(i).cloned().unwrap_or(Value::Null))
+                    .collect()
+            })
+            .collect()
     };
-    
+
     Ok(ExecutorResult::new(result_rows, 0))
 }
 
 /// Execute INSERT statement
-fn execute_insert(insert: &InsertStatement, storage: &mut dyn StorageEngine) -> Result<ExecutorResult, String> {
+fn execute_insert(
+    insert: &InsertStatement,
+    storage: &mut dyn StorageEngine,
+) -> Result<ExecutorResult, String> {
     let table_name = &insert.table;
-    
+
     if !storage.has_table(table_name) {
         return Err(format!("Table '{}' not found", table_name));
     }
-    
+
     // Convert values to records
-    let records: Vec<Vec<Value>> = insert.values.iter().map(|row| {
-        row.iter().map(|expr| {
-            match expr {
-                Expression::Literal(value) => sqlrustgo_types::Value::Text(value.clone()),
-                _ => Value::Null,
-            }
-        }).collect()
-    }).collect();
-    
-    storage.insert(table_name, records).map_err(|e| e.to_string())?;
-    
+    let records: Vec<Vec<Value>> = insert
+        .values
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|expr| match expr {
+                    Expression::Literal(value) => sqlrustgo_types::Value::Text(value.clone()),
+                    _ => Value::Null,
+                })
+                .collect()
+        })
+        .collect();
+
+    storage
+        .insert(table_name, records)
+        .map_err(|e| e.to_string())?;
+
     Ok(ExecutorResult::new(vec![], insert.values.len()))
 }
 
 /// Execute CREATE TABLE statement
-fn execute_create_table(create: &CreateTableStatement, storage: &mut dyn StorageEngine) -> Result<ExecutorResult, String> {
-    let columns: Vec<ColumnDefinition> = create.columns.iter().map(|col| {
-        ColumnDefinition {
+fn execute_create_table(
+    create: &CreateTableStatement,
+    storage: &mut dyn StorageEngine,
+) -> Result<ExecutorResult, String> {
+    let columns: Vec<ColumnDefinition> = create
+        .columns
+        .iter()
+        .map(|col| ColumnDefinition {
             name: col.name.clone(),
             data_type: col.data_type.clone(),
             nullable: col.nullable,
-        }
-    }).collect();
-    
+        })
+        .collect();
+
     let table_info = TableInfo {
         name: create.name.clone(),
         columns,
     };
-    
-    storage.create_table(&table_info).map_err(|e| e.to_string())?;
-    
+
+    storage
+        .create_table(&table_info)
+        .map_err(|e| e.to_string())?;
+
     Ok(ExecutorResult::new(vec![], 0))
 }
 
 /// Execute DROP TABLE statement
-fn execute_drop_table(drop: &DropTableStatement, storage: &mut dyn StorageEngine) -> Result<ExecutorResult, String> {
+fn execute_drop_table(
+    drop: &DropTableStatement,
+    storage: &mut dyn StorageEngine,
+) -> Result<ExecutorResult, String> {
     storage.drop_table(&drop.name).map_err(|e| e.to_string())?;
-    
+
     Ok(ExecutorResult::new(vec![], 0))
 }
 
@@ -228,18 +251,30 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
             },
         ],
     };
-    
+
     // Create table (ignore error if already exists)
     let _ = storage.create_table(&users_info);
-    
+
     // Insert sample data
     let user_records = vec![
-        vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Text("alice@example.com".to_string())],
-        vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Text("bob@example.com".to_string())],
-        vec![Value::Integer(3), Value::Text("Charlie".to_string()), Value::Null],
+        vec![
+            Value::Integer(1),
+            Value::Text("Alice".to_string()),
+            Value::Text("alice@example.com".to_string()),
+        ],
+        vec![
+            Value::Integer(2),
+            Value::Text("Bob".to_string()),
+            Value::Text("bob@example.com".to_string()),
+        ],
+        vec![
+            Value::Integer(3),
+            Value::Text("Charlie".to_string()),
+            Value::Null,
+        ],
     ];
     let _ = storage.insert("users", user_records);
-    
+
     // Create orders table
     let orders_info = TableInfo {
         name: "orders".to_string(),
@@ -261,9 +296,9 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
             },
         ],
     };
-    
+
     let _ = storage.create_table(&orders_info);
-    
+
     let order_records = vec![
         vec![Value::Integer(1), Value::Integer(1), Value::Float(100.5)],
         vec![Value::Integer(2), Value::Integer(1), Value::Float(250.0)],

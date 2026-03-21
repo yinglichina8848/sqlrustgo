@@ -5,7 +5,7 @@ use sqlrustgo_types::Value;
 fn test_value_integer_as_integer() {
     let v = Value::Integer(42);
     assert_eq!(v.as_integer(), Some(42));
-    
+
     let v = Value::Text("hello".to_string());
     assert_eq!(v.as_integer(), None);
 }
@@ -75,11 +75,17 @@ fn test_value_timestamp_creation() {
 #[test]
 fn test_value_timestamp_to_string() {
     let ts = Value::Timestamp(0);
-    assert_eq!(ts.timestamp_to_string(), Some("1970-01-01 00:00:00".to_string()));
-    
+    assert_eq!(
+        ts.timestamp_to_string(),
+        Some("1970-01-01 00:00:00".to_string())
+    );
+
     let ts = Value::Timestamp(1000000);
-    assert_eq!(ts.timestamp_to_string(), Some("1970-01-01 00:00:01".to_string()));
-    
+    assert_eq!(
+        ts.timestamp_to_string(),
+        Some("1970-01-01 00:00:01".to_string())
+    );
+
     let not_ts = Value::Integer(42);
     assert_eq!(not_ts.timestamp_to_string(), None);
 }
@@ -88,7 +94,7 @@ fn test_value_timestamp_to_string() {
 fn test_value_date_creation() {
     let d = Value::Date(0);
     assert_eq!(d, Value::Date(0));
-    
+
     let d = Value::Date(1);
     assert_eq!(d, Value::Date(1));
 }
@@ -96,13 +102,13 @@ fn test_value_date_creation() {
 #[test]
 fn test_value_hash() {
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::new();
     set.insert(Value::Integer(1));
     set.insert(Value::Integer(1));
     set.insert(Value::Integer(2));
     assert_eq!(set.len(), 2);
-    
+
     let mut set = HashSet::new();
     set.insert(Value::Text("hello".to_string()));
     set.insert(Value::Text("hello".to_string()));
@@ -115,11 +121,14 @@ fn test_value_equality() {
     assert_eq!(Value::Boolean(true), Value::Boolean(true));
     assert_eq!(Value::Integer(42), Value::Integer(42));
     assert_eq!(Value::Float(3.14), Value::Float(3.14));
-    assert_eq!(Value::Text("hello".to_string()), Value::Text("hello".to_string()));
+    assert_eq!(
+        Value::Text("hello".to_string()),
+        Value::Text("hello".to_string())
+    );
     assert_eq!(Value::Blob(vec![1, 2, 3]), Value::Blob(vec![1, 2, 3]));
     assert_eq!(Value::Date(0), Value::Date(0));
     assert_eq!(Value::Timestamp(0), Value::Timestamp(0));
-    
+
     assert_ne!(Value::Integer(1), Value::Integer(2));
     assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
 }
