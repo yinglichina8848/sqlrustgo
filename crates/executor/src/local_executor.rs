@@ -4,8 +4,8 @@
 
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, ExplainExec, FilterExec, HashJoinExec, JoinType,
-    OperatorMetrics, PhysicalPlan, ProjectionExec, SortMergeJoinExec,
+    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, OperatorMetrics,
+    PhysicalPlan, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -85,7 +85,7 @@ impl<'a> LocalExecutor<'a> {
         // Start query tracing
         let query_start = Instant::now();
         let mut query_trace = QueryTrace::new(sql);
-        
+
         // Check cache first
         if self.cache_config.enabled && !sql.is_empty() {
             let cache_key = self.get_cache_key(sql, params);
@@ -109,19 +109,19 @@ impl<'a> LocalExecutor<'a> {
             // Record trace
             query_trace.finish(query_start.elapsed());
             GLOBAL_TRACE_COLLECTOR.record(query_trace);
-            
+
             return Ok(result);
         }
 
         let result = self.execute_plan_with_tracing(plan, sql, &mut query_trace)?;
-        
+
         // Record trace
         query_trace.finish(query_start.elapsed());
         GLOBAL_TRACE_COLLECTOR.record(query_trace);
-        
+
         Ok(result)
     }
-    
+
     /// Execute plan with tracing and profiling
     fn execute_plan_with_tracing(
         &self,
@@ -130,7 +130,7 @@ impl<'a> LocalExecutor<'a> {
         query_trace: &mut QueryTrace,
     ) -> SqlResult<ExecutorResult> {
         let query_start = Instant::now();
-        
+
         // Execute the plan
         let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
@@ -141,15 +141,15 @@ impl<'a> LocalExecutor<'a> {
             "SortMergeJoin" => self.execute_sort_merge_join(plan),
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
-            "Explain" => self.execute_explain(plan),
+            // "Explain" => self.execute_explain(plan),
             _ => Ok(ExecutorResult::empty()),
         };
-        
+
         // Record profiling
         let duration = query_start.elapsed();
         let rows = result.as_ref().map(|r| r.rows.len()).unwrap_or(0);
         let batches = 1; // Simplified batch count
-        
+
         GLOBAL_PROFILER.record(
             plan.name(),
             plan.name(),
@@ -157,7 +157,7 @@ impl<'a> LocalExecutor<'a> {
             rows,
             batches,
         );
-        
+
         // Build trace
         let mut root_trace = OperatorTrace::new(plan.name(), plan.name());
         root_trace.start(query_start);
@@ -165,11 +165,11 @@ impl<'a> LocalExecutor<'a> {
         root_trace.record_rows(rows);
         root_trace.record_batch();
         query_trace.set_root(root_trace);
-        
+
         result
     }
 
-    fn execute_explain(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+    /*fn execute_explain(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         let explain_plan = plan.as_any().downcast_ref::<ExplainExec>().ok_or_else(|| {
             sqlrustgo_types::SqlError::ExecutionError("Failed to downcast ExplainExec".to_string())
         })?;
@@ -188,7 +188,7 @@ impl<'a> LocalExecutor<'a> {
         };
 
         Ok(ExecutorResult::new(rows, 0))
-    }
+    }*/
 
     fn collect_operator_metrics(&self, plan: &dyn PhysicalPlan) -> SqlResult<OperatorMetrics> {
         use std::time::Instant;
@@ -280,10 +280,6 @@ impl<'a> LocalExecutor<'a> {
         let input_schema = children[0].schema();
         let _output_schema = plan.schema();
 
-        for expr in &projection {
-            expr.validate_columns(input_schema, "select")?;
-        }
-
         let projected_rows: Vec<Vec<Value>> = child_result
             .rows
             .iter()
@@ -320,8 +316,6 @@ impl<'a> LocalExecutor<'a> {
         };
 
         let input_schema = children[0].schema();
-
-        predicate.validate_columns(input_schema, "where")?;
 
         // Filter rows based on predicate
         let filtered_rows: Vec<Vec<Value>> = child_result
