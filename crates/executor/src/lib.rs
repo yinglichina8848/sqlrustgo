@@ -24,9 +24,7 @@ pub use local_executor::LocalExecutor;
 pub use operator_profile::{
     OperatorProfile, ProfileTimer, Profiler, QueryProfile, GLOBAL_PROFILER,
 };
-pub use pipeline_trace::{
-    OperatorTrace, QueryTrace, TraceCollector, GLOBAL_TRACE_COLLECTOR,
-};
+pub use pipeline_trace::{OperatorTrace, QueryTrace, TraceCollector, GLOBAL_TRACE_COLLECTOR};
 pub use query_cache::{QueryCache, QueryCacheStats};
 pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use query_cache_metrics::QueryCacheMetrics;

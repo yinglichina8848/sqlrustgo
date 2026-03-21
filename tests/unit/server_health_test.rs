@@ -19,15 +19,13 @@ fn test_component_health_new() {
 
 #[test]
 fn test_component_health_with_message() {
-    let health = ComponentHealth::new("test", HealthStatus::Healthy)
-        .with_message("All good");
+    let health = ComponentHealth::new("test", HealthStatus::Healthy).with_message("All good");
     assert_eq!(health.message, Some("All good".to_string()));
 }
 
 #[test]
 fn test_component_health_with_latency() {
-    let health = ComponentHealth::new("test", HealthStatus::Healthy)
-        .with_latency(100);
+    let health = ComponentHealth::new("test", HealthStatus::Healthy).with_latency(100);
     assert_eq!(health.latency_ms, Some(100));
 }
 
@@ -71,7 +69,7 @@ fn test_health_status_ordering() {
     let healthy = HealthStatus::Healthy;
     let degraded = HealthStatus::Degraded;
     let unhealthy = HealthStatus::Unhealthy;
-    
+
     assert!(healthy == HealthStatus::Healthy);
     assert!(degraded == HealthStatus::Degraded);
     assert!(unhealthy == HealthStatus::Unhealthy);
