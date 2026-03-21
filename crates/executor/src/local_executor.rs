@@ -126,7 +126,7 @@ impl<'a> LocalExecutor<'a> {
     fn execute_plan_with_tracing(
         &self,
         plan: &dyn PhysicalPlan,
-        sql: &str,
+        _sql: &str,
         query_trace: &mut QueryTrace,
     ) -> SqlResult<ExecutorResult> {
         let query_start = Instant::now();
