@@ -31,6 +31,7 @@ pub enum Token {
     Grant,
     Revoke,
     Analyze,
+    Explain,
     Union,
     Intersect,
     Except,
@@ -128,6 +129,7 @@ impl fmt::Display for Token {
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            Token::Explain => write!(f, "EXPLAIN"),
             Token::Union => write!(f, "UNION"),
             Token::Intersect => write!(f, "INTERSECT"),
             Token::Except => write!(f, "EXCEPT"),
@@ -195,6 +197,7 @@ pub fn is_keyword(s: &str) -> bool {
             | "ALTER"
             | "INDEX"
             | "VIEW"
+            | "EXPLAIN"
             | "ON"
             | "AS"
             | "PRIMARY"
@@ -260,6 +263,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "NOT" => Some(Token::Not),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
+        "EXPLAIN" => Some(Token::Explain),
         _ => None,
     }
 }
