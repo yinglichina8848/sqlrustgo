@@ -16,9 +16,8 @@ pub mod planner;
 pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, ExplainExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec,
-    OperatorMetrics, PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec,
-    SortMergeJoinExec,
+    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, OperatorMetrics,
+    PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec, SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
