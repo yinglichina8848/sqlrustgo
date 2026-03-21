@@ -11,6 +11,7 @@ members = [
     "crates/server",
     "crates/bench",
     "crates/bench-cli",
+    "crates/sql-cli",
 ]
 
 [workspace.package]
