@@ -4,6 +4,7 @@ pub mod binary_format;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
+pub mod columnar;
 pub mod engine;
 pub mod file_storage;
 pub mod heap;
@@ -15,11 +16,14 @@ pub use binary_format::BinaryFormat;
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
+pub use columnar::{
+    ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
+};
 pub use engine::{ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo};
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
-pub use stats::{ColumnStats, StatsManager, TableStats};
+pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
 
 #[cfg(test)]
