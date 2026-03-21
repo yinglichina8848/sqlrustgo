@@ -176,3 +176,39 @@ path = "tests/binary_format_test.rs"
 [[test]]
 name = "optimizer_stats_test"
 path = "tests/integration/optimizer_stats_test.rs"
+
+[[test]]
+name = "types_value_test"
+path = "tests/unit/types_value_test.rs"
+
+[[test]]
+name = "query_cache_config_test"
+path = "tests/unit/query_cache_config_test.rs"
+
+[[test]]
+name = "server_health_test"
+path = "tests/unit/server_health_test.rs"
+
+[[test]]
+name = "bplus_tree_test"
+path = "tests/unit/bplus_tree_test.rs"
+
+[[test]]
+name = "optimizer_cost_test"
+path = "tests/unit/optimizer_cost_test.rs"
+
+[[test]]
+name = "local_executor_test"
+path = "tests/unit/local_executor_test.rs"
+
+[[test]]
+name = "query_cache_test"
+path = "tests/unit/query_cache_test.rs"
+
+[[test]]
+name = "vectorization_test"
+path = "tests/unit/vectorization_test.rs"
+
+[[test]]
+name = "file_storage_test"
+path = "tests/unit/file_storage_test.rs"
