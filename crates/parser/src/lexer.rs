@@ -233,6 +233,7 @@ impl<'a> Lexer<'a> {
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
                     "ANALYZE" => Token::Analyze,
+                    "EXPLAIN" => Token::Explain,
                     "UNION" => Token::Union,
                     "INTERSECT" => Token::Intersect,
                     "EXCEPT" => Token::Except,
