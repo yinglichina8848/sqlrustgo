@@ -2,8 +2,8 @@
 //!
 //! Implements MySQL-style meta commands
 
-use sqlrustgo_storage::{StorageEngine, TableInfo};
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_storage::{StorageEngine, TableInfo};
 use sqlrustgo_types::SqlError;
 
 /// Command execution result
@@ -21,12 +21,8 @@ pub fn execute_command(cmd: &str, storage: &dyn StorageEngine) -> CommandResult 
     let cmd_name = parts.first().unwrap_or(&"");
 
     match *cmd_name {
-        ".help" => {
-            CommandResult::Ok(get_help())
-        }
-        ".tables" => {
-            execute_tables(storage)
-        }
+        ".help" => CommandResult::Ok(get_help()),
+        ".tables" => execute_tables(storage),
         ".schema" => {
             if parts.len() < 2 {
                 CommandResult::Err("Usage: .schema <table_name>".to_string())
@@ -41,12 +37,11 @@ pub fn execute_command(cmd: &str, storage: &dyn StorageEngine) -> CommandResult 
                 execute_indexes(parts[1], storage)
             }
         }
-        ".exit" | ".quit" => {
-            CommandResult::Exit
-        }
-        _ => {
-            CommandResult::Err(format!("Unknown command: {}. Type .help for available commands.", cmd_name))
-        }
+        ".exit" | ".quit" => CommandResult::Exit,
+        _ => CommandResult::Err(format!(
+            "Unknown command: {}. Type .help for available commands.",
+            cmd_name
+        )),
     }
 }
 
@@ -61,17 +56,19 @@ fn get_help() -> String {
 
 SQL Commands:
   SELECT, INSERT, CREATE TABLE, DROP TABLE are supported
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Execute .tables command - list all tables
 fn execute_tables(storage: &dyn StorageEngine) -> CommandResult {
     let tables = storage.list_tables();
-    
+
     if tables.is_empty() {
         CommandResult::Ok("No tables found".to_string())
     } else {
-        let output = tables.iter()
+        let output = tables
+            .iter()
             .map(|t| format!("  {}", t))
             .collect::<Vec<_>>()
             .join("\n");
@@ -86,9 +83,7 @@ fn execute_schema(table_name: &str, storage: &dyn StorageEngine) -> CommandResul
             let output = format_table_schema(&info);
             CommandResult::Ok(output)
         }
-        Err(e) => {
-            CommandResult::Err(format!("Error: {}", e))
-        }
+        Err(e) => CommandResult::Err(format!("Error: {}", e)),
     }
 }
 
@@ -98,11 +93,11 @@ fn execute_indexes(table_name: &str, storage: &dyn StorageEngine) -> CommandResu
     if !storage.has_table(table_name) {
         return CommandResult::Err(format!("Table '{}' not found", table_name));
     }
-    
+
     // Try to get index information from storage
     // For now, we'll use a simple approach that checks if the storage supports it
     let indexes = get_table_indexes(storage, table_name);
-    
+
     if indexes.is_empty() {
         CommandResult::Ok(format!("No indexes found for table '{}'", table_name))
     } else {
@@ -120,7 +115,7 @@ fn get_table_indexes(storage: &dyn StorageEngine, table_name: &str) -> Vec<Index
         // Since MemoryStorage doesn't really track indexes, we'll return empty
         // But this can be extended in the future
         let mut indexes = Vec::new();
-        
+
         // Check if we can find any index metadata
         // For now, return empty - this can be enhanced when StorageEngine is extended
         for (i, col) in info.columns.iter().enumerate() {
@@ -134,7 +129,7 @@ fn get_table_indexes(storage: &dyn StorageEngine, table_name: &str) -> Vec<Index
                 });
             }
         }
-        
+
         indexes
     } else {
         Vec::new()
@@ -154,7 +149,7 @@ struct IndexInfo {
 fn format_table_schema(info: &TableInfo) -> String {
     let mut output = format!("Table: {}\n", info.name);
     output.push_str("Columns:\n");
-    
+
     for col in &info.columns {
         let nullable_str = if col.nullable { "YES" } else { "NO" };
         output.push_str(&format!(
@@ -162,21 +157,21 @@ fn format_table_schema(info: &TableInfo) -> String {
             col.name, col.data_type, nullable_str
         ));
     }
-    
+
     output
 }
 
 /// Format table indexes for display
 fn format_table_indexes(table_name: &str, indexes: &[IndexInfo]) -> String {
     let mut output = format!("Indexes for {}:\n", table_name);
-    
+
     if indexes.is_empty() {
         output.push_str("  (none)\n");
     } else {
         output.push_str("+---------------------------+-------------+----------+\n");
         output.push_str("| Key Name                  | Column      | Unique   |\n");
         output.push_str("+---------------------------+-------------+----------+\n");
-        
+
         for idx in indexes {
             let unique_str = if idx.is_unique { "YES" } else { "NO" };
             output.push_str(&format!(
@@ -186,7 +181,7 @@ fn format_table_indexes(table_name: &str, indexes: &[IndexInfo]) -> String {
         }
         output.push_str("+---------------------------+-------------+----------+\n");
     }
-    
+
     output
 }
 
@@ -206,7 +201,7 @@ pub fn print_result(result: ExecutorResult) {
         let row_str: Vec<String> = row.iter().map(|v| format_value(v)).collect();
         println!("{}", row_str.join("\t"));
     }
-    
+
     println!("\n{} rows in set", result.rows.len());
 }
 
@@ -227,13 +222,13 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_storage::{MemoryStorage, ColumnDefinition, TableInfo};
+    use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, TableInfo};
 
     #[test]
     fn test_command_help() {
         let storage = MemoryStorage::new();
         let result = execute_command(".help", &storage);
-        
+
         match result {
             CommandResult::Ok(output) => {
                 assert!(output.contains(".tables"));
@@ -248,7 +243,7 @@ mod tests {
     fn test_command_tables_empty() {
         let storage = MemoryStorage::new();
         let result = execute_command(".tables", &storage);
-        
+
         match result {
             CommandResult::Ok(output) => {
                 assert!(output.contains("No tables found"));
@@ -269,9 +264,9 @@ mod tests {
             }],
         };
         storage.create_table(&info).unwrap();
-        
+
         let result = execute_command(".tables", &storage);
-        
+
         match result {
             CommandResult::Ok(output) => {
                 assert!(output.contains("users"));
@@ -299,9 +294,9 @@ mod tests {
             ],
         };
         storage.create_table(&info).unwrap();
-        
+
         let result = execute_command(".schema users", &storage);
-        
+
         match result {
             CommandResult::Ok(output) => {
                 assert!(output.contains("users"));
@@ -316,7 +311,7 @@ mod tests {
     fn test_command_schema_not_found() {
         let storage = MemoryStorage::new();
         let result = execute_command(".schema nonexistent", &storage);
-        
+
         match result {
             CommandResult::Err(msg) => {
                 assert!(msg.contains("not found"));
@@ -337,9 +332,9 @@ mod tests {
             }],
         };
         storage.create_table(&info).unwrap();
-        
+
         let result = execute_command(".indexes users", &storage);
-        
+
         match result {
             CommandResult::Ok(output) => {
                 assert!(output.contains("users"));
@@ -352,7 +347,7 @@ mod tests {
     fn test_command_exit() {
         let storage = MemoryStorage::new();
         let result = execute_command(".exit", &storage);
-        
+
         match result {
             CommandResult::Exit => {}
             _ => panic!("Expected Exit"),
@@ -363,7 +358,7 @@ mod tests {
     fn test_command_quit() {
         let storage = MemoryStorage::new();
         let result = execute_command(".quit", &storage);
-        
+
         match result {
             CommandResult::Exit => {}
             _ => panic!("Expected Exit"),
@@ -374,7 +369,7 @@ mod tests {
     fn test_command_unknown() {
         let storage = MemoryStorage::new();
         let result = execute_command(".unknown", &storage);
-        
+
         match result {
             CommandResult::Err(msg) => {
                 assert!(msg.contains("Unknown command"));
@@ -386,7 +381,10 @@ mod tests {
     #[test]
     fn test_format_value() {
         assert_eq!(format_value(&sqlrustgo_types::Value::Integer(42)), "42");
-        assert_eq!(format_value(&sqlrustgo_types::Value::Text("hello".to_string())), "hello");
+        assert_eq!(
+            format_value(&sqlrustgo_types::Value::Text("hello".to_string())),
+            "hello"
+        );
         assert_eq!(format_value(&sqlrustgo_types::Value::Null), "NULL");
         assert_eq!(format_value(&sqlrustgo_types::Value::Float(3.14)), "3.14");
         assert_eq!(format_value(&sqlrustgo_types::Value::Boolean(true)), "true");

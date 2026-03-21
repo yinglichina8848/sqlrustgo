@@ -57,21 +57,21 @@ impl OperatorProfile {
     pub fn record_execution(&mut self, duration_ns: u64, rows: usize, batches: usize) {
         self.total_time_ns += duration_ns;
         self.execution_count += 1;
-        
+
         if duration_ns < self.min_time_ns {
             self.min_time_ns = duration_ns;
         }
         if duration_ns > self.max_time_ns {
             self.max_time_ns = duration_ns;
         }
-        
+
         if self.execution_count > 0 {
             self.avg_time_ns = self.total_time_ns / self.execution_count;
         }
-        
+
         self.rows_processed += rows as u64;
         self.batches_processed += batches as u64;
-        
+
         // Calculate rows per second
         if self.total_time_ns > 0 {
             let seconds = self.total_time_ns as f64 / 1_000_000_000.0;
@@ -193,38 +193,71 @@ impl QueryProfile {
     /// Generate profiling report
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
-        
-        report.push_str(&format!("╔══════════════════════════════════════════════════════════════════╗\n"));
-        report.push_str(&format!("║          SQLRustGo 2.0 - Query Performance Profile               ║\n"));
-        report.push_str(&format!("╠══════════════════════════════════════════════════════════════════╣\n"));
-        report.push_str(&format!("║ Query ID: {}                                          ║\n", self.query_id));
-        report.push_str(&format!("║ SQL: {}                               ║\n", truncate_string(&self.sql, 50)));
-        report.push_str(&format!("║ Total Time: {}                                                 ║\n", format_duration(self.total_time_ns)));
-        report.push_str(&format!("║ Status: {}                                                     ║\n", if self.success { "SUCCESS" } else { "FAILED" }));
-        report.push_str(&format!("╚══════════════════════════════════════════════════════════════════╝\n\n"));
-        
+
+        report.push_str(&format!(
+            "╔══════════════════════════════════════════════════════════════════╗\n"
+        ));
+        report.push_str(&format!(
+            "║          SQLRustGo 2.0 - Query Performance Profile               ║\n"
+        ));
+        report.push_str(&format!(
+            "╠══════════════════════════════════════════════════════════════════╣\n"
+        ));
+        report.push_str(&format!(
+            "║ Query ID: {}                                          ║\n",
+            self.query_id
+        ));
+        report.push_str(&format!(
+            "║ SQL: {}                               ║\n",
+            truncate_string(&self.sql, 50)
+        ));
+        report.push_str(&format!(
+            "║ Total Time: {}                                                 ║\n",
+            format_duration(self.total_time_ns)
+        ));
+        report.push_str(&format!(
+            "║ Status: {}                                                     ║\n",
+            if self.success { "SUCCESS" } else { "FAILED" }
+        ));
+        report.push_str(&format!(
+            "╚══════════════════════════════════════════════════════════════════╝\n\n"
+        ));
+
         report.push_str("Operator Breakdown:\n");
-        report.push_str("┌─────────────────────────────────────────────────────────────────────────┐\n");
-        report.push_str("│ Operator          │ Executions  │ Avg Time     │ Total Time   │ Rows  │\n");
-        report.push_str("├───────────────────┼──────────────┼──────────────┼──────────────┼───────┤\n");
-        
+        report.push_str(
+            "┌─────────────────────────────────────────────────────────────────────────┐\n",
+        );
+        report.push_str(
+            "│ Operator          │ Executions  │ Avg Time     │ Total Time   │ Rows  │\n",
+        );
+        report.push_str(
+            "├───────────────────┼──────────────┼──────────────┼──────────────┼───────┤\n",
+        );
+
         for op in self.operators_by_time() {
             let name = format!("{:17}", truncate_string(&op.operator_name, 17));
             let execs = format!("{:12}", op.execution_count);
             let avg = format!("{:12}", op.format_avg_time());
             let total = format!("{:12}", op.format_total_time());
             let rows = format!("{:6}", op.rows_processed);
-            
-            report.push_str(&format!("│ {} │ {} │ {} │ {} │ {} │\n",
-                name, execs, avg, total, rows));
+
+            report.push_str(&format!(
+                "│ {} │ {} │ {} │ {} │ {} │\n",
+                name, execs, avg, total, rows
+            ));
         }
-        report.push_str("└─────────────────────────────────────────────────────────────────────────┘\n");
-        
+        report.push_str(
+            "└─────────────────────────────────────────────────────────────────────────┘\n",
+        );
+
         if let Some(slowest) = self.slowest_operator() {
-            report.push_str(&format!("\n⚠️  Slowest Operator: {} ({}ms)\n", 
-                slowest.operator_name, slowest.total_time_ns / 1_000_000));
+            report.push_str(&format!(
+                "\n⚠️  Slowest Operator: {} ({}ms)\n",
+                slowest.operator_name,
+                slowest.total_time_ns / 1_000_000
+            ));
         }
-        
+
         report
     }
 
@@ -266,27 +299,37 @@ impl AtomicProfile {
     pub fn record(&self, duration_ns: u64, rows: usize, batches: usize) {
         self.total_time_ns.fetch_add(duration_ns, Ordering::Relaxed);
         self.execution_count.fetch_add(1, Ordering::Relaxed);
-        self.rows_processed.fetch_add(rows as u64, Ordering::Relaxed);
-        self.batches_processed.fetch_add(batches as u64, Ordering::Relaxed);
-        
+        self.rows_processed
+            .fetch_add(rows as u64, Ordering::Relaxed);
+        self.batches_processed
+            .fetch_add(batches as u64, Ordering::Relaxed);
+
         // Update min (try to set lower value)
         loop {
             let current = self.min_time_ns.load(Ordering::Relaxed);
             if duration_ns >= current {
                 break;
             }
-            if self.min_time_ns.compare_exchange(current, duration_ns, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            if self
+                .min_time_ns
+                .compare_exchange(current, duration_ns, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
                 break;
             }
         }
-        
+
         // Update max (try to set higher value)
         loop {
             let current = self.max_time_ns.load(Ordering::Relaxed);
             if duration_ns <= current {
                 break;
             }
-            if self.max_time_ns.compare_exchange(current, duration_ns, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            if self
+                .max_time_ns
+                .compare_exchange(current, duration_ns, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
                 break;
             }
         }
@@ -310,7 +353,11 @@ impl AtomicProfile {
 
     pub fn min_time_ns(&self) -> u64 {
         let val = self.min_time_ns.load(Ordering::Relaxed);
-        if val == u64::MAX { 0 } else { val }
+        if val == u64::MAX {
+            0
+        } else {
+            val
+        }
     }
 
     pub fn max_time_ns(&self) -> u64 {
@@ -355,11 +402,8 @@ impl<'a> ProfileTimer<'a> {
 impl<'a> Drop for ProfileTimer<'a> {
     fn drop(&mut self) {
         let duration = self.start.elapsed();
-        self.profile.record_execution(
-            duration.as_nanos() as u64,
-            self.rows,
-            self.batches,
-        );
+        self.profile
+            .record_execution(duration.as_nanos() as u64, self.rows, self.batches);
     }
 }
 
@@ -392,11 +436,18 @@ impl Profiler {
     }
 
     /// Record an operator execution
-    pub fn record(&self, name: &str, operator_type: &str, duration_ns: u64, rows: usize, batches: usize) {
+    pub fn record(
+        &self,
+        name: &str,
+        operator_type: &str,
+        duration_ns: u64,
+        rows: usize,
+        batches: usize,
+    ) {
         if let Ok(mut profiles) = self.profiles.write() {
-            let profile = profiles.entry(name.to_string()).or_insert_with(|| {
-                OperatorProfile::new(name, operator_type)
-            });
+            let profile = profiles
+                .entry(name.to_string())
+                .or_insert_with(|| OperatorProfile::new(name, operator_type));
             profile.record_execution(duration_ns, rows, batches);
         }
     }
@@ -428,12 +479,18 @@ impl Profiler {
 
     /// Get all query profiles
     pub fn get_query_profiles(&self) -> Vec<QueryProfile> {
-        self.query_profiles.read().map(|p| p.clone()).unwrap_or_default()
+        self.query_profiles
+            .read()
+            .map(|p| p.clone())
+            .unwrap_or_default()
     }
 
     /// Get the latest query profile
     pub fn latest_query_profile(&self) -> Option<QueryProfile> {
-        self.query_profiles.read().ok().and_then(|p| p.last().cloned())
+        self.query_profiles
+            .read()
+            .ok()
+            .and_then(|p| p.last().cloned())
     }
 
     /// Clear all profiling data
@@ -449,43 +506,70 @@ impl Profiler {
     /// Generate aggregate profiling report
     pub fn generate_report(&self) -> String {
         let profiles = self.get_sorted_profiles();
-        
+
         let mut report = String::new();
-        
-        report.push_str(&format!("╔════════════════════════════════════════════════════════════════════╗\n"));
-        report.push_str(&format!("║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n"));
-        report.push_str(&format!("╠════════════════════════════════════════════════════════════════════╣\n"));
-        
+
+        report.push_str(&format!(
+            "╔════════════════════════════════════════════════════════════════════╗\n"
+        ));
+        report.push_str(&format!(
+            "║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n"
+        ));
+        report.push_str(&format!(
+            "╠════════════════════════════════════════════════════════════════════╣\n"
+        ));
+
         let total_queries = self.query_profiles.read().map(|p| p.len()).unwrap_or(0);
-        report.push_str(&format!("║ Total Queries Profiled: {}                                         ║\n", total_queries));
-        
+        report.push_str(&format!(
+            "║ Total Queries Profiled: {}                                         ║\n",
+            total_queries
+        ));
+
         let total_operators = profiles.len();
-        report.push_str(&format!("║ Unique Operators: {}                                                 ║\n", total_operators));
-        
+        report.push_str(&format!(
+            "║ Unique Operators: {}                                                 ║\n",
+            total_operators
+        ));
+
         let total_time: u64 = profiles.iter().map(|p| p.total_time_ns).sum();
-        report.push_str(&format!("║ Total Time: {}                                                     ║\n", format_duration(total_time)));
-        
-        report.push_str(&format!("╚════════════════════════════════════════════════════════════════════╝\n\n"));
-        
+        report.push_str(&format!(
+            "║ Total Time: {}                                                     ║\n",
+            format_duration(total_time)
+        ));
+
+        report.push_str(&format!(
+            "╚════════════════════════════════════════════════════════════════════╝\n\n"
+        ));
+
         if !profiles.is_empty() {
             report.push_str("Top Operators by Execution Time:\n");
-            report.push_str("┌─────────────────────────────────────────────────────────────────────────┐\n");
-            report.push_str("│ Operator          │ Executions  │ Avg Time     │ Total Time   │ Rows  │\n");
-            report.push_str("├───────────────────┼──────────────┼──────────────┼──────────────┼───────┤\n");
-            
+            report.push_str(
+                "┌─────────────────────────────────────────────────────────────────────────┐\n",
+            );
+            report.push_str(
+                "│ Operator          │ Executions  │ Avg Time     │ Total Time   │ Rows  │\n",
+            );
+            report.push_str(
+                "├───────────────────┼──────────────┼──────────────┼──────────────┼───────┤\n",
+            );
+
             for profile in profiles.iter().take(20) {
                 let name = format!("{:17}", truncate_string(&profile.operator_name, 17));
                 let execs = format!("{:12}", profile.execution_count);
                 let avg = format!("{:12}", profile.format_avg_time());
                 let total = format!("{:12}", profile.format_total_time());
                 let rows = format!("{:6}", profile.rows_processed);
-                
-                report.push_str(&format!("│ {} │ {} │ {} │ {} │ {} │\n",
-                    name, execs, avg, total, rows));
+
+                report.push_str(&format!(
+                    "│ {} │ {} │ {} │ {} │ {} │\n",
+                    name, execs, avg, total, rows
+                ));
             }
-            report.push_str("└─────────────────────────────────────────────────────────────────────────┘\n");
+            report.push_str(
+                "└─────────────────────────────────────────────────────────────────────────┘\n",
+            );
         }
-        
+
         report
     }
 
@@ -514,12 +598,12 @@ mod tests {
     #[test]
     fn test_operator_profile_record() {
         let mut profile = OperatorProfile::new("SeqScan", "scan");
-        
+
         profile.record_execution(1000, 100, 2);
         assert_eq!(profile.execution_count, 1);
         assert_eq!(profile.total_time_ns, 1000);
         assert_eq!(profile.rows_processed, 100);
-        
+
         profile.record_execution(2000, 150, 3);
         assert_eq!(profile.execution_count, 2);
         assert_eq!(profile.total_time_ns, 3000);
@@ -529,11 +613,11 @@ mod tests {
     #[test]
     fn test_operator_profile_min_max() {
         let mut profile = OperatorProfile::new("Test", "test");
-        
+
         profile.record_execution(100, 10, 1);
         profile.record_execution(500, 20, 2);
         profile.record_execution(200, 15, 1);
-        
+
         assert_eq!(profile.min_time_ns, 100);
         assert_eq!(profile.max_time_ns, 500);
     }
@@ -541,20 +625,20 @@ mod tests {
     #[test]
     fn test_query_profile() {
         let mut query = QueryProfile::new("q1", "SELECT * FROM users");
-        
+
         let mut op1 = OperatorProfile::new("SeqScan", "scan");
         op1.record_execution(1000, 1000, 10);
-        
+
         let mut op2 = OperatorProfile::new("Filter", "filter");
         op2.record_execution(500, 500, 5);
-        
+
         query.add_operator(op1);
         query.add_operator(op2);
         query.finish(1500);
-        
+
         assert_eq!(query.operators.len(), 2);
         assert_eq!(query.total_time_ns, 1500);
-        
+
         let slowest = query.slowest_operator().unwrap();
         assert_eq!(slowest.operator_name, "SeqScan");
     }
@@ -562,13 +646,13 @@ mod tests {
     #[test]
     fn test_query_profile_report() {
         let mut query = QueryProfile::new("q1", "SELECT * FROM users");
-        
+
         let mut op = OperatorProfile::new("SeqScan", "scan");
         op.record_execution(1_000_000, 1000, 10);
-        
+
         query.add_operator(op);
         query.finish(1_000_000);
-        
+
         let report = query.generate_report();
         assert!(report.contains("SQLRustGo"));
         assert!(report.contains("SeqScan"));
@@ -577,10 +661,10 @@ mod tests {
     #[test]
     fn test_atomic_profile() {
         let profile = AtomicProfile::new();
-        
+
         profile.record(1000, 100, 1);
         profile.record(2000, 200, 2);
-        
+
         assert_eq!(profile.execution_count(), 2);
         assert_eq!(profile.total_time_ns(), 3000);
         assert_eq!(profile.avg_time_ns(), 1500);
@@ -589,14 +673,14 @@ mod tests {
     #[test]
     fn test_profiler() {
         let profiler = Profiler::new();
-        
+
         profiler.record("SeqScan", "scan", 1000, 100, 1);
         profiler.record("SeqScan", "scan", 2000, 200, 2);
         profiler.record("Filter", "filter", 500, 50, 1);
-        
+
         let profiles = profiler.get_all_profiles();
         assert_eq!(profiles.len(), 2);
-        
+
         let sorted = profiler.get_sorted_profiles();
         assert_eq!(sorted[0].operator_name, "SeqScan");
     }
@@ -604,15 +688,15 @@ mod tests {
     #[test]
     fn test_profiler_query() {
         let profiler = Profiler::new();
-        
+
         let mut query = QueryProfile::new("q1", "SELECT 1");
         let mut op = OperatorProfile::new("Test", "test");
         op.record_execution(1000, 100, 1);
         query.add_operator(op);
         query.finish(1000);
-        
+
         profiler.record_query(query);
-        
+
         let latest = profiler.latest_query_profile().unwrap();
         assert_eq!(latest.query_id, "q1");
     }
@@ -620,10 +704,10 @@ mod tests {
     #[test]
     fn test_profiler_report() {
         let profiler = Profiler::new();
-        
+
         profiler.record("SeqScan", "scan", 1000, 100, 1);
         profiler.record("HashJoin", "join", 2000, 50, 1);
-        
+
         let report = profiler.generate_report();
         assert!(report.contains("SQLRustGo"));
         assert!(report.contains("SeqScan"));
@@ -632,12 +716,12 @@ mod tests {
     #[test]
     fn test_profile_timer() {
         let mut profile = OperatorProfile::new("Test", "test");
-        
+
         {
             let _timer = ProfileTimer::new(&mut profile, 100, 5);
             std::thread::sleep(Duration::from_millis(1));
         }
-        
+
         assert_eq!(profile.execution_count, 1);
         assert!(profile.total_time_ns > 0);
     }

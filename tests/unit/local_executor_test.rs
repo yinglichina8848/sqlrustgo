@@ -1,6 +1,6 @@
 // Local Executor Tests
-use sqlrustgo_executor::LocalExecutor;
 use sqlrustgo_executor::query_cache_config::QueryCacheConfig;
+use sqlrustgo_executor::LocalExecutor;
 use sqlrustgo_storage::engine::StorageEngine;
 use sqlrustgo_storage::file_storage::FileStorage;
 use tempfile::TempDir;

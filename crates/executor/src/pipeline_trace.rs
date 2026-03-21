@@ -89,38 +89,31 @@ impl OperatorTrace {
 
     fn build_tree(&self, depth: usize, is_last: bool) -> String {
         let mut result = String::new();
-        
+
         // Build prefix
         let prefix = if depth == 0 {
             "".to_string()
         } else {
-            let indent = if is_last {
-                "└── "
-            } else {
-                "├── "
-            };
+            let indent = if is_last { "└── " } else { "├── " };
             indent.to_string()
         };
 
         // Duration display
         let duration_str = format_duration(self.duration_ns);
-        
+
         // Rows display
         let rows_str = format!("{} rows", self.rows_produced);
-        
+
         // Build the line
         result.push_str(&format!(
             "{}{} ({}) [{}]\n",
-            prefix,
-            self.operator_name,
-            duration_str,
-            rows_str
+            prefix, self.operator_name, duration_str, rows_str
         ));
 
         // Process children
         for (i, child) in self.children.iter().enumerate() {
             let child_is_last = i == self.children.len() - 1;
-            
+
             // Add vertical lines for parents
             if depth > 0 {
                 // Add proper indentation
@@ -136,7 +129,7 @@ impl OperatorTrace {
                     }
                 }
             }
-            
+
             result.push_str(&child.build_tree(depth + 1, child_is_last));
         }
 
@@ -204,7 +197,7 @@ impl QueryTrace {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap();
-        
+
         Self {
             query_id: uuid_simple(),
             sql: sql.to_string(),
@@ -229,26 +222,50 @@ impl QueryTrace {
     }
 
     fn count_operators(&self, trace: &OperatorTrace) -> usize {
-        1 + trace.children.iter().map(|c| self.count_operators(c)).sum::<usize>()
+        1 + trace
+            .children
+            .iter()
+            .map(|c| self.count_operators(c))
+            .sum::<usize>()
     }
 
     /// Generate ASCII pipeline visualization
     pub fn visualize_pipeline(&self) -> String {
         let mut output = String::new();
-        
-        output.push_str(&format!("╔══════════════════════════════════════════════════════════════════╗\n"));
-        output.push_str(&format!("║          SQLRustGo 2.0 - Query Pipeline Visualization          ║\n"));
-        output.push_str(&format!("╠══════════════════════════════════════════════════════════════════╣\n"));
-        output.push_str(&format!("║ Query ID: {}                                        ║\n", self.query_id));
+
+        output.push_str(&format!(
+            "╔══════════════════════════════════════════════════════════════════╗\n"
+        ));
+        output.push_str(&format!(
+            "║          SQLRustGo 2.0 - Query Pipeline Visualization          ║\n"
+        ));
+        output.push_str(&format!(
+            "╠══════════════════════════════════════════════════════════════════╣\n"
+        ));
+        output.push_str(&format!(
+            "║ Query ID: {}                                        ║\n",
+            self.query_id
+        ));
         output.push_str(&format!("║ SQL: {}  ║\n", truncate_string(&self.sql, 60)));
-        output.push_str(&format!("║ Duration: {}                                             ║\n", format_duration(self.total_duration_ns)));
-        output.push_str(&format!("║ Operators: {}                                                   ║\n", self.operator_count));
-        output.push_str(&format!("║ Total Rows: {}                                                 ║\n", self.total_rows));
-        output.push_str(&format!("╚══════════════════════════════════════════════════════════════════╝\n\n"));
-        
+        output.push_str(&format!(
+            "║ Duration: {}                                             ║\n",
+            format_duration(self.total_duration_ns)
+        ));
+        output.push_str(&format!(
+            "║ Operators: {}                                                   ║\n",
+            self.operator_count
+        ));
+        output.push_str(&format!(
+            "║ Total Rows: {}                                                 ║\n",
+            self.total_rows
+        ));
+        output.push_str(&format!(
+            "╚══════════════════════════════════════════════════════════════════╝\n\n"
+        ));
+
         output.push_str("Execution Pipeline:\n");
         output.push_str(&self.root_trace.to_tree_string());
-        
+
         output
     }
 
@@ -341,11 +358,11 @@ mod tests {
     fn test_operator_trace_timing() {
         let start = Instant::now();
         let mut trace = OperatorTrace::new("SeqScan", "scan");
-        
+
         trace.start(start);
         std::thread::sleep(Duration::from_millis(1));
         trace.finish(start);
-        
+
         assert!(trace.duration_ns > 0);
     }
 
@@ -356,10 +373,10 @@ mod tests {
         left.rows_produced = 100;
         let mut right = OperatorTrace::new("SeqScan", "scan");
         right.rows_produced = 50;
-        
+
         root.add_child(left);
         root.add_child(right);
-        
+
         let tree = root.to_tree_string();
         assert!(tree.contains("HashJoin"));
         assert!(tree.contains("SeqScan"));
@@ -374,15 +391,15 @@ mod tests {
     #[test]
     fn test_query_trace_pipeline_viz() {
         let mut query = QueryTrace::new("SELECT * FROM users WHERE id > 10");
-        
+
         let mut root = OperatorTrace::new("Filter", "filter");
         let mut scan = OperatorTrace::new("SeqScan", "scan");
         scan.rows_produced = 1000;
         root.add_child(scan);
-        
+
         query.set_root(root);
         query.finish(Duration::from_millis(10));
-        
+
         let viz = query.visualize_pipeline();
         assert!(viz.contains("SQLRustGo"));
         assert!(viz.contains("Query Pipeline"));
@@ -391,13 +408,13 @@ mod tests {
     #[test]
     fn test_trace_collector() {
         let collector = TraceCollector::new(10);
-        
+
         let trace1 = QueryTrace::new("SELECT 1");
         let trace2 = QueryTrace::new("SELECT 2");
-        
+
         collector.record(trace1);
         collector.record(trace2);
-        
+
         let traces = collector.get_traces();
         assert_eq!(traces.len(), 2);
     }
@@ -405,12 +422,12 @@ mod tests {
     #[test]
     fn test_trace_collector_max_traces() {
         let collector = TraceCollector::new(2);
-        
+
         for i in 0..5 {
             let trace = QueryTrace::new(&format!("SELECT {}", i));
             collector.record(trace);
         }
-        
+
         let traces = collector.get_traces();
         assert_eq!(traces.len(), 2);
     }
