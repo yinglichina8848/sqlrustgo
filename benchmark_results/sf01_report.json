@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "date": "20533+03:33:30",
+    "scale_factor": "0.1",
+    "scenario": "single_thread",
+    "threads": 1
+  },
+  "results": [
+    {
+      "query": "Q1",
+      "sqlrustgo_ms": 0.133208,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    },
+    {
+      "query": "Q3",
+      "sqlrustgo_ms": 0.048458,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    },
+    {
+      "query": "Q4",
+      "sqlrustgo_ms": 0.012333,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    },
+    {
+      "query": "Q6",
+      "sqlrustgo_ms": 0.0065,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    },
+    {
+      "query": "Q10",
+      "sqlrustgo_ms": 0.016042,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    },
+    {
+      "query": "Q13",
+      "sqlrustgo_ms": 0.005791999999999999,
+      "sqlite_ms": 305.8490695,
+      "cache_hit": false,
+      "rows": 1
+    }
+  ],
+  "summary": {
+    "total_sqlrustgo_ms": 0.222333,
+    "total_sqlite_ms": 1835.094417,
+    "cache_hit_rate": 0.0,
+    "qps": 1.956429233839875
+  }
+}
