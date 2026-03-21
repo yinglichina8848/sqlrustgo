@@ -8,6 +8,14 @@ use sqlrustgo_parser::parser::{SelectStatement, InsertStatement, CreateTableStat
 use sqlrustgo_storage::{MemoryStorage, StorageEngine, TableInfo, ColumnDefinition};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_types::Value;
+use std::env;
+
+/// Check if teaching mode is enabled via environment variable
+fn is_teaching_mode() -> bool {
+    env::var("SQLRUSTGO_TEACHING_MODE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
 
 mod commands;
 use commands::{execute_command, print_result, CommandResult};
@@ -132,6 +140,11 @@ fn execute_select(select: &SelectStatement, storage: &dyn StorageEngine) -> Resu
         return Err(format!("Table '{}' not found", table_name));
     }
     
+    // In teaching mode, return EXPLAIN output instead of actual data
+    if is_teaching_mode() {
+        return generate_explain_output(select, storage);
+    }
+    
     // Get table info for schema
     let table_info = storage.get_table_info(table_name).map_err(|e| e.to_string())?;
     
@@ -153,6 +166,70 @@ fn execute_select(select: &SelectStatement, storage: &dyn StorageEngine) -> Resu
     };
     
     Ok(ExecutorResult::new(result_rows, 0))
+}
+
+/// Generate EXPLAIN output for teaching mode
+fn generate_explain_output(select: &SelectStatement, storage: &dyn StorageEngine) -> Result<ExecutorResult, String> {
+    let table_name = &select.table;
+    
+    // Get table info for schema
+    let table_info = storage.get_table_info(table_name).map_err(|e| e.to_string())?;
+    
+    // Build EXPLAIN output
+    let mut explain_output = String::new();
+    
+    explain_output.push_str("+-----------------------------+\n");
+    explain_output.push_str("| ID | Operation              |\n");
+    explain_output.push_str("+-----------------------------+\n");
+    
+    // Generate plan based on query structure
+    if select.columns.is_empty() {
+        explain_output.push_str(&format!("| 1  | SeqScan on {}        |\n", table_name));
+    } else {
+        explain_output.push_str(&format!("| 1  | SeqScan on {}        |\n", table_name));
+        let cols_str = if select.columns.len() > 3 {
+            format!("{} columns...", select.columns.len())
+        } else {
+            select.columns.iter().map(|c| c.name.clone()).collect::<Vec<_>>().join(", ")
+        };
+        explain_output.push_str(&format!("| 2  | Projection: {} |\n", cols_str));
+    }
+    
+    // Check WHERE clause presence
+    if select.where_clause.is_some() {
+        explain_output.push_str("| 3  | Filter                |\n");
+    }
+    
+    // Add aggregates info if present
+    if !select.aggregates.is_empty() {
+        explain_output.push_str(&format!("| {}  | Aggregate              |\n", 
+            if select.where_clause.is_some() { 4 } else { 3 }));
+    }
+    
+    explain_output.push_str("+-----------------------------+\n");
+    
+    // Add table structure info
+    explain_output.push_str("\nTable structure:\n");
+    explain_output.push_str("+-------------+---------------+\n");
+    explain_output.push_str("| Column      | Type          |\n");
+    explain_output.push_str("+-------------+---------------+\n");
+    
+    for col in &table_info.columns {
+        let col_type = format!("{:?}", col.data_type);
+        explain_output.push_str(&format!("| {:11} | {:13} |\n", 
+            if col.name.len() > 11 { &col.name[..11] } else { &col.name },
+            if col_type.len() > 13 { &col_type[..13] } else { &col_type }));
+    }
+    
+    explain_output.push_str("+-------------+---------------+\n");
+    
+    // Add note about teaching mode
+    explain_output.push_str("\nNote: Teaching mode is enabled. Set SQLRUSTGO_TEACHING_MODE=0 to disable.\n");
+    
+    Ok(ExecutorResult::new(
+        vec![vec![Value::Text(explain_output)]], 
+        0
+    ))
 }
 
 /// Execute INSERT statement
