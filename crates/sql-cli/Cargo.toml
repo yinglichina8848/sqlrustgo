@@ -1,0 +1,31 @@
+[package]
+name = "sqlrustgo-sql-cli"
+version = "1.6.1"
+edition = "2021"
+authors = ["SQLRustGo Team"]
+license = "MIT"
+
+[dependencies]
+# SQLRustGo internal crates
+sqlrustgo-common = { path = "../common" }
+sqlrustgo-types = { path = "../types" }
+sqlrustgo-parser = { path = "../parser" }
+sqlrustgo-planner = { path = "../planner" }
+sqlrustgo-optimizer = { path = "../optimizer" }
+sqlrustgo-executor = { path = "../executor" }
+sqlrustgo-storage = { path = "../storage" }
+sqlrustgo-catalog = { path = "../catalog" }
+sqlrustgo-transaction = { path = "../transaction" }
+
+# External dependencies
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+thiserror = "2.0"
+log = "0.4"
+env_logger = "0.11"
+rustyline = "15"
+ctrlc = "3.5"
+regex = "1.10"
+
+[features]
+default = []
