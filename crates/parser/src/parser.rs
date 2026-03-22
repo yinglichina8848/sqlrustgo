@@ -416,30 +416,97 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
-        // Check for column list: (col1, col2, ...)
-        let columns = if matches!(self.current(), Some(Token::LParen)) {
-            self.next(); // consume '('
-            let mut cols = Vec::new();
+        // Check for INSERT SET syntax or column list
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+
+        if matches!(self.current(), Some(Token::Set)) {
+            // INSERT INTO table SET col1=val1, col2=val2
+            self.next(); // consume SET
+
             loop {
+                // Parse column name
+                let col_name = match self.current() {
+                    Some(Token::Identifier(name)) => name.clone(),
+                    _ => break,
+                };
+                self.next();
+                columns.push(col_name);
+
+                // Expect =
                 match self.current() {
+                    Some(Token::Equal) => {}
+                    _ => return Err("Expected = after column name".to_string()),
+                }
+                self.next(); // consume =
+
+                // Parse value - extract first, then advance
+                let value = match self.current() {
+                    Some(Token::NumberLiteral(n)) => {
+                        let v = Expression::Literal(n.clone());
+                        self.next();
+                        v
+                    }
+                    Some(Token::StringLiteral(s)) => {
+                        let v = Expression::Literal(format!("'{}'", s));
+                        self.next();
+                        v
+                    }
                     Some(Token::Identifier(name)) => {
-                        cols.push(name.clone());
+                        let v = Expression::Identifier(name.clone());
                         self.next();
+                        v
                     }
-                    Some(Token::RParen) => {
+                    Some(Token::Null) => {
+                        let v = Expression::Literal("NULL".to_string());
                         self.next();
-                        break;
+                        v
                     }
+                    Some(Token::Minus) => {
+                        self.next();
+                        if let Some(Token::NumberLiteral(n)) = self.current() {
+                            let v = Expression::Literal(format!("-{}", n));
+                            self.next();
+                            v
+                        } else {
+                            return Err("Expected number after -".to_string());
+                        }
+                    }
+                    _ => return Err("Expected value".to_string()),
+                };
+                values.push(vec![value]);
+
+                // Check for more columns
+                match self.current() {
                     Some(Token::Comma) => {
-                        self.next();
+                        self.next(); // consume comma
                     }
-                    _ => return Err("Expected column name".to_string()),
+                    _ => break,
                 }
             }
-            cols
-        } else {
-            Vec::new()
-        };
+
+            return Ok(Statement::Insert(InsertStatement {
+                table,
+                columns,
+                values,
+            }));
+        } else if matches!(self.current(), Some(Token::LParen)) {
+            // INSERT INTO table (col1, col2) VALUES ...
+            self.next(); // consume '('
+            loop {
+                if let Some(Token::Identifier(name)) = self.current() {
+                    columns.push(name.clone());
+                    self.next();
+                } else if matches!(self.current(), Some(Token::RParen)) {
+                    self.next();
+                    break;
+                } else if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    return Err("Expected column name".to_string());
+                }
+            }
+        }
 
         // Expect VALUES keyword
         if !matches!(self.current(), Some(Token::Values)) {
