@@ -28,9 +28,26 @@ pub enum Statement {
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
     AlterTable(AlterTableStatement),
+    CreateIndex(CreateIndexStatement),
+    DropIndex(DropIndexStatement),
     CreateView(CreateViewStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
+}
+
+/// CREATE INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateIndexStatement {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+}
+
+/// DROP INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropIndexStatement {
+    pub name: String,
 }
 
 /// ALTER TABLE operation type
@@ -803,6 +820,63 @@ impl Parser {
             table,
             where_clause,
         }))
+    }
+
+    fn parse_create_index(&mut self) -> Result<Statement, String> {
+        // CREATE [UNIQUE] INDEX index_name ON table (col1, col2, ...)
+        let unique = matches!(self.current(), Some(Token::Unique));
+        if unique {
+            self.next();
+        }
+
+        self.expect(Token::Index)?;
+        let name = match self.next() {
+            Some(Token::Identifier(n)) => n,
+            _ => return Err("Expected index name".to_string()),
+        };
+
+        self.expect(Token::On)?;
+        let table = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(col)) => {
+                    columns.push(col.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name".to_string()),
+            }
+        }
+
+        Ok(Statement::CreateIndex(CreateIndexStatement {
+            name,
+            table,
+            columns,
+            unique,
+        }))
+    }
+
+    fn parse_drop_index(&mut self) -> Result<Statement, String> {
+        // DROP INDEX index_name
+        self.expect(Token::Index)?;
+        let name = match self.next() {
+            Some(Token::Identifier(n)) => n,
+            _ => return Err("Expected index name".to_string()),
+        };
+
+        Ok(Statement::DropIndex(DropIndexStatement { name }))
     }
 
     fn parse_create(&mut self) -> Result<Statement, String> {
