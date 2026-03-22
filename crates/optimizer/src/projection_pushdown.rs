@@ -41,38 +41,54 @@ impl ProjectionPushdownRule {
         match plan {
             // Eliminate redundant projection by pushing it down
             Plan::Projection { expr, input } => {
-                if let Plan::Projection { expr: inner_expr, .. } = &mut **input {
+                if let Plan::Projection {
+                    expr: inner_expr, ..
+                } = &mut **input
+                {
                     // Two consecutive projections - merge them
                     let merged = self.merge_projections(expr, inner_expr);
                     if let Some(merged_expr) = merged {
                         *expr = merged_expr;
                         // Remove the inner projection by replacing with its input
-                        if let Plan::Projection { input: inner_input, .. } = std::mem::replace(&mut **input, Plan::EmptyRelation) {
+                        if let Plan::Projection {
+                            input: inner_input, ..
+                        } = std::mem::replace(&mut **input, Plan::EmptyRelation)
+                        {
                             **input = *inner_input;
                         }
                         return true;
                     }
                 }
-                
+
                 // Try to push projection through Filter
-                if let Plan::Filter { input: filter_input, .. } = &mut **input {
+                if let Plan::Filter {
+                    input: filter_input,
+                    ..
+                } = &mut **input
+                {
                     // Move projection above filter is usually better
                     // But if filter_input is a scan, we can push down
-                    if let Plan::TableScan { projection: Some(_), .. } = &mut **filter_input {
+                    if let Plan::TableScan {
+                        projection: Some(_),
+                        ..
+                    } = &mut **filter_input
+                    {
                         // Already has projection
                         return false;
                     }
                 }
-                
+
                 false
             }
-            
+
             // Add projection to table scan if missing
-            Plan::TableScan { projection: None, .. } => {
+            Plan::TableScan {
+                projection: None, ..
+            } => {
                 // Check if there's a projection above
                 false
             }
-            
+
             // Propagate through Filter
             Plan::Filter { input, .. } => {
                 let mut changed = false;
@@ -82,7 +98,7 @@ impl ProjectionPushdownRule {
                 }
                 changed
             }
-            
+
             // Propagate through Aggregate
             Plan::Aggregate { input, .. } => {
                 // Aggregate needs all columns for group by
@@ -90,29 +106,29 @@ impl ProjectionPushdownRule {
                 let mut changed = false;
                 changed
             }
-            
+
             // Propagate through Join - push to both children
             Plan::Join { left, right, .. } => {
                 let mut changed = false;
                 changed
             }
-            
+
             // Propagate through Sort
             Plan::Sort { input, .. } => {
                 let mut changed = false;
                 changed
             }
-            
+
             // Propagate through Limit
             Plan::Limit { input, .. } => {
                 let mut changed = false;
                 changed
             }
-            
+
             _ => false,
         }
     }
-    
+
     /// Merge two consecutive projections
     fn merge_projections(&self, outer: &[Expr], inner: &[Expr]) -> Option<Vec<Expr>> {
         // This is a simplified merge - in reality we'd need expression analysis
@@ -138,20 +154,20 @@ impl ColumnPruner {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Collect all columns referenced in expressions
     pub fn collect_columns(&self, exprs: &[Expr]) -> HashSet<String> {
         let mut columns = HashSet::new();
         self.collect_from_exprs(exprs, &mut columns);
         columns
     }
-    
+
     fn collect_from_exprs(&self, exprs: &[Expr], columns: &mut HashSet<String>) {
         for expr in exprs {
             self.collect_from_expr(expr, columns);
         }
     }
-    
+
     fn collect_from_expr(&self, expr: &Expr, columns: &mut HashSet<String>) {
         match expr {
             Expr::Column(name) => {
@@ -167,14 +183,14 @@ impl ColumnPruner {
             _ => {}
         }
     }
-    
+
     /// Determine which columns are needed based on plan
     pub fn required_columns(&self, plan: &Plan) -> HashSet<String> {
         let mut columns = HashSet::new();
         self.collect_from_plan(plan, &mut columns);
         columns
     }
-    
+
     fn collect_from_plan(&self, plan: &Plan, columns: &mut HashSet<String>) {
         match plan {
             Plan::Projection { expr, input } => {
@@ -185,7 +201,11 @@ impl ColumnPruner {
                 self.collect_from_expr(predicate, columns);
                 self.collect_from_plan(input, columns);
             }
-            Plan::Aggregate { group_by, aggregates, input } => {
+            Plan::Aggregate {
+                group_by,
+                aggregates,
+                input,
+            } => {
                 self.collect_from_exprs(group_by, columns);
                 self.collect_from_exprs(aggregates, columns);
                 self.collect_from_plan(input, columns);
@@ -194,7 +214,12 @@ impl ColumnPruner {
                 self.collect_from_exprs(expr, columns);
                 self.collect_from_plan(input, columns);
             }
-            Plan::Join { left, right, condition, .. } => {
+            Plan::Join {
+                left,
+                right,
+                condition,
+                ..
+            } => {
                 if let Some(cond) = condition {
                     self.collect_from_expr(cond, columns);
                 }
@@ -239,21 +264,21 @@ impl ProjectionPushdownOptimizer {
             config: ProjectionPushdownConfig::default(),
         }
     }
-    
+
     /// Create with custom config
     pub fn with_config(config: ProjectionPushdownConfig) -> Self {
         Self { config }
     }
-    
+
     /// Optimize a plan
     pub fn optimize(&self, plan: &Plan) -> Plan {
         if !self.config.enabled {
             return plan.clone();
         }
-        
+
         let mut optimized = plan.clone();
         let rule = ProjectionPushdownRule::new();
-        
+
         // Apply rule until fixed point
         let mut changed = true;
         let mut iterations = 0;
@@ -261,10 +286,10 @@ impl ProjectionPushdownOptimizer {
             changed = rule.apply(&mut optimized);
             iterations += 1;
         }
-        
+
         optimized
     }
-    
+
     /// Check if pushdown would be beneficial
     pub fn is_beneficial(&self, total_columns: usize, required_columns: usize) -> bool {
         if !self.config.enabled {
@@ -309,13 +334,11 @@ mod tests {
     #[test]
     fn test_column_pruner_nested() {
         let pruner = ColumnPruner::new();
-        let columns = pruner.collect_columns(&[
-            Expr::BinaryExpr {
-                left: Box::new(Expr::Column("a".to_string())),
-                op: crate::Operator::Plus,
-                right: Box::new(Expr::Column("b".to_string())),
-            },
-        ]);
+        let columns = pruner.collect_columns(&[Expr::BinaryExpr {
+            left: Box::new(Expr::Column("a".to_string())),
+            op: crate::Operator::Plus,
+            right: Box::new(Expr::Column("b".to_string())),
+        }]);
         assert_eq!(columns.len(), 2);
         assert!(columns.contains("a"));
         assert!(columns.contains("b"));

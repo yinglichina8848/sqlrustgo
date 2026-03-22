@@ -31,6 +31,8 @@ mod tests {
             where_clause: None,
             join_clause: None,
             aggregates: vec![],
+            limit: None,
+            offset: None,
         });
     }
 

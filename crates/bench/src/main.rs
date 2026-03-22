@@ -16,10 +16,10 @@
 mod analysis;
 mod cli;
 mod db;
+mod memory;
 mod metrics;
 mod runner;
 mod workload;
-mod memory;
 
 use anyhow::Result;
 use clap::Parser;

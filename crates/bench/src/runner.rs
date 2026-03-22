@@ -3,9 +3,9 @@
 use crate::analysis::analyze;
 use crate::cli::BenchArgs;
 use crate::db::{create_db, DbConfig};
+use crate::memory::MemoryLimiter;
 use crate::metrics::LatencyRecorder;
 use crate::workload::create_workload;
-use crate::memory::MemoryLimiter;
 
 use anyhow::Result;
 use std::sync::atomic::{AtomicU64, Ordering};
