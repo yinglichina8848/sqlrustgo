@@ -373,12 +373,20 @@ pub mod simd_agg {
 
     /// Minimum value for float column
     pub fn min_f64(values: &[f64]) -> Option<f64> {
-        values.iter().copied().filter(|v| !v.is_nan()).reduce(|a, b| a.min(b))
+        values
+            .iter()
+            .copied()
+            .filter(|v| !v.is_nan())
+            .reduce(|a, b| a.min(b))
     }
 
     /// Maximum value for float column
     pub fn max_f64(values: &[f64]) -> Option<f64> {
-        values.iter().copied().filter(|v| !v.is_nan()).reduce(|a, b| a.max(b))
+        values
+            .iter()
+            .copied()
+            .filter(|v| !v.is_nan())
+            .reduce(|a, b| a.max(b))
     }
 
     /// Boolean AND reduction (all true)
@@ -397,11 +405,7 @@ pub mod vectorized_expr {
     use super::*;
 
     /// Vectorized binary expression evaluation
-    pub fn eval_binary_expr(
-        left: &ColumnArray,
-        op: &Operator,
-        right: &ColumnArray,
-    ) -> ColumnArray {
+    pub fn eval_binary_expr(left: &ColumnArray, op: &Operator, right: &ColumnArray) -> ColumnArray {
         match (left, right) {
             (ColumnArray::Int64(l), ColumnArray::Int64(r)) => {
                 let result: Vec<bool> = l
@@ -516,7 +520,10 @@ pub mod vectorized_expr {
                     // Try skipping one character from text
                     if text_chars.peek().is_some() {
                         let mut text_copy: String = text_chars.clone().collect();
-                        if like_pattern(&text_copy[1..], &pattern[pattern.len() - pattern_chars.clone().count()..]) {
+                        if like_pattern(
+                            &text_copy[1..],
+                            &pattern[pattern.len() - pattern_chars.clone().count()..],
+                        ) {
                             return true;
                         }
                     }
@@ -546,16 +553,14 @@ pub mod vectorized_expr {
                 }
                 ColumnArray::Null
             }
-            Expr::Literal(value) => {
-                match value {
-                    Value::Integer(i) => ColumnArray::Int64(vec![*i; chunk.num_rows()]),
-                    Value::Float(f) => ColumnArray::Float64(vec![*f; chunk.num_rows()]),
-                    Value::Boolean(b) => ColumnArray::Boolean(vec![*b; chunk.num_rows()]),
-                    Value::Text(s) => ColumnArray::Text(vec![s.clone(); chunk.num_rows()]),
-                    Value::Null => ColumnArray::Null,
-                    _ => ColumnArray::Null,
-                }
-            }
+            Expr::Literal(value) => match value {
+                Value::Integer(i) => ColumnArray::Int64(vec![*i; chunk.num_rows()]),
+                Value::Float(f) => ColumnArray::Float64(vec![*f; chunk.num_rows()]),
+                Value::Boolean(b) => ColumnArray::Boolean(vec![*b; chunk.num_rows()]),
+                Value::Text(s) => ColumnArray::Text(vec![s.clone(); chunk.num_rows()]),
+                Value::Null => ColumnArray::Null,
+                _ => ColumnArray::Null,
+            },
             Expr::BinaryExpr { left, op, right } => {
                 let left_col = eval_expr(left, chunk, schema);
                 let right_col = eval_expr(right, chunk, schema);
@@ -606,19 +611,23 @@ pub mod vectorized_filter {
         for col in chunk.columns() {
             let filtered = match col {
                 ColumnArray::Int64(v) => {
-                    let new_vec: Vec<i64> = indices.iter().filter_map(|&i| v.get(i).copied()).collect();
+                    let new_vec: Vec<i64> =
+                        indices.iter().filter_map(|&i| v.get(i).copied()).collect();
                     ColumnArray::Int64(new_vec)
                 }
                 ColumnArray::Float64(v) => {
-                    let new_vec: Vec<f64> = indices.iter().filter_map(|&i| v.get(i).copied()).collect();
+                    let new_vec: Vec<f64> =
+                        indices.iter().filter_map(|&i| v.get(i).copied()).collect();
                     ColumnArray::Float64(new_vec)
                 }
                 ColumnArray::Boolean(v) => {
-                    let new_vec: Vec<bool> = indices.iter().filter_map(|&i| v.get(i).copied()).collect();
+                    let new_vec: Vec<bool> =
+                        indices.iter().filter_map(|&i| v.get(i).copied()).collect();
                     ColumnArray::Boolean(new_vec)
                 }
                 ColumnArray::Text(v) => {
-                    let new_vec: Vec<String> = indices.iter().filter_map(|&i| v.get(i).cloned()).collect();
+                    let new_vec: Vec<String> =
+                        indices.iter().filter_map(|&i| v.get(i).cloned()).collect();
                     ColumnArray::Text(new_vec)
                 }
                 ColumnArray::Null => ColumnArray::Null,
@@ -653,11 +662,7 @@ pub mod vectorized_projection {
     }
 
     /// Apply expression projections to DataChunk
-    pub fn project_expr(
-        chunk: &DataChunk,
-        exprs: &[Expr],
-        schema: &Schema,
-    ) -> DataChunk {
+    pub fn project_expr(chunk: &DataChunk, exprs: &[Expr], schema: &Schema) -> DataChunk {
         let mut new_chunk = DataChunk::new(chunk.num_rows());
 
         for expr in exprs {
@@ -680,10 +685,7 @@ pub mod vectorized_agg {
     }
 
     /// Compute aggregates for a DataChunk
-    pub fn compute_aggregates(
-        chunk: &DataChunk,
-        agg_funcs: &[AggFunction],
-    ) -> AggregateResult {
+    pub fn compute_aggregates(chunk: &DataChunk, agg_funcs: &[AggFunction]) -> AggregateResult {
         let mut values = Vec::new();
 
         for agg_func in agg_funcs {
@@ -724,12 +726,12 @@ pub mod vectorized_agg {
                 AggFunction::Min(col_idx) => {
                     if let Some(col) = chunk.get_column(*col_idx) {
                         match col {
-                            ColumnArray::Int64(v) => {
-                                simd_agg::min_i64(v).map(Value::Integer).unwrap_or(Value::Null)
-                            }
-                            ColumnArray::Float64(v) => {
-                                simd_agg::min_f64(v).map(Value::Float).unwrap_or(Value::Null)
-                            }
+                            ColumnArray::Int64(v) => simd_agg::min_i64(v)
+                                .map(Value::Integer)
+                                .unwrap_or(Value::Null),
+                            ColumnArray::Float64(v) => simd_agg::min_f64(v)
+                                .map(Value::Float)
+                                .unwrap_or(Value::Null),
                             _ => Value::Null,
                         }
                     } else {
@@ -739,12 +741,12 @@ pub mod vectorized_agg {
                 AggFunction::Max(col_idx) => {
                     if let Some(col) = chunk.get_column(*col_idx) {
                         match col {
-                            ColumnArray::Int64(v) => {
-                                simd_agg::max_i64(v).map(Value::Integer).unwrap_or(Value::Null)
-                            }
-                            ColumnArray::Float64(v) => {
-                                simd_agg::max_f64(v).map(Value::Float).unwrap_or(Value::Null)
-                            }
+                            ColumnArray::Int64(v) => simd_agg::max_i64(v)
+                                .map(Value::Integer)
+                                .unwrap_or(Value::Null),
+                            ColumnArray::Float64(v) => simd_agg::max_f64(v)
+                                .map(Value::Float)
+                                .unwrap_or(Value::Null),
                             _ => Value::Null,
                         }
                     } else {
@@ -770,11 +772,13 @@ pub mod vectorized_agg {
 }
 
 // Re-export for convenience
-pub use vectorized_agg::{compute_aggregates, AggregateResult, AggFunction};
+pub use simd_agg::{
+    avg_f64, avg_i64, count_f64, count_i64, max_f64, max_i64, min_f64, min_i64, sum_f64, sum_i64,
+};
+pub use vectorized_agg::{compute_aggregates, AggFunction, AggregateResult};
 pub use vectorized_expr::eval_expr;
 pub use vectorized_filter::{apply_filter, filter_chunk, filter_chunk_by_indices};
 pub use vectorized_projection::{project_columns, project_expr};
-pub use simd_agg::{sum_i64, sum_f64, count_i64, count_f64, avg_i64, avg_f64, min_i64, max_i64, min_f64, max_f64};
 
 /// RecordBatch - a batch of records for vectorized processing
 #[derive(Debug, Clone)]
@@ -954,20 +958,33 @@ mod tests {
     fn test_data_chunk_to_rows() {
         let mut chunk = DataChunk::new(3);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3]));
-        chunk.add_column(ColumnArray::Text(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
-        
+        chunk.add_column(ColumnArray::Text(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+        ]));
+
         let rows = chunk.to_rows();
         assert_eq!(rows.len(), 3);
-        assert_eq!(rows[0], vec![Value::Integer(1), Value::Text("a".to_string())]);
-        assert_eq!(rows[1], vec![Value::Integer(2), Value::Text("b".to_string())]);
-        assert_eq!(rows[2], vec![Value::Integer(3), Value::Text("c".to_string())]);
+        assert_eq!(
+            rows[0],
+            vec![Value::Integer(1), Value::Text("a".to_string())]
+        );
+        assert_eq!(
+            rows[1],
+            vec![Value::Integer(2), Value::Text("b".to_string())]
+        );
+        assert_eq!(
+            rows[2],
+            vec![Value::Integer(3), Value::Text("c".to_string())]
+        );
     }
 
     #[test]
     fn test_data_chunk_is_empty() {
         let chunk = DataChunk::new(0);
         assert!(chunk.is_empty());
-        
+
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3]));
         assert!(!chunk.is_empty());
@@ -1062,7 +1079,7 @@ mod tests {
     fn test_all_true() {
         let values = vec![true, true, true];
         assert!(simd_agg::all_true(&values));
-        
+
         let values = vec![true, false, true];
         assert!(!simd_agg::all_true(&values));
     }
@@ -1071,7 +1088,7 @@ mod tests {
     fn test_any_true() {
         let values = vec![false, false, true];
         assert!(simd_agg::any_true(&values));
-        
+
         let values = vec![false, false, false];
         assert!(!simd_agg::any_true(&values));
     }
@@ -1080,7 +1097,7 @@ mod tests {
     #[test]
     fn test_eval_int_op() {
         use sqlrustgo_planner::Operator;
-        
+
         assert!(vectorized_expr::eval_int_op(5, &Operator::Gt, 3));
         assert!(!vectorized_expr::eval_int_op(5, &Operator::Lt, 3));
         assert!(vectorized_expr::eval_int_op(5, &Operator::Eq, 5));
@@ -1090,12 +1107,12 @@ mod tests {
     #[test]
     fn test_eval_binary_expr_int() {
         use sqlrustgo_planner::Operator;
-        
+
         let left = ColumnArray::Int64(vec![1, 2, 3, 4, 5]);
         let right = ColumnArray::Int64(vec![5, 4, 3, 2, 1]);
-        
+
         let result = vectorized_expr::eval_binary_expr(&left, &Operator::Gt, &right);
-        
+
         if let ColumnArray::Boolean(v) = result {
             assert_eq!(v, vec![false, false, false, true, true]);
         } else {
@@ -1126,11 +1143,17 @@ mod tests {
     fn test_apply_filter() {
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3, 4, 5]));
-        chunk.add_column(ColumnArray::Text(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(), "e".to_string()]));
-        
+        chunk.add_column(ColumnArray::Text(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+            "e".to_string(),
+        ]));
+
         let predicate = ColumnArray::Boolean(vec![true, false, true, false, true]);
         let filtered = apply_filter(&chunk, &predicate);
-        
+
         assert_eq!(filtered.num_rows(), 3);
         assert_eq!(filtered.get_column(0).unwrap().len(), 3);
     }
@@ -1138,10 +1161,10 @@ mod tests {
     #[test]
     fn test_filter_chunk_by_indices() {
         let chunk = DataChunk::new(5);
-        
+
         let indices = vec![0, 2, 4];
         let filtered = filter_chunk_by_indices(&chunk, &indices);
-        
+
         assert_eq!(filtered.num_rows(), 3);
     }
 
@@ -1150,11 +1173,15 @@ mod tests {
     fn test_project_columns() {
         let mut chunk = DataChunk::new(3);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3]));
-        chunk.add_column(ColumnArray::Text(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+        chunk.add_column(ColumnArray::Text(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+        ]));
         chunk.add_column(ColumnArray::Float64(vec![1.0, 2.0, 3.0]));
-        
+
         let projected = project_columns(&chunk, &[0, 2]);
-        
+
         assert_eq!(projected.num_columns(), 2);
         assert_eq!(projected.num_rows(), 3);
     }
@@ -1164,10 +1191,10 @@ mod tests {
     fn test_compute_aggregates_sum() {
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3, 4, 5]));
-        
+
         let aggs = vec![AggFunction::Sum(0)];
         let result = compute_aggregates(&chunk, &aggs);
-        
+
         assert_eq!(result.values[0], Value::Integer(15));
     }
 
@@ -1175,10 +1202,10 @@ mod tests {
     fn test_compute_aggregates_count() {
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3, 4, 5]));
-        
+
         let aggs = vec![AggFunction::Count(0)];
         let result = compute_aggregates(&chunk, &aggs);
-        
+
         assert_eq!(result.values[0], Value::Integer(5));
     }
 
@@ -1186,10 +1213,10 @@ mod tests {
     fn test_compute_aggregates_avg() {
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![1, 2, 3, 4, 5]));
-        
+
         let aggs = vec![AggFunction::Avg(0)];
         let result = compute_aggregates(&chunk, &aggs);
-        
+
         assert_eq!(result.values[0], Value::Float(3.0));
     }
 
@@ -1197,10 +1224,10 @@ mod tests {
     fn test_compute_aggregates_min_max() {
         let mut chunk = DataChunk::new(5);
         chunk.add_column(ColumnArray::Int64(vec![3, 1, 4, 1, 5]));
-        
+
         let aggs = vec![AggFunction::Min(0), AggFunction::Max(0)];
         let result = compute_aggregates(&chunk, &aggs);
-        
+
         assert_eq!(result.values[0], Value::Integer(1));
         assert_eq!(result.values[1], Value::Integer(5));
     }

@@ -61,8 +61,14 @@ fn main() {
         Command::Tpch(tpch_args) => {
             // Load config file if provided
             let config = tpch_args.config.as_ref().and_then(|p| load_config(p));
-            let output = tpch_args.output.clone().or_else(|| config.as_ref().and_then(|c| c.output.clone()));
-            let pg_conn = tpch_args.pg_conn.clone().or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
+            let output = tpch_args
+                .output
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.output.clone()));
+            let pg_conn = tpch_args
+                .pg_conn
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
 
             let result = tpch::run(tpch_args);
             if let Some(output_path) = output {
@@ -80,8 +86,14 @@ fn main() {
         }
         Command::Oltp(oltp_args) => {
             let config = oltp_args.config.as_ref().and_then(|p| load_config(p));
-            let output = oltp_args.output.clone().or_else(|| config.as_ref().and_then(|c| c.output.clone()));
-            let pg_conn = oltp_args.pg_conn.clone().or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
+            let output = oltp_args
+                .output
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.output.clone()));
+            let pg_conn = oltp_args
+                .pg_conn
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
 
             let result = oltp::run(oltp_args);
             if let Some(output_path) = output {
@@ -98,8 +110,14 @@ fn main() {
         }
         Command::Custom(custom_args) => {
             let config = custom_args.config.as_ref().and_then(|p| load_config(p));
-            let output = custom_args.output.clone().or_else(|| config.as_ref().and_then(|c| c.output.clone()));
-            let pg_conn = custom_args.pg_conn.clone().or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
+            let output = custom_args
+                .output
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.output.clone()));
+            let pg_conn = custom_args
+                .pg_conn
+                .clone()
+                .or_else(|| config.as_ref().and_then(|c| c.pg_conn.clone()));
 
             let result = custom::run(custom_args);
             if let Some(output_path) = output {
