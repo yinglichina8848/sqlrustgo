@@ -106,6 +106,8 @@ pub struct SelectStatement {
     pub where_clause: Option<Expression>,
     pub join_clause: Option<JoinClause>,
     pub aggregates: Vec<AggregateCall>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
 }
 
 /// Column in SELECT
@@ -318,7 +320,37 @@ impl Parser {
             where_clause,
             join_clause: None,
             aggregates,
+            limit: None,
+            offset: None,
         };
+
+        // Check for LIMIT and OFFSET
+        let mut select = base_select.clone();
+        match self.current() {
+            Some(Token::Limit) => {
+                self.next();
+                if let Some(Token::NumberLiteral(n)) = self.current() {
+                    select.limit = Some(n.parse().unwrap_or(0));
+                    self.next();
+                } else {
+                    return Err("Expected number after LIMIT".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        match self.current() {
+            Some(Token::Offset) => {
+                self.next();
+                if let Some(Token::NumberLiteral(n)) = self.current() {
+                    select.offset = Some(n.parse().unwrap_or(0));
+                    self.next();
+                } else {
+                    return Err("Expected number after OFFSET".to_string());
+                }
+            }
+            _ => {}
+        }
 
         // Check for set operations (UNION, INTERSECT, EXCEPT)
         match self.current() {
@@ -371,7 +403,7 @@ impl Parser {
                     right,
                 }))
             }
-            _ => Ok(Statement::Select(base_select)),
+            _ => Ok(Statement::Select(select)),
         }
     }
 

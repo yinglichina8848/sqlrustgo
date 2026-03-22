@@ -37,6 +37,8 @@ pub enum Token {
     Except,
     View,
     All,
+    Limit,
+    Offset,
 
     // Aggregate Functions
     Count,
@@ -135,6 +137,8 @@ impl fmt::Display for Token {
             Token::Except => write!(f, "EXCEPT"),
             Token::View => write!(f, "VIEW"),
             Token::All => write!(f, "ALL"),
+            Token::Limit => write!(f, "LIMIT"),
+            Token::Offset => write!(f, "OFFSET"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
