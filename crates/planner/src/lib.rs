@@ -331,6 +331,7 @@ pub enum DataType {
     Boolean,
     Integer,
     Float,
+    Decimal,
     Text,
     Blob,
     Null,
@@ -341,6 +342,7 @@ impl DataType {
         match type_name.to_uppercase().as_str() {
             "INTEGER" | "INT" => DataType::Integer,
             "FLOAT" | "DOUBLE" | "REAL" => DataType::Float,
+            "DECIMAL" | "NUMERIC" => DataType::Decimal,
             "TEXT" | "VARCHAR" | "CHAR" => DataType::Text,
             "BLOB" | "BINARY" => DataType::Blob,
             "BOOLEAN" | "BOOL" => DataType::Boolean,
@@ -355,6 +357,7 @@ impl fmt::Display for DataType {
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Integer => write!(f, "INTEGER"),
             DataType::Float => write!(f, "FLOAT"),
+            DataType::Decimal => write!(f, "DECIMAL"),
             DataType::Text => write!(f, "TEXT"),
             DataType::Blob => write!(f, "BLOB"),
             DataType::Null => write!(f, "NULL"),
