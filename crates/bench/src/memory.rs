@@ -87,7 +87,12 @@ impl MemoryLimiter {
             Some(bytes) => {
                 let gb = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
                 let limit_gb = self.limit_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-                format!("{:.2} GB / {:.2} GB limit ({:.1}%)", gb, limit_gb, (bytes as f64 / self.limit_bytes as f64) * 100.0)
+                format!(
+                    "{:.2} GB / {:.2} GB limit ({:.1}%)",
+                    gb,
+                    limit_gb,
+                    (bytes as f64 / self.limit_bytes as f64) * 100.0
+                )
             }
             None => "Unknown".to_string(),
         }
