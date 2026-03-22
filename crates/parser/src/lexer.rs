@@ -249,6 +249,7 @@ impl<'a> Lexer<'a> {
                     "DECIMAL" | "NUMERIC" => Token::Decimal,
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
+                    "JSON" => Token::Json,
                     "NULL" => Token::Null,
                     "DATE" => Token::Date,
                     "TIMESTAMP" => Token::Timestamp,

@@ -333,6 +333,7 @@ pub enum DataType {
     Float,
     Decimal,
     Text,
+    Json,
     Blob,
     Null,
 }
@@ -344,6 +345,7 @@ impl DataType {
             "FLOAT" | "DOUBLE" | "REAL" => DataType::Float,
             "DECIMAL" | "NUMERIC" => DataType::Decimal,
             "TEXT" | "VARCHAR" | "CHAR" => DataType::Text,
+            "JSON" => DataType::Json,
             "BLOB" | "BINARY" => DataType::Blob,
             "BOOLEAN" | "BOOL" => DataType::Boolean,
             _ => DataType::Null,
@@ -359,6 +361,7 @@ impl fmt::Display for DataType {
             DataType::Float => write!(f, "FLOAT"),
             DataType::Decimal => write!(f, "DECIMAL"),
             DataType::Text => write!(f, "TEXT"),
+            DataType::Json => write!(f, "JSON"),
             DataType::Blob => write!(f, "BLOB"),
             DataType::Null => write!(f, "NULL"),
         }
