@@ -146,7 +146,19 @@ fn execute_select(
         .map_err(|e| e.to_string())?;
 
     // Scan all rows
-    let rows = storage.scan(table_name).map_err(|e| e.to_string())?;
+    let mut rows = storage.scan(table_name).map_err(|e| e.to_string())?;
+
+    // Apply OFFSET (skip first N rows)
+    if let Some(offset) = select.offset {
+        let offset = offset.min(rows.len());
+        rows = rows.into_iter().skip(offset).collect();
+    }
+
+    // Apply LIMIT (take first N rows)
+    if let Some(limit) = select.limit {
+        let limit = limit.min(rows.len());
+        rows = rows.into_iter().take(limit).collect();
+    }
 
     // If there are columns specified, filter them
     let result_rows: Vec<Vec<Value>> = if select.columns.is_empty() {
