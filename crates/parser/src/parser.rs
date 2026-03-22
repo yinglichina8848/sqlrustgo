@@ -27,9 +27,25 @@ pub enum Statement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
+    AlterTable(AlterTableStatement),
     CreateView(CreateViewStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
+}
+
+/// ALTER TABLE operation type
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterOperation {
+    AddColumn { name: String, data_type: String },
+    DropColumn { name: String },
+    ModifyColumn { name: String, data_type: String },
+}
+
+/// ALTER TABLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTableStatement {
+    pub table: String,
+    pub operation: AlterOperation,
 }
 
 /// Set operation type for UNION, INTERSECT, EXCEPT
