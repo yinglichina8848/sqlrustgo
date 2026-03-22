@@ -7,6 +7,9 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
+    Add,
+    Modify,
+    Column,
     Select,
     From,
     Where,
@@ -107,6 +110,9 @@ impl fmt::Display for Token {
             Token::DateLiteral(s) => write!(f, "DATE '{}'", s),
             Token::TimestampLiteral(s) => write!(f, "TIMESTAMP '{}'", s),
             // Keywords and data types - uppercase
+            Token::Add => write!(f, "ADD"),
+            Token::Modify => write!(f, "MODIFY"),
+            Token::Column => write!(f, "COLUMN"),
             Token::Select => write!(f, "SELECT"),
             Token::From => write!(f, "FROM"),
             Token::Where => write!(f, "WHERE"),

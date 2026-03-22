@@ -210,6 +210,9 @@ impl<'a> Lexer<'a> {
             _ if ch.is_alphabetic() || ch == '_' => {
                 let ident = self.read_identifier();
                 match ident.to_uppercase().as_str() {
+                    "ADD" => Token::Add,
+                    "MODIFY" => Token::Modify,
+                    "COLUMN" => Token::Column,
                     "SELECT" => Token::Select,
                     "FROM" => Token::From,
                     "WHERE" => Token::Where,
