@@ -246,6 +246,7 @@ impl<'a> Lexer<'a> {
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
                     "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
+                    "DECIMAL" | "NUMERIC" => Token::Decimal,
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "NULL" => Token::Null,
