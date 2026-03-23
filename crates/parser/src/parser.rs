@@ -258,7 +258,9 @@ impl Parser {
             Some(Token::Insert) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
-            Some(Token::Create) => self.parse_create(),
+            Some(Token::Alter) => self.parse_alter(),
+            Some(Token::Index) => self.parse_create_index(),
+            Some(Token::Create) => self.parse_create_or_index(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::Explain) => self.parse_explain(),
@@ -624,6 +626,57 @@ impl Parser {
         }))
     }
 
+
+    fn parse_alter(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Alter)?;
+        self.expect(Token::Table)?;
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        let operation = match self.current() {
+            Some(Token::Add) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.current() {
+                    Some(Token::Integer) => { self.next(); "INTEGER".to_string() }
+                    Some(Token::Text) => { self.next(); "TEXT".to_string() }
+                    _ => return Err("Expected data type".to_string()),
+                };
+                AlterOperation::AddColumn { name, data_type }
+            }
+            Some(Token::Drop) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                AlterOperation::DropColumn { name }
+            }
+            Some(Token::Modify) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.current() {
+                    Some(Token::Integer) => { self.next(); "INTEGER".to_string() }
+                    Some(Token::Text) => { self.next(); "TEXT".to_string() }
+                    _ => return Err("Expected data type".to_string()),
+                };
+                AlterOperation::ModifyColumn { name, data_type }
+            }
+            _ => return Err("Expected ADD, DROP or MODIFY".to_string()),
+        };
+        Ok(Statement::AlterTable(AlterTableStatement { table, operation }))
+    }
+
     fn parse_update(&mut self) -> Result<Statement, String> {
         self.expect(Token::Update)?;
         let table = match self.next() {
@@ -824,12 +877,16 @@ impl Parser {
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
         // CREATE [UNIQUE] INDEX index_name ON table (col1, col2, ...)
-        let unique = matches!(self.current(), Some(Token::Unique));
-        if unique {
+        let mut unique = false;
+        if matches!(self.current(), Some(Token::Unique)) {
+            unique = true;
             self.next();
         }
 
-        self.expect(Token::Index)?;
+        if !matches!(self.current(), Some(Token::Index)) {
+            return Err("Expected INDEX after CREATE or UNIQUE".to_string());
+        }
+        self.next();
         let name = match self.next() {
             Some(Token::Identifier(n)) => n,
             _ => return Err("Expected index name".to_string()),
@@ -877,6 +934,29 @@ impl Parser {
         };
 
         Ok(Statement::DropIndex(DropIndexStatement { name }))
+    }
+
+
+    fn peek(&self) -> Option<Token> {
+        self.tokens.get(self.position).cloned()
+    }
+
+    fn parse_create_or_index(&mut self) -> Result<Statement, String> {
+        let mut pos = self.position;
+        let mut is_index = false;
+        if pos < self.tokens.len() { pos += 1; }
+        if pos < self.tokens.len() {
+            if let Some(Token::Unique) = &self.tokens.get(pos) { is_index = true; pos += 1; }
+        }
+        if pos < self.tokens.len() {
+            if let Some(Token::Index) = &self.tokens.get(pos) { is_index = true; }
+        }
+        if is_index {
+            self.next();
+            self.parse_create_index()
+        } else {
+            self.parse_create()
+        }
     }
 
     fn parse_create(&mut self) -> Result<Statement, String> {
