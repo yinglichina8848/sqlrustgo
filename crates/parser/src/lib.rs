@@ -93,3 +93,24 @@ mod tests {
         }
     }
 }
+
+#[test]
+fn test_sql92_features() {
+    let tests = vec![
+        ("SELECT * FROM users LIMIT 10", true),
+        ("SELECT * FROM users LIMIT 10 OFFSET 20", true),
+        ("INSERT INTO users SET name='test'", true),
+        ("ALTER TABLE users ADD COLUMN age INTEGER", true),
+        ("ALTER TABLE users DROP COLUMN age", true),
+        ("CREATE INDEX idx ON users (name)", true),
+        ("CREATE UNIQUE INDEX idx ON users (email)", true),
+        ("CREATE TABLE t (id DECIMAL(10,2))", true),
+        ("CREATE TABLE t (data JSON)", true),
+    ];
+    for (sql, should_pass) in tests {
+        let result = parse(sql);
+        if should_pass {
+            assert!(result.is_ok(), "Expected {} to parse OK", sql);
+        }
+    }
+}
