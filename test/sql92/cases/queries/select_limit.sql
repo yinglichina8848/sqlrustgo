@@ -1,0 +1,2 @@
+-- Test: SELECT with LIMIT
+SELECT * FROM users LIMIT 10;

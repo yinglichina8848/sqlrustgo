@@ -1,0 +1,26 @@
+[package]
+name = "sql92-test-suite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlrustgo-parser = { path = "../../crates/parser" }
+sqlrustgo-planner = { path = "../../crates/planner" }
+sqlrustgo-executor = { path = "../../crates/executor" }
+sqlrustgo-storage = { path = "../../crates/storage" }
+sqlrustgo-types = { path = "../../crates/types" }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+log = "0.4"
+env_logger = "0.10"
+rayon = "1.8"
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[[bin]]
+name = "sql92-runner"
+path = "runner/main.rs"
