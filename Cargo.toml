@@ -12,6 +12,7 @@ members = [
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
+    "test/sql92",
 ]
 
 [workspace.package]

@@ -1,0 +1,2 @@
+-- Test: SELECT with LIMIT and OFFSET
+SELECT * FROM users LIMIT 10 OFFSET 20;
