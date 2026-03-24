@@ -12,3 +12,25 @@ impl Default for PoolConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pool_config_default() {
+        let config = PoolConfig::default();
+        assert_eq!(config.size, num_cpus::get());
+        assert_eq!(config.timeout_ms, 5000);
+    }
+
+    #[test]
+    fn test_pool_config_new() {
+        let config = PoolConfig {
+            size: 10,
+            timeout_ms: 1000,
+        };
+        assert_eq!(config.size, 10);
+        assert_eq!(config.timeout_ms, 1000);
+    }
+}
