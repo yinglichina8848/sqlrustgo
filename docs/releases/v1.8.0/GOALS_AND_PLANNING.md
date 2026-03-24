@@ -19,15 +19,15 @@ SQL-92 Compliance Enhancement & Test Suite Building
 
 | Feature | Issue | Status |
 |---------|-------|--------|
-| ALTER TABLE support | #761 | ✅ Merged |
-| DECIMAL data type | #762 | ✅ Merged |
-| JSON data type | #763 | ✅ Merged |
-| Stored procedure tokens | #764 | ✅ Merged |
-| Trigger tokens | #765 | ✅ Merged |
-| CREATE INDEX / DROP INDEX | #766 | ✅ Merged |
-| String & datetime functions | #767 | ✅ Merged |
-| LIMIT/OFFSET pagination | #760 | ✅ Merged |
-| INSERT SET syntax | #768 | ✅ Open |
+| ALTER TABLE support | #761 | ✅ Closed |
+| DECIMAL data type | #762 | ✅ Closed |
+| JSON data type | #763 | ✅ Closed |
+| Stored procedure tokens | #764 | ✅ Closed |
+| Trigger tokens | #765 | ✅ Closed |
+| CREATE INDEX / DROP INDEX | #766 | ✅ Closed |
+| String & datetime functions | #767 | ✅ Closed |
+| LIMIT/OFFSET pagination | #760 | ✅ Closed |
+| INSERT SET syntax | #768 | ✅ Closed |
 
 ### SQL-92 Test Suite
 
