@@ -54,13 +54,13 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while !self.is_eof() {
             let ch = self.peek_char();
-            
+
             // Skip whitespace
             if ch.is_whitespace() {
                 self.position += 1;
                 continue;
             }
-            
+
             // Skip single-line comments: --
             if ch == '-' && self.input[self.position..].starts_with("--") {
                 while !self.is_eof() && self.peek_char() != '\n' {
@@ -68,7 +68,7 @@ impl<'a> Lexer<'a> {
                 }
                 continue;
             }
-            
+
             // Skip block comments: /* ... */
             if ch == '/' && self.input[self.position..].starts_with("/*") {
                 self.position += 2; // skip /*
@@ -80,7 +80,7 @@ impl<'a> Lexer<'a> {
                 }
                 continue;
             }
-            
+
             break;
         }
     }
