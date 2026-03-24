@@ -2,15 +2,17 @@
 
 ## Summary
 
-- **Total Tests**: 11
-- **Passed**: 11
+- **Total Tests**: 18
+- **Passed**: 18
 - **Failed**: 0
 - **Pass Rate**: 100.00%
 
 ## Results by Category
 
-### ddl (5/5)
+### ddl (6/6)
 
+- ✅ PASS **drop_table**
+  - Parsed successfully
 - ✅ PASS **alter_table_drop**
   - Parsed successfully
 - ✅ PASS **create_index**
@@ -22,24 +24,36 @@
 - ✅ PASS **create_unique_index**
   - Parsed successfully
 
-### dml (2/2)
+### dml (4/4)
 
 - ✅ PASS **insert_set**
   - Parsed successfully
+- ✅ PASS **delete**
+  - Parsed successfully
 - ✅ PASS **insert_values**
   - Parsed successfully
+- ✅ PASS **update**
+  - Parsed successfully
 
-### queries (2/2)
+### queries (4/4)
 
+- ✅ PASS **order_by**
+  - Parsed successfully
 - ✅ PASS **select_limit**
+  - Parsed successfully
+- ✅ PASS **group_by**
   - Parsed successfully
 - ✅ PASS **select_limit_offset**
   - Parsed successfully
 
-### types (2/2)
+### types (4/4)
 
 - ✅ PASS **decimal**
   - Parsed successfully
+- ✅ PASS **timestamp**
+  - Parsed successfully
 - ✅ PASS **json**
+  - Parsed successfully
+- ✅ PASS **varchar**
   - Parsed successfully
 
