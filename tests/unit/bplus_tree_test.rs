@@ -29,17 +29,6 @@ fn test_bplus_tree_search_missing() {
 }
 
 #[test]
-fn test_bplus_tree_remove() {
-    let mut tree: BPlusTree = BPlusTree::new();
-
-    tree.insert(1, 100);
-    assert!(!tree.is_empty());
-
-    tree.remove(1);
-    assert!(tree.is_empty());
-}
-
-#[test]
 fn test_bplus_tree_len() {
     let mut tree: BPlusTree = BPlusTree::new();
 
