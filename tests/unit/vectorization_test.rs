@@ -52,13 +52,9 @@ fn test_record_batch_new() {
 
 #[test]
 fn test_record_batch_with_schema() {
-    let mut batch = RecordBatch::new(10);
-    let col1 = Vector::from_vec(vec![1; 10]);
-    let col2 = Vector::from_vec(vec![2; 10]);
-    batch.add_column(col1);
-    batch.add_column(col2);
-    batch.schema = vec!["col1".to_string(), "col2".to_string()];
-    assert_eq!(batch.num_columns(), 2);
+    // Note: with_schema only sets the schema field, doesn't add columns
+    let batch = RecordBatch::new(10).with_schema(vec!["col1".to_string(), "col2".to_string()]);
+    // The schema is set but no columns are added
     assert_eq!(batch.schema(), &["col1", "col2"]);
 }
 
