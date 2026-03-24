@@ -50,14 +50,38 @@ impl<'a> Lexer<'a> {
         ch
     }
 
-    /// Skip whitespace characters
+    /// Skip whitespace and comments
     fn skip_whitespace(&mut self) {
         while !self.is_eof() {
             let ch = self.peek_char();
-            if !ch.is_whitespace() {
-                break;
+            
+            // Skip whitespace
+            if ch.is_whitespace() {
+                self.position += 1;
+                continue;
             }
-            self.position += 1;
+            
+            // Skip single-line comments: --
+            if ch == '-' && self.input[self.position..].starts_with("--") {
+                while !self.is_eof() && self.peek_char() != '\n' {
+                    self.position += 1;
+                }
+                continue;
+            }
+            
+            // Skip block comments: /* ... */
+            if ch == '/' && self.input[self.position..].starts_with("/*") {
+                self.position += 2; // skip /*
+                while !self.is_eof() && !self.input[self.position..].starts_with("*/") {
+                    self.position += 1;
+                }
+                if !self.is_eof() {
+                    self.position += 2; // skip */
+                }
+                continue;
+            }
+            
+            break;
         }
     }
 
