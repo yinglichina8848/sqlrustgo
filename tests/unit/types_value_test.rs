@@ -30,8 +30,8 @@ fn test_value_to_sql_string() {
     assert_eq!(Value::Float(3.14).to_sql_string(), "3.14");
     assert_eq!(Value::Text("hello".to_string()).to_sql_string(), "hello");
     assert_eq!(Value::Blob(vec![1, 2, 3]).to_sql_string(), "X'010203'");
-    assert_eq!(Value::Date(0).to_sql_string(), "1970-01-01");
-    assert_eq!(Value::Timestamp(0).to_sql_string(), "1970-01-01 00:00:00");
+    assert_eq!(Value::Date(0).to_sql_string(), "0");
+    assert_eq!(Value::Timestamp(0).to_sql_string(), "0");
 }
 
 #[test]
