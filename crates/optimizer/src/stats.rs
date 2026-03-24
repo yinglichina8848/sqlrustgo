@@ -961,11 +961,13 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: true,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
+                is_unique: false,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
