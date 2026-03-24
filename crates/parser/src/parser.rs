@@ -626,7 +626,6 @@ impl Parser {
         }))
     }
 
-
     fn parse_alter(&mut self) -> Result<Statement, String> {
         self.expect(Token::Alter)?;
         self.expect(Token::Table)?;
@@ -643,8 +642,14 @@ impl Parser {
                     _ => return Err("Expected column name".to_string()),
                 };
                 let data_type = match self.current() {
-                    Some(Token::Integer) => { self.next(); "INTEGER".to_string() }
-                    Some(Token::Text) => { self.next(); "TEXT".to_string() }
+                    Some(Token::Integer) => {
+                        self.next();
+                        "INTEGER".to_string()
+                    }
+                    Some(Token::Text) => {
+                        self.next();
+                        "TEXT".to_string()
+                    }
                     _ => return Err("Expected data type".to_string()),
                 };
                 AlterOperation::AddColumn { name, data_type }
@@ -666,15 +671,24 @@ impl Parser {
                     _ => return Err("Expected column name".to_string()),
                 };
                 let data_type = match self.current() {
-                    Some(Token::Integer) => { self.next(); "INTEGER".to_string() }
-                    Some(Token::Text) => { self.next(); "TEXT".to_string() }
+                    Some(Token::Integer) => {
+                        self.next();
+                        "INTEGER".to_string()
+                    }
+                    Some(Token::Text) => {
+                        self.next();
+                        "TEXT".to_string()
+                    }
                     _ => return Err("Expected data type".to_string()),
                 };
                 AlterOperation::ModifyColumn { name, data_type }
             }
             _ => return Err("Expected ADD, DROP or MODIFY".to_string()),
         };
-        Ok(Statement::AlterTable(AlterTableStatement { table, operation }))
+        Ok(Statement::AlterTable(AlterTableStatement {
+            table,
+            operation,
+        }))
     }
 
     fn parse_update(&mut self) -> Result<Statement, String> {
@@ -936,7 +950,6 @@ impl Parser {
         Ok(Statement::DropIndex(DropIndexStatement { name }))
     }
 
-
     fn peek(&self) -> Option<Token> {
         self.tokens.get(self.position).cloned()
     }
@@ -944,12 +957,19 @@ impl Parser {
     fn parse_create_or_index(&mut self) -> Result<Statement, String> {
         let mut pos = self.position;
         let mut is_index = false;
-        if pos < self.tokens.len() { pos += 1; }
         if pos < self.tokens.len() {
-            if let Some(Token::Unique) = &self.tokens.get(pos) { is_index = true; pos += 1; }
+            pos += 1;
         }
         if pos < self.tokens.len() {
-            if let Some(Token::Index) = &self.tokens.get(pos) { is_index = true; }
+            if let Some(Token::Unique) = &self.tokens.get(pos) {
+                is_index = true;
+                pos += 1;
+            }
+        }
+        if pos < self.tokens.len() {
+            if let Some(Token::Index) = &self.tokens.get(pos) {
+                is_index = true;
+            }
         }
         if is_index {
             self.next();
