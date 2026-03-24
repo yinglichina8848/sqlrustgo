@@ -3,43 +3,43 @@
 ## Summary
 
 - **Total Tests**: 11
-- **Passed**: 0
-- **Failed**: 11
-- **Pass Rate**: 0.00%
+- **Passed**: 11
+- **Failed**: 0
+- **Pass Rate**: 100.00%
 
 ## Results by Category
 
-### ddl (0/5)
+### ddl (5/5)
 
-- ❌ FAIL **alter_table_drop**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **create_index**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **create_table**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **alter_table_add**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **create_unique_index**
-  - Parse error: Unexpected token: Minus
+- ✅ PASS **alter_table_drop**
+  - Parsed successfully
+- ✅ PASS **create_index**
+  - Parsed successfully
+- ✅ PASS **create_table**
+  - Parsed successfully
+- ✅ PASS **alter_table_add**
+  - Parsed successfully
+- ✅ PASS **create_unique_index**
+  - Parsed successfully
 
-### dml (0/2)
+### dml (2/2)
 
-- ❌ FAIL **insert_set**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **insert_values**
-  - Parse error: Unexpected token: Minus
+- ✅ PASS **insert_set**
+  - Parsed successfully
+- ✅ PASS **insert_values**
+  - Parsed successfully
 
-### queries (0/2)
+### queries (2/2)
 
-- ❌ FAIL **select_limit**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **select_limit_offset**
-  - Parse error: Unexpected token: Minus
+- ✅ PASS **select_limit**
+  - Parsed successfully
+- ✅ PASS **select_limit_offset**
+  - Parsed successfully
 
-### types (0/2)
+### types (2/2)
 
-- ❌ FAIL **decimal**
-  - Parse error: Unexpected token: Minus
-- ❌ FAIL **json**
-  - Parse error: Unexpected token: Minus
+- ✅ PASS **decimal**
+  - Parsed successfully
+- ✅ PASS **json**
+  - Parsed successfully
 
