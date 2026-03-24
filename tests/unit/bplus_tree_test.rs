@@ -51,8 +51,9 @@ fn test_bplus_tree_range_query() {
     tree.insert(4, 400);
     tree.insert(5, 500);
 
-    let results = tree.range_query(2, 4);
-    assert_eq!(results.len(), 3);
+    // range_query uses start..end (exclusive end)
+    let results = tree.range_query(2, 5);
+    assert_eq!(results.len(), 3); // keys 2, 3, 4
 }
 
 #[test]
