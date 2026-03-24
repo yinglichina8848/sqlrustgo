@@ -2,6 +2,7 @@
 //!
 //! A MySQL-compatible interactive SQL shell
 
+use rustyline::history::FileHistory;
 use rustyline::Editor;
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
@@ -37,20 +38,20 @@ fn main() {
     setup_sample_data(&mut storage);
 
     // Create REPL editor
-    let mut rl = Editor::<(), ()>::new();
-    rl.load_history(".sql_history").ok();
+    let mut rl = Editor::<(), FileHistory>::new().expect("Failed to create editor");
+    let _ = rl.load_history(".sql_history");
 
     // Main REPL loop
     loop {
         let readline = rl.readline("sqlrustgo> ");
         match readline {
             Ok(line) => {
-                let trimmed: String = line.trim().to_string();
+                let trimmed = line.trim().to_string();
                 if trimmed.is_empty() {
                     continue;
                 }
 
-                let _ = rl.add_history_entry(trimmed);
+                let _ = rl.add_history_entry(&trimmed);
 
                 // Handle meta-commands (starting with dot)
                 if trimmed.starts_with('.') {
@@ -81,7 +82,7 @@ fn main() {
                     }
                 } else {
                     // Execute SQL query
-                    match execute_sql(trimmed, &mut storage) {
+                    match execute_sql(&trimmed, &mut storage) {
                         Ok(result) => {
                             print_result(result);
                         }
@@ -315,6 +316,7 @@ fn execute_create_table(
             name: col.name.clone(),
             data_type: col.data_type.clone(),
             nullable: col.nullable,
+            is_unique: false,
         })
         .collect();
 
@@ -350,16 +352,19 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
+                is_unique: false,
             },
             ColumnDefinition {
                 name: "email".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
+                is_unique: false,
             },
         ],
     };
@@ -395,16 +400,19 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             },
             ColumnDefinition {
                 name: "user_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             },
             ColumnDefinition {
                 name: "amount".to_string(),
                 data_type: "REAL".to_string(),
                 nullable: false,
+                is_unique: false,
             },
         ],
     };
