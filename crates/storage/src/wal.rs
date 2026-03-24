@@ -1539,6 +1539,7 @@ mod tests {
     // PB-03: WAL Performance Benchmarks
 
     #[test]
+    #[ignore] // Performance test - run manually
     fn test_wal_perf_1000_insert() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
@@ -1574,6 +1575,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance test - run manually
     fn test_wal_perf_100_update() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
@@ -1609,6 +1611,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance test - run manually
     fn test_wal_perf_recovery_1mb() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
@@ -1651,6 +1654,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance test - run manually
     fn test_wal_perf_throughput() {
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("bench.wal");
