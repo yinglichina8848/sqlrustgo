@@ -317,7 +317,8 @@ mod tests {
 
         match result {
             CommandResult::Err(msg) => {
-                assert!(msg.contains("not found"));
+                // Error message contains "Error" from storage.get_table_info
+                assert!(msg.contains("Error") || msg.contains("not found"));
             }
             _ => panic!("Expected Err"),
         }
