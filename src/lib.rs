@@ -569,6 +569,20 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(projected_rows, 0))
             }
+            Statement::Explain(explain) => {
+                let start = std::time::Instant::now();
+                let result = self.execute(*explain.query)?;
+                if explain.analyze {
+                    let duration = start.elapsed();
+                    let mut rows = result.rows;
+                    rows.push(vec![
+                        Value::Text("Execution Time".to_string()),
+                        Value::Text(format!("{:?}", duration)),
+                    ]);
+                    return Ok(ExecutorResult::new(rows, result.affected_rows));
+                }
+                Ok(result)
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
