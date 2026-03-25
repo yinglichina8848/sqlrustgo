@@ -352,14 +352,14 @@ mod tests {
 
     #[test]
     fn test_mock_storage_create_index() {
-        let storage = MockStorage::new();
+        let mut storage = MockStorage::new();
         let result = storage.create_table_index("users", "id", 0);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_mock_storage_drop_index() {
-        let storage = MockStorage::new();
+        let mut storage = MockStorage::new();
         let result = storage.drop_table_index("users", "id");
         assert!(result.is_ok());
     }
