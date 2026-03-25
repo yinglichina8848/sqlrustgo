@@ -229,3 +229,7 @@ path = "tests/stress/concurrency_stress_test.rs"
 [[test]]
 name = "production_scenario_test"
 path = "tests/stress/production_scenario_test.rs"
+
+[[test]]
+name = "teaching_scenario_test"
+path = "tests/integration/teaching_scenario_test.rs"
