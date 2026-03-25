@@ -516,7 +516,6 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(vec![], updated_count))
             }
-            }
             Statement::Select(select) => {
                 let storage = self.storage.read().unwrap();
                 if !storage.has_table(&select.table) {
