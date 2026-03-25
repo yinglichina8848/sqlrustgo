@@ -16,8 +16,9 @@ pub mod planner;
 pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, OperatorMetrics,
-    PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec, SortMergeJoinExec,
+    AggregateExec, AnyAllSubqueryExec, ExistsExec, FilterExec, HashJoinExec, IndexScanExec,
+    InSubqueryExec, LimitExec, OperatorMetrics, PhysicalPlan, ProjectionExec, ScalarSubqueryExec,
+    SeqScanExec, SetOperationExec, SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
@@ -104,6 +105,29 @@ impl fmt::Display for Column {
     }
 }
 
+/// Subquery type for classification
+#[derive(Debug, Clone, PartialEq)]
+pub enum SubqueryType {
+    /// Scalar subquery - returns single value
+    Scalar,
+    /// IN subquery - checks if value is in subquery results
+    In,
+    /// EXISTS subquery - checks if subquery returns any rows
+    Exists,
+    /// ANY subquery - compares with any result (synonym for SOME)
+    Any,
+    /// ALL subquery - compares with all results
+    All,
+}
+
+/// Subquery expression with its type and associated expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subquery {
+    pub subquery_type: SubqueryType,
+    pub expr: Box<Expr>,
+    pub plan: Box<LogicalPlan>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Column(Column),
@@ -129,6 +153,22 @@ pub enum Expr {
     Wildcard,
     QualifiedWildcard {
         qualifier: String,
+    },
+    /// Scalar subquery returning single value
+    ScalarSubquery(Box<LogicalPlan>),
+    /// IN subquery: expr IN (SELECT ...)
+    InSubquery {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    /// EXISTS subquery: EXISTS (SELECT ...)
+    Exists(Box<LogicalPlan>),
+    /// ANY/ALL subquery: expr OP ANY/ALL (SELECT ...)
+    AnyAll {
+        expr: Box<Expr>,
+        op: Operator,
+        subquery: Box<LogicalPlan>,
+        any_all: SubqueryType,
     },
 }
 
@@ -169,6 +209,11 @@ impl Expr {
             Expr::Alias { expr, .. } => expr.evaluate(row, schema),
             Expr::Wildcard => None,
             Expr::QualifiedWildcard { .. } => None,
+            // Subquery expressions cannot be evaluated row-by-row
+            Expr::ScalarSubquery(_) => None,
+            Expr::InSubquery { .. } => None,
+            Expr::Exists(_) => None,
+            Expr::AnyAll { .. } => None,
         }
     }
 
@@ -251,6 +296,17 @@ impl fmt::Display for Expr {
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
             Expr::QualifiedWildcard { qualifier } => write!(f, "{}.*", qualifier),
+            Expr::ScalarSubquery(_) => write!(f, "(SELECT ...)"),
+            Expr::InSubquery { expr, .. } => write!(f, "{} IN (SELECT ...)", expr),
+            Expr::Exists(_) => write!(f, "EXISTS (SELECT ...)"),
+            Expr::AnyAll { expr, op, any_all, .. } => {
+                let any_all_str = match any_all {
+                    SubqueryType::Any => "ANY",
+                    SubqueryType::All => "ALL",
+                    _ => "UNKNOWN",
+                };
+                write!(f, "{} {} {} (SELECT ...)", expr, op, any_all_str)
+            }
         }
     }
 }
@@ -1043,5 +1099,146 @@ mod tests {
 
         let result = evaluate_binary_op(&Integer(10), &Operator::Divide, &Integer(0));
         assert!(result.is_none());
+    }
+
+    // === Tests for subquery expressions ===
+
+    #[test]
+    fn test_subquery_type_variants() {
+        use crate::SubqueryType;
+        assert!(matches!(SubqueryType::Scalar, SubqueryType::Scalar));
+        assert!(matches!(SubqueryType::In, SubqueryType::In));
+        assert!(matches!(SubqueryType::Exists, SubqueryType::Exists));
+        assert!(matches!(SubqueryType::Any, SubqueryType::Any));
+        assert!(matches!(SubqueryType::All, SubqueryType::All));
+    }
+
+    #[test]
+    fn test_expr_display_scalar_subquery() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::ScalarSubquery(Box::new(inner));
+        assert!(expr.to_string().contains("SELECT"));
+    }
+
+    #[test]
+    fn test_expr_display_in_subquery() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::InSubquery {
+            expr: Box::new(Expr::column("id")),
+            subquery: Box::new(inner),
+        };
+        let display = expr.to_string();
+        assert!(display.contains("IN"));
+    }
+
+    #[test]
+    fn test_expr_display_exists() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::Exists(Box::new(inner));
+        assert!(expr.to_string().contains("EXISTS"));
+    }
+
+    #[test]
+    fn test_expr_display_any_all() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let any_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("id")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::Any,
+        };
+        assert!(any_expr.to_string().contains("ANY"));
+
+        let all_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("id")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::All,
+        };
+        assert!(all_expr.to_string().contains("ALL"));
+    }
+
+    #[test]
+    fn test_expr_evaluate_subquery_returns_none() {
+        // Subquery expressions cannot be evaluated row-by-row
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("x".to_string(), DataType::Integer)]);
+        let row = vec![Value::Integer(1)];
+
+        let scalar_expr = Expr::ScalarSubquery(Box::new(LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        }));
+        assert!(scalar_expr.evaluate(&row, &schema).is_none());
+
+        let in_expr = Expr::InSubquery {
+            expr: Box::new(Expr::column("x")),
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+        };
+        assert!(in_expr.evaluate(&row, &schema).is_none());
+
+        let exists_expr = Expr::Exists(Box::new(LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        }));
+        assert!(exists_expr.evaluate(&row, &schema).is_none());
+
+        let any_all_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("x")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::Any,
+        };
+        assert!(any_all_expr.evaluate(&row, &schema).is_none());
+    }
+
+    #[test]
+    fn test_scalar_subquery_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Subquery {
+            subquery: Box::new(inner),
+            alias: "sub".to_string(),
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
     }
 }
