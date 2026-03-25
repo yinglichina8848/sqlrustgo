@@ -11,6 +11,7 @@ pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
+    pub is_unique: bool,
 }
 
 /// Table metadata
@@ -35,6 +36,21 @@ pub type Record = Vec<Value>;
 pub trait StorageEngine: Send + Sync {
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
+
+    /// Scan rows in batches for streaming (memory-efficient)
+    /// Returns (records, total_count, has_more)
+    fn scan_batch(
+        &self,
+        table: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<(Vec<Record>, usize, bool)> {
+        let all_records = self.scan(table)?;
+        let total = all_records.len();
+        let has_more = offset + limit < total;
+        let batch = all_records.into_iter().skip(offset).take(limit).collect();
+        Ok((batch, total, has_more))
+    }
 
     /// Insert rows into a table
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
@@ -83,6 +99,7 @@ pub trait StorageEngine: Send + Sync {
 }
 
 /// In-memory storage implementation for testing and caching
+#[allow(clippy::type_complexity)]
 pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
@@ -119,6 +136,29 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+        let table_info = self.table_infos.get(table);
+
+        for record in &records {
+            if let Some(info) = table_info {
+                for (col_idx, col_def) in info.columns.iter().enumerate() {
+                    if col_def.is_unique {
+                        if let Some(value) = record.get(col_idx) {
+                            for existing in self.tables.get(table).cloned().unwrap_or_default() {
+                                if let Some(existing_val) = existing.get(col_idx) {
+                                    if existing_val == value {
+                                        return Err(SqlError::DuplicateKey {
+                                            value: value.to_string(),
+                                            key: col_def.name.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         self.tables
             .entry(table.to_string())
             .or_default()
@@ -161,10 +201,11 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
-        self.table_infos
-            .get(table)
-            .cloned()
-            .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound(table.to_string()))
+        self.table_infos.get(table).cloned().ok_or_else(|| {
+            sqlrustgo_types::SqlError::TableNotFound {
+                table: table.to_string(),
+            }
+        })
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -270,6 +311,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -293,6 +335,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -328,6 +371,7 @@ mod tests {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            is_unique: false,
         };
         assert_eq!(col.name, "id");
     }
@@ -369,6 +413,60 @@ mod tests {
     fn test_record_index() {
         let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
         assert_eq!(record[0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_memory_storage_with_callback() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        let storage = MemoryStorage::with_callback(Box::new(move |_table| {
+            counter_clone.fetch_add(1, Ordering::SeqCst);
+        }));
+
+        assert!(storage.write_callback.is_some());
+    }
+
+    #[test]
+    fn test_memory_storage_scan_batch() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![
+                vec![Value::Integer(1)],
+                vec![Value::Integer(2)],
+                vec![Value::Integer(3)],
+                vec![Value::Integer(4)],
+                vec![Value::Integer(5)],
+            ],
+        );
+
+        let (batch, total, has_more) = storage.scan_batch("users", 0, 2).unwrap();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(total, 5);
+        assert!(has_more);
+
+        let (batch, total, has_more) = storage.scan_batch("users", 2, 2).unwrap();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(total, 5);
+        assert!(has_more);
+
+        let (batch, total, has_more) = storage.scan_batch("users", 4, 2).unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(total, 5);
+        assert!(!has_more);
+    }
+
+    #[test]
+    fn test_memory_storage_scan_batch_empty() {
+        let storage = MemoryStorage::new();
+        let (batch, total, has_more) = storage.scan_batch("nonexistent", 0, 10).unwrap();
+        assert!(batch.is_empty());
+        assert_eq!(total, 0);
+        assert!(!has_more);
     }
 }
 
