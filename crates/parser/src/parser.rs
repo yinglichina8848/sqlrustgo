@@ -2219,4 +2219,309 @@ mod tests {
             assert!(result.is_ok(), "Failed to parse: {}", sql);
         }
     }
+
+    #[test]
+    fn test_parse_upsert_single() {
+        let result = parse(
+            "INSERT INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Alice'",
+        );
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert!(i.on_duplicate.is_some());
+                let updates = i.on_duplicate.unwrap();
+                assert_eq!(updates.len(), 1);
+                assert_eq!(updates[0].0, "name");
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_upsert_multiple() {
+        let result = parse("INSERT INTO users (id, name) VALUES (1, 'A') ON DUPLICATE KEY UPDATE name='A', id=id+1");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.on_duplicate.is_some());
+                let updates = i.on_duplicate.unwrap();
+                assert_eq!(updates.len(), 2);
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_upsert_without_on_duplicate() {
+        let result = parse("INSERT INTO users (id, name) VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.on_duplicate.is_none());
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_batch_insert() {
+        let result = parse("INSERT INTO users VALUES (1, 'A'), (2, 'B'), (3, 'C')");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.values.len(), 3);
+                assert_eq!(i.table, "users");
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_auto_increment() {
+        let result = parse("CREATE TABLE orders (id INTEGER AUTO_INCREMENT, name TEXT)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 2);
+                assert!(ct.columns[0].auto_increment);
+                assert!(!ct.columns[1].auto_increment);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_primary_key() {
+        let result = parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 2);
+                assert!(ct.columns[0].primary_key);
+                assert!(!ct.columns[1].primary_key);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_foreign_key() {
+        let result =
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 2);
+                assert!(ct.columns[1].references.is_some());
+                let fk = ct.columns[1].references.as_ref().unwrap();
+                assert_eq!(fk.table, "users");
+                assert_eq!(fk.column, "id");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_not_null() {
+        let result = parse("CREATE TABLE users (id INTEGER NOT NULL, name TEXT)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 2);
+                assert!(!ct.columns[0].nullable);
+                assert!(ct.columns[1].nullable);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_all_constraints() {
+        let result = parse("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, user_id INTEGER REFERENCES users(id))");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 2);
+                let col = &ct.columns[0];
+                assert!(col.primary_key);
+                assert!(col.auto_increment);
+                assert!(!col.nullable);
+                assert!(ct.columns[1].references.is_some());
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_view() {
+        let result = parse("CREATE VIEW user_view AS SELECT * FROM users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateView(cv) => {
+                assert_eq!(cv.name, "user_view");
+                assert!(cv.query.contains("SELECT"));
+            }
+            _ => panic!("Expected CREATE VIEW statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_view_complex() {
+        let result =
+            parse("CREATE VIEW active_users AS SELECT id, name FROM users WHERE active = true");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateView(cv) => {
+                assert_eq!(cv.name, "active_users");
+                assert!(cv.query.contains("WHERE"));
+            }
+            _ => panic!("Expected CREATE VIEW statement"),
+        }
+    }
+
+    #[test]
+    fn test_column_definition_clone() {
+        let col = ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            auto_increment: true,
+            primary_key: true,
+            references: Some(ForeignKeyRef {
+                table: "users".to_string(),
+                column: "id".to_string(),
+                on_delete: None,
+                on_update: None,
+            }),
+        };
+        let cloned = col.clone();
+        assert_eq!(col.name, cloned.name);
+        assert_eq!(col.auto_increment, cloned.auto_increment);
+        assert_eq!(col.primary_key, cloned.primary_key);
+    }
+
+    #[test]
+    fn test_column_definition_debug() {
+        let col = ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            auto_increment: true,
+            primary_key: false,
+            references: None,
+        };
+        let debug = format!("{:?}", col);
+        assert!(debug.contains("id"));
+        assert!(debug.contains("INTEGER"));
+        assert!(debug.contains("auto_increment"));
+    }
+
+    #[test]
+    fn test_insert_statement_with_on_duplicate_clone() {
+        let insert = InsertStatement {
+            table: "users".to_string(),
+            columns: vec!["id".to_string(), "name".to_string()],
+            values: vec![vec![Expression::Literal("1".to_string())]],
+            on_duplicate: Some(vec![(
+                "name".to_string(),
+                Expression::Literal("new".to_string()),
+            )]),
+        };
+        let cloned = insert.clone();
+        assert_eq!(insert.table, cloned.table);
+        assert!(cloned.on_duplicate.is_some());
+    }
+
+    #[test]
+    fn test_foreign_key_ref_clone() {
+        let fk = ForeignKeyRef {
+            table: "orders".to_string(),
+            column: "user_id".to_string(),
+            on_delete: Some(ForeignKeyAction::Cascade),
+            on_update: Some(ForeignKeyAction::Restrict),
+        };
+        let cloned = fk.clone();
+        assert_eq!(fk.table, cloned.table);
+        assert_eq!(fk.on_delete, cloned.on_delete);
+    }
+
+    #[test]
+    fn test_foreign_key_action_enum() {
+        assert_eq!(format!("{:?}", ForeignKeyAction::Cascade), "Cascade");
+        assert_eq!(format!("{:?}", ForeignKeyAction::SetNull), "SetNull");
+        assert_eq!(format!("{:?}", ForeignKeyAction::Restrict), "Restrict");
+    }
+
+    #[test]
+    fn test_create_view_statement_clone() {
+        let cv = CreateViewStatement {
+            name: "my_view".to_string(),
+            query: "SELECT * FROM users".to_string(),
+        };
+        let cloned = cv.clone();
+        assert_eq!(cv.name, cloned.name);
+        assert_eq!(cv.query, cloned.query);
+    }
+
+    #[test]
+    fn test_create_view_statement_debug() {
+        let cv = CreateViewStatement {
+            name: "my_view".to_string(),
+            query: "SELECT * FROM users".to_string(),
+        };
+        let debug = format!("{:?}", cv);
+        assert!(debug.contains("my_view"));
+        assert!(debug.contains("SELECT"));
+    }
+
+    #[test]
+    fn test_parse_view_lowercase() {
+        let result = parse("create view my_view as select * from users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_view_missing_as() {
+        let result = parse("CREATE VIEW my_view SELECT * FROM users");
+        assert!(result.is_err(), "Expected error for missing AS");
+    }
+
+    #[test]
+    fn test_parse_upsert_empty_update() {
+        let result = parse("INSERT INTO users VALUES (1) ON DUPLICATE KEY UPDATE ");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_batch_insert_single_row() {
+        let result = parse("INSERT INTO users VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_batch_insert_empty_values() {
+        let result = parse("INSERT INTO users VALUES ()");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_column_foreign_key_no_column() {
+        let result = parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                let fk = ct.columns[1].references.as_ref().unwrap();
+                assert_eq!(fk.table, "users");
+                assert_eq!(fk.column, "id");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_column_auto_increment_synonyms() {
+        let result = parse("CREATE TABLE t1 (id INTEGER AUTOINCREMENT)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
 }
