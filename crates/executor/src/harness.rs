@@ -251,12 +251,14 @@ pub mod fixtures {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
             ],
         })?;
@@ -283,12 +285,14 @@ pub mod fixtures {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
                 ColumnDefinition {
                     name: "c_name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
             ],
         })?;
@@ -324,18 +328,21 @@ pub mod fixtures {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
                 ColumnDefinition {
                     name: "amount".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
             ],
         })?;
