@@ -90,6 +90,38 @@ impl ExecutionEngine {
                 storage.create_view(view_info)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
+            Statement::Analyze(analyze) => {
+                let table_name = analyze.table_name.ok_or_else(|| {
+                    SqlError::ExecutionError("ANALYZE requires a table name".to_string())
+                })?;
+                let storage = self.storage.read().unwrap();
+                let stats = storage.analyze_table(&table_name)?;
+
+                let mut rows: Vec<Vec<Value>> = vec![
+                    vec![
+                        Value::Text("table".to_string()),
+                        Value::Text(stats.table_name.clone()),
+                    ],
+                    vec![
+                        Value::Text("row_count".to_string()),
+                        Value::Text(stats.row_count.to_string()),
+                    ],
+                ];
+
+                for col_stat in &stats.column_stats {
+                    let col_row = vec![
+                        Value::Text(format!("column:{}", col_stat.column_name)),
+                        Value::Text(format!(
+                            "distinct:{}, null:{}",
+                            col_stat.distinct_count, col_stat.null_count
+                        )),
+                    ];
+                    rows.push(col_row);
+                }
+
+                let row_count = rows.len();
+                Ok(ExecutorResult::new(rows, row_count))
+            }
             Statement::Select(select) => {
                 let storage = self.storage.read().unwrap();
                 if !storage.has_table(&select.table) {
