@@ -62,7 +62,9 @@ impl MockStorage {
             data.rows.push(row);
             Ok(())
         } else {
-            Err(SqlError::TableNotFound(table.to_string()))
+            Err(SqlError::TableNotFound {
+                table: table.to_string(),
+            })
         }
     }
 }

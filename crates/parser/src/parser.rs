@@ -21,18 +21,78 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Select(SelectStatement),
+    SetOperation(SetOperation),
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
+    AlterTable(AlterTableStatement),
+    CreateIndex(CreateIndexStatement),
+    DropIndex(DropIndexStatement),
+    CreateView(CreateViewStatement),
     Analyze(AnalyzeStatement),
+    Explain(ExplainStatement),
+}
+
+/// CREATE INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateIndexStatement {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+}
+
+/// DROP INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropIndexStatement {
+    pub name: String,
+}
+
+/// ALTER TABLE operation type
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterOperation {
+    AddColumn { name: String, data_type: String },
+    DropColumn { name: String },
+    ModifyColumn { name: String, data_type: String },
+}
+
+/// ALTER TABLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTableStatement {
+    pub table: String,
+    pub operation: AlterOperation,
+}
+
+/// Set operation type for UNION, INTERSECT, EXCEPT
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperationType {
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
+}
+
+/// Set operation combining multiple SELECT statements
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetOperation {
+    pub op_type: SetOperationType,
+    pub left: Box<SelectStatement>,
+    pub right: Box<SelectStatement>,
 }
 
 /// ANALYZE statement for collecting statistics
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
     pub table_name: Option<String>,
+}
+
+/// EXPLAIN statement for showing execution plan
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplainStatement {
+    pub query: Box<Statement>,
+    pub analyze: bool,
 }
 
 /// Join type
@@ -79,6 +139,8 @@ pub struct SelectStatement {
     pub where_clause: Option<Expression>,
     pub join_clause: Option<JoinClause>,
     pub aggregates: Vec<AggregateCall>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
 }
 
 /// Column in SELECT
@@ -122,6 +184,13 @@ pub struct CreateTableStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStatement {
     pub name: String,
+}
+
+/// CREATE VIEW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStatement {
+    pub name: String,
+    pub query: String,
 }
 
 /// Column definition
@@ -189,9 +258,12 @@ impl Parser {
             Some(Token::Insert) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
-            Some(Token::Create) => self.parse_create_table(),
+            Some(Token::Alter) => self.parse_alter(),
+            Some(Token::Index) => self.parse_create_index(),
+            Some(Token::Create) => self.parse_create_or_index(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
+            Some(Token::Explain) => self.parse_explain(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -277,13 +349,97 @@ impl Parser {
             None
         };
 
-        Ok(Statement::Select(SelectStatement {
+        let base_select = SelectStatement {
             columns,
             table,
             where_clause,
             join_clause: None,
             aggregates,
-        }))
+            limit: None,
+            offset: None,
+        };
+
+        // Check for LIMIT and OFFSET
+        let mut select = base_select.clone();
+        match self.current() {
+            Some(Token::Limit) => {
+                self.next();
+                if let Some(Token::NumberLiteral(n)) = self.current() {
+                    select.limit = Some(n.parse().unwrap_or(0));
+                    self.next();
+                } else {
+                    return Err("Expected number after LIMIT".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        match self.current() {
+            Some(Token::Offset) => {
+                self.next();
+                if let Some(Token::NumberLiteral(n)) = self.current() {
+                    select.offset = Some(n.parse().unwrap_or(0));
+                    self.next();
+                } else {
+                    return Err("Expected number after OFFSET".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        // Check for set operations (UNION, INTERSECT, EXCEPT)
+        match self.current() {
+            Some(Token::Union) => {
+                self.next(); // consume UNION
+                let all = matches!(self.current(), Some(Token::All));
+                if all {
+                    self.next(); // consume ALL
+                }
+                // Recursively parse the next SELECT statement
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    Statement::SetOperation(_) => {
+                        return Err("Nested set operations not yet supported".to_string())
+                    }
+                    _ => return Err("Expected SELECT after UNION".to_string()),
+                };
+                let op_type = if all {
+                    SetOperationType::UnionAll
+                } else {
+                    SetOperationType::Union
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            Some(Token::Intersect) => {
+                self.next(); // consume INTERSECT
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    _ => return Err("Expected SELECT after INTERSECT".to_string()),
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type: SetOperationType::Intersect,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            Some(Token::Except) => {
+                self.next(); // consume EXCEPT
+                let right = match self.parse_select()? {
+                    Statement::Select(s) => Box::new(s),
+                    _ => return Err("Expected SELECT after EXCEPT".to_string()),
+                };
+                Ok(Statement::SetOperation(SetOperation {
+                    op_type: SetOperationType::Except,
+                    left: Box::new(base_select),
+                    right,
+                }))
+            }
+            _ => Ok(Statement::Select(select)),
+        }
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
@@ -295,30 +451,97 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
-        // Check for column list: (col1, col2, ...)
-        let columns = if matches!(self.current(), Some(Token::LParen)) {
-            self.next(); // consume '('
-            let mut cols = Vec::new();
+        // Check for INSERT SET syntax or column list
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+
+        if matches!(self.current(), Some(Token::Set)) {
+            // INSERT INTO table SET col1=val1, col2=val2
+            self.next(); // consume SET
+
             loop {
+                // Parse column name
+                let col_name = match self.current() {
+                    Some(Token::Identifier(name)) => name.clone(),
+                    _ => break,
+                };
+                self.next();
+                columns.push(col_name);
+
+                // Expect =
                 match self.current() {
+                    Some(Token::Equal) => {}
+                    _ => return Err("Expected = after column name".to_string()),
+                }
+                self.next(); // consume =
+
+                // Parse value - extract first, then advance
+                let value = match self.current() {
+                    Some(Token::NumberLiteral(n)) => {
+                        let v = Expression::Literal(n.clone());
+                        self.next();
+                        v
+                    }
+                    Some(Token::StringLiteral(s)) => {
+                        let v = Expression::Literal(format!("'{}'", s));
+                        self.next();
+                        v
+                    }
                     Some(Token::Identifier(name)) => {
-                        cols.push(name.clone());
+                        let v = Expression::Identifier(name.clone());
                         self.next();
+                        v
                     }
-                    Some(Token::RParen) => {
+                    Some(Token::Null) => {
+                        let v = Expression::Literal("NULL".to_string());
                         self.next();
-                        break;
+                        v
                     }
+                    Some(Token::Minus) => {
+                        self.next();
+                        if let Some(Token::NumberLiteral(n)) = self.current() {
+                            let v = Expression::Literal(format!("-{}", n));
+                            self.next();
+                            v
+                        } else {
+                            return Err("Expected number after -".to_string());
+                        }
+                    }
+                    _ => return Err("Expected value".to_string()),
+                };
+                values.push(vec![value]);
+
+                // Check for more columns
+                match self.current() {
                     Some(Token::Comma) => {
-                        self.next();
+                        self.next(); // consume comma
                     }
-                    _ => return Err("Expected column name".to_string()),
+                    _ => break,
                 }
             }
-            cols
-        } else {
-            Vec::new()
-        };
+
+            return Ok(Statement::Insert(InsertStatement {
+                table,
+                columns,
+                values,
+            }));
+        } else if matches!(self.current(), Some(Token::LParen)) {
+            // INSERT INTO table (col1, col2) VALUES ...
+            self.next(); // consume '('
+            loop {
+                if let Some(Token::Identifier(name)) = self.current() {
+                    columns.push(name.clone());
+                    self.next();
+                } else if matches!(self.current(), Some(Token::RParen)) {
+                    self.next();
+                    break;
+                } else if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    return Err("Expected column name".to_string());
+                }
+            }
+        }
 
         // Expect VALUES keyword
         if !matches!(self.current(), Some(Token::Values)) {
@@ -400,6 +623,71 @@ impl Parser {
             table,
             columns,
             values,
+        }))
+    }
+
+    fn parse_alter(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Alter)?;
+        self.expect(Token::Table)?;
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        let operation = match self.current() {
+            Some(Token::Add) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.current() {
+                    Some(Token::Integer) => {
+                        self.next();
+                        "INTEGER".to_string()
+                    }
+                    Some(Token::Text) => {
+                        self.next();
+                        "TEXT".to_string()
+                    }
+                    _ => return Err("Expected data type".to_string()),
+                };
+                AlterOperation::AddColumn { name, data_type }
+            }
+            Some(Token::Drop) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                AlterOperation::DropColumn { name }
+            }
+            Some(Token::Modify) => {
+                self.next();
+                self.expect(Token::Column)?;
+                let name = match self.next() {
+                    Some(Token::Identifier(n)) => n,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.current() {
+                    Some(Token::Integer) => {
+                        self.next();
+                        "INTEGER".to_string()
+                    }
+                    Some(Token::Text) => {
+                        self.next();
+                        "TEXT".to_string()
+                    }
+                    _ => return Err("Expected data type".to_string()),
+                };
+                AlterOperation::ModifyColumn { name, data_type }
+            }
+            _ => return Err("Expected ADD, DROP or MODIFY".to_string()),
+        };
+        Ok(Statement::AlterTable(AlterTableStatement {
+            table,
+            operation,
         }))
     }
 
@@ -601,9 +889,113 @@ impl Parser {
         }))
     }
 
-    fn parse_create_table(&mut self) -> Result<Statement, String> {
+    fn parse_create_index(&mut self) -> Result<Statement, String> {
+        // CREATE [UNIQUE] INDEX index_name ON table (col1, col2, ...)
+        let mut unique = false;
+        if matches!(self.current(), Some(Token::Unique)) {
+            unique = true;
+            self.next();
+        }
+
+        if !matches!(self.current(), Some(Token::Index)) {
+            return Err("Expected INDEX after CREATE or UNIQUE".to_string());
+        }
+        self.next();
+        let name = match self.next() {
+            Some(Token::Identifier(n)) => n,
+            _ => return Err("Expected index name".to_string()),
+        };
+
+        self.expect(Token::On)?;
+        let table = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(col)) => {
+                    columns.push(col.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name".to_string()),
+            }
+        }
+
+        Ok(Statement::CreateIndex(CreateIndexStatement {
+            name,
+            table,
+            columns,
+            unique,
+        }))
+    }
+
+    fn parse_drop_index(&mut self) -> Result<Statement, String> {
+        // DROP INDEX index_name
+        self.expect(Token::Index)?;
+        let name = match self.next() {
+            Some(Token::Identifier(n)) => n,
+            _ => return Err("Expected index name".to_string()),
+        };
+
+        Ok(Statement::DropIndex(DropIndexStatement { name }))
+    }
+
+    fn peek(&self) -> Option<Token> {
+        self.tokens.get(self.position).cloned()
+    }
+
+    fn parse_create_or_index(&mut self) -> Result<Statement, String> {
+        let mut pos = self.position;
+        let mut is_index = false;
+        if pos < self.tokens.len() {
+            pos += 1;
+        }
+        if pos < self.tokens.len() {
+            if let Some(Token::Unique) = &self.tokens.get(pos) {
+                is_index = true;
+                pos += 1;
+            }
+        }
+        if pos < self.tokens.len() {
+            if let Some(Token::Index) = &self.tokens.get(pos) {
+                is_index = true;
+            }
+        }
+        if is_index {
+            self.next();
+            self.parse_create_index()
+        } else {
+            self.parse_create()
+        }
+    }
+
+    fn parse_create(&mut self) -> Result<Statement, String> {
         self.expect(Token::Create)?;
-        self.expect(Token::Table)?;
+
+        match self.current() {
+            Some(Token::Table) => {
+                self.next();
+                self.parse_create_table()
+            }
+            Some(Token::View) => {
+                self.next();
+                self.parse_create_view()
+            }
+            _ => Err("Expected TABLE or VIEW after CREATE".to_string()),
+        }
+    }
+
+    fn parse_create_table(&mut self) -> Result<Statement, String> {
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -670,6 +1062,31 @@ impl Parser {
         Ok(Statement::DropTable(DropTableStatement { name }))
     }
 
+    fn parse_create_view(&mut self) -> Result<Statement, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected view name".to_string()),
+        };
+
+        self.expect(Token::As)?;
+
+        let mut query_parts = Vec::new();
+        while let Some(token) = self.current() {
+            match token {
+                Token::Semicolon => {
+                    break;
+                }
+                _ => {
+                    query_parts.push(token.to_string());
+                    self.next();
+                }
+            }
+        }
+
+        let query = query_parts.join(" ");
+        Ok(Statement::CreateView(CreateViewStatement { name, query }))
+    }
+
     fn parse_analyze(&mut self) -> Result<Statement, String> {
         self.expect(Token::Analyze)?;
 
@@ -684,6 +1101,25 @@ impl Parser {
         };
 
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+    }
+
+    fn parse_explain(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Explain)?;
+
+        let analyze = match self.current() {
+            Some(Token::Analyze) => {
+                self.next();
+                true
+            }
+            _ => false,
+        };
+
+        let query = match self.current() {
+            Some(Token::Select) => Box::new(self.parse_select()?),
+            _ => return Err("EXPLAIN must be followed by a SELECT statement".to_string()),
+        };
+
+        Ok(Statement::Explain(ExplainStatement { query, analyze }))
     }
 }
 
@@ -1041,5 +1477,35 @@ mod tests {
     fn test_parse_update_single_set() {
         let result = parse("UPDATE users SET name = 'Bob'");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_explain() {
+        let result = parse("EXPLAIN SELECT id FROM users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Explain(e) => {
+                assert!(!e.analyze);
+                match *e.query {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "users");
+                    }
+                    _ => panic!("Expected SELECT in EXPLAIN"),
+                }
+            }
+            _ => panic!("Expected EXPLAIN statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_explain_analyze() {
+        let result = parse("EXPLAIN ANALYZE SELECT id FROM users");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Explain(e) => {
+                assert!(e.analyze);
+            }
+            _ => panic!("Expected EXPLAIN statement"),
+        }
     }
 }

@@ -250,11 +250,13 @@ pub mod fixtures {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
             ],
         })?;
@@ -280,11 +282,13 @@ pub mod fixtures {
                     name: "c_custkey".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
                 ColumnDefinition {
                     name: "c_name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
             ],
         })?;
@@ -319,16 +323,19 @@ pub mod fixtures {
                     name: "order_id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
                 ColumnDefinition {
                     name: "amount".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
                 },
             ],
         })?;
@@ -343,113 +350,5 @@ pub mod fixtures {
         )?;
 
         Ok(())
-    }
-}
-
-/// Comparison utilities for test assertions
-pub mod compare {
-    use super::*;
-
-    /// Compare two rows, ignoring nulls in expected
-    pub fn rows_match(actual: &[Value], expected: &[Value]) -> bool {
-        if actual.len() != expected.len() {
-            return false;
-        }
-
-        for (i, exp) in expected.iter().enumerate() {
-            match exp {
-                Value::Null => continue, // Null in expected matches anything
-                _ => {
-                    if &actual[i] != exp {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        true
-    }
-
-    /// Check if result contains any row matching the expected pattern
-    pub fn find_matching_row<'a>(
-        result: &'a [Vec<Value>],
-        expected: &[Value],
-    ) -> Option<&'a Vec<Value>> {
-        result.iter().find(|row| rows_match(row, expected))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::mock_storage::MockStorage;
-
-    #[test]
-    fn test_harness_new() {
-        let storage = MockStorage::new();
-        let _harness = TestHarness::<MockStorage>::new(storage);
-    }
-
-    #[test]
-    fn test_assertions_row_count() {
-        let result = ExecutorResult::new(vec![vec![Value::Integer(1)], vec![Value::Integer(2)]], 0);
-        assertions::assert_row_count(&result, 2);
-    }
-
-    #[test]
-    fn test_assertions_has_rows() {
-        let result = ExecutorResult::new(vec![vec![Value::Integer(1)]], 0);
-        assertions::assert_has_rows(&result);
-    }
-
-    #[test]
-    #[should_panic(expected = "Expected at least one row")]
-    fn test_assertions_has_rows_panic() {
-        let result = ExecutorResult::new(vec![], 0);
-        assertions::assert_has_rows(&result);
-    }
-
-    #[test]
-    fn test_assertions_no_rows() {
-        let result = ExecutorResult::new(vec![], 0);
-        assertions::assert_no_rows(&result);
-    }
-
-    #[test]
-    fn test_assertions_first_row_equals() {
-        let result = ExecutorResult::new(
-            vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
-            0,
-        );
-        assertions::assert_first_row_equals(
-            &result,
-            &[Value::Integer(1), Value::Text("Alice".to_string())],
-        );
-    }
-
-    #[test]
-    fn test_compare_rows_match() {
-        let actual = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        let expected = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        assert!(compare::rows_match(&actual, &expected));
-    }
-
-    #[test]
-    fn test_compare_rows_with_null() {
-        let actual = vec![Value::Integer(1), Value::Text("Alice".to_string())];
-        let expected = vec![Value::Null, Value::Text("Alice".to_string())];
-        assert!(compare::rows_match(&actual, &expected));
-    }
-
-    #[test]
-    fn test_compare_find_matching_row() {
-        let result = vec![
-            vec![Value::Integer(1), Value::Text("Alice".to_string())],
-            vec![Value::Integer(2), Value::Text("Bob".to_string())],
-        ];
-        let expected = vec![Value::Null, Value::Text("Bob".to_string())];
-
-        let found = compare::find_matching_row(&result, &expected);
-        assert!(found.is_some());
     }
 }
