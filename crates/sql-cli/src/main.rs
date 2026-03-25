@@ -317,6 +317,7 @@ fn execute_create_table(
             data_type: col.data_type.clone(),
             nullable: col.nullable,
             is_unique: false,
+            references: None,
         })
         .collect();
 
@@ -353,18 +354,21 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
             ColumnDefinition {
                 name: "email".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
                 is_unique: false,
+                references: None,
             },
         ],
     };
@@ -401,18 +405,21 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
             ColumnDefinition {
                 name: "user_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
             ColumnDefinition {
                 name: "amount".to_string(),
                 data_type: "REAL".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
         ],
     };

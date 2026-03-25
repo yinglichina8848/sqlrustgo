@@ -385,12 +385,14 @@ impl ExecutionEngine {
                             sqlrustgo_storage::ForeignKeyConstraint {
                                 referenced_table: fk.table.clone(),
                                 referenced_column: fk.column.clone(),
-                                on_delete: fk.on_delete.as_ref().map(|_| {
-                                    sqlrustgo_storage::ForeignKeyAction::Cascade
-                                }),
-                                on_update: fk.on_update.as_ref().map(|_| {
-                                    sqlrustgo_storage::ForeignKeyAction::Cascade
-                                }),
+                                on_delete: fk
+                                    .on_delete
+                                    .as_ref()
+                                    .map(|_| sqlrustgo_storage::ForeignKeyAction::Cascade),
+                                on_update: fk
+                                    .on_update
+                                    .as_ref()
+                                    .map(|_| sqlrustgo_storage::ForeignKeyAction::Cascade),
                             }
                         });
                         sqlrustgo_storage::ColumnDefinition {
@@ -925,5 +927,170 @@ mod tests {
     #[test]
     fn test_planner_export() {
         let _: Option<Box<dyn Planner>> = None;
+    }
+
+    #[test]
+    fn test_execute_analyze_sql() {
+        let mut engine = ExecutionEngine::default();
+
+        engine
+            .execute(sqlrustgo_parser::parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(sqlrustgo_parser::parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+        engine
+            .execute(sqlrustgo_parser::parse("INSERT INTO users VALUES (2, 'Bob')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(sqlrustgo_parser::parse("ANALYZE users").unwrap())
+            .unwrap();
+
+        assert!(result.rows.len() > 0);
+        assert!(result.rows.iter().any(|r| r.iter().any(|v| match v {
+            Value::Text(s) => s.contains("users"),
+            _ => false,
+        })));
+    }
+
+    #[test]
+    fn test_execute_explain_analyze() {
+        let mut engine = ExecutionEngine::default();
+
+        engine
+            .execute(sqlrustgo_parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(sqlrustgo_parser::parse("INSERT INTO users VALUES (1)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(sqlrustgo_parser::parse("EXPLAIN ANALYZE SELECT * FROM users").unwrap())
+            .unwrap();
+
+        assert!(result.rows.len() > 0);
+    }
+
+    #[test]
+    fn test_execute_explain_without_analyze() {
+        let mut engine = ExecutionEngine::default();
+
+        engine
+            .execute(sqlrustgo_parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(sqlrustgo_parser::parse("EXPLAIN SELECT * FROM users").unwrap())
+            .unwrap();
+
+        assert!(result.rows.len() >= 0);
+    }
+
+    #[test]
+    fn test_execute_plan_with_index_scan() {
+        use sqlrustgo_planner::{DataType, Field, IndexScanExec, Schema};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "users".to_string(),
+                columns: vec![sqlrustgo_storage::ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    references: None,
+                }],
+            })
+            .unwrap();
+        storage
+            .insert(
+                "users",
+                vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+            )
+            .unwrap();
+
+        let engine = ExecutionEngine::new(std::sync::Arc::new(std::sync::RwLock::new(storage)));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let scan = IndexScanExec::new(
+            "users".to_string(),
+            "idx_id".to_string(),
+            sqlrustgo_planner::Expr::Literal(Value::Integer(1)),
+            schema,
+        );
+
+        let result = engine.execute_plan(&scan).unwrap();
+        assert!(result.rows.len() >= 0);
+    }
+
+    #[test]
+    fn test_execute_plan_with_hash_join() {
+        use sqlrustgo_planner::{DataType, Field, HashJoinExec, JoinType, Schema};
+
+        let mut storage = MemoryStorage::new();
+
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "users".to_string(),
+                columns: vec![sqlrustgo_storage::ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    references: None,
+                }],
+            })
+            .unwrap();
+        storage
+            .insert(
+                "users",
+                vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+            )
+            .unwrap();
+
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "users".to_string(),
+                columns: vec![sqlrustgo_storage::ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    references: None,
+                }],
+            })
+            .unwrap();
+        storage
+            .insert(
+                "orders",
+                vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+            )
+            .unwrap();
+
+        let engine = ExecutionEngine::new(std::sync::Arc::new(std::sync::RwLock::new(storage)));
+
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("user_id".to_string(), DataType::Integer)]);
+
+        let left_scan = Box::new(sqlrustgo_planner::SeqScanExec::new(
+            "users".to_string(),
+            left_schema.clone(),
+        ));
+        let right_scan = Box::new(sqlrustgo_planner::SeqScanExec::new(
+            "orders".to_string(),
+            right_schema.clone(),
+        ));
+
+        let join_schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("user_id".to_string(), DataType::Integer),
+        ]);
+
+        let join = HashJoinExec::new(left_scan, right_scan, JoinType::Inner, None, join_schema);
+
+        let result = engine.execute_plan(&join).unwrap();
+        assert!(result.rows.len() > 0);
     }
 }

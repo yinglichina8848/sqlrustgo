@@ -403,4 +403,25 @@ mod tests {
 
         assert!(matches!(result, Ok(LockGrantMode::Granted)));
     }
+
+    #[test]
+    fn test_lock_manager_with_deadlock_detector() {
+        let mut manager = LockManager::new();
+
+        let key1 = vec![1];
+        let key2 = vec![2];
+
+        manager
+            .acquire_lock(TxId::new(1), key1.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        manager
+            .acquire_lock(TxId::new(1), key2.clone(), LockMode::Shared)
+            .unwrap();
+
+        let result = manager.acquire_lock(TxId::new(2), key2.clone(), LockMode::Exclusive);
+        assert!(matches!(result, Ok(LockGrantMode::Waiting)));
+
+        let _ = manager.detect_deadlock(TxId::new(2));
+    }
 }
