@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 
+use crate::bplus_tree::SimpleBPlusTree;
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -82,10 +84,15 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_table_index(&self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
+    fn create_table_index(
+        &mut self,
+        table: &str,
+        column: &str,
+        column_index: usize,
+    ) -> SqlResult<()>;
 
     /// Drop an index from a table
-    fn drop_table_index(&self, table: &str, column: &str) -> SqlResult<()>;
+    fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
     /// Search using index - returns row IDs matching the key
     fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32>;
@@ -116,6 +123,7 @@ pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
     views: HashMap<String, ViewInfo>,
+    indexes: HashMap<String, SimpleBPlusTree>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
 }
 
@@ -133,6 +141,7 @@ impl MemoryStorage {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
             views: HashMap::new(),
+            indexes: HashMap::new(),
             write_callback: None,
         }
     }
@@ -142,6 +151,7 @@ impl MemoryStorage {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
             views: HashMap::new(),
+            indexes: HashMap::new(),
             write_callback: Some(callback),
         }
     }
@@ -266,24 +276,47 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn create_table_index(
-        &self,
-        _table: &str,
-        _column: &str,
-        _column_index: usize,
+        &mut self,
+        table: &str,
+        column: &str,
+        column_index: usize,
     ) -> SqlResult<()> {
+        let index_name = format!("{}_{}", table, column);
+        let mut tree = SimpleBPlusTree::new();
+
+        if let Some(records) = self.tables.get(table) {
+            for (row_id, record) in records.iter().enumerate() {
+                if let Some(value) = record.get(column_index) {
+                    if let Some(key) = value.to_index_key() {
+                        tree.insert(key, row_id as u32);
+                    }
+                }
+            }
+        }
+
+        self.indexes.insert(index_name, tree);
         Ok(())
     }
 
-    fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
+        let index_name = format!("{}_{}", table, column);
+        self.indexes.remove(&index_name);
         Ok(())
     }
 
-    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Option<u32> {
-        None
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
+        let index_name = format!("{}_{}", table, column);
+        self.indexes
+            .get(&index_name)
+            .and_then(|tree| tree.search(key))
     }
 
-    fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
-        Vec::new()
+    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
+        let index_name = format!("{}_{}", table, column);
+        self.indexes
+            .get(&index_name)
+            .map(|tree| tree.range_query(start, end))
+            .unwrap_or_default()
     }
 
     fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
