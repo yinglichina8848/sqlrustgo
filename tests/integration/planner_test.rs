@@ -785,4 +785,3 @@ fn test_index_scan_exec_key_range() {
     // IndexScan with key range - verify config is set (stub returns empty)
     assert!(rows.is_empty() || rows.len() == 9);
 }
-
