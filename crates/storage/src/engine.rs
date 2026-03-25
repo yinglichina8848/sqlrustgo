@@ -7,6 +7,24 @@ use std::collections::HashMap;
 
 use crate::bplus_tree::SimpleBPlusTree;
 
+/// Column statistics for a single column
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ColumnStats {
+    pub column_name: String,
+    pub distinct_count: u64,
+    pub null_count: u64,
+    pub min_value: Option<Value>,
+    pub max_value: Option<Value>,
+}
+
+/// Table statistics
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TableStats {
+    pub table_name: String,
+    pub row_count: u64,
+    pub column_stats: Vec<ColumnStats>,
+}
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -111,6 +129,9 @@ pub trait StorageEngine: Send + Sync {
 
     /// Check if view exists
     fn has_view(&self, name: &str) -> bool;
+
+    /// Analyze table and collect statistics
+    fn analyze_table(&self, table: &str) -> SqlResult<TableStats>;
 
     /// Callback triggered after write operations (INSERT/UPDATE/DELETE)
     /// Used by upper layers to invalidate query caches
@@ -334,6 +355,54 @@ impl StorageEngine for MemoryStorage {
 
     fn has_view(&self, name: &str) -> bool {
         self.views.contains_key(name)
+    }
+
+    fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
+        let records = self
+            .tables
+            .get(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
+
+        let table_info = self.table_infos.get(table);
+
+        let mut column_stats = Vec::new();
+
+        if let Some(info) = table_info {
+            for col in &info.columns {
+                let mut null_count = 0u64;
+                let mut distinct_values: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
+
+                for record in records {
+                    if let Some(idx) = info.columns.iter().position(|c| c.name == col.name) {
+                        if let Some(val) = record.get(idx) {
+                            match val {
+                                Value::Null => null_count += 1,
+                                _ => {
+                                    distinct_values.insert(val.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                column_stats.push(ColumnStats {
+                    column_name: col.name.clone(),
+                    distinct_count: distinct_values.len() as u64,
+                    null_count,
+                    min_value: None,
+                    max_value: None,
+                });
+            }
+        }
+
+        Ok(TableStats {
+            table_name: table.to_string(),
+            row_count: records.len() as u64,
+            column_stats,
+        })
     }
 
     fn on_write_complete(&mut self, table: &str) {

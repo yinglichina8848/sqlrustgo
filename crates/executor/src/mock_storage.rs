@@ -4,7 +4,9 @@
 //! that can be used for testing executor operations without
 //! requiring a real database connection.
 
-use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo, ViewInfo};
+use sqlrustgo_storage::engine::{
+    ColumnDefinition, ColumnStats, StorageEngine, TableInfo, TableStats, ViewInfo,
+};
 use sqlrustgo_types::{SqlResult, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -207,6 +209,58 @@ impl StorageEngine for MockStorage {
 
     fn has_view(&self, _name: &str) -> bool {
         false
+    }
+
+    fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
+        let tables = self.tables.read().unwrap();
+        let records =
+            tables
+                .get(table)
+                .cloned()
+                .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound {
+                    table: table.to_string(),
+                })?;
+
+        let table_infos = self.table_infos.read().unwrap();
+        let table_info = table_infos.get(table).cloned().ok_or_else(|| {
+            sqlrustgo_types::SqlError::TableNotFound {
+                table: table.to_string(),
+            }
+        })?;
+
+        let mut column_stats = Vec::new();
+
+        for col in &table_info.columns {
+            let mut null_count = 0u64;
+            let mut distinct_values = std::collections::HashSet::new();
+
+            if let Some(idx) = table_info.columns.iter().position(|c| c.name == col.name) {
+                for record in &records {
+                    if let Some(val) = record.get(idx) {
+                        match val {
+                            Value::Null => null_count += 1,
+                            _ => {
+                                distinct_values.insert(val.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            column_stats.push(ColumnStats {
+                column_name: col.name.clone(),
+                distinct_count: distinct_values.len() as u64,
+                null_count,
+                min_value: None,
+                max_value: None,
+            });
+        }
+
+        Ok(TableStats {
+            table_name: table.to_string(),
+            row_count: records.len() as u64,
+            column_stats,
+        })
     }
 }
 
