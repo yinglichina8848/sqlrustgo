@@ -23,7 +23,8 @@ pub use buffer_pool_metrics::BufferPoolMetrics;
 //     ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
 // };
 pub use engine::{
-    ColumnDefinition, MemoryStorage, Record, StorageEngine, TableData, TableInfo, ViewInfo,
+    ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record,
+    StorageEngine, TableData, TableInfo, ViewInfo,
 };
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};

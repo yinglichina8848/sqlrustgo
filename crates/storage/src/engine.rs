@@ -25,6 +25,23 @@ pub struct TableStats {
     pub column_stats: Vec<ColumnStats>,
 }
 
+/// Foreign key referential action
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ForeignKeyAction {
+    Cascade,
+    SetNull,
+    Restrict,
+}
+
+/// Foreign key constraint definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForeignKeyConstraint {
+    pub referenced_table: String,
+    pub referenced_column: String,
+    pub on_delete: Option<ForeignKeyAction>,
+    pub on_update: Option<ForeignKeyAction>,
+}
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -32,6 +49,7 @@ pub struct ColumnDefinition {
     pub data_type: String,
     pub nullable: bool,
     pub is_unique: bool,
+    pub references: Option<ForeignKeyConstraint>,
 }
 
 /// Table metadata
@@ -229,6 +247,47 @@ impl StorageEngine for MemoryStorage {
                                                 value: value.to_string(),
                                                 key: col_def.name.clone(),
                                             });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Foreign key validation
+            for record in &records {
+                for (col_idx, col_def) in info.columns.iter().enumerate() {
+                    if let Some(ref fk) = col_def.references {
+                        if let Some(value) = record.get(col_idx) {
+                            if *value != Value::Null {
+                                // Check if the referenced value exists in the parent table
+                                let parent_table_info = self.table_infos.get(&fk.referenced_table);
+                                if let Some(parent_info) = parent_table_info {
+                                    if let Some(parent_col_idx) = parent_info
+                                        .columns
+                                        .iter()
+                                        .position(|c| c.name == fk.referenced_column)
+                                    {
+                                        let parent_records = self
+                                            .tables
+                                            .get(&fk.referenced_table)
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let value_exists = parent_records.iter().any(|r| {
+                                            r.get(parent_col_idx)
+                                                .map(|v| v == value)
+                                                .unwrap_or(false)
+                                        });
+                                        if !value_exists {
+                                            return Err(SqlError::ExecutionError(format!(
+                                                "Foreign key constraint violation: {} references {}.{} = {} which does not exist",
+                                                col_def.name,
+                                                fk.referenced_table,
+                                                fk.referenced_column,
+                                                value
+                                            )));
                                         }
                                     }
                                 }
@@ -480,6 +539,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -504,6 +564,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -540,6 +601,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            references: None,
         };
         assert_eq!(col.name, "id");
     }

@@ -170,3 +170,62 @@ fn test_revoke_syntax() {
         panic!("Expected Revoke statement");
     }
 }
+
+#[test]
+fn test_foreign_key_constraint_violation() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    // Create parent table first
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
+
+    // Insert some users
+    engine
+        .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+        .unwrap();
+
+    // Create child table with FK
+    engine
+        .execute(
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))").unwrap(),
+        )
+        .unwrap();
+
+    // Insert order with valid user_id - should succeed
+    let result = engine.execute(parse("INSERT INTO orders VALUES (1, 1)").unwrap());
+    assert!(result.is_ok(), "Should allow insert with valid FK");
+
+    // Insert order with invalid user_id - should fail
+    let result = engine.execute(parse("INSERT INTO orders VALUES (2, 999)").unwrap());
+    assert!(
+        result.is_err(),
+        "Should reject insert with invalid FK reference"
+    );
+}
+
+#[test]
+fn test_foreign_key_constraint_null_value() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    // Create parent table
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
+
+    // Insert a user
+    engine
+        .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+        .unwrap();
+
+    // Create child table with FK
+    engine
+        .execute(
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))").unwrap(),
+        )
+        .unwrap();
+
+    // Insert order with NULL user_id - should succeed (NULL bypasses FK check)
+    let result = engine.execute(parse("INSERT INTO orders VALUES (1, NULL)").unwrap());
+    assert!(result.is_ok(), "Should allow NULL FK value");
+}
