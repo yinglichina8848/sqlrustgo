@@ -643,3 +643,109 @@ fn test_record_index() {
     let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
     assert_eq!(record[0], Value::Integer(1));
 }
+
+#[test]
+fn test_column_definition_new() {
+    let col = ColumnDefinition {
+        name: "id".to_string(),
+        data_type: "INTEGER".to_string(),
+        nullable: false,
+        is_unique: true,
+    };
+    assert_eq!(col.name, "id");
+    assert_eq!(col.data_type, "INTEGER");
+    assert!(!col.nullable);
+    assert!(col.is_unique);
+}
+
+#[test]
+fn test_table_info_new() {
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![
+            ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: true,
+            },
+            ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                is_unique: false,
+            },
+        ],
+    };
+    assert_eq!(info.name, "users");
+    assert_eq!(info.columns.len(), 2);
+}
+
+#[test]
+fn test_table_stats_new() {
+    let stats = TableStats {
+        table_name: "users".to_string(),
+        row_count: 100,
+        column_stats: vec![ColumnStats {
+            column_name: "id".to_string(),
+            distinct_count: 100,
+            null_count: 0,
+            min_value: Some(Value::Integer(1)),
+            max_value: Some(Value::Integer(100)),
+        }],
+    };
+    assert_eq!(stats.row_count, 100);
+    assert_eq!(stats.column_stats.len(), 1);
+}
+
+#[test]
+fn test_column_stats_new() {
+    let stats = ColumnStats {
+        column_name: "id".to_string(),
+        distinct_count: 50,
+        null_count: 5,
+        min_value: Some(Value::Integer(1)),
+        max_value: Some(Value::Integer(100)),
+    };
+    assert_eq!(stats.column_name, "id");
+    assert_eq!(stats.distinct_count, 50);
+}
+
+#[test]
+fn test_table_data_new() {
+    let data = TableData {
+        info: TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        },
+        rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+    };
+    assert_eq!(data.rows.len(), 2);
+}
+
+#[test]
+fn test_column_definition_serialize() {
+    let col = ColumnDefinition {
+        name: "id".to_string(),
+        data_type: "INTEGER".to_string(),
+        nullable: false,
+        is_unique: true,
+    };
+    let json = serde_json::to_string(&col).unwrap();
+    assert!(json.contains("id"));
+}
+
+#[test]
+fn test_table_info_serialize() {
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+        }],
+    };
+    let json = serde_json::to_string(&info).unwrap();
+    assert!(json.contains("users"));
+}
