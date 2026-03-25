@@ -34,6 +34,8 @@ pub enum Statement {
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
     Transaction(TransactionStatement),
+    Grant(GrantStatement),
+    Revoke(RevokeStatement),
 }
 
 /// CREATE INDEX statement
@@ -110,6 +112,30 @@ pub enum TransactionCommand {
     Rollback,
     Savepoint { name: String },
     RollbackTo { name: String },
+}
+
+/// GRANT statement for permission management
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrantStatement {
+    pub privilege: Privilege,
+    pub table: String,
+    pub to_user: String,
+}
+
+/// REVOKE statement for permission management
+#[derive(Debug, Clone, PartialEq)]
+pub struct RevokeStatement {
+    pub privilege: Privilege,
+    pub table: String,
+    pub from_user: String,
+}
+
+/// Privilege types
+#[derive(Debug, Clone, PartialEq)]
+pub enum Privilege {
+    Read,
+    Write,
+    All,
 }
 
 /// Join type
@@ -304,6 +330,8 @@ impl Parser {
             | Some(Token::Commit)
             | Some(Token::Rollback)
             | Some(Token::Savepoint) => self.parse_transaction(),
+            Some(Token::Grant) => self.parse_grant(),
+            Some(Token::Revoke) => self.parse_revoke(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1258,6 +1286,122 @@ impl Parser {
         };
 
         Ok(Statement::Explain(ExplainStatement { query, analyze }))
+    }
+
+    fn parse_grant(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Grant)?;
+
+        let privilege = match self.current() {
+            Some(Token::Select) => {
+                self.next();
+                Privilege::Read
+            }
+            Some(Token::Insert) | Some(Token::Update) | Some(Token::Delete) => {
+                self.next();
+                Privilege::Write
+            }
+            Some(Token::All) => {
+                self.next();
+                Privilege::All
+            }
+            Some(Token::Identifier(s)) => {
+                let upper = s.to_uppercase();
+                self.next();
+                match upper.as_str() {
+                    "READ" => Privilege::Read,
+                    "WRITE" => Privilege::Write,
+                    "ALL" => Privilege::All,
+                    _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+                }
+            }
+            _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+        };
+
+        self.expect(Token::On)?;
+
+        let table = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let t = name.clone();
+                self.next();
+                t
+            }
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::To)?;
+
+        let to_user = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let u = name.clone();
+                self.next();
+                u
+            }
+            _ => return Err("Expected user name".to_string()),
+        };
+
+        Ok(Statement::Grant(GrantStatement {
+            privilege,
+            table,
+            to_user,
+        }))
+    }
+
+    fn parse_revoke(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Revoke)?;
+
+        let privilege = match self.current() {
+            Some(Token::Select) => {
+                self.next();
+                Privilege::Read
+            }
+            Some(Token::Insert) | Some(Token::Update) | Some(Token::Delete) => {
+                self.next();
+                Privilege::Write
+            }
+            Some(Token::All) => {
+                self.next();
+                Privilege::All
+            }
+            Some(Token::Identifier(s)) => {
+                let upper = s.to_uppercase();
+                self.next();
+                match upper.as_str() {
+                    "READ" => Privilege::Read,
+                    "WRITE" => Privilege::Write,
+                    "ALL" => Privilege::All,
+                    _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+                }
+            }
+            _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+        };
+
+        self.expect(Token::On)?;
+
+        let table = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let t = name.clone();
+                self.next();
+                t
+            }
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::From)?;
+
+        let from_user = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let u = name.clone();
+                self.next();
+                u
+            }
+            _ => return Err("Expected user name".to_string()),
+        };
+
+        Ok(Statement::Revoke(RevokeStatement {
+            privilege,
+            table,
+            from_user,
+        }))
     }
 
     fn parse_transaction(&mut self) -> Result<Statement, String> {
