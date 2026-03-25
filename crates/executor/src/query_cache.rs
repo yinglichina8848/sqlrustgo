@@ -80,7 +80,9 @@ impl QueryCache {
         if let Some(keys) = self.table_index.remove(table) {
             for key in keys {
                 if let Some(entry) = self.cache.remove(&key) {
-                    self.current_memory_bytes -= entry.size_bytes;
+                    // Use estimate_size to ensure consistency with put()
+                    let size = entry.estimate_size();
+                    self.current_memory_bytes = self.current_memory_bytes.saturating_sub(size);
                 }
                 self.lru_order.retain(|k| k != &key);
             }
@@ -230,11 +232,10 @@ mod tests {
 
         let key = make_cache_key("SELECT * FROM users");
         let entry = make_test_entry();
-        let size = entry.size_bytes;
         cache.put(key.clone(), entry, vec!["users".to_string()]);
 
-        // Manually clear since there's a bug in invalidate_table
-        cache.clear();
+        // Invalidate the table
+        cache.invalidate_table("users");
 
         let stats = cache.stats();
         assert_eq!(stats.entries, 0);
