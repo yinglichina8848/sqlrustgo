@@ -1,17 +1,14 @@
 // SQLRustGo transaction module
 
-pub mod deadlock;
 pub mod lock;
 pub mod manager;
 pub mod mvcc;
-pub mod savepoint;
 
-pub use deadlock::DeadlockDetector;
 pub use lock::{LockError, LockGrantMode, LockInfo, LockManager, LockMode, LockRequest};
 pub use manager::{
     IsolationLevel, TransactionCommand, TransactionContext, TransactionError, TransactionManager,
 };
+
 pub use mvcc::{
     MvccEngine, RowVersion, Snapshot, Transaction, TransactionStatus, TxId, INVALID_TX_ID,
 };
-pub use savepoint::{Savepoint, SavepointError, SavepointManager, UndoRecord};

@@ -9,10 +9,6 @@ fn test_cache_basic_get_put() {
         max_memory_bytes: 1024 * 1024,
         ttl_seconds: 60,
         enabled: true,
-<<<<<<< HEAD:tests/integration/query_cache_test.rs
-        benchmark_mode: false,
-=======
->>>>>>> origin/main:crates/executor/tests/query_cache_test.rs
     };
     let mut cache = QueryCache::new(config);
 
@@ -73,10 +69,6 @@ fn test_cache_lru_eviction() {
         max_memory_bytes: 1024 * 1024,
         ttl_seconds: 60,
         enabled: true,
-<<<<<<< HEAD:tests/integration/query_cache_test.rs
-        benchmark_mode: false,
-=======
->>>>>>> origin/main:crates/executor/tests/query_cache_test.rs
     };
     let mut cache = QueryCache::new(config);
 

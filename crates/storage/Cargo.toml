@@ -14,13 +14,6 @@ thiserror.workspace = true
 log.workspace = true
 async-trait.workspace = true
 miniz_oxide.workspace = true
-fnv.workspace = true
-
-# Parquet support for columnar storage
-# Pin chrono to 0.4.38 to avoid compatibility issues with arrow-arith
-parquet = { version = "45.0", features = ["snap", "flate2", "brotli", "lz4", "zstd"] }
-arrow = { version = "45.0", features = ["prettyprint"] }
-chrono = "=0.4.38"
 
 [dev-dependencies]
 tempfile.workspace = true
