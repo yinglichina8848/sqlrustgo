@@ -93,6 +93,18 @@ pub trait StorageEngine: Send + Sync {
     /// Range query using index - returns row IDs in range [start, end)
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
 
+    /// Create a view
+    fn create_view(&mut self, info: ViewInfo) -> SqlResult<()>;
+
+    /// Get view info
+    fn get_view(&self, name: &str) -> Option<ViewInfo>;
+
+    /// List all views
+    fn list_views(&self) -> Vec<String>;
+
+    /// Check if view exists
+    fn has_view(&self, name: &str) -> bool;
+
     /// Callback triggered after write operations (INSERT/UPDATE/DELETE)
     /// Used by upper layers to invalidate query caches
     fn on_write_complete(&mut self, _table: &str) {}
@@ -103,7 +115,16 @@ pub trait StorageEngine: Send + Sync {
 pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
+    views: HashMap<String, ViewInfo>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ViewInfo {
+    pub name: String,
+    pub query: String,
+    pub schema: TableInfo,
+    pub records: Vec<Record>,
 }
 
 impl MemoryStorage {
@@ -111,6 +132,7 @@ impl MemoryStorage {
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
+            views: HashMap::new(),
             write_callback: None,
         }
     }
@@ -119,8 +141,26 @@ impl MemoryStorage {
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
+            views: HashMap::new(),
             write_callback: Some(callback),
         }
+    }
+
+    pub fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
+        self.views.insert(info.name.clone(), info);
+        Ok(())
+    }
+
+    pub fn get_view(&self, name: &str) -> Option<&ViewInfo> {
+        self.views.get(name)
+    }
+
+    pub fn list_views(&self) -> Vec<String> {
+        self.views.keys().cloned().collect()
+    }
+
+    pub fn has_view(&self, name: &str) -> bool {
+        self.views.contains_key(name)
     }
 }
 
@@ -244,6 +284,23 @@ impl StorageEngine for MemoryStorage {
 
     fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
         Vec::new()
+    }
+
+    fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
+        self.views.insert(info.name.clone(), info);
+        Ok(())
+    }
+
+    fn get_view(&self, name: &str) -> Option<ViewInfo> {
+        self.views.get(name).cloned()
+    }
+
+    fn list_views(&self) -> Vec<String> {
+        self.views.keys().cloned().collect()
+    }
+
+    fn has_view(&self, name: &str) -> bool {
+        self.views.contains_key(name)
     }
 
     fn on_write_complete(&mut self, table: &str) {

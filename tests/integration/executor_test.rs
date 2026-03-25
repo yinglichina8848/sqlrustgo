@@ -26,6 +26,26 @@ fn test_batch_insert() {
 }
 
 #[test]
+fn test_materialized_view() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+        .unwrap();
+
+    let result = engine
+        .execute(parse("CREATE VIEW user_view AS SELECT * FROM users").unwrap())
+        .unwrap();
+
+    assert_eq!(result.affected_rows, 0);
+
+    let storage = engine.storage.read().unwrap();
+    assert!(storage.has_view("user_view"));
+}
+
+#[test]
 fn test_executor_result_new() {
     let result = ExecutorResult::new(vec![], 0);
     assert!(result.rows.is_empty());
