@@ -3572,4 +3572,127 @@ mod tests {
         assert_eq!(smj.left_keys(), &left_keys);
         assert_eq!(smj.right_keys(), &right_keys);
     }
+
+    #[test]
+    fn test_index_scan_exec_new() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema.clone(),
+        );
+
+        assert_eq!(scan.name(), "IndexScan");
+        assert_eq!(scan.table_name(), "test_table");
+        assert_eq!(scan.index_name(), "idx_id");
+        assert_eq!(scan.schema().fields.len(), 1);
+        assert!(scan.children().is_empty());
+    }
+
+    #[test]
+    fn test_index_scan_exec_with_key_range() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema,
+        )
+        .with_key_range(10, 100);
+
+        assert_eq!(scan.key_expr().to_string(), "id");
+        assert_eq!(scan.key_range(), (Some(10), Some(100)));
+    }
+
+    #[test]
+    fn test_index_scan_exec_execute() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema,
+        );
+
+        let result = scan.execute();
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_scalar_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let scalar = ScalarSubqueryExec::new(subquery, schema.clone());
+
+        assert_eq!(scalar.name(), "ScalarSubquery");
+        assert_eq!(scalar.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_in_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let expr = Box::new(Expr::column("id"));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let in_subquery = InSubqueryExec::new(expr, subquery, schema.clone());
+
+        assert_eq!(in_subquery.name(), "InSubquery");
+        assert_eq!(in_subquery.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_exists_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let schema = Schema::new(vec![Field::new("exists".to_string(), DataType::Boolean)]);
+
+        let exists = ExistsExec::new(subquery, schema.clone());
+
+        assert_eq!(exists.name(), "Exists");
+        assert_eq!(exists.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_any_all_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let expr = Box::new(Expr::column("id"));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let any_all = AnyAllSubqueryExec::new(
+            expr,
+            crate::Operator::Eq,
+            subquery,
+            crate::SubqueryType::Any,
+            schema.clone(),
+        );
+
+        assert_eq!(any_all.name(), "Any");
+        assert_eq!(any_all.any_all(), crate::SubqueryType::Any);
+    }
+
+    #[test]
+    fn test_set_operation_exec() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let set_op =
+            SetOperationExec::new(crate::SetOperationType::Union, left, right, schema.clone());
+
+        assert_eq!(set_op.name(), "SetOperation");
+        assert_eq!(set_op.op_type(), crate::SetOperationType::Union);
+    }
 }
