@@ -46,6 +46,62 @@ fn test_materialized_view() {
 }
 
 #[test]
+fn test_auto_increment_column() {
+    let result = parse("CREATE TABLE orders (id INTEGER AUTO_INCREMENT, name TEXT)");
+    assert!(
+        result.is_ok(),
+        "Failed to parse AUTO_INCREMENT: {:?}",
+        result
+    );
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::CreateTable(create) = stmt {
+        assert_eq!(create.columns.len(), 2);
+        assert!(create.columns[0].auto_increment);
+    } else {
+        panic!("Expected CreateTable statement");
+    }
+}
+
+#[test]
+fn test_primary_key_column() {
+    let result = parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+    assert!(result.is_ok(), "Failed to parse PRIMARY KEY: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::CreateTable(create) = stmt {
+        assert_eq!(create.columns.len(), 2);
+        assert!(create.columns[0].primary_key);
+    } else {
+        panic!("Expected CreateTable statement");
+    }
+}
+
+#[test]
+fn test_foreign_key_column() {
+    let result = parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))");
+    assert!(result.is_ok(), "Failed to parse FOREIGN KEY: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::CreateTable(create) = stmt {
+        assert_eq!(create.columns.len(), 2);
+        assert!(create.columns[1].references.is_some());
+    } else {
+        panic!("Expected CreateTable statement");
+    }
+}
+
+#[test]
+fn test_not_null_column() {
+    let result = parse("CREATE TABLE users (id INTEGER NOT NULL, name TEXT)");
+    assert!(result.is_ok(), "Failed to parse NOT NULL: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::CreateTable(create) = stmt {
+        assert_eq!(create.columns.len(), 2);
+        assert!(!create.columns[0].nullable);
+    } else {
+        panic!("Expected CreateTable statement");
+    }
+}
+
+#[test]
 fn test_executor_result_new() {
     let result = ExecutorResult::new(vec![], 0);
     assert!(result.rows.is_empty());
