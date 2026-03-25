@@ -122,3 +122,117 @@ impl Drop for PooledConnection {
         self.pool.release(self.session.clone());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+
+    #[test]
+    fn test_connection_pool_basic_acquire_release() {
+        let config = PoolConfig { size: 5, timeout_ms: 5000 };
+        let pool = ConnectionPool::new(config);
+
+        assert_eq!(pool.size(), 5);
+
+        // Acquire and release a connection
+        let conn = pool.acquire();
+        drop(conn);
+
+        // Should be able to acquire again
+        let conn2 = pool.acquire();
+        drop(conn2);
+    }
+
+    #[test]
+    fn test_connection_pool_concurrent_50_connections() {
+        let config = PoolConfig { size: 50, timeout_ms: 5000 };
+        let pool = ConnectionPool::new(config);
+        let pool = Arc::new(pool);
+
+        let success_count = Arc::new(AtomicUsize::new(0));
+
+        let handles: Vec<_> = (0..50).map(|_| {
+            let pool = Arc::clone(&pool);
+            let success_count = Arc::clone(&success_count);
+            thread::spawn(move || {
+                let conn = pool.acquire();
+                // Simulate some work by checking the executor exists
+                let _executor = conn.executor();
+                drop(conn);
+                success_count.fetch_add(1, Ordering::SeqCst);
+            })
+        }).collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(success_count.load(Ordering::SeqCst), 50);
+    }
+
+    #[test]
+    fn test_connection_pool_concurrent_100_connections() {
+        let config = PoolConfig { size: 50, timeout_ms: 5000 };
+        let pool = ConnectionPool::new(config);
+        let pool = Arc::new(pool);
+
+        let success_count = Arc::new(AtomicUsize::new(0));
+
+        let handles: Vec<_> = (0..100).map(|_| {
+            let pool = Arc::clone(&pool);
+            let success_count = Arc::clone(&success_count);
+            thread::spawn(move || {
+                // Small delay to increase contention
+                thread::sleep(std::time::Duration::from_micros(100));
+                let conn = pool.acquire();
+                let _executor = conn.executor();
+                drop(conn);
+                success_count.fetch_add(1, Ordering::SeqCst);
+            })
+        }).collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // All 100 should complete even with only 50 sessions
+        // because connections are released back to the pool
+        assert_eq!(success_count.load(Ordering::SeqCst), 100);
+    }
+
+    #[test]
+    fn test_connection_pool_reuse_sessions() {
+        let config = PoolConfig { size: 5, timeout_ms: 5000 };
+        let pool = ConnectionPool::new(config);
+
+        let mut conn_handles = vec![];
+        // Acquire all 5 connections
+        for _ in 0..5 {
+            let conn = pool.acquire();
+            conn_handles.push(conn);
+        }
+
+        // Release all
+        conn_handles.clear();
+
+        // Should be able to acquire all again
+        for _ in 0..5 {
+            let conn = pool.acquire();
+            drop(conn);
+        }
+    }
+
+    #[test]
+    fn test_pooled_session_clone_creates_fresh_session() {
+        let storage = Arc::new(MemoryStorage::new());
+        let session1 = PooledSession::new(Arc::clone(&storage));
+        let session2 = session1.clone();
+
+        // Cloned sessions should be independent
+        assert!(session1.is_available());
+        assert!(session2.is_available());
+    }
+}

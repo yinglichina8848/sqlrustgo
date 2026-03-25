@@ -72,6 +72,14 @@ pub enum LogicalPlan {
         right: Box<LogicalPlan>,
         schema: Schema,
     },
+    /// Window function
+    Window {
+        input: Box<LogicalPlan>,
+        window_expr: Vec<Expr>,
+        partition_by: Vec<Expr>,
+        order_by: Vec<crate::SortExpr>,
+        schema: Schema,
+    },
     /// Empty relation
     EmptyRelation,
     /// Subquery
@@ -126,6 +134,7 @@ impl LogicalPlan {
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
             LogicalPlan::View { schema, .. } => schema.clone(),
+            LogicalPlan::Window { schema, .. } => schema.clone(),
         }
     }
 }
