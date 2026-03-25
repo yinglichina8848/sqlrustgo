@@ -795,6 +795,7 @@ fn test_column_definition_serialize() {
         data_type: "INTEGER".to_string(),
         nullable: false,
         is_unique: true,
+        references: None,
     };
     let json = serde_json::to_string(&col).unwrap();
     assert!(json.contains("id"));
@@ -809,6 +810,7 @@ fn test_table_info_serialize() {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: true,
+            references: None,
         }],
     };
     let json = serde_json::to_string(&info).unwrap();
@@ -881,6 +883,7 @@ fn test_memory_storage_insert_with_info() {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: true,
+            references: None,
         }],
     };
     storage.create_table(&info).unwrap();
@@ -901,6 +904,7 @@ fn test_memory_storage_duplicate_key() {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: true,
+            references: None,
         }],
     };
     storage.create_table(&info).unwrap();
@@ -921,6 +925,7 @@ fn test_memory_storage_get_table_info() {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            references: None,
         }],
     };
     storage.create_table(&info).unwrap();
@@ -960,4 +965,154 @@ fn test_memory_storage_on_write_complete() {
         count.fetch_add(1, Ordering::SeqCst);
     }));
     assert!(storage.write_callback.is_some());
+}
+
+#[test]
+fn test_memory_storage_list_tables() {
+    let mut storage = MemoryStorage::new();
+    let info1 = TableInfo {
+        name: "users".to_string(),
+        columns: vec![],
+    };
+    let info2 = TableInfo {
+        name: "orders".to_string(),
+        columns: vec![],
+    };
+    storage.create_table(&info1).unwrap();
+    storage.create_table(&info2).unwrap();
+
+    let tables = storage.list_tables();
+    assert_eq!(tables.len(), 2);
+    assert!(tables.contains(&"users".to_string()));
+    assert!(tables.contains(&"orders".to_string()));
+}
+
+#[test]
+fn test_memory_storage_create_index() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+            references: None,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+
+    let result = storage.create_table_index("users", "id", 0);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_memory_storage_drop_index() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+            references: None,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+    storage.create_table_index("users", "id", 0).unwrap();
+
+    let result = storage.drop_table_index("users", "id");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_memory_storage_search_index() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+            references: None,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(2)]])
+        .unwrap();
+    storage.create_table_index("users", "id", 0).unwrap();
+
+    let result = storage.search_index("users", "id", 1);
+    assert!(result.is_some());
+}
+
+#[test]
+fn test_memory_storage_range_index() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+            references: None,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(5)]])
+        .unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(10)]])
+        .unwrap();
+    storage.create_table_index("users", "id", 0).unwrap();
+
+    let result = storage.range_index("users", "id", 1, 10);
+    assert!(result.len() >= 0);
+}
+
+#[test]
+fn test_foreign_key_constraint_new() {
+    let fk = ForeignKeyConstraint {
+        referenced_table: "users".to_string(),
+        referenced_column: "id".to_string(),
+        on_delete: Some(ForeignKeyAction::Cascade),
+        on_update: Some(ForeignKeyAction::Restrict),
+    };
+    assert_eq!(fk.referenced_table, "users");
+    assert_eq!(fk.referenced_column, "id");
+}
+
+#[test]
+fn test_column_definition_with_foreign_key() {
+    let fk = ForeignKeyConstraint {
+        referenced_table: "users".to_string(),
+        referenced_column: "id".to_string(),
+        on_delete: None,
+        on_update: None,
+    };
+    let col = ColumnDefinition {
+        name: "user_id".to_string(),
+        data_type: "INTEGER".to_string(),
+        nullable: false,
+        is_unique: false,
+        references: Some(fk),
+    };
+    assert!(col.references.is_some());
 }

@@ -1274,4 +1274,59 @@ mod tests {
         let sum: i32 = v.iter().sum();
         assert_eq!(sum, 6);
     }
+
+    #[test]
+    fn test_vector_fill() {
+        let mut v = Vector::from_vec(vec![1, 2, 3]);
+        v.fill(0);
+        assert_eq!(v.as_slice(), &[0, 0, 0]);
+    }
+
+    #[test]
+    fn test_vector_with_len() {
+        let v: Vector<i32> = Vector::with_len(5);
+        assert_eq!(v.len(), 5);
+    }
+
+    #[test]
+    fn test_vector_as_slice() {
+        let v = Vector::from_vec(vec![1, 2, 3]);
+        assert_eq!(v.as_slice(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn test_vector_as_mut_slice() {
+        let mut v = Vector::from_vec(vec![1, 2, 3]);
+        v.as_mut_slice()[0] = 10;
+        assert_eq!(v.as_slice(), &[10, 2, 3]);
+    }
+
+    #[test]
+    fn test_column_array_count_nonnull() {
+        let col = ColumnArray::Int64(vec![1, 2, 0, 4, 5]);
+        assert_eq!(col.count_nonnull(), 4);
+    }
+
+    #[test]
+    fn test_column_array_null() {
+        let col = ColumnArray::Null;
+        assert_eq!(col.len(), 0);
+        assert!(col.is_empty());
+    }
+
+    #[test]
+    fn test_data_chunk_columns() {
+        let mut chunk = DataChunk::new(3);
+        chunk.add_column(ColumnArray::Int64(vec![1, 2, 3]));
+        let cols = chunk.columns();
+        assert_eq!(cols.len(), 1);
+    }
+
+    #[test]
+    fn test_data_chunk_get_column_mut() {
+        let mut chunk = DataChunk::new(3);
+        chunk.add_column(ColumnArray::Int64(vec![1, 2, 3]));
+        let col = chunk.get_column_mut(0);
+        assert!(col.is_some());
+    }
 }
