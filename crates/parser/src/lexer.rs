@@ -255,6 +255,7 @@ impl<'a> Lexer<'a> {
                     "ON" => Token::On,
                     "PRIMARY" => Token::Primary,
                     "KEY" => Token::Key,
+                    "DUPLICATE" => Token::Duplicate,
                     "BEGIN" => Token::Begin,
                     "COMMIT" => Token::Commit,
                     "ROLLBACK" => Token::Rollback,
