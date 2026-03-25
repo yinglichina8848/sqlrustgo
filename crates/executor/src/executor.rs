@@ -1766,6 +1766,197 @@ mod tests {
         }
     }
 
+    #[cfg(test)]
+    mod streaming_hash_join_tests {
+        use super::*;
+        use sqlrustgo_planner::{DataType, Field, JoinType, Schema};
+        use sqlrustgo_types::Value;
+
+        struct MockExecutor {
+            data: Vec<Vec<Value>>,
+            idx: usize,
+        }
+
+        impl MockExecutor {
+            fn new(data: Vec<Vec<Value>>) -> Self {
+                Self { data, idx: 0 }
+            }
+        }
+
+        impl VolcanoExecutor for MockExecutor {
+            fn init(&mut self) -> SqlResult<()> {
+                self.idx = 0;
+                Ok(())
+            }
+
+            fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+                if self.idx < self.data.len() {
+                    let row = self.data[self.idx].clone();
+                    self.idx += 1;
+                    Ok(Some(row))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            fn close(&mut self) -> SqlResult<()> {
+                Ok(())
+            }
+
+            fn schema(&self) -> &Schema {
+                static SCHEMA: std::sync::OnceLock<Schema> = std::sync::OnceLock::new();
+                SCHEMA.get_or_init(|| {
+                    Schema::new(vec![Field::new("id".to_string(), DataType::Integer)])
+                })
+            }
+
+            fn name(&self) -> &str {
+                "Mock"
+            }
+
+            fn is_initialized(&self) -> bool {
+                true
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        #[test]
+        fn test_streaming_hash_join_basic() {
+            let left_data = vec![
+                vec![Value::Integer(1)],
+                vec![Value::Integer(2)],
+                vec![Value::Integer(3)],
+            ];
+            let right_data = vec![
+                vec![Value::Integer(1), Value::Text("A".to_string())],
+                vec![Value::Integer(2), Value::Text("B".to_string())],
+                vec![Value::Integer(4), Value::Text("C".to_string())],
+            ];
+
+            let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+            let right_schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+            let schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+
+            let left = Box::new(MockExecutor::new(left_data));
+            let right = Box::new(MockExecutor::new(right_data));
+
+            let mut exec = StreamingHashJoinExecutor::new(
+                left,
+                right,
+                JoinType::Inner,
+                left_schema,
+                right_schema,
+                schema,
+            );
+
+            exec.init().unwrap();
+
+            let mut count = 0;
+            while let Some(row) = exec.next().unwrap() {
+                assert_eq!(row.len(), 3);
+                count += 1;
+            }
+
+            assert_eq!(count, 2);
+            exec.close().unwrap();
+        }
+
+        #[test]
+        fn test_streaming_hash_join_no_matches() {
+            let left_data = vec![vec![Value::Integer(10)]];
+            let right_data = vec![vec![Value::Integer(1), Value::Text("A".to_string())]];
+
+            let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+            let right_schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+            let schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+
+            let left = Box::new(MockExecutor::new(left_data));
+            let right = Box::new(MockExecutor::new(right_data));
+
+            let mut exec = StreamingHashJoinExecutor::new(
+                left,
+                right,
+                JoinType::Inner,
+                left_schema,
+                right_schema,
+                schema,
+            );
+
+            exec.init().unwrap();
+
+            let result = exec.next().unwrap();
+            assert!(result.is_none());
+            exec.close().unwrap();
+        }
+
+        #[test]
+        fn test_streaming_hash_join_large_batch() {
+            let mut left_data = Vec::new();
+            let mut right_data = Vec::new();
+
+            for i in 0..2000 {
+                left_data.push(vec![Value::Integer(i as i64)]);
+            }
+
+            for i in 0..2000 {
+                right_data.push(vec![
+                    Value::Integer(i as i64),
+                    Value::Text(format!("val_{}", i)),
+                ]);
+            }
+
+            let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+            let right_schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+            let schema = Schema::new(vec![
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("id".to_string(), DataType::Integer),
+                Field::new("value".to_string(), DataType::Text),
+            ]);
+
+            let left = Box::new(MockExecutor::new(left_data));
+            let right = Box::new(MockExecutor::new(right_data));
+
+            let mut exec = StreamingHashJoinExecutor::new(
+                left,
+                right,
+                JoinType::Inner,
+                left_schema,
+                right_schema,
+                schema,
+            );
+
+            exec.init().unwrap();
+
+            let mut count = 0;
+            while let Some(_row) = exec.next().unwrap() {
+                count += 1;
+            }
+
+            assert_eq!(count, 2000);
+            exec.close().unwrap();
+        }
+    }
+
     #[test]
     fn test_mock_volcano_executor() {
         let mut executor = MockVolcanoExecutor::new();
@@ -3078,5 +3269,211 @@ mod tests {
         let exec = SeqScanVolcanoExecutor::new("test".to_string(), schema, storage);
 
         assert_eq!(exec.name(), "SeqScan");
+    }
+}
+
+const DEFAULT_BUILD_BATCH_SIZE: usize = 1024;
+const DEFAULT_PROBE_BATCH_SIZE: usize = 1024;
+const DEFAULT_MEMORY_LIMIT: usize = 64 * 1024 * 1024;
+
+pub struct StreamingHashJoinExecutor {
+    left: Box<dyn VolcanoExecutor>,
+    right: Box<dyn VolcanoExecutor>,
+    join_type: sqlrustgo_planner::JoinType,
+    left_schema: Schema,
+    right_schema: Schema,
+    schema: Schema,
+    build_hash: std::collections::HashMap<Vec<Value>, Vec<Vec<Value>>>,
+    probe_rows: Vec<Vec<Value>>,
+    current_probe_idx: usize,
+    current_matches_idx: usize,
+    current_matches: Vec<Vec<Value>>,
+    build_exhausted: bool,
+    probe_exhausted: bool,
+    batch_size: usize,
+    memory_used: usize,
+    memory_limit: usize,
+}
+
+impl StreamingHashJoinExecutor {
+    pub fn new(
+        left: Box<dyn VolcanoExecutor>,
+        right: Box<dyn VolcanoExecutor>,
+        join_type: sqlrustgo_planner::JoinType,
+        left_schema: Schema,
+        right_schema: Schema,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            join_type,
+            left_schema,
+            right_schema,
+            schema,
+            build_hash: std::collections::HashMap::new(),
+            probe_rows: Vec::new(),
+            current_probe_idx: 0,
+            current_matches_idx: 0,
+            current_matches: Vec::new(),
+            build_exhausted: false,
+            probe_exhausted: false,
+            batch_size: DEFAULT_BUILD_BATCH_SIZE,
+            memory_used: 0,
+            memory_limit: DEFAULT_MEMORY_LIMIT,
+        }
+    }
+
+    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
+    }
+
+    pub fn with_memory_limit(mut self, memory_limit: usize) -> Self {
+        self.memory_limit = memory_limit;
+        self
+    }
+
+    fn extract_key(&self, row: &[Value]) -> Vec<Value> {
+        if !row.is_empty() {
+            vec![row[0].clone()]
+        } else {
+            vec![Value::Null]
+        }
+    }
+
+    fn build_partition(&mut self) -> SqlResult<()> {
+        while !self.build_exhausted {
+            match self.right.next()? {
+                Some(row) => {
+                    let key = self.extract_key(&row);
+                    let entry = self.build_hash.entry(key).or_default();
+                    entry.push(row);
+                    self.memory_used += 64;
+                }
+                None => {
+                    self.build_exhausted = true;
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn probe_partition(&mut self) -> SqlResult<()> {
+        while !self.probe_exhausted {
+            match self.left.next()? {
+                Some(row) => {
+                    self.probe_rows.push(row);
+                }
+                None => {
+                    self.probe_exhausted = true;
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn match_probe_row(&self, probe_row: &[Value]) -> Vec<Vec<Value>> {
+        let key = self.extract_key(probe_row);
+        if let Some(matches) = self.build_hash.get(&key) {
+            let mut results = Vec::with_capacity(matches.len());
+            for match_row in matches {
+                let mut result = probe_row.to_vec();
+                result.extend(match_row.clone());
+                results.push(result);
+            }
+            results
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn next_streaming_inner(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        loop {
+            if self.current_matches_idx < self.current_matches.len() {
+                let result = self.current_matches[self.current_matches_idx].clone();
+                self.current_matches_idx += 1;
+                return Ok(Some(result));
+            }
+
+            if self.current_probe_idx >= self.probe_rows.len() {
+                if self.probe_exhausted {
+                    if !self.build_exhausted {
+                        self.build_partition()?;
+                    }
+                    if self.build_exhausted && self.probe_exhausted {
+                        return Ok(None);
+                    }
+                    self.probe_partition()?;
+                    self.current_probe_idx = 0;
+                    if self.probe_rows.is_empty() {
+                        return Ok(None);
+                    }
+                } else {
+                    self.probe_partition()?;
+                    self.current_probe_idx = 0;
+                    if self.probe_rows.is_empty() {
+                        return Ok(None);
+                    }
+                }
+            }
+
+            let probe_row = &self.probe_rows[self.current_probe_idx];
+            self.current_matches = self.match_probe_row(probe_row);
+            self.current_matches_idx = 0;
+            self.current_probe_idx += 1;
+
+            if self.current_matches.is_empty() {
+                continue;
+            }
+        }
+    }
+}
+
+impl VolcanoExecutor for StreamingHashJoinExecutor {
+    fn init(&mut self) -> SqlResult<()> {
+        self.left.init()?;
+        self.right.init()?;
+        self.build_partition()?;
+        self.probe_partition()?;
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if self.build_hash.is_empty() && self.build_exhausted {
+            return Ok(None);
+        }
+
+        match self.join_type {
+            sqlrustgo_planner::JoinType::Inner => self.next_streaming_inner(),
+            _ => Ok(None),
+        }
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.left.close()?;
+        self.right.close()?;
+        self.build_hash.clear();
+        self.probe_rows.clear();
+        self.current_matches.clear();
+        Ok(())
+    }
+
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn name(&self) -> &str {
+        "StreamingHashJoin"
+    }
+
+    fn is_initialized(&self) -> bool {
+        !self.build_hash.is_empty() || !self.probe_rows.is_empty()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
