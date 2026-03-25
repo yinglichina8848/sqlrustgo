@@ -6,32 +6,93 @@
 pub use sqlrustgo_executor::{Executor, ExecutorResult};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
-pub use sqlrustgo_parser::{parse, Lexer, SetOperation, Statement, Token};
+pub use sqlrustgo_parser::{parse, Expression, Lexer, SetOperation, Statement, Token};
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
-use std::sync::Arc;
-
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
+use std::sync::{Arc, RwLock};
+
 pub struct ExecutionEngine {
-    storage: Arc<dyn StorageEngine>,
+    storage: Arc<RwLock<dyn StorageEngine>>,
 }
 
 impl ExecutionEngine {
-    pub fn new(storage: Arc<dyn StorageEngine>) -> Self {
+    pub fn new(storage: Arc<RwLock<dyn StorageEngine>>) -> Self {
         Self { storage }
     }
 
-    pub fn execute(&mut self, _statement: Statement) -> Result<ExecutorResult, SqlError> {
-        Ok(ExecutorResult::empty())
+    pub fn execute(&mut self, statement: Statement) -> Result<ExecutorResult, SqlError> {
+        match statement {
+            Statement::Insert(insert) => {
+                let table_name = &insert.table;
+                let mut storage = self.storage.write().unwrap();
+                if !storage.has_table(table_name) {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Table '{}' not found",
+                        table_name
+                    )));
+                }
+
+                let records: Vec<Vec<Value>> = insert
+                    .values
+                    .iter()
+                    .map(|row| {
+                        row.iter()
+                            .map(|expr| match expr {
+                                Expression::Literal(value) => Value::Text(value.clone()),
+                                _ => Value::Null,
+                            })
+                            .collect()
+                    })
+                    .collect();
+
+                storage.insert(table_name, records)?;
+                Ok(ExecutorResult::new(vec![], insert.values.len()))
+            }
+            Statement::CreateTable(create) => {
+                let mut storage = self.storage.write().unwrap();
+                let columns: Vec<sqlrustgo_storage::ColumnDefinition> = create
+                    .columns
+                    .iter()
+                    .map(|col| sqlrustgo_storage::ColumnDefinition {
+                        name: col.name.clone(),
+                        data_type: col.data_type.clone(),
+                        nullable: col.nullable,
+                        is_unique: false,
+                    })
+                    .collect();
+
+                let table_info = sqlrustgo_storage::TableInfo {
+                    name: create.name.clone(),
+                    columns,
+                };
+
+                storage.create_table(&table_info)?;
+                Ok(ExecutorResult::new(vec![], 0))
+            }
+            Statement::Select(select) => {
+                let storage = self.storage.read().unwrap();
+                if !storage.has_table(&select.table) {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Table '{}' not found",
+                        select.table
+                    )));
+                }
+                let rows = storage.scan(&select.table).unwrap_or_default();
+                Ok(ExecutorResult::new(rows, 0))
+            }
+            _ => Ok(ExecutorResult::empty()),
+        }
     }
 
     pub fn execute_plan(&self, plan: &dyn PhysicalPlan) -> Result<ExecutorResult, SqlError> {
+        let storage = self.storage.read().unwrap();
         match plan.name() {
             "SeqScan" => {
-                let rows = self.storage.scan(plan.table_name())?;
+                let rows = storage.scan(plan.table_name())?;
                 Ok(ExecutorResult::new(rows, 0))
             }
             "Filter" => {
@@ -89,12 +150,11 @@ impl ExecutionEngine {
 impl Default for ExecutionEngine {
     fn default() -> Self {
         Self {
-            storage: Arc::new(MemoryStorage::new()),
+            storage: Arc::new(RwLock::new(MemoryStorage::new())),
         }
     }
 }
 
-/// Initialize the database system
 pub fn init() {
     println!("SQLRustGo Database System initialized");
 }
@@ -116,7 +176,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unnecessary_literal_unwrap)]
     fn test_sql_result_alias() {
         let result: SqlResult<i32> = Ok(42);
         assert_eq!(result.unwrap(), 42);
@@ -135,6 +194,9 @@ mod tests {
     #[test]
     fn test_execution_engine_new() {
         let mut engine = ExecutionEngine::default();
+        engine
+            .execute(sqlrustgo_parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
         let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
         assert_eq!(engine.execute(stmt).unwrap().rows.len(), 0);
     }
@@ -142,8 +204,11 @@ mod tests {
     #[test]
     fn test_execution_engine_default() {
         let mut engine = ExecutionEngine::default();
+        engine
+            .execute(sqlrustgo_parser::parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
         let stmt = sqlrustgo_parser::parse("SELECT * FROM users").unwrap();
-        assert_eq!(engine.execute(stmt).unwrap().affected_rows, 0);
+        assert_eq!(engine.execute(stmt).unwrap().rows.len(), 0);
     }
 
     #[test]
@@ -161,7 +226,7 @@ mod tests {
             )
             .unwrap();
 
-        let engine = ExecutionEngine::new(Arc::new(storage));
+        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
         let schema = Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
@@ -190,7 +255,7 @@ mod tests {
             )
             .unwrap();
 
-        let engine = ExecutionEngine::new(Arc::new(storage));
+        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
         let schema = Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
@@ -224,7 +289,7 @@ mod tests {
             )
             .unwrap();
 
-        let engine = ExecutionEngine::new(Arc::new(storage));
+        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
         let schema = Schema::new(vec![
             Field::new("id".to_string(), DataType::Integer),
             Field::new("name".to_string(), DataType::Text),
