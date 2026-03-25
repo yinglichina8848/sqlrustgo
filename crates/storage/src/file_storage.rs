@@ -1123,7 +1123,7 @@ impl StorageEngine for FileStorage {
     }
 
     fn create_table_index(
-        &self,
+        &mut self,
         table_name: &str,
         column_name: &str,
         column_index: usize,
@@ -1154,7 +1154,7 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 
-    fn drop_table_index(&self, table_name: &str, column_name: &str) -> SqlResult<()> {
+    fn drop_table_index(&mut self, table_name: &str, column_name: &str) -> SqlResult<()> {
         if let Ok(mut indexes) = self.indexes.write() {
             indexes.remove(&(table_name.to_string(), column_name.to_string()));
         }
