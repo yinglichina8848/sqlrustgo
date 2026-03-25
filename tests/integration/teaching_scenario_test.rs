@@ -4,7 +4,9 @@ use sqlrustgo_executor::query_cache_config::{CacheEntry, CacheKey, QueryCacheCon
 use sqlrustgo_executor::{ExecutorResult, QueryCache};
 use sqlrustgo_optimizer::cost::SimpleCostModel;
 use sqlrustgo_optimizer::stats::{ColumnStats, TableStats};
-use sqlrustgo_planner::{DataType, Expr, Field, HashJoinExec, JoinType, Operator, Schema};
+use sqlrustgo_planner::{
+    DataType, Expr, Field, HashJoinExec, JoinType, Operator, Schema, SeqScanExec,
+};
 use sqlrustgo_transaction::{
     lock::{LockManager, LockMode},
     TxId,
@@ -308,4 +310,195 @@ fn test_transaction_rollback() {
         .execute(parse("SELECT * FROM test_table WHERE id = 1").unwrap())
         .unwrap();
     assert_eq!(result.rows[0][1], Value::Text("'initial'".to_string()));
+}
+
+#[test]
+fn test_basic_select_operations() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE products (id INTEGER, name TEXT, price INTEGER)").unwrap())
+        .ok();
+    engine
+        .execute(
+            parse("INSERT INTO products VALUES (1, 'Apple', 100), (2, 'Banana', 200)").unwrap(),
+        )
+        .ok();
+
+    let result = engine
+        .execute(parse("SELECT * FROM products").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 2, "SELECT * should return all rows");
+
+    let result_col = engine
+        .execute(parse("SELECT name FROM products").unwrap())
+        .unwrap();
+    assert_eq!(
+        result_col.rows.len(),
+        2,
+        "SELECT column should return specific column"
+    );
+}
+
+#[test]
+fn test_where_clause_filtering() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE items (id INTEGER, value INTEGER)").unwrap())
+        .ok();
+    engine
+        .execute(parse("INSERT INTO items VALUES (1, 100), (2, 200), (3, 300)").unwrap())
+        .ok();
+
+    let result = engine
+        .execute(parse("SELECT * FROM items WHERE value > 150").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 2, "WHERE clause should filter rows");
+}
+
+#[test]
+fn test_insert_operations() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE test (id INTEGER, name TEXT)").unwrap())
+        .ok();
+
+    let result = engine
+        .execute(parse("INSERT INTO test VALUES (1, 'Alice')").unwrap())
+        .unwrap();
+    assert_eq!(result.affected_rows, 1, "INSERT should affect 1 row");
+
+    let result_multi = engine
+        .execute(parse("INSERT INTO test VALUES (2, 'Bob'), (3, 'Charlie')").unwrap())
+        .unwrap();
+    assert_eq!(
+        result_multi.affected_rows, 2,
+        "Multi-row INSERT should affect 2 rows"
+    );
+}
+
+#[test]
+fn test_update_operations() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE test (id INTEGER, value INTEGER)").unwrap())
+        .ok();
+    engine
+        .execute(parse("INSERT INTO test VALUES (1, 100), (2, 200)").unwrap())
+        .ok();
+
+    let result = engine
+        .execute(parse("UPDATE test SET value = 150 WHERE id = 1").unwrap())
+        .unwrap();
+    assert_eq!(result.affected_rows, 1, "UPDATE should affect 1 row");
+}
+
+#[test]
+fn test_delete_operations() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE test (id INTEGER)").unwrap())
+        .ok();
+    engine
+        .execute(parse("INSERT INTO test VALUES (1), (2), (3)").unwrap())
+        .ok();
+
+    let result = engine
+        .execute(parse("DELETE FROM test WHERE id = 2").unwrap())
+        .unwrap();
+    assert_eq!(result.affected_rows, 1, "DELETE should affect 1 row");
+
+    let remaining = engine
+        .execute(parse("SELECT COUNT(*) FROM test").unwrap())
+        .unwrap();
+    assert_eq!(
+        remaining.rows[0][0],
+        Value::Integer(2),
+        "Should have 2 rows remaining"
+    );
+}
+
+#[test]
+fn test_table_creation_ddl() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    let result = engine
+        .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+    assert_eq!(
+        result.affected_rows, 0,
+        "CREATE TABLE should return 0 affected rows"
+    );
+
+    let exists = engine
+        .execute(parse("SELECT * FROM users").unwrap())
+        .unwrap();
+    assert_eq!(exists.rows.len(), 0, "New table should be empty");
+}
+
+#[test]
+fn test_multiple_joins() {
+    use sqlrustgo_planner::HashJoinExec;
+
+    let mut storage = MemoryStorage::new();
+
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "orders".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                references: None,
+            }],
+        })
+        .unwrap();
+    storage
+        .insert(
+            "orders",
+            vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+        )
+        .ok();
+
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "items".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "order_id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                references: None,
+            }],
+        })
+        .unwrap();
+    storage
+        .insert(
+            "items",
+            vec![vec![Value::Integer(1)], vec![Value::Integer(1)]],
+        )
+        .ok();
+
+    let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
+
+    let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+    let right_schema = Schema::new(vec![Field::new("order_id".to_string(), DataType::Integer)]);
+
+    let left_scan = Box::new(SeqScanExec::new("orders".to_string(), left_schema));
+    let right_scan = Box::new(SeqScanExec::new("items".to_string(), right_schema));
+
+    let join_schema = Schema::new(vec![
+        Field::new("id".to_string(), DataType::Integer),
+        Field::new("order_id".to_string(), DataType::Integer),
+    ]);
+
+    let join = HashJoinExec::new(left_scan, right_scan, JoinType::Inner, None, join_schema);
+
+    let result = engine.execute_plan(&join).unwrap();
+    assert!(result.rows.len() >= 2, "Join should return results");
 }
