@@ -213,3 +213,19 @@ path = "tests/unit/vectorization_test.rs"
 [[test]]
 name = "file_storage_test"
 path = "tests/unit/file_storage_test.rs"
+
+[[test]]
+name = "crash_recovery_test"
+path = "tests/stress/crash_recovery_test.rs"
+
+[[test]]
+name = "stress_test"
+path = "tests/stress/stress_test.rs"
+
+[[test]]
+name = "concurrency_stress_test"
+path = "tests/stress/concurrency_stress_test.rs"
+
+[[test]]
+name = "production_scenario_test"
+path = "tests/stress/production_scenario_test.rs"

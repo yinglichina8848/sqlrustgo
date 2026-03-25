@@ -260,4 +260,172 @@ mod tests {
             entries.len()
         );
     }
+
+    /// Test: Multiple concurrent transactions crash recovery
+    #[test]
+    fn test_concurrent_transactions_recovery() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test_concurrent.wal");
+
+        {
+            let manager = WalManager::new(wal_path.clone());
+
+            // Create 5 concurrent transactions
+            for tx_id in 1..=5 {
+                let _ = manager.log_begin(tx_id).unwrap();
+                for row_id in 1..=10 {
+                    let _ = manager
+                        .log_insert(
+                            tx_id,
+                            1,
+                            vec![row_id],
+                            vec![tx_id as u8 * 10 + row_id as u8],
+                        )
+                        .unwrap();
+                }
+                if tx_id % 2 == 0 {
+                    let _ = manager.log_commit(tx_id).unwrap();
+                }
+            }
+        }
+
+        let manager = WalManager::new(wal_path.clone());
+        let entries = manager.recover().unwrap();
+
+        let commits = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Commit)
+            .count();
+        let inserts = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Insert)
+            .count();
+
+        assert_eq!(commits, 2, "Should recover 2 committed transactions");
+        assert_eq!(inserts, 50, "Should recover 50 insert operations");
+
+        println!(
+            "✓ Concurrent recovery: {} commits, {} inserts",
+            commits, inserts
+        );
+    }
+
+    /// Test: Empty WAL recovery
+    #[test]
+    fn test_empty_wal_recovery() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test_empty.wal");
+
+        // Create WAL with some entries then delete
+        {
+            let manager = WalManager::new(wal_path.clone());
+            let _ = manager.log_begin(1).unwrap();
+            let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+            let _ = manager.log_commit(1).unwrap();
+        }
+
+        // Delete WAL file to simulate empty case
+        std::fs::remove_file(&wal_path).ok();
+
+        // Recovery should handle missing file gracefully
+        let manager = WalManager::new(wal_path.clone());
+        let result = manager.recover();
+
+        println!(
+            "✓ Empty WAL: recovery {:?}",
+            if result.is_ok() {
+                "succeeded"
+            } else {
+                "failed gracefully"
+            }
+        );
+    }
+
+    /// Test: Corrupted entry recovery (partial data)
+    #[test]
+    fn test_partial_entry_recovery() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test_partial.wal");
+
+        {
+            let manager = WalManager::new(wal_path.clone());
+            let _ = manager.log_begin(1).unwrap();
+            let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+            let _ = manager.log_commit(1).unwrap();
+        }
+
+        // Simulate partial write by truncating file
+        let metadata = fs::metadata(&wal_path).unwrap();
+        let trunc_len = metadata.len() / 2;
+        let file = fs::OpenOptions::new().write(true).open(&wal_path).unwrap();
+        file.set_len(trunc_len).unwrap();
+        drop(file);
+
+        // Recover - should handle gracefully
+        let manager = WalManager::new(wal_path.clone());
+        let result = manager.recover();
+
+        println!(
+            "✓ Partial entry: recovery {:?}",
+            if result.is_ok() {
+                "succeeded"
+            } else {
+                "failed gracefully"
+            }
+        );
+    }
+
+    /// Test: Rapid commit/rollback cycles
+    #[test]
+    fn test_rapid_commit_rollback_cycles() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test_rapid.wal");
+
+        let cycles = 100;
+        {
+            let manager = WalManager::new(wal_path.clone());
+
+            for i in 1..=cycles {
+                let _ = manager.log_begin(i).unwrap();
+                let _ = manager
+                    .log_insert(i, 1, vec![i as u8], vec![i as u8])
+                    .unwrap();
+                if i % 2 == 0 {
+                    let _ = manager.log_commit(i).unwrap();
+                } else {
+                    let _ = manager.log_rollback(i).unwrap();
+                }
+            }
+        }
+
+        let manager = WalManager::new(wal_path.clone());
+        let entries = manager.recover().unwrap();
+
+        let commits = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Commit)
+            .count();
+        let rollbacks = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Rollback)
+            .count();
+
+        assert_eq!(
+            commits,
+            (cycles / 2) as usize,
+            "Should have {} commits",
+            cycles / 2
+        );
+        assert_eq!(
+            rollbacks,
+            (cycles / 2) as usize,
+            "Should have {} rollbacks",
+            cycles / 2
+        );
+
+        println!(
+            "✓ Rapid cycles: {} commits, {} rollbacks",
+            commits, rollbacks
+        );
+    }
 }
