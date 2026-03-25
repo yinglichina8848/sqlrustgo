@@ -77,6 +77,60 @@ impl PartialEq for Value {
 
 impl Eq for Value {}
 
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Value {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Define variant ordering for consistent comparisons
+        fn variant_order(v: &Value) -> u8 {
+            match v {
+                Value::Null => 0,
+                Value::Boolean(_) => 1,
+                Value::Integer(_) => 2,
+                Value::Float(_) => 3,
+                Value::Text(_) => 4,
+                Value::Blob(_) => 5,
+                Value::Date(_) => 6,
+                Value::Timestamp(_) => 7,
+            }
+        }
+
+        let self_order = variant_order(self);
+        let other_order = variant_order(other);
+
+        if self_order != other_order {
+            return self_order.cmp(&other_order);
+        }
+
+        match (self, other) {
+            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+            (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
+            (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => {
+                // Handle NaN: NaN is considered the smallest value
+                if a.is_nan() && b.is_nan() {
+                    std::cmp::Ordering::Equal
+                } else if a.is_nan() {
+                    std::cmp::Ordering::Less
+                } else if b.is_nan() {
+                    std::cmp::Ordering::Greater
+                } else {
+                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                }
+            }
+            (Value::Text(a), Value::Text(b)) => a.cmp(b),
+            (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
+            (Value::Date(a), Value::Date(b)) => a.cmp(b),
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
 impl Value {
     /// Get integer value if this is an Integer
     pub fn as_integer(&self) -> Option<i64> {

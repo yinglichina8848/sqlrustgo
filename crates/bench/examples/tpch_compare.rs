@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use sqlrustgo::{parse, ExecutionEngine};
 use sqlrustgo_storage::MemoryStorage;
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,7 +338,7 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
         let mut latencies = LatencyStats::new();
 
         for _ in 0..ITERATIONS {
-            let storage = Arc::new(MemoryStorage::new());
+            let storage = Arc::new(RwLock::new(MemoryStorage::new()));
             let mut engine = ExecutionEngine::new(storage);
 
             // Create and populate tables

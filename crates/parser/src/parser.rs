@@ -222,6 +222,7 @@ pub struct DeleteStatement {
 pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    pub if_not_exists: bool,
 }
 
 /// DROP TABLE statement
@@ -551,7 +552,7 @@ impl Parser {
                         v
                     }
                     Some(Token::StringLiteral(s)) => {
-                        let v = Expression::Literal(format!("'{}'", s));
+                        let v = Expression::Literal(s.to_string());
                         self.next();
                         v
                     }
@@ -947,7 +948,7 @@ impl Parser {
                 Ok(expr)
             }
             Some(Token::StringLiteral(s)) => {
-                let expr = Expression::Literal(format!("'{}'", s));
+                let expr = Expression::Literal(s.to_string());
                 self.next();
                 Ok(expr)
             }
@@ -1101,8 +1102,27 @@ impl Parser {
     }
 
     fn parse_create_table(&mut self) -> Result<Statement, String> {
-        let name = match self.next() {
-            Some(Token::Identifier(name)) => name,
+        // Parse optional IF NOT EXISTS
+        let mut if_not_exists = false;
+        if matches!(self.current(), Some(Token::If)) {
+            self.next(); // consume IF
+            if matches!(self.current(), Some(Token::Not)) {
+                self.next(); // consume NOT
+                if let Some(Token::Identifier(s)) = self.current() {
+                    if s.to_uppercase() == "EXISTS" {
+                        if_not_exists = true;
+                        self.next(); // consume EXISTS
+                    }
+                }
+            }
+        }
+
+        let name = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let n = name.clone();
+                self.next();
+                n
+            }
             _ => return Err("Expected table name".to_string()),
         };
 
@@ -1214,6 +1234,7 @@ impl Parser {
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
+            if_not_exists,
         }))
     }
 
