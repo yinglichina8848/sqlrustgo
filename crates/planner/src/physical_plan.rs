@@ -446,7 +446,11 @@ pub struct InSubqueryExec {
 
 impl InSubqueryExec {
     pub fn new(expr: Box<Expr>, subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
-        Self { expr, subquery, schema }
+        Self {
+            expr,
+            subquery,
+            schema,
+        }
     }
 
     pub fn expr(&self) -> &Expr {
@@ -1072,6 +1076,74 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Set operation execution operator (UNION, INTERSECT, EXCEPT)
+#[allow(dead_code)]
+pub struct SetOperationExec {
+    op_type: crate::SetOperationType,
+    left: Box<dyn PhysicalPlan>,
+    right: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl SetOperationExec {
+    pub fn new(
+        op_type: crate::SetOperationType,
+        left: Box<dyn PhysicalPlan>,
+        right: Box<dyn PhysicalPlan>,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            op_type,
+            left,
+            right,
+            schema,
+        }
+    }
+
+    pub fn op_type(&self) -> crate::SetOperationType {
+        self.op_type
+    }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+}
+
+impl PhysicalPlan for SetOperationExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.left.as_ref(), self.right.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "SetOperation"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let left_results = self.left.execute()?;
+        let right_results = self.right.execute()?;
+        match self.op_type {
+            crate::SetOperationType::Union | crate::SetOperationType::UnionAll => {
+                let mut results = left_results;
+                results.extend(right_results);
+                Ok(results)
+            }
+            _ => Ok(vec![]),
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

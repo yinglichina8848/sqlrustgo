@@ -66,6 +66,7 @@ impl SqlNormalizer {
                         params.push(Value::Float(f));
                     }
                     current_param.clear();
+                    normalized.push('?');
                 }
                 normalized.push(c.to_ascii_lowercase());
             }
@@ -74,7 +75,10 @@ impl SqlNormalizer {
         if !current_param.is_empty() {
             if let Ok(n) = current_param.parse::<i64>() {
                 params.push(Value::Integer(n));
+            } else if let Ok(_) = current_param.parse::<f64>() {
+                // float case
             }
+            normalized.push('?');
         }
 
         (normalized.trim().to_string(), params)
