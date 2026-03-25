@@ -6,7 +6,10 @@
 pub use sqlrustgo_executor::{Executor, ExecutorResult};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
-pub use sqlrustgo_parser::{parse, Expression, Lexer, SetOperation, Statement, Token};
+pub use sqlrustgo_parser::{
+    parse, Expression, GrantStatement, Lexer, Privilege, RevokeStatement, SetOperation, Statement,
+    Token,
+};
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
