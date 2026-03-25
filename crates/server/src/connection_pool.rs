@@ -129,7 +129,10 @@ mod tests {
 
     #[test]
     fn test_connection_pool_basic_acquire_release() {
-        let config = PoolConfig { size: 5, timeout_ms: 5000 };
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
         let pool = ConnectionPool::new(config);
 
         assert_eq!(pool.size(), 5);
@@ -145,23 +148,28 @@ mod tests {
 
     #[test]
     fn test_connection_pool_concurrent_50_connections() {
-        let config = PoolConfig { size: 50, timeout_ms: 5000 };
+        let config = PoolConfig {
+            size: 50,
+            timeout_ms: 5000,
+        };
         let pool = ConnectionPool::new(config);
         let pool = Arc::new(pool);
 
         let success_count = Arc::new(AtomicUsize::new(0));
 
-        let handles: Vec<_> = (0..50).map(|_| {
-            let pool = Arc::clone(&pool);
-            let success_count = Arc::clone(&success_count);
-            thread::spawn(move || {
-                let conn = pool.acquire();
-                // Simulate some work by checking the executor exists
-                let _executor = conn.executor();
-                drop(conn);
-                success_count.fetch_add(1, Ordering::SeqCst);
+        let handles: Vec<_> = (0..50)
+            .map(|_| {
+                let pool = Arc::clone(&pool);
+                let success_count = Arc::clone(&success_count);
+                thread::spawn(move || {
+                    let conn = pool.acquire();
+                    // Simulate some work by checking the executor exists
+                    let _executor = conn.executor();
+                    drop(conn);
+                    success_count.fetch_add(1, Ordering::SeqCst);
+                })
             })
-        }).collect();
+            .collect();
 
         for handle in handles {
             handle.join().unwrap();
@@ -172,24 +180,29 @@ mod tests {
 
     #[test]
     fn test_connection_pool_concurrent_100_connections() {
-        let config = PoolConfig { size: 50, timeout_ms: 5000 };
+        let config = PoolConfig {
+            size: 50,
+            timeout_ms: 5000,
+        };
         let pool = ConnectionPool::new(config);
         let pool = Arc::new(pool);
 
         let success_count = Arc::new(AtomicUsize::new(0));
 
-        let handles: Vec<_> = (0..100).map(|_| {
-            let pool = Arc::clone(&pool);
-            let success_count = Arc::clone(&success_count);
-            thread::spawn(move || {
-                // Small delay to increase contention
-                thread::sleep(std::time::Duration::from_micros(100));
-                let conn = pool.acquire();
-                let _executor = conn.executor();
-                drop(conn);
-                success_count.fetch_add(1, Ordering::SeqCst);
+        let handles: Vec<_> = (0..100)
+            .map(|_| {
+                let pool = Arc::clone(&pool);
+                let success_count = Arc::clone(&success_count);
+                thread::spawn(move || {
+                    // Small delay to increase contention
+                    thread::sleep(std::time::Duration::from_micros(100));
+                    let conn = pool.acquire();
+                    let _executor = conn.executor();
+                    drop(conn);
+                    success_count.fetch_add(1, Ordering::SeqCst);
+                })
             })
-        }).collect();
+            .collect();
 
         for handle in handles {
             handle.join().unwrap();
@@ -202,7 +215,10 @@ mod tests {
 
     #[test]
     fn test_connection_pool_reuse_sessions() {
-        let config = PoolConfig { size: 5, timeout_ms: 5000 };
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
         let pool = ConnectionPool::new(config);
 
         let mut conn_handles = vec![];
