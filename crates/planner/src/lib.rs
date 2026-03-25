@@ -48,6 +48,18 @@ pub enum AggregateFunction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum WindowFunction {
+    RowNumber,
+    Rank,
+    DenseRank,
+    Lead,
+    Lag,
+    FirstValue,
+    LastValue,
+    NthValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -146,6 +158,12 @@ pub enum Expr {
         args: Vec<Expr>,
         distinct: bool,
     },
+    WindowFunction {
+        func: WindowFunction,
+        args: Vec<Expr>,
+        partition_by: Vec<Expr>,
+        order_by: Vec<SortExpr>,
+    },
     Alias {
         expr: Box<Expr>,
         name: String,
@@ -206,6 +224,7 @@ impl Expr {
                 evaluate_unary_op(&v, op)
             }
             Expr::AggregateFunction { .. } => None,
+            Expr::WindowFunction { .. } => None,
             Expr::Alias { expr, .. } => expr.evaluate(row, schema),
             Expr::Wildcard => None,
             Expr::QualifiedWildcard { .. } => None,
@@ -292,6 +311,20 @@ impl fmt::Display for Expr {
                 let distinct_str = if *distinct { "DISTINCT " } else { "" };
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
                 write!(f, "{}({}{})", func_name, distinct_str, args_str.join(", "))
+            }
+            Expr::WindowFunction { func, args, .. } => {
+                let func_name = match func {
+                    WindowFunction::RowNumber => "ROW_NUMBER",
+                    WindowFunction::Rank => "RANK",
+                    WindowFunction::DenseRank => "DENSE_RANK",
+                    WindowFunction::Lead => "LEAD",
+                    WindowFunction::Lag => "LAG",
+                    WindowFunction::FirstValue => "FIRST_VALUE",
+                    WindowFunction::LastValue => "LAST_VALUE",
+                    WindowFunction::NthValue => "NTH_VALUE",
+                };
+                let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                write!(f, "{}({})", func_name, args_str.join(", "))
             }
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
