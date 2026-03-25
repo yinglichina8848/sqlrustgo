@@ -963,6 +963,14 @@ mod tests {
         fn has_view(&self, _name: &str) -> bool {
             false
         }
+
+        fn analyze_table(&self, _table: &str) -> SqlResult<sqlrustgo_storage::engine::TableStats> {
+            Ok(sqlrustgo_storage::engine::TableStats {
+                table_name: _table.to_string(),
+                row_count: 0,
+                column_stats: vec![],
+            })
+        }
     }
 
     #[test]
