@@ -362,4 +362,30 @@ mod tests {
             self
         }
     }
+
+    #[test]
+    fn test_filter_executor_predicate_getter() {
+        let predicate = Expr::Literal(Value::Boolean(true));
+        let executor = FilterVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            predicate.clone(),
+            Schema::empty(),
+            Schema::empty(),
+        );
+        let result = executor.predicate();
+        assert!(matches!(result, Expr::Literal(Value::Boolean(true))));
+    }
+
+    #[test]
+    fn test_filter_executor_input_schema_getter() {
+        let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let executor = FilterVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            Expr::Literal(Value::Boolean(true)),
+            Schema::empty(),
+            input_schema,
+        );
+        let result = executor.input_schema();
+        assert!(result.field("id").is_some());
+    }
 }
