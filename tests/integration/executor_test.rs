@@ -1,5 +1,5 @@
 // Executor Tests - Volcano Model
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage, Privilege};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
@@ -159,5 +159,33 @@ fn test_upsert_syntax() {
         assert!(insert.on_duplicate.is_some());
     } else {
         panic!("Expected Insert statement");
+    }
+}
+
+#[test]
+fn test_grant_syntax() {
+    let result = parse("GRANT READ ON users TO alice");
+    assert!(result.is_ok(), "Failed to parse GRANT: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::Grant(grant) = stmt {
+        assert_eq!(grant.privilege, Privilege::Read);
+        assert_eq!(grant.table, "users");
+        assert_eq!(grant.to_user, "alice");
+    } else {
+        panic!("Expected Grant statement");
+    }
+}
+
+#[test]
+fn test_revoke_syntax() {
+    let result = parse("REVOKE WRITE ON orders FROM bob");
+    assert!(result.is_ok(), "Failed to parse REVOKE: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::Revoke(revoke) = stmt {
+        assert_eq!(revoke.privilege, Privilege::Write);
+        assert_eq!(revoke.table, "orders");
+        assert_eq!(revoke.from_user, "bob");
+    } else {
+        panic!("Expected Revoke statement");
     }
 }
