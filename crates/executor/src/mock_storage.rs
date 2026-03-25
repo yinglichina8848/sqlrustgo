@@ -173,7 +173,7 @@ impl StorageEngine for MockStorage {
     }
 
     fn create_table_index(
-        &self,
+        &mut self,
         _table: &str,
         _column: &str,
         _column_index: usize,
@@ -181,7 +181,7 @@ impl StorageEngine for MockStorage {
         Ok(())
     }
 
-    fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+    fn drop_table_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
         Ok(())
     }
 
