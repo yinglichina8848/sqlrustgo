@@ -337,8 +337,85 @@ impl DataRestorer {
         }
     }
 
-    fn restore_sql(_storage: &mut dyn StorageEngine, _content: &str) -> SqlResult<usize> {
-        Ok(0)
+    fn restore_sql(storage: &mut dyn StorageEngine, content: &str) -> SqlResult<usize> {
+        let mut total_rows = 0;
+
+        for line in content.lines() {
+            let line = line.trim();
+            if !line.starts_with("INSERT INTO") {
+                continue;
+            }
+
+            if let Some((table_name, values_part)) = Self::parse_insert(line) {
+                let rows = Self::parse_insert_values(&values_part);
+
+                if !storage.has_table(&table_name) {
+                    let table_info = TableInfo {
+                        name: table_name.clone(),
+                        columns: vec![],
+                    };
+                    storage.create_table(&table_info)?;
+                }
+
+                storage.insert(&table_name, rows)?;
+                total_rows += 1;
+            }
+        }
+
+        Ok(total_rows)
+    }
+
+    fn parse_insert(line: &str) -> Option<(String, &str)> {
+        let line = line.trim_end_matches(';').trim();
+        if !line.starts_with("INSERT INTO") {
+            return None;
+        }
+
+        let rest = &line[12..];
+        let paren_pos = rest.find('(')?;
+        let table_name = rest[..paren_pos].trim().trim_matches('`').to_string();
+        let values_pos = rest[paren_pos..].find("VALUES")? + paren_pos;
+
+        Some((table_name, &rest[values_pos..]))
+    }
+
+    fn parse_insert_values(values_part: &str) -> Vec<Record> {
+        let mut rows = Vec::new();
+
+        let values_str = values_part.trim();
+        let value_groups: Vec<&str> = values_str.split("),").collect();
+
+        for group in value_groups {
+            let group = group.trim().trim_matches('(').trim_matches(')');
+            let values: Vec<Value> = group
+                .split(',')
+                .map(|s| Self::parse_sql_value(s.trim()))
+                .collect();
+            rows.push(values);
+        }
+
+        rows
+    }
+
+    fn parse_sql_value(s: &str) -> Value {
+        let s = s.trim();
+        if s.eq_ignore_ascii_case("NULL") {
+            return Value::Null;
+        }
+        if s.starts_with('\'') && s.ends_with('\'') {
+            let inner = &s[1..s.len() - 1];
+            return Value::Text(inner.replace("''", "'"));
+        }
+        if s.starts_with("X'") && s.ends_with('\'') {
+            return Value::Blob(vec![]);
+        }
+        if let Ok(i) = s.parse::<i64>() {
+            return Value::Integer(i);
+        }
+        if let Ok(f) = s.parse::<f64>() {
+            return Value::Float(f);
+        }
+        Value::Text(s.to_string())
     }
 }
 
