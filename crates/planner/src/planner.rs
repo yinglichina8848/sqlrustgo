@@ -209,6 +209,7 @@ impl DefaultPlanner {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
+            LogicalPlan::Window { input, .. } => self.create_physical_plan_internal(input),
             LogicalPlan::SetOperation {
                 op_type,
                 left,
