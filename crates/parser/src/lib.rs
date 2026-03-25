@@ -11,6 +11,7 @@ pub use token::Token;
 
 pub use parser::parse;
 pub use parser::CreateViewStatement;
+pub use parser::Expression;
 pub use parser::SetOperation;
 pub use parser::SetOperationType;
 pub use parser::Statement;

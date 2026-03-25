@@ -441,7 +441,7 @@ mod network_stress {
     use sqlrustgo_common::network_metrics::NetworkMetrics;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     #[test]
@@ -821,7 +821,7 @@ mod wal_stress {
 mod stability_stress {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_sustained_load_30s() {
@@ -949,11 +949,11 @@ mod crud_correctness {
     use super::*;
     use sqlrustgo::ExecutionEngine;
     use sqlrustgo::MemoryStorage;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_crud_basic_correctness() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1014,7 +1014,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_duplicate_check() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1042,7 +1042,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_transaction_atomicity() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1075,7 +1075,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_query_accuracy() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1152,7 +1152,7 @@ mod crud_correctness {
 
     #[test]
     fn test_concurrent_crud_correctness() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 
         let handles: Vec<_> = (0..10)
             .map(|tid| {
