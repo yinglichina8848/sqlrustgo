@@ -244,6 +244,7 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    references: None,
                 })
                 .collect(),
         };
@@ -308,6 +309,7 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    references: None,
                 })
                 .collect(),
         };
