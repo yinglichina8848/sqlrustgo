@@ -11,7 +11,7 @@ pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 
-pub use cost::SimpleCostModel;
+pub use cost::{CboOptimizer, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use projection_pushdown::{
