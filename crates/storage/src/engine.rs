@@ -135,21 +135,30 @@ impl StorageEngine for MemoryStorage {
         Ok(self.tables.get(table).cloned().unwrap_or_default())
     }
 
-    fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+    fn insert(&mut self, table: &str, mut records: Vec<Record>) -> SqlResult<()> {
+        if records.is_empty() {
+            return Ok(());
+        }
+
         let table_info = self.table_infos.get(table);
 
-        for record in &records {
-            if let Some(info) = table_info {
-                for (col_idx, col_def) in info.columns.iter().enumerate() {
-                    if col_def.is_unique {
-                        if let Some(value) = record.get(col_idx) {
-                            for existing in self.tables.get(table).cloned().unwrap_or_default() {
-                                if let Some(existing_val) = existing.get(col_idx) {
-                                    if existing_val == value {
-                                        return Err(SqlError::DuplicateKey {
-                                            value: value.to_string(),
-                                            key: col_def.name.clone(),
-                                        });
+        if let Some(info) = table_info {
+            let has_unique = info.columns.iter().any(|c| c.is_unique);
+            if has_unique {
+                let table_records = self.tables.get(table).cloned().unwrap_or_default();
+                let existing: Vec<&Record> = table_records.iter().collect();
+                for record in &records {
+                    for (col_idx, col_def) in info.columns.iter().enumerate() {
+                        if col_def.is_unique {
+                            if let Some(value) = record.get(col_idx) {
+                                for existing_record in &existing {
+                                    if let Some(existing_val) = existing_record.get(col_idx) {
+                                        if existing_val == value {
+                                            return Err(SqlError::DuplicateKey {
+                                                value: value.to_string(),
+                                                key: col_def.name.clone(),
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -162,7 +171,7 @@ impl StorageEngine for MemoryStorage {
         self.tables
             .entry(table.to_string())
             .or_default()
-            .extend(records);
+            .append(&mut records);
         self.on_write_complete(table);
         Ok(())
     }
