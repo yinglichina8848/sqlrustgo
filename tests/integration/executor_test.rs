@@ -146,3 +146,18 @@ fn test_operator_metrics() {
     assert!(output.contains("time="));
     assert!(output.contains("rows=100"));
 }
+
+#[test]
+fn test_upsert_syntax() {
+    let result = parse(
+        "INSERT INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Alice'",
+    );
+    assert!(result.is_ok(), "Failed to parse UPSERT: {:?}", result);
+    let stmt = result.unwrap();
+    if let sqlrustgo_parser::Statement::Insert(insert) = stmt {
+        assert_eq!(insert.table, "users");
+        assert!(insert.on_duplicate.is_some());
+    } else {
+        panic!("Expected Insert statement");
+    }
+}
