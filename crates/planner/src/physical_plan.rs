@@ -513,6 +513,193 @@ impl FilterExec {
     }
 }
 
+/// Scalar subquery execution operator
+/// Executes a subquery that returns a single value
+#[allow(dead_code)]
+pub struct ScalarSubqueryExec {
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl ScalarSubqueryExec {
+    pub fn new(subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self { subquery, schema }
+    }
+
+    pub fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+}
+
+impl PhysicalPlan for ScalarSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "ScalarSubquery"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// IN subquery execution operator
+/// Checks if a value exists in the subquery results
+#[allow(dead_code)]
+pub struct InSubqueryExec {
+    expr: Box<Expr>,
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl InSubqueryExec {
+    pub fn new(expr: Box<Expr>, subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self { expr, subquery, schema }
+    }
+
+    pub fn expr(&self) -> &Expr {
+        &self.expr
+    }
+
+    pub fn subquery(&self) -> &dyn PhysicalPlan {
+        self.subquery.as_ref()
+    }
+}
+
+impl PhysicalPlan for InSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "InSubquery"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// EXISTS subquery execution operator
+/// Checks if the subquery returns any rows
+#[allow(dead_code)]
+pub struct ExistsExec {
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl ExistsExec {
+    pub fn new(subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self { subquery, schema }
+    }
+
+    pub fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let results = self.subquery.execute()?;
+        // EXISTS returns true if subquery returns at least one row
+        Ok(vec![vec![Value::Boolean(!results.is_empty())]])
+    }
+}
+
+impl PhysicalPlan for ExistsExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Exists"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let results = self.subquery.execute()?;
+        Ok(vec![vec![Value::Boolean(!results.is_empty())]])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// ANY/ALL subquery execution operator
+/// Compares a value with ALL or ANY results from the subquery
+#[allow(dead_code)]
+pub struct AnyAllSubqueryExec {
+    expr: Box<Expr>,
+    op: Operator,
+    subquery: Box<dyn PhysicalPlan>,
+    any_all: crate::SubqueryType,
+    schema: Schema,
+}
+
+impl AnyAllSubqueryExec {
+    pub fn new(
+        expr: Box<Expr>,
+        op: Operator,
+        subquery: Box<dyn PhysicalPlan>,
+        any_all: crate::SubqueryType,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            expr,
+            op,
+            subquery,
+            any_all,
+            schema,
+        }
+    }
+
+    pub fn any_all(&self) -> crate::SubqueryType {
+        self.any_all.clone()
+    }
+}
+
+impl PhysicalPlan for AnyAllSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        match self.any_all {
+            crate::SubqueryType::Any => "Any",
+            crate::SubqueryType::All => "All",
+            _ => "AnyAll",
+        }
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Aggregate execution operator
 #[allow(dead_code)]
 pub struct AggregateExec {
