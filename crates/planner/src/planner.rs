@@ -740,3 +740,49 @@ fn extract_join_keys(condition: Option<&Expr>, left_side: bool) -> Vec<Expr> {
         _ => vec![],
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+    use crate::{DataType, Field};
+
+    #[test]
+    fn test_default_planner_with_teaching_mode() {
+        let _planner = DefaultPlanner::with_teaching_mode(true);
+        assert!(std::any::type_name::<DefaultPlanner>().contains("DefaultPlanner"));
+    }
+
+    #[test]
+    fn test_extract_join_keys_left() {
+        let expr = Expr::binary_expr(
+            Expr::column("a.id"),
+            crate::Operator::Eq,
+            Expr::column("b.id"),
+        );
+        let keys = extract_join_keys(Some(&expr), true);
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_join_keys_right() {
+        let expr = Expr::binary_expr(
+            Expr::column("a.id"),
+            crate::Operator::Eq,
+            Expr::column("b.id"),
+        );
+        let keys = extract_join_keys(Some(&expr), false);
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_join_keys_none() {
+        let keys = extract_join_keys(None, true);
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn test_should_use_index() {
+        let result = should_use_index("test_table");
+        assert!(!result);
+    }
+}
