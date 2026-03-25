@@ -33,6 +33,7 @@ pub enum Statement {
     CreateView(CreateViewStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
+    Transaction(TransactionStatement),
 }
 
 /// CREATE INDEX statement
@@ -93,6 +94,22 @@ pub struct AnalyzeStatement {
 pub struct ExplainStatement {
     pub query: Box<Statement>,
     pub analyze: bool,
+}
+
+/// Transaction statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionStatement {
+    pub command: TransactionCommand,
+}
+
+/// Transaction command types
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransactionCommand {
+    Begin,
+    Commit,
+    Rollback,
+    Savepoint { name: String },
+    RollbackTo { name: String },
 }
 
 /// Join type
@@ -264,6 +281,10 @@ impl Parser {
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::Explain) => self.parse_explain(),
+            Some(Token::Begin)
+            | Some(Token::Commit)
+            | Some(Token::Rollback)
+            | Some(Token::Savepoint) => self.parse_transaction(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1120,6 +1141,60 @@ impl Parser {
         };
 
         Ok(Statement::Explain(ExplainStatement { query, analyze }))
+    }
+
+    fn parse_transaction(&mut self) -> Result<Statement, String> {
+        match self.current() {
+            Some(Token::Begin) => {
+                self.next();
+                Ok(Statement::Transaction(TransactionStatement {
+                    command: TransactionCommand::Begin,
+                }))
+            }
+            Some(Token::Commit) => {
+                self.next();
+                Ok(Statement::Transaction(TransactionStatement {
+                    command: TransactionCommand::Commit,
+                }))
+            }
+            Some(Token::Rollback) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Savepoint) => {
+                        self.next();
+                        let name = match self.current() {
+                            Some(Token::Identifier(n)) => {
+                                let name = n.clone();
+                                self.next();
+                                name
+                            }
+                            _ => return Err("Expected savepoint name".to_string()),
+                        };
+                        Ok(Statement::Transaction(TransactionStatement {
+                            command: TransactionCommand::RollbackTo { name },
+                        }))
+                    }
+                    _ => Ok(Statement::Transaction(TransactionStatement {
+                        command: TransactionCommand::Rollback,
+                    })),
+                }
+            }
+            Some(Token::Savepoint) => {
+                self.next();
+                let name = match self.current() {
+                    Some(Token::Identifier(n)) => {
+                        let name = n.clone();
+                        self.next();
+                        name
+                    }
+                    _ => return Err("Expected savepoint name".to_string()),
+                };
+                Ok(Statement::Transaction(TransactionStatement {
+                    command: TransactionCommand::Savepoint { name },
+                }))
+            }
+            _ => Err("Invalid transaction statement".to_string()),
+        }
     }
 }
 
