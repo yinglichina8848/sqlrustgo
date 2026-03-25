@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use thiserror::Error;
 
-use sqlrustgo_storage::engine::{StorageEngine, TableStats as StorageTableStats, ViewInfo};
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_storage::StorageEngine;
+use sqlrustgo_types::Value;
 
 /// Statistics provider error types
 #[derive(Error, Debug)]
@@ -110,7 +110,7 @@ pub struct TableStats {
     /// Total size in bytes
     pub size_bytes: u64,
     /// Column statistics
-    pub column_stats: Vec<ColumnStats>,
+    pub column_stats: HashMap<String, ColumnStats>,
     /// Last updated timestamp (Unix epoch)
     pub last_updated: u64,
 }
@@ -121,7 +121,7 @@ impl TableStats {
             table_name: table_name.into(),
             row_count: 0,
             size_bytes: 0,
-            column_stats: Vec::new(),
+            column_stats: HashMap::new(),
             last_updated: 0,
         }
     }
@@ -137,7 +137,7 @@ impl TableStats {
     }
 
     pub fn add_column_stats(mut self, stats: ColumnStats) -> Self {
-        self.column_stats.push(stats);
+        self.column_stats.insert(stats.column_name.clone(), stats);
         self
     }
 
@@ -148,12 +148,13 @@ impl TableStats {
 
     /// Get column statistics by name
     pub fn column(&self, column: &str) -> Option<&ColumnStats> {
-        self.column_stats.iter().find(|c| c.column_name == column)
+        self.column_stats.get(column)
     }
 
     /// Estimate selectivity for a predicate on a column
     pub fn estimate_selectivity(&self, column: &str) -> f64 {
-        self.column(column)
+        self.column_stats
+            .get(column)
             .map(|c| c.eq_selectivity())
             .unwrap_or(0.1) // Default selectivity when no stats
     }
@@ -178,7 +179,7 @@ impl TableStats {
     }
 
     /// Add multiple column stats at once
-    pub fn with_column_stats(mut self, stats: Vec<ColumnStats>) -> Self {
+    pub fn with_column_stats(mut self, stats: HashMap<String, ColumnStats>) -> Self {
         self.column_stats = stats;
         self
     }
@@ -216,10 +217,7 @@ pub trait StatisticsProvider: Send + Sync {
 
     /// Get column statistics for a specific column
     fn column_stats(&self, table: &str, column: &str) -> Option<ColumnStats> {
-        self.table_stats(table)?
-            .column_stats
-            .into_iter()
-            .find(|c| c.column_name == column)
+        self.table_stats(table)?.column_stats.get(column).cloned()
     }
 
     /// Check if statistics exist for a table
@@ -323,12 +321,12 @@ impl StatsCollector for DefaultStatsCollector {
             .map_err(|e| StatsError::UpdateFailed(e.to_string()))?;
         let row_count = records.len() as u64;
 
-        let mut column_stats = Vec::new();
+        let mut column_stats = HashMap::new();
 
         if let Ok(table_info) = storage.get_table_info(table) {
             for (idx, col_meta) in table_info.columns.iter().enumerate() {
                 let col_stats = self.collect_column_stats(storage, table, &col_meta.name, idx)?;
-                column_stats.push(col_stats);
+                column_stats.insert(col_meta.name.clone(), col_stats);
             }
         }
 
@@ -950,72 +948,20 @@ mod tests {
             Vec::new()
         }
 
-        fn create_view(&mut self, _info: ViewInfo) -> SqlResult<()> {
+        fn create_view(&mut self, _info: sqlrustgo_storage::engine::ViewInfo) -> SqlResult<()> {
             Ok(())
         }
 
-        fn get_view(&self, _name: &str) -> Option<ViewInfo> {
+        fn get_view(&self, _name: &str) -> Option<sqlrustgo_storage::engine::ViewInfo> {
             None
         }
 
         fn list_views(&self) -> Vec<String> {
-            vec![]
+            Vec::new()
         }
 
         fn has_view(&self, _name: &str) -> bool {
             false
-        }
-
-        fn analyze_table(&self, table: &str) -> SqlResult<StorageTableStats> {
-            let records =
-                self.tables
-                    .get(table)
-                    .cloned()
-                    .ok_or_else(|| SqlError::TableNotFound {
-                        table: table.to_string(),
-                    })?;
-
-            let table_infos =
-                self.table_infos
-                    .get(table)
-                    .cloned()
-                    .ok_or_else(|| SqlError::TableNotFound {
-                        table: table.to_string(),
-                    })?;
-
-            let mut column_stats = Vec::new();
-
-            for col in &table_infos.columns {
-                let mut null_count = 0u64;
-                let mut distinct_values = std::collections::HashSet::new();
-
-                if let Some(idx) = table_infos.columns.iter().position(|c| c.name == col.name) {
-                    for record in &records {
-                        if let Some(val) = record.get(idx) {
-                            match val {
-                                Value::Null => null_count += 1,
-                                _ => {
-                                    distinct_values.insert(val.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                column_stats.push(ColumnStats {
-                    column_name: col.name.clone(),
-                    distinct_count: distinct_values.len() as u64,
-                    null_count,
-                    min_value: None,
-                    max_value: None,
-                });
-            }
-
-            Ok(StorageTableStats {
-                table_name: table.to_string(),
-                row_count: records.len() as u64,
-                column_stats,
-            })
         }
     }
 
@@ -1048,8 +994,8 @@ mod tests {
         assert!(result.is_ok());
         let stats = result.unwrap();
         assert_eq!(stats.row_count, 3);
-        assert!(stats.column_stats.iter().any(|c| c.column_name == "id"));
-        assert!(stats.column_stats.iter().any(|c| c.column_name == "name"));
+        assert!(stats.column_stats.contains_key("id"));
+        assert!(stats.column_stats.contains_key("name"));
     }
 
     #[test]
