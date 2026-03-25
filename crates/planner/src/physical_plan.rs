@@ -8,72 +8,9 @@ use crate::AggregateFunction;
 use crate::Expr;
 use crate::Operator;
 use crate::Schema;
-use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::Value;
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
-#[derive(Debug, Clone, Default)]
-pub struct OperatorMetrics {
-    pub name: String,
-    pub table_name: Option<String>,
-    pub execution_time_ms: f64,
-    pub rows: usize,
-    pub children: Vec<OperatorMetrics>,
-}
-
-impl OperatorMetrics {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            table_name: None,
-            execution_time_ms: 0.0,
-            rows: 0,
-            children: Vec::new(),
-        }
-    }
-
-    pub fn with_table(mut self, table_name: String) -> Self {
-        self.table_name = Some(table_name);
-        self
-    }
-
-    pub fn with_timing(mut self, duration: Duration, rows: usize) -> Self {
-        self.execution_time_ms = duration.as_secs_f64() * 1000.0;
-        self.rows = rows;
-        self
-    }
-
-    pub fn add_child(&mut self, child: OperatorMetrics) {
-        self.children.push(child);
-    }
-
-    pub fn to_string(&self, indent: usize) -> String {
-        let prefix = "  ".repeat(indent);
-
-        let mut line = format!("{}{}", prefix, self.name);
-        if let Some(ref table) = self.table_name {
-            line.push_str(&format!(" on {}", table));
-        }
-
-        if self.execution_time_ms > 0.0 || self.rows > 0 {
-            line.push_str(&format!(
-                " (time={:.3}ms, rows={})",
-                self.execution_time_ms, self.rows
-            ));
-        }
-
-        let mut result = vec![line];
-
-        for child in &self.children {
-            result.push(child.to_string(indent + 1));
-        }
-
-        result.join("\n")
-    }
-}
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
@@ -159,7 +96,7 @@ impl PhysicalPlan for SeqScanExec {
 }
 
 /// Index scan execution operator - uses index instead of full table scan
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct IndexScanExec {
     table_name: String,
@@ -168,7 +105,6 @@ pub struct IndexScanExec {
     schema: Schema,
     key_range_min: Option<i64>,
     key_range_max: Option<i64>,
-    storage: Option<Arc<dyn StorageEngine>>,
 }
 
 impl IndexScanExec {
@@ -180,25 +116,6 @@ impl IndexScanExec {
             schema,
             key_range_min: None,
             key_range_max: None,
-            storage: None,
-        }
-    }
-
-    pub fn with_storage(
-        table_name: String,
-        index_name: String,
-        key_expr: Expr,
-        schema: Schema,
-        storage: Arc<dyn StorageEngine>,
-    ) -> Self {
-        Self {
-            table_name,
-            index_name,
-            key_expr,
-            schema,
-            key_range_min: None,
-            key_range_max: None,
-            storage: Some(storage),
         }
     }
 
@@ -242,43 +159,8 @@ impl PhysicalPlan for IndexScanExec {
         &self.table_name
     }
 
-    #[allow(clippy::collapsible_match)]
     fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        match &self.storage {
-            Some(storage) => {
-                let key_value = match &self.key_expr {
-                    Expr::Literal(v) => match v {
-                        sqlrustgo_types::Value::Integer(i) => *i,
-                        _ => return Ok(vec![]),
-                    },
-                    _ => return Ok(vec![]),
-                };
-
-                if let Some(min) = self.key_range_min {
-                    let max = self.key_range_max.unwrap_or(min);
-                    let row_ids = storage.range_index(&self.table_name, &self.index_name, min, max);
-                    let mut results = Vec::new();
-                    let all_rows = storage.scan(&self.table_name).map_err(|e| e.to_string())?;
-                    for row_id in row_ids {
-                        if (row_id as usize) < all_rows.len() {
-                            results.push(all_rows[row_id as usize].clone());
-                        }
-                    }
-                    Ok(results)
-                } else {
-                    if let Some(row_id) =
-                        storage.search_index(&self.table_name, &self.index_name, key_value)
-                    {
-                        let all_rows = storage.scan(&self.table_name).map_err(|e| e.to_string())?;
-                        if (row_id as usize) < all_rows.len() {
-                            return Ok(vec![all_rows[row_id as usize].clone()]);
-                        }
-                    }
-                    Ok(vec![])
-                }
-            }
-            None => Ok(vec![]),
-        }
+        Ok(vec![])
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -1190,105 +1072,6 @@ impl PhysicalPlan for LimitExec {
 
     fn name(&self) -> &str {
         "Limit"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-#[allow(dead_code)]
-pub struct SetOperationExec {
-    op_type: crate::SetOperationType,
-    left: Box<dyn PhysicalPlan>,
-    right: Box<dyn PhysicalPlan>,
-    schema: Schema,
-}
-
-impl SetOperationExec {
-    pub fn new(
-        op_type: crate::SetOperationType,
-        left: Box<dyn PhysicalPlan>,
-        right: Box<dyn PhysicalPlan>,
-        schema: Schema,
-    ) -> Self {
-        Self {
-            op_type,
-            left,
-            right,
-            schema,
-        }
-    }
-
-    pub fn op_type(&self) -> crate::SetOperationType {
-        self.op_type
-    }
-
-    pub fn left(&self) -> &dyn PhysicalPlan {
-        self.left.as_ref()
-    }
-
-    pub fn right(&self) -> &dyn PhysicalPlan {
-        self.right.as_ref()
-    }
-}
-
-impl PhysicalPlan for SetOperationExec {
-    fn schema(&self) -> &Schema {
-        &self.schema
-    }
-
-    fn children(&self) -> Vec<&dyn PhysicalPlan> {
-        vec![self.left.as_ref(), self.right.as_ref()]
-    }
-
-    fn name(&self) -> &str {
-        match self.op_type {
-            crate::SetOperationType::Union => "Union",
-            crate::SetOperationType::UnionAll => "UnionAll",
-            crate::SetOperationType::Intersect => "Intersect",
-            crate::SetOperationType::Except => "Except",
-        }
-    }
-
-    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
-        let left_results = self.left.execute()?;
-        let right_results = self.right.execute()?;
-
-        match self.op_type {
-            crate::SetOperationType::UnionAll => {
-                let mut results = left_results;
-                results.extend(right_results);
-                Ok(results)
-            }
-            crate::SetOperationType::Union => {
-                let mut combined = left_results;
-                combined.extend(right_results);
-                let mut unique: Vec<Vec<Value>> = Vec::new();
-                for row in combined {
-                    if !unique.contains(&row) {
-                        unique.push(row);
-                    }
-                }
-                Ok(unique)
-            }
-            crate::SetOperationType::Intersect => {
-                let right_set: std::collections::HashSet<_> = right_results.iter().collect();
-                let results: Vec<Vec<Value>> = left_results
-                    .into_iter()
-                    .filter(|row| right_set.contains(row))
-                    .collect();
-                Ok(results)
-            }
-            crate::SetOperationType::Except => {
-                let right_set: std::collections::HashSet<_> = right_results.iter().collect();
-                let results: Vec<Vec<Value>> = left_results
-                    .into_iter()
-                    .filter(|row| !right_set.contains(row))
-                    .collect();
-                Ok(results)
-            }
-        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -3714,133 +3497,7 @@ mod tests {
         );
 
         assert_eq!(smj.join_type(), crate::JoinType::Left);
-    }
-
-    #[test]
-    fn test_index_scan_methods() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let scan = IndexScanExec::new(
-            "users".to_string(),
-            "idx_id".to_string(),
-            Expr::literal(Value::Integer(42)),
-            schema.clone(),
-        );
-
-        assert_eq!(scan.table_name(), "users");
-        assert_eq!(scan.index_name(), "idx_id");
-        assert_eq!(scan.name(), "IndexScan");
-    }
-
-    #[test]
-    fn test_aggregate_methods() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
-        let agg = AggregateExec::new(input, vec![Expr::column("id")], vec![], schema.clone());
-
-        let _ = agg.group_expr();
-        let _ = agg.aggregate_expr();
-    }
-
-    #[test]
-    fn test_hash_join_condition() {
-        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-
-        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema.clone()));
-        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema.clone()));
-
-        let join_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-
-        let condition = Some(Expr::binary_expr(
-            Expr::column("id"),
-            crate::Operator::Eq,
-            Expr::column("id"),
-        ));
-
-        let hash_join =
-            HashJoinExec::new(left, right, crate::JoinType::Inner, condition, join_schema);
-
-        let _ = hash_join.join_type();
-        let _ = hash_join.condition();
-    }
-
-    #[test]
-    fn test_sort_methods() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
-        let sort_exprs = vec![SortExpr {
-            expr: Expr::column("id"),
-            asc: true,
-            nulls_first: false,
-        }];
-        let sort = SortExec::new(input, sort_exprs);
-
-        let _ = sort.sort_expr();
-        let _ = sort.input();
-    }
-
-    #[test]
-    fn test_set_operation_exec_union_all() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
-        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
-
-        let exec = SetOperationExec::new(
-            crate::SetOperationType::UnionAll,
-            left_input,
-            right_input,
-            schema,
-        );
-
-        assert_eq!(exec.name(), "UnionAll");
-        assert_eq!(exec.children().len(), 2);
-    }
-
-    #[test]
-    fn test_set_operation_exec_union() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
-        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
-
-        let exec = SetOperationExec::new(
-            crate::SetOperationType::Union,
-            left_input,
-            right_input,
-            schema,
-        );
-
-        assert_eq!(exec.name(), "Union");
-    }
-
-    #[test]
-    fn test_set_operation_exec_intersect() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
-        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
-
-        let exec = SetOperationExec::new(
-            crate::SetOperationType::Intersect,
-            left_input,
-            right_input,
-            schema,
-        );
-
-        assert_eq!(exec.name(), "Intersect");
-    }
-
-    #[test]
-    fn test_set_operation_exec_except() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
-        let left_input = Box::new(SeqScanExec::new("t1".to_string(), schema.clone()));
-        let right_input = Box::new(SeqScanExec::new("t2".to_string(), schema.clone()));
-
-        let exec = SetOperationExec::new(
-            crate::SetOperationType::Except,
-            left_input,
-            right_input,
-            schema,
-        );
-
-        assert_eq!(exec.name(), "Except");
+        assert_eq!(smj.left_keys(), &left_keys);
+        assert_eq!(smj.right_keys(), &right_keys);
     }
 }
