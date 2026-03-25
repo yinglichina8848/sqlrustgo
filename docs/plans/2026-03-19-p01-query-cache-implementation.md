@@ -1,13 +1,5 @@
 # P-01 查询缓存实施计划
 
-<<<<<<< HEAD
-> **状态**: ✅ 已完成
-> **Issue**: #627
-> **PR**: #627
-> **完成日期**: 2026-03-20
-
-=======
->>>>>>> origin/main
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 在 Executor 层实现查询结果缓存，支持 LRU 淘汰、表级失效、TTL

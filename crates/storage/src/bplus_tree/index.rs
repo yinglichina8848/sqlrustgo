@@ -1,7 +1,7 @@
 //! Disk-based B+Tree index implementation
 
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const BTREE_ORDER: usize = 64;
@@ -213,7 +213,7 @@ impl IndexStats {
             return 1.0;
         }
         let selectivity = self.cardinality as f64 / self.num_entries as f64;
-        selectivity.clamp(0.0, 1.0)
+        selectivity.min(1.0).max(0.0)
     }
 }
 
@@ -845,9 +845,7 @@ pub struct PostingList {
 
 impl PostingList {
     pub fn new() -> Self {
-        Self {
-            doc_ids: Vec::new(),
-        }
+        Self { doc_ids: Vec::new() }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -924,7 +922,7 @@ impl FullTextIndex {
 
         // Add document to each term's posting list
         for term in terms {
-            let entry = self.inverted_index.entry(term).or_default();
+            let entry = self.inverted_index.entry(term).or_insert_with(PostingList::new);
             entry.add_doc_id(doc_id);
         }
 
@@ -945,11 +943,7 @@ impl FullTextIndex {
 
     /// Filter deleted documents from results
     fn filter_deleted(&self, doc_ids: &[u32]) -> Vec<u32> {
-        doc_ids
-            .iter()
-            .copied()
-            .filter(|id| !self.is_deleted(*id))
-            .collect()
+        doc_ids.iter().copied().filter(|id| !self.is_deleted(*id)).collect()
     }
 
     /// Intersect two sorted posting lists (AND operation)
@@ -984,7 +978,9 @@ impl FullTextIndex {
         // Get posting lists for each term
         let posting_lists: Vec<&Vec<u32>> = terms
             .iter()
-            .filter_map(|term| self.inverted_index.get(term).map(|pl| &pl.doc_ids))
+            .filter_map(|term| {
+                self.inverted_index.get(term).map(|pl| &pl.doc_ids)
+            })
             .collect();
 
         // If no terms found, return empty

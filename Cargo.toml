@@ -9,14 +9,10 @@ members = [
     "crates/catalog",
     "crates/transaction",
     "crates/server",
-    "crates/bench",
-    "crates/bench-cli",
-    "crates/sql-cli",
-    "test/sql92",
 ]
 
 [workspace.package]
-version = "1.6.1"
+version = "1.5.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -49,19 +45,14 @@ lru-cache = "0.1.2"
 ctrlc = "3.5.2"
 parking_lot = "0.12"
 serde_json = "1.0"
-num_cpus = "1.17"
 tempfile = "3.25.0"
-criterion = "0.8"
+criterion = "0.5"
 miniz_oxide = "0.7"
-rand = "0.8"
-fnv = "1.0"
 
 [dev-dependencies]
-criterion = "0.8"
+criterion = "0.5"
 tempfile = "3.25.0"
 serde_yaml = "0.9"
-rand = "0.8"
-clap = { version = "4.0", features = ["derive"] }
 
 [package]
 name = "sqlrustgo"
@@ -96,7 +87,7 @@ serde_json.workspace = true
 
 [[test]]
 name = "ci_test"
-path = "tests/ci/ci_test.rs"
+path = "tests/ci_test.rs"
 
 [[bench]]
 name = "sql_operations"
@@ -130,44 +121,28 @@ harness = false
 name = "bench_cbo"
 harness = false
 
-[[bench]]
-name = "tpch_bench"
-harness = false
-
-# [[bin]]
-# name = "tpch_benchmark"
-# path = "benches/tpch_comprehensive_main.rs"
-
-[[example]]
-name = "tpch_data_gen"
-path = "crates/bench/examples/tpch_data_gen.rs"
-
-[dependencies.rusqlite]
-version = "0.32"
-features = ["bundled"]
-
 [[test]]
 name = "optimizer_rules_test"
-path = "tests/unit/optimizer_rules_test.rs"
+path = "tests/optimizer_rules_test.rs"
 
 
 [[test]]
 name = "buffer_pool_test"
-path = "tests/ci/buffer_pool_test.rs"
+path = "tests/buffer_pool_test.rs"
 
 
 [[test]]
 name = "page_test"
-path = "tests/integration/page_test.rs"
+path = "tests/page_test.rs"
 
 
 [[test]]
 name = "executor_test"
-path = "tests/integration/executor_test.rs"
+path = "tests/executor_test.rs"
 
 [[test]]
 name = "planner_test"
-path = "tests/integration/planner_test.rs"
+path = "tests/planner_test.rs"
 
 
 [[test]]
@@ -176,40 +151,4 @@ path = "tests/binary_format_test.rs"
 
 [[test]]
 name = "optimizer_stats_test"
-path = "tests/integration/optimizer_stats_test.rs"
-
-[[test]]
-name = "types_value_test"
-path = "tests/unit/types_value_test.rs"
-
-[[test]]
-name = "query_cache_config_test"
-path = "tests/unit/query_cache_config_test.rs"
-
-[[test]]
-name = "server_health_test"
-path = "tests/unit/server_health_test.rs"
-
-[[test]]
-name = "bplus_tree_test"
-path = "tests/unit/bplus_tree_test.rs"
-
-[[test]]
-name = "optimizer_cost_test"
-path = "tests/unit/optimizer_cost_test.rs"
-
-[[test]]
-name = "local_executor_test"
-path = "tests/unit/local_executor_test.rs"
-
-[[test]]
-name = "query_cache_test"
-path = "tests/unit/query_cache_test.rs"
-
-[[test]]
-name = "vectorization_test"
-path = "tests/unit/vectorization_test.rs"
-
-[[test]]
-name = "file_storage_test"
-path = "tests/unit/file_storage_test.rs"
+path = "tests/optimizer_stats_test.rs"
