@@ -1844,4 +1844,379 @@ mod tests {
             _ => panic!("Expected EXPLAIN statement"),
         }
     }
+
+    #[test]
+    fn test_parse_grant_read() {
+        let result = parse("GRANT READ ON users TO alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Read);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "alice");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_write() {
+        let result = parse("GRANT WRITE ON orders TO bob");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Write);
+                assert_eq!(g.table, "orders");
+                assert_eq!(g.to_user, "bob");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_all() {
+        let result = parse("GRANT ALL ON products TO admin");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::All);
+                assert_eq!(g.table, "products");
+                assert_eq!(g.to_user, "admin");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_select() {
+        let result = parse("GRANT SELECT ON users TO guest");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Read);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "guest");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_insert() {
+        let result = parse("GRANT INSERT ON users TO writer");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Write);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "writer");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_update() {
+        let result = parse("GRANT UPDATE ON users TO updater");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Write);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "updater");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_delete() {
+        let result = parse("GRANT DELETE ON users TO deleter");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Write);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "deleter");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_lowercase() {
+        let result = parse("grant read on users to alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Read);
+                assert_eq!(g.table, "users");
+                assert_eq!(g.to_user, "alice");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_mixed_case() {
+        let result = parse("Grant Read On Users To Alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Grant(g) => {
+                assert_eq!(g.privilege, Privilege::Read);
+                assert_eq!(g.table, "Users");
+                assert_eq!(g.to_user, "Alice");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant_invalid_privilege() {
+        let result = parse("GRANT INVALID ON users TO alice");
+        assert!(result.is_err(), "Expected error for invalid privilege");
+    }
+
+    #[test]
+    fn test_parse_grant_missing_on() {
+        let result = parse("GRANT READ users TO alice");
+        assert!(result.is_err(), "Expected error for missing ON");
+    }
+
+    #[test]
+    fn test_parse_grant_missing_to() {
+        let result = parse("GRANT READ ON users alice");
+        assert!(result.is_err(), "Expected error for missing TO");
+    }
+
+    #[test]
+    fn test_parse_revoke_read() {
+        let result = parse("REVOKE READ ON users FROM alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Read);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "alice");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_write() {
+        let result = parse("REVOKE WRITE ON orders FROM bob");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Write);
+                assert_eq!(r.table, "orders");
+                assert_eq!(r.from_user, "bob");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_all() {
+        let result = parse("REVOKE ALL ON products FROM admin");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::All);
+                assert_eq!(r.table, "products");
+                assert_eq!(r.from_user, "admin");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_select() {
+        let result = parse("REVOKE SELECT ON users FROM guest");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Read);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "guest");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_insert() {
+        let result = parse("REVOKE INSERT ON users FROM writer");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Write);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "writer");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_update() {
+        let result = parse("REVOKE UPDATE ON users FROM updater");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Write);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "updater");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_delete() {
+        let result = parse("REVOKE DELETE ON users FROM deleter");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Write);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "deleter");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_lowercase() {
+        let result = parse("revoke read on users from alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Read);
+                assert_eq!(r.table, "users");
+                assert_eq!(r.from_user, "alice");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_mixed_case() {
+        let result = parse("Revoke Read On Users From Alice");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Revoke(r) => {
+                assert_eq!(r.privilege, Privilege::Read);
+                assert_eq!(r.table, "Users");
+                assert_eq!(r.from_user, "Alice");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke_invalid_privilege() {
+        let result = parse("REVOKE INVALID ON users FROM alice");
+        assert!(result.is_err(), "Expected error for invalid privilege");
+    }
+
+    #[test]
+    fn test_parse_revoke_missing_on() {
+        let result = parse("REVOKE READ users FROM alice");
+        assert!(result.is_err(), "Expected error for missing ON");
+    }
+
+    #[test]
+    fn test_parse_revoke_missing_from() {
+        let result = parse("REVOKE READ ON users alice");
+        assert!(result.is_err(), "Expected error for missing FROM");
+    }
+
+    #[test]
+    fn test_privilege_enum() {
+        assert_eq!(format!("{:?}", Privilege::Read), "Read");
+        assert_eq!(format!("{:?}", Privilege::Write), "Write");
+        assert_eq!(format!("{:?}", Privilege::All), "All");
+    }
+
+    #[test]
+    fn test_grant_statement_clone() {
+        let grant = GrantStatement {
+            privilege: Privilege::Read,
+            table: "users".to_string(),
+            to_user: "alice".to_string(),
+        };
+        let cloned = grant.clone();
+        assert_eq!(grant.privilege, cloned.privilege);
+        assert_eq!(grant.table, cloned.table);
+        assert_eq!(grant.to_user, cloned.to_user);
+    }
+
+    #[test]
+    fn test_revoke_statement_clone() {
+        let revoke = RevokeStatement {
+            privilege: Privilege::Write,
+            table: "orders".to_string(),
+            from_user: "bob".to_string(),
+        };
+        let cloned = revoke.clone();
+        assert_eq!(revoke.privilege, cloned.privilege);
+        assert_eq!(revoke.table, cloned.table);
+        assert_eq!(revoke.from_user, cloned.from_user);
+    }
+
+    #[test]
+    fn test_grant_statement_debug() {
+        let grant = GrantStatement {
+            privilege: Privilege::Read,
+            table: "users".to_string(),
+            to_user: "alice".to_string(),
+        };
+        let debug = format!("{:?}", grant);
+        assert!(debug.contains("GrantStatement"));
+        assert!(debug.contains("Read"));
+        assert!(debug.contains("users"));
+        assert!(debug.contains("alice"));
+    }
+
+    #[test]
+    fn test_revoke_statement_debug() {
+        let revoke = RevokeStatement {
+            privilege: Privilege::Write,
+            table: "orders".to_string(),
+            from_user: "bob".to_string(),
+        };
+        let debug = format!("{:?}", revoke);
+        assert!(debug.contains("RevokeStatement"));
+        assert!(debug.contains("Write"));
+        assert!(debug.contains("orders"));
+        assert!(debug.contains("bob"));
+    }
+
+    #[test]
+    fn test_multiple_grant_statements() {
+        let grants = vec![
+            "GRANT READ ON users TO alice",
+            "GRANT WRITE ON orders TO bob",
+            "GRANT ALL ON admin TO root",
+        ];
+        for sql in grants {
+            let result = parse(sql);
+            assert!(result.is_ok(), "Failed to parse: {}", sql);
+        }
+    }
+
+    #[test]
+    fn test_multiple_revoke_statements() {
+        let revokes = vec![
+            "REVOKE READ ON users FROM alice",
+            "REVOKE WRITE ON orders FROM bob",
+            "REVOKE ALL ON admin FROM root",
+        ];
+        for sql in revokes {
+            let result = parse(sql);
+            assert!(result.is_ok(), "Failed to parse: {}", sql);
+        }
+    }
 }
