@@ -629,4 +629,28 @@ mod tests {
         assert!(!is_leap_year(2019));
         assert!(!is_leap_year(2100));
     }
+
+    #[test]
+    fn test_value_type_name_new() {
+        assert_eq!(Value::Null.type_name(), "NULL");
+        assert_eq!(Value::Boolean(true).type_name(), "BOOLEAN");
+        assert_eq!(Value::Integer(1).type_name(), "INTEGER");
+        assert_eq!(Value::Float(1.0).type_name(), "FLOAT");
+        assert_eq!(Value::Text("test".to_string()).type_name(), "TEXT");
+        assert_eq!(Value::Blob(vec![1, 2]).type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_to_index_key_new() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+        assert!(Value::Text("hello".to_string()).to_index_key().is_some());
+        assert_eq!(Value::Float(1.5).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_sql_string_new() {
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Integer(42).to_sql_string(), "42");
+    }
 }
