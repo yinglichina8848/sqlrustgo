@@ -10,6 +10,7 @@ pub mod query_cache;
 pub mod query_cache_config;
 pub mod query_cache_metrics;
 pub mod session_config;
+pub mod sql_log;
 pub mod sql_normalizer;
 pub mod test_framework;
 pub mod vectorization;
@@ -28,6 +29,7 @@ pub use pipeline_trace::{OperatorTrace, QueryTrace, TraceCollector, GLOBAL_TRACE
 pub use query_cache::{QueryCache, QueryCacheStats};
 pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use query_cache_metrics::QueryCacheMetrics;
+pub use sql_log::{global_execution_log, ExecutionLog, LogLevel, SqlLogEntry};
 pub use sql_normalizer::SqlNormalizer;
 pub use vectorization::{
     AggFunction, AggregateResult, BatchIterator, ColumnArray, DataChunk, RecordBatch, Vector,
