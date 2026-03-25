@@ -1174,6 +1174,22 @@ impl StorageEngine for FileStorage {
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
         self.range_index(table, column, start, end)
     }
+
+    fn create_view(&mut self, _info: crate::engine::ViewInfo) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn get_view(&self, _name: &str) -> Option<crate::engine::ViewInfo> {
+        None
+    }
+
+    fn list_views(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn has_view(&self, _name: &str) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

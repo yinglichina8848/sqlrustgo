@@ -4,7 +4,7 @@
 //! that can be used for testing executor operations without
 //! requiring a real database connection.
 
-use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo, ViewInfo};
 use sqlrustgo_types::{SqlResult, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -191,6 +191,22 @@ impl StorageEngine for MockStorage {
 
     fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
         Vec::new()
+    }
+
+    fn create_view(&mut self, _info: ViewInfo) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn get_view(&self, _name: &str) -> Option<ViewInfo> {
+        None
+    }
+
+    fn list_views(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn has_view(&self, _name: &str) -> bool {
+        false
     }
 }
 

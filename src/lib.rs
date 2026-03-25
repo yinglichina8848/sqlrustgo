@@ -9,14 +9,14 @@ pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{parse, Expression, Lexer, SetOperation, Statement, Token};
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
-    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
+    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
 use std::sync::{Arc, RwLock};
 
 pub struct ExecutionEngine {
-    storage: Arc<RwLock<dyn StorageEngine>>,
+    pub storage: Arc<RwLock<dyn StorageEngine>>,
 }
 
 impl ExecutionEngine {
@@ -71,6 +71,20 @@ impl ExecutionEngine {
                 };
 
                 storage.create_table(&table_info)?;
+                Ok(ExecutorResult::new(vec![], 0))
+            }
+            Statement::CreateView(create) => {
+                let mut storage = self.storage.write().unwrap();
+                let view_info = sqlrustgo_storage::ViewInfo {
+                    name: create.name.clone(),
+                    query: create.query.clone(),
+                    schema: sqlrustgo_storage::TableInfo {
+                        name: create.name.clone(),
+                        columns: vec![],
+                    },
+                    records: vec![],
+                };
+                storage.create_view(view_info)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::Select(select) => {
