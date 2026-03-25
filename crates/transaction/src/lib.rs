@@ -1,9 +1,11 @@
 // SQLRustGo transaction module
 
+pub mod deadlock;
 pub mod lock;
 pub mod manager;
 pub mod mvcc;
 
+pub use deadlock::DeadlockDetector;
 pub use lock::{LockError, LockGrantMode, LockInfo, LockManager, LockMode, LockRequest};
 pub use manager::{
     IsolationLevel, TransactionCommand, TransactionContext, TransactionError, TransactionManager,
