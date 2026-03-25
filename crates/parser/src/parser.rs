@@ -173,6 +173,7 @@ pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub values: Vec<Vec<Expression>>, // Multiple rows
+    pub on_duplicate: Option<Vec<(String, Expression)>>, // ON DUPLICATE KEY UPDATE
 }
 
 /// UPDATE statement
@@ -564,6 +565,7 @@ impl Parser {
                 table,
                 columns,
                 values,
+                on_duplicate: None,
             }));
         } else if matches!(self.current(), Some(Token::LParen)) {
             // INSERT INTO table (col1, col2) VALUES ...
@@ -663,10 +665,44 @@ impl Parser {
             return Err("Expected at least one row of values".to_string());
         }
 
+        // Check for ON DUPLICATE KEY UPDATE
+        let mut on_duplicate = None;
+        if let Some(Token::On) = self.current() {
+            self.next();
+            if let Some(Token::Duplicate) = self.current() {
+                self.next();
+                if let Some(Token::Key) = self.current() {
+                    self.next();
+                    if let Some(Token::Update) = self.current() {
+                        self.next();
+                        // Parse update clauses: col1=val1, col2=val2, ...
+                        let mut updates = Vec::new();
+                        loop {
+                            match self.current() {
+                                Some(Token::Identifier(col)) => {
+                                    let col_name = col.clone();
+                                    self.next();
+                                    self.expect(Token::Equal)?;
+                                    let expr = self.parse_expression()?;
+                                    updates.push((col_name, expr));
+                                }
+                                Some(Token::Comma) => {
+                                    self.next();
+                                }
+                                _ => break,
+                            }
+                        }
+                        on_duplicate = Some(updates);
+                    }
+                }
+            }
+        }
+
         Ok(Statement::Insert(InsertStatement {
             table,
             columns,
             values,
+            on_duplicate,
         }))
     }
 
