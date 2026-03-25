@@ -1,6 +1,29 @@
 // Executor Tests - Volcano Model
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_types::Value;
+use std::sync::{Arc, RwLock};
+
+#[test]
+fn test_batch_insert() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+
+    let result = engine
+        .execute(
+            parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')").unwrap(),
+        )
+        .unwrap();
+
+    assert_eq!(result.affected_rows, 3);
+
+    let result = engine
+        .execute(parse("SELECT * FROM users").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 3);
+}
 
 #[test]
 fn test_executor_result_new() {
