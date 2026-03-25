@@ -16,9 +16,9 @@ pub mod planner;
 pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, AnyAllSubqueryExec, ExistsExec, FilterExec, HashJoinExec, IndexScanExec,
-    InSubqueryExec, LimitExec, OperatorMetrics, PhysicalPlan, ProjectionExec, ScalarSubqueryExec,
-    SeqScanExec, SetOperationExec, SortMergeJoinExec,
+    AggregateExec, AnyAllSubqueryExec, ExistsExec, FilterExec, HashJoinExec, InSubqueryExec,
+    IndexScanExec, LimitExec, PhysicalPlan, ProjectionExec, ScalarSubqueryExec, SeqScanExec,
+    SetOperationExec, SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
@@ -332,7 +332,9 @@ impl fmt::Display for Expr {
             Expr::ScalarSubquery(_) => write!(f, "(SELECT ...)"),
             Expr::InSubquery { expr, .. } => write!(f, "{} IN (SELECT ...)", expr),
             Expr::Exists(_) => write!(f, "EXISTS (SELECT ...)"),
-            Expr::AnyAll { expr, op, any_all, .. } => {
+            Expr::AnyAll {
+                expr, op, any_all, ..
+            } => {
                 let any_all_str = match any_all {
                     SubqueryType::Any => "ANY",
                     SubqueryType::All => "ALL",

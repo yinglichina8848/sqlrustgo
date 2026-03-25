@@ -8,6 +8,7 @@ pub struct QueryCacheConfig {
     pub max_memory_bytes: usize,
     pub ttl_seconds: u64,
     pub enabled: bool,
+    pub benchmark_mode: bool,
 }
 
 impl Default for QueryCacheConfig {
@@ -17,6 +18,7 @@ impl Default for QueryCacheConfig {
             max_memory_bytes: 100 * 1024 * 1024, // 100MB
             ttl_seconds: 30,
             enabled: true,
+            benchmark_mode: false,
         }
     }
 }
