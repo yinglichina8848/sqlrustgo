@@ -225,3 +225,7 @@ path = "tests/stress/stress_test.rs"
 [[test]]
 name = "concurrency_stress_test"
 path = "tests/stress/concurrency_stress_test.rs"
+
+[[test]]
+name = "production_scenario_test"
+path = "tests/stress/production_scenario_test.rs"
