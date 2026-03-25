@@ -623,4 +623,141 @@ mod tests {
         let result = BackupExporter::sql_value(&Value::Blob(blob));
         assert!(result.starts_with("X'"));
     }
+
+    #[test]
+    fn test_parse_csv_value_integer() {
+        let val = DataRestorer::restore_from_backup(
+            &mut MemoryStorage::new(),
+            std::path::Path::new(""),
+            BackupFormat::Csv,
+        );
+        assert!(val.is_err());
+    }
+
+    #[test]
+    fn test_backup_format_invalid() {
+        assert_eq!(BackupFormat::from_str("invalid"), None);
+        assert_eq!(BackupFormat::from_str(""), None);
+    }
+
+    #[test]
+    fn test_restore_sql() {
+        let mut storage = MemoryStorage::new();
+        let sql = "INSERT INTO users (id, name) VALUES (1, 'Alice');";
+        let path = temp_dir().join("test_restore.sql");
+        std::fs::write(&path, sql).unwrap();
+
+        let _result = DataRestorer::restore_from_backup(&mut storage, &path, BackupFormat::Sql);
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_restore_json_invalid() {
+        let mut storage = MemoryStorage::new();
+        let json = "{invalid json}";
+        let path = temp_dir().join("test_invalid.json");
+        std::fs::write(&path, json).unwrap();
+
+        let result = DataRestorer::restore_from_backup(&mut storage, &path, BackupFormat::Json);
+        assert!(result.is_err());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_export_with_empty_table() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "empty".to_string(),
+            columns: vec![crate::ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+
+        let path = temp_dir().join("test_empty.csv");
+        let count =
+            BackupExporter::export_table(&storage, "empty", &path, BackupFormat::Csv).unwrap();
+        assert_eq!(count, 0);
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_export_csv_with_quotes() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "test".to_string(),
+            columns: vec![crate::ColumnDefinition {
+                name: "data".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: false,
+                is_unique: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("test", vec![vec![Value::Text("hello,world".to_string())]])
+            .unwrap();
+
+        let path = temp_dir().join("test_quotes.csv");
+        let count =
+            BackupExporter::export_table(&storage, "test", &path, BackupFormat::Csv).unwrap();
+        assert_eq!(count, 1);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("\"hello,world\""));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_export_sql_with_text_escaping() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "test".to_string(),
+            columns: vec![crate::ColumnDefinition {
+                name: "text".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: false,
+                is_unique: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("test", vec![vec![Value::Text("It's a test".to_string())]])
+            .unwrap();
+
+        let path = temp_dir().join("test_escape.sql");
+        let count =
+            BackupExporter::export_table(&storage, "test", &path, BackupFormat::Sql).unwrap();
+        assert_eq!(count, 1);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("It''s a test"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_json_value_integer() {
+        use crate::backup::DataRestorer;
+        let json_str = r#"{"id": 123}"#;
+        let json: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        let val = DataRestorer::json_to_value(&json["id"]);
+        assert_eq!(val, Value::Integer(123));
+    }
+
+    #[test]
+    fn test_json_value_string() {
+        use crate::backup::DataRestorer;
+        let json_str = r#"{"name": "test"}"#;
+        let json: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        let val = DataRestorer::json_to_value(&json["name"]);
+        assert_eq!(val, Value::Text("test".to_string()));
+    }
 }

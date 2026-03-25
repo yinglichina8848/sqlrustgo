@@ -749,3 +749,150 @@ fn test_table_info_serialize() {
     let json = serde_json::to_string(&info).unwrap();
     assert!(json.contains("users"));
 }
+
+#[test]
+fn test_view_info_new() {
+    let view = ViewInfo {
+        name: "user_view".to_string(),
+        query: "SELECT * FROM users".to_string(),
+        schema: TableInfo {
+            name: "user_view".to_string(),
+            columns: vec![],
+        },
+        records: vec![],
+    };
+    assert_eq!(view.name, "user_view");
+}
+
+#[test]
+fn test_memory_storage_views() {
+    let mut storage = MemoryStorage::new();
+    let view = ViewInfo {
+        name: "user_view".to_string(),
+        query: "SELECT * FROM users".to_string(),
+        schema: TableInfo {
+            name: "user_view".to_string(),
+            columns: vec![],
+        },
+        records: vec![],
+    };
+    storage.create_view(view).unwrap();
+    assert!(storage.has_view("user_view"));
+    assert_eq!(storage.list_views(), vec!["user_view"]);
+}
+
+#[test]
+fn test_memory_storage_get_view() {
+    let mut storage = MemoryStorage::new();
+    let view = ViewInfo {
+        name: "v1".to_string(),
+        query: "SELECT 1".to_string(),
+        schema: TableInfo {
+            name: "v1".to_string(),
+            columns: vec![],
+        },
+        records: vec![],
+    };
+    storage.create_view(view).unwrap();
+    let retrieved = storage.get_view("v1");
+    assert!(retrieved.is_some());
+    assert_eq!(retrieved.unwrap().query, "SELECT 1");
+}
+
+#[test]
+fn test_memory_storage_insert_empty() {
+    let mut storage = MemoryStorage::new();
+    let result = storage.insert("users", vec![]);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_memory_storage_insert_with_info() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+    let rows = storage.scan("users").unwrap();
+    assert_eq!(rows.len(), 1);
+}
+
+#[test]
+fn test_memory_storage_duplicate_key() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: true,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    storage
+        .insert("users", vec![vec![Value::Integer(1)]])
+        .unwrap();
+    let result = storage.insert("users", vec![vec![Value::Integer(1)]]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_memory_storage_get_table_info() {
+    let mut storage = MemoryStorage::new();
+    let info = TableInfo {
+        name: "users".to_string(),
+        columns: vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: false,
+        }],
+    };
+    storage.create_table(&info).unwrap();
+    let retrieved = storage.get_table_info("users").unwrap();
+    assert_eq!(retrieved.name, "users");
+    assert_eq!(retrieved.columns.len(), 1);
+}
+
+#[test]
+fn test_memory_storage_get_table_info_not_found() {
+    let storage = MemoryStorage::new();
+    let result = storage.get_table_info("nonexistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_memory_storage_default() {
+    let storage = MemoryStorage::default();
+    assert!(storage.tables.is_empty());
+}
+
+#[test]
+fn test_memory_storage_with_callback() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let called = AtomicBool::new(false);
+    let storage = MemoryStorage::with_callback(Box::new(move |_t| {
+        called.store(true, Ordering::SeqCst);
+    }));
+    assert!(storage.write_callback.is_some());
+}
+
+#[test]
+fn test_memory_storage_on_write_complete() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let count = AtomicUsize::new(0);
+    let storage = MemoryStorage::with_callback(Box::new(move |_t| {
+        count.fetch_add(1, Ordering::SeqCst);
+    }));
+    assert!(storage.write_callback.is_some());
+}
