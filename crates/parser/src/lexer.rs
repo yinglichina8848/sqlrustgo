@@ -50,38 +50,14 @@ impl<'a> Lexer<'a> {
         ch
     }
 
-    /// Skip whitespace and comments
+    /// Skip whitespace characters
     fn skip_whitespace(&mut self) {
         while !self.is_eof() {
             let ch = self.peek_char();
-
-            // Skip whitespace
-            if ch.is_whitespace() {
-                self.position += 1;
-                continue;
+            if !ch.is_whitespace() {
+                break;
             }
-
-            // Skip single-line comments: --
-            if ch == '-' && self.input[self.position..].starts_with("--") {
-                while !self.is_eof() && self.peek_char() != '\n' {
-                    self.position += 1;
-                }
-                continue;
-            }
-
-            // Skip block comments: /* ... */
-            if ch == '/' && self.input[self.position..].starts_with("/*") {
-                self.position += 2; // skip /*
-                while !self.is_eof() && !self.input[self.position..].starts_with("*/") {
-                    self.position += 1;
-                }
-                if !self.is_eof() {
-                    self.position += 2; // skip */
-                }
-                continue;
-            }
-
-            break;
+            self.position += 1;
         }
     }
 
@@ -234,9 +210,6 @@ impl<'a> Lexer<'a> {
             _ if ch.is_alphabetic() || ch == '_' => {
                 let ident = self.read_identifier();
                 match ident.to_uppercase().as_str() {
-                    "ADD" => Token::Add,
-                    "MODIFY" => Token::Modify,
-                    "COLUMN" => Token::Column,
                     "SELECT" => Token::Select,
                     "FROM" => Token::From,
                     "WHERE" => Token::Where,
@@ -250,7 +223,6 @@ impl<'a> Lexer<'a> {
                     "TABLE" => Token::Table,
                     "DROP" => Token::Drop,
                     "ALTER" => Token::Alter,
-                    "UNIQUE" => Token::Unique,
                     "INDEX" => Token::Index,
                     "ON" => Token::On,
                     "PRIMARY" => Token::Primary,
@@ -261,57 +233,14 @@ impl<'a> Lexer<'a> {
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
                     "ANALYZE" => Token::Analyze,
-                    "EXPLAIN" => Token::Explain,
-                    "UNION" => Token::Union,
-                    "INTERSECT" => Token::Intersect,
-                    "EXCEPT" => Token::Except,
-                    "TRIGGER" => Token::Trigger,
-                    "BEFORE" => Token::Before,
-                    "AFTER" => Token::After,
-                    "FOR" => Token::For,
-                    "EACH" => Token::Each,
-                    "ROW" => Token::Row,
-                    "NEW" => Token::New,
-                    "OLD" => Token::Old,
-                    "REFERENCING" => Token::Referencing,
-                    "PROCEDURE" => Token::Procedure,
-                    "CALL" => Token::Call,
-                    "RETURN" => Token::Return,
-                    "IF" => Token::If,
-                    "THEN" => Token::Then,
-                    "ELSE" => Token::Else,
-                    "ELSIF" => Token::Elsif,
-                    "END IF" => Token::EndIf,
-                    "WHILE" => Token::While,
-                    "LOOP" => Token::Loop,
-                    "END LOOP" => Token::EndLoop,
-                    "LEAVE" => Token::Leave,
-                    "ITERATE" => Token::Iterate,
-                    "SIGNAL" => Token::Signal,
-                    "VIEW" => Token::View,
-                    "AS" => Token::As,
-                    "ALL" => Token::All,
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
                     "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
-                    "DECIMAL" | "NUMERIC" => Token::Decimal,
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
-                    "JSON" => Token::Json,
                     "NULL" => Token::Null,
                     "DATE" => Token::Date,
                     "TIMESTAMP" => Token::Timestamp,
-                    "LENGTH" => Token::Length,
-                    "UPPER" => Token::Upper,
-                    "LOWER" => Token::Lower,
-                    "SUBSTR" => Token::Substr,
-                    "SUBSTRING" => Token::Substring,
-                    "TRIM" => Token::Trim,
-                    "NOW" => Token::Now,
-                    "CURDATE" => Token::Curdate,
-                    "CURTIME" => Token::Curtime,
-                    "DATE_ADD" => Token::DateAdd,
-                    "DATE_FORMAT" => Token::DateFormat,
                     "COUNT" => Token::Count,
                     "SUM" => Token::Sum,
                     "AVG" => Token::Avg,
