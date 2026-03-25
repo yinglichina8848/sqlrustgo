@@ -380,11 +380,26 @@ impl ExecutionEngine {
                 let columns: Vec<sqlrustgo_storage::ColumnDefinition> = create
                     .columns
                     .iter()
-                    .map(|col| sqlrustgo_storage::ColumnDefinition {
-                        name: col.name.clone(),
-                        data_type: col.data_type.clone(),
-                        nullable: col.nullable,
-                        is_unique: false,
+                    .map(|col| {
+                        let references = col.references.as_ref().map(|fk| {
+                            sqlrustgo_storage::ForeignKeyConstraint {
+                                referenced_table: fk.table.clone(),
+                                referenced_column: fk.column.clone(),
+                                on_delete: fk.on_delete.as_ref().map(|_| {
+                                    sqlrustgo_storage::ForeignKeyAction::Cascade
+                                }),
+                                on_update: fk.on_update.as_ref().map(|_| {
+                                    sqlrustgo_storage::ForeignKeyAction::Cascade
+                                }),
+                            }
+                        });
+                        sqlrustgo_storage::ColumnDefinition {
+                            name: col.name.clone(),
+                            data_type: col.data_type.clone(),
+                            nullable: col.nullable,
+                            is_unique: false,
+                            references,
+                        }
                     })
                     .collect();
 
