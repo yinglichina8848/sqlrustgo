@@ -338,4 +338,36 @@ mod tests {
         assert_eq!(SqlState::Success.code(), "00000");
         assert_eq!(SqlState::Unknown.code(), "HY000");
     }
+
+    #[test]
+    fn test_error_number() {
+        let err = SqlError::ParseError("test".to_string());
+        assert_eq!(err.error_number(), 1064);
+
+        let err = SqlError::TableNotFound {
+            table: "users".to_string(),
+        };
+        assert_eq!(err.error_number(), 1146);
+
+        let err = SqlError::ColumnNotFound {
+            column: "id".to_string(),
+            location: "where".to_string(),
+        };
+        assert_eq!(err.error_number(), 1054);
+    }
+
+    #[test]
+    fn test_all_error_sqlstate() {
+        assert_eq!(
+            SqlError::ParseError("x".to_string()).sqlstate(),
+            SqlState::SyntaxError
+        );
+        assert_eq!(
+            SqlError::TableNotFound {
+                table: "t".to_string()
+            }
+            .sqlstate(),
+            SqlState::NoSuchTable
+        );
+    }
 }
