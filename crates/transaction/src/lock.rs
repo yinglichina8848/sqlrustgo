@@ -3,6 +3,7 @@
 //! This module provides row-level locking for concurrent transaction control,
 //! including shared locks (read) and exclusive locks (write).
 
+use crate::deadlock::DeadlockDetector;
 use crate::mvcc::TxId;
 use std::collections::{HashMap, HashSet};
 
@@ -84,10 +85,12 @@ impl LockInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct LockManager {
     locks: HashMap<Vec<u8>, LockInfo>,
     tx_locks: HashMap<TxId, HashSet<Vec<u8>>>,
+    deadlock_detector: DeadlockDetector,
 }
 
 impl LockManager {
@@ -95,7 +98,16 @@ impl LockManager {
         Self {
             locks: HashMap::new(),
             tx_locks: HashMap::new(),
+            deadlock_detector: DeadlockDetector::new(),
         }
+    }
+
+    pub fn detect_deadlock(&mut self, tx_id: TxId) -> Option<Vec<TxId>> {
+        self.deadlock_detector.detect_cycle(tx_id)
+    }
+
+    pub fn clear_deadlock_edges(&mut self, tx_id: TxId) {
+        self.deadlock_detector.remove_edges_for(tx_id);
     }
 
     pub fn acquire_lock(
@@ -118,6 +130,17 @@ impl LockManager {
             Ok(LockGrantMode::Granted)
         } else {
             lock.add_waiter(tx_id, mode);
+
+            if let Some(holders) = self.locks.get(&key).map(|l| &l.holders) {
+                for holder in holders {
+                    self.deadlock_detector.add_edge(tx_id, *holder);
+                }
+            }
+
+            if let Some(cycle) = self.deadlock_detector.detect_cycle(tx_id) {
+                return Err(LockError::Deadlock);
+            }
+
             Ok(LockGrantMode::Waiting)
         }
     }

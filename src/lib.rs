@@ -32,7 +32,10 @@ fn evaluate_where_clause(
         }
         sqlrustgo_parser::Expression::Identifier(name) => {
             // Single identifier in WHERE - treat as boolean (for EXISTS subqueries, etc)
-            if let Some(idx) = columns.iter().position(|c| c.name.eq_ignore_ascii_case(name)) {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(name))
+            {
                 if let Some(val) = row.get(idx) {
                     return val.to_bool();
                 }
@@ -70,7 +73,10 @@ fn evaluate_expr(
         }
         sqlrustgo_parser::Expression::Identifier(name) => {
             // Look up column by name (case-insensitive)
-            if let Some(idx) = columns.iter().position(|c| c.name.eq_ignore_ascii_case(name)) {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(name))
+            {
                 row.get(idx).cloned().unwrap_or(Value::Null)
             } else {
                 Value::Null
@@ -90,46 +96,38 @@ fn compare_values(left: &Value, op: &str, right: &Value) -> bool {
     match op {
         "=" | "==" | "EQ" => left == right,
         "!=" | "<>" | "NE" => left != right,
-        ">" | "GT" => {
-            match (left, right) {
-                (Value::Integer(l), Value::Integer(r)) => l > r,
-                (Value::Float(l), Value::Float(r)) => l > r,
-                (Value::Integer(l), Value::Float(r)) => (*l as f64) > *r,
-                (Value::Float(l), Value::Integer(r)) => *l > (*r as f64),
-                (Value::Text(l), Value::Text(r)) => l > r,
-                _ => false,
-            }
-        }
-        "<" | "LT" => {
-            match (left, right) {
-                (Value::Integer(l), Value::Integer(r)) => l < r,
-                (Value::Float(l), Value::Float(r)) => l < r,
-                (Value::Integer(l), Value::Float(r)) => (*l as f64) < *r,
-                (Value::Float(l), Value::Integer(r)) => *l < (*r as f64),
-                (Value::Text(l), Value::Text(r)) => l < r,
-                _ => false,
-            }
-        }
-        ">=" | "GE" => {
-            match (left, right) {
-                (Value::Integer(l), Value::Integer(r)) => l >= r,
-                (Value::Float(l), Value::Float(r)) => l >= r,
-                (Value::Integer(l), Value::Float(r)) => (*l as f64) >= *r,
-                (Value::Float(l), Value::Integer(r)) => *l >= (*r as f64),
-                (Value::Text(l), Value::Text(r)) => l >= r,
-                _ => false,
-            }
-        }
-        "<=" | "LE" => {
-            match (left, right) {
-                (Value::Integer(l), Value::Integer(r)) => l <= r,
-                (Value::Float(l), Value::Float(r)) => l <= r,
-                (Value::Integer(l), Value::Float(r)) => (*l as f64) <= *r,
-                (Value::Float(l), Value::Integer(r)) => *l <= (*r as f64),
-                (Value::Text(l), Value::Text(r)) => l <= r,
-                _ => false,
-            }
-        }
+        ">" | "GT" => match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l > r,
+            (Value::Float(l), Value::Float(r)) => l > r,
+            (Value::Integer(l), Value::Float(r)) => (*l as f64) > *r,
+            (Value::Float(l), Value::Integer(r)) => *l > (*r as f64),
+            (Value::Text(l), Value::Text(r)) => l > r,
+            _ => false,
+        },
+        "<" | "LT" => match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l < r,
+            (Value::Float(l), Value::Float(r)) => l < r,
+            (Value::Integer(l), Value::Float(r)) => (*l as f64) < *r,
+            (Value::Float(l), Value::Integer(r)) => *l < (*r as f64),
+            (Value::Text(l), Value::Text(r)) => l < r,
+            _ => false,
+        },
+        ">=" | "GE" => match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l >= r,
+            (Value::Float(l), Value::Float(r)) => l >= r,
+            (Value::Integer(l), Value::Float(r)) => (*l as f64) >= *r,
+            (Value::Float(l), Value::Integer(r)) => *l >= (*r as f64),
+            (Value::Text(l), Value::Text(r)) => l >= r,
+            _ => false,
+        },
+        "<=" | "LE" => match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l <= r,
+            (Value::Float(l), Value::Float(r)) => l <= r,
+            (Value::Integer(l), Value::Float(r)) => (*l as f64) <= *r,
+            (Value::Float(l), Value::Integer(r)) => *l <= (*r as f64),
+            (Value::Text(l), Value::Text(r)) => l <= r,
+            _ => false,
+        },
         "LIKE" | "like" => {
             if let (Value::Text(pattern), Value::Text(text)) = (right, left) {
                 like_match(text, pattern)
@@ -155,7 +153,8 @@ fn like_match(text: &str, pattern: &str) -> bool {
         } else if pc[pi] == '%' {
             // % matches any sequence - try matching remaining pattern at each position
             // or skip the % and continue
-            (ti < tc.len() && do_match(pi + 1, ti, pc, tc)) || (ti < tc.len() && do_match(pi, ti + 1, pc, tc))
+            (ti < tc.len() && do_match(pi + 1, ti, pc, tc))
+                || (ti < tc.len() && do_match(pi, ti + 1, pc, tc))
         } else if pc[pi] == '_' {
             ti < tc.len() && do_match(pi + 1, ti + 1, pc, tc)
         } else if ti < tc.len() && pc[pi] == tc[ti] {
@@ -182,9 +181,9 @@ fn compute_aggregate(
         None
     } else {
         match &agg.args[0] {
-            sqlrustgo_parser::Expression::Identifier(name) => {
-                columns.iter().position(|c| c.name.eq_ignore_ascii_case(name))
-            }
+            sqlrustgo_parser::Expression::Identifier(name) => columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(name)),
             sqlrustgo_parser::Expression::Wildcard => Some(0), // Will be ignored for COUNT
             _ => None,
         }
@@ -192,7 +191,12 @@ fn compute_aggregate(
 
     match agg.func {
         AggregateFunction::Count => {
-            if agg.args.is_empty() || matches!(agg.args.get(0), Some(sqlrustgo_parser::Expression::Wildcard)) {
+            if agg.args.is_empty()
+                || matches!(
+                    agg.args.get(0),
+                    Some(sqlrustgo_parser::Expression::Wildcard)
+                )
+            {
                 // COUNT(*) - count all rows
                 Value::Integer(rows.len() as i64)
             } else {
@@ -329,11 +333,17 @@ impl ExecutionEngine {
                                                 let col_type = &info.columns[col_idx].data_type;
                                                 let upper = col_type.to_uppercase();
                                                 // Parse numeric values for appropriate types
-                                                if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" {
+                                                if upper.contains("INT")
+                                                    || upper == "BIGINT"
+                                                    || upper == "SMALLINT"
+                                                {
                                                     if let Ok(n) = value.parse::<i64>() {
                                                         return Value::Integer(n);
                                                     }
-                                                } else if upper == "FLOAT" || upper == "DOUBLE" || upper == "DECIMAL" {
+                                                } else if upper == "FLOAT"
+                                                    || upper == "DOUBLE"
+                                                    || upper == "DECIMAL"
+                                                {
                                                     if let Ok(n) = value.parse::<f64>() {
                                                         return Value::Float(n);
                                                     }
@@ -442,7 +452,9 @@ impl ExecutionEngine {
                 }
 
                 let table_info = storage.get_table_info(&delete.table).ok();
-                let columns = table_info.map(|info| info.columns.clone()).unwrap_or_default();
+                let columns = table_info
+                    .map(|info| info.columns.clone())
+                    .unwrap_or_default();
                 let mut rows = storage.scan(&delete.table).unwrap_or_default();
 
                 // Filter rows by WHERE clause - keep rows that DON'T match the WHERE clause
@@ -477,7 +489,9 @@ impl ExecutionEngine {
                 }
 
                 let table_info = storage.get_table_info(&update.table).ok();
-                let columns = table_info.map(|info| info.columns.clone()).unwrap_or_default();
+                let columns = table_info
+                    .map(|info| info.columns.clone())
+                    .unwrap_or_default();
                 let mut rows = storage.scan(&update.table).unwrap_or_default();
 
                 // Filter rows by WHERE clause and apply updates
@@ -496,7 +510,10 @@ impl ExecutionEngine {
 
                     // Apply SET clauses
                     for (col_name, expr) in &update.set_clauses {
-                        if let Some(col_idx) = columns.iter().position(|c| c.name.eq_ignore_ascii_case(col_name)) {
+                        if let Some(col_idx) = columns
+                            .iter()
+                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                        {
                             let new_value = evaluate_expr(expr, row, &columns);
                             if col_idx < row.len() {
                                 row[col_idx] = new_value;
@@ -525,25 +542,28 @@ impl ExecutionEngine {
                     )));
                 }
                 let table_info = storage.get_table_info(&select.table).ok();
-                let columns = table_info.map(|info| info.columns.clone()).unwrap_or_default();
+                let columns = table_info
+                    .map(|info| info.columns.clone())
+                    .unwrap_or_default();
                 let rows = storage.scan(&select.table).unwrap_or_default();
 
                 // Apply WHERE clause filter if present
-                let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_clause) = select.where_clause {
-                    rows.into_iter()
-                        .filter(|row| {
-                            evaluate_where_clause(where_clause, row, &columns)
-                        })
-                        .collect()
-                } else {
-                    rows
-                };
+                let filtered_rows: Vec<Vec<Value>> =
+                    if let Some(ref where_clause) = select.where_clause {
+                        rows.into_iter()
+                            .filter(|row| evaluate_where_clause(where_clause, row, &columns))
+                            .collect()
+                    } else {
+                        rows
+                    };
 
                 // Handle aggregates if present
                 if !select.aggregates.is_empty() {
-                    let result_row: Vec<Value> = select.aggregates.iter().map(|agg| {
-                        compute_aggregate(agg, &filtered_rows, &columns)
-                    }).collect();
+                    let result_row: Vec<Value> = select
+                        .aggregates
+                        .iter()
+                        .map(|agg| compute_aggregate(agg, &filtered_rows, &columns))
+                        .collect();
                     return Ok(ExecutorResult::new(vec![result_row], 0));
                 }
 
@@ -558,12 +578,21 @@ impl ExecutionEngine {
                     filtered_rows
                 } else {
                     // Project only the selected columns
-                    filtered_rows.into_iter().map(|row| {
-                        select.columns.iter().filter_map(|col| {
-                            columns.iter().position(|c| c.name.eq_ignore_ascii_case(&col.name))
-                                .and_then(|idx| row.get(idx).cloned())
-                        }).collect()
-                    }).collect()
+                    filtered_rows
+                        .into_iter()
+                        .map(|row| {
+                            select
+                                .columns
+                                .iter()
+                                .filter_map(|col| {
+                                    columns
+                                        .iter()
+                                        .position(|c| c.name.eq_ignore_ascii_case(&col.name))
+                                        .and_then(|idx| row.get(idx).cloned())
+                                })
+                                .collect()
+                        })
+                        .collect()
                 };
 
                 Ok(ExecutorResult::new(projected_rows, 0))
@@ -592,6 +621,31 @@ impl ExecutionEngine {
             "SeqScan" => {
                 let rows = storage.scan(plan.table_name())?;
                 Ok(ExecutorResult::new(rows, 0))
+            }
+            "IndexScan" => {
+                let index_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::IndexScanExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast IndexScanExec".to_string())
+                    })?;
+
+                let table = index_plan.table_name();
+                let index_name = index_plan.index_name();
+                let (range_min, range_max) = index_plan.key_range();
+
+                if let (Some(min), Some(max)) = (range_min, range_max) {
+                    let row_ids = storage.range_index(table, index_name, min, max);
+                    let all_rows = storage.scan(table)?;
+                    let indexed_rows: Vec<Vec<Value>> = row_ids
+                        .into_iter()
+                        .filter_map(|id| all_rows.get(id as usize).cloned())
+                        .collect();
+                    Ok(ExecutorResult::new(indexed_rows, 0))
+                } else {
+                    let rows = storage.scan(table)?;
+                    Ok(ExecutorResult::new(rows, 0))
+                }
             }
             "Filter" => {
                 let filter_plan = plan
@@ -639,6 +693,46 @@ impl ExecutionEngine {
                     .collect();
 
                 Ok(ExecutorResult::new(projected_rows, 0))
+            }
+            "HashJoin" => {
+                let join_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::HashJoinExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast HashJoinExec".to_string())
+                    })?;
+
+                let left = join_plan.left();
+                let right = join_plan.right();
+                let join_type = join_plan.join_type();
+
+                let left_result = self.execute_plan(left)?;
+                let right_result = self.execute_plan(right)?;
+
+                let left_rows = left_result.rows;
+                let right_rows = right_result.rows;
+
+                let mut result_rows = Vec::new();
+
+                for lrow in &left_rows {
+                    for rrow in &right_rows {
+                        match join_type {
+                            sqlrustgo_planner::JoinType::Inner => {
+                                let mut combined = lrow.clone();
+                                combined.extend(rrow.clone());
+                                result_rows.push(combined);
+                            }
+                            sqlrustgo_planner::JoinType::Left => {
+                                let mut combined = lrow.clone();
+                                combined.extend(rrow.clone());
+                                result_rows.push(combined);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                Ok(ExecutorResult::new(result_rows, 0))
             }
             _ => Ok(ExecutorResult::empty()),
         }
