@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-03-20T15:24:07.206090+00:00",
+  "version": "1.6.0",
+  "workload": "custom",
+  "config": {
+    "file": "benchmarks/sql/sample.sql",
+    "iterations": 3,
+    "parallel": 1,
+    "query_count": 1
+  },
+  "metrics": {
+    "total_time_ms": 0,
+    "iterations": 3,
+    "avg_latency_ms": 0.0,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "min_ms": 0.0,
+    "max_ms": 0.0,
+    "qps": null
+  },
+  "queries": []
+}

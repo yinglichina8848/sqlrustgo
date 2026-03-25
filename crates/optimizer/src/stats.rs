@@ -880,7 +880,7 @@ mod tests {
     impl StorageEngine for MockStorage {
         fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
             if let Some(err) = &self.scan_error {
-                return Err(SqlError::TableNotFound(err.clone()));
+                return Err(SqlError::TableNotFound { table: err.clone() });
             }
             Ok(self.tables.get(table).cloned().unwrap_or_default())
         }
@@ -914,7 +914,9 @@ mod tests {
             self.table_infos
                 .get(table)
                 .cloned()
-                .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+                .ok_or_else(|| SqlError::TableNotFound {
+                    table: table.to_string(),
+                })
         }
 
         fn has_table(&self, table: &str) -> bool {
@@ -959,11 +961,13 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                is_unique: true,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
+                is_unique: false,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
@@ -991,6 +995,7 @@ mod tests {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            is_unique: false,
         }];
         let storage = MockStorage::new().with_data("orders", records, columns);
 
@@ -1014,6 +1019,7 @@ mod tests {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            is_unique: false,
         }];
         let storage = MockStorage::new().with_data("users", records, columns);
 
@@ -1042,6 +1048,7 @@ mod tests {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            is_unique: false,
         }];
         let storage: Box<dyn StorageEngine> =
             Box::new(MockStorage::new().with_data("t", records, columns));

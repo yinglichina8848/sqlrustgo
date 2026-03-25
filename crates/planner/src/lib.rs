@@ -13,11 +13,11 @@ pub mod planner;
 // pub mod cost;
 // pub mod executor;
 
-pub use logical_plan::LogicalPlan;
+pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortMergeJoinExec,
+    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, OperatorMetrics,
+    PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec, SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
@@ -331,7 +331,9 @@ pub enum DataType {
     Boolean,
     Integer,
     Float,
+    Decimal,
     Text,
+    Json,
     Blob,
     Null,
 }
@@ -341,7 +343,9 @@ impl DataType {
         match type_name.to_uppercase().as_str() {
             "INTEGER" | "INT" => DataType::Integer,
             "FLOAT" | "DOUBLE" | "REAL" => DataType::Float,
+            "DECIMAL" | "NUMERIC" => DataType::Decimal,
             "TEXT" | "VARCHAR" | "CHAR" => DataType::Text,
+            "JSON" => DataType::Json,
             "BLOB" | "BINARY" => DataType::Blob,
             "BOOLEAN" | "BOOL" => DataType::Boolean,
             _ => DataType::Null,
@@ -355,7 +359,9 @@ impl fmt::Display for DataType {
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Integer => write!(f, "INTEGER"),
             DataType::Float => write!(f, "FLOAT"),
+            DataType::Decimal => write!(f, "DECIMAL"),
             DataType::Text => write!(f, "TEXT"),
+            DataType::Json => write!(f, "JSON"),
             DataType::Blob => write!(f, "BLOB"),
             DataType::Null => write!(f, "NULL"),
         }
@@ -901,5 +907,141 @@ mod tests {
         };
         let result = expr.matches(&row, &schema);
         assert!(!result);
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_integer_comparisons() {
+        use sqlrustgo_types::Value::*;
+
+        // Test integer comparisons
+        assert_eq!(
+            evaluate_binary_op(&Integer(1), &Operator::Lt, &Integer(2)),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(2), &Operator::Lt, &Integer(1)),
+            Some(Boolean(false))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(1), &Operator::LtEq, &Integer(1)),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(2), &Operator::Gt, &Integer(1)),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(1), &Operator::GtEq, &Integer(1)),
+            Some(Boolean(true))
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_text_comparisons() {
+        use sqlrustgo_types::Value::*;
+
+        // Test text comparisons
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("a".to_string()),
+                &Operator::Lt,
+                &Text("b".to_string())
+            ),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("b".to_string()),
+                &Operator::Gt,
+                &Text("a".to_string())
+            ),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("a".to_string()),
+                &Operator::Eq,
+                &Text("a".to_string())
+            ),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("a".to_string()),
+                &Operator::NotEq,
+                &Text("b".to_string())
+            ),
+            Some(Boolean(true))
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_text_lt_eq() {
+        use sqlrustgo_types::Value::*;
+
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("a".to_string()),
+                &Operator::LtEq,
+                &Text("a".to_string())
+            ),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("a".to_string()),
+                &Operator::LtEq,
+                &Text("b".to_string())
+            ),
+            Some(Boolean(true))
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_text_gt_eq() {
+        use sqlrustgo_types::Value::*;
+
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("b".to_string()),
+                &Operator::GtEq,
+                &Text("b".to_string())
+            ),
+            Some(Boolean(true))
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Text("b".to_string()),
+                &Operator::GtEq,
+                &Text("a".to_string())
+            ),
+            Some(Boolean(true))
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_arithmetic() {
+        use sqlrustgo_types::Value::*;
+
+        assert_eq!(
+            evaluate_binary_op(&Integer(5), &Operator::Plus, &Integer(3)),
+            Some(Integer(8))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(10), &Operator::Minus, &Integer(3)),
+            Some(Integer(7))
+        );
+        assert_eq!(
+            evaluate_binary_op(&Integer(4), &Operator::Multiply, &Integer(3)),
+            Some(Integer(12))
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_division_by_zero() {
+        use sqlrustgo_types::Value::*;
+
+        let result = evaluate_binary_op(&Integer(10), &Operator::Divide, &Integer(0));
+        assert!(result.is_none());
     }
 }
