@@ -538,4 +538,89 @@ mod tests {
         );
         assert_eq!(BackupExporter::sql_value(&Value::Null), "NULL");
     }
+
+    #[test]
+    fn test_backup_format_case_insensitive() {
+        assert_eq!(BackupFormat::from_str("CSV"), Some(BackupFormat::Csv));
+        assert_eq!(BackupFormat::from_str("JSON"), Some(BackupFormat::Json));
+        assert_eq!(BackupFormat::from_str("SQL"), Some(BackupFormat::Sql));
+    }
+
+    #[test]
+    fn test_data_restorer_restore_csv() {
+        let mut storage = MemoryStorage::new();
+        let csv_content = "id,name\n1,Alice\n2,Bob";
+
+        let path = temp_dir().join("test_restore.csv");
+        std::fs::write(&path, csv_content).unwrap();
+
+        let count =
+            DataRestorer::restore_from_backup(&mut storage, &path, BackupFormat::Csv).unwrap();
+        assert_eq!(count, 2);
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_parse_csv_value() {
+        let mut storage = MemoryStorage::new();
+        let path = temp_dir().join("nonexistent.csv");
+        let result = DataRestorer::restore_from_backup(&mut storage, &path, BackupFormat::Csv);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_export_json() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![crate::ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        let path = temp_dir().join("test_backup.json");
+        let count =
+            BackupExporter::export_table(&storage, "users", &path, BackupFormat::Json).unwrap();
+        assert_eq!(count, 1);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("users"));
+        assert!(content.contains("rows"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_csv_escape_boolean() {
+        assert_eq!(BackupExporter::csv_escape(&Value::Boolean(true)), "true");
+        assert_eq!(BackupExporter::csv_escape(&Value::Boolean(false)), "false");
+    }
+
+    #[test]
+    fn test_csv_escape_blob() {
+        let blob = vec![1u8, 2, 3];
+        let result = BackupExporter::csv_escape(&Value::Blob(blob));
+        assert!(result.contains("BLOB"));
+    }
+
+    #[test]
+    fn test_sql_value_boolean() {
+        assert_eq!(BackupExporter::sql_value(&Value::Boolean(true)), "1");
+        assert_eq!(BackupExporter::sql_value(&Value::Boolean(false)), "0");
+    }
+
+    #[test]
+    fn test_sql_value_blob() {
+        let blob = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let result = BackupExporter::sql_value(&Value::Blob(blob));
+        assert!(result.starts_with("X'"));
+    }
 }
