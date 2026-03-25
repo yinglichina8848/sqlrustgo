@@ -298,7 +298,6 @@ impl<'a> Lexer<'a> {
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "JSON" => Token::Json,
-                    "NULL" => Token::Null,
                     "DATE" => Token::Date,
                     "TIMESTAMP" => Token::Timestamp,
                     "LENGTH" => Token::Length,
@@ -322,6 +321,8 @@ impl<'a> Lexer<'a> {
                     "AND" => Token::And,
                     "OR" => Token::Or,
                     "NOT" => Token::Not,
+                    "AUTO_INCREMENT" | "AUTOINCREMENT" => Token::AutoIncrement,
+                    "REFERENCES" => Token::References,
                     _ => Token::Identifier(ident),
                 }
             }
@@ -606,12 +607,6 @@ mod tests {
     fn test_lexer_boolean_false() {
         let tokens = tokenize("FALSE");
         assert!(matches!(tokens[0], Token::BooleanLiteral(false)));
-    }
-
-    #[test]
-    fn test_lexer_null() {
-        let tokens = tokenize("NULL");
-        assert!(matches!(tokens[0], Token::Null));
     }
 
     #[test]

@@ -95,7 +95,6 @@ pub enum Token {
     Boolean,
     Blob,
     Json,
-    Null,
     Date,
     Timestamp,
 
@@ -123,6 +122,10 @@ pub enum Token {
     Semicolon,
     Colon,
     SingleQuote,
+
+    // Column constraints
+    AutoIncrement,
+    References,
 
     // Wildcard
     Star, // * for SELECT *
@@ -218,7 +221,6 @@ impl fmt::Display for Token {
             Token::Boolean => write!(f, "BOOLEAN"),
             Token::Blob => write!(f, "BLOB"),
             Token::Json => write!(f, "JSON"),
-            Token::Null => write!(f, "NULL"),
             Token::Date => write!(f, "DATE"),
             Token::Timestamp => write!(f, "TIMESTAMP"),
             // Aggregate Functions
@@ -253,6 +255,9 @@ impl fmt::Display for Token {
             Token::Asterisk => write!(f, "*"),
             Token::Slash => write!(f, "/"),
             Token::Percent => write!(f, "%"),
+            // Column constraints
+            Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
+            Token::References => write!(f, "REFERENCES"),
             // Syntax
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
@@ -344,9 +349,10 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "FLOAT" => Some(Token::Float),
         "BOOLEAN" => Some(Token::Boolean),
         "BLOB" => Some(Token::Blob),
-        "NULL" => Some(Token::Null),
         "DATE" => Some(Token::Date),
         "TIMESTAMP" => Some(Token::Timestamp),
+        "AUTO_INCREMENT" | "AUTOINCREMENT" => Some(Token::AutoIncrement),
+        "REFERENCES" => Some(Token::References),
         "TRUE" => Some(Token::BooleanLiteral(true)),
         "FALSE" => Some(Token::BooleanLiteral(false)),
         "AND" => Some(Token::And),
@@ -432,7 +438,6 @@ mod tests {
         assert_eq!(Token::Float.to_string(), "FLOAT");
         assert_eq!(Token::Boolean.to_string(), "BOOLEAN");
         assert_eq!(Token::Blob.to_string(), "BLOB");
-        assert_eq!(Token::Null.to_string(), "NULL");
     }
 
     #[test]
@@ -533,7 +538,6 @@ mod tests {
         assert_eq!(from_keyword("FLOAT"), Some(Token::Float));
         assert_eq!(from_keyword("BOOLEAN"), Some(Token::Boolean));
         assert_eq!(from_keyword("BLOB"), Some(Token::Blob));
-        assert_eq!(from_keyword("NULL"), Some(Token::Null));
         assert_eq!(from_keyword("DATE"), Some(Token::Date));
         assert_eq!(from_keyword("TIMESTAMP"), Some(Token::Timestamp));
 
