@@ -216,6 +216,24 @@ pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
+    pub auto_increment: bool,
+    pub primary_key: bool,
+    pub references: Option<ForeignKeyRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ForeignKeyRef {
+    pub table: String,
+    pub column: String,
+    pub on_delete: Option<ForeignKeyAction>,
+    pub on_update: Option<ForeignKeyAction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ForeignKeyAction {
+    Cascade,
+    SetNull,
+    Restrict,
 }
 
 /// Expression
@@ -509,14 +527,15 @@ impl Parser {
                         v
                     }
                     Some(Token::Identifier(name)) => {
-                        let v = Expression::Identifier(name.clone());
-                        self.next();
-                        v
-                    }
-                    Some(Token::Null) => {
-                        let v = Expression::Literal("NULL".to_string());
-                        self.next();
-                        v
+                        if name.to_uppercase() == "NULL" {
+                            let v = Expression::Literal("NULL".to_string());
+                            self.next();
+                            v
+                        } else {
+                            let v = Expression::Identifier(name.clone());
+                            self.next();
+                            v
+                        }
                     }
                     Some(Token::Minus) => {
                         self.next();
@@ -608,8 +627,12 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
-                    Some(Token::Null) => {
-                        row.push(Expression::Literal("NULL".to_string()));
+                    Some(Token::Identifier(name)) => {
+                        if name.to_uppercase() == "NULL" {
+                            row.push(Expression::Literal("NULL".to_string()));
+                        } else {
+                            row.push(Expression::Identifier(name.clone()));
+                        }
                         self.next();
                     }
                     Some(Token::Minus) => {
@@ -746,7 +769,6 @@ impl Parser {
                 Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
                 Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
                 Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-                Some(Token::Null) => Expression::Literal("NULL".to_string()),
                 Some(Token::Minus) => {
                     self.next();
                     if let Some(Token::NumberLiteral(n)) = self.current() {
@@ -848,6 +870,9 @@ impl Parser {
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
             Some(Token::Identifier(name)) => {
+                if name.to_uppercase() == "NULL" {
+                    return Ok(Expression::Literal("NULL".to_string()));
+                }
                 let expr = Expression::Identifier(name.clone());
                 self.next();
                 Ok(expr)
@@ -859,11 +884,6 @@ impl Parser {
             }
             Some(Token::StringLiteral(s)) => {
                 let expr = Expression::Literal(format!("'{}'", s));
-                self.next();
-                Ok(expr)
-            }
-            Some(Token::Null) => {
-                let expr = Expression::Literal("NULL".to_string());
                 self.next();
                 Ok(expr)
             }
@@ -1048,10 +1068,71 @@ impl Parser {
                             }
                             _ => "INTEGER".to_string(), // default
                         };
+
+                        // Parse column constraints
+                        let mut nullable = true;
+                        let mut auto_increment = false;
+                        let mut primary_key = false;
+                        let mut references = None;
+
+                        loop {
+                            match self.current() {
+                                Some(Token::Not) => {
+                                    self.next();
+                                    if let Some(Token::Identifier(s)) = self.current() {
+                                        if s.to_uppercase() == "NULL" {
+                                            nullable = false;
+                                            self.next();
+                                        }
+                                    }
+                                }
+                                Some(Token::AutoIncrement) => {
+                                    auto_increment = true;
+                                    self.next();
+                                }
+                                Some(Token::Primary) => {
+                                    self.next();
+                                    if let Some(Token::Key) = self.current() {
+                                        primary_key = true;
+                                        self.next();
+                                    }
+                                }
+                                Some(Token::References) => {
+                                    self.next();
+                                    let ref_table = match self.current() {
+                                        Some(Token::Identifier(s)) => {
+                                            let t = s.clone();
+                                            self.next();
+                                            t
+                                        }
+                                        _ => "".to_string(),
+                                    };
+                                    let ref_column = match self.current() {
+                                        Some(Token::Identifier(s)) => {
+                                            let c = s.clone();
+                                            self.next();
+                                            c
+                                        }
+                                        _ => "id".to_string(),
+                                    };
+                                    references = Some(ForeignKeyRef {
+                                        table: ref_table,
+                                        column: ref_column,
+                                        on_delete: None,
+                                        on_update: None,
+                                    });
+                                }
+                                _ => break,
+                            }
+                        }
+
                         columns.push(ColumnDefinition {
                             name: col_name,
                             data_type,
-                            nullable: true,
+                            nullable,
+                            auto_increment,
+                            primary_key,
+                            references,
                         });
                     }
                     Some(Token::RParen) => {
