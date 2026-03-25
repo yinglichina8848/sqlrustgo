@@ -4,19 +4,17 @@
 
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, OperatorMetrics,
-    PhysicalPlan, ProjectionExec, SortMergeJoinExec,
+    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
+    ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
-use crate::operator_profile::OperatorProfile;
-use crate::pipeline_trace::{OperatorTrace, QueryTrace};
 use crate::query_cache::should_cache;
 use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use crate::sql_normalizer::SqlNormalizer;
-use crate::{Executor, ExecutorResult, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
+use crate::{Executor, ExecutorResult};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -82,18 +80,23 @@ impl<'a> LocalExecutor<'a> {
         sql: &str,
         params: &[Value],
     ) -> SqlResult<ExecutorResult> {
-        // Start query tracing
-        let query_start = Instant::now();
-        let mut query_trace = QueryTrace::new(sql);
-
-        // Check cache first
         if self.cache_config.enabled && !sql.is_empty() {
             let cache_key = self.get_cache_key(sql, params);
             if let Some(result) = self.cache.write().get(&cache_key) {
                 return Ok(result);
             }
 
-            let result = self.execute_plan_with_tracing(plan, sql, &mut query_trace)?;
+            let result = match plan.name() {
+                "SeqScan" => self.execute_seq_scan(plan),
+                "Projection" => self.execute_projection(plan),
+                "Filter" => self.execute_filter(plan),
+                "Aggregate" => self.execute_aggregate(plan),
+                "HashJoin" => self.execute_hash_join(plan),
+                "SortMergeJoin" => self.execute_sort_merge_join(plan),
+                "Sort" => self.execute_sort(plan),
+                "Limit" => self.execute_limit(plan),
+                _ => Ok(ExecutorResult::empty()),
+            }?;
 
             if should_cache(&result) {
                 let tables = self.extract_tables(plan);
@@ -106,103 +109,10 @@ impl<'a> LocalExecutor<'a> {
                 self.cache.write().put(cache_key, entry, vec![]);
             }
 
-            // Record trace
-            query_trace.finish(query_start.elapsed());
-            GLOBAL_TRACE_COLLECTOR.record(query_trace);
-
             return Ok(result);
         }
 
-        let result = self.execute_plan_with_tracing(plan, sql, &mut query_trace)?;
-
-        // Record trace
-        query_trace.finish(query_start.elapsed());
-        GLOBAL_TRACE_COLLECTOR.record(query_trace);
-
-        Ok(result)
-    }
-
-    /// Execute plan with tracing and profiling
-    fn execute_plan_with_tracing(
-        &self,
-        plan: &dyn PhysicalPlan,
-        _sql: &str,
-        query_trace: &mut QueryTrace,
-    ) -> SqlResult<ExecutorResult> {
-        let query_start = Instant::now();
-
-        // Execute the plan
-        let result = match plan.name() {
-            "SeqScan" => self.execute_seq_scan(plan),
-            "Projection" => self.execute_projection(plan),
-            "Filter" => self.execute_filter(plan),
-            "Aggregate" => self.execute_aggregate(plan),
-            "HashJoin" => self.execute_hash_join(plan),
-            "SortMergeJoin" => self.execute_sort_merge_join(plan),
-            "Sort" => self.execute_sort(plan),
-            "Limit" => self.execute_limit(plan),
-            // "Explain" => self.execute_explain(plan),
-            _ => Ok(ExecutorResult::empty()),
-        };
-
-        // Record profiling
-        let duration = query_start.elapsed();
-        let rows = result.as_ref().map(|r| r.rows.len()).unwrap_or(0);
-        let batches = 1; // Simplified batch count
-
-        GLOBAL_PROFILER.record(
-            plan.name(),
-            plan.name(),
-            duration.as_nanos() as u64,
-            rows,
-            batches,
-        );
-
-        // Build trace
-        let mut root_trace = OperatorTrace::new(plan.name(), plan.name());
-        root_trace.start(query_start);
-        root_trace.finish(query_start);
-        root_trace.record_rows(rows);
-        root_trace.record_batch();
-        query_trace.set_root(root_trace);
-
-        result
-    }
-
-    /*fn execute_explain(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
-        let explain_plan = plan.as_any().downcast_ref::<ExplainExec>().ok_or_else(|| {
-            sqlrustgo_types::SqlError::ExecutionError("Failed to downcast ExplainExec".to_string())
-        })?;
-
-        let input_plan = explain_plan.input();
-        let analyze = explain_plan.analyze();
-
-        let plan_text = format_plan_tree(input_plan, 0);
-
-        let rows = if analyze {
-            let metrics = self.collect_operator_metrics(input_plan)?;
-            let plan_text_with_metrics = metrics.to_string(0);
-            vec![vec![Value::Text(plan_text_with_metrics)]]
-        } else {
-            vec![vec![Value::Text(plan_text)]]
-        };
-
-        Ok(ExecutorResult::new(rows, 0))
-    }*/
-
-    fn collect_operator_metrics(&self, plan: &dyn PhysicalPlan) -> SqlResult<OperatorMetrics> {
-        use std::time::Instant;
-
-        let mut metrics = OperatorMetrics::new(plan.name().to_string());
-
-        let table_name = plan.table_name();
-        if !table_name.is_empty() {
-            metrics = metrics.with_table(table_name.to_string());
-        }
-
-        let start = Instant::now();
-
-        let result = match plan.name() {
+        match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
@@ -212,23 +122,7 @@ impl<'a> LocalExecutor<'a> {
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
             _ => Ok(ExecutorResult::empty()),
-        };
-
-        let duration = start.elapsed();
-
-        let rows = match result {
-            Ok(r) => r.rows.len(),
-            Err(_) => 0,
-        };
-
-        metrics = metrics.with_timing(duration, rows);
-
-        for child in plan.children() {
-            let child_metrics = self.collect_operator_metrics(child)?;
-            metrics.add_child(child_metrics);
         }
-
-        Ok(metrics)
     }
 
     fn extract_tables(&self, plan: &dyn PhysicalPlan) -> Vec<String> {
@@ -1748,80 +1642,4 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().rows.is_empty());
     }
-
-    #[test]
-    fn test_local_executor_with_cache_config() {
-        use crate::query_cache_config::QueryCacheConfig;
-
-        let storage = MemoryStorage::new();
-        let config = QueryCacheConfig {
-            enabled: true,
-            ttl_seconds: 120,
-            max_entries: 50,
-            max_memory_bytes: 1024 * 1024,
-            benchmark_mode: false,
-        };
-
-        let executor = LocalExecutor::with_cache_config(&storage, config);
-
-        // Just verify it was created without panic
-        assert!(true);
-    }
-
-    #[test]
-    fn test_local_executor_invalidate_table() {
-        let storage = MemoryStorage::new();
-        let executor = LocalExecutor::new(&storage);
-
-        // This should not panic
-        executor.invalidate_table("test_table");
-    }
-
-    #[test]
-    fn test_local_executor_clear_cache() {
-        let storage = MemoryStorage::new();
-        let executor = LocalExecutor::new(&storage);
-
-        // This should not panic
-        executor.clear_cache();
-    }
-
-    #[test]
-    fn test_local_executor_cache_key_generation() {
-        let storage = MemoryStorage::new();
-        let executor = LocalExecutor::new(&storage);
-
-        let key = executor.get_cache_key("SELECT * FROM users", &[]);
-        assert!(!key.normalized_sql.is_empty());
-    }
-
-    #[test]
-    fn test_local_executor_cache_key_with_params() {
-        let storage = MemoryStorage::new();
-        let executor = LocalExecutor::new(&storage);
-
-        let params = vec![Value::Integer(1)];
-        let key = executor.get_cache_key("SELECT * FROM users WHERE id = ?", &params);
-        assert!(!key.normalized_sql.is_empty());
-    }
-}
-
-fn format_plan_tree(plan: &dyn PhysicalPlan, indent: usize) -> String {
-    let prefix = "  ".repeat(indent);
-    let name = plan.name();
-    let table_name = plan.table_name();
-
-    let line = if table_name.is_empty() {
-        format!("{}{}", prefix, name)
-    } else {
-        format!("{}{} on {}", prefix, name, table_name)
-    };
-
-    let mut result = vec![line];
-
-    for child in plan.children() {
-        result.push(format_plan_tree(child, indent + 1));
-    }
-
-    result.join("\n")
 }
