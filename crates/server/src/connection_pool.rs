@@ -240,8 +240,7 @@ mod tests {
 
     #[test]
     fn test_pooled_session_clone_creates_fresh_session() {
-        let storage = Arc::new(MemoryStorage::new());
-        let session1 = PooledSession::new(Arc::clone(&storage));
+        let session1 = PooledSession::new();
         let session2 = session1.clone();
 
         // Cloned sessions should be independent
