@@ -2,7 +2,7 @@
 //! Error handling for SQLRustGo database system
 
 /// MySQL-style SQLSTATE error codes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SqlState {
     /// 42000: Syntax error or access rule violation
     SyntaxError,
@@ -23,6 +23,7 @@ pub enum SqlState {
     /// 00000: Successful completion
     Success,
     /// Unknown error code
+    #[default]
     Unknown,
 }
 
@@ -40,12 +41,6 @@ impl SqlState {
             SqlState::Success => "00000",
             SqlState::Unknown => "HY000",
         }
-    }
-}
-
-impl Default for SqlState {
-    fn default() -> Self {
-        SqlState::Unknown
     }
 }
 
