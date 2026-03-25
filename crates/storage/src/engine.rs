@@ -713,6 +713,7 @@ fn test_column_definition_new() {
         data_type: "INTEGER".to_string(),
         nullable: false,
         is_unique: true,
+        references: None,
     };
     assert_eq!(col.name, "id");
     assert_eq!(col.data_type, "INTEGER");
@@ -730,12 +731,14 @@ fn test_table_info_new() {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                references: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
                 is_unique: false,
+                references: None,
             },
         ],
     };
