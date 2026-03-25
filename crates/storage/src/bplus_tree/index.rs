@@ -104,21 +104,17 @@ impl BTreeNode {
     }
 
     pub fn find_child_index(&self, key: i64) -> usize {
-        for (i, k) in self.keys.iter().enumerate() {
-            if key < *k {
-                return i;
-            }
+        // Binary search for the first key >= search key
+        // This is more efficient than linear search for B+Tree nodes
+        match self.keys.binary_search(&key) {
+            Ok(idx) => idx + 1, // Key found, go to child at idx+1
+            Err(idx) => idx,    // Key not found, idx is insertion point
         }
-        self.keys.len()
     }
 
     pub fn find_key_index(&self, key: i64) -> Option<usize> {
-        for (i, k) in self.keys.iter().enumerate() {
-            if *k == key {
-                return Some(i);
-            }
-        }
-        None
+        // Binary search for exact key match
+        self.keys.binary_search(&key).ok()
     }
 
     pub fn insert_key_value(&mut self, key: i64, value: u32) -> Option<(i64, BTreeNode)> {
@@ -323,12 +319,12 @@ impl BTreeIndex {
     fn search_node(&self, node_id: u32, key: i64) -> Option<u32> {
         if let Some(ref node) = self.nodes[node_id as usize] {
             if node.is_leaf {
-                for (i, k) in node.keys.iter().enumerate() {
-                    if *k == key {
-                        return node.values.get(i).copied();
-                    }
+                // Use binary search for key lookup in leaf nodes
+                if let Some(idx) = node.find_key_index(key) {
+                    node.values.get(idx).copied()
+                } else {
+                    None
                 }
-                None
             } else {
                 let child_idx = node.find_child_index(key);
                 if child_idx < node.children.len() {
