@@ -722,6 +722,7 @@ impl ExecutionEngine {
                 let left = join_plan.left();
                 let right = join_plan.right();
                 let join_type = join_plan.join_type();
+                let right_schema_len = right.schema().fields.len();
 
                 let left_result = self.execute_plan(left)?;
                 let right_result = self.execute_plan(right)?;
@@ -729,22 +730,48 @@ impl ExecutionEngine {
                 let left_rows = left_result.rows;
                 let right_rows = right_result.rows;
 
-                let mut result_rows = Vec::new();
+                // Build hash map from right rows using first column as key
+                use std::collections::HashMap;
+                let mut right_hash: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
+                for rrow in &right_rows {
+                    let key = if !rrow.is_empty() {
+                        vec![rrow[0].clone()]
+                    } else {
+                        vec![Value::Null]
+                    };
+                    right_hash.entry(key).or_default().push(rrow.clone());
+                }
 
-                for lrow in &left_rows {
-                    for rrow in &right_rows {
-                        match join_type {
-                            sqlrustgo_planner::JoinType::Inner => {
-                                let mut combined = lrow.clone();
-                                combined.extend(rrow.clone());
-                                result_rows.push(combined);
+                let mut result_rows = Vec::new();
+                let mut left_matched: Vec<bool> = vec![false; left_rows.len()];
+
+                // Probe with left rows
+                for (lidx, lrow) in left_rows.iter().enumerate() {
+                    let key = if !lrow.is_empty() {
+                        vec![lrow[0].clone()]
+                    } else {
+                        vec![Value::Null]
+                    };
+
+                    if let Some(matched_right_rows) = right_hash.get(&key) {
+                        left_matched[lidx] = true;
+                        for rrow in matched_right_rows {
+                            let mut combined = lrow.clone();
+                            combined.extend(rrow.clone());
+                            result_rows.push(combined);
+                        }
+                    }
+                }
+
+                // For LEFT join, emit unmatched left rows with NULLs for right schema
+                if join_type == sqlrustgo_planner::JoinType::Left {
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if !left_matched[lidx] {
+                            let mut combined = lrow.clone();
+                            for _ in 0..right_schema_len {
+                                combined.push(Value::Null);
                             }
-                            sqlrustgo_planner::JoinType::Left => {
-                                let mut combined = lrow.clone();
-                                combined.extend(rrow.clone());
-                                result_rows.push(combined);
-                            }
-                            _ => {}
+                            result_rows.push(combined);
                         }
                     }
                 }

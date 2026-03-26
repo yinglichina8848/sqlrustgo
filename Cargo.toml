@@ -241,6 +241,28 @@ name = "performance_test"
 path = "tests/integration/performance_test.rs"
 
 [[test]]
+
+[[test]]
+name = "crash_injection_test"
+path = "tests/anomaly/crash_injection_test.rs"
+
+[[test]]
+name = "catalog_consistency_test"
+path = "tests/anomaly/catalog_consistency_test.rs"
+
+[[test]]
+name = "long_run_stability_test"
+path = "tests/anomaly/long_run_stability_test.rs"
+
+[[test]]
+name = "qps_benchmark_test"
+path = "tests/anomaly/qps_benchmark_test.rs"
+
+[[test]]
+name = "transaction_isolation_test"
+path = "tests/anomaly/transaction_isolation_test.rs"
+
+[[test]]
 name = "mysql_tpch_test"
 path = "tests/integration/mysql_tpch_test.rs"
 
