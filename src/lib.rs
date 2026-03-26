@@ -3,7 +3,7 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 //! This crate re-exports functionality from the modular crates/ workspace.
 
-pub use sqlrustgo_executor::{Executor, ExecutorResult};
+pub use sqlrustgo_executor::{Executor, ExecutorResult, GLOBAL_PROFILER};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{
@@ -622,9 +622,15 @@ impl ExecutionEngine {
             }
             Statement::Explain(explain) => {
                 let start = std::time::Instant::now();
+
+                // Clear previous profiling data before execution
+                GLOBAL_PROFILER.clear();
+
                 let result = self.execute(*explain.query)?;
+                let duration = start.elapsed();
+
                 if explain.analyze {
-                    let duration = start.elapsed();
+                    let profiles = GLOBAL_PROFILER.get_all_profiles();
                     let mut rows = Vec::new();
 
                     rows.push(vec![
@@ -633,22 +639,19 @@ impl ExecutionEngine {
                         Value::Text("Rows".to_string()),
                     ]);
 
-                    rows.push(vec![
-                        Value::Text("Seq Scan".to_string()),
-                        Value::Text(format!("{:.3} ms", duration.as_secs_f64() * 1000.0)),
-                        Value::Text(format!("{}", result.rows.len())),
-                    ]);
+                    // Generate rows from real profiling data
+                    for profile in &profiles {
+                        rows.push(vec![
+                            Value::Text(profile.operator_name.clone()),
+                            Value::Text(format!("{:.3} ms", profile.total_time_ns as f64 / 1_000_000.0)),
+                            Value::Text(format!("{}", profile.rows_processed)),
+                        ]);
+                    }
 
                     rows.push(vec![
                         Value::Text("".to_string()),
                         Value::Text("".to_string()),
                         Value::Text("".to_string()),
-                    ]);
-
-                    rows.push(vec![
-                        Value::Text("Planning Time".to_string()),
-                        Value::Text("0.123 ms".to_string()),
-                        Value::Text("-".to_string()),
                     ]);
 
                     rows.push(vec![
