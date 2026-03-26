@@ -1219,6 +1219,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             schema,
         );
 
@@ -1326,7 +1327,7 @@ mod tests {
     fn test_aggregate_exec_new() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.name(), "Aggregate");
     }
 
@@ -1334,7 +1335,7 @@ mod tests {
     fn test_aggregate_exec_schema() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.schema().fields.len(), 1);
     }
 
@@ -1408,6 +1409,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1426,6 +1428,7 @@ mod tests {
                 args: vec![Expr::column("id")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1444,6 +1447,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Integer)]),
         );
 
@@ -1465,6 +1469,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("category".to_string(), DataType::Text),
                 Field::new("sum".to_string(), DataType::Integer),
@@ -1582,6 +1587,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]),
         );
 
@@ -1696,6 +1702,7 @@ mod tests {
                 args: vec![Expr::column("c")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("a".to_string(), DataType::Integer),
                 Field::new("b".to_string(), DataType::Integer),
@@ -1719,6 +1726,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Integer)]),
         );
 
@@ -1737,6 +1745,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Integer)]),
         );
 
@@ -1755,6 +1764,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Integer)]),
         );
 
@@ -2014,6 +2024,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             schema,
         );
 
@@ -2143,6 +2154,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2161,6 +2173,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2180,6 +2193,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Integer)]),
         );
 
@@ -2199,6 +2213,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Integer)]),
         );
 
@@ -2218,6 +2233,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Integer)]),
         );
 
@@ -2237,6 +2253,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]),
         );
 
@@ -2256,6 +2273,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Float)]),
         );
 
@@ -2275,6 +2293,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Float)]),
         );
 
@@ -2294,6 +2313,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Float)]),
         );
 
@@ -2567,6 +2587,7 @@ mod tests {
                     distinct: false,
                 },
             ],
+            None,
             Schema::new(vec![
                 Field::new("count".to_string(), DataType::Integer),
                 Field::new("sum".to_string(), DataType::Integer),
@@ -2589,6 +2610,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: true,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2612,6 +2634,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("dept".to_string(), DataType::Text),
                 Field::new("category".to_string(), DataType::Text),
@@ -2635,6 +2658,7 @@ mod tests {
                 args: vec![Expr::Wildcard],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2833,6 +2857,7 @@ mod tests {
                 args: vec![Expr::column("id")],
                 distinct: true,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2852,6 +2877,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]),
         );
 
@@ -2871,6 +2897,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Float)]),
         );
 
@@ -2890,6 +2917,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Float)]),
         );
 
@@ -2909,6 +2937,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Float)]),
         );
 
@@ -3176,6 +3205,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3200,6 +3230,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3224,6 +3255,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3248,6 +3280,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3272,6 +3305,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3296,6 +3330,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3320,6 +3355,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3344,6 +3380,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3368,6 +3405,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3499,7 +3537,7 @@ mod tests {
         let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
         let group_expr = vec![Expr::column("id")];
         let agg_expr = vec![];
-        let agg = AggregateExec::new(input, group_expr.clone(), agg_expr, schema.clone());
+        let agg = AggregateExec::new(input, group_expr.clone(), agg_expr, None, schema.clone());
 
         assert_eq!(agg.group_expr(), &group_expr);
     }
