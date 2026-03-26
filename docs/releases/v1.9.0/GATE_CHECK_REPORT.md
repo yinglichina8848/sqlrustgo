@@ -85,8 +85,8 @@
 | | Cardinality | ✅ |
 | | Cost-based Join | ✅ |
 | **SQL Compatibility** | | |
-| | FOREIGN KEY | ✅ |
-| | AUTO_INCREMENT | ✅ |
+| | FOREIGN KEY | 🔶 部分 (解析完成,DELETE/UPDATE待实现) |
+| | AUTO_INCREMENT | 🔶 部分 (解析完成,执行待实现) |
 | | VIEW | ✅ |
 | | UNION | ✅ |
 | **Observability** | | |
@@ -102,7 +102,7 @@
 | | Index Corruption | ✅ |
 | | WAL Replay | ✅ |
 
-**总计**: 34/34 完成 (100%)
+**总计**: 32/34 完成 (94%) - FOREIGN KEY 和 AUTO_INCREMENT 部分完成
 
 ---
 
@@ -131,7 +131,10 @@
 
 ### 阻塞问题
 
-无阻塞问题
+1. FOREIGN KEY DELETE/UPDATE 动作未实现 (ISSUE #888)
+2. AUTO_INCREMENT 执行逻辑未实现 (ISSUE #889)
+3. UPSERT 执行逻辑未实现 (ISSUE #890)
+4. SAVEPOINT 部分实现待完成 (ISSUE #892)
 
 ### 已优化项
 
@@ -144,7 +147,7 @@
 
 ## 8. 结论
 
-v1.9.0 RC 阶段完成：
+v1.9.0 RC 阶段完成，但存在阻塞问题：
 - ✅ 编译通过
 - ✅ 325+ 测试通过
 - ✅ Clippy 无 error
@@ -155,9 +158,13 @@ v1.9.0 RC 阶段完成：
 - ✅ 并发控制完整
 - ✅ 教学场景测试 (18个)
 - ✅ 性能测试 (16个)
-- ✅ 所有 Gate 组件完成 (34/34)
+- ⚠️ SQL Compatibility Gate: FOREIGN KEY 和 AUTO_INCREMENT 仅部分完成
 
-**状态**: ✅ 已准备好发布 GA
+**状态**: 🔶 存在阻塞问题，需完成以下 Issue:
+- ISSUE #888: FOREIGN KEY DELETE/UPDATE 动作实现
+- ISSUE #889: AUTO_INCREMENT 执行逻辑实现
+- ISSUE #890: UPSERT 执行逻辑实现
+- ISSUE #892: SAVEPOINT 部分实现完成
 
 ---
 
