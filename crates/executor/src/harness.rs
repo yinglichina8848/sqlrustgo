@@ -205,6 +205,7 @@ pub mod helpers {
             child,
             group_expr,
             aggregate_expr,
+            None,
             output_schema,
         ))
     }

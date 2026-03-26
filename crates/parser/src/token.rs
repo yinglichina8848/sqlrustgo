@@ -70,6 +70,17 @@ pub enum Token {
     Limit,
     Offset,
 
+    // Group By / Order By keywords
+    Group,
+    By,
+    Having,
+    Order,
+    Asc,
+    Desc,
+    Nulls,
+    First,
+    Last,
+
     // Aggregate Functions
     Length,
     Upper,
@@ -217,6 +228,16 @@ impl fmt::Display for Token {
             Token::All => write!(f, "ALL"),
             Token::Limit => write!(f, "LIMIT"),
             Token::Offset => write!(f, "OFFSET"),
+            // Group By / Order By keywords
+            Token::Group => write!(f, "GROUP"),
+            Token::By => write!(f, "BY"),
+            Token::Having => write!(f, "HAVING"),
+            Token::Order => write!(f, "ORDER"),
+            Token::Asc => write!(f, "ASC"),
+            Token::Desc => write!(f, "DESC"),
+            Token::Nulls => write!(f, "NULLS"),
+            Token::First => write!(f, "FIRST"),
+            Token::Last => write!(f, "LAST"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),

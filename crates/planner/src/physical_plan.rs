@@ -592,6 +592,7 @@ pub struct AggregateExec {
     input: Box<dyn PhysicalPlan>,
     group_expr: Vec<Expr>,
     aggregate_expr: Vec<Expr>,
+    having_expr: Option<Expr>,
     schema: Schema,
 }
 
@@ -600,12 +601,14 @@ impl AggregateExec {
         input: Box<dyn PhysicalPlan>,
         group_expr: Vec<Expr>,
         aggregate_expr: Vec<Expr>,
+        having_expr: Option<Expr>,
         schema: Schema,
     ) -> Self {
         Self {
             input,
             group_expr,
             aggregate_expr,
+            having_expr,
             schema,
         }
     }
@@ -620,6 +623,10 @@ impl AggregateExec {
 
     pub fn aggregate_expr(&self) -> &Vec<Expr> {
         &self.aggregate_expr
+    }
+
+    pub fn having_expr(&self) -> &Option<Expr> {
+        &self.having_expr
     }
 
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
