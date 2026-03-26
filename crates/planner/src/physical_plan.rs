@@ -1326,7 +1326,7 @@ mod tests {
     fn test_aggregate_exec_new() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.name(), "Aggregate");
     }
 
@@ -1334,7 +1334,7 @@ mod tests {
     fn test_aggregate_exec_schema() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.schema().fields.len(), 1);
     }
 
