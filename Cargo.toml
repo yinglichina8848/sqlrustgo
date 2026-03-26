@@ -241,6 +241,8 @@ name = "performance_test"
 path = "tests/integration/performance_test.rs"
 
 [[test]]
+name = "mvcc_concurrency_test"
+path = "tests/anomaly/mvcc_concurrency_test.rs"
 
 [[test]]
 name = "crash_injection_test"
@@ -261,10 +263,7 @@ path = "tests/anomaly/qps_benchmark_test.rs"
 [[test]]
 name = "transaction_isolation_test"
 path = "tests/anomaly/transaction_isolation_test.rs"
-name = "mysql_tpch_test"
-path = "tests/integration/mysql_tpch_test.rs"
 
 [[test]]
-name = "mvcc_concurrency_test"
-path = "tests/anomaly/mvcc_concurrency_test.rs"
-
+name = "mysql_tpch_test"
+path = "tests/integration/mysql_tpch_test.rs"
