@@ -1,0 +1,17 @@
+[package]
+name = "test-runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+test-registry = { path = "../test-registry" }
+parking_lot = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+num_cpus = "1.17"
+
+[dev-dependencies]
+tempfile = "3.8"

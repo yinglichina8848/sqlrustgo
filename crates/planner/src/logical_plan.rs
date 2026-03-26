@@ -279,6 +279,7 @@ mod tests {
             input: Box::new(input),
             group_expr: vec![],
             aggregate_expr: vec![],
+            having_expr: None,
             schema: schema.clone(),
         };
         assert_eq!(plan.schema(), schema);

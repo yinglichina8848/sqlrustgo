@@ -436,6 +436,7 @@ mod tests {
             input: Box::new(table_scan),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema: schema.clone(),
         };
 
@@ -510,6 +511,7 @@ mod tests {
             input: Box::new(table_scan),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![Expr::column("value")],
+            having_expr: None,
             schema: schema.clone(),
         };
 

@@ -190,8 +190,8 @@ pub struct OrderByClause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderByItem {
     pub expr: Expression,
-    pub asc: bool,          // true = ASC, false = DESC
-    pub nulls_first: bool,  // true = NULLS FIRST, false = NULLS LAST
+    pub asc: bool,         // true = ASC, false = DESC
+    pub nulls_first: bool, // true = NULLS FIRST, false = NULLS LAST
 }
 
 /// SELECT statement
@@ -1084,8 +1084,8 @@ impl Parser {
                     Err("Expected number after -".to_string())
                 }
             }
-            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg)
-            | Some(Token::Min) | Some(Token::Max) => {
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+            | Some(Token::Max) => {
                 // Parse aggregate function call for HAVING clause
                 let func_name = match self.current() {
                     Some(Token::Count) => "COUNT",

@@ -188,7 +188,8 @@ fn test_foreign_key_constraint_violation() {
     // Create child table with FK
     engine
         .execute(
-            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))").unwrap(),
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))")
+                .unwrap(),
         )
         .unwrap();
 
@@ -221,7 +222,8 @@ fn test_foreign_key_constraint_null_value() {
     // Create child table with FK
     engine
         .execute(
-            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))").unwrap(),
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))")
+                .unwrap(),
         )
         .unwrap();
 
