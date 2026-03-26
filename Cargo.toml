@@ -18,6 +18,10 @@ members = [
     "crates/transaction-stress",
     "crates/information-schema",
     "crates/query-stats",
+    "crates/test-registry",
+    "crates/test-runner",
+    "crates/test-results",
+    "crates/test-reporter",
     "test/sql92",
 ]
 

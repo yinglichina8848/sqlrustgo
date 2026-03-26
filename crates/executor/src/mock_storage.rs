@@ -327,7 +327,7 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
-                        references: None,
+                    references: None,
                 }],
             })
             .unwrap();
