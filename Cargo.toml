@@ -306,3 +306,11 @@ path = "tests/anomaly/boundary_test.rs"
 [[test]]
 name = "error_handling_test"
 path = "tests/anomaly/error_handling_test.rs"
+
+[[test]]
+name = "aggregate_type_test"
+path = "tests/anomaly/aggregate_type_test.rs"
+
+[[test]]
+name = "null_handling_test"
+path = "tests/anomaly/null_handling_test.rs"
