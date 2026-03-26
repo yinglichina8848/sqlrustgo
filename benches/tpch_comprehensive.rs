@@ -1,5 +1,6 @@
 // TPC-H Comprehensive Benchmark
 
+use mysql::Pool;
 use serde::Serialize;
 use sqlrustgo::{parse, ExecutionEngine, StorageEngine};
 use std::sync::Arc;
@@ -85,6 +86,7 @@ pub struct BenchmarkMetadata {
 pub struct BenchmarkSummary {
     pub total_sqlrustgo_ms: f64,
     pub total_sqlite_ms: Option<f64>,
+    pub total_mysql_ms: Option<f64>,
     pub cache_hit_rate: f64,
     pub qps: f64,
 }
@@ -93,6 +95,7 @@ pub struct BenchmarkSummary {
 pub struct BenchmarkResult {
     pub metadata: BenchmarkMetadata,
     pub results: Vec<QueryResult>,
+    pub mysql_ms: Option<f64>,
     pub summary: BenchmarkSummary,
 }
 
@@ -118,6 +121,13 @@ impl TpchBenchmark {
 
         let sqlite_ms = self.run_sqlite_benchmark(&queries);
         let avg_sqlite_per_query = sqlite_ms / queries.len() as f64;
+
+        let mysql_ms = self.run_mysql_benchmark(&queries);
+        let avg_mysql_per_query = if mysql_ms > 0.0 {
+            Some(mysql_ms / queries.len() as f64)
+        } else {
+            None
+        };
 
         let (results, cache_hit_count) = match self.scenario {
             TestScenario::SingleThread => {
@@ -161,9 +171,11 @@ impl TpchBenchmark {
                 threads: self.threads,
             },
             results,
+            mysql_ms: if mysql_ms > 0.0 { Some(mysql_ms) } else { None },
             summary: BenchmarkSummary {
                 total_sqlrustgo_ms,
                 total_sqlite_ms: Some(sqlite_ms),
+                total_mysql_ms: if mysql_ms > 0.0 { Some(mysql_ms) } else { None },
                 cache_hit_rate,
                 qps,
             },
@@ -295,6 +307,22 @@ impl TpchBenchmark {
         for (_, sql) in queries {
             let start = Instant::now();
             let _ = conn.query_row(sql, [], |_| Ok(()));
+            total_ms += start.elapsed().as_secs_f64() * 1000.0;
+        }
+        total_ms
+    }
+
+    fn run_mysql_benchmark(&self, queries: &[(&str, &str)]) -> f64 {
+        let config = benches::mysql_config::MySqlConfig::docker();
+        let pool = match Pool::new(config.connection_string().as_str()) {
+            Ok(p) => p,
+            Err(_) => return 0.0, // MySQL not available
+        };
+
+        let mut total_ms = 0.0;
+        for (_, sql) in queries {
+            let start = Instant::now();
+            let _ = pool.query_drop(sql);
             total_ms += start.elapsed().as_secs_f64() * 1000.0;
         }
         total_ms
@@ -473,6 +501,11 @@ impl TpchBenchmark {
             println!("  Total SQLite: {:.2} ms", sqlite);
             let ratio = result.summary.total_sqlrustgo_ms / sqlite;
             println!("  Ratio (SR/SQ): {:.2}x", ratio);
+        }
+        if let Some(mysql) = result.summary.total_mysql_ms {
+            println!("  Total MySQL: {:.2} ms", mysql);
+            let ratio = result.summary.total_sqlrustgo_ms / mysql;
+            println!("  Ratio (SR/MY): {:.2}x", ratio);
         }
         println!(
             "  Cache Hit Rate: {:.1}%",
