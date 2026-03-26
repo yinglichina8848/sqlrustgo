@@ -7,6 +7,7 @@ mod column;
 mod data_type;
 mod error;
 mod index;
+mod rebuild;
 mod schema;
 mod table;
 
