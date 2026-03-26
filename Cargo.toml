@@ -284,3 +284,7 @@ path = "tests/anomaly/view_test.rs"
 name = "transaction_timeout_test"
 path = "tests/anomaly/transaction_timeout_test.rs"
 
+[[test]]
+name = "datetime_type_test"
+path = "tests/anomaly/datetime_type_test.rs"
+
