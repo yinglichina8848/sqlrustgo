@@ -670,8 +670,106 @@ impl ExecutionEngine {
                     })
                     .collect();
 
-                storage.insert(table_name, records)?;
-                Ok(ExecutorResult::new(vec![], insert.values.len()))
+                // Handle UPSERT: INSERT ... ON DUPLICATE KEY UPDATE
+                if insert.on_duplicate.is_some() {
+                    let existing_rows = storage.scan(table_name)?;
+
+                    let key_columns: Vec<usize> = table_info
+                        .as_ref()
+                        .map(|info| {
+                            info.columns
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, col)| col.is_primary_key || col.is_unique)
+                                .map(|(idx, _)| idx)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    let updates = insert.on_duplicate.as_ref().unwrap();
+                    let mut total_affected = 0;
+                    let mut final_rows = existing_rows.clone();
+
+                    for new_row in &records {
+                        if !key_columns.is_empty() {
+                            let mut conflict_idx = None;
+                            for (idx, existing_row) in final_rows.iter().enumerate() {
+                                let mut match_count = 0;
+                                for &key_col in &key_columns {
+                                    if key_col < new_row.len() && key_col < existing_row.len() {
+                                        if new_row[key_col] == existing_row[key_col] {
+                                            match_count += 1;
+                                        }
+                                    }
+                                }
+                                if match_count == key_columns.len() {
+                                    conflict_idx = Some(idx);
+                                    break;
+                                }
+                            }
+
+                            if let Some(idx) = conflict_idx {
+                                let mut updated = final_rows[idx].clone();
+                                for (col_name, expr) in updates {
+                                    if let Some(ref info) = table_info {
+                                        if let Some(col_idx) = info
+                                            .columns
+                                            .iter()
+                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                        {
+                                            let new_val = match expr {
+                                                Expression::Literal(value) => {
+                                                    let col_type = &info.columns[col_idx].data_type;
+                                                    let upper = col_type.to_uppercase();
+                                                    if upper.contains("INT")
+                                                        || upper == "BIGINT"
+                                                        || upper == "SMALLINT"
+                                                    {
+                                                        if let Ok(n) = value.parse::<i64>() {
+                                                            Value::Integer(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "FLOAT"
+                                                        || upper == "DOUBLE"
+                                                        || upper == "DECIMAL"
+                                                    {
+                                                        if let Ok(n) = value.parse::<f64>() {
+                                                            Value::Float(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else {
+                                                        Value::Text(value.clone())
+                                                    }
+                                                }
+                                                _ => Value::Null,
+                                            };
+                                            if col_idx < updated.len() {
+                                                updated[col_idx] = new_val;
+                                            }
+                                        }
+                                    }
+                                }
+                                final_rows[idx] = updated;
+                                total_affected += 1;
+                            } else {
+                                final_rows.push(new_row.clone());
+                                total_affected += 1;
+                            }
+                        } else {
+                            final_rows.push(new_row.clone());
+                            total_affected += 1;
+                        }
+                    }
+
+                    let _ = storage.delete(table_name, &[]);
+                    storage.insert(table_name, final_rows)?;
+                    Ok(ExecutorResult::new(vec![], total_affected))
+                } else {
+                    storage.insert(table_name, records)?;
+                    Ok(ExecutorResult::new(vec![], insert.values.len()))
+                }
             }
             Statement::CreateTable(create) => {
                 let mut storage = self.storage.write().unwrap();
@@ -703,8 +801,8 @@ impl ExecutionEngine {
                             name: col.name.clone(),
                             data_type: col.data_type.clone(),
                             nullable: col.nullable,
-                            is_unique: false,
-                            is_primary_key: false,
+                            is_unique: col.primary_key,
+                            is_primary_key: col.primary_key,
                             references,
                             auto_increment: col.auto_increment,
                         }

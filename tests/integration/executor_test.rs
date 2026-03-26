@@ -308,3 +308,71 @@ fn test_auto_increment_with_explicit_value() {
         "auto-increment should be 2 (counter incremented on explicit insert)"
     );
 }
+
+#[test]
+fn test_upsert_execution() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    // Create table with primary key
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
+
+    // Insert initial row
+    let result = engine.execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap());
+    assert!(
+        result.is_ok(),
+        "Initial insert should succeed: {:?}",
+        result
+    );
+    assert_eq!(result.unwrap().affected_rows, 1);
+
+    // UPSERT - insert with duplicate key, should update
+    let result = engine.execute(
+        parse("INSERT INTO users VALUES (1, 'Bob') ON DUPLICATE KEY UPDATE name='Bob'").unwrap(),
+    );
+    assert!(result.is_ok(), "UPSERT should succeed: {:?}", result);
+
+    // Should have only 1 row (updated, not inserted)
+    let result = engine
+        .execute(parse("SELECT * FROM users").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 1, "Should have 1 row after UPSERT");
+    assert_eq!(result.rows[0][0], Value::Integer(1), "id should be 1");
+    assert_eq!(
+        result.rows[0][1],
+        Value::Text("Bob".to_string()),
+        "name should be Bob (updated)"
+    );
+}
+
+#[test]
+fn test_upsert_no_conflict() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    // Create table with primary key
+    engine
+        .execute(parse("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
+
+    // Insert first row
+    engine
+        .execute(parse("INSERT INTO products VALUES (1, 'Product1')").unwrap())
+        .unwrap();
+
+    // UPSERT with different key - should insert new row
+    let result = engine.execute(
+        parse("INSERT INTO products VALUES (2, 'Product2') ON DUPLICATE KEY UPDATE name='Updated'")
+            .unwrap(),
+    );
+    assert!(result.is_ok(), "UPSERT should succeed: {:?}", result);
+
+    // Should have 2 rows
+    let result = engine
+        .execute(parse("SELECT * FROM products ORDER BY id").unwrap())
+        .unwrap();
+    assert_eq!(result.rows.len(), 2, "Should have 2 rows");
+    assert_eq!(result.rows[1][0], Value::Integer(2));
+    // Note: parser keeps quotes in string literals
+    assert_eq!(result.rows[1][1], Value::Text("'Product2'".to_string()));
+}
