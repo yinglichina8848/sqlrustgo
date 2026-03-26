@@ -248,3 +248,6 @@ path = "tests/integration/performance_test.rs"
 [[test]]
 name = "savepoint_test"
 path = "tests/integration/savepoint_test.rs"
+[[test]]
+name = "upsert_test"
+path = "tests/integration/upsert_test.rs"
