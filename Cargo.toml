@@ -254,6 +254,10 @@ name = "mvcc_concurrency_test"
 path = "tests/anomaly/mvcc_concurrency_test.rs"
 
 [[test]]
+name = "snapshot_isolation_test"
+path = "tests/anomaly/snapshot_isolation_test.rs"
+
+[[test]]
 name = "checksum_corruption_test"
 path = "tests/integration/checksum_corruption_test.rs"
 
