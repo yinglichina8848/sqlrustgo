@@ -237,6 +237,65 @@ cargo test --test concurrency_stress_test
 
 ---
 
+## 覆盖率测试配置
+
+### 正确的覆盖率测试命令
+
+```bash
+# 完整覆盖率测试（推荐）
+cargo tarpaulin --workspace --output-dir target/tarpaulin --ignore-panics --timeout 120
+```
+
+### 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `--workspace` | 覆盖整个 workspace（所有 crate） |
+| `--output-dir target/tarpaulin` | 输出报告到指定目录 |
+| `--ignore-panics` | 忽略 panic 的覆盖率统计 |
+| `--timeout 120` | 单个测试超时时间（秒） |
+
+### 查看覆盖率报告
+
+```bash
+# HTML 报告
+open target/tarpaulin/tarpaulin-report.html
+
+# JSON 报告
+cat target/tarpaulin/tarpaulin-report.json
+```
+
+### 覆盖率统计说明
+
+tarpaulin 统计范围：
+- 核心库代码 (`crates/*/src/*.rs`)
+- 测试代码 (`tests/**/*.rs`)
+
+**总行数计算**：包含测试代码本身，因此覆盖率 = 核心被测行 / (核心行 + 测试行)
+
+### v1.9.x 模块级覆盖率
+
+| 模块 | 覆盖率 | 提升 |
+|------|--------|------|
+| storage/buffer_pool.rs | 91% | +27% |
+| storage/engine.rs | 97% | +33% |
+| optimizer/rules.rs | 82% | - |
+| planner/logical_plan.rs | 95% | - |
+
+### 异常测试对覆盖率的贡献
+
+v1.9.x 新增的异常测试：
+
+| 测试文件 | 测试数 | 覆盖模块 |
+|----------|--------|----------|
+| tests/anomaly/oom_test.rs | 8 | buffer_pool |
+| tests/anomaly/io_error_test.rs | 8 | file_storage |
+| tests/anomaly/leak_test.rs | 8 | buffer_pool, storage |
+
+这些测试提升了 storage 模块的模块级覆盖率（从 64% 提升到 91%+）。
+
+---
+
 ## 发布前必须通过的测试
 
 ### 必须通过 (Must Pass)
