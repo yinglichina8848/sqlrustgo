@@ -190,7 +190,11 @@ mod tests {
         let storage = create_test_storage();
         let catalog = rebuild_from_storage(&storage).unwrap();
         let schema = catalog.default_schema().unwrap();
-        assert_eq!(schema.table_names(), vec!["users", "orders"]);
+        // Check table names exist (order doesn't matter due to HashMap)
+        let table_names: Vec<_> = schema.table_names();
+        assert!(table_names.contains(&"users"));
+        assert!(table_names.contains(&"orders"));
+        assert_eq!(table_names.len(), 2);
         let users = schema.get_table("users").unwrap();
         assert_eq!(users.columns.len(), 3);
         assert!(users.columns.iter().any(|c| c.name == "id"));

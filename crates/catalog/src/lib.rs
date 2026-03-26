@@ -19,6 +19,7 @@ pub use schema::Schema;
 pub use table::{ForeignKeyAction, ForeignKeyRef, Table, TableRef};
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo_storage::{ForeignKeyAction as StorageFkAction, StorageEngine};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -197,6 +198,105 @@ impl Catalog {
         }
 
         Ok(())
+    }
+
+    /// Rebuild catalog from a storage engine
+    ///
+    /// This reconstructs catalog metadata from an existing storage engine,
+    /// including schemas, tables, columns, and foreign key constraints.
+    pub fn rebuild(storage: &dyn StorageEngine) -> CatalogResult<Self> {
+        let mut catalog = Self::new();
+        let default_schema = catalog.default_schema_name().to_string();
+
+        for table_name in storage.list_tables() {
+            let info = storage.get_table_info(&table_name).map_err(|e| {
+                CatalogError::InvariantViolation(format!(
+                    "Failed to get table info for '{}': {}",
+                    table_name, e
+                ))
+            })?;
+
+            let columns: Vec<ColumnDefinition> = info
+                .columns
+                .into_iter()
+                .map(|col| {
+                    let data_type = DataType::parse_sql_name(&col.data_type).ok_or_else(|| {
+                        CatalogError::InvariantViolation(format!(
+                            "Unknown data type '{}' for column '{}'",
+                            col.data_type, col.name
+                        ))
+                    })?;
+
+                    let mut column_def = ColumnDefinition::new(col.name, data_type);
+                    if !col.nullable {
+                        column_def = column_def.not_null();
+                    }
+                    if col.is_unique {
+                        column_def = column_def.unique();
+                    }
+                    Ok(column_def)
+                })
+                .collect::<CatalogResult<Vec<_>>>()?;
+
+            let mut table = Table::new(info.name.clone(), columns);
+
+            // Collect foreign keys from column references
+            let foreign_keys: Vec<ForeignKeyRef> = if let Ok(info) = storage.get_table_info(&table.name) {
+                info.columns
+                    .iter()
+                    .filter_map(|col_info| {
+                        col_info.references.as_ref().map(|references| {
+                            let col_name = col_info.name.clone();
+                            ForeignKeyRef {
+                                referenced_schema: default_schema.clone(),
+                                referenced_table: references.referenced_table.clone(),
+                                referenced_columns: vec![references.referenced_column.clone()],
+                                columns: vec![col_name],
+                                on_delete: references.on_delete.map(convert_fk_action),
+                                on_update: references.on_update.map(convert_fk_action),
+                            }
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+
+            // Add all foreign keys to the table
+            for fk in foreign_keys {
+                table = table.add_foreign_key(fk);
+            }
+
+            // Get owned schema, add table, then put back
+            let schema_name = default_schema.clone();
+            let mut schema = catalog.schemas.remove(&schema_name).ok_or_else(|| {
+                CatalogError::SchemaNotFound(schema_name.clone())
+            })?;
+
+            if schema.has_table(&table.name) {
+                return Err(CatalogError::DuplicateTable {
+                    schema: schema_name.clone(),
+                    table: table.name.clone(),
+                });
+            }
+
+            schema = schema.add_table(table)?;
+
+            // Put schema back
+            catalog.schemas.insert(schema_name, schema);
+        }
+
+        catalog.check_invariants()?;
+        Ok(catalog)
+    }
+}
+
+/// Convert storage foreign key action to catalog foreign key action
+fn convert_fk_action(action: StorageFkAction) -> ForeignKeyAction {
+    match action {
+        StorageFkAction::Cascade => ForeignKeyAction::Cascade,
+        StorageFkAction::SetNull => ForeignKeyAction::SetNull,
+        StorageFkAction::Restrict => ForeignKeyAction::Restrict,
     }
 }
 
