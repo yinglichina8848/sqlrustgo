@@ -20,6 +20,8 @@ pub struct FileStorage {
     tables: HashMap<String, TableData>,
     /// B+ Tree indexes protected by RwLock for concurrent access
     indexes: RwLock<HashMap<(String, String), BPlusTree>>,
+    /// Auto-increment counters: table_name -> (column_index -> next_value)
+    auto_increment_counters: RwLock<HashMap<String, HashMap<usize, i64>>>,
 }
 
 impl FileStorage {
@@ -32,6 +34,7 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
+            auto_increment_counters: RwLock::new(HashMap::new()),
         };
 
         // Load existing tables
@@ -1250,6 +1253,30 @@ impl StorageEngine for FileStorage {
             row_count: records.len() as u64,
             column_stats,
         })
+    }
+
+    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let mut counters = self
+            .auto_increment_counters
+            .write()
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        let table_counters = counters
+            .entry(table.to_string())
+            .or_insert_with(HashMap::new);
+        let next = table_counters.entry(column_index).or_insert(0).clone();
+        table_counters.insert(column_index, next + 1);
+        Ok(next + 1)
+    }
+
+    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let counters = self
+            .auto_increment_counters
+            .read()
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        let table_counters = counters.get(table).ok_or_else(|| SqlError::TableNotFound {
+            table: table.to_string(),
+        })?;
+        Ok(*table_counters.get(&column_index).unwrap_or(&0))
     }
 }
 

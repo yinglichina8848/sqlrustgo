@@ -62,6 +62,9 @@ fn handle_foreign_key_delete(
                             }
                         }
                         Some(ForeignKeyAction::Cascade) => {
+                            // TODO: 当前只处理直接子表，不支持递归删除孙表及更深层次
+                            // 例如: parent -> child -> grandchild，删除 parent 时 child 被删除，
+                            //      但 grandchild 不会被处理（需要递归实现）
                             let child_rows = storage.scan(&table_name)?;
                             if let Some(pk_val) = parent_key_values.first() {
                                 let original_count = child_rows.len();
@@ -504,14 +507,40 @@ impl ExecutionEngine {
                     )));
                 }
 
-                // Get table info to determine column types
+                // Get table info to determine column types and auto_increment columns
                 let table_info = storage.get_table_info(table_name).ok();
+
+                // Find auto_increment column indices
+                let auto_increment_cols: Vec<usize> = table_info
+                    .as_ref()
+                    .map(|info| {
+                        info.columns
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, col)| col.auto_increment)
+                            .map(|(idx, _)| idx)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Pre-calculate auto_increment values for each row
+                let mut auto_increment_values: Vec<Vec<(usize, i64)>> = Vec::new();
+                for _ in 0..insert.values.len() {
+                    let mut row_auto_inc: Vec<(usize, i64)> = Vec::new();
+                    for &col_idx in &auto_increment_cols {
+                        let next_val = storage.get_next_auto_increment(table_name, col_idx)?;
+                        row_auto_inc.push((col_idx, next_val));
+                    }
+                    auto_increment_values.push(row_auto_inc);
+                }
 
                 let records: Vec<Vec<Value>> = insert
                     .values
                     .iter()
-                    .map(|row| {
-                        row.iter()
+                    .enumerate()
+                    .map(|(row_idx, row)| {
+                        let mut new_row: Vec<Value> = row
+                            .iter()
                             .enumerate()
                             .map(|(col_idx, expr)| {
                                 match expr {
@@ -551,7 +580,23 @@ impl ExecutionEngine {
                                     _ => Value::Null,
                                 }
                             })
-                            .collect()
+                            .collect();
+
+                        // Apply auto_increment values
+                        for &(col_idx, next_val) in &auto_increment_values[row_idx] {
+                            if col_idx < new_row.len() {
+                                if matches!(new_row[col_idx], Value::Null) {
+                                    new_row[col_idx] = Value::Integer(next_val);
+                                }
+                            } else {
+                                while new_row.len() < col_idx {
+                                    new_row.push(Value::Null);
+                                }
+                                new_row.push(Value::Integer(next_val));
+                            }
+                        }
+
+                        new_row
                     })
                     .collect();
 
@@ -589,7 +634,9 @@ impl ExecutionEngine {
                             data_type: col.data_type.clone(),
                             nullable: col.nullable,
                             is_unique: false,
+                            is_primary_key: false,
                             references,
+                            auto_increment: col.auto_increment,
                         }
                     })
                     .collect();
@@ -663,16 +710,21 @@ impl ExecutionEngine {
                     .unwrap_or_default();
 
                 // Find primary key column for foreign key reference
-                let primary_key_col = columns.iter().position(|c| c.is_unique);
+                let primary_key_col = columns.iter().position(|c| c.is_primary_key);
 
                 // Find rows that will be deleted
                 let all_rows = storage.scan(&delete.table).unwrap_or_default();
                 let mut rows_to_delete = Vec::new();
 
-                for row in &all_rows {
-                    if let Some(ref where_clause) = delete.where_clause {
-                        if evaluate_where_clause(where_clause, row, &columns) {
-                            rows_to_delete.push(row.clone());
+                // If no WHERE clause, delete all rows
+                if delete.where_clause.is_none() {
+                    rows_to_delete = all_rows.clone();
+                } else {
+                    for row in &all_rows {
+                        if let Some(ref where_clause) = delete.where_clause {
+                            if evaluate_where_clause(where_clause, row, &columns) {
+                                rows_to_delete.push(row.clone());
+                            }
                         }
                     }
                 }
@@ -729,19 +781,22 @@ impl ExecutionEngine {
                     .unwrap_or_default();
 
                 // Find primary key column
-                let primary_key_col = columns.iter().position(|c| c.is_unique);
+                let primary_key_col = columns.iter().position(|c| c.is_primary_key);
 
                 let all_rows = storage.scan(&update.table).unwrap_or_default();
                 let mut rows_to_update: Vec<(Vec<Value>, Vec<Value>)> = Vec::new(); // (old_row, new_row)
 
                 // Find rows to update and prepare new values
+                // If no WHERE clause, update all rows
+                let has_where_clause = update.where_clause.is_some();
+
                 for row in &all_rows {
-                    if let Some(ref where_clause) = update.where_clause {
-                        if !evaluate_where_clause(where_clause, row, &columns) {
-                            continue;
+                    if has_where_clause {
+                        if let Some(ref where_clause) = update.where_clause {
+                            if !evaluate_where_clause(where_clause, row, &columns) {
+                                continue;
+                            }
                         }
-                    } else {
-                        continue;
                     }
 
                     let mut new_row = row.clone();
@@ -1302,7 +1357,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();
@@ -1341,7 +1398,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();
@@ -1360,7 +1419,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();

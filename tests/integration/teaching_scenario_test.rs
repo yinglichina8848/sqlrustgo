@@ -117,7 +117,9 @@ fn test_hash_join_with_condition() {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -140,7 +142,9 @@ fn test_hash_join_with_condition() {
                 name: "emp_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -453,7 +457,9 @@ fn test_multiple_joins() {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -472,7 +478,9 @@ fn test_multiple_joins() {
                 name: "order_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })

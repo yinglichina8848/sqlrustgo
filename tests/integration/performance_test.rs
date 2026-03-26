@@ -248,7 +248,9 @@ fn test_index_scan_performance_vs_seqscan() {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: true,
+                is_unique: true,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -305,7 +307,9 @@ fn test_join_performance_hash_join() {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -324,7 +328,9 @@ fn test_join_performance_hash_join() {
                 name: "emp_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
+                is_unique: false,,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
