@@ -272,3 +272,7 @@ path = "tests/anomaly/mvcc_concurrency_test.rs"
 name = "outer_join_test"
 path = "tests/anomaly/outer_join_test.rs"
 
+[[test]]
+name = "set_operations_test"
+path = "tests/anomaly/set_operations_test.rs"
+
