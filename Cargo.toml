@@ -266,3 +266,7 @@ path = "tests/anomaly/transaction_isolation_test.rs"
 name = "join_test"
 path = "tests/anomaly/join_test.rs"
 
+[[test]]
+name = "foreign_key_test"
+path = "tests/anomaly/foreign_key_test.rs"
+
