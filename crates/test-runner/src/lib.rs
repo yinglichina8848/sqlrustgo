@@ -143,7 +143,7 @@ impl TestRunner {
         let start_time = Instant::now();
         let result = Self::execute_cargo_test(&self.config, test_id, name).await;
         let duration_ms = start_time.elapsed().as_millis() as u64;
-        
+
         let mut final_result = result;
         final_result.duration_ms = duration_ms;
         final_result.finished_at = Utc::now();

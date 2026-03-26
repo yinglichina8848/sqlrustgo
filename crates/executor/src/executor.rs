@@ -302,7 +302,11 @@ impl AggregateVolcanoExecutor {
 
     /// Evaluate a HAVING expression that may contain aggregate functions.
     /// Returns true if the row passes the HAVING condition, false otherwise.
-    fn evaluate_having_expr(&self, expr: &sqlrustgo_planner::Expr, group_rows: &[Vec<Value>]) -> bool {
+    fn evaluate_having_expr(
+        &self,
+        expr: &sqlrustgo_planner::Expr,
+        group_rows: &[Vec<Value>],
+    ) -> bool {
         match expr {
             sqlrustgo_planner::Expr::AggregateFunction { func, args, .. } => {
                 // Compute the aggregate value for this group
