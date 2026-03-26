@@ -1,3 +1,5 @@
+# SQLRustGo v1.6.1
+
 [workspace]
 members = [
     "crates/common",
@@ -62,8 +64,6 @@ tempfile = "3.25.0"
 serde_yaml = "0.9"
 rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
-mysql = "25"
-sqlrustgo-bench = { path = "crates/bench" }
 
 [package]
 name = "sqlrustgo"
@@ -147,6 +147,9 @@ path = "crates/bench/examples/tpch_data_gen.rs"
 [dependencies.rusqlite]
 version = "0.32"
 features = ["bundled"]
+
+[dev-dependencies.mysql]
+version = "25"
 
 [[test]]
 name = "optimizer_rules_test"
@@ -271,3 +274,23 @@ path = "tests/anomaly/transaction_isolation_test.rs"
 [[test]]
 name = "server_integration_test"
 path = "tests/integration/server_integration_test.rs"
+
+[[test]]
+name = "set_operations_test"
+path = "tests/anomaly/set_operations_test.rs"
+
+[[test]]
+name = "view_test"
+path = "tests/anomaly/view_test.rs"
+
+[[test]]
+name = "transaction_timeout_test"
+path = "tests/anomaly/transaction_timeout_test.rs"
+
+[[test]]
+name = "datetime_type_test"
+path = "tests/anomaly/datetime_type_test.rs"
+
+[[test]]
+name = "boundary_test"
+path = "tests/anomaly/boundary_test.rs"
