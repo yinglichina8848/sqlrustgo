@@ -174,6 +174,26 @@ pub struct AggregateCall {
     pub distinct: bool,
 }
 
+/// GROUP BY clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct GroupByClause {
+    pub columns: Vec<Expression>,
+}
+
+/// ORDER BY clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByClause {
+    pub items: Vec<OrderByItem>,
+}
+
+/// ORDER BY single item
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByItem {
+    pub expr: Expression,
+    pub asc: bool,          // true = ASC, false = DESC
+    pub nulls_first: bool,  // true = NULLS FIRST, false = NULLS LAST
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
@@ -184,6 +204,10 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+    // New fields for GROUP BY / HAVING / ORDER BY
+    pub group_by: Option<GroupByClause>,
+    pub having: Option<Expression>,
+    pub order_by: Option<OrderByClause>,
 }
 
 /// Column in SELECT
@@ -271,6 +295,8 @@ pub enum Expression {
     Identifier(String),
     BinaryOp(Box<Expression>, String, Box<Expression>),
     Wildcard,
+    /// Function call expression (for HAVING clause aggregates like COUNT(*), SUM(col))
+    FunctionCall(String, Vec<Expression>),
 }
 
 /// SQL Parser
@@ -418,6 +444,99 @@ impl Parser {
             None
         };
 
+        // Parse GROUP BY clause (optional)
+        let group_by = if matches!(self.current(), Some(Token::Group)) {
+            self.next(); // consume GROUP
+            if !matches!(self.current(), Some(Token::By)) {
+                return Err("Expected BY after GROUP".to_string());
+            }
+            self.next(); // consume BY
+
+            let mut columns = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+                columns.push(expr);
+
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+
+            Some(GroupByClause { columns })
+        } else {
+            None
+        };
+
+        // Parse HAVING clause (optional) - must follow GROUP BY
+        let having = if matches!(self.current(), Some(Token::Having)) {
+            self.next(); // consume HAVING
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        // Parse ORDER BY clause (optional)
+        let order_by = if matches!(self.current(), Some(Token::Order)) {
+            self.next(); // consume ORDER
+            if !matches!(self.current(), Some(Token::By)) {
+                return Err("Expected BY after ORDER".to_string());
+            }
+            self.next(); // consume BY
+
+            let mut items = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+
+                // Parse ASC/DESC (default ASC)
+                let asc = match self.current() {
+                    Some(Token::Asc) => {
+                        self.next();
+                        true
+                    }
+                    Some(Token::Desc) => {
+                        self.next();
+                        false
+                    }
+                    _ => true, // default is ASC
+                };
+
+                // Parse NULLS FIRST/LAST (default depends on ASC/DESC)
+                let nulls_first = match self.current() {
+                    Some(Token::Nulls) => {
+                        self.next(); // consume NULLS
+                        match self.current() {
+                            Some(Token::First) => {
+                                self.next();
+                                true
+                            }
+                            Some(Token::Last) => {
+                                self.next();
+                                false
+                            }
+                            _ => return Err("Expected FIRST or LAST after NULLS".to_string()),
+                        }
+                    }
+                    _ => asc, // default: NULLS FIRST for ASC, NULLS LAST for DESC
+                };
+
+                items.push(OrderByItem {
+                    expr,
+                    asc,
+                    nulls_first,
+                });
+
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+
+            Some(OrderByClause { items })
+        } else {
+            None
+        };
+
         let base_select = SelectStatement {
             columns,
             table,
@@ -426,6 +545,9 @@ impl Parser {
             aggregates,
             limit: None,
             offset: None,
+            group_by,
+            having,
+            order_by,
         };
 
         // Check for LIMIT and OFFSET
@@ -961,6 +1083,41 @@ impl Parser {
                 } else {
                     Err("Expected number after -".to_string())
                 }
+            }
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg)
+            | Some(Token::Min) | Some(Token::Max) => {
+                // Parse aggregate function call for HAVING clause
+                let func_name = match self.current() {
+                    Some(Token::Count) => "COUNT",
+                    Some(Token::Sum) => "SUM",
+                    Some(Token::Avg) => "AVG",
+                    Some(Token::Min) => "MIN",
+                    Some(Token::Max) => "MAX",
+                    _ => return Err("Unknown aggregate function".to_string()),
+                };
+                self.next(); // consume function name
+                self.expect(Token::LParen)?;
+
+                // Parse arguments
+                let mut args = Vec::new();
+                match self.current() {
+                    Some(Token::Star) => {
+                        args.push(Expression::Wildcard);
+                        self.next();
+                    }
+                    Some(Token::Identifier(name)) => {
+                        args.push(Expression::Identifier(name.to_string()));
+                        self.next();
+                    }
+                    Some(Token::NumberLiteral(n)) => {
+                        args.push(Expression::Literal(n.clone()));
+                        self.next();
+                    }
+                    _ => return Err("Expected *, column name, or number in aggregate".to_string()),
+                }
+
+                self.expect(Token::RParen)?;
+                Ok(Expression::FunctionCall(func_name.to_string(), args))
             }
             Some(Token::LParen) => {
                 // Parenthesized expression

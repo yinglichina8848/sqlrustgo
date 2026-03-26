@@ -47,6 +47,11 @@ fn evaluate_where_clause(
             s.to_uppercase() != "FALSE" && s != "0"
         }
         sqlrustgo_parser::Expression::Wildcard => true,
+        sqlrustgo_parser::Expression::FunctionCall(_, _) => {
+            // Function calls in WHERE should be evaluated as boolean
+            // This handles cases like WHERE COUNT(*) > 1
+            false
+        }
     }
 }
 
@@ -88,6 +93,7 @@ fn evaluate_expr(
             Value::Null
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
+        sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
     }
 }
 

@@ -40,6 +40,7 @@ pub enum LogicalPlan {
         input: Box<LogicalPlan>,
         group_expr: Vec<Expr>,
         aggregate_expr: Vec<Expr>,
+        having_expr: Option<Expr>,
         schema: Schema,
     },
     /// Join operation
