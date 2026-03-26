@@ -1,3 +1,5 @@
+# SQLRustGo v1.6.1
+
 [workspace]
 members = [
     "crates/common",
@@ -62,8 +64,6 @@ tempfile = "3.25.0"
 serde_yaml = "0.9"
 rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
-mysql = "25"
-sqlrustgo-bench = { path = "crates/bench" }
 
 [package]
 name = "sqlrustgo"
@@ -147,6 +147,9 @@ path = "crates/bench/examples/tpch_data_gen.rs"
 [dependencies.rusqlite]
 version = "0.32"
 features = ["bundled"]
+
+[dev-dependencies.mysql]
+version = "25"
 
 [[test]]
 name = "optimizer_rules_test"
@@ -241,6 +244,14 @@ name = "performance_test"
 path = "tests/integration/performance_test.rs"
 
 [[test]]
+name = "mysql_tpch_test"
+path = "tests/integration/mysql_tpch_test.rs"
+
+[[test]]
+name = "mvcc_concurrency_test"
+path = "tests/anomaly/mvcc_concurrency_test.rs"
+
+[[test]]
 name = "crash_injection_test"
 path = "tests/anomaly/crash_injection_test.rs"
 
@@ -261,16 +272,8 @@ name = "transaction_isolation_test"
 path = "tests/anomaly/transaction_isolation_test.rs"
 
 [[test]]
-name = "mysql_tpch_test"
-path = "tests/integration/mysql_tpch_test.rs"
-
-[[test]]
-name = "mvcc_concurrency_test"
-path = "tests/anomaly/mvcc_concurrency_test.rs"
-
-[[test]]
-name = "outer_join_test"
-path = "tests/anomaly/outer_join_test.rs"
+name = "server_integration_test"
+path = "tests/integration/server_integration_test.rs"
 
 [[test]]
 name = "set_operations_test"
@@ -303,4 +306,3 @@ path = "tests/anomaly/aggregate_type_test.rs"
 [[test]]
 name = "null_handling_test"
 path = "tests/anomaly/null_handling_test.rs"
-

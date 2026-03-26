@@ -188,6 +188,7 @@ pub struct AggregateVolcanoExecutor {
     child: Box<dyn VolcanoExecutor>,
     group_expr: Vec<sqlrustgo_planner::Expr>,
     aggregate_expr: Vec<sqlrustgo_planner::Expr>,
+    having_expr: Option<sqlrustgo_planner::Expr>,
     schema: Schema,
     input_schema: Schema,
     initialized: bool,
@@ -201,6 +202,7 @@ impl AggregateVolcanoExecutor {
         child: Box<dyn VolcanoExecutor>,
         group_expr: Vec<sqlrustgo_planner::Expr>,
         aggregate_expr: Vec<sqlrustgo_planner::Expr>,
+        having_expr: Option<sqlrustgo_planner::Expr>,
         schema: Schema,
         input_schema: Schema,
     ) -> Self {
@@ -208,6 +210,7 @@ impl AggregateVolcanoExecutor {
             child,
             group_expr,
             aggregate_expr,
+            having_expr,
             schema,
             input_schema,
             initialized: false,
@@ -296,6 +299,116 @@ impl AggregateVolcanoExecutor {
         }
         results
     }
+
+    /// Evaluate a HAVING expression that may contain aggregate functions.
+    /// Returns true if the row passes the HAVING condition, false otherwise.
+    fn evaluate_having_expr(&self, expr: &sqlrustgo_planner::Expr, group_rows: &[Vec<Value>]) -> bool {
+        match expr {
+            sqlrustgo_planner::Expr::AggregateFunction { func, args, .. } => {
+                // Compute the aggregate value for this group
+                let agg_values: Vec<Value> = group_rows
+                    .iter()
+                    .flat_map(|row| {
+                        if args.is_empty() {
+                            vec![Value::Integer(group_rows.len() as i64)]
+                        } else {
+                            args.iter()
+                                .map(|arg| {
+                                    arg.evaluate(row, &self.input_schema).unwrap_or(Value::Null)
+                                })
+                                .collect()
+                        }
+                    })
+                    .collect();
+
+                let result = match func {
+                    sqlrustgo_planner::AggregateFunction::Count => {
+                        Value::Integer(agg_values.len() as i64)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Sum => {
+                        let mut sum: i64 = 0;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                sum += n;
+                            }
+                        }
+                        Value::Integer(sum)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Avg => {
+                        let mut sum: i64 = 0;
+                        let mut count = 0;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                sum += n;
+                                count += 1;
+                            }
+                        }
+                        if count > 0 {
+                            Value::Integer(sum / count as i64)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    sqlrustgo_planner::AggregateFunction::Min => {
+                        let mut min_val: Option<i64> = None;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                match min_val {
+                                    Some(m) if *n < m => min_val = Some(*n),
+                                    None => min_val = Some(*n),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        min_val.map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Max => {
+                        let mut max_val: Option<i64> = None;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                match max_val {
+                                    Some(m) if *n > m => max_val = Some(*n),
+                                    None => max_val = Some(*n),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        max_val.map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                };
+
+                if let Value::Boolean(b) = result {
+                    b
+                } else {
+                    false
+                }
+            }
+            sqlrustgo_planner::Expr::BinaryExpr { left, op, right } => {
+                let left_val = self.evaluate_having_expr(left, group_rows);
+                let right_val = self.evaluate_having_expr(right, group_rows);
+                // For boolean results from aggregate comparisons like COUNT(*) > 1
+                match op {
+                    sqlrustgo_planner::Operator::Gt => left_val > right_val,
+                    sqlrustgo_planner::Operator::Lt => left_val < right_val,
+                    sqlrustgo_planner::Operator::GtEq => left_val >= right_val,
+                    sqlrustgo_planner::Operator::LtEq => left_val <= right_val,
+                    sqlrustgo_planner::Operator::Eq => left_val == right_val,
+                    sqlrustgo_planner::Operator::NotEq => left_val != right_val,
+                    sqlrustgo_planner::Operator::And => left_val && right_val,
+                    sqlrustgo_planner::Operator::Or => left_val || right_val,
+                    _ => false,
+                }
+            }
+            sqlrustgo_planner::Expr::Literal(val) => {
+                if let sqlrustgo_types::Value::Boolean(b) = val {
+                    *b
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
 }
 
 impl VolcanoExecutor for AggregateVolcanoExecutor {
@@ -338,6 +451,22 @@ impl VolcanoExecutor for AggregateVolcanoExecutor {
             }
             a.len().cmp(&b.len())
         });
+
+        // Apply HAVING filter if present
+        if let Some(ref having_expr) = self.having_expr {
+            let mut keys_to_remove = Vec::new();
+            for key in &self.group_keys {
+                let group_rows = &self.groups[key];
+                if !self.evaluate_having_expr(having_expr, group_rows) {
+                    keys_to_remove.push(key.clone());
+                }
+            }
+            for key in keys_to_remove {
+                self.groups.remove(&key);
+            }
+            self.group_keys.retain(|k| self.groups.contains_key(k));
+        }
+
         self.current_group_idx = 0;
         self.initialized = true;
         Ok(())
@@ -1550,6 +1679,7 @@ impl VolExecutorBuilder {
             child,
             aggregate.group_expr().clone(),
             aggregate.aggregate_expr().clone(),
+            aggregate.having_expr().clone(),
             plan.schema().clone(),
             children[0].schema().clone(),
         )))

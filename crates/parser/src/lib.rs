@@ -37,6 +37,9 @@ mod tests {
             aggregates: vec![],
             limit: None,
             offset: None,
+            group_by: None,
+            having: None,
+            order_by: None,
         });
     }
 
@@ -116,5 +119,107 @@ fn test_sql92_features() {
         if should_pass {
             assert!(result.is_ok(), "Expected {} to parse OK", sql);
         }
+    }
+}
+
+#[test]
+fn test_parse_group_by() {
+    let sql = "SELECT category, COUNT(*) FROM products GROUP BY category";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse GROUP BY: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.group_by.is_some(), "Expected group_by to be Some");
+        let group_by = select.group_by.unwrap();
+        assert_eq!(group_by.columns.len(), 1);
+    } else {
+        panic!("Expected Select statement");
+    }
+}
+
+#[test]
+fn test_parse_group_by_multiple_columns() {
+    let sql = "SELECT category, brand, COUNT(*) FROM products GROUP BY category, brand";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse GROUP BY with multiple columns: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.group_by.is_some());
+        let group_by = select.group_by.unwrap();
+        assert_eq!(group_by.columns.len(), 2);
+    }
+}
+
+#[test]
+fn test_parse_having() {
+    let sql = "SELECT category, COUNT(*) FROM products GROUP BY category HAVING COUNT(*) > 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse HAVING: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.group_by.is_some(), "Expected group_by to be Some");
+        assert!(select.having.is_some(), "Expected having to be Some");
+    } else {
+        panic!("Expected Select statement");
+    }
+}
+
+#[test]
+fn test_parse_order_by() {
+    let sql = "SELECT * FROM products ORDER BY name ASC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ORDER BY: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.order_by.is_some(), "Expected order_by to be Some");
+        let order_by = select.order_by.unwrap();
+        assert_eq!(order_by.items.len(), 1);
+        assert!(order_by.items[0].asc);
+        assert!(order_by.items[0].nulls_first); // ASC defaults to NULLS FIRST
+    } else {
+        panic!("Expected Select statement");
+    }
+}
+
+#[test]
+fn test_parse_order_by_desc_nulls_last() {
+    let sql = "SELECT * FROM products ORDER BY price DESC NULLS LAST";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ORDER BY DESC NULLS LAST: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.order_by.is_some());
+        let order_by = select.order_by.unwrap();
+        assert_eq!(order_by.items.len(), 1);
+        assert!(!order_by.items[0].asc); // DESC
+        assert!(!order_by.items[0].nulls_first); // NULLS LAST
+    }
+}
+
+#[test]
+fn test_parse_complete_aggregate_query() {
+    let sql = "SELECT category, SUM(price) FROM products WHERE price > 10 GROUP BY category HAVING SUM(price) > 100 ORDER BY SUM(price) DESC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse complete aggregate query: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.group_by.is_some());
+        assert!(select.having.is_some());
+        assert!(select.order_by.is_some());
+    }
+}
+
+#[test]
+fn test_parse_order_by_multiple_columns() {
+    let sql = "SELECT * FROM products ORDER BY category ASC, price DESC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ORDER BY with multiple columns: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert!(select.order_by.is_some());
+        let order_by = select.order_by.unwrap();
+        assert_eq!(order_by.items.len(), 2);
+        assert!(order_by.items[0].asc);
+        assert!(!order_by.items[1].asc);
     }
 }

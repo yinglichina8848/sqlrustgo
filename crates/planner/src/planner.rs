@@ -127,6 +127,7 @@ impl DefaultPlanner {
                 input,
                 group_expr,
                 aggregate_expr,
+                having_expr,
                 schema,
             } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
@@ -134,6 +135,7 @@ impl DefaultPlanner {
                     input_plan,
                     group_expr.clone(),
                     aggregate_expr.clone(),
+                    having_expr.clone(),
                     schema.clone(),
                 )))
             }
