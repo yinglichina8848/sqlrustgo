@@ -276,6 +276,10 @@ name = "transaction_isolation_test"
 path = "tests/anomaly/transaction_isolation_test.rs"
 
 [[test]]
+name = "join_test"
+path = "tests/anomaly/join_test.rs"
+
+[[test]]
 name = "server_integration_test"
 path = "tests/integration/server_integration_test.rs"
 
@@ -298,7 +302,6 @@ path = "tests/anomaly/datetime_type_test.rs"
 [[test]]
 name = "boundary_test"
 path = "tests/anomaly/boundary_test.rs"
-<<<<<<< HEAD
 
 [[test]]
 name = "error_handling_test"
