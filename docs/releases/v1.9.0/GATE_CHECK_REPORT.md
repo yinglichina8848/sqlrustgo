@@ -64,7 +64,7 @@
 | 聚合函数测试 | 10 | `cargo test --test aggregate_type_test` | ✅ |
 | NULL 处理测试 | 10 | `cargo test --test null_handling_test` | ✅ |
 
-**状态**: ✅ 所有测试通过 (1748+ 测试, 100%)
+**状态**: ✅ 所有测试通过 (329+ 测试, 100%)
 
 ---
 
@@ -126,11 +126,11 @@
 | | Cost-based Join | 基于成本的连接优化 | ✅ |
 | | CBO | 基于成本的优化器 | ✅ |
 | **SQL Compatibility** | | | |
-| | FOREIGN KEY | 外键约束 | ✅ |
-| | AUTO_INCREMENT | 自增主键 | ✅ |
+| | FOREIGN KEY | 外键约束 | 🔶 |
+| | AUTO_INCREMENT | 自增主键 | 🔶 |
 | | VIEW | 视图 | ✅ |
 | | UNION/INTERSECT/EXCEPT | 集合操作 | ✅ |
-| | UPSERT | 插入或更新 | ✅ |
+| | UPSERT | 插入或更新 | 🔶 |
 | | Batch INSERT | 批量插入 | ✅ |
 | **Observability** | | | |
 | | EXPLAIN | 执行计划解释 | ✅ |
@@ -231,7 +231,7 @@
 ### RC 阶段必须通过
 
 - [x] 编译检查通过
-- [x] 核心测试通过 (1748+ tests)
+- [x] 核心测试通过 (329+ tests)
 - [x] Clippy 无 error
 - [x] 格式化通过
 - [x] 覆盖率 ~70%
@@ -314,8 +314,10 @@
 ## 11. 结论
 
 v1.9.0 RC 阶段完成，但存在阻塞问题：
+
+### 编译与测试
 - ✅ 编译通过
-- ✅ 1748+ 测试通过 (100%)
+- ✅ 329+ 测试通过 (100%)
 - ✅ Clippy 无 error
 - ✅ 格式化通过
 
@@ -324,7 +326,7 @@ v1.9.0 RC 阶段完成，但存在阻塞问题：
 - ✅ Transaction 完整 (6/6)
 - ✅ Query Engine 完整 (9/9)
 - ✅ Optimizer 完整 (5/5)
-- ✅ SQL Compatibility 完整 (6/6)
+- 🔶 SQL Compatibility 部分完成 (3/6) - FOREIGN KEY, AUTO_INCREMENT, UPSERT 仅部分实现
 - ✅ Observability 完整 (7/7)
 - ✅ Stability 完整 (8/8)
 
@@ -335,8 +337,11 @@ v1.9.0 RC 阶段完成，但存在阻塞问题：
 
 ### 测试覆盖
 - ✅ 教学场景测试 (18个)
-- ✅ 性能测试 (16个)
-- ⚠️ SQL Compatibility Gate: FOREIGN KEY 和 AUTO_INCREMENT 仅部分完成
+- ✅ 性能测试 (10个)
+- ✅ 崩溃注入测试 (10个)
+- ✅ 并发异常测试 (20个)
+- ✅ Catalog 一致性测试 (13个)
+- ✅ SQL 功能测试 (100+个)
 
 **状态**: 🔶 存在阻塞问题，需完成以下 Issue:
 - ISSUE #888: FOREIGN KEY DELETE/UPDATE 动作实现
