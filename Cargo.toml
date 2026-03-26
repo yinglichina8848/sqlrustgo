@@ -276,3 +276,7 @@ path = "tests/anomaly/outer_join_test.rs"
 name = "set_operations_test"
 path = "tests/anomaly/set_operations_test.rs"
 
+[[test]]
+name = "view_test"
+path = "tests/anomaly/view_test.rs"
+
