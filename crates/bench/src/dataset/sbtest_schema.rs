@@ -1,14 +1,25 @@
 //! SBTest schema for sysbench-compatible benchmarks
 
-/// SBTest schema definition
-pub struct SbtestSchema;
+/// SBTest table schema definition (sysbench-compatible)
+pub const SBTEST_SCHEMA: &str = r#"
+CREATE TABLE sbtest (
+    id BIGINT PRIMARY KEY,
+    k BIGINT NOT NULL,
+    c TEXT NOT NULL,
+    pad TEXT NOT NULL
+)
+"#;
 
-impl SbtestSchema {
-    pub fn new() -> Self {
-        Self
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    pub fn table_name() -> &'static str {
-        "sbtest"
+    #[test]
+    fn test_sbtest_schema() {
+        // Verify schema contains required columns
+        assert!(SBTEST_SCHEMA.contains("id BIGINT PRIMARY KEY"));
+        assert!(SBTEST_SCHEMA.contains("k BIGINT NOT NULL"));
+        assert!(SBTEST_SCHEMA.contains("c TEXT NOT NULL"));
+        assert!(SBTEST_SCHEMA.contains("pad TEXT NOT NULL"));
     }
 }
