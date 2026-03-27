@@ -262,6 +262,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -287,12 +288,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    references: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    references: None,
                 },
             ],
         };
@@ -334,6 +337,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             }],
         };
         storage.create_table(&info).unwrap();

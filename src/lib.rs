@@ -3,7 +3,7 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 //! This crate re-exports functionality from the modular crates/ workspace.
 
-pub use sqlrustgo_executor::{Executor, ExecutorResult};
+pub use sqlrustgo_executor::{Executor, ExecutorResult, GLOBAL_PROFILER};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{
@@ -17,6 +17,256 @@ pub use sqlrustgo_storage::{
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
 use std::sync::{Arc, RwLock};
+
+use sqlrustgo_executor::OperatorProfile;
+use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
+
+/// Format the EXPLAIN ANALYZE output as a tree structure (PostgreSQL-style)
+fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec<Value>> {
+    let mut rows = Vec::new();
+
+    // Header
+    rows.push(vec![
+        Value::Text("┌─────────────────────────────────────────────────────────────────┐".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text("│                      Execution Plan                             │".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text("├─────────────────────────────────────────────────────────────────┤".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+
+    // Operator nodes
+    for (i, profile) in profiles.iter().enumerate() {
+        let is_last = i == profiles.len() - 1;
+        let prefix = if is_last { "└─ " } else { "├─ " };
+        let time_ms = profile.total_time_ns as f64 / 1_000_000.0;
+
+        rows.push(vec![
+            Value::Text(format!(
+                "│  {} {} (rows={})",
+                prefix,
+                profile.operator_name,
+                profile.rows_processed
+            )),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+        rows.push(vec![
+            Value::Text(format!(
+                "│        Actual Time: {:.3} ms, Rows: {}",
+                time_ms,
+                profile.rows_processed
+            )),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+    }
+
+    // Footer
+    rows.push(vec![
+        Value::Text("└─────────────────────────────────────────────────────────────────┘".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text(format!("Total Execution Time: {}", total_time)),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+
+    rows
+}
+
+/// Handle foreign key constraints for DELETE operations
+/// Returns: (cascaded_deletes, modified_rows) or error for RESTRICT
+fn handle_foreign_key_delete(
+    storage: &mut dyn sqlrustgo_storage::StorageEngine,
+    parent_table: &str,
+    parent_key_values: &[Value],
+    parent_key_column: &str,
+) -> SqlResult<(usize, usize)> {
+    let mut total_cascade_deletes = 0;
+    let mut total_set_null_updates = 0;
+
+    let all_tables = storage.list_tables();
+
+    for table_name in all_tables {
+        if table_name == parent_table {
+            continue;
+        }
+
+        let table_info = match storage.get_table_info(&table_name) {
+            Ok(info) => info,
+            Err(_) => continue,
+        };
+
+        for (col_idx, col) in table_info.columns.iter().enumerate() {
+            if let Some(ref fk) = col.references {
+                if fk.referenced_table == parent_table && fk.referenced_column == parent_key_column
+                {
+                    match fk.on_delete {
+                        Some(ForeignKeyAction::Restrict) => {
+                            let child_rows = storage.scan(&table_name)?;
+                            if let Some(pk_val) = parent_key_values.first() {
+                                for child_row in &child_rows {
+                                    if child_row[col_idx] == *pk_val {
+                                        return Err(SqlError::ExecutionError(format!(
+                                            "Cannot delete: foreign key constraint violation - table '{}' has referenced rows",
+                                            table_name
+                                        )));
+                                    }
+                                }
+                            }
+                        }
+                        Some(ForeignKeyAction::Cascade) => {
+                            // TODO: 当前只处理直接子表，不支持递归删除孙表及更深层次
+                            // 例如: parent -> child -> grandchild，删除 parent 时 child 被删除，
+                            //      但 grandchild 不会被处理（需要递归实现）
+                            let child_rows = storage.scan(&table_name)?;
+                            if let Some(pk_val) = parent_key_values.first() {
+                                let original_count = child_rows.len();
+                                let remaining: Vec<Vec<Value>> = child_rows
+                                    .into_iter()
+                                    .filter(|r| r[col_idx] != *pk_val)
+                                    .collect();
+                                let deleted = original_count - remaining.len();
+                                if deleted > 0 {
+                                    let _ = storage.delete(&table_name, &[]);
+                                    if !remaining.is_empty() {
+                                        storage.insert(&table_name, remaining)?;
+                                    }
+                                    total_cascade_deletes += deleted;
+                                }
+                            }
+                        }
+                        Some(ForeignKeyAction::SetNull) => {
+                            let child_rows = storage.scan(&table_name)?;
+                            if let Some(pk_val) = parent_key_values.first() {
+                                let mut updated = false;
+                                let new_rows: Vec<Vec<Value>> = child_rows
+                                    .into_iter()
+                                    .map(|mut r| {
+                                        if r[col_idx] == *pk_val {
+                                            r[col_idx] = Value::Null;
+                                            updated = true;
+                                        }
+                                        r
+                                    })
+                                    .collect();
+                                if updated {
+                                    let _ = storage.delete(&table_name, &[]);
+                                    storage.insert(&table_name, new_rows)?;
+                                    total_set_null_updates += 1;
+                                }
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((total_cascade_deletes, total_set_null_updates))
+}
+
+/// Handle foreign key constraints for UPDATE operations
+fn handle_foreign_key_update(
+    storage: &mut dyn sqlrustgo_storage::StorageEngine,
+    parent_table: &str,
+    old_key_value: &Value,
+    new_key_value: &Value,
+    parent_key_column: &str,
+) -> SqlResult<(usize, usize)> {
+    let mut total_cascade_updates = 0;
+    let mut total_set_null_updates = 0;
+
+    let all_tables = storage.list_tables();
+
+    for table_name in all_tables {
+        if table_name == parent_table {
+            continue;
+        }
+
+        let table_info = match storage.get_table_info(&table_name) {
+            Ok(info) => info,
+            Err(_) => continue,
+        };
+
+        for (col_idx, col) in table_info.columns.iter().enumerate() {
+            if let Some(ref fk) = col.references {
+                if fk.referenced_table == parent_table && fk.referenced_column == parent_key_column
+                {
+                    match fk.on_update {
+                        Some(ForeignKeyAction::Restrict) => {
+                            let child_rows = storage.scan(&table_name)?;
+                            for child_row in &child_rows {
+                                if child_row[col_idx] == *old_key_value {
+                                    return Err(SqlError::ExecutionError(format!(
+                                        "Cannot update: foreign key constraint violation - table '{}' has referenced rows",
+                                        table_name
+                                    )));
+                                }
+                            }
+                        }
+                        Some(ForeignKeyAction::Cascade) => {
+                            let child_rows = storage.scan(&table_name)?;
+                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                                .into_iter()
+                                .map(|mut r| {
+                                    if r[col_idx] == *old_key_value {
+                                        r[col_idx] = new_key_value.clone();
+                                    }
+                                    r
+                                })
+                                .collect();
+                            let updated_count = new_rows
+                                .iter()
+                                .filter(|r| r[col_idx] == *new_key_value)
+                                .count();
+                            if updated_count > 0 {
+                                let _ = storage.delete(&table_name, &[]);
+                                storage.insert(&table_name, new_rows)?;
+                                total_cascade_updates += updated_count;
+                            }
+                        }
+                        Some(ForeignKeyAction::SetNull) => {
+                            let child_rows = storage.scan(&table_name)?;
+                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                                .into_iter()
+                                .map(|mut r| {
+                                    if r[col_idx] == *old_key_value {
+                                        r[col_idx] = Value::Null;
+                                    }
+                                    r
+                                })
+                                .collect();
+                            let updated_count = new_rows
+                                .iter()
+                                .filter(|r| r[col_idx] == Value::Null)
+                                .count();
+                            if updated_count > 0 {
+                                let _ = storage.delete(&table_name, &[]);
+                                storage.insert(&table_name, new_rows)?;
+                                total_set_null_updates += updated_count;
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((total_cascade_updates, total_set_null_updates))
+}
 
 /// Evaluate a WHERE clause expression against a row
 fn evaluate_where_clause(
@@ -47,64 +297,11 @@ fn evaluate_where_clause(
             s.to_uppercase() != "FALSE" && s != "0"
         }
         sqlrustgo_parser::Expression::Wildcard => true,
-    }
-}
-
-/// Extract simple column=value filter from WHERE clause for FK-aware delete
-/// Returns (column_index, value) if the WHERE clause is a simple equality condition
-fn extract_simple_filter(
-    expr: &sqlrustgo_parser::Expression,
-    columns: &[sqlrustgo_storage::ColumnDefinition],
-) -> Option<(usize, Value)> {
-    match expr {
-        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
-            // Only handle equality comparisons
-            if op != "=" && op != "==" {
-                return None;
-            }
-
-            // Extract column name (left side) and value (right side)
-            let (col_name, value_expr) = match (left.as_ref(), right.as_ref()) {
-                (sqlrustgo_parser::Expression::Identifier(name), val) => (name, val),
-                (val, sqlrustgo_parser::Expression::Identifier(name)) => (name, val),
-                _ => return None,
-            };
-
-            // Find column index
-            let col_idx = columns.iter().position(|c| c.name.eq_ignore_ascii_case(col_name))?;
-
-            // Evaluate value
-            let value = evaluate_literal_expr(value_expr);
-
-            Some((col_idx, value))
+        sqlrustgo_parser::Expression::FunctionCall(_, _) => {
+            // Function calls in WHERE should be evaluated as boolean
+            // This handles cases like WHERE COUNT(*) > 1
+            false
         }
-        _ => None,
-    }
-}
-
-/// Evaluate a literal expression to a Value
-fn evaluate_literal_expr(expr: &sqlrustgo_parser::Expression) -> Value {
-    match expr {
-        sqlrustgo_parser::Expression::Literal(s) => {
-            if let Ok(n) = s.parse::<i64>() {
-                Value::Integer(n)
-            } else if let Ok(n) = s.parse::<f64>() {
-                Value::Float(n)
-            } else if s.eq_ignore_ascii_case("true") {
-                Value::Boolean(true)
-            } else if s.eq_ignore_ascii_case("false") {
-                Value::Boolean(false)
-            } else if s.eq_ignore_ascii_case("null") {
-                Value::Null
-            } else {
-                Value::Text(s.clone())
-            }
-        }
-        sqlrustgo_parser::Expression::Identifier(name) => {
-            // Could be a column reference in some contexts, but for literals return as text
-            Value::Text(name.clone())
-        }
-        _ => Value::Null,
     }
 }
 
@@ -146,6 +343,7 @@ fn evaluate_expr(
             Value::Null
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
+        sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
     }
 }
 
@@ -373,54 +571,166 @@ impl ExecutionEngine {
                     )));
                 }
 
-                // Get table info to determine column types
+                // Get table info to determine column types and auto_increment columns
                 let table_info = storage.get_table_info(table_name).ok();
+
+                // Find auto_increment column indices
+                let auto_increment_cols: Vec<usize> = table_info
+                    .as_ref()
+                    .map(|info| {
+                        info.columns
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, col)| col.auto_increment)
+                            .map(|(idx, _)| idx)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Pre-calculate auto_increment values for each row
+                let mut auto_increment_values: Vec<Vec<(usize, i64)>> = Vec::new();
+                for _ in 0..insert.values.len() {
+                    let mut row_auto_inc: Vec<(usize, i64)> = Vec::new();
+                    for &col_idx in &auto_increment_cols {
+                        let next_val = storage.get_next_auto_increment(table_name, col_idx)?;
+                        row_auto_inc.push((col_idx, next_val));
+                    }
+                    auto_increment_values.push(row_auto_inc);
+                }
 
                 let records: Vec<Vec<Value>> = insert
                     .values
                     .iter()
-                    .map(|row| {
-                        row.iter()
-                            .enumerate()
-                            .map(|(col_idx, expr)| {
-                                match expr {
-                                    Expression::Literal(value) => {
-                                        // Determine the column type from table schema
-                                        if let Some(ref info) = table_info {
-                                            if col_idx < info.columns.len() {
-                                                let col_type = &info.columns[col_idx].data_type;
-                                                let upper = col_type.to_uppercase();
-                                                // Parse numeric values for appropriate types
-                                                if upper.contains("INT")
-                                                    || upper == "BIGINT"
-                                                    || upper == "SMALLINT"
-                                                {
-                                                    if let Ok(n) = value.parse::<i64>() {
-                                                        return Value::Integer(n);
+                    .enumerate()
+                    .map(|(row_idx, row)| {
+                        // If INSERT specifies columns, map values to correct positions
+                        // Otherwise, values go in column order
+                        let num_columns = if insert.columns.is_empty() {
+                            table_info
+                                .as_ref()
+                                .map(|i| i.columns.len())
+                                .unwrap_or(row.len())
+                        } else {
+                            table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0)
+                        };
+
+                        // Create row with correct size, filled with Null initially
+                        let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
+
+                        // Map values to correct column positions
+                        if insert.columns.is_empty() {
+                            // No column list: values map to columns in order
+                            for (col_idx, expr) in row.iter().enumerate() {
+                                if col_idx < num_columns {
+                                    new_row[col_idx] = match expr {
+                                        Expression::Literal(value) => {
+                                            if let Some(ref info) = table_info {
+                                                if col_idx < info.columns.len() {
+                                                    let col_type = &info.columns[col_idx].data_type;
+                                                    let upper = col_type.to_uppercase();
+                                                    if upper.contains("INT")
+                                                        || upper == "BIGINT"
+                                                        || upper == "SMALLINT"
+                                                    {
+                                                        if let Ok(n) = value.parse::<i64>() {
+                                                            Value::Integer(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "FLOAT"
+                                                        || upper == "DOUBLE"
+                                                        || upper == "DECIMAL"
+                                                    {
+                                                        if let Ok(n) = value.parse::<f64>() {
+                                                            Value::Float(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "BOOLEAN" {
+                                                        if value.to_uppercase() == "TRUE" {
+                                                            Value::Boolean(true)
+                                                        } else if value.to_uppercase() == "FALSE" {
+                                                            Value::Boolean(false)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else {
+                                                        Value::Text(value.clone())
                                                     }
-                                                } else if upper == "FLOAT"
-                                                    || upper == "DOUBLE"
-                                                    || upper == "DECIMAL"
-                                                {
-                                                    if let Ok(n) = value.parse::<f64>() {
-                                                        return Value::Float(n);
-                                                    }
-                                                } else if upper == "BOOLEAN" {
-                                                    if value.to_uppercase() == "TRUE" {
-                                                        return Value::Boolean(true);
-                                                    } else if value.to_uppercase() == "FALSE" {
-                                                        return Value::Boolean(false);
-                                                    }
+                                                } else {
+                                                    Value::Text(value.clone())
                                                 }
+                                            } else {
+                                                Value::Text(value.clone())
                                             }
                                         }
-                                        // Default to text for strings and unrecognized types
-                                        Value::Text(value.clone())
-                                    }
-                                    _ => Value::Null,
+                                        _ => Value::Null,
+                                    };
                                 }
-                            })
-                            .collect()
+                            }
+                        } else {
+                            // Column list specified: map each value to its column position
+                            for (value_idx, col_name) in insert.columns.iter().enumerate() {
+                                if value_idx < row.len() {
+                                    // Find column index by name
+                                    if let Some(ref info) = table_info {
+                                        if let Some(target_idx) = info
+                                            .columns
+                                            .iter()
+                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                        {
+                                            let expr = &row[value_idx];
+                                            new_row[target_idx] = match expr {
+                                                Expression::Literal(value) => {
+                                                    let col_type =
+                                                        &info.columns[target_idx].data_type;
+                                                    let upper = col_type.to_uppercase();
+                                                    if upper.contains("INT")
+                                                        || upper == "BIGINT"
+                                                        || upper == "SMALLINT"
+                                                    {
+                                                        if let Ok(n) = value.parse::<i64>() {
+                                                            Value::Integer(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "FLOAT"
+                                                        || upper == "DOUBLE"
+                                                        || upper == "DECIMAL"
+                                                    {
+                                                        if let Ok(n) = value.parse::<f64>() {
+                                                            Value::Float(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "BOOLEAN" {
+                                                        if value.to_uppercase() == "TRUE" {
+                                                            Value::Boolean(true)
+                                                        } else if value.to_uppercase() == "FALSE" {
+                                                            Value::Boolean(false)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else {
+                                                        Value::Text(value.clone())
+                                                    }
+                                                }
+                                                _ => Value::Null,
+                                            };
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Apply auto_increment values for columns that are Null
+                        for &(col_idx, next_val) in &auto_increment_values[row_idx] {
+                            if col_idx < new_row.len() && matches!(new_row[col_idx], Value::Null) {
+                                new_row[col_idx] = Value::Integer(next_val);
+                            }
+                        }
+
+                        new_row
                     })
                     .collect();
 
@@ -440,24 +750,17 @@ impl ExecutionEngine {
                     .iter()
                     .map(|col| {
                         let references = col.references.as_ref().map(|fk| {
-                            use sqlrustgo_parser::parser::ForeignKeyAction as ParserAction;
-                            use sqlrustgo_storage::ForeignKeyAction as StorageAction;
-
-                            let map_action = |action: &Option<ParserAction>| {
-                                action.as_ref().map(|a| {
-                                    match a {
-                                        ParserAction::Cascade => StorageAction::Cascade,
-                                        ParserAction::SetNull => StorageAction::SetNull,
-                                        ParserAction::Restrict => StorageAction::Restrict,
-                                    }
-                                })
-                            };
-
                             sqlrustgo_storage::ForeignKeyConstraint {
                                 referenced_table: fk.table.clone(),
                                 referenced_column: fk.column.clone(),
-on_delete: map_action(&fk.on_delete),
-                                on_update: map_action(&fk.on_update),
+                                on_delete: fk
+                                    .on_delete
+                                    .as_ref()
+                                    .map(|_| sqlrustgo_storage::ForeignKeyAction::Cascade),
+                                on_update: fk
+                                    .on_update
+                                    .as_ref()
+                                    .map(|_| sqlrustgo_storage::ForeignKeyAction::Cascade),
                             }
                         });
                         sqlrustgo_storage::ColumnDefinition {
@@ -465,7 +768,9 @@ on_delete: map_action(&fk.on_delete),
                             data_type: col.data_type.clone(),
                             nullable: col.nullable,
                             is_unique: false,
+                            is_primary_key: false,
                             references,
+                            auto_increment: col.auto_increment,
                         }
                     })
                     .collect();
@@ -538,39 +843,58 @@ on_delete: map_action(&fk.on_delete),
                     .map(|info| info.columns.clone())
                     .unwrap_or_default();
 
+                // Find primary key column for foreign key reference
+                let primary_key_col = columns.iter().position(|c| c.is_primary_key);
+
+                // Find rows that will be deleted
+                let all_rows = storage.scan(&delete.table).unwrap_or_default();
+                let mut rows_to_delete = Vec::new();
+
                 // If no WHERE clause, delete all rows
                 if delete.where_clause.is_none() {
-                    let deleted_count = storage.scan(&delete.table).unwrap_or_default().len();
-                    storage.delete(&delete.table, &[])?;
-                    return Ok(ExecutorResult::new(vec![], deleted_count));
+                    rows_to_delete = all_rows.clone();
+                } else {
+                    for row in &all_rows {
+                        if let Some(ref where_clause) = delete.where_clause {
+                            if evaluate_where_clause(where_clause, row, &columns) {
+                                rows_to_delete.push(row.clone());
+                            }
+                        }
+                    }
                 }
 
-                let where_clause = delete.where_clause.as_ref().unwrap();
+                // Handle foreign key constraints for CASCADE/SET NULL/RESTRICT
+                if let (Some(pk_col_idx), true) = (primary_key_col, !rows_to_delete.is_empty()) {
+                    for row in &rows_to_delete {
+                        let key_value = row[pk_col_idx].clone();
+                        handle_foreign_key_delete(
+                            &mut *storage,
+                            &delete.table,
+                            &[key_value],
+                            &columns[pk_col_idx].name,
+                        )?;
+                    }
+                }
 
-                // Try to extract simple column=value condition from WHERE clause
-                // This supports FK constraint checking
-                let mut deleted_count = 0;
-
-                if let Some((col_idx, filter_value)) = extract_simple_filter(where_clause, &columns) {
-                    // Simple filter: column = value - use storage.delete directly
-                    // This allows proper FK constraint checking
-                    deleted_count = storage.delete(&delete.table, &[Value::Integer(col_idx as i64), filter_value])?;
-                } else {
-                    // Complex WHERE clause - fall back to in-memory approach
-                    let mut rows = storage.scan(&delete.table).unwrap_or_default();
-                    let original_count = rows.len();
-
-                    rows.retain(|row| {
-                        !evaluate_where_clause(where_clause, row, &columns)
-                    });
-
-                    deleted_count = original_count - rows.len();
-
-                    if deleted_count > 0 {
-                        storage.delete(&delete.table, &[])?;
-                        if !rows.is_empty() {
-                            storage.insert(&delete.table, rows)?;
+                // Filter rows - keep rows that DON'T match the WHERE clause
+                let mut remaining_rows: Vec<Vec<Value>> = all_rows
+                    .into_iter()
+                    .filter(|row| {
+                        if let Some(ref where_clause) = delete.where_clause {
+                            !evaluate_where_clause(where_clause, row, &columns)
+                        } else {
+                            true
                         }
+                    })
+                    .collect();
+
+                let deleted_count = rows_to_delete.len();
+
+                // Delete matching rows and insert remaining rows
+                if deleted_count > 0 {
+                    let _ = storage.delete(&delete.table, &[]);
+                    if !remaining_rows.is_empty() {
+                        storage.insert(&delete.table, remaining_rows)?;
                     }
                 }
 
@@ -590,110 +914,75 @@ on_delete: map_action(&fk.on_delete),
                     .map(|info| info.columns.clone())
                     .unwrap_or_default();
 
-                // If no WHERE clause, we can't do simple FK checking - need to reject or handle specially
-                if update.where_clause.is_none() {
-                    return Err(SqlError::ExecutionError(
-                        "UPDATE without WHERE clause is not supported with FK constraints".to_string(),
-                    ));
-                }
+                // Find primary key column
+                let primary_key_col = columns.iter().position(|c| c.is_primary_key);
 
-                let where_clause = update.where_clause.as_ref().unwrap();
+                let all_rows = storage.scan(&update.table).unwrap_or_default();
+                let mut rows_to_update: Vec<(Vec<Value>, Vec<Value>)> = Vec::new(); // (old_row, new_row)
 
-                // Try to extract simple column=value condition from WHERE clause
-                // This supports FK constraint checking
-                let mut updated_count;
-                if let Some((col_idx, filter_value)) = extract_simple_filter(where_clause, &columns) {
-                    // Simple filter: column = value - use storage.update directly
-                    // This allows proper FK constraint checking
+                // Find rows to update and prepare new values
+                // If no WHERE clause, update all rows
+                let has_where_clause = update.where_clause.is_some();
 
-                    // First, we need to evaluate the SET expressions to get the new values
-                    // But we need a sample row to evaluate against for column references
-                    let sample_row = storage.scan(&update.table).unwrap_or_default().pop();
-                    let sample_row = sample_row.as_ref().map(|r| r.as_slice());
+                for row in &all_rows {
+                    if has_where_clause {
+                        if let Some(ref where_clause) = update.where_clause {
+                            if !evaluate_where_clause(where_clause, row, &columns) {
+                                continue;
+                            }
+                        }
+                    }
 
-                    let mut updates: Vec<(usize, Value)> = Vec::new();
+                    let mut new_row = row.clone();
+                    let mut old_key_value: Option<Value> = None;
+
+                    // Apply SET clauses and track if primary key is being updated
                     for (col_name, expr) in &update.set_clauses {
                         if let Some(col_idx) = columns
                             .iter()
                             .position(|c| c.name.eq_ignore_ascii_case(col_name))
                         {
-                            // Use sample row if available for evaluating expressions
-                            let new_value = if let Some(row) = sample_row {
-                                evaluate_expr(expr, row, &columns)
-                            } else {
-                                evaluate_expr(expr, &[], &columns)
-                            };
-                            updates.push((col_idx, new_value));
-                        }
-                    }
+                            // Track old key value if this is the primary key
+                            if primary_key_col == Some(col_idx) {
+                                old_key_value = Some(row[col_idx].clone());
+                            }
 
-                    if !updates.is_empty() {
-                        updated_count = storage.update(
-                            &update.table,
-                            &[Value::Integer(col_idx as i64), filter_value],
-                            &updates,
-                        )?;
-                    } else {
-                        updated_count = 0;
-                    }
-                } else {
-                    // Complex WHERE clause - fall back to in-memory approach
-                    // But we need to be careful: the current implementation deletes ALL rows
-                    // and re-inserts which bypasses FK checking
-                    // For now, reject complex WHERE with FK constraints
-                    let mut rows = storage.scan(&update.table).unwrap_or_default();
-
-                    // Check if any FK columns are being updated
-                    let mut has_fk_update = false;
-                    for (col_name, _) in &update.set_clauses {
-                        if let Some(col_idx) = columns
-                            .iter()
-                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                        {
-                            if col_idx < columns.len() && columns[col_idx].references.is_some() {
-                                has_fk_update = true;
-                                break;
+                            let new_value = evaluate_expr(expr, &new_row, &columns);
+                            if col_idx < new_row.len() {
+                                new_row[col_idx] = new_value;
                             }
                         }
                     }
 
-                    if has_fk_update {
-                        return Err(SqlError::ExecutionError(
-                            "Complex WHERE clause with FK column updates is not supported".to_string(),
-                        ));
-                    }
-
-                    // Filter and update rows in memory (no FK constraints affected)
-                    let original_count = rows.len();
-                    for row in rows.iter_mut() {
-                        if !evaluate_where_clause(where_clause, row, &columns) {
-                            continue;
-                        }
-
-                        for (col_name, expr) in &update.set_clauses {
-                            if let Some(col_idx) = columns
-                                .iter()
-                                .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                            {
-                                let new_value = evaluate_expr(expr, row, &columns);
-                                if col_idx < row.len() {
-                                    row[col_idx] = new_value;
-                                }
-                            }
+                    // Handle foreign key constraints if primary key is being updated
+                    if let (Some(pk_col), Some(old_val)) = (primary_key_col, old_key_value) {
+                        if let Some(new_key_val) = new_row.get(pk_col) {
+                            handle_foreign_key_update(
+                                &mut *storage,
+                                &update.table,
+                                &old_val,
+                                new_key_val,
+                                &columns[pk_col].name,
+                            )?;
                         }
                     }
 
-                    let new_count = rows.len();
-                    updated_count = original_count - new_count;
+                    rows_to_update.push((row.clone(), new_row));
+                }
 
-                    if updated_count > 0 {
-                        storage.delete(&update.table, &[])?;
-                        if !rows.is_empty() {
-                            storage.insert(&update.table, rows)?;
-                        }
-                    } else {
-                        updated_count = 0;
+                let updated_count = rows_to_update.len();
+
+                // Write back updated rows
+                if updated_count > 0 {
+                    let _ = storage.delete(&update.table, &[]);
+
+                    let mut final_rows = all_rows;
+                    final_rows.retain(|r| !rows_to_update.iter().any(|(old, _)| old == r));
+                    for (_, new) in rows_to_update {
+                        final_rows.push(new);
                     }
+
+                    storage.insert(&update.table, final_rows)?;
                 }
 
                 Ok(ExecutorResult::new(vec![], updated_count))
@@ -764,14 +1053,18 @@ on_delete: map_action(&fk.on_delete),
             }
             Statement::Explain(explain) => {
                 let start = std::time::Instant::now();
+
+                // Clear previous profiling data before execution
+                GLOBAL_PROFILER.clear();
+
                 let result = self.execute(*explain.query)?;
+                let duration = start.elapsed();
+
                 if explain.analyze {
-                    let duration = start.elapsed();
-                    let mut rows = result.rows;
-                    rows.push(vec![
-                        Value::Text("Execution Time".to_string()),
-                        Value::Text(format!("{:?}", duration)),
-                    ]);
+                    let profiles = GLOBAL_PROFILER.get_all_profiles();
+                    let total_time = format!("{:.3} ms", duration.as_secs_f64() * 1000.0);
+                    let rows = format_tree_output(&profiles, &total_time);
+
                     return Ok(ExecutorResult::new(rows, result.affected_rows));
                 }
                 Ok(result)
@@ -870,6 +1163,7 @@ on_delete: map_action(&fk.on_delete),
                 let left = join_plan.left();
                 let right = join_plan.right();
                 let join_type = join_plan.join_type();
+                let right_schema_len = right.schema().fields.len();
 
                 let left_result = self.execute_plan(left)?;
                 let right_result = self.execute_plan(right)?;
@@ -877,22 +1171,48 @@ on_delete: map_action(&fk.on_delete),
                 let left_rows = left_result.rows;
                 let right_rows = right_result.rows;
 
-                let mut result_rows = Vec::new();
+                // Build hash map from right rows using first column as key
+                use std::collections::HashMap;
+                let mut right_hash: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
+                for rrow in &right_rows {
+                    let key = if !rrow.is_empty() {
+                        vec![rrow[0].clone()]
+                    } else {
+                        vec![Value::Null]
+                    };
+                    right_hash.entry(key).or_default().push(rrow.clone());
+                }
 
-                for lrow in &left_rows {
-                    for rrow in &right_rows {
-                        match join_type {
-                            sqlrustgo_planner::JoinType::Inner => {
-                                let mut combined = lrow.clone();
-                                combined.extend(rrow.clone());
-                                result_rows.push(combined);
+                let mut result_rows = Vec::new();
+                let mut left_matched: Vec<bool> = vec![false; left_rows.len()];
+
+                // Probe with left rows
+                for (lidx, lrow) in left_rows.iter().enumerate() {
+                    let key = if !lrow.is_empty() {
+                        vec![lrow[0].clone()]
+                    } else {
+                        vec![Value::Null]
+                    };
+
+                    if let Some(matched_right_rows) = right_hash.get(&key) {
+                        left_matched[lidx] = true;
+                        for rrow in matched_right_rows {
+                            let mut combined = lrow.clone();
+                            combined.extend(rrow.clone());
+                            result_rows.push(combined);
+                        }
+                    }
+                }
+
+                // For LEFT join, emit unmatched left rows with NULLs for right schema
+                if join_type == sqlrustgo_planner::JoinType::Left {
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if !left_matched[lidx] {
+                            let mut combined = lrow.clone();
+                            for _ in 0..right_schema_len {
+                                combined.push(Value::Null);
                             }
-                            sqlrustgo_planner::JoinType::Left => {
-                                let mut combined = lrow.clone();
-                                combined.extend(rrow.clone());
-                                result_rows.push(combined);
-                            }
-                            _ => {}
+                            result_rows.push(combined);
                         }
                     }
                 }
@@ -1148,7 +1468,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();
@@ -1187,7 +1509,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();
@@ -1206,7 +1530,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();

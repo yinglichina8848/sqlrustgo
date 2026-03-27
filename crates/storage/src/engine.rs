@@ -43,13 +43,29 @@ pub struct ForeignKeyConstraint {
 }
 
 /// Column definition for table schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
     pub is_unique: bool,
+    pub is_primary_key: bool,
     pub references: Option<ForeignKeyConstraint>,
+    pub auto_increment: bool,
+}
+
+impl ColumnDefinition {
+    pub fn new(name: &str, data_type: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: data_type.to_string(),
+            nullable: true,
+            is_unique: false,
+            is_primary_key: false,
+            references: None,
+            auto_increment: false,
+        }
+    }
 }
 
 /// Table metadata
@@ -151,6 +167,13 @@ pub trait StorageEngine: Send + Sync {
     /// Analyze table and collect statistics
     fn analyze_table(&self, table: &str) -> SqlResult<TableStats>;
 
+    /// Get the next auto_increment value for a table column
+    /// Returns the next value and increments the counter
+    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64>;
+
+    /// Get the current auto_increment counter for a table column
+    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64>;
+
     /// Callback triggered after write operations (INSERT/UPDATE/DELETE)
     /// Used by upper layers to invalidate query caches
     fn on_write_complete(&mut self, _table: &str) {}
@@ -164,6 +187,7 @@ pub struct MemoryStorage {
     views: HashMap<String, ViewInfo>,
     indexes: HashMap<String, SimpleBPlusTree>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
 }
 
 #[derive(Clone, Debug)]
@@ -182,6 +206,7 @@ impl MemoryStorage {
             views: HashMap::new(),
             indexes: HashMap::new(),
             write_callback: None,
+            auto_increment_counters: HashMap::new(),
         }
     }
 
@@ -192,6 +217,7 @@ impl MemoryStorage {
             views: HashMap::new(),
             indexes: HashMap::new(),
             write_callback: Some(callback),
+            auto_increment_counters: HashMap::new(),
         }
     }
 
@@ -864,6 +890,26 @@ impl StorageEngine for MemoryStorage {
             callback(table);
         }
     }
+
+    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let counters = self
+            .auto_increment_counters
+            .entry(table.to_string())
+            .or_insert_with(HashMap::new);
+        let next = counters.entry(column_index).or_insert(0).clone();
+        counters.insert(column_index, next + 1);
+        Ok(next + 1)
+    }
+
+    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let counters =
+            self.auto_increment_counters
+                .get(table)
+                .ok_or_else(|| SqlError::TableNotFound {
+                    table: table.to_string(),
+                })?;
+        Ok(*counters.get(&column_index).unwrap_or(&0))
+    }
 }
 
 /// Helper methods for MemoryStorage (not part of StorageEngine trait)
@@ -922,6 +968,7 @@ impl MemoryStorage {
         Ok(())
     }
 }
+
 
 #[cfg(test)]
 mod tests {
