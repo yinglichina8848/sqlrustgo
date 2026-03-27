@@ -22,6 +22,8 @@ pub use parser::SetOperationType;
 pub use parser::Statement;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
+pub use parser::WindowFrameInfo;
+pub use parser::FrameBoundInfo;
 
 #[cfg(test)]
 mod tests {
@@ -242,4 +244,62 @@ fn test_parse_order_by_multiple_columns() {
         assert!(order_by.items[0].asc);
         assert!(!order_by.items[1].asc);
     }
+}
+
+#[test]
+fn test_parse_row_number_window_function() {
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ROW_NUMBER: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        // Check that we have columns
+        assert!(!select.columns.is_empty());
+    } else {
+        panic!("Expected Select statement");
+    }
+}
+
+#[test]
+fn test_parse_rank_window_function() {
+    let sql = "SELECT RANK() OVER (PARTITION BY dept ORDER BY salary) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse RANK: {:?}", result);
+}
+
+#[test]
+fn test_parse_lead_window_function() {
+    let sql = "SELECT LEAD(salary, 1) OVER (ORDER BY hire_date) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LEAD: {:?}", result);
+}
+
+#[test]
+fn test_parse_lag_window_function() {
+    let sql = "SELECT LAG(salary, 1, 0) OVER (PARTITION BY dept ORDER BY hire_date) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LAG: {:?}", result);
+}
+
+#[test]
+fn test_parse_window_frame_rows() {
+    // Test basic ROW_NUMBER with frame (simple version without aggregate)
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse window frame: {:?}", result);
+}
+
+#[test]
+fn test_parse_window_frame_range() {
+    // Test RANK with frame (simple version)
+    let sql = "SELECT RANK() OVER (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse RANGE window frame: {:?}", result);
+}
+
+#[test]
+fn test_parse_window_frame_with_exclude() {
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse window frame with EXCLUDE: {:?}", result);
 }
