@@ -8,14 +8,26 @@ use std::sync::{Arc, RwLock};
 #[test]
 fn test_replace_updates_existing_row() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
-    engine.execute(parse("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
 
-    engine.execute(parse("INSERT INTO t VALUES (1, 'Alice')").unwrap()).unwrap();
-    engine.execute(parse("REPLACE INTO t VALUES (1, 'Bob')").unwrap()).unwrap();
+    engine
+        .execute(parse("INSERT INTO t VALUES (1, 'Alice')").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("REPLACE INTO t VALUES (1, 'Bob')").unwrap())
+        .unwrap();
 
     // Should still have 1 row (replaced)
-    let count = engine.execute(parse("SELECT COUNT(*) FROM t").unwrap()).unwrap();
-    assert_eq!(count.rows[0][0], Value::Integer(1), "Should have 1 row after REPLACE");
+    let count = engine
+        .execute(parse("SELECT COUNT(*) FROM t").unwrap())
+        .unwrap();
+    assert_eq!(
+        count.rows[0][0],
+        Value::Integer(1),
+        "Should have 1 row after REPLACE"
+    );
 
     println!("✓ REPLACE 更新: 保持 1 行");
 }
@@ -24,13 +36,21 @@ fn test_replace_updates_existing_row() {
 #[test]
 fn test_insert_ignore_skips_duplicate() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
-    engine.execute(parse("CREATE TABLE t2 (id INTEGER PRIMARY KEY, name TEXT)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE t2 (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
 
-    engine.execute(parse("INSERT INTO t2 VALUES (1, 'Alice')").unwrap()).unwrap();
-    engine.execute(parse("INSERT IGNORE INTO t2 VALUES (1, 'Bob')").unwrap()).unwrap();
+    engine
+        .execute(parse("INSERT INTO t2 VALUES (1, 'Alice')").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("INSERT IGNORE INTO t2 VALUES (1, 'Bob')").unwrap())
+        .unwrap();
 
     // Should still have 1 row
-    let count = engine.execute(parse("SELECT COUNT(*) FROM t2").unwrap()).unwrap();
+    let count = engine
+        .execute(parse("SELECT COUNT(*) FROM t2").unwrap())
+        .unwrap();
     assert_eq!(count.rows[0][0], Value::Integer(1), "Should have 1 row");
 
     println!("✓ INSERT IGNORE 跳过重复");
@@ -40,11 +60,20 @@ fn test_insert_ignore_skips_duplicate() {
 #[test]
 fn test_upsert_inserts_new_row() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
-    engine.execute(parse("CREATE TABLE t3 (id INTEGER PRIMARY KEY, name TEXT)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE t3 (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+        .unwrap();
 
-    engine.execute(parse("INSERT INTO t3 VALUES (1, 'new') ON DUPLICATE KEY UPDATE name='updated'").unwrap()).unwrap();
+    engine
+        .execute(
+            parse("INSERT INTO t3 VALUES (1, 'new') ON DUPLICATE KEY UPDATE name='updated'")
+                .unwrap(),
+        )
+        .unwrap();
 
-    let count = engine.execute(parse("SELECT COUNT(*) FROM t3").unwrap()).unwrap();
+    let count = engine
+        .execute(parse("SELECT COUNT(*) FROM t3").unwrap())
+        .unwrap();
     assert_eq!(count.rows[0][0], Value::Integer(1));
 
     println!("✓ UPSERT 插入新行");

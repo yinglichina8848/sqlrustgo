@@ -299,7 +299,8 @@ mod tests {
         let restored = Page::from_bytes(bytes).unwrap();
 
         assert_eq!(
-            original_checksum, restored.checksum(),
+            original_checksum,
+            restored.checksum(),
             "Checksum should be preserved through serialization"
         );
 
@@ -339,7 +340,10 @@ mod tests {
 
         // After recalculation, should still pass
         let checksum = page.calculate_checksum();
-        assert!(page.verify_checksum(), "Page should still verify after calculate");
+        assert!(
+            page.verify_checksum(),
+            "Page should still verify after calculate"
+        );
 
         // Corrupt and verify should fail
         corrupt_bit(&mut page, 500);

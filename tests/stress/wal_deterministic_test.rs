@@ -188,10 +188,7 @@ mod tests {
         // Entries should be in order
         let mut last_lsn = 0u64;
         for entry in &entries {
-            assert!(
-                entry.lsn >= last_lsn,
-                "LSN should increase monotonically"
-            );
+            assert!(entry.lsn >= last_lsn, "LSN should increase monotonically");
             last_lsn = entry.lsn;
         }
 
@@ -294,7 +291,10 @@ mod tests {
             }
             Err(e) => {
                 // If file doesn't exist, that's also acceptable for empty WAL
-                println!("Empty WAL recovery returned error (file may not exist): {:?}", e);
+                println!(
+                    "Empty WAL recovery returned error (file may not exist): {:?}",
+                    e
+                );
             }
         }
     }

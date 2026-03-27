@@ -11,7 +11,7 @@ use sqlrustgo_server::connection_pool::ConnectionPool;
 use sqlrustgo_transaction::lock::{LockManager, LockMode};
 use sqlrustgo_transaction::mvcc::TxId;
 use sqlrustgo_transaction::TransactionManager;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::sync::RwLock;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -441,7 +441,7 @@ mod network_stress {
     use sqlrustgo_common::network_metrics::NetworkMetrics;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[test]
@@ -455,7 +455,7 @@ mod network_stress {
         let conn_count = 100;
 
         let handles: Vec<_> = (0..conn_count)
-            .map(|i| {
+            .map(|_i| {
                 let metrics = metrics.clone();
                 thread::spawn(move || {
                     if let Ok(stream) =
@@ -657,8 +657,8 @@ mod network_stress {
 #[cfg(test)]
 mod wal_stress {
     use super::*;
-    use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager};
-    use std::fs;
+    use sqlrustgo_storage::wal::WalManager;
+    
     use std::path::PathBuf;
 
     fn create_test_wal() -> (tempfile::TempDir, PathBuf) {
@@ -1117,7 +1117,7 @@ mod crud_correctness {
     #[test]
     fn test_wal_recovery_correctness() {
         use sqlrustgo_storage::wal::WalManager;
-        use std::path::PathBuf;
+        
 
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("recovery_test.wal");

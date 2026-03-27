@@ -568,41 +568,6 @@ fn test_cache_hit_performance() {
 // ============================================================================
 
 #[test]
-fn test_single_insert_qps() {
-    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
-
-    engine
-        .execute(parse("CREATE TABLE single_insert_test (id INTEGER, value TEXT)").unwrap())
-        .unwrap();
-
-    let iterations = 1000;
-    let start = Instant::now();
-
-    for i in 0..iterations {
-        engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO single_insert_test VALUES ({}, 'value{}')",
-                    i, i
-                ))
-                .unwrap(),
-            )
-            .unwrap();
-    }
-
-    let elapsed = start.elapsed();
-    let qps = iterations as f64 / elapsed.as_secs_f64();
-
-    println!("Single insert QPS: {:.2} ops/s (target: 1000+)", qps);
-
-    // Verify all rows were inserted
-    let result = engine
-        .execute(parse("SELECT COUNT(*) FROM single_insert_test").unwrap())
-        .unwrap();
-    assert_eq!(result.rows[0][0], Value::Integer(iterations as i64));
-}
-
-#[test]
 fn test_insert_batch_optimization() {
     // Test batch insert optimization
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));

@@ -1154,9 +1154,9 @@ impl Parser {
 
     /// Parse comparison expression (=, !=, >, <, >=, <=)
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
-        let left = self.parse_primary_expression()?;
+        let left = self.parse_arithmetic_expression()?;
 
-        // Check for binary operator
+        // Check for comparison operator
         let op = match self.current() {
             Some(Token::Equal) => "=",
             Some(Token::NotEqual) => "!=",
@@ -1168,7 +1168,30 @@ impl Parser {
         };
         self.next(); // consume operator
 
-        let right = self.parse_primary_expression()?;
+        let right = self.parse_arithmetic_expression()?;
+
+        Ok(Expression::BinaryOp(
+            Box::new(left),
+            op.to_string(),
+            Box::new(right),
+        ))
+    }
+
+    /// Parse arithmetic expression (+, -, *, /)
+    fn parse_arithmetic_expression(&mut self) -> Result<Expression, String> {
+        let left = self.parse_primary_expression()?;
+
+        // Check for arithmetic operator
+        let op = match self.current() {
+            Some(Token::Plus) => "+",
+            Some(Token::Minus) => "-",
+            Some(Token::Asterisk) => "*",
+            Some(Token::Slash) => "/",
+            _ => return Ok(left), // No operator, return simple expression
+        };
+        self.next(); // consume operator
+
+        let right = self.parse_arithmetic_expression()?;
 
         Ok(Expression::BinaryOp(
             Box::new(left),

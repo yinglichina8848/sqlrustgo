@@ -6,18 +6,38 @@
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
-    use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager};
+    use sqlrustgo_storage::wal::{WalEntryType, WalManager};
     use tempfile::TempDir;
 
     /// Operation types for fuzz testing
     #[derive(Debug, Clone)]
     enum Op {
-        Begin { tx_id: u64 },
-        Insert { tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8> },
-        Update { tx_id: u64, table_id: u64, key: Vec<u8>, data: Vec<u8> },
-        Delete { tx_id: u64, table_id: u64, key: Vec<u8> },
-        Commit { tx_id: u64 },
-        Rollback { tx_id: u64 },
+        Begin {
+            tx_id: u64,
+        },
+        Insert {
+            tx_id: u64,
+            table_id: u64,
+            key: Vec<u8>,
+            data: Vec<u8>,
+        },
+        Update {
+            tx_id: u64,
+            table_id: u64,
+            key: Vec<u8>,
+            data: Vec<u8>,
+        },
+        Delete {
+            tx_id: u64,
+            table_id: u64,
+            key: Vec<u8>,
+        },
+        Commit {
+            tx_id: u64,
+        },
+        Rollback {
+            tx_id: u64,
+        },
     }
 
     impl Op {
@@ -26,13 +46,27 @@ mod tests {
                 Op::Begin { tx_id } => {
                     manager.log_begin(*tx_id)?;
                 }
-                Op::Insert { tx_id, table_id, key, data } => {
+                Op::Insert {
+                    tx_id,
+                    table_id,
+                    key,
+                    data,
+                } => {
                     manager.log_insert(*tx_id, *table_id, key.clone(), data.clone())?;
                 }
-                Op::Update { tx_id, table_id, key, data } => {
+                Op::Update {
+                    tx_id,
+                    table_id,
+                    key,
+                    data,
+                } => {
                     manager.log_update(*tx_id, *table_id, key.clone(), data.clone())?;
                 }
-                Op::Delete { tx_id, table_id, key } => {
+                Op::Delete {
+                    tx_id,
+                    table_id,
+                    key,
+                } => {
                     manager.log_delete(*tx_id, *table_id, key.clone())?;
                 }
                 Op::Commit { tx_id } => {
@@ -359,10 +393,7 @@ mod tests {
     #[test]
     fn test_wal_fuzz_update_delete() {
         let ops = prop::collection::vec(
-            (
-                any::<u64>(),
-                prop::collection::vec(any::<u8>(), 1..5),
-            ),
+            (any::<u64>(), prop::collection::vec(any::<u8>(), 1..5)),
             1..20,
         )
         .prop_map(|ops| {

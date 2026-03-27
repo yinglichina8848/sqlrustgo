@@ -19,7 +19,7 @@ pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
-use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
+use sqlrustgo_storage::ForeignKeyAction;
 
 /// Format the EXPLAIN ANALYZE output as a tree structure (PostgreSQL-style)
 fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec<Value>> {
@@ -220,7 +220,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::Cascade) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -241,7 +241,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::SetNull) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -341,10 +341,44 @@ fn evaluate_expr(
                 Value::Null
             }
         }
-        sqlrustgo_parser::Expression::BinaryOp(_, _, _) => {
-            // For binary ops, we'd need to evaluate recursively
-            // This shouldn't happen in a simple where clause evaluation
-            Value::Null
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            // Evaluate binary operations (+, -, *, /, =, !=, >, <, >=, <=)
+            let left_val = evaluate_expr(left, row, columns);
+            let right_val = evaluate_expr(right, row, columns);
+
+            match op.as_str() {
+                "+" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 + r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l + *r as f64),
+                    _ => Value::Null,
+                },
+                "-" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 - r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l - *r as f64),
+                    _ => Value::Null,
+                },
+                "*" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 * r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l * *r as f64),
+                    _ => Value::Null,
+                },
+                "/" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) if *r != 0 => Value::Integer(l / r),
+                    (Value::Float(l), Value::Float(r)) if *r != 0.0 => Value::Float(l / r),
+                    (Value::Integer(l), Value::Float(r)) if *r != 0.0 => {
+                        Value::Float(*l as f64 / r)
+                    }
+                    (Value::Float(l), Value::Integer(r)) if *r != 0 => Value::Float(l / *r as f64),
+                    _ => Value::Null,
+                },
+                _ => Value::Null,
+            }
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
@@ -406,8 +440,8 @@ fn like_match(text: &str, pattern: &str) -> bool {
     // Simple implementation for LIKE patterns
     // % matches any sequence of characters
     // _ matches any single character
-    let mut text_chars: Vec<char> = text.chars().collect();
-    let mut pattern_chars: Vec<char> = pattern.chars().collect();
+    let text_chars: Vec<char> = text.chars().collect();
+    let pattern_chars: Vec<char> = pattern.chars().collect();
 
     fn do_match(pi: usize, ti: usize, pc: &[char], tc: &[char]) -> bool {
         if pi == pc.len() {
@@ -981,7 +1015,7 @@ impl ExecutionEngine {
                 }
 
                 // Filter rows - keep rows that DON'T match the WHERE clause
-                let mut remaining_rows: Vec<Vec<Value>> = all_rows
+                let remaining_rows: Vec<Vec<Value>> = all_rows
                     .into_iter()
                     .filter(|row| {
                         if let Some(ref where_clause) = delete.where_clause {
