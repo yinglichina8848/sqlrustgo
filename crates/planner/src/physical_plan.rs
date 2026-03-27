@@ -35,9 +35,32 @@ pub trait PhysicalPlan: Send + Sync {
 
     /// Downcast to concrete type
     fn as_any(&self) -> &dyn Any;
+
+    /// Estimated cost for this plan node (startup_cost, total_cost, rows, width)
+    /// Default implementation returns estimated values based on schema
+    fn estimated_cost(&self) -> (f64, f64, u64, u32) {
+        let row_width = self
+            .schema()
+            .fields
+            .iter()
+            .map(|f| f.data_type.estimate_size())
+            .sum::<usize>() as u32;
+        let children = self.children();
+        if children.is_empty() {
+            (0.0, 100.0, 1000, row_width)
+        } else {
+            let child_costs: Vec<_> = children.iter().map(|c| c.estimated_cost()).collect();
+            let total_cost = child_costs.iter().map(|(_, c, _, _)| c).sum::<f64>() + 50.0;
+            let total_rows = child_costs
+                .iter()
+                .map(|(_, _, r, _)| *r)
+                .max()
+                .unwrap_or(1000);
+            (0.0, total_cost, total_rows, row_width)
+        }
+    }
 }
 
-/// Sequential scan execution operator
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SeqScanExec {
@@ -92,6 +115,16 @@ impl PhysicalPlan for SeqScanExec {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn estimated_cost(&self) -> (f64, f64, u64, u32) {
+        let row_width = self
+            .schema
+            .fields
+            .iter()
+            .map(|f| f.data_type.estimate_size())
+            .sum::<usize>() as u32;
+        (0.0, 100.0, 1000, row_width)
     }
 }
 
