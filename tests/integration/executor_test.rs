@@ -373,5 +373,6 @@ fn test_upsert_no_conflict() {
         .unwrap();
     assert_eq!(result.rows.len(), 2, "Should have 2 rows");
     assert_eq!(result.rows[1][0], Value::Integer(2));
+    // Note: parser keeps quotes in string literals
     assert_eq!(result.rows[1][1], Value::Text("Product2".to_string()));
 }

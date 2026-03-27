@@ -280,6 +280,7 @@ impl<'a> Lexer<'a> {
                     "INTERSECT" => Token::Intersect,
                     "EXCEPT" => Token::Except,
                     "TRIGGER" => Token::Trigger,
+                    "DO" => Token::Do,
                     "BEFORE" => Token::Before,
                     "AFTER" => Token::After,
                     "FOR" => Token::For,

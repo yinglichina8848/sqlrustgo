@@ -299,6 +299,8 @@ fn evaluate_where_clause(
             s.to_uppercase() != "FALSE" && s != "0"
         }
         sqlrustgo_parser::Expression::Wildcard => true,
+        sqlrustgo_parser::Expression::Subquery(_)
+        | sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => {
             // Function calls in WHERE should be evaluated as boolean
             // This handles cases like WHERE COUNT(*) > 1
@@ -339,13 +341,49 @@ fn evaluate_expr(
                 Value::Null
             }
         }
-        sqlrustgo_parser::Expression::BinaryOp(_, _, _) => {
-            // For binary ops, we'd need to evaluate recursively
-            // This shouldn't happen in a simple where clause evaluation
-            Value::Null
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            // Evaluate binary operations (+, -, *, /, =, !=, >, <, >=, <=)
+            let left_val = evaluate_expr(left, row, columns);
+            let right_val = evaluate_expr(right, row, columns);
+
+            match op.as_str() {
+                "+" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 + r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l + *r as f64),
+                    _ => Value::Null,
+                },
+                "-" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 - r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l - *r as f64),
+                    _ => Value::Null,
+                },
+                "*" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 * r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l * *r as f64),
+                    _ => Value::Null,
+                },
+                "/" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) if *r != 0 => Value::Integer(l / r),
+                    (Value::Float(l), Value::Float(r)) if *r != 0.0 => Value::Float(l / r),
+                    (Value::Integer(l), Value::Float(r)) if *r != 0.0 => {
+                        Value::Float(*l as f64 / r)
+                    }
+                    (Value::Float(l), Value::Integer(r)) if *r != 0 => Value::Float(l / *r as f64),
+                    _ => Value::Null,
+                },
+                _ => Value::Null,
+            }
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
+        sqlrustgo_parser::Expression::Subquery(_)
+        | sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
     }
 }
 

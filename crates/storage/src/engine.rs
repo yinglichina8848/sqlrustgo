@@ -164,6 +164,18 @@ pub trait StorageEngine: Send + Sync {
     /// Check if view exists
     fn has_view(&self, name: &str) -> bool;
 
+    /// Create a trigger
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()>;
+
+    /// Drop a trigger
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()>;
+
+    /// Get trigger info
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo>;
+
+    /// List all triggers for a table
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo>;
+
     /// Analyze table and collect statistics
     fn analyze_table(&self, table: &str) -> SqlResult<TableStats>;
 
@@ -185,6 +197,8 @@ pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
     views: HashMap<String, ViewInfo>,
+    triggers: HashMap<String, TriggerInfo>,
+    table_triggers: HashMap<String, Vec<String>>,
     indexes: HashMap<String, SimpleBPlusTree>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
     auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
@@ -198,12 +212,36 @@ pub struct ViewInfo {
     pub records: Vec<Record>,
 }
 
+#[derive(Clone, Debug)]
+pub struct TriggerInfo {
+    pub name: String,
+    pub table_name: String,
+    pub timing: TriggerTiming,
+    pub event: TriggerEvent,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
 impl MemoryStorage {
     pub fn new() -> Self {
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
             views: HashMap::new(),
+            triggers: HashMap::new(),
+            table_triggers: HashMap::new(),
             indexes: HashMap::new(),
             write_callback: None,
             auto_increment_counters: HashMap::new(),
@@ -215,6 +253,8 @@ impl MemoryStorage {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
             views: HashMap::new(),
+            triggers: HashMap::new(),
+            table_triggers: HashMap::new(),
             indexes: HashMap::new(),
             write_callback: Some(callback),
             auto_increment_counters: HashMap::new(),
@@ -236,6 +276,45 @@ impl MemoryStorage {
 
     pub fn has_view(&self, name: &str) -> bool {
         self.views.contains_key(name)
+    }
+
+    pub fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        self.triggers.insert(info.name.clone(), info.clone());
+        self.table_triggers
+            .entry(info.table_name.clone())
+            .or_insert_with(Vec::new)
+            .push(info.name.clone());
+        Ok(())
+    }
+
+    pub fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        if let Some(info) = self.triggers.remove(name) {
+            if let Some(triggers) = self.table_triggers.get_mut(&info.table_name) {
+                triggers.retain(|n| n != name);
+            }
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Trigger {} not found",
+                name
+            )))
+        }
+    }
+
+    pub fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        self.triggers.get(name).cloned()
+    }
+
+    pub fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        self.table_triggers
+            .get(table)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|n| self.triggers.get(n).cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get all tables that have foreign key references to the given parent table
@@ -866,6 +945,45 @@ impl StorageEngine for MemoryStorage {
 
     fn has_view(&self, name: &str) -> bool {
         self.views.contains_key(name)
+    }
+
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        self.triggers.insert(info.name.clone(), info.clone());
+        self.table_triggers
+            .entry(info.table_name.clone())
+            .or_insert_with(Vec::new)
+            .push(info.name.clone());
+        Ok(())
+    }
+
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        if let Some(info) = self.triggers.remove(name) {
+            if let Some(triggers) = self.table_triggers.get_mut(&info.table_name) {
+                triggers.retain(|n| n != name);
+            }
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Trigger {} not found",
+                name
+            )))
+        }
+    }
+
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        self.triggers.get(name).cloned()
+    }
+
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        self.table_triggers
+            .get(table)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|n| self.triggers.get(n).cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
