@@ -294,6 +294,7 @@ impl<'a> Lexer<'a> {
                     "CURRENT" => Token::Current,
                     "TIES" => Token::Ties,
                     "NO" => Token::NoOthers,
+                    "BETWEEN" => Token::Between,
                     "ALL" => Token::All,
                     "ANALYZE" => Token::Analyze,
                     "EXPLAIN" => Token::Explain,

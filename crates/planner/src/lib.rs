@@ -57,6 +57,12 @@ pub enum WindowFunction {
     FirstValue,
     LastValue,
     NthValue,
+    // Aggregate window functions
+    Sum,
+    Avg,
+    Count,
+    Min,
+    Max,
 }
 
 /// Window frame type for window functions
@@ -376,6 +382,11 @@ impl fmt::Display for Expr {
                     WindowFunction::FirstValue => "FIRST_VALUE",
                     WindowFunction::LastValue => "LAST_VALUE",
                     WindowFunction::NthValue => "NTH_VALUE",
+                    WindowFunction::Sum => "SUM",
+                    WindowFunction::Avg => "AVG",
+                    WindowFunction::Count => "COUNT",
+                    WindowFunction::Min => "MIN",
+                    WindowFunction::Max => "MAX",
                 };
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
                 write!(f, "{}({})", func_name, args_str.join(", "))?;
