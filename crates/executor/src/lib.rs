@@ -18,9 +18,11 @@ pub mod session_config;
 pub mod sql_log;
 pub mod sql_normalizer;
 pub mod task_scheduler;
+pub mod parallel_executor;
 pub mod test_framework;
 pub mod vectorization;
 pub use task_scheduler::{create_default_scheduler, RayonTaskScheduler, TaskScheduler};
+pub use parallel_executor::{ParallelExecutor, ParallelVolcanoExecutor};
 
 pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
