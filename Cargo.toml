@@ -182,6 +182,10 @@ name = "executor_test"
 path = "tests/integration/executor_test.rs"
 
 [[test]]
+name = "foreign_key_test"
+path = "tests/integration/foreign_key_test.rs"
+
+[[test]]
 name = "planner_test"
 path = "tests/integration/planner_test.rs"
 
@@ -251,6 +255,10 @@ name = "concurrency_stress_test"
 path = "tests/stress/concurrency_stress_test.rs"
 
 [[test]]
+name = "chaos_test"
+path = "tests/stress/chaos_test.rs"
+
+[[test]]
 name = "production_scenario_test"
 path = "tests/stress/production_scenario_test.rs"
 
@@ -303,8 +311,8 @@ name = "join_test"
 path = "tests/anomaly/join_test.rs"
 
 [[test]]
-name = "foreign_key_test"
-path = "tests/anomaly/foreign_key_test.rs"
+name = "fk_constraint_test"
+path = "tests/anomaly/fk_constraint_test.rs"
 
 [[test]]
 name = "server_integration_test"

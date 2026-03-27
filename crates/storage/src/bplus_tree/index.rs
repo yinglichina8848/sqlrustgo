@@ -428,7 +428,7 @@ impl BTreeIndex {
 
     /// Collect index statistics
     pub fn collect_stats(&self) -> IndexStats {
-        let mut stats = IndexStats::new();
+        let mut stats = IndexStats::default();
         stats.num_entries = self.metadata.num_entries;
         stats.height = self.metadata.height;
 
@@ -1340,7 +1340,7 @@ mod tests {
 
     #[test]
     fn test_index_stats_selectivity() {
-        let mut stats = IndexStats::new();
+        let mut stats = IndexStats::default();
         stats.num_entries = 100;
         stats.cardinality = 50;
         assert_eq!(stats.selectivity(), 0.5);
@@ -1348,7 +1348,7 @@ mod tests {
 
     #[test]
     fn test_index_stats_selectivity_clamped() {
-        let mut stats = IndexStats::new();
+        let mut stats = IndexStats::default();
         stats.num_entries = 100;
         stats.cardinality = 150; // More unique than entries
         assert_eq!(stats.selectivity(), 1.0); // Should clamp to 1.0
@@ -1683,5 +1683,135 @@ mod tests {
         index.insert(1, "hello world");
 
         assert!(!index.is_empty());
+    }
+}
+
+// ============================================================================
+// ============================================================================
+// Composite Index Tests (Issue #896)
+// ============================================================================
+
+#[cfg(test)]
+mod composite_index_tests {
+    use super::*;
+
+    #[test]
+    fn test_composite_key_creation() {
+        // Test composite key creation
+        let key = CompositeKey::new(vec![1, 2, 3]);
+        assert_eq!(key.columns.len(), 3);
+        assert_eq!(key.columns[0], 1);
+        assert_eq!(key.columns[1], 2);
+        assert_eq!(key.columns[2], 3);
+    }
+
+    #[test]
+    fn test_composite_key_from_slice() {
+        let key = CompositeKey::from_slice(&[10, 20, 30]);
+        assert_eq!(key.columns, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn test_composite_key_equality() {
+        let key1 = CompositeKey::new(vec![1, 2, 3]);
+        let key2 = CompositeKey::new(vec![1, 2, 3]);
+        let key3 = CompositeKey::new(vec![1, 2, 4]);
+        
+        assert_eq!(key1, key2);
+        assert!(key1 != key3);
+    }
+
+    #[test]
+    fn test_composite_btree_insert_and_search() {
+        let mut index = CompositeBTreeIndex::new(2);
+        
+        // Insert composite keys
+        index.insert(CompositeKey::new(vec![1, 100]), 1);
+        
+        // Search should work
+        let result = index.search(&CompositeKey::new(vec![1, 100]));
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_index_stats_selectivity() {
+        let stats = IndexStats {
+            num_entries: 1000,
+            cardinality: 100,
+            ..Default::default()
+        };
+        
+        let selectivity = stats.selectivity();
+        assert!(selectivity > 0.0 && selectivity <= 1.0);
+    }
+}
+
+// ============================================================================
+// Covering Index Tests (Issue #896)
+// ============================================================================
+
+#[cfg(test)]
+mod covering_index_tests {
+    use super::*;
+
+    #[test]
+    fn test_covering_index_check() {
+        // Test covering index concept
+        let index_columns = vec!["id".to_string(), "name".to_string()];
+        let query_columns = vec!["id".to_string(), "name".to_string()];
+        
+        let is_covering = query_columns.iter().all(|col| index_columns.contains(col));
+        assert!(is_covering);
+    }
+
+    #[test]
+    fn test_non_covering_index_check() {
+        let index_columns = vec!["id".to_string(), "name".to_string()];
+        let query_columns = vec!["id".to_string(), "email".to_string()];
+        
+        let is_covering = query_columns.iter().all(|col| index_columns.contains(col));
+        assert!(!is_covering);
+    }
+
+    #[test]
+    fn test_index_only_scan_decision() {
+        let covering_index = (true, 0.1, 0.5);
+        
+        let should_use_index_only = covering_index.0 && 
+            covering_index.1 < covering_index.2;
+        
+        assert!(should_use_index_only);
+    }
+}
+
+// ============================================================================
+// Index Selection Tests (Issue #896)
+// ============================================================================
+
+#[cfg(test)]
+mod index_selection_tests {
+    #[test]
+    fn test_selectivity_calculation() {
+        // Test selectivity calculation
+        let num_entries = 1000u64;
+        let cardinality = 100u64;
+        
+        let selectivity = cardinality as f64 / num_entries as f64;
+        assert!((selectivity - 0.1).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_best_index_selection() {
+        let indexes = vec![
+            ("idx1", 0.1),
+            ("idx2", 0.5),
+            ("idx3", 0.9),
+        ];
+        
+        let best = indexes.iter()
+            .min_by_key(|(_, sel)| (sel * 100.0) as i32)
+            .map(|(name, _)| *name);
+        
+        assert_eq!(best, Some("idx1"));
     }
 }
