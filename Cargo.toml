@@ -75,6 +75,7 @@ serde_yaml = "0.9"
 rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
 proptest = "1.1"
+sqlrustgo-server = { path = "crates/server" }
 
 [package]
 name = "sqlrustgo"
@@ -93,7 +94,6 @@ sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 sqlrustgo-transaction.workspace = true
-sqlrustgo-server.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
