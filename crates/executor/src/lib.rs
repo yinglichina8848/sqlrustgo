@@ -13,12 +13,14 @@ pub mod pipeline_trace;
 pub mod query_cache;
 pub mod query_cache_config;
 pub mod query_cache_metrics;
+pub mod reusable_vec;
 pub mod session_config;
 pub mod sql_log;
 pub mod sql_normalizer;
+pub mod task_scheduler;
 pub mod test_framework;
 pub mod vectorization;
-pub mod reusable_vec;
+pub use task_scheduler::{create_default_scheduler, RayonTaskScheduler, TaskScheduler};
 
 pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
