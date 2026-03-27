@@ -16,8 +16,6 @@ pub use sqlrustgo_storage::{
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
-pub mod memory;
-
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
@@ -637,20 +635,15 @@ impl ExecutionEngine {
                     })
                     .unwrap_or_default();
 
-                // Pre-calculate auto_increment values for each row (batch allocation for efficiency)
-                // Batch allocation reduces lock contention from O(rows * auto_increment_cols) to O(auto_increment_cols)
-                let num_rows = insert.values.len();
-                let mut auto_increment_values: Vec<Vec<(usize, i64)>> = Vec::with_capacity(num_rows);
-                for _ in 0..num_rows {
-                    auto_increment_values.push(Vec::new());
-                }
-
-                // For each auto_increment column, batch allocate all needed values at once
-                for &col_idx in &auto_increment_cols {
-                    let batch_values = storage.get_next_auto_increment_batch(table_name, col_idx, num_rows)?;
-                    for (row_idx, &value) in batch_values.iter().enumerate() {
-                        auto_increment_values[row_idx].push((col_idx, value));
+                // Pre-calculate auto_increment values for each row
+                let mut auto_increment_values: Vec<Vec<(usize, i64)>> = Vec::new();
+                for _ in 0..insert.values.len() {
+                    let mut row_auto_inc: Vec<(usize, i64)> = Vec::new();
+                    for &col_idx in &auto_increment_cols {
+                        let next_val = storage.get_next_auto_increment(table_name, col_idx)?;
+                        row_auto_inc.push((col_idx, next_val));
                     }
+                    auto_increment_values.push(row_auto_inc);
                 }
 
                 let records: Vec<Vec<Value>> = insert
