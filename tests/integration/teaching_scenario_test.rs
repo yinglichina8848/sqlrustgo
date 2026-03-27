@@ -313,7 +313,7 @@ fn test_transaction_rollback() {
     let result = engine
         .execute(parse("SELECT * FROM test_table WHERE id = 1").unwrap())
         .unwrap();
-    assert_eq!(result.rows[0][1], Value::Text("'initial'".to_string()));
+    assert_eq!(result.rows[0][1], Value::Text("initial".to_string()));
 }
 
 #[test]

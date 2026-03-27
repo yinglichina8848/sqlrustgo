@@ -777,7 +777,7 @@ impl Parser {
                         self.next();
                     }
                     Some(Token::StringLiteral(s)) => {
-                        row.push(Expression::Literal(format!("'{}'", s)));
+                        row.push(Expression::Literal(s.to_string()));
                         self.next();
                     }
                     Some(Token::Comma) => {
@@ -958,7 +958,7 @@ impl Parser {
             let value = match self.current() {
                 Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
                 Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
+                Some(Token::StringLiteral(s)) => Expression::Literal(s.to_string()),
                 Some(Token::Minus) => {
                     self.next();
                     if let Some(Token::NumberLiteral(n)) = self.current() {
@@ -1351,13 +1351,32 @@ impl Parser {
                                         }
                                         _ => "".to_string(),
                                     };
-                                    let ref_column = match self.current() {
-                                        Some(Token::Identifier(s)) => {
-                                            let c = s.clone();
+                                    // Handle optional parentheses: REFERENCES table(column)
+                                    let ref_column = if let Some(Token::LParen) = self.current() {
+                                        // Consume '('
+                                        self.next();
+                                        let col = match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        };
+                                        // Consume ')' if present
+                                        if let Some(Token::RParen) = self.current() {
                                             self.next();
-                                            c
                                         }
-                                        _ => "id".to_string(),
+                                        col
+                                    } else {
+                                        match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        }
                                     };
                                     references = Some(ForeignKeyRef {
                                         table: ref_table,
@@ -1365,6 +1384,88 @@ impl Parser {
                                         on_delete: None,
                                         on_update: None,
                                     });
+                                    // Parse ON DELETE and ON UPDATE actions
+                                    loop {
+                                        match self.current() {
+                                            Some(Token::On) => {
+                                                self.next();
+                                                // Parse ON DELETE action
+                                                if let Some(Token::Delete) = self.current() {
+                                                    self.next();
+                                                    // Check for SET NULL or direct action
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper = action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
+                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_delete = action;
+                                                    }
+                                                }
+                                                // Check if we're at UPDATE before checking for ON (order matters!)
+                                                if let Some(Token::Update) = self.current() {
+                                                    self.next();
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper = action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
+                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_update = action;
+                                                    }
+                                                }
+                                                // If we're at ON, continue to next iteration to handle it
+                                                else if let Some(Token::On) = self.current() {
+                                                    continue;
+                                                }
+                                                // Not ON DELETE or ON UPDATE, break
+                                                else {
+                                                    break;
+                                                }
+                                            }
+                                            _ => break,
+                                        }
+                                    }
                                 }
                                 _ => break,
                             }
@@ -2711,6 +2812,36 @@ mod tests {
                 let fk = ct.columns[1].references.as_ref().unwrap();
                 assert_eq!(fk.table, "users");
                 assert_eq!(fk.column, "id");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_foreign_keys() {
+        // Test that multiple FK columns can be parsed correctly
+        let result = parse(
+            "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id), product_id INTEGER REFERENCES products(id))",
+        );
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 3, "Should parse all 3 columns");
+                // First column: id
+                assert_eq!(ct.columns[0].name, "id");
+                assert!(ct.columns[0].references.is_none());
+                // Second column: user_id with FK to users
+                assert_eq!(ct.columns[1].name, "user_id");
+                assert!(ct.columns[1].references.is_some());
+                let fk1 = ct.columns[1].references.as_ref().unwrap();
+                assert_eq!(fk1.table, "users");
+                assert_eq!(fk1.column, "id");
+                // Third column: product_id with FK to products
+                assert_eq!(ct.columns[2].name, "product_id");
+                assert!(ct.columns[2].references.is_some());
+                let fk2 = ct.columns[2].references.as_ref().unwrap();
+                assert_eq!(fk2.table, "products");
+                assert_eq!(fk2.column, "id");
             }
             _ => panic!("Expected CREATE TABLE statement"),
         }

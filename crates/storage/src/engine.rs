@@ -237,6 +237,43 @@ impl MemoryStorage {
     pub fn has_view(&self, name: &str) -> bool {
         self.views.contains_key(name)
     }
+
+    /// Get all tables that have foreign key references to the given parent table
+    pub fn get_tables_referencing(&self, parent_table: &str) -> Vec<String> {
+        let mut referencing_tables = Vec::new();
+        for (table_name, table_info) in &self.table_infos {
+            for col_def in &table_info.columns {
+                if let Some(ref fk) = col_def.references {
+                    if fk.referenced_table == parent_table {
+                        referencing_tables.push(table_name.clone());
+                        break;
+                    }
+                }
+            }
+        }
+        referencing_tables
+    }
+
+    /// Get the column indices and FK constraints that reference a parent table
+    /// Returns Vec of (column_index, ForeignKeyConstraint)
+    pub fn get_referencing_columns(
+        &self,
+        child_table: &str,
+        parent_table: &str,
+    ) -> Vec<(usize, ForeignKeyConstraint)> {
+        let mut result = Vec::new();
+        if let Some(table_info) = self.table_infos.get(child_table) {
+            for (col_idx, col_def) in table_info.columns.iter().enumerate() {
+                if let Some(ref fk) = col_def.references {
+                    if fk.referenced_table == parent_table {
+                        result.push((col_idx, fk.clone()));
+                    }
+                }
+            }
+        }
+        result
+    }
+
 }
 
 impl Default for MemoryStorage {
@@ -332,25 +369,383 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize> {
-        let mut count = 0;
-        if let Some(records) = self.tables.get_mut(table) {
-            count = records.len();
-            records.clear();
+    fn delete(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
+        // If filters is empty, delete all records (original behavior)
+        // If filters has values, interpret as: filter[0] is the column index, filter[1] is the value to match
+
+        // First, collect information needed for FK constraint checking
+        let (col_idx, match_value, needs_fk_check) = if filters.is_empty() {
+            (0, &Value::Null, false)
+        } else if filters.len() >= 2 {
+            let col_idx = match &filters[0] {
+                Value::Integer(i) => *i as usize,
+                _ => return Err(SqlError::ExecutionError(
+                    "Filter column index must be an integer".to_string(),
+                )),
+            };
+            (col_idx, &filters[1], true)
+        } else {
+            return Err(SqlError::ExecutionError(
+                "Invalid filter format: expected [column_index, value]".to_string(),
+            ));
+        };
+
+        // First, find the records that will be deleted (for FK action processing)
+        let records_to_delete: Vec<Vec<Value>> = if needs_fk_check {
+            if let Some(table_records) = self.tables.get(table) {
+                table_records.iter()
+                    .filter(|row| {
+                        row.get(col_idx).map(|v| v == match_value).unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        // Process FK actions BEFORE deleting
+        // For CASCADE, we need to keep processing until no more records are deleted
+        // to handle transitive dependencies (e.g., CEO -> Manager -> Worker)
+        if needs_fk_check && !records_to_delete.is_empty() {
+            let mut restrict_error: Option<String> = None;
+            let referenced_by = self.get_tables_referencing(table);
+
+            // For handling transitive CASCADE deletions, we need to track values that were deleted
+            // so we can find records that reference THOSE deleted records
+            let mut values_to_check: Vec<Value> = vec![match_value.clone()];
+            let mut processed_values: Vec<Value> = Vec::new(); // Track already processed to avoid infinite loops
+
+            // First pass: check RESTRICT on the original values
+            for child_table in &referenced_by {
+                let referencing_cols = self.get_referencing_columns(child_table, table);
+                for (child_col_idx, fk) in referencing_cols {
+                    match fk.on_delete {
+                        Some(ForeignKeyAction::Restrict) => {
+                            if let Some(child_records) = self.tables.get(child_table) {
+                                for child_row in child_records {
+                                    if let Some(fk_value) = child_row.get(child_col_idx) {
+                                        if fk_value == match_value {
+                                            restrict_error = Some(format!(
+                                                "Foreign key constraint violation: ON DELETE RESTRICT - child table '{}' has references to the parent",
+                                                child_table
+                                            ));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Some(ForeignKeyAction::SetNull) => {
+                            self.set_foreign_key_null(child_table, child_col_idx, match_value)?;
+                        }
+                        Some(ForeignKeyAction::Cascade) | None => {}
+                    }
+                }
+            }
+
+            // Return RESTRICT error if found
+            if let Some(err_msg) = restrict_error {
+                return Err(SqlError::ExecutionError(err_msg));
+            }
+
+            // Process CASCADE deletions with multiple passes to handle transitive dependencies
+            // e.g., CEO -> Manager -> Worker: deleting CEO cascades to Manager, which then cascades to Worker
+            loop {
+                let mut next_values_to_check: Vec<Value> = Vec::new();
+
+                // For each value that needs checking (initially the deleted parent's value,
+                // then values from cascade-deleted records)
+                for current_value in &values_to_check {
+                    // Skip if already processed (avoid infinite loops in case of circular refs)
+                    if processed_values.contains(current_value) {
+                        continue;
+                    }
+                    processed_values.push(current_value.clone());
+
+                    // Find and delete child records that reference this value
+                    for child_table in &referenced_by {
+                        let referencing_cols = self.get_referencing_columns(child_table, table);
+                        for (child_col_idx, fk) in referencing_cols {
+                            if fk.on_delete == Some(ForeignKeyAction::Cascade) {
+                                // Get records that will be deleted to collect their PK values for next pass
+                                let records_to_delete: Vec<Vec<Value>> = if let Some(child_records) = self.tables.get(child_table) {
+                                    child_records.iter()
+                                        .filter(|row| {
+                                            row.get(child_col_idx)
+                                                .map(|v| v == current_value)
+                                                .unwrap_or(false)
+                                        })
+                                        .cloned()
+                                        .collect()
+                                } else {
+                                    vec![]
+                                };
+
+                                // Only propagate cascade if the child table is the SAME as the parent table
+                                // (self-referencing FK). For non-self-referencing tables, cascade stops here.
+                                // This is because orders referencing users doesn't mean records referencing orders should be deleted.
+                                if child_table == table {
+                                    // Self-referencing: collect PK of deleted records to find more children
+                                    let child_pk_col_idx = 0; // Assume first column is PK
+
+                                    // Collect the PK values from records being deleted
+                                    // These become the next set of values to check for cascade
+                                    for record in &records_to_delete {
+                                        if let Some(pk_value) = record.get(child_pk_col_idx) {
+                                            if !next_values_to_check.contains(pk_value) {
+                                                next_values_to_check.push(pk_value.clone());
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Delete the child records
+                                let deleted = self.delete_internal(
+                                    child_table,
+                                    &[Value::Integer(child_col_idx as i64), current_value.clone()]
+                                )?;
+                            }
+                        }
+                    }
+                }
+
+                // If no new values to check, we're done cascading
+                if next_values_to_check.is_empty() {
+                    break;
+                }
+
+                // Continue with the next set of values
+                values_to_check = next_values_to_check;
+            }
         }
+
+        // Now get mutable access to records and delete
+        let records = self.tables.get_mut(table).ok_or_else(|| {
+            SqlError::TableNotFound { table: table.to_string() }
+        })?;
+
+        let mut deleted_count = 0;
+        if filters.is_empty() {
+            // Delete all records
+            deleted_count = records.len();
+            records.clear();
+        } else if filters.len() >= 2 {
+            // Delete matching records
+            let original_len = records.len();
+            records.retain(|row| {
+                if let Some(value) = row.get(col_idx) {
+                    value != match_value
+                } else {
+                    true
+                }
+            });
+            deleted_count = original_len - records.len();
+        }
+
         self.on_write_complete(table);
-        Ok(count)
+        Ok(deleted_count)
     }
 
     fn update(
         &mut self,
         table: &str,
-        _filters: &[Value],
-        _updates: &[(usize, Value)],
+        filters: &[Value],
+        updates: &[(usize, Value)],
     ) -> SqlResult<usize> {
-        let count = self.tables.get(table).map(|r| r.len()).unwrap_or(0);
+        if updates.is_empty() {
+            return Ok(0);
+        }
+
+        // First, get table info (immutable borrow)
+        let table_info = self.table_infos.get(table).ok_or_else(|| {
+            SqlError::TableNotFound { table: table.to_string() }
+        })?;
+
+        // Find which updated columns are referenced by foreign keys in other tables
+        // For ON UPDATE CASCADE/SET NULL/RESTRICT, we're updating a PARENT column
+        // and need to find CHILD tables that reference it
+        #[derive(Debug)]
+        struct UpdatedColumn {
+            col_idx: usize,
+            col_name: String,
+            referenced_by: Vec<(String, usize, ForeignKeyConstraint)>, // (child_table, child_col_idx, fk)
+        }
+
+        let mut updated_columns: Vec<UpdatedColumn> = Vec::new();
+        for (col_idx, _new_value) in updates {
+            if let Some(col_def) = table_info.columns.get(*col_idx) {
+                // Find all child tables that reference this column
+                let mut referencing = Vec::new();
+                let referenced_by = self.get_tables_referencing(table);
+                for child_table in &referenced_by {
+                    let ref_cols = self.get_referencing_columns(child_table, table);
+                    for (child_col_idx, fk) in ref_cols {
+                        // fk.referenced_column is the column in THIS (parent) table that is referenced
+                        if fk.referenced_column == col_def.name {
+                            referencing.push((child_table.clone(), child_col_idx, fk.clone()));
+                        }
+                    }
+                }
+                if !referencing.is_empty() {
+                    updated_columns.push(UpdatedColumn {
+                        col_idx: *col_idx,
+                        col_name: col_def.name.clone(),
+                        referenced_by: referencing,
+                    });
+                }
+            }
+        }
+
+        // If we're updating columns that are referenced by child tables, handle FK actions
+        // Collect all operations we need to perform
+        #[derive(Debug)]
+        enum ChildUpdateOp {
+            SetNull { child_table: String, child_col_idx: usize, match_value: Value },
+            Cascade { child_table: String, child_col_idx: usize, new_value: Value },
+        }
+
+        let mut child_ops: Vec<ChildUpdateOp> = Vec::new();
+        let mut restrict_violation: Option<String> = None;
+
+        // First pass: check RESTRICT and collect SET NULL/CASCADE operations
+        // For each parent column being updated that is referenced by children
+        for updated_col in &updated_columns {
+            for (child_table, child_col_idx, child_fk) in &updated_col.referenced_by {
+                match child_fk.on_update {
+                    Some(ForeignKeyAction::Restrict) => {
+                        // Check if any child record has the old value
+                        if let Some(old_value) = filters.get(1) {
+                            let child_records = self.tables.get(child_table);
+                            if let Some(child_records) = child_records {
+                                for child_row in child_records {
+                                    if let Some(fk_value) = child_row.get(*child_col_idx) {
+                                        if fk_value == old_value {
+                                            restrict_violation = Some(format!(
+                                                "Foreign key constraint violation: ON UPDATE RESTRICT - child table '{}' has references to the parent",
+                                                child_table
+                                            ));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(ForeignKeyAction::SetNull) => {
+                        // Queue SET NULL operation
+                        if let Some(old_value) = filters.get(1) {
+                            child_ops.push(ChildUpdateOp::SetNull {
+                                child_table: child_table.clone(),
+                                child_col_idx: *child_col_idx,
+                                match_value: old_value.clone(),
+                            });
+                        }
+                    }
+                    Some(ForeignKeyAction::Cascade) => {
+                        // Queue CASCADE operation - find the new value for this column
+                        if let Some((_, new_value)) = updates.iter().find(|(idx, _)| *idx == updated_col.col_idx) {
+                            if let Some(_old_value) = filters.get(1) {
+                                child_ops.push(ChildUpdateOp::Cascade {
+                                    child_table: child_table.clone(),
+                                    child_col_idx: *child_col_idx,
+                                    new_value: new_value.clone(),
+                                });
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        // Return RESTRICT error if found
+        if let Some(err_msg) = restrict_violation {
+            return Err(SqlError::ExecutionError(err_msg));
+        }
+
+        // Apply child updates first (if updating FK columns)
+        for op in &child_ops {
+            match op {
+                ChildUpdateOp::SetNull { child_table, child_col_idx, match_value } => {
+                    if let Some(child_records) = self.tables.get_mut(child_table) {
+                        for child_row in child_records.iter_mut() {
+                            if let Some(fk_value) = child_row.get(*child_col_idx) {
+                                if fk_value == match_value {
+                                    child_row[*child_col_idx] = Value::Null;
+                                }
+                            }
+                        }
+                    }
+                }
+                ChildUpdateOp::Cascade { child_table, child_col_idx, new_value } => {
+                    if let Some(child_records) = self.tables.get_mut(child_table) {
+                        for child_row in child_records.iter_mut() {
+                            if let Some(fk_value) = child_row.get(*child_col_idx) {
+                                // For CASCADE, we need to match the OLD value that we're updating FROM
+                                // But we don't have the old value directly - we have match_value in filters
+                                // Actually, for CASCADE, the child should be updated to match the new parent value
+                                // The matching is done via filters[1] which is the old value
+                                if let Some(old_value) = filters.get(1) {
+                                    if fk_value == old_value {
+                                        child_row[*child_col_idx] = new_value.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Now get mutable access to records and apply updates to the parent table
+        let records = self.tables.get_mut(table).ok_or_else(|| {
+            SqlError::TableNotFound { table: table.to_string() }
+        })?;
+
+        let mut updated_count = 0;
+        if filters.is_empty() {
+            // Update all records
+            for row in records.iter_mut() {
+                for (col_idx, new_value) in updates {
+                    if let Some(elem) = row.get_mut(*col_idx) {
+                        *elem = new_value.clone();
+                        updated_count += 1;
+                    }
+                }
+            }
+            // Divide by number of updates per row to get unique row count
+            if !updates.is_empty() {
+                updated_count /= updates.len();
+            }
+        } else if filters.len() >= 2 {
+            // filters[0] = column index, filters[1] = value to match
+            let col_idx = match &filters[0] {
+                Value::Integer(i) => *i as usize,
+                _ => return Err(SqlError::ExecutionError(
+                    "Filter column index must be an integer".to_string(),
+                )),
+            };
+            let match_value = &filters[1];
+
+            for row in records.iter_mut() {
+                if let Some(value) = row.get(col_idx) {
+                    if value == match_value {
+                        for (upd_col_idx, new_value) in updates {
+                            if let Some(elem) = row.get_mut(*upd_col_idx) {
+                                *elem = new_value.clone();
+                            }
+                        }
+                        updated_count += 1;
+                    }
+                }
+            }
+        }
+
         self.on_write_complete(table);
-        Ok(count)
+        Ok(updated_count)
     }
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
@@ -514,6 +909,63 @@ impl StorageEngine for MemoryStorage {
                     table: table.to_string(),
                 })?;
         Ok(*counters.get(&column_index).unwrap_or(&0))
+    }
+}
+
+/// Helper methods for MemoryStorage (not part of StorageEngine trait)
+impl MemoryStorage {
+    /// Internal delete without FK action processing (used for CASCADE)
+    pub fn delete_internal(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
+        let (col_idx, match_value) = if filters.len() >= 2 {
+            let col_idx = match &filters[0] {
+                Value::Integer(i) => *i as usize,
+                _ => return Err(SqlError::ExecutionError(
+                    "Filter column index must be an integer".to_string(),
+                )),
+            };
+            (col_idx, &filters[1])
+        } else {
+            return Err(SqlError::ExecutionError(
+                "Invalid filter format: expected [column_index, value]".to_string(),
+            ));
+        };
+
+        let records = self.tables.get_mut(table).ok_or_else(|| {
+            SqlError::TableNotFound { table: table.to_string() }
+        })?;
+
+        let original_len = records.len();
+        records.retain(|row| {
+            if let Some(value) = row.get(col_idx) {
+                value != match_value
+            } else {
+                true
+            }
+        });
+
+        let deleted_count = original_len - records.len();
+        self.on_write_complete(table);
+        Ok(deleted_count)
+    }
+
+    /// Set foreign key column to NULL for records matching the given value
+    pub fn set_foreign_key_null(&mut self, table: &str, col_idx: usize, match_value: &Value) -> SqlResult<()> {
+        let records = self.tables.get_mut(table).ok_or_else(|| {
+            SqlError::TableNotFound { table: table.to_string() }
+        })?;
+
+        for row in records.iter_mut() {
+            if let Some(value) = row.get(col_idx) {
+                if value == match_value {
+                    if col_idx < row.len() {
+                        row[col_idx] = Value::Null;
+                    }
+                }
+            }
+        }
+
+        self.on_write_complete(table);
+        Ok(())
     }
 }
 
