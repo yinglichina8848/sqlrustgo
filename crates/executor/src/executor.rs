@@ -2,7 +2,7 @@
 
 use crate::filter::FilterVolcanoExecutor;
 use sqlrustgo_planner::{PhysicalPlan, Schema};
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_types::{encode_row, SqlError, SqlResult, Value, RowRef};
 use std::any::Any;
 
 #[derive(Debug, Clone)]
@@ -60,19 +60,50 @@ pub struct SeqScanVolcanoExecutor {
     storage: std::sync::Arc<dyn Storage>,
     initialized: bool,
     current_idx: usize,
-    rows: Vec<Vec<Value>>,
+    /// Encoded row bytes for zero-copy access
+    row_bytes: Vec<Vec<u8>>,
+    /// Schema for decoding RowRef columns (same as self.schema but separate for RowRef trait)
+    column_types: Vec<sqlrustgo_types::ColumnType>,
 }
 
 impl SeqScanVolcanoExecutor {
     pub fn new(table_name: String, schema: Schema, storage: std::sync::Arc<dyn Storage>) -> Self {
         Self {
             table_name,
-            schema,
+            schema: schema.clone(),
             storage,
             initialized: false,
             current_idx: 0,
-            rows: Vec::new(),
+            row_bytes: Vec::new(),
+            column_types: schema.fields.iter().map(|f| {
+                match f.data_type {
+                    sqlrustgo_planner::DataType::Integer => sqlrustgo_types::ColumnType::Integer,
+                    sqlrustgo_planner::DataType::Float => sqlrustgo_types::ColumnType::Float,
+                    sqlrustgo_planner::DataType::Decimal => sqlrustgo_types::ColumnType::Float,
+                    sqlrustgo_planner::DataType::Text => sqlrustgo_types::ColumnType::Text,
+                    sqlrustgo_planner::DataType::Boolean => sqlrustgo_types::ColumnType::Boolean,
+                    sqlrustgo_planner::DataType::Null => sqlrustgo_types::ColumnType::Null,
+                    sqlrustgo_planner::DataType::Blob => sqlrustgo_types::ColumnType::Blob,
+                    sqlrustgo_planner::DataType::Json => sqlrustgo_types::ColumnType::Text,
+                }
+            }).collect(),
         }
+    }
+
+    /// Get next row as RowRef (zero-copy access to encoded bytes)
+    ///
+    /// Returns a reference to the encoded row bytes without cloning.
+    /// The caller can use RowRef::get_column() to access individual columns.
+    pub fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
+        if !self.initialized {
+            return Err(SqlError::ExecutionError("Not initialized".to_string()));
+        }
+        if self.current_idx >= self.row_bytes.len() {
+            return Ok(None);
+        }
+        let row_ref = RowRef::from_bytes(&self.row_bytes[self.current_idx]);
+        self.current_idx += 1;
+        Ok(Some(row_ref))
     }
 }
 
@@ -81,7 +112,9 @@ impl VolcanoExecutor for SeqScanVolcanoExecutor {
         if self.initialized {
             return Ok(());
         }
-        self.rows = self.storage.scan(&self.table_name).unwrap_or_default();
+        // Scan from storage and encode to bytes for zero-copy access
+        let rows = self.storage.scan(&self.table_name).unwrap_or_default();
+        self.row_bytes = rows.iter().map(|r| encode_row(r)).collect();
         self.current_idx = 0;
         self.initialized = true;
         Ok(())
@@ -91,16 +124,17 @@ impl VolcanoExecutor for SeqScanVolcanoExecutor {
         if !self.initialized {
             return Err(SqlError::ExecutionError("Not initialized".to_string()));
         }
-        if self.current_idx >= self.rows.len() {
+        if self.current_idx >= self.row_bytes.len() {
             return Ok(None);
         }
-        let row = self.rows[self.current_idx].clone();
+        // Decode from encoded bytes to Vec<Value>
+        let row_ref = RowRef::from_bytes(&self.row_bytes[self.current_idx]);
         self.current_idx += 1;
-        Ok(Some(row))
+        Ok(Some(row_ref.to_owned_row(&self.column_types)))
     }
 
     fn close(&mut self) -> SqlResult<()> {
-        self.rows.clear();
+        self.row_bytes.clear();
         self.current_idx = 0;
         self.initialized = false;
         Ok(())
