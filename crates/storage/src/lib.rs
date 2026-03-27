@@ -11,6 +11,7 @@ pub mod engine;
 pub mod file_storage;
 pub mod heap;
 pub mod page;
+pub mod page_guard;
 pub mod replication;
 pub mod stats;
 pub mod wal;
@@ -32,6 +33,7 @@ pub use engine::{
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
+pub use page_guard::PageGuard;
 pub use replication::{
     BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, FailoverManager, MasterNode,
     ReplicationConfig, SlaveNode,

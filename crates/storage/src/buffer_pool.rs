@@ -1,6 +1,7 @@
 //! Buffer Pool Manager with LRU cache, prefetch, and memory pool optimization
 
 use crate::page::Page;
+use crate::page_guard::PageGuard;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -141,6 +142,32 @@ impl BufferPool {
         let page = loader(page_id);
         self.insert(Arc::clone(&page));
         page
+    }
+
+    /// Fetch a page and return a PageGuard for RAII-based lifecycle management
+    ///
+    /// This is the preferred way to access pages when you want automatic
+    /// pin/unpin management. The returned PageGuard will:
+    /// - Pin the page on creation
+    /// - Unpin the page when dropped
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// {
+    ///     let guard = pool.fetch_page(page_id, loader);
+    ///     let page = guard.page();
+    ///     // ... use page ...
+    /// } // guard dropped, page unpinned automatically
+    /// ```
+    pub fn fetch_page<F>(&self, page_id: u32, loader: F) -> PageGuard<'_>
+    where
+        F: FnOnce(u32) -> Arc<Page>,
+    {
+        // Get or load the page
+        let page = self.get_or_load(page_id, loader);
+        // Create and return PageGuard (it will pin the page on creation)
+        PageGuard::new(page, self, true)
     }
 
     /// Insert a page with LRU eviction
