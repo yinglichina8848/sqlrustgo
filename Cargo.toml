@@ -67,6 +67,7 @@ miniz_oxide = "0.7"
 rand = "0.8"
 fnv = "1.0"
 proptest = "1.1"
+bumpalo = "3"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -106,6 +107,7 @@ bytes.workspace = true
 lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
+bumpalo = "3"
 
 [[test]]
 name = "ci_test"
