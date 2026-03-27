@@ -10,6 +10,7 @@ use sqlrustgo_planner::{
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
+use crate::operator_profile::GLOBAL_PROFILER;
 use crate::query_cache::should_cache;
 use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
@@ -143,11 +144,24 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
+        let start = Instant::now();
+
         // Scan from storage
         let records = self.storage.scan(table_name).unwrap_or_default();
 
         // Convert records to rows
         let rows: Vec<Vec<Value>> = records;
+        let row_count = rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "SeqScan",
+            "scan",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
 
         Ok(ExecutorResult::new(rows, 0))
     }
@@ -158,6 +172,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         let child_result = self.execute(children[0])?;
 
@@ -185,6 +201,18 @@ impl<'a> LocalExecutor<'a> {
             })
             .collect();
 
+        let row_count = projected_rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "Projection",
+            "projection",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
+
         Ok(ExecutorResult::new(
             projected_rows,
             child_result.affected_rows,
@@ -197,6 +225,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         // Execute child first
         let child_result = self.execute(children[0])?;
@@ -221,6 +251,18 @@ impl<'a> LocalExecutor<'a> {
             })
             .collect();
 
+        let row_count = filtered_rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "Filter",
+            "filter",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
+
         Ok(ExecutorResult::new(filtered_rows, 0))
     }
 
@@ -230,6 +272,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         let child_result = self.execute(children[0])?;
 
@@ -269,6 +313,18 @@ impl<'a> LocalExecutor<'a> {
             }
 
             if !agg_results.is_empty() {
+                let row_count = 1;
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "Aggregate",
+                    "aggregate",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 return Ok(ExecutorResult::new(vec![agg_results], 0));
             }
 
@@ -315,6 +371,18 @@ impl<'a> LocalExecutor<'a> {
                 }
                 results.push(row);
             }
+
+            let row_count = results.len();
+            let duration = start.elapsed();
+
+            // Record to GLOBAL_PROFILER
+            GLOBAL_PROFILER.record(
+                "Aggregate",
+                "aggregate",
+                duration.as_nanos() as u64,
+                row_count,
+                1,
+            );
 
             Ok(ExecutorResult::new(results, 0))
         }
@@ -383,6 +451,8 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
+        let start = Instant::now();
+
         let left_result = self.execute(children[0])?;
         let right_result = self.execute(children[1])?;
 
@@ -396,10 +466,20 @@ impl<'a> LocalExecutor<'a> {
         let condition = match condition {
             Some(c) => c,
             None => {
-                return Ok(ExecutorResult::new(
-                    cartesian_product(&left_result.rows, &right_result.rows),
-                    0,
-                ));
+                let results = cartesian_product(&left_result.rows, &right_result.rows);
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                return Ok(ExecutorResult::new(results, 0));
             }
         };
 
@@ -415,6 +495,18 @@ impl<'a> LocalExecutor<'a> {
                     left_schema,
                     right_schema,
                 );
+                let row_count = matched.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 Ok(ExecutorResult::new(matched, 0))
             }
             JoinType::Left => {
@@ -442,9 +534,36 @@ impl<'a> LocalExecutor<'a> {
                     .collect();
                 let mut results = matched;
                 results.extend(left_only);
+
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 Ok(ExecutorResult::new(results, 0))
             }
-            _ => Ok(ExecutorResult::empty()),
+            _ => {
+                let row_count = 0;
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                Ok(ExecutorResult::empty())
+            }
         }
     }
 

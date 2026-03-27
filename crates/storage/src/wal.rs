@@ -199,6 +199,12 @@ impl WalEntry {
 pub struct WalWriter {
     writer: BufWriter<File>,
     lsn: u64,
+    /// Batch mode - only flush when explicitly requested (INSERT 性能优化)
+    batch_mode: bool,
+    /// Records since last flush
+    records_since_flush: usize,
+    /// Flush threshold
+    flush_threshold: usize,
 }
 
 impl WalWriter {
@@ -208,7 +214,23 @@ impl WalWriter {
 
         let writer = BufWriter::new(file);
 
-        Ok(Self { writer, lsn: 0 })
+        Ok(Self {
+            writer,
+            lsn: 0,
+            batch_mode: false, // Default: sync mode for safety
+            records_since_flush: 0,
+            flush_threshold: 100,
+        })
+    }
+
+    /// Enable batch mode for better performance (use for bulk inserts)
+    pub fn enable_batch_mode(&mut self, enable: bool) {
+        self.batch_mode = enable;
+        if !enable {
+            // When disabling, flush pending writes
+            let _ = self.writer.flush();
+            self.records_since_flush = 0;
+        }
     }
 
     /// Append an entry to the WAL
@@ -220,11 +242,28 @@ impl WalWriter {
         self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
         // Write entry data
         self.writer.write_all(&bytes)?;
-        // Flush to ensure durability
-        self.writer.flush()?;
+
+        // 批量模式优化：只在达到阈值或显式调用时 flush
+        if self.batch_mode {
+            self.records_since_flush += 1;
+            if self.records_since_flush >= self.flush_threshold {
+                self.writer.flush()?;
+                self.records_since_flush = 0;
+            }
+        } else {
+            // 默认模式：每次都 flush，保证持久性
+            self.writer.flush()?;
+        }
 
         self.lsn += 1;
         Ok(lsn)
+    }
+
+    /// Force flush pending writes (call after batch insert)
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()?;
+        self.records_since_flush = 0;
+        Ok(())
     }
 
     /// Get current LSN
