@@ -629,6 +629,7 @@ impl FailoverManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn test_binlog_event_serialize() {
@@ -651,5 +652,140 @@ mod tests {
         assert_eq!(parsed.tx_id, 123);
         assert_eq!(parsed.table_id, 456);
         assert_eq!(parsed.database, "test_db");
+    }
+
+    #[test]
+    fn test_binlog_event_ddl() {
+        let event = BinlogEvent {
+            event_type: BinlogEventType::Ddl,
+            tx_id: 100,
+            table_id: 1,
+            database: "mydb".to_string(),
+            table: "orders".to_string(),
+            sql: Some("CREATE TABLE orders (id INT)".to_string()),
+            row_data: None,
+            lsn: 10,
+            timestamp: 1234567890,
+        };
+
+        let bytes = event.to_bytes();
+        let parsed = BinlogEvent::from_bytes(&bytes).unwrap();
+
+        assert_eq!(parsed.event_type, BinlogEventType::Ddl);
+        assert_eq!(parsed.sql.as_ref().unwrap(), "CREATE TABLE orders (id INT)");
+    }
+
+    #[test]
+    fn test_binlog_event_commit() {
+        let event = BinlogEvent {
+            event_type: BinlogEventType::Commit,
+            tx_id: 999,
+            table_id: 0,
+            database: "test".to_string(),
+            table: "".to_string(),
+            sql: None,
+            row_data: None,
+            lsn: 100,
+            timestamp: 1234567890,
+        };
+
+        let bytes = event.to_bytes();
+        let parsed = BinlogEvent::from_bytes(&bytes).unwrap();
+
+        assert_eq!(parsed.event_type, BinlogEventType::Commit);
+        assert_eq!(parsed.tx_id, 999);
+    }
+
+    #[test]
+    fn test_binlog_event_heartbeat() {
+        let event = BinlogEvent {
+            event_type: BinlogEventType::Heartbeat,
+            tx_id: 0,
+            table_id: 0,
+            database: "".to_string(),
+            table: "".to_string(),
+            sql: None,
+            row_data: None,
+            lsn: 50,
+            timestamp: 1234567890,
+        };
+
+        let bytes = event.to_bytes();
+        let parsed = BinlogEvent::from_bytes(&bytes).unwrap();
+
+        assert_eq!(parsed.event_type, BinlogEventType::Heartbeat);
+    }
+
+    #[test]
+    fn test_binlog_writer_and_reader() {
+        let temp_dir = std::env::temp_dir();
+        let binlog_path = temp_dir.join("test_binlog_replication.binlog");
+
+        let _ = fs::remove_file(&binlog_path);
+
+        let mut writer = BinlogWriter::new(binlog_path.clone()).unwrap();
+
+        let event1 = BinlogEvent {
+            event_type: BinlogEventType::Dml,
+            tx_id: 1,
+            table_id: 1,
+            database: "test".to_string(),
+            table: "users".to_string(),
+            sql: Some("INSERT".to_string()),
+            row_data: None,
+            lsn: 0,
+            timestamp: 1000,
+        };
+
+        let lsn1 = writer.write_event(&event1).unwrap();
+        assert_eq!(lsn1, 0);
+
+        let event2 = BinlogEvent {
+            event_type: BinlogEventType::Commit,
+            tx_id: 1,
+            table_id: 0,
+            database: "test".to_string(),
+            table: "".to_string(),
+            sql: None,
+            row_data: None,
+            lsn: 0,
+            timestamp: 1001,
+        };
+
+        let lsn2 = writer.write_event(&event2).unwrap();
+        assert_eq!(lsn2, 1);
+
+        drop(writer);
+
+        let mut reader = BinlogReader::new(binlog_path).unwrap();
+        let events = reader.read_from(0).unwrap();
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_type, BinlogEventType::Dml);
+        assert_eq!(events[1].event_type, BinlogEventType::Commit);
+
+        let _ = fs::remove_file(&binlog_path);
+    }
+
+    #[test]
+    fn test_replication_config_default() {
+        let config = ReplicationConfig::default();
+        assert_eq!(config.master_port, 3306);
+        assert_eq!(config.slave_id, 1);
+        assert_eq!(config.lag_threshold_ms, 1000);
+    }
+
+    #[test]
+    fn test_binlog_event_type_from_u8() {
+        assert_eq!(BinlogEventType::from_u8(1), Some(BinlogEventType::Ddl));
+        assert_eq!(BinlogEventType::from_u8(2), Some(BinlogEventType::Dml));
+        assert_eq!(BinlogEventType::from_u8(3), Some(BinlogEventType::Commit));
+        assert_eq!(BinlogEventType::from_u8(4), Some(BinlogEventType::Rollback));
+        assert_eq!(
+            BinlogEventType::from_u8(5),
+            Some(BinlogEventType::Heartbeat)
+        );
+        assert_eq!(BinlogEventType::from_u8(0), None);
+        assert_eq!(BinlogEventType::from_u8(100), None);
     }
 }
