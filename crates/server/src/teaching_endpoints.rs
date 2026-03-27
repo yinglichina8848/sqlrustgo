@@ -72,6 +72,16 @@ impl TeachingHttpServer {
         self
     }
 
+    /// Get server version
+    pub fn get_version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// Get server port
+    pub fn get_port(&self) -> u16 {
+        self.port
+    }
+
     /// Start the teaching enhanced HTTP server
     pub fn start(&self) -> Result<(), std::io::Error> {
         let addr = format!("{}:{}", self.host, self.port);

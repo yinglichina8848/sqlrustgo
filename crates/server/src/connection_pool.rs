@@ -94,6 +94,20 @@ impl ConnectionPool {
         }
     }
 
+    pub fn try_acquire(&self) -> Option<PooledConnection> {
+        self.received
+            .try_recv()
+            .ok()
+            .map(|session| PooledConnection {
+                session,
+                pool: self.clone(),
+            })
+    }
+
+    pub fn get_pool_size(&self) -> usize {
+        self.config.size
+    }
+
     pub fn size(&self) -> usize {
         self.config.size
     }
