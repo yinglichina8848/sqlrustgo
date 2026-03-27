@@ -311,8 +311,8 @@ name = "join_test"
 path = "tests/anomaly/join_test.rs"
 
 [[test]]
-name = "foreign_key_test"
-path = "tests/anomaly/foreign_key_test.rs"
+name = "fk_constraint_test"
+path = "tests/anomaly/fk_constraint_test.rs"
 
 [[test]]
 name = "server_integration_test"
