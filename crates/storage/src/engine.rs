@@ -969,63 +969,6 @@ impl MemoryStorage {
     }
 }
 
-/// Helper methods for MemoryStorage (not part of StorageEngine trait)
-impl MemoryStorage {
-    /// Internal delete without FK action processing (used for CASCADE)
-    pub fn delete_internal(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
-        let (col_idx, match_value) = if filters.len() >= 2 {
-            let col_idx = match &filters[0] {
-                Value::Integer(i) => *i as usize,
-                _ => return Err(SqlError::ExecutionError(
-                    "Filter column index must be an integer".to_string(),
-                )),
-            };
-            (col_idx, &filters[1])
-        } else {
-            return Err(SqlError::ExecutionError(
-                "Invalid filter format: expected [column_index, value]".to_string(),
-            ));
-        };
-
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
-
-        let original_len = records.len();
-        records.retain(|row| {
-            if let Some(value) = row.get(col_idx) {
-                value != match_value
-            } else {
-                true
-            }
-        });
-
-        let deleted_count = original_len - records.len();
-        self.on_write_complete(table);
-        Ok(deleted_count)
-    }
-
-    /// Set foreign key column to NULL for records matching the given value
-    pub fn set_foreign_key_null(&mut self, table: &str, col_idx: usize, match_value: &Value) -> SqlResult<()> {
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
-
-        for row in records.iter_mut() {
-            if let Some(value) = row.get(col_idx) {
-                if value == match_value {
-                    if col_idx < row.len() {
-                        row[col_idx] = Value::Null;
-                    }
-                }
-            }
-        }
-
-        self.on_write_complete(table);
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
