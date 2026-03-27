@@ -40,6 +40,7 @@ pub enum LogicalPlan {
         input: Box<LogicalPlan>,
         group_expr: Vec<Expr>,
         aggregate_expr: Vec<Expr>,
+        having_expr: Option<Expr>,
         schema: Schema,
     },
     /// Join operation
@@ -278,6 +279,7 @@ mod tests {
             input: Box::new(input),
             group_expr: vec![],
             aggregate_expr: vec![],
+            having_expr: None,
             schema: schema.clone(),
         };
         assert_eq!(plan.schema(), schema);

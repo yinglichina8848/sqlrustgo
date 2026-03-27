@@ -1,0 +1,14 @@
+[package]
+name = "sqlrustgo-tools"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo-catalog.workspace = true
+sqlrustgo-storage.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+structopt = "0.3"

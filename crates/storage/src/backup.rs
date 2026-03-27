@@ -244,7 +244,9 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 })
                 .collect(),
         };
@@ -309,7 +311,9 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 })
                 .collect(),
         };
@@ -447,6 +451,7 @@ mod tests {
                     nullable: false,
                     is_unique: false,
                     references: None,
+                    auto_increment: false,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
@@ -493,6 +498,7 @@ mod tests {
                     nullable: false,
                     is_unique: false,
                     references: None,
+                    auto_increment: false,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
@@ -586,6 +592,7 @@ mod tests {
                 nullable: false,
                 is_unique: false,
                 references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -683,6 +690,7 @@ mod tests {
                 nullable: false,
                 is_unique: false,
                 references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -706,6 +714,7 @@ mod tests {
                 nullable: false,
                 is_unique: false,
                 references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();

@@ -12,8 +12,8 @@
 
 #### 数据完整性 & SQL 扩展
 - 索引支持优化 (B+ Tree / Hash)
-- 外键约束实现
-- 事务增强 (SAVEPOINT / ROLLBACK TO SAVEPOINT)
+- 外键约束实现 🔶 (ISSUE #901 - 部分完成，DELETE/UPDATE CASCADE 待实现)
+- 事务增强 (SAVEPOINT / ROLLBACK TO SAVEPOINT) 🔶 (ISSUE #812 - 部分完成)
 
 #### SQL 特性增强
 - 子查询支持增强 (Scalar, IN, EXISTS, ANY, ALL) - ✅ 已完成
