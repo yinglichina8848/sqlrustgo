@@ -341,3 +341,6 @@ path = "tests/anomaly/aggregate_type_test.rs"
 [[test]]
 name = "null_handling_test"
 path = "tests/anomaly/null_handling_test.rs"
+[[test]]
+name = "upsert_test"
+path = "tests/integration/upsert_test.rs"

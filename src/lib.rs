@@ -534,6 +534,31 @@ impl ExecutionEngine {
                     auto_increment_values.push(row_auto_inc);
                 }
 
+                // Handle REPLACE, INSERT IGNORE, ON DUPLICATE KEY UPDATE
+                let is_replace = insert.replace;
+                let is_ignore = insert.ignore;
+                let on_duplicate = insert.on_duplicate.clone();
+                
+                // Find unique/index columns for duplicate detection
+                let unique_cols: Vec<usize> = table_info
+                    .as_ref()
+                    .map(|info| {
+                        info.columns
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, c)| c.is_unique || c.is_primary_key)
+                            .map(|(i, _)| i)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Scan existing records if needed
+                let existing_records = if (is_replace || is_ignore || on_duplicate.is_some()) && !unique_cols.is_empty() {
+                    storage.scan(table_name).unwrap_or_default()
+                } else {
+                    vec![]
+                };
+
                 let records: Vec<Vec<Value>> = insert
                     .values
                     .iter()
@@ -670,8 +695,72 @@ impl ExecutionEngine {
                     })
                     .collect();
 
-                storage.insert(table_name, records)?;
-                Ok(ExecutorResult::new(vec![], insert.values.len()))
+                // Handle REPLACE, INSERT IGNORE, ON DUPLICATE KEY UPDATE
+                let mut inserted_count = 0;
+                let mut skipped_count = 0;
+                
+                for row in records.iter() {
+                    // Check for duplicate key
+                    let mut is_duplicate = false;
+                    
+                    if !unique_cols.is_empty() && !existing_records.is_empty() {
+                        // Check for duplicate in existing records
+                        for record in existing_records.iter() {
+                            let mut matches = true;
+                            for &col_idx in unique_cols.iter() {
+                                if let (Some(rval), Some(pval)) = (record.get(col_idx), row.get(col_idx)) {
+                                    if rval != pval {
+                                        matches = false;
+                                        break;
+                                    }
+                                } else {
+                                    matches = false;
+                                    break;
+                                }
+                            }
+                            if matches {
+                                is_duplicate = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Handle duplicate based on mode
+                    if is_duplicate {
+                        if is_ignore {
+                            skipped_count += 1;
+                            continue;
+                        }
+                        if is_replace || on_duplicate.is_some() {
+                            // Delete existing row for REPLACE/UPSERT
+                            let to_delete: Vec<Value> = unique_cols
+                                .iter()
+                                .filter_map(|&i| row.get(i).cloned())
+                                .collect();
+                            
+                            if to_delete.len() == unique_cols.len() {
+                                for (i, val) in to_delete.iter().enumerate() {
+                                    let col_idx = Value::Integer(unique_cols[i] as i64);
+                                    let _ = storage.delete(table_name, &[col_idx, val.clone()]);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Insert the record
+                    match storage.insert(table_name, vec![row.clone()]) {
+                        Ok(_) => inserted_count += 1,
+                        Err(e) => {
+                            if is_ignore {
+                                skipped_count += 1;
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                
+                Ok(ExecutorResult::new(vec![], inserted_count))
             }
             Statement::CreateTable(create) => {
                 let mut storage = self.storage.write().unwrap();
@@ -703,8 +792,8 @@ impl ExecutionEngine {
                             name: col.name.clone(),
                             data_type: col.data_type.clone(),
                             nullable: col.nullable,
-                            is_unique: false,
-                            is_primary_key: false,
+                            is_unique: col.primary_key,
+                            is_primary_key: col.primary_key,
                             references,
                             auto_increment: col.auto_increment,
                         }
