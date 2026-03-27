@@ -21,7 +21,7 @@ pub struct FileStorage {
     tables: HashMap<String, TableData>,
     /// B+ Tree indexes protected by RwLock for concurrent access
     indexes: RwLock<HashMap<(String, String), BPlusTree>>,
-/// Insert buffer for batch optimization (INSERT 性能优化)
+    /// Insert buffer for batch optimization (INSERT 性能优化)
     insert_buffer: HashMap<String, Vec<Record>>,
     /// Buffer threshold - flush when reaching this count
     buffer_threshold: usize,

@@ -8,7 +8,7 @@ pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{
     parse, Expression, GrantStatement, Lexer, Privilege, RevokeStatement, SetOperation, Statement,
-    Token,
+    Token, TransactionCommand,
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
@@ -25,24 +25,28 @@ use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
 fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec<Value>> {
     let mut rows = Vec::new();
 
-    // Header
     rows.push(vec![
-        Value::Text("┌─────────────────────────────────────────────────────────────────┐".to_string()),
+        Value::Text(
+            "┌─────────────────────────────────────────────────────────────────┐".to_string(),
+        ),
         Value::Text("".to_string()),
         Value::Text("".to_string()),
     ]);
     rows.push(vec![
-        Value::Text("│                      Execution Plan                             │".to_string()),
+        Value::Text(
+            "│                      Execution Plan                             │".to_string(),
+        ),
         Value::Text("".to_string()),
         Value::Text("".to_string()),
     ]);
     rows.push(vec![
-        Value::Text("├─────────────────────────────────────────────────────────────────┤".to_string()),
+        Value::Text(
+            "├─────────────────────────────────────────────────────────────────┤".to_string(),
+        ),
         Value::Text("".to_string()),
         Value::Text("".to_string()),
     ]);
 
-    // Operator nodes
     for (i, profile) in profiles.iter().enumerate() {
         let is_last = i == profiles.len() - 1;
         let prefix = if is_last { "└─ " } else { "├─ " };
@@ -51,9 +55,7 @@ fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec
         rows.push(vec![
             Value::Text(format!(
                 "│  {} {} (rows={})",
-                prefix,
-                profile.operator_name,
-                profile.rows_processed
+                prefix, profile.operator_name, profile.rows_processed
             )),
             Value::Text("".to_string()),
             Value::Text("".to_string()),
@@ -61,17 +63,17 @@ fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec
         rows.push(vec![
             Value::Text(format!(
                 "│        Actual Time: {:.3} ms, Rows: {}",
-                time_ms,
-                profile.rows_processed
+                time_ms, profile.rows_processed
             )),
             Value::Text("".to_string()),
             Value::Text("".to_string()),
         ]);
     }
 
-    // Footer
     rows.push(vec![
-        Value::Text("└─────────────────────────────────────────────────────────────────┘".to_string()),
+        Value::Text(
+            "└─────────────────────────────────────────────────────────────────┘".to_string(),
+        ),
         Value::Text("".to_string()),
         Value::Text("".to_string()),
     ]);
@@ -598,31 +600,6 @@ impl ExecutionEngine {
                     auto_increment_values.push(row_auto_inc);
                 }
 
-                // Handle REPLACE, INSERT IGNORE, ON DUPLICATE KEY UPDATE
-                let is_replace = insert.replace;
-                let is_ignore = insert.ignore;
-                let on_duplicate = insert.on_duplicate.clone();
-                
-                // Find unique/index columns for duplicate detection
-                let unique_cols: Vec<usize> = table_info
-                    .as_ref()
-                    .map(|info| {
-                        info.columns
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, c)| c.is_unique || c.is_primary_key)
-                            .map(|(i, _)| i)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                // Scan existing records if needed
-                let existing_records = if (is_replace || is_ignore || on_duplicate.is_some()) && !unique_cols.is_empty() {
-                    storage.scan(table_name).unwrap_or_default()
-                } else {
-                    vec![]
-                };
-
                 let records: Vec<Vec<Value>> = insert
                     .values
                     .iter()
@@ -759,72 +736,106 @@ impl ExecutionEngine {
                     })
                     .collect();
 
-                // Handle REPLACE, INSERT IGNORE, ON DUPLICATE KEY UPDATE
-                let mut inserted_count = 0;
-                let mut skipped_count = 0;
-                
-                for row in records.iter() {
-                    // Check for duplicate key
-                    let mut is_duplicate = false;
-                    
-                    if !unique_cols.is_empty() && !existing_records.is_empty() {
-                        // Check for duplicate in existing records
-                        for record in existing_records.iter() {
-                            let mut matches = true;
-                            for &col_idx in unique_cols.iter() {
-                                if let (Some(rval), Some(pval)) = (record.get(col_idx), row.get(col_idx)) {
-                                    if rval != pval {
-                                        matches = false;
-                                        break;
+                // Handle UPSERT: INSERT ... ON DUPLICATE KEY UPDATE
+                if insert.on_duplicate.is_some() {
+                    let existing_rows = storage.scan(table_name)?;
+
+                    let key_columns: Vec<usize> = table_info
+                        .as_ref()
+                        .map(|info| {
+                            info.columns
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, col)| col.is_primary_key || col.is_unique)
+                                .map(|(idx, _)| idx)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    let updates = insert.on_duplicate.as_ref().unwrap();
+                    let mut total_affected = 0;
+                    let mut final_rows = existing_rows.clone();
+
+                    for new_row in &records {
+                        if !key_columns.is_empty() {
+                            let mut conflict_idx = None;
+                            for (idx, existing_row) in final_rows.iter().enumerate() {
+                                let mut match_count = 0;
+                                for &key_col in &key_columns {
+                                    if key_col < new_row.len() && key_col < existing_row.len() {
+                                        if new_row[key_col] == existing_row[key_col] {
+                                            match_count += 1;
+                                        }
                                     }
-                                } else {
-                                    matches = false;
+                                }
+                                if match_count == key_columns.len() {
+                                    conflict_idx = Some(idx);
                                     break;
                                 }
                             }
-                            if matches {
-                                is_duplicate = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // Handle duplicate based on mode
-                    if is_duplicate {
-                        if is_ignore {
-                            skipped_count += 1;
-                            continue;
-                        }
-                        if is_replace || on_duplicate.is_some() {
-                            // Delete existing row for REPLACE/UPSERT
-                            let to_delete: Vec<Value> = unique_cols
-                                .iter()
-                                .filter_map(|&i| row.get(i).cloned())
-                                .collect();
-                            
-                            if to_delete.len() == unique_cols.len() {
-                                for (i, val) in to_delete.iter().enumerate() {
-                                    let col_idx = Value::Integer(unique_cols[i] as i64);
-                                    let _ = storage.delete(table_name, &[col_idx, val.clone()]);
+
+                            if let Some(idx) = conflict_idx {
+                                let mut updated = final_rows[idx].clone();
+                                for (col_name, expr) in updates {
+                                    if let Some(ref info) = table_info {
+                                        if let Some(col_idx) = info
+                                            .columns
+                                            .iter()
+                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                        {
+                                            let new_val = match expr {
+                                                Expression::Literal(value) => {
+                                                    let col_type = &info.columns[col_idx].data_type;
+                                                    let upper = col_type.to_uppercase();
+                                                    if upper.contains("INT")
+                                                        || upper == "BIGINT"
+                                                        || upper == "SMALLINT"
+                                                    {
+                                                        if let Ok(n) = value.parse::<i64>() {
+                                                            Value::Integer(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "FLOAT"
+                                                        || upper == "DOUBLE"
+                                                        || upper == "DECIMAL"
+                                                    {
+                                                        if let Ok(n) = value.parse::<f64>() {
+                                                            Value::Float(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else {
+                                                        Value::Text(value.clone())
+                                                    }
+                                                }
+                                                _ => Value::Null,
+                                            };
+                                            if col_idx < updated.len() {
+                                                updated[col_idx] = new_val;
+                                            }
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                    }
-                    
-                    // Insert the record
-                    match storage.insert(table_name, vec![row.clone()]) {
-                        Ok(_) => inserted_count += 1,
-                        Err(e) => {
-                            if is_ignore {
-                                skipped_count += 1;
+                                final_rows[idx] = updated;
+                                total_affected += 1;
                             } else {
-                                return Err(e);
+                                final_rows.push(new_row.clone());
+                                total_affected += 1;
                             }
+                        } else {
+                            final_rows.push(new_row.clone());
+                            total_affected += 1;
                         }
                     }
+
+                    let _ = storage.delete(table_name, &[]);
+                    storage.insert(table_name, final_rows)?;
+                    Ok(ExecutorResult::new(vec![], total_affected))
+                } else {
+                    storage.insert(table_name, records)?;
+                    Ok(ExecutorResult::new(vec![], insert.values.len()))
                 }
-                
-                Ok(ExecutorResult::new(vec![], inserted_count))
             }
             Statement::CreateTable(create) => {
                 let mut storage = self.storage.write().unwrap();
@@ -1158,6 +1169,31 @@ impl ExecutionEngine {
                 }
                 Ok(result)
             }
+            Statement::Transaction(tx) => match tx.command {
+                sqlrustgo_parser::TransactionCommand::Begin => Ok(ExecutorResult::new(vec![], 0)),
+                sqlrustgo_parser::TransactionCommand::Commit => Ok(ExecutorResult::new(vec![], 0)),
+                sqlrustgo_parser::TransactionCommand::Rollback => {
+                    Ok(ExecutorResult::new(vec![], 0))
+                }
+                sqlrustgo_parser::TransactionCommand::Savepoint { name } => {
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!("Savepoint '{}' created", name))]],
+                        0,
+                    ))
+                }
+                sqlrustgo_parser::TransactionCommand::RollbackTo { name } => {
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!("Rolled back to '{}'", name))]],
+                        0,
+                    ))
+                }
+                sqlrustgo_parser::TransactionCommand::ReleaseSavepoint { name } => {
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!("Release savepoint '{}'", name))]],
+                        0,
+                    ))
+                }
+            },
             _ => Ok(ExecutorResult::empty()),
         }
     }
