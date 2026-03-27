@@ -442,6 +442,19 @@ impl DataType {
             _ => DataType::Null,
         }
     }
+
+    pub fn estimate_size(&self) -> usize {
+        match self {
+            DataType::Boolean => 1,
+            DataType::Integer => 8,
+            DataType::Float => 8,
+            DataType::Decimal => 16,
+            DataType::Text => 64,
+            DataType::Json => 128,
+            DataType::Blob => 256,
+            DataType::Null => 0,
+        }
+    }
 }
 
 impl fmt::Display for DataType {
