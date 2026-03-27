@@ -12,6 +12,45 @@ use std::time::Instant;
 const BENCH_ROW_COUNT: usize = 10000;
 
 #[test]
+fn test_single_insert_qps() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE single_insert_test (id INTEGER, value TEXT)").unwrap())
+        .unwrap();
+
+    let start = Instant::now();
+
+    for i in 0..BENCH_ROW_COUNT {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO single_insert_test VALUES ({}, 'value{}')",
+                    i, i
+                ))
+                .unwrap(),
+            )
+            .unwrap();
+    }
+
+    let elapsed = start.elapsed();
+    let qps = BENCH_ROW_COUNT as f64 / elapsed.as_secs_f64();
+    println!(
+        "Single insert QPS: {:.2} ops/s ({} rows in {:?})",
+        qps, BENCH_ROW_COUNT, elapsed
+    );
+
+    // Verify all rows were inserted
+    let result = engine
+        .execute(parse("SELECT COUNT(*) FROM single_insert_test").unwrap())
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(BENCH_ROW_COUNT as i64));
+
+    // QPS should be >= 1000
+    assert!(qps >= 1000.0, "QPS {} should be >= 1000", qps);
+}
+
+#[test]
 fn test_batch_insert_performance() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
