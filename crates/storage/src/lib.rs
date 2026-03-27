@@ -6,6 +6,7 @@ pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 // pub mod columnar;
+pub mod clock_replacer;
 pub mod engine;
 pub mod file_storage;
 pub mod heap;
@@ -20,6 +21,7 @@ pub use binary_format::BinaryFormat;
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
+pub use clock_replacer::ClockReplacer;
 // pub use columnar::{
 //     ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
 // };
