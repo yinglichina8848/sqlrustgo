@@ -5,6 +5,7 @@ use crate::bplus_tree::BPlusTree;
 use crate::engine::{
     ColumnDefinition, ColumnStats, Record, StorageEngine, TableData, TableInfo, TableStats,
 };
+use crate::wal::{WalEntry, WalManager, WalWriter};
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -20,6 +21,16 @@ pub struct FileStorage {
     tables: HashMap<String, TableData>,
     /// B+ Tree indexes protected by RwLock for concurrent access
     indexes: RwLock<HashMap<(String, String), BPlusTree>>,
+/// Insert buffer for batch optimization (INSERT 性能优化)
+    insert_buffer: HashMap<String, Vec<Record>>,
+    /// Buffer threshold - flush when reaching this count
+    buffer_threshold: usize,
+    /// Enable buffer for batch inserts
+    enable_buffer: bool,
+    /// WAL writer for durability
+    wal_writer: Option<WalWriter>,
+    /// WAL manager for recovery
+    wal_manager: Option<WalManager>,
     /// Auto-increment counters: table_name -> (column_index -> next_value)
     auto_increment_counters: RwLock<HashMap<String, HashMap<usize, i64>>>,
 }
@@ -34,6 +45,11 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
+            insert_buffer: HashMap::new(),
+            buffer_threshold: 10,
+            enable_buffer: true,
+            wal_writer: None,
+            wal_manager: None,
             auto_increment_counters: RwLock::new(HashMap::new()),
         };
 
@@ -44,6 +60,48 @@ impl FileStorage {
         storage.load_all_indexes()?;
 
         Ok(storage)
+    }
+
+    /// 从 WAL 恢复数据 (简化版 - 待完善)
+    fn recover_from_wal(&mut self, _manager: &WalManager) -> SqlResult<()> {
+        // TODO: 实现 WAL 恢复
+        Ok(())
+    }
+
+    /// 启用/禁用批量缓冲模式
+    pub fn set_batch_mode(&mut self, enable: bool) {
+        self.enable_buffer = enable;
+    }
+
+    /// 刷新所有缓冲（事务提交时调用）
+    pub fn flush_all_buffers(&mut self) -> SqlResult<()> {
+        let tables: Vec<String> = self.insert_buffer.keys().cloned().collect();
+        for table in tables {
+            self.do_flush_buffer(&table);
+        }
+        Ok(())
+    }
+
+    /// 直接写入（无缓冲）- 内部方法
+    fn do_insert_direct(&mut self, table: &str, records: Vec<Record>) {
+        if let Some(ref mut data) = self.tables.get_mut(table) {
+            data.rows.extend(records);
+            let table_data = data.clone();
+            let _ = self.save_table(table, &table_data);
+        }
+    }
+
+    /// 刷新缓冲到磁盘 - 内部方法
+    fn do_flush_buffer(&mut self, table: &str) {
+        if let Some(records) = self.insert_buffer.remove(table) {
+            if !records.is_empty() {
+                if let Some(ref mut data) = self.tables.get_mut(table) {
+                    data.rows.extend(records);
+                    let table_data = data.clone();
+                    let _ = self.save_table(table, &table_data);
+                }
+            }
+        }
     }
 
     /// Get the path for a table file
@@ -1079,10 +1137,26 @@ impl StorageEngine for FileStorage {
     }
 
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
-        if let Some(ref mut data) = self.tables.get_mut(table) {
-            data.rows.extend(records);
-            let table_data = data.clone();
-            self.save_table(table, &table_data)?;
+        if records.is_empty() {
+            return Ok(());
+        }
+
+        // 混合模式优化：批量 >= 10 条用缓冲，单条直接写
+        if self.enable_buffer && records.len() >= self.buffer_threshold {
+            // 批量模式：先缓冲，达到阈值后批量写入
+            self.insert_buffer
+                .entry(table.to_string())
+                .or_insert_with(Vec::new)
+                .extend(records);
+
+            // 达到阈值，批量持久化
+            if self.insert_buffer.get(table).map(|b| b.len()).unwrap_or(0) >= self.buffer_threshold
+            {
+                self.do_flush_buffer(table);
+            }
+        } else {
+            // 单条模式：直接写入（低延迟优先）
+            self.do_insert_direct(table, records);
         }
         Ok(())
     }
