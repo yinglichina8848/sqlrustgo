@@ -1,7 +1,7 @@
 // SQLRustGo window function executor module
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
-use sqlrustgo_planner::{Expr, Schema, SortExpr, WindowFrame, WindowFunction};
+use sqlrustgo_planner::{Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::collections::HashMap;
@@ -182,8 +182,8 @@ impl WindowVolcanoExecutor {
     ) -> SqlResult<Value> {
         match func {
             WindowFunction::RowNumber => Ok(Value::Integer((local_idx + 1) as i64)),
-            WindowFunction::Rank => Ok(Value::Integer((local_idx + 1) as i64)),
-            WindowFunction::DenseRank => Ok(Value::Integer((local_idx + 1) as i64)),
+            WindowFunction::Rank => self.compute_rank(partition, local_idx),
+            WindowFunction::DenseRank => self.compute_dense_rank(partition, local_idx),
             WindowFunction::Lead => {
                 let offset = if args.len() > 1 {
                     let target_idx = partition.indices[local_idx];
@@ -223,7 +223,8 @@ impl WindowVolcanoExecutor {
                 }
             }
             WindowFunction::FirstValue => {
-                if let Some(&first_idx) = partition.indices.first() {
+                let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
+                if let Some(&first_idx) = frame_rows.first() {
                     Ok(args[0].evaluate(&partition.rows[first_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
@@ -231,7 +232,8 @@ impl WindowVolcanoExecutor {
                 }
             }
             WindowFunction::LastValue => {
-                if let Some(&last_idx) = partition.indices.last() {
+                let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
+                if let Some(&last_idx) = frame_rows.last() {
                     Ok(args[0].evaluate(&partition.rows[last_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
@@ -239,6 +241,7 @@ impl WindowVolcanoExecutor {
                 }
             }
             WindowFunction::NthValue => {
+                let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
                 let n = args
                     .get(1)
                     .and_then(|e| {
@@ -247,19 +250,257 @@ impl WindowVolcanoExecutor {
                     })
                     .and_then(|v| v.as_integer())
                     .unwrap_or(1) as usize;
-                if n > 0 && n <= partition.indices.len() {
-                    let target_idx = partition.indices[n - 1];
+                if n > 0 && n <= frame_rows.len() {
+                    let target_idx = frame_rows[n - 1];
                     Ok(args[0].evaluate(&partition.rows[target_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
                 }
             }
-            // Note: Aggregate window functions (Sum, Avg, Count, Min, Max)
-            // are handled through aggregate expression evaluation
-            // For now, return NULL for unhandled cases
-            _ => Ok(Value::Null),
+            // Aggregate window functions
+            WindowFunction::Sum => self.compute_agg(args, partition, local_idx, frame, |vals| {
+                let mut sum = 0i64;
+                for v in vals {
+                    if let Some(n) = v.as_integer() {
+                        sum += n;
+                    }
+                }
+                Value::Integer(sum)
+            }),
+            WindowFunction::Avg => self.compute_agg(args, partition, local_idx, frame, |vals| {
+                let mut sum = 0i64;
+                let mut count = 0i64;
+                for v in vals {
+                    if let Some(n) = v.as_integer() {
+                        sum += n;
+                        count += 1;
+                    }
+                }
+                if count > 0 {
+                    Value::Float(sum as f64 / count as f64)
+                } else {
+                    Value::Null
+                }
+            }),
+            WindowFunction::Count => self.compute_agg(args, partition, local_idx, frame, |vals| {
+                let count = vals.iter().filter(|v| !matches!(v, Value::Null)).count() as i64;
+                Value::Integer(count)
+            }),
+            WindowFunction::Min => self.compute_agg(args, partition, local_idx, frame, |vals| {
+                let mut min: Option<i64> = None;
+                for v in vals {
+                    if let Some(n) = v.as_integer() {
+                        min = Some(min.map(|m| n.min(m)).unwrap_or(n));
+                    }
+                }
+                min.map(Value::Integer).unwrap_or(Value::Null)
+            }),
+            WindowFunction::Max => self.compute_agg(args, partition, local_idx, frame, |vals| {
+                let mut max: Option<i64> = None;
+                for v in vals {
+                    if let Some(n) = v.as_integer() {
+                        max = Some(max.map(|m| n.max(m)).unwrap_or(n));
+                    }
+                }
+                max.map(Value::Integer).unwrap_or(Value::Null)
+            }),
         }
+    }
+
+    /// Compute rank with proper ranking logic (1, 2, 2, 5 for ties)
+    fn compute_rank(&self, partition: &PartitionState, local_idx: usize) -> SqlResult<Value> {
+        if local_idx == 0 {
+            return Ok(Value::Integer(1));
+        }
+        // Get current row's order_by value
+        let current_row_idx = partition.indices[local_idx];
+        let current_row = &partition.rows[current_row_idx];
+
+        // Count how many rows have strictly smaller order_by values
+        let mut rank = 1i64;
+        for i in 0..local_idx {
+            let prev_row_idx = partition.indices[i];
+            let prev_row = &partition.rows[prev_row_idx];
+            // Compare with order_by columns
+            for sort_expr in &self.order_by {
+                let val_curr = sort_expr.expr.evaluate(current_row, &self.input_schema);
+                let val_prev = sort_expr.expr.evaluate(prev_row, &self.input_schema);
+                // If prev_row is less than current_row (current row is greater), increment rank
+                let is_less = match (val_curr, val_prev) {
+                    (Some(vc), Some(vp)) => {
+                        let cmp = if sort_expr.asc { vp.cmp(&vc) } else { vp.cmp(&vc).reverse() };
+                        cmp == std::cmp::Ordering::Less
+                    }
+                    (Some(_), None) => false,
+                    (None, Some(_)) => true,
+                    (None, None) => false,
+                };
+                if is_less {
+                    rank += 1;
+                    break;
+                }
+            }
+        }
+        Ok(Value::Integer(rank))
+    }
+
+    /// Compute dense rank without gaps (1, 2, 2, 3 for ties)
+    fn compute_dense_rank(&self, partition: &PartitionState, local_idx: usize) -> SqlResult<Value> {
+        if local_idx == 0 {
+            return Ok(Value::Integer(1));
+        }
+        let current_row_idx = partition.indices[local_idx];
+        let current_row = &partition.rows[current_row_idx];
+
+        // Get current row's order_by values
+        let mut current_vals: Vec<Option<Value>> = Vec::new();
+        for sort_expr in &self.order_by {
+            current_vals.push(sort_expr.expr.evaluate(current_row, &self.input_schema));
+        }
+
+        // Count distinct order_by values strictly smaller than current
+        let mut smaller_distinct_values: Vec<Vec<Option<Value>>> = Vec::new();
+        for i in 0..local_idx {
+            let prev_row_idx = partition.indices[i];
+            let prev_row = &partition.rows[prev_row_idx];
+            let mut prev_vals: Vec<Option<Value>> = Vec::new();
+            for sort_expr in &self.order_by {
+                prev_vals.push(sort_expr.expr.evaluate(prev_row, &self.input_schema));
+            }
+
+            // Only count values strictly smaller than current
+            if self.values_less_than(&prev_vals, &current_vals) {
+                // Check if this is a new distinct value
+                let mut is_new = true;
+                for existing in &smaller_distinct_values {
+                    if existing == &prev_vals {
+                        is_new = false;
+                        break;
+                    }
+                }
+                if is_new {
+                    smaller_distinct_values.push(prev_vals);
+                }
+            }
+        }
+        Ok(Value::Integer((smaller_distinct_values.len() + 1) as i64))
+    }
+
+    /// Compare if values1 < values2 (for all order_by expressions)
+    fn values_less_than(&self, values1: &[Option<Value>], values2: &[Option<Value>]) -> bool {
+        if values1.len() != values2.len() {
+            return false;
+        }
+        for i in 0..values1.len() {
+            let v1 = &values1[i];
+            let v2 = &values2[i];
+            match (v1, v2) {
+                (Some(a), Some(b)) => {
+                    if let Some(ord) = a.partial_cmp(b) {
+                        if ord == std::cmp::Ordering::Greater {
+                            return false;
+                        }
+                        if ord == std::cmp::Ordering::Less {
+                            // Found a smaller value, check if all following are also not greater
+                            let mut all_not_greater = true;
+                            for j in (i + 1)..values1.len() {
+                                let (next_v1, next_v2) = (&values1[j], &values2[j]);
+                                match (next_v1, next_v2) {
+                                    (Some(na), Some(nb)) => {
+                                        if let Some(next_ord) = na.partial_cmp(nb) {
+                                            if next_ord == std::cmp::Ordering::Greater {
+                                                all_not_greater = false;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            if all_not_greater {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Actually simpler: check if ALL values are less than or equal, and at least one is less
+        let mut any_less = false;
+        for i in 0..values1.len() {
+            let v1 = &values1[i];
+            let v2 = &values2[i];
+            match (v1, v2) {
+                (Some(a), Some(b)) => {
+                    if let Some(ord) = a.partial_cmp(b) {
+                        if ord == std::cmp::Ordering::Greater {
+                            return false;
+                        }
+                        if ord == std::cmp::Ordering::Less {
+                            any_less = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        any_less
+    }
+
+    /// Get frame rows based on window frame specification
+    fn get_frame_rows(
+        &self,
+        partition: &PartitionState,
+        local_idx: usize,
+        frame: &Option<WindowFrame>,
+    ) -> SqlResult<Vec<usize>> {
+        let partition_size = partition.indices.len();
+
+        // Default frame: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        let (start_bound, end_bound) = match frame {
+            Some(WindowFrame::Rows { start, end, .. }) => (start, end),
+            Some(WindowFrame::Range { start, end, .. }) => (start, end),
+            Some(WindowFrame::Groups { start, end, .. }) => (start, end),
+            None => {
+                // Default frame: UNBOUNDED PRECEDING to CURRENT ROW
+                return Ok(partition.indices[..=local_idx].to_vec());
+            }
+        };
+
+        let start_idx = match start_bound {
+            FrameBound::UnboundedPreceding => 0,
+            FrameBound::Preceding(n) => {
+                let offset = *n as usize;
+                local_idx.saturating_sub(offset)
+            }
+            FrameBound::CurrentRow => local_idx,
+            FrameBound::Following(n) => {
+                let offset = *n as usize;
+                (local_idx + offset).min(partition_size)
+            }
+            FrameBound::UnboundedFollowing => 0,
+        };
+
+        let end_idx = match end_bound {
+            FrameBound::UnboundedPreceding => 0,
+            FrameBound::Preceding(n) => {
+                let offset = *n as usize;
+                local_idx.saturating_sub(offset)
+            }
+            FrameBound::CurrentRow => local_idx,
+            FrameBound::Following(n) => {
+                let offset = *n as usize;
+                (local_idx + offset).min(partition_size - 1)
+            }
+            FrameBound::UnboundedFollowing => partition_size - 1,
+        };
+
+        if start_idx > end_idx {
+            return Ok(Vec::new());
+        }
+
+        Ok(partition.indices[start_idx..=end_idx].to_vec())
     }
 
     fn compute_agg<F>(
@@ -267,18 +508,17 @@ impl WindowVolcanoExecutor {
         args: &[Expr],
         partition: &PartitionState,
         local_idx: usize,
-        _frame: &Option<WindowFrame>,
+        frame: &Option<WindowFrame>,
         f: F,
     ) -> SqlResult<Value>
     where
         F: Fn(&[Value]) -> Value,
     {
-        // For simplicity, use entire partition as frame
-        let start_idx = 0;
-        let end_idx = partition.indices.len();
+        // Get frame rows based on window frame specification
+        let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
 
         // Collect values for aggregation
-        let values: Vec<Value> = partition.indices[start_idx..end_idx]
+        let values: Vec<Value> = frame_rows
             .iter()
             .map(|&idx| {
                 if args.is_empty() {
@@ -342,5 +582,326 @@ impl VolcanoExecutor for WindowVolcanoExecutor {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlrustgo_planner::{Expr, SortExpr};
+
+    fn create_test_partition() -> PartitionState {
+        // Create test rows: (id, value)
+        let rows = vec![
+            vec![Value::Integer(1), Value::Integer(100)],
+            vec![Value::Integer(2), Value::Integer(200)],
+            vec![Value::Integer(3), Value::Integer(100)],
+            vec![Value::Integer(4), Value::Integer(300)],
+            vec![Value::Integer(5), Value::Integer(100)],
+        ];
+        let indices = vec![0, 1, 2, 3, 4];
+        PartitionState { rows, indices }
+    }
+
+    #[test]
+    fn test_row_number() {
+        let partition = create_test_partition();
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            Schema::empty(),
+            vec![],
+            vec![],
+        );
+
+        for i in 0..5 {
+            let result = executor.compute_window_function(
+                &WindowFunction::RowNumber,
+                &[],
+                &partition,
+                i,
+                &None,
+            );
+            assert_eq!(result.unwrap(), Value::Integer((i + 1) as i64));
+        }
+    }
+
+    #[test]
+    fn test_rank_with_ties() {
+        // Create partition with ties in order_by values
+        let rows = vec![
+            vec![Value::Integer(1), Value::Integer(100)],
+            vec![Value::Integer(2), Value::Integer(200)],
+            vec![Value::Integer(3), Value::Integer(200)],
+            vec![Value::Integer(4), Value::Integer(300)],
+            vec![Value::Integer(5), Value::Integer(400)],
+        ];
+        let indices = vec![0, 1, 2, 3, 4];
+        let partition = PartitionState { rows, indices };
+
+        // Use index-based evaluation (column 1)
+        let order_by = vec![SortExpr {
+            expr: Expr::Column(Column {
+                relation: None,
+                name: "value".to_string(),
+            }),
+            asc: true,
+            nulls_first: false,
+        }];
+        // Provide schema with field to enable evaluation
+        let input_schema = Schema::new(vec![
+            sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            input_schema,
+            vec![],
+            order_by,
+        );
+
+        // Row 1 (value=100): rank 1
+        let result = executor.compute_rank(&partition, 0).unwrap();
+        assert_eq!(result, Value::Integer(1));
+
+        // Row 2 (value=200): rank 2 (skips 1)
+        let result = executor.compute_rank(&partition, 1).unwrap();
+        assert_eq!(result, Value::Integer(2));
+
+        // Row 3 (value=200): rank 2 (same as row 2)
+        let result = executor.compute_rank(&partition, 2).unwrap();
+        assert_eq!(result, Value::Integer(2));
+
+        // Row 4 (value=300): rank 4 (skips 1, 2, 3)
+        let result = executor.compute_rank(&partition, 3).unwrap();
+        assert_eq!(result, Value::Integer(4));
+
+        // Row 5 (value=400): rank 5
+        let result = executor.compute_rank(&partition, 4).unwrap();
+        assert_eq!(result, Value::Integer(5));
+    }
+
+    #[test]
+    fn test_dense_rank_with_ties() {
+        let rows = vec![
+            vec![Value::Integer(1), Value::Integer(100)],
+            vec![Value::Integer(2), Value::Integer(200)],
+            vec![Value::Integer(3), Value::Integer(200)],
+            vec![Value::Integer(4), Value::Integer(300)],
+            vec![Value::Integer(5), Value::Integer(400)],
+        ];
+        let indices = vec![0, 1, 2, 3, 4];
+        let partition = PartitionState { rows, indices };
+
+        let order_by = vec![SortExpr {
+            expr: Expr::Column(Column {
+                relation: None,
+                name: "value".to_string(),
+            }),
+            asc: true,
+            nulls_first: false,
+        }];
+        let input_schema = Schema::new(vec![
+            sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            input_schema,
+            vec![],
+            order_by,
+        );
+
+        // Dense rank: 1, 2, 2, 3, 4 (no gaps)
+        let results: Vec<Value> = (0..5)
+            .map(|i| executor.compute_dense_rank(&partition, i).unwrap())
+            .collect();
+
+        assert_eq!(results[0], Value::Integer(1));
+        assert_eq!(results[1], Value::Integer(2));
+        assert_eq!(results[2], Value::Integer(2));
+        assert_eq!(results[3], Value::Integer(3));
+        assert_eq!(results[4], Value::Integer(4));
+    }
+
+    #[test]
+    fn test_get_frame_rows_default() {
+        let partition = create_test_partition();
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            Schema::empty(),
+            vec![],
+            vec![],
+        );
+
+        // Default frame: UNBOUNDED PRECEDING to CURRENT ROW
+        let frame_rows = executor.get_frame_rows(&partition, 2, &None).unwrap();
+        // Should include indices 0, 1, 2 (local_idx=2)
+        assert_eq!(frame_rows.len(), 3);
+    }
+
+    #[test]
+    fn test_get_frame_rows_with_offset() {
+        let partition = create_test_partition();
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            Schema::empty(),
+            vec![],
+            vec![],
+        );
+
+        // Frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
+        let frame = WindowFrame::Rows {
+            start: FrameBound::Preceding(1),
+            end: FrameBound::Following(1),
+            exclude: ExcludeMode::None,
+        };
+
+        let frame_rows = executor.get_frame_rows(&partition, 2, &Some(frame)).unwrap();
+        // Should include indices 1, 2, 3 (local_idx=2, 1 before, 1 after)
+        assert_eq!(frame_rows.len(), 3);
+    }
+
+    #[test]
+    fn test_aggregate_window_sum() {
+        let partition = create_test_partition();
+        let input_schema = Schema::new(vec![
+            sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            input_schema,
+            vec![],
+            vec![],
+        );
+
+        let sum = executor.compute_window_function(
+            &WindowFunction::Sum,
+            &[Expr::Column(Column {
+                relation: None,
+                name: "value".to_string(),
+            })],
+            &partition,
+            2,
+            &None,
+        );
+        // Default frame includes rows 0,1,2 with values 100,200,100 = 400
+        assert_eq!(sum.unwrap(), Value::Integer(400));
+    }
+
+    #[test]
+    fn test_aggregate_window_count() {
+        let partition = create_test_partition();
+        let input_schema = Schema::new(vec![
+            sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            input_schema,
+            vec![],
+            vec![],
+        );
+
+        let count = executor.compute_window_function(
+            &WindowFunction::Count,
+            &[Expr::Column(Column {
+                relation: None,
+                name: "value".to_string(),
+            })],
+            &partition,
+            2,
+            &None,
+        );
+        // Default frame includes rows 0,1,2 = 3 rows
+        assert_eq!(count.unwrap(), Value::Integer(3));
+    }
+
+    #[test]
+    fn test_aggregate_window_avg() {
+        let partition = create_test_partition();
+        let input_schema = Schema::new(vec![
+            sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let executor = WindowVolcanoExecutor::new(
+            Box::new(MockExecutor::new()),
+            vec![],
+            Schema::empty(),
+            input_schema,
+            vec![],
+            vec![],
+        );
+
+        let avg = executor.compute_window_function(
+            &WindowFunction::Avg,
+            &[Expr::Column(Column {
+                relation: None,
+                name: "value".to_string(),
+            })],
+            &partition,
+            2,
+            &None,
+        );
+        // Default frame includes rows 0,1,2 with values 100,200,100, avg = 400/3
+        let expected = Value::Float(400.0 / 3.0);
+        assert!((avg.unwrap().as_float().unwrap() - expected.as_float().unwrap()).abs() < 0.001);
+    }
+
+    // Mock executor for tests
+    struct MockExecutor {
+        schema: Schema,
+    }
+
+    impl MockExecutor {
+        fn new() -> Self {
+            Self {
+                schema: Schema::empty(),
+            }
+        }
+    }
+
+    impl VolcanoExecutor for MockExecutor {
+        fn init(&mut self) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+            Ok(None)
+        }
+
+        fn close(&mut self) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn schema(&self) -> &Schema {
+            &self.schema
+        }
+
+        fn name(&self) -> &str {
+            "MockExecutor"
+        }
+
+        fn is_initialized(&self) -> bool {
+            true
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
     }
 }
