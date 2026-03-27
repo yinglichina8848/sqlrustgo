@@ -485,6 +485,8 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         ColumnDefinition {
@@ -492,6 +494,8 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                     ],
@@ -555,6 +559,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -597,6 +603,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -634,6 +642,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -672,6 +682,8 @@ mod tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
                         references: None,
                     },
                     ColumnDefinition {
@@ -679,6 +691,8 @@ mod tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
                         references: None,
                     },
                 ],
@@ -755,6 +769,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -801,6 +817,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -838,6 +856,8 @@ mod tests {
                     data_type: "TEXT".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -905,6 +925,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -940,6 +962,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 }],
             },
@@ -1013,6 +1037,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -1401,29 +1427,6 @@ impl StorageEngine for FileStorage {
         Ok(next + 1)
     }
 
-    fn get_next_auto_increment_batch(
-        &mut self,
-        table: &str,
-        column_index: usize,
-        count: usize,
-    ) -> SqlResult<Vec<i64>> {
-        // Optimized: single lock acquisition for batch allocation
-        let mut counters = self
-            .auto_increment_counters
-            .write()
-            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
-        let table_counters = counters
-            .entry(table.to_string())
-            .or_insert_with(HashMap::new);
-        let start = *table_counters.entry(column_index).or_insert(0);
-        let mut values = Vec::with_capacity(count);
-        for i in 0..count {
-            values.push(start + i as i64 + 1);
-        }
-        table_counters.insert(column_index, start + count as i64);
-        Ok(values)
-    }
-
     fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
         let counters = self
             .auto_increment_counters
@@ -1461,6 +1464,8 @@ mod storage_engine_tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
                         references: None,
                     }],
                 },
@@ -1553,6 +1558,8 @@ mod storage_engine_tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
                         references: None,
                     }],
                 },
@@ -1587,6 +1594,8 @@ mod storage_engine_tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
                         references: None,
                     }],
                 },

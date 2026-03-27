@@ -67,7 +67,6 @@ miniz_oxide = "0.7"
 rand = "0.8"
 fnv = "1.0"
 proptest = "1.1"
-bumpalo = "3"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -107,7 +106,6 @@ bytes.workspace = true
 lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
-bumpalo = "3"
 
 [[test]]
 name = "ci_test"
@@ -182,10 +180,6 @@ path = "tests/integration/page_test.rs"
 [[test]]
 name = "executor_test"
 path = "tests/integration/executor_test.rs"
-
-[[test]]
-name = "batch_insert_test"
-path = "tests/integration/batch_insert_test.rs"
 
 [[test]]
 name = "foreign_key_test"
@@ -362,3 +356,7 @@ path = "tests/integration/upsert_test.rs"
 [[test]]
 name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
+
+[[test]]
+name = "regression_test"
+path = "tests/regression_test.rs"

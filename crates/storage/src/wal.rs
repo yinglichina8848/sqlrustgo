@@ -2,22 +2,10 @@
 //!
 //! The WAL ensures durability by logging all modifications before applying them.
 //! This allows recovery after a crash.
-//!
-//! # WAL Group Commit Optimization
-//!
-//! Group commit improves write throughput by:
-//! 1. Collecting multiple transactions' WAL records in memory
-//! 2. Writing them in a single batch
-//! 3. Calling fsync once for multiple transactions
-//!
-//! This significantly improves performance under high concurrent write load.
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::mem;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use std::time::Instant;
 
 /// WAL magic number for validation
 #[allow(dead_code)]
@@ -207,28 +195,7 @@ impl WalEntry {
     }
 }
 
-/// WAL group commit configuration
-#[derive(Debug, Clone)]
-pub struct WalGroupCommitConfig {
-    /// Maximum time to wait before flushing (milliseconds)
-    pub max_wait_ms: u64,
-    /// Maximum number of records to buffer before flush
-    pub max_records: usize,
-    /// Enable group commit (for replication performance)
-    pub enabled: bool,
-}
-
-impl Default for WalGroupCommitConfig {
-    fn default() -> Self {
-        Self {
-            max_wait_ms: 10,  // 10ms max wait
-            max_records: 100, // 100 records max
-            enabled: true,    // Enable by default for replication
-        }
-    }
-}
-
-/// WAL writer with group commit support
+/// WAL writer
 pub struct WalWriter {
     writer: BufWriter<File>,
     lsn: u64,
@@ -238,63 +205,22 @@ pub struct WalWriter {
     records_since_flush: usize,
     /// Flush threshold
     flush_threshold: usize,
-    /// Group commit configuration
-    group_commit_config: WalGroupCommitConfig,
-    /// Pending entries buffer for group commit
-    pending_entries: Vec<Vec<u8>>,
-    /// Last flush time for group commit timing
-    last_flush_time: Instant,
-    /// Lock for thread-safe group commit
-    write_lock: Mutex<()>,
 }
 
 impl WalWriter {
     /// Create a new WAL writer
     pub fn new(path: &PathBuf) -> std::io::Result<Self> {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
+
         let writer = BufWriter::new(file);
 
         Ok(Self {
             writer,
             lsn: 0,
-            batch_mode: false,
+            batch_mode: false, // Default: sync mode for safety
             records_since_flush: 0,
             flush_threshold: 100,
-            group_commit_config: WalGroupCommitConfig::default(),
-            pending_entries: Vec::new(),
-            last_flush_time: Instant::now(),
-            write_lock: Mutex::new(()),
         })
-    }
-
-    /// Create a new WAL writer with group commit configuration
-    pub fn new_with_config(path: &PathBuf, config: WalGroupCommitConfig) -> std::io::Result<Self> {
-        let file = OpenOptions::new().create(true).append(true).open(path)?;
-        let writer = BufWriter::new(file);
-
-        Ok(Self {
-            writer,
-            lsn: 0,
-            batch_mode: false,
-            records_since_flush: 0,
-            flush_threshold: config.max_records,
-            group_commit_config: config,
-            pending_entries: Vec::new(),
-            last_flush_time: Instant::now(),
-            write_lock: Mutex::new(()),
-        })
-    }
-
-    /// Enable/disable group commit
-    pub fn set_group_commit(&mut self, enabled: bool) {
-        self.group_commit_config.enabled = enabled;
-    }
-
-    /// Configure group commit parameters
-    pub fn configure_group_commit(&mut self, max_wait_ms: u64, max_records: usize) {
-        self.group_commit_config.max_wait_ms = max_wait_ms;
-        self.group_commit_config.max_records = max_records;
-        self.flush_threshold = max_records;
     }
 
     /// Enable batch mode for better performance (use for bulk inserts)
@@ -302,115 +228,39 @@ impl WalWriter {
         self.batch_mode = enable;
         if !enable {
             // When disabling, flush pending writes
-            let _ = self.flush_group_commit();
             let _ = self.writer.flush();
             self.records_since_flush = 0;
         }
     }
 
-    /// Check if group commit should trigger (by time or count)
-    fn should_flush_group_commit(&self) -> bool {
-        if self.pending_entries.is_empty() {
-            return false;
-        }
-
-        let time_elapsed = self.last_flush_time.elapsed();
-        let count_reached = self.pending_entries.len() >= self.group_commit_config.max_records;
-        let time_reached = time_elapsed.as_millis() >= self.group_commit_config.max_wait_ms as u128;
-
-        count_reached || time_reached
-    }
-
-    /// Flush pending group commit entries
-    fn flush_group_commit(&mut self) -> std::io::Result<()> {
-        if self.pending_entries.is_empty() {
-            return Ok(());
-        }
-
-        // Write all pending entries in a single batch
-        for entry_bytes in self.pending_entries.drain(..) {
-            self.writer
-                .write_all(&(entry_bytes.len() as u32).to_le_bytes())?;
-            self.writer.write_all(&entry_bytes)?;
-        }
-
-        // Single fsync for all entries
-        self.writer.flush()?;
-        self.last_flush_time = Instant::now();
-
-        Ok(())
-    }
-
-    /// Append an entry to the WAL with group commit optimization
+    /// Append an entry to the WAL
     pub fn append(&mut self, entry: &WalEntry) -> std::io::Result<u64> {
         let lsn = self.lsn;
+        let bytes = entry.to_bytes();
 
-        if self.group_commit_config.enabled && !self.batch_mode {
-            // Group commit mode: buffer entries and flush periodically
-            // Need to handle locking carefully to avoid borrow conflicts
+        // Write length prefix (4 bytes)
+        self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
+        // Write entry data
+        self.writer.write_all(&bytes)?;
 
-            let bytes = entry.to_bytes();
-
-            // Hold lock only for buffer push
-            {
-                let _guard = self.write_lock.lock().unwrap();
-                self.pending_entries.push(bytes);
-            }
-
-            // Increment LSN without holding lock
-            self.lsn += 1;
-
-            // Check and flush outside of lock
-            if self.should_flush_group_commit() {
-                let _guard = self.write_lock.lock().unwrap();
-                // Use helper to flush only if needed (re-check under lock)
-                if !self.pending_entries.is_empty() {
-                    // Drain entries to avoid borrow issues
-                    let entries = std::mem::take(&mut self.pending_entries);
-                    for entry_bytes in entries {
-                        self.writer
-                            .write_all(&(entry_bytes.len() as u32).to_le_bytes())?;
-                        self.writer.write_all(&entry_bytes)?;
-                    }
-                    self.writer.flush()?;
-                    self.last_flush_time = Instant::now();
-                }
-            }
-
-            Ok(lsn)
-        } else {
-            // Original mode: direct write (no group commit)
-            let bytes = entry.to_bytes();
-            let _guard = self.write_lock.lock().unwrap();
-
-            // Write length prefix (4 bytes)
-            self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
-            // Write entry data
-            self.writer.write_all(&bytes)?;
-
-            // Batch mode or default sync mode
-            if self.batch_mode {
-                self.records_since_flush += 1;
-                if self.records_since_flush >= self.flush_threshold {
-                    self.writer.flush()?;
-                    self.records_since_flush = 0;
-                }
-            } else {
+        // 批量模式优化：只在达到阈值或显式调用时 flush
+        if self.batch_mode {
+            self.records_since_flush += 1;
+            if self.records_since_flush >= self.flush_threshold {
                 self.writer.flush()?;
+                self.records_since_flush = 0;
             }
-
-            self.lsn += 1;
-            Ok(lsn)
+        } else {
+            // 默认模式：每次都 flush，保证持久性
+            self.writer.flush()?;
         }
+
+        self.lsn += 1;
+        Ok(lsn)
     }
 
-    /// Force flush pending writes (call after batch insert or at commit)
+    /// Force flush pending writes (call after batch insert)
     pub fn flush(&mut self) -> std::io::Result<()> {
-        // Flush group commit buffer if any
-        if self.group_commit_config.enabled {
-            self.flush_group_commit()?;
-        }
-
         self.writer.flush()?;
         self.records_since_flush = 0;
         Ok(())
@@ -419,11 +269,6 @@ impl WalWriter {
     /// Get current LSN
     pub fn current_lsn(&self) -> u64 {
         self.lsn
-    }
-
-    /// Get pending entries count (for monitoring)
-    pub fn pending_count(&self) -> usize {
-        self.pending_entries.len()
     }
 }
 
