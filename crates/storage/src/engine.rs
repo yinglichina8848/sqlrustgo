@@ -183,6 +183,22 @@ pub trait StorageEngine: Send + Sync {
     /// Returns the next value and increments the counter
     fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64>;
 
+    /// Get the next batch of auto_increment values for a table column
+    /// Returns a vector of consecutive values and advances the counter by count
+    /// This is more efficient than calling get_next_auto_increment() multiple times
+    fn get_next_auto_increment_batch(
+        &mut self,
+        table: &str,
+        column_index: usize,
+        count: usize,
+    ) -> SqlResult<Vec<i64>> {
+        let mut values = Vec::with_capacity(count);
+        for _ in 0..count {
+            values.push(self.get_next_auto_increment(table, column_index)?);
+        }
+        Ok(values)
+    }
+
     /// Get the current auto_increment counter for a table column
     fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64>;
 
