@@ -2221,8 +2221,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2257,8 +2263,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2279,8 +2291,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let row = exec.next().unwrap();
@@ -2293,7 +2311,7 @@ mod tests {
         let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
 
-        let exec = AggregateVolcanoExecutor::new(child, vec![], vec![], schema, input_schema);
+        let exec = AggregateVolcanoExecutor::new(child, vec![], vec![], None, schema, input_schema);
         assert_eq!(exec.name(), "Aggregate");
     }
 
@@ -2663,8 +2681,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2709,8 +2733,14 @@ mod tests {
             },
         ];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();

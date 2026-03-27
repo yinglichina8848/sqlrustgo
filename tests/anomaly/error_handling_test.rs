@@ -148,7 +148,13 @@ mod tests {
         storage.create_table(&info).unwrap();
 
         // Use proper filter format: [column_index, value] - delete from column 0 where value=999
-        let result = storage.delete("test", &[sqlrustgo_types::Value::Integer(0), sqlrustgo_types::Value::Integer(999)]);
+        let result = storage.delete(
+            "test",
+            &[
+                sqlrustgo_types::Value::Integer(0),
+                sqlrustgo_types::Value::Integer(999),
+            ],
+        );
 
         assert!(result.is_ok());
     }
