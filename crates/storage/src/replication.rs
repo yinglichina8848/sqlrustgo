@@ -757,7 +757,7 @@ mod tests {
 
         drop(writer);
 
-        let mut reader = BinlogReader::new(binlog_path).unwrap();
+        let mut reader = BinlogReader::new(binlog_path.clone()).unwrap();
         let events = reader.read_from(0).unwrap();
 
         assert_eq!(events.len(), 2);

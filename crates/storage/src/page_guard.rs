@@ -27,8 +27,13 @@
 
 use std::sync::Arc;
 
-use crate::buffer_pool::BufferPool;
-use crate::page::Page;
+use crate::page::{Page, PageType};
+
+/// Trait for pool-like types that support pin/unpin
+pub trait PoolLike {
+    fn pin(&self, page_id: u32);
+    fn unpin(&self, page_id: u32) -> bool;
+}
 
 /// RAII guard for page access with automatic pin/unpin lifecycle management
 ///
@@ -47,18 +52,18 @@ use crate::page::Page;
 ///     // ... use page ...
 /// } // guard dropped, page 42 is now unpinned
 /// ```
-pub struct PageGuard<'a> {
+pub struct PageGuard<'a, P: PoolLike> {
     /// The page being guarded (Arc allows sharing)
     page: Arc<Page>,
     /// Reference to buffer pool for unpin on drop
-    pool: &'a BufferPool,
+    pool: &'a P,
     /// Whether this guard owns the pin (false for read-only guards)
     exclusive: bool,
 }
 
-impl<'a> PageGuard<'a> {
+impl<'a, P: PoolLike> PageGuard<'a, P> {
     /// Create a new page guard (typically called by BufferPool::fetch_page)
-    pub(crate) fn new(page: Arc<Page>, pool: &'a BufferPool, exclusive: bool) -> Self {
+    pub(crate) fn new(page: Arc<Page>, pool: &'a P, exclusive: bool) -> Self {
         // Pin the page when guard is created
         pool.pin(page.page_id());
 
@@ -111,14 +116,14 @@ impl<'a> PageGuard<'a> {
     }
 }
 
-impl<'a> Drop for PageGuard<'a> {
+impl<'a, P: PoolLike> Drop for PageGuard<'a, P> {
     fn drop(&mut self) {
         // Unpin the page when guard is dropped
         self.pool.unpin(self.page.page_id());
     }
 }
 
-impl<'a> std::fmt::Debug for PageGuard<'a> {
+impl<'a, P: PoolLike> std::fmt::Debug for PageGuard<'a, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PageGuard")
             .field("page_id", &self.page.page_id())
@@ -127,7 +132,7 @@ impl<'a> std::fmt::Debug for PageGuard<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for PageGuard<'a> {
+impl<'a, P: PoolLike> std::ops::Deref for PageGuard<'a, P> {
     type Target = Page;
 
     fn deref(&self) -> &Self::Target {
@@ -144,13 +149,7 @@ mod tests {
         pin_count: std::sync::Mutex<std::collections::HashMap<u32, u32>>,
     }
 
-    impl MockBufferPool {
-        fn new() -> Self {
-            Self {
-                pin_count: std::sync::Mutex::new(std::collections::HashMap::new()),
-            }
-        }
-
+    impl PoolLike for MockBufferPool {
         fn pin(&self, page_id: u32) {
             let mut count = self.pin_count.lock().unwrap();
             *count.entry(page_id).or_insert(0) += 1;
@@ -168,6 +167,14 @@ mod tests {
                 }
             }
             false
+        }
+    }
+
+    impl MockBufferPool {
+        fn new() -> Self {
+            Self {
+                pin_count: std::sync::Mutex::new(std::collections::HashMap::new()),
+            }
         }
 
         fn pin_count(&self, page_id: u32) -> u32 {
