@@ -4,6 +4,8 @@
 
 pub mod chunk;
 pub mod segment;
+pub mod storage;
 
 pub use chunk::{Bitmap, ColumnChunk, ColumnStats};
 pub use segment::{ColumnSegment, CompressionType, ColumnStatsDisk};
+pub use storage::{ColumnarStorage, TableStore};
