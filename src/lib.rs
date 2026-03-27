@@ -3,7 +3,7 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 //! This crate re-exports functionality from the modular crates/ workspace.
 
-pub use sqlrustgo_executor::{Executor, ExecutorResult};
+pub use sqlrustgo_executor::{Executor, ExecutorResult, GLOBAL_PROFILER};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{
@@ -18,7 +18,71 @@ pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
 use std::sync::{Arc, RwLock};
 
+use sqlrustgo_executor::OperatorProfile;
 use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
+
+/// Format the EXPLAIN ANALYZE output as a tree structure (PostgreSQL-style)
+fn format_tree_output(profiles: &[OperatorProfile], total_time: &str) -> Vec<Vec<Value>> {
+    let mut rows = Vec::new();
+
+    // Header
+    rows.push(vec![
+        Value::Text("┌─────────────────────────────────────────────────────────────────┐".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text("│                      Execution Plan                             │".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text("├─────────────────────────────────────────────────────────────────┤".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+
+    // Operator nodes
+    for (i, profile) in profiles.iter().enumerate() {
+        let is_last = i == profiles.len() - 1;
+        let prefix = if is_last { "└─ " } else { "├─ " };
+        let time_ms = profile.total_time_ns as f64 / 1_000_000.0;
+
+        rows.push(vec![
+            Value::Text(format!(
+                "│  {} {} (rows={})",
+                prefix,
+                profile.operator_name,
+                profile.rows_processed
+            )),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+        rows.push(vec![
+            Value::Text(format!(
+                "│        Actual Time: {:.3} ms, Rows: {}",
+                time_ms,
+                profile.rows_processed
+            )),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+    }
+
+    // Footer
+    rows.push(vec![
+        Value::Text("└─────────────────────────────────────────────────────────────────┘".to_string()),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+    rows.push(vec![
+        Value::Text(format!("Total Execution Time: {}", total_time)),
+        Value::Text("".to_string()),
+        Value::Text("".to_string()),
+    ]);
+
+    rows
+}
 
 /// Handle foreign key constraints for DELETE operations
 /// Returns: (cascaded_deletes, modified_rows) or error for RESTRICT
@@ -1078,40 +1142,17 @@ impl ExecutionEngine {
             }
             Statement::Explain(explain) => {
                 let start = std::time::Instant::now();
+
+                // Clear previous profiling data before execution
+                GLOBAL_PROFILER.clear();
+
                 let result = self.execute(*explain.query)?;
+                let duration = start.elapsed();
+
                 if explain.analyze {
-                    let duration = start.elapsed();
-                    let mut rows = Vec::new();
-
-                    rows.push(vec![
-                        Value::Text("Plan".to_string()),
-                        Value::Text("Timing".to_string()),
-                        Value::Text("Rows".to_string()),
-                    ]);
-
-                    rows.push(vec![
-                        Value::Text("Seq Scan".to_string()),
-                        Value::Text(format!("{:.3} ms", duration.as_secs_f64() * 1000.0)),
-                        Value::Text(format!("{}", result.rows.len())),
-                    ]);
-
-                    rows.push(vec![
-                        Value::Text("".to_string()),
-                        Value::Text("".to_string()),
-                        Value::Text("".to_string()),
-                    ]);
-
-                    rows.push(vec![
-                        Value::Text("Planning Time".to_string()),
-                        Value::Text("0.123 ms".to_string()),
-                        Value::Text("-".to_string()),
-                    ]);
-
-                    rows.push(vec![
-                        Value::Text("Execution Time".to_string()),
-                        Value::Text(format!("{:.3} ms", duration.as_secs_f64() * 1000.0)),
-                        Value::Text("-".to_string()),
-                    ]);
+                    let profiles = GLOBAL_PROFILER.get_all_profiles();
+                    let total_time = format!("{:.3} ms", duration.as_secs_f64() * 1000.0);
+                    let rows = format_tree_output(&profiles, &total_time);
 
                     return Ok(ExecutorResult::new(rows, result.affected_rows));
                 }

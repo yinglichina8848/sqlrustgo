@@ -36,6 +36,8 @@ pub enum Statement {
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
+    ShowStatus,
+    ShowProcesslist,
 }
 
 /// CREATE INDEX statement
@@ -225,7 +227,7 @@ pub struct InsertStatement {
     pub values: Vec<Vec<Expression>>, // Multiple rows
     pub on_duplicate: Option<Vec<(String, Expression)>>, // ON DUPLICATE KEY UPDATE
     pub ignore: bool, // INSERT IGNORE
-    pub replace: bool, // REPLACE INTO
+    pub replace: bool, // REPLACE INTO (aliased to INSERT or separate)
 }
 
 /// UPDATE statement
@@ -361,6 +363,7 @@ impl Parser {
             | Some(Token::Savepoint) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
+            Some(Token::Show) => self.parse_show(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -636,31 +639,28 @@ impl Parser {
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
-        // Check for optional REPLACE or IGNORE after INSERT
+        // Check for REPLACE INTO (MySQL syntax: REPLACE INTO table...)
         let mut replace = false;
         let mut ignore = false;
         
-        // Check for REPLACE (REPLACE INTO table...)
         if let Some(Token::Replace) = self.current() {
             replace = true;
             self.next(); // consume REPLACE
         } else if let Some(Token::Ignore) = self.current() {
-            // Check for INSERT IGNORE INTO
+            // Check for IGNORE (INSERT IGNORE INTO)
             ignore = true;
             self.next(); // consume IGNORE
         }
         
-        // Now expect INSERT (unless we consumed REPLACE)
+        // Now expect INSERT (unless we already consumed REPLACE)
         if !replace {
             self.expect(Token::Insert)?;
         }
         
         // Check for IGNORE after INSERT (INSERT IGNORE INTO)
-        if !ignore {
-            if let Some(Token::Ignore) = self.current() {
-                ignore = true;
-                self.next(); // consume IGNORE
-            }
+        if let Some(Token::Ignore) = self.current() {
+            ignore = true;
+            self.next(); // consume IGNORE
         }
         
         self.expect(Token::Into)?;
@@ -804,7 +804,7 @@ impl Parser {
                         self.next();
                     }
                     Some(Token::StringLiteral(s)) => {
-                        row.push(Expression::Literal(format!("'{}'", s)));
+                        row.push(Expression::Literal(s.to_string()));
                         self.next();
                     }
                     Some(Token::Comma) => {
@@ -987,7 +987,7 @@ impl Parser {
             let value = match self.current() {
                 Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
                 Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
+                Some(Token::StringLiteral(s)) => Expression::Literal(s.to_string()),
                 Some(Token::Minus) => {
                     self.next();
                     if let Some(Token::NumberLiteral(n)) = self.current() {
@@ -1380,13 +1380,32 @@ impl Parser {
                                         }
                                         _ => "".to_string(),
                                     };
-                                    let ref_column = match self.current() {
-                                        Some(Token::Identifier(s)) => {
-                                            let c = s.clone();
+                                    // Handle optional parentheses: REFERENCES table(column)
+                                    let ref_column = if let Some(Token::LParen) = self.current() {
+                                        // Consume '('
+                                        self.next();
+                                        let col = match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        };
+                                        // Consume ')' if present
+                                        if let Some(Token::RParen) = self.current() {
                                             self.next();
-                                            c
                                         }
-                                        _ => "id".to_string(),
+                                        col
+                                    } else {
+                                        match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        }
                                     };
                                     references = Some(ForeignKeyRef {
                                         table: ref_table,
@@ -1394,6 +1413,88 @@ impl Parser {
                                         on_delete: None,
                                         on_update: None,
                                     });
+                                    // Parse ON DELETE and ON UPDATE actions
+                                    loop {
+                                        match self.current() {
+                                            Some(Token::On) => {
+                                                self.next();
+                                                // Parse ON DELETE action
+                                                if let Some(Token::Delete) = self.current() {
+                                                    self.next();
+                                                    // Check for SET NULL or direct action
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper = action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
+                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_delete = action;
+                                                    }
+                                                }
+                                                // Check if we're at UPDATE before checking for ON (order matters!)
+                                                if let Some(Token::Update) = self.current() {
+                                                    self.next();
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper = action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
+                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_update = action;
+                                                    }
+                                                }
+                                                // If we're at ON, continue to next iteration to handle it
+                                                else if let Some(Token::On) = self.current() {
+                                                    continue;
+                                                }
+                                                // Not ON DELETE or ON UPDATE, break
+                                                else {
+                                                    break;
+                                                }
+                                            }
+                                            _ => break,
+                                        }
+                                    }
                                 }
                                 _ => break,
                             }
@@ -1612,6 +1713,22 @@ impl Parser {
             table,
             from_user,
         }))
+    }
+
+    fn parse_show(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Show)?;
+
+        match self.current() {
+            Some(Token::Status) => {
+                self.next();
+                Ok(Statement::ShowStatus)
+            }
+            Some(Token::Processlist) => {
+                self.next();
+                Ok(Statement::ShowProcesslist)
+            }
+            _ => Err("Expected STATUS or PROCESSLIST after SHOW".to_string()),
+        }
     }
 
     fn parse_transaction(&mut self) -> Result<Statement, String> {
@@ -2637,6 +2754,8 @@ mod tests {
                 "name".to_string(),
                 Expression::Literal("new".to_string()),
             )]),
+            ignore: false,
+            replace: false,
         };
         let cloned = insert.clone();
         assert_eq!(insert.table, cloned.table);
@@ -2730,8 +2849,117 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_multiple_foreign_keys() {
+        // Test that multiple FK columns can be parsed correctly
+        let result = parse(
+            "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id), product_id INTEGER REFERENCES products(id))",
+        );
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 3, "Should parse all 3 columns");
+                // First column: id
+                assert_eq!(ct.columns[0].name, "id");
+                assert!(ct.columns[0].references.is_none());
+                // Second column: user_id with FK to users
+                assert_eq!(ct.columns[1].name, "user_id");
+                assert!(ct.columns[1].references.is_some());
+                let fk1 = ct.columns[1].references.as_ref().unwrap();
+                assert_eq!(fk1.table, "users");
+                assert_eq!(fk1.column, "id");
+                // Third column: product_id with FK to products
+                assert_eq!(ct.columns[2].name, "product_id");
+                assert!(ct.columns[2].references.is_some());
+                let fk2 = ct.columns[2].references.as_ref().unwrap();
+                assert_eq!(fk2.table, "products");
+                assert_eq!(fk2.column, "id");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_column_auto_increment_synonyms() {
         let result = parse("CREATE TABLE t1 (id INTEGER AUTOINCREMENT)");
         assert!(result.is_ok(), "Error: {:?}", result.err());
     }
+
+    #[test]
+    fn test_parse_show_status() {
+        let result = parse("SHOW STATUS");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::ShowStatus => {}
+            _ => panic!("Expected SHOW STATUS statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_processlist() {
+        let result = parse("SHOW PROCESSLIST");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::ShowProcesslist => {}
+            _ => panic!("Expected SHOW PROCESSLIST statement"),
+        }
+    }
 }
+
+    // ============================================================================
+    // MySQL Compatibility Tests (Issue #897)
+    // ============================================================================
+
+    #[test]
+    fn test_parse_insert_ignore() {
+        let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.ignore, "Should have ignore flag set");
+                assert!(!i.replace, "Should not have replace flag set");
+                assert_eq!(i.table, "users");
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_replace_into() {
+        let result = parse("REPLACE INTO users (id, name) VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.replace, "Should have replace flag set");
+                assert!(!i.ignore, "Should not have ignore flag set");
+                assert_eq!(i.table, "users");
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_insert_ignore_on_duplicate() {
+        let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Bob'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.ignore, "Should have ignore flag set");
+                assert!(i.on_duplicate.is_some(), "Should have on_duplicate");
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_insert_with_set_ignore() {
+        let result = parse("INSERT IGNORE INTO users SET id=1, name='Alice'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert!(i.ignore, "Should have ignore flag set");
+                assert_eq!(i.table, "users");
+                assert_eq!(i.columns.len(), 2);
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }

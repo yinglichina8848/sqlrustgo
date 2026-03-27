@@ -72,6 +72,11 @@ pub enum Token {
     Limit,
     Offset,
 
+    // SHOW keywords (运维监控)
+    Show,
+    Status,
+    Processlist,
+
     // Group By / Order By keywords
     Group,
     By,
@@ -297,6 +302,10 @@ impl fmt::Display for Token {
             Token::SingleQuote => write!(f, "'"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
+            // SHOW keywords
+            Token::Show => write!(f, "SHOW"),
+            Token::Status => write!(f, "STATUS"),
+            Token::Processlist => write!(f, "PROCESSLIST"),
         }
     }
 }
@@ -368,6 +377,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),
         "DUPLICATE" => Some(Token::Duplicate),
+        "REPLACE" => Some(Token::Replace),
+        "IGNORE" => Some(Token::Ignore),
         "BEGIN" => Some(Token::Begin),
         "COMMIT" => Some(Token::Commit),
         "ROLLBACK" => Some(Token::Rollback),
@@ -393,6 +404,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
+        "SHOW" => Some(Token::Show),
+        "STATUS" => Some(Token::Status),
+        "PROCESSLIST" => Some(Token::Processlist),
         _ => None,
     }
 }

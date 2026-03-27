@@ -7,11 +7,11 @@ use super::*;
 #[allow(dead_code)]
 pub struct SimpleCostModel {
     /// CPU cost per row
-    cpu_cost_per_row: f64,
+    pub cpu_cost_per_row: f64,
     /// I/O cost per page
-    io_cost_per_page: f64,
+    pub io_cost_per_page: f64,
     /// Network cost per byte
-    network_cost_per_byte: f64,
+    pub network_cost_per_byte: f64,
 }
 
 impl SimpleCostModel {
