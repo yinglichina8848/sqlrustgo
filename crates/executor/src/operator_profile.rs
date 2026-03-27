@@ -791,8 +791,8 @@ mod tests {
     fn test_global_profile_timer() {
         let profiler = Profiler::new();
 
-        // Ensure profile exists
-        profiler.record("TestOp", "test", 0, 0, 0);
+        // Ensure profile exists (without recording an execution)
+        let _ = profiler.get_operator_profile("TestOp", "test");
 
         {
             let _timer = profiler.start_timer("TestOp", 100, 5);
