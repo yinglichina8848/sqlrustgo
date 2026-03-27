@@ -103,8 +103,20 @@ impl BufferPool {
         let pin_count = self.pin_count.lock().unwrap();
         pin_count.get(&page_id).copied().unwrap_or(0)
     }
+}
 
-    /// Get a page - returns None if not in pool
+impl crate::page_guard::PoolLike for BufferPool {
+    fn pin(&self, page_id: u32) {
+        self.pin(page_id);
+    }
+
+    fn unpin(&self, page_id: u32) -> bool {
+        self.unpin(page_id)
+    }
+}
+
+/// Get a page - returns None if not in pool
+impl BufferPool {
     pub fn get(&self, page_id: u32) -> Option<Arc<Page>> {
         let pages = self.pages.lock().unwrap();
 
@@ -160,7 +172,7 @@ impl BufferPool {
     ///     // ... use page ...
     /// } // guard dropped, page unpinned automatically
     /// ```
-    pub fn fetch_page<F>(&self, page_id: u32, loader: F) -> PageGuard<'_>
+    pub fn fetch_page<F>(&self, page_id: u32, loader: F) -> PageGuard<'_, Self>
     where
         F: FnOnce(u32) -> Arc<Page>,
     {
