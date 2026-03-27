@@ -356,3 +356,7 @@ path = "tests/integration/upsert_test.rs"
 [[test]]
 name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
+
+[[test]]
+name = "regression_test"
+path = "tests/regression_test.rs"
