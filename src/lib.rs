@@ -842,6 +842,93 @@ impl ExecutionEngine {
                     let _ = storage.delete(table_name, &[]);
                     storage.insert(table_name, final_rows)?;
                     Ok(ExecutorResult::new(vec![], total_affected))
+                } else if insert.replace {
+                    // REPLACE: Delete existing rows with matching PK, then insert
+                    let key_columns: Vec<usize> = table_info
+                        .as_ref()
+                        .map(|info| {
+                            info.columns
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, col)| col.is_primary_key || col.is_unique)
+                                .map(|(idx, _)| idx)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    if key_columns.is_empty() {
+                        // No PK/unique key - just do a regular insert
+                        storage.insert(table_name, records)?;
+                        Ok(ExecutorResult::new(vec![], insert.values.len()))
+                    } else {
+                        let existing_rows = storage.scan(table_name)?;
+                        let mut final_rows = existing_rows.clone();
+                        let mut total_affected = 0;
+
+                        for new_row in &records {
+                            // Find and remove existing row with matching PK
+                            let conflict_idx = final_rows.iter().enumerate().find(|(_, existing_row)| {
+                                key_columns.iter().all(|&key_col| {
+                                    key_col < new_row.len() && key_col < existing_row.len() &&
+                                    new_row[key_col] == existing_row[key_col]
+                                })
+                            }).map(|(idx, _)| idx);
+
+                            if let Some(idx) = conflict_idx {
+                                final_rows.remove(idx);
+                            }
+                            final_rows.push(new_row.clone());
+                            total_affected += 1;
+                        }
+
+                        let _ = storage.delete(table_name, &[]);
+                        storage.insert(table_name, final_rows)?;
+                        Ok(ExecutorResult::new(vec![], total_affected))
+                    }
+                } else if insert.ignore {
+                    // INSERT IGNORE: Skip rows that would cause duplicate key violations
+                    let key_columns: Vec<usize> = table_info
+                        .as_ref()
+                        .map(|info| {
+                            info.columns
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, col)| col.is_primary_key || col.is_unique)
+                                .map(|(idx, _)| idx)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    if key_columns.is_empty() {
+                        // No PK/unique key - just do a regular insert
+                        storage.insert(table_name, records)?;
+                        Ok(ExecutorResult::new(vec![], insert.values.len()))
+                    } else {
+                        let existing_rows = storage.scan(table_name)?;
+                        let mut final_rows = existing_rows.clone();
+                        let mut total_affected = 0;
+
+                        for new_row in &records {
+                            // Check if there's an existing row with matching PK
+                            let conflict_exists = final_rows.iter().any(|existing_row| {
+                                key_columns.iter().all(|&key_col| {
+                                    key_col < new_row.len() && key_col < existing_row.len() &&
+                                    new_row[key_col] == existing_row[key_col]
+                                })
+                            });
+
+                            if !conflict_exists {
+                                final_rows.push(new_row.clone());
+                                total_affected += 1;
+                            }
+                        }
+
+                        let _ = storage.delete(table_name, &[]);
+                        if !final_rows.is_empty() {
+                            storage.insert(table_name, final_rows)?;
+                        }
+                        Ok(ExecutorResult::new(vec![], total_affected))
+                    }
                 } else {
                     storage.insert(table_name, records)?;
                     Ok(ExecutorResult::new(vec![], insert.values.len()))
