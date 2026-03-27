@@ -365,6 +365,20 @@ impl StorageEngine for MemoryStorage {
         Ok(self.tables.get(table).cloned().unwrap_or_default())
     }
 
+    /// Efficient batch scan - directly accesses internal table storage without full table scan
+    fn scan_batch(
+        &self,
+        table: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<(Vec<Record>, usize, bool)> {
+        let table_records = self.tables.get(table).cloned().unwrap_or_default();
+        let total = table_records.len();
+        let has_more = offset + limit < total;
+        let batch = table_records.into_iter().skip(offset).take(limit).collect();
+        Ok((batch, total, has_more))
+    }
+
     fn insert(&mut self, table: &str, mut records: Vec<Record>) -> SqlResult<()> {
         if records.is_empty() {
             return Ok(());
