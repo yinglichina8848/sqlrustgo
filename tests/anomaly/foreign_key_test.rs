@@ -22,6 +22,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -34,6 +36,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -41,6 +45,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "parent".to_string(),
                         referenced_column: "id".to_string(),
@@ -74,6 +80,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -86,6 +94,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -93,6 +103,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "parent".to_string(),
                         referenced_column: "id".to_string(),
@@ -137,6 +149,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -149,6 +163,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -156,6 +172,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "users".to_string(),
                         referenced_column: "id".to_string(),
@@ -193,6 +211,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -205,6 +225,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -212,6 +234,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "departments".to_string(),
                         referenced_column: "id".to_string(),
@@ -229,6 +253,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -261,6 +287,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -268,6 +296,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "employees".to_string(),
                         referenced_column: "id".to_string(),
@@ -303,6 +333,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -314,6 +346,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -326,6 +360,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -333,6 +369,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "customers".to_string(),
                         referenced_column: "id".to_string(),
@@ -345,6 +383,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "products".to_string(),
                         referenced_column: "id".to_string(),
@@ -389,6 +429,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -401,6 +443,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -408,6 +452,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "categories".to_string(),
                         referenced_column: "id".to_string(),
@@ -443,6 +489,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: None,
                 },
                 ColumnDefinition {
@@ -450,6 +498,8 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
                     references: Some(ForeignKeyConstraint {
                         referenced_table: "customers".to_string(),
                         referenced_column: "id".to_string(),

@@ -12,7 +12,7 @@ v1.9.0 版本包含以下测试类型：
 | 教学场景测试 (teaching) | 18 | `cargo test --test teaching_scenario_test` |
 | 压力测试 (stress) | 41 | `cargo test --test stress_test` |
 | TPC-H 测试 | 5 | `cargo test --test tpch_test` |
-| **总计** | **1748+** | - |
+| **总计** | **~329** | - |
 
 ---
 

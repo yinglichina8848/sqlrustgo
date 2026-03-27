@@ -141,7 +141,11 @@ fn test_parse_group_by() {
 fn test_parse_group_by_multiple_columns() {
     let sql = "SELECT category, brand, COUNT(*) FROM products GROUP BY category, brand";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse GROUP BY with multiple columns: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse GROUP BY with multiple columns: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert!(select.group_by.is_some());
@@ -185,7 +189,11 @@ fn test_parse_order_by() {
 fn test_parse_order_by_desc_nulls_last() {
     let sql = "SELECT * FROM products ORDER BY price DESC NULLS LAST";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse ORDER BY DESC NULLS LAST: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ORDER BY DESC NULLS LAST: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert!(select.order_by.is_some());
@@ -200,7 +208,11 @@ fn test_parse_order_by_desc_nulls_last() {
 fn test_parse_complete_aggregate_query() {
     let sql = "SELECT category, SUM(price) FROM products WHERE price > 10 GROUP BY category HAVING SUM(price) > 100 ORDER BY SUM(price) DESC";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse complete aggregate query: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse complete aggregate query: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert!(select.group_by.is_some());
@@ -213,7 +225,11 @@ fn test_parse_complete_aggregate_query() {
 fn test_parse_order_by_multiple_columns() {
     let sql = "SELECT * FROM products ORDER BY category ASC, price DESC";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse ORDER BY with multiple columns: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ORDER BY with multiple columns: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert!(select.order_by.is_some());
