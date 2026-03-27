@@ -125,6 +125,7 @@ fn test_planner_with_aggregate() {
                 distinct: false,
             },
         ],
+        having_expr: None,
         schema: Schema::new(vec![
             Field::new("department".to_string(), DataType::Text),
             Field::new("count".to_string(), DataType::Integer),
@@ -455,6 +456,7 @@ fn test_aggregate_execute_count() {
             args: vec![],
             distinct: false,
         }],
+        None,
         Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
     );
 
@@ -554,6 +556,7 @@ fn test_group_by_query_plan() {
                 distinct: false,
             },
         ],
+        having_expr: None,
         schema: Schema::new(vec![
             Field::new("department".to_string(), DataType::Text),
             Field::new("count".to_string(), DataType::Integer),

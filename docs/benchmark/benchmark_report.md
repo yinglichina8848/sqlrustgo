@@ -107,6 +107,62 @@ cargo bench --bench bench_aggregate
 | optimizer/rules.rs | 81.96% |
 | executor/local_executor.rs | 69.47% |
 
+## 7. TPC-H Multi-Database Comparison
+
+| System | Q1 (ms) | Q3 (ms) | Q6 (ms) | Q10 (ms) |
+|--------|---------|---------|---------|----------|
+| SQLRustGo | TBD | TBD | TBD | TBD |
+| MySQL | TBD | TBD | TBD | TBD |
+| PostgreSQL | TBD | TBD | TBD | TBD |
+| SQLite | TBD | TBD | TBD | TBD |
+
+> **Note**: TBD = To Be Determined. Run benchmarks to fill in actual values.
+
+## Running MySQL Benchmarks
+
+### Prerequisites
+
+```bash
+# Start MySQL container
+docker run --name mysql-tpch -e MYSQL_ROOT_PASSWORD= -p 3306:3306 -d mysql:8
+
+# Wait for MySQL to be ready
+sleep 10
+
+# Create tpch database
+docker exec mysql-tpch mysql -u root -e "CREATE DATABASE IF NOT EXISTS tpch;"
+```
+
+### Run TPC-H Comparison
+
+```bash
+# Run TPC-H comparison benchmark
+cargo run --example tpch_compare --package sqlrustgo-bench
+
+# Run comprehensive TPC-H benchmark
+cargo run --example tpch_comprehensive --package sqlrustgo-bench
+```
+
+### Run Integration Tests
+
+```bash
+# Run MySQL TPC-H integration tests
+cargo test --test mysql_tpch_test -- --nocapture
+```
+
+### Benchmark Configuration
+
+MySQL connection settings (see `benches/mysql_config.rs`):
+
+| Setting | Default |
+|---------|---------|
+| Host | 127.0.0.1 |
+| Port | 3306 |
+| Database | tpch |
+| User | root |
+| Password | (empty) |
+| Timeout | 30s |
+
 ## Future Improvements
 
 - [ ] Add disk-based storage benchmarks
