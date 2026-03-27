@@ -31,6 +31,8 @@ pub enum Statement {
     CreateIndex(CreateIndexStatement),
     DropIndex(DropIndexStatement),
     CreateView(CreateViewStatement),
+    CreateTrigger(CreateTriggerStatement),
+    DropTrigger(DropTriggerStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
     Transaction(TransactionStatement),
@@ -98,6 +100,37 @@ pub struct AnalyzeStatement {
 pub struct ExplainStatement {
     pub query: Box<Statement>,
     pub analyze: bool,
+}
+
+/// CREATE TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTriggerStatement {
+    pub name: String,
+    pub table_name: String,
+    pub timing: TriggerTiming,
+    pub event: TriggerEvent,
+    pub body: Box<Statement>,
+}
+
+/// DROP TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTriggerStatement {
+    pub name: String,
+}
+
+/// Trigger timing: BEFORE or AFTER
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// Trigger event: INSERT, UPDATE, or DELETE
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
 }
 
 /// Transaction statement
@@ -302,6 +335,10 @@ pub enum Expression {
     Wildcard,
     /// Function call expression (for HAVING clause aggregates like COUNT(*), SUM(col))
     FunctionCall(String, Vec<Expression>),
+    /// Subquery expression: (SELECT ...)
+    Subquery(Box<Statement>),
+    /// Qualified column: table.column
+    QualifiedColumn(String, String),
 }
 
 /// SQL Parser
@@ -379,6 +416,36 @@ impl Parser {
         loop {
             match self.current() {
                 Some(Token::From) => break,
+                Some(Token::LParen) => {
+                    // Subquery in SELECT: (SELECT ...) AS alias
+                    self.next();
+                    if matches!(self.current(), Some(Token::Select)) {
+                        let select_stmt = self.parse_select()?;
+                        self.expect(Token::RParen)?;
+
+                        // Check for AS alias
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let a = Some(name.clone());
+                                    self.next();
+                                    a
+                                }
+                                _ => return Err("Expected alias name".to_string()),
+                            }
+                        } else {
+                            None
+                        };
+
+                        columns.push(SelectColumn {
+                            name: format!("(subquery)"),
+                            alias,
+                        });
+                    } else {
+                        return Err("Expected SELECT in subquery".to_string());
+                    }
+                }
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -422,9 +489,46 @@ impl Parser {
                     aggregates.push(agg);
                 }
                 Some(Token::Identifier(_)) => {
-                    if let Some(Token::Identifier(name)) = self.next() {
-                        columns.push(SelectColumn { name, alias: None });
-                    }
+                    let first_name = match self.current() {
+                        Some(Token::Identifier(name)) => name.clone(),
+                        _ => return Err("Expected column name".to_string()),
+                    };
+                    self.next();
+
+                    // Check for qualified column: table.column
+                    let col_name = if matches!(self.current(), Some(Token::Dot)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(col)) => {
+                                let full_name = format!("{}.{}", first_name, col);
+                                self.next();
+                                full_name
+                            }
+                            _ => return Err("Expected column name after dot".to_string()),
+                        }
+                    } else {
+                        first_name
+                    };
+
+                    // Check for alias: column AS alias or column alias
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => return Err("Expected alias name".to_string()),
+                        }
+                    } else {
+                        None
+                    };
+
+                    columns.push(SelectColumn {
+                        name: col_name,
+                        alias,
+                    });
                 }
                 Some(Token::Comma) => {
                     self.next();
@@ -985,22 +1089,8 @@ impl Parser {
             }
             self.next(); // consume =
 
-            // Parse value
-            let value = match self.current() {
-                Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-                Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(s.to_string()),
-                Some(Token::Minus) => {
-                    self.next();
-                    if let Some(Token::NumberLiteral(n)) = self.current() {
-                        Expression::Literal(format!("-{}", n))
-                    } else {
-                        return Err("Expected number after -".to_string());
-                    }
-                }
-                _ => return Err("Expected value in SET clause".to_string()),
-            };
-            self.next();
+            // Parse value expression (supports: column = column +/- value)
+            let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
 
@@ -1089,14 +1179,29 @@ impl Parser {
 
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
-        match self.current() {
+        let token = self.current().cloned();
+
+        match token {
             Some(Token::Identifier(name)) => {
                 if name.to_uppercase() == "NULL" {
                     return Ok(Expression::Literal("NULL".to_string()));
                 }
-                let expr = Expression::Identifier(name.clone());
                 self.next();
-                Ok(expr)
+
+                // Check for qualified column name: table.column
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next(); // consume '.'
+                    match self.current() {
+                        Some(Token::Identifier(col_name)) => {
+                            let expr = Expression::QualifiedColumn(name.clone(), col_name.clone());
+                            self.next();
+                            return Ok(expr);
+                        }
+                        _ => return Err("Expected column name after dot".to_string()),
+                    }
+                }
+
+                Ok(Expression::Identifier(name.clone()))
             }
             Some(Token::NumberLiteral(n)) => {
                 let expr = Expression::Literal(n.clone());
@@ -1154,8 +1259,16 @@ impl Parser {
                 Ok(Expression::FunctionCall(func_name.to_string(), args))
             }
             Some(Token::LParen) => {
-                // Parenthesized expression
                 self.next(); // consume '('
+
+                // Check if this is a subquery: (SELECT ...)
+                if matches!(self.current(), Some(Token::Select)) {
+                    let select_stmt = self.parse_select()?;
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::Subquery(Box::new(select_stmt)));
+                }
+
+                // Regular parenthesized expression
                 let expr = self.parse_or_expression()?;
                 self.expect(Token::RParen)?;
                 Ok(expr)
@@ -1288,7 +1401,11 @@ impl Parser {
                 self.next();
                 self.parse_create_view()
             }
-            _ => Err("Expected TABLE or VIEW after CREATE".to_string()),
+            Some(Token::Trigger) => {
+                self.next();
+                self.parse_create_trigger()
+            }
+            _ => Err("Expected TABLE, VIEW, or TRIGGER after CREATE".to_string()),
         }
     }
 
@@ -1553,6 +1670,83 @@ impl Parser {
         };
 
         Ok(Statement::DropTable(DropTableStatement { name }))
+    }
+
+    fn parse_drop_trigger(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Trigger)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected trigger name".to_string()),
+        };
+
+        Ok(Statement::DropTrigger(DropTriggerStatement { name }))
+    }
+
+    fn parse_create_trigger(&mut self) -> Result<Statement, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected trigger name".to_string()),
+        };
+
+        // Parse ON keyword
+        self.expect(Token::On)?;
+
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        // Parse timing: BEFORE or AFTER
+        let timing = match self.current() {
+            Some(Token::Before) => {
+                self.next();
+                TriggerTiming::Before
+            }
+            Some(Token::After) => {
+                self.next();
+                TriggerTiming::After
+            }
+            _ => return Err("Expected BEFORE or AFTER".to_string()),
+        };
+
+        // Parse event: INSERT, UPDATE, DELETE
+        let event = match self.current() {
+            Some(Token::Insert) => {
+                self.next();
+                TriggerEvent::Insert
+            }
+            Some(Token::Update) => {
+                self.next();
+                TriggerEvent::Update
+            }
+            Some(Token::Delete) => {
+                self.next();
+                TriggerEvent::Delete
+            }
+            _ => return Err("Expected INSERT, UPDATE, or DELETE".to_string()),
+        };
+
+        // Parse DO keyword
+        self.expect(Token::Do)?;
+
+        // Parse trigger body (simple: single statement)
+        let body = match self.current() {
+            Some(Token::Insert) => Box::new(self.parse_insert()?),
+            Some(Token::Update) => Box::new(self.parse_update()?),
+            Some(Token::Delete) => Box::new(self.parse_delete()?),
+            Some(Token::Select) => Box::new(self.parse_select()?),
+            _ => {
+                return Err("Expected INSERT, UPDATE, DELETE, or SELECT in trigger body".to_string())
+            }
+        };
+
+        Ok(Statement::CreateTrigger(CreateTriggerStatement {
+            name,
+            table_name,
+            timing,
+            event,
+            body,
+        }))
     }
 
     fn parse_create_view(&mut self) -> Result<Statement, String> {

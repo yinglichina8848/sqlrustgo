@@ -46,6 +46,7 @@ pub enum Token {
     Intersect,
     Except,
     Trigger,
+    Do,
     Before,
     After,
     Each,
@@ -211,6 +212,7 @@ impl fmt::Display for Token {
             Token::Intersect => write!(f, "INTERSECT"),
             Token::Except => write!(f, "EXCEPT"),
             Token::Trigger => write!(f, "TRIGGER"),
+            Token::Do => write!(f, "DO"),
             Token::Before => write!(f, "BEFORE"),
             Token::After => write!(f, "AFTER"),
 

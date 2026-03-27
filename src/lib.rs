@@ -299,6 +299,8 @@ fn evaluate_where_clause(
             s.to_uppercase() != "FALSE" && s != "0"
         }
         sqlrustgo_parser::Expression::Wildcard => true,
+        sqlrustgo_parser::Expression::Subquery(_)
+        | sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => {
             // Function calls in WHERE should be evaluated as boolean
             // This handles cases like WHERE COUNT(*) > 1
@@ -346,6 +348,8 @@ fn evaluate_expr(
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
+        sqlrustgo_parser::Expression::Subquery(_)
+        | sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
     }
 }
 

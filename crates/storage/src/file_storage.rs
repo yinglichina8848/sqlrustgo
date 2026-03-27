@@ -4,6 +4,7 @@
 use crate::bplus_tree::BPlusTree;
 use crate::engine::{
     ColumnDefinition, ColumnStats, Record, StorageEngine, TableData, TableInfo, TableStats,
+    TriggerInfo,
 };
 use crate::wal::{WalEntry, WalManager, WalWriter};
 use sqlrustgo_types::{SqlError, SqlResult, Value};
@@ -33,6 +34,10 @@ pub struct FileStorage {
     wal_manager: Option<WalManager>,
     /// Auto-increment counters: table_name -> (column_index -> next_value)
     auto_increment_counters: RwLock<HashMap<String, HashMap<usize, i64>>>,
+    /// Triggers: trigger_name -> TriggerInfo
+    triggers: RwLock<HashMap<String, TriggerInfo>>,
+    /// Table triggers: table_name -> Vec<trigger_name>
+    table_triggers: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl FileStorage {
@@ -51,6 +56,8 @@ impl FileStorage {
             wal_writer: None,
             wal_manager: None,
             auto_increment_counters: RwLock::new(HashMap::new()),
+            triggers: RwLock::new(HashMap::new()),
+            table_triggers: RwLock::new(HashMap::new()),
         };
 
         // Load existing tables
@@ -1281,6 +1288,58 @@ impl StorageEngine for FileStorage {
 
     fn has_view(&self, _name: &str) -> bool {
         false
+    }
+
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        let name = info.name.clone();
+        let table_name = info.table_name.clone();
+        self.triggers.write().unwrap().insert(name.clone(), info);
+        self.table_triggers
+            .write()
+            .unwrap()
+            .entry(table_name)
+            .or_insert_with(Vec::new)
+            .push(name);
+        Ok(())
+    }
+
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        let mut triggers = self.triggers.write().unwrap();
+        if let Some(info) = triggers.remove(name) {
+            if let Some(table_triggers) = self
+                .table_triggers
+                .write()
+                .unwrap()
+                .get_mut(&info.table_name)
+            {
+                table_triggers.retain(|n| n != name);
+            }
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Trigger {} not found",
+                name
+            )))
+        }
+    }
+
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        self.triggers.read().unwrap().get(name).cloned()
+    }
+
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        self.table_triggers
+            .read()
+            .unwrap()
+            .get(table)
+            .map(|names| {
+                let triggers = self.triggers.read().unwrap();
+                names
+                    .iter()
+                    .filter_map(|n| triggers.get(n).cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
