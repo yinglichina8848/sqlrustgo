@@ -4,12 +4,14 @@ use crate::page::Page;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, RwLock};
 
-/// Buffer Pool with LRU eviction, prefetch, and memory pool
+/// Buffer Pool with LRU eviction, prefetch, pin/unpin and memory pool
 pub struct BufferPool {
     /// Page storage with LRU tracking
     pages: Mutex<HashMap<u32, Arc<Page>>>,
     /// LRU queue - most recently used at front
     lru: Mutex<VecDeque<u32>>,
+    /// Pin count for each page - page can't be evicted if pin > 0
+    pin_count: Mutex<HashMap<u32, u32>>,
     /// Capacity
     capacity: usize,
     /// Prefetch window size
@@ -43,6 +45,7 @@ impl BufferPool {
         Self {
             pages: Mutex::new(HashMap::new()),
             lru: Mutex::new(VecDeque::new()),
+            pin_count: Mutex::new(HashMap::new()),
             capacity,
             prefetch_window: 2,
             stats: RwLock::new(BufferPoolStats::default()),
@@ -54,10 +57,50 @@ impl BufferPool {
         Self {
             pages: Mutex::new(HashMap::new()),
             lru: Mutex::new(VecDeque::new()),
+            pin_count: Mutex::new(HashMap::new()),
             capacity,
             prefetch_window,
             stats: RwLock::new(BufferPoolStats::default()),
         }
+    }
+
+    /// Pin a page - prevents it from being evicted
+    ///
+    /// When a transaction accesses a page, it should be pinned to prevent
+    /// eviction while in use. Each pin must have a corresponding unpin.
+    pub fn pin(&self, page_id: u32) {
+        let mut pin_count = self.pin_count.lock().unwrap();
+        *pin_count.entry(page_id).or_insert(0) += 1;
+    }
+
+    /// Unpin a page - allows it to be evicted after all pins are released
+    ///
+    /// Called when a transaction finishes using the page. When pin_count
+    /// reaches 0, the page becomes a candidate for eviction.
+    pub fn unpin(&self, page_id: u32) -> bool {
+        let mut pin_count = self.pin_count.lock().unwrap();
+        if let Some(count) = pin_count.get_mut(&page_id) {
+            if *count > 0 {
+                *count -= 1;
+                if *count == 0 {
+                    pin_count.remove(&page_id);
+                    return true; // Page is now unpinned
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a page is pinned
+    pub fn is_pinned(&self, page_id: u32) -> bool {
+        let pin_count = self.pin_count.lock().unwrap();
+        pin_count.get(&page_id).copied().unwrap_or(0) > 0
+    }
+
+    /// Get pin count for a page
+    pub fn pin_count(&self, page_id: u32) -> u32 {
+        let pin_count = self.pin_count.lock().unwrap();
+        pin_count.get(&page_id).copied().unwrap_or(0)
     }
 
     /// Get a page - returns None if not in pool
@@ -114,9 +157,15 @@ impl BufferPool {
             return;
         }
 
-        // Evict if at capacity
+        // Evict if at capacity - skip pinned pages
         while pages.len() >= self.capacity && !lru.is_empty() {
             if let Some(evicted_id) = lru.pop_back() {
+                // Skip pinned pages - they cannot be evicted
+                if self.is_pinned(evicted_id) {
+                    // Move to front, will try next candidate
+                    lru.push_front(evicted_id);
+                    continue;
+                }
                 pages.remove(&evicted_id);
                 let mut stats = self.stats.write().unwrap();
                 stats.evictions += 1;
@@ -774,5 +823,94 @@ mod tests {
         pool.clear();
 
         assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn test_buffer_pool_pin_unpin() {
+        let pool = BufferPool::new(10);
+        pool.insert(Arc::new(Page::new(1)));
+
+        assert!(!pool.is_pinned(1));
+        assert_eq!(pool.pin_count(1), 0);
+
+        pool.pin(1);
+        assert!(pool.is_pinned(1));
+        assert_eq!(pool.pin_count(1), 1);
+
+        pool.pin(1);
+        assert_eq!(pool.pin_count(1), 2);
+
+        assert!(!pool.unpin(1)); // Still pinned
+        assert_eq!(pool.pin_count(1), 1);
+
+        assert!(pool.unpin(1)); // Now unpinned
+        assert!(!pool.is_pinned(1));
+        assert_eq!(pool.pin_count(1), 0);
+    }
+
+    #[test]
+    fn test_buffer_pool_skip_pinned_on_eviction() {
+        let pool = BufferPool::new(3); // Capacity of 3
+
+        // Insert 3 pages
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+        pool.insert(Arc::new(Page::new(3)));
+
+        // Access pages to set LRU order: 3 is MRU, 1 is LRU
+        let _ = pool.get(1);
+        let _ = pool.get(2);
+        let _ = pool.get(3);
+        // LRU order is now: [3, 2, 1] (3 is front/MRU, 1 is back/LRU)
+
+        // Pin the LRU page (page 1)
+        pool.pin(1);
+
+        // Insert new page - should evict page 2 (LRU), NOT page 1 (which is pinned)
+        pool.insert(Arc::new(Page::new(4)));
+
+        // Page 1 should still be there (pinned), page 2 should be evicted
+        assert!(pool.get(1).is_some()); // Pinned page should remain
+        assert!(pool.get(2).is_none()); // Should be evicted
+        assert!(pool.get(3).is_some());
+        assert!(pool.get(4).is_some());
+
+        // Unpin page 1
+        pool.unpin(1);
+
+        // Insert another page - now page 1 is the only unpinned LRU candidate
+        pool.insert(Arc::new(Page::new(5)));
+
+        // Now page 1 should be evicted
+        assert!(pool.get(1).is_none()); // Now evicted
+    }
+
+    #[test]
+    fn test_buffer_pool_unpin_allows_eviction() {
+        let pool = BufferPool::new(2);
+
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+
+        // Pin both pages
+        pool.pin(1);
+        pool.pin(2);
+
+        // Try to insert new page - cannot evict any (both pinned)
+        pool.insert(Arc::new(Page::new(3)));
+
+        // Pool is still at capacity (pinned pages can't be evicted)
+        assert_eq!(pool.len(), 2);
+
+        // Unpin one page
+        pool.unpin(1);
+
+        // Now insert should evict page 1
+        pool.insert(Arc::new(Page::new(4)));
+
+        assert!(pool.get(1).is_none()); // Evicted
+        assert!(pool.get(2).is_some()); // Still pinned
+        assert!(pool.get(3).is_some());
+        assert!(pool.get(4).is_some());
     }
 }
