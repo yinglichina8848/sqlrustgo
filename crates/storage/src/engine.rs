@@ -273,7 +273,6 @@ impl MemoryStorage {
         }
         result
     }
-
 }
 
 impl Default for MemoryStorage {
@@ -379,9 +378,11 @@ impl StorageEngine for MemoryStorage {
         } else if filters.len() >= 2 {
             let col_idx = match &filters[0] {
                 Value::Integer(i) => *i as usize,
-                _ => return Err(SqlError::ExecutionError(
-                    "Filter column index must be an integer".to_string(),
-                )),
+                _ => {
+                    return Err(SqlError::ExecutionError(
+                        "Filter column index must be an integer".to_string(),
+                    ))
+                }
             };
             (col_idx, &filters[1], true)
         } else {
@@ -393,10 +394,9 @@ impl StorageEngine for MemoryStorage {
         // First, find the records that will be deleted (for FK action processing)
         let records_to_delete: Vec<Vec<Value>> = if needs_fk_check {
             if let Some(table_records) = self.tables.get(table) {
-                table_records.iter()
-                    .filter(|row| {
-                        row.get(col_idx).map(|v| v == match_value).unwrap_or(false)
-                    })
+                table_records
+                    .iter()
+                    .filter(|row| row.get(col_idx).map(|v| v == match_value).unwrap_or(false))
                     .cloned()
                     .collect()
             } else {
@@ -471,18 +471,20 @@ impl StorageEngine for MemoryStorage {
                         for (child_col_idx, fk) in referencing_cols {
                             if fk.on_delete == Some(ForeignKeyAction::Cascade) {
                                 // Get records that will be deleted to collect their PK values for next pass
-                                let records_to_delete: Vec<Vec<Value>> = if let Some(child_records) = self.tables.get(child_table) {
-                                    child_records.iter()
-                                        .filter(|row| {
-                                            row.get(child_col_idx)
-                                                .map(|v| v == current_value)
-                                                .unwrap_or(false)
-                                        })
-                                        .cloned()
-                                        .collect()
-                                } else {
-                                    vec![]
-                                };
+                                let records_to_delete: Vec<Vec<Value>> =
+                                    if let Some(child_records) = self.tables.get(child_table) {
+                                        child_records
+                                            .iter()
+                                            .filter(|row| {
+                                                row.get(child_col_idx)
+                                                    .map(|v| v == current_value)
+                                                    .unwrap_or(false)
+                                            })
+                                            .cloned()
+                                            .collect()
+                                    } else {
+                                        vec![]
+                                    };
 
                                 // Only propagate cascade if the child table is the SAME as the parent table
                                 // (self-referencing FK). For non-self-referencing tables, cascade stops here.
@@ -505,7 +507,7 @@ impl StorageEngine for MemoryStorage {
                                 // Delete the child records
                                 let deleted = self.delete_internal(
                                     child_table,
-                                    &[Value::Integer(child_col_idx as i64), current_value.clone()]
+                                    &[Value::Integer(child_col_idx as i64), current_value.clone()],
                                 )?;
                             }
                         }
@@ -523,9 +525,12 @@ impl StorageEngine for MemoryStorage {
         }
 
         // Now get mutable access to records and delete
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
+        let records = self
+            .tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
 
         let mut deleted_count = 0;
         if filters.is_empty() {
@@ -560,9 +565,12 @@ impl StorageEngine for MemoryStorage {
         }
 
         // First, get table info (immutable borrow)
-        let table_info = self.table_infos.get(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
+        let table_info = self
+            .table_infos
+            .get(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
 
         // Find which updated columns are referenced by foreign keys in other tables
         // For ON UPDATE CASCADE/SET NULL/RESTRICT, we're updating a PARENT column
@@ -603,8 +611,16 @@ impl StorageEngine for MemoryStorage {
         // Collect all operations we need to perform
         #[derive(Debug)]
         enum ChildUpdateOp {
-            SetNull { child_table: String, child_col_idx: usize, match_value: Value },
-            Cascade { child_table: String, child_col_idx: usize, new_value: Value },
+            SetNull {
+                child_table: String,
+                child_col_idx: usize,
+                match_value: Value,
+            },
+            Cascade {
+                child_table: String,
+                child_col_idx: usize,
+                new_value: Value,
+            },
         }
 
         let mut child_ops: Vec<ChildUpdateOp> = Vec::new();
@@ -646,7 +662,9 @@ impl StorageEngine for MemoryStorage {
                     }
                     Some(ForeignKeyAction::Cascade) => {
                         // Queue CASCADE operation - find the new value for this column
-                        if let Some((_, new_value)) = updates.iter().find(|(idx, _)| *idx == updated_col.col_idx) {
+                        if let Some((_, new_value)) =
+                            updates.iter().find(|(idx, _)| *idx == updated_col.col_idx)
+                        {
                             if let Some(_old_value) = filters.get(1) {
                                 child_ops.push(ChildUpdateOp::Cascade {
                                     child_table: child_table.clone(),
@@ -669,7 +687,11 @@ impl StorageEngine for MemoryStorage {
         // Apply child updates first (if updating FK columns)
         for op in &child_ops {
             match op {
-                ChildUpdateOp::SetNull { child_table, child_col_idx, match_value } => {
+                ChildUpdateOp::SetNull {
+                    child_table,
+                    child_col_idx,
+                    match_value,
+                } => {
                     if let Some(child_records) = self.tables.get_mut(child_table) {
                         for child_row in child_records.iter_mut() {
                             if let Some(fk_value) = child_row.get(*child_col_idx) {
@@ -680,7 +702,11 @@ impl StorageEngine for MemoryStorage {
                         }
                     }
                 }
-                ChildUpdateOp::Cascade { child_table, child_col_idx, new_value } => {
+                ChildUpdateOp::Cascade {
+                    child_table,
+                    child_col_idx,
+                    new_value,
+                } => {
                     if let Some(child_records) = self.tables.get_mut(child_table) {
                         for child_row in child_records.iter_mut() {
                             if let Some(fk_value) = child_row.get(*child_col_idx) {
@@ -701,9 +727,12 @@ impl StorageEngine for MemoryStorage {
         }
 
         // Now get mutable access to records and apply updates to the parent table
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
+        let records = self
+            .tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
 
         let mut updated_count = 0;
         if filters.is_empty() {
@@ -724,9 +753,11 @@ impl StorageEngine for MemoryStorage {
             // filters[0] = column index, filters[1] = value to match
             let col_idx = match &filters[0] {
                 Value::Integer(i) => *i as usize,
-                _ => return Err(SqlError::ExecutionError(
-                    "Filter column index must be an integer".to_string(),
-                )),
+                _ => {
+                    return Err(SqlError::ExecutionError(
+                        "Filter column index must be an integer".to_string(),
+                    ))
+                }
             };
             let match_value = &filters[1];
 
@@ -919,9 +950,11 @@ impl MemoryStorage {
         let (col_idx, match_value) = if filters.len() >= 2 {
             let col_idx = match &filters[0] {
                 Value::Integer(i) => *i as usize,
-                _ => return Err(SqlError::ExecutionError(
-                    "Filter column index must be an integer".to_string(),
-                )),
+                _ => {
+                    return Err(SqlError::ExecutionError(
+                        "Filter column index must be an integer".to_string(),
+                    ))
+                }
             };
             (col_idx, &filters[1])
         } else {
@@ -930,9 +963,12 @@ impl MemoryStorage {
             ));
         };
 
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
+        let records = self
+            .tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
 
         let original_len = records.len();
         records.retain(|row| {
@@ -949,10 +985,18 @@ impl MemoryStorage {
     }
 
     /// Set foreign key column to NULL for records matching the given value
-    pub fn set_foreign_key_null(&mut self, table: &str, col_idx: usize, match_value: &Value) -> SqlResult<()> {
-        let records = self.tables.get_mut(table).ok_or_else(|| {
-            SqlError::TableNotFound { table: table.to_string() }
-        })?;
+    pub fn set_foreign_key_null(
+        &mut self,
+        table: &str,
+        col_idx: usize,
+        match_value: &Value,
+    ) -> SqlResult<()> {
+        let records = self
+            .tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
 
         for row in records.iter_mut() {
             if let Some(value) = row.get(col_idx) {
@@ -968,7 +1012,6 @@ impl MemoryStorage {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

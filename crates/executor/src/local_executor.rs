@@ -155,13 +155,7 @@ impl<'a> LocalExecutor<'a> {
         let duration = start.elapsed();
 
         // Record to GLOBAL_PROFILER
-        GLOBAL_PROFILER.record(
-            "SeqScan",
-            "scan",
-            duration.as_nanos() as u64,
-            row_count,
-            1,
-        );
+        GLOBAL_PROFILER.record("SeqScan", "scan", duration.as_nanos() as u64, row_count, 1);
 
         Ok(ExecutorResult::new(rows, 0))
     }
@@ -255,13 +249,7 @@ impl<'a> LocalExecutor<'a> {
         let duration = start.elapsed();
 
         // Record to GLOBAL_PROFILER
-        GLOBAL_PROFILER.record(
-            "Filter",
-            "filter",
-            duration.as_nanos() as u64,
-            row_count,
-            1,
-        );
+        GLOBAL_PROFILER.record("Filter", "filter", duration.as_nanos() as u64, row_count, 1);
 
         Ok(ExecutorResult::new(filtered_rows, 0))
     }

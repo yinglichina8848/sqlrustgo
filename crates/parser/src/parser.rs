@@ -227,8 +227,8 @@ pub struct InsertStatement {
     pub columns: Vec<String>,
     pub values: Vec<Vec<Expression>>, // Multiple rows
     pub on_duplicate: Option<Vec<(String, Expression)>>, // ON DUPLICATE KEY UPDATE
-    pub ignore: bool, // INSERT IGNORE
-    pub replace: bool, // REPLACE INTO (aliased to INSERT or separate)
+    pub ignore: bool,                 // INSERT IGNORE
+    pub replace: bool,                // REPLACE INTO (aliased to INSERT or separate)
 }
 
 /// UPDATE statement
@@ -361,7 +361,8 @@ impl Parser {
             Some(Token::Begin)
             | Some(Token::Commit)
             | Some(Token::Rollback)
-            | Some(Token::Savepoint) | Some(Token::Release) => self.parse_transaction(),
+            | Some(Token::Savepoint)
+            | Some(Token::Release) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
@@ -643,7 +644,7 @@ impl Parser {
         // Check for REPLACE INTO (MySQL syntax: REPLACE INTO table...)
         let mut replace = false;
         let mut ignore = false;
-        
+
         if let Some(Token::Replace) = self.current() {
             replace = true;
             self.next(); // consume REPLACE
@@ -652,18 +653,18 @@ impl Parser {
             ignore = true;
             self.next(); // consume IGNORE
         }
-        
+
         // Now expect INSERT (unless we already consumed REPLACE)
         if !replace {
             self.expect(Token::Insert)?;
         }
-        
+
         // Check for IGNORE after INSERT (INSERT IGNORE INTO)
         if let Some(Token::Ignore) = self.current() {
             ignore = true;
             self.next(); // consume IGNORE
         }
-        
+
         self.expect(Token::Into)?;
 
         let table = match self.next() {
@@ -1426,7 +1427,9 @@ impl Parser {
                                                     let action = match self.current() {
                                                         Some(Token::Set) => {
                                                             self.next();
-                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                            if let Some(Token::Identifier(name)) =
+                                                                self.current()
+                                                            {
                                                                 if name.to_uppercase() == "NULL" {
                                                                     self.next();
                                                                     Some(ForeignKeyAction::SetNull)
@@ -1438,11 +1441,16 @@ impl Parser {
                                                             }
                                                         }
                                                         Some(Token::Identifier(action)) => {
-                                                            let action_upper = action.to_uppercase();
+                                                            let action_upper =
+                                                                action.to_uppercase();
                                                             self.next();
                                                             match action_upper.as_str() {
-                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
-                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                "CASCADE" => {
+                                                                    Some(ForeignKeyAction::Cascade)
+                                                                }
+                                                                "RESTRICT" => {
+                                                                    Some(ForeignKeyAction::Restrict)
+                                                                }
                                                                 _ => None,
                                                             }
                                                         }
@@ -1458,7 +1466,9 @@ impl Parser {
                                                     let action = match self.current() {
                                                         Some(Token::Set) => {
                                                             self.next();
-                                                            if let Some(Token::Identifier(name)) = self.current() {
+                                                            if let Some(Token::Identifier(name)) =
+                                                                self.current()
+                                                            {
                                                                 if name.to_uppercase() == "NULL" {
                                                                     self.next();
                                                                     Some(ForeignKeyAction::SetNull)
@@ -1470,11 +1480,16 @@ impl Parser {
                                                             }
                                                         }
                                                         Some(Token::Identifier(action)) => {
-                                                            let action_upper = action.to_uppercase();
+                                                            let action_upper =
+                                                                action.to_uppercase();
                                                             self.next();
                                                             match action_upper.as_str() {
-                                                                "CASCADE" => Some(ForeignKeyAction::Cascade),
-                                                                "RESTRICT" => Some(ForeignKeyAction::Restrict),
+                                                                "CASCADE" => {
+                                                                    Some(ForeignKeyAction::Cascade)
+                                                                }
+                                                                "RESTRICT" => {
+                                                                    Some(ForeignKeyAction::Restrict)
+                                                                }
                                                                 _ => None,
                                                             }
                                                         }
@@ -2925,61 +2940,61 @@ mod tests {
     }
 }
 
-    // ============================================================================
-    // MySQL Compatibility Tests (Issue #897)
-    // ============================================================================
+// ============================================================================
+// MySQL Compatibility Tests (Issue #897)
+// ============================================================================
 
-    #[test]
-    fn test_parse_insert_ignore() {
-        let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice')");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::Insert(i) => {
-                assert!(i.ignore, "Should have ignore flag set");
-                assert!(!i.replace, "Should not have replace flag set");
-                assert_eq!(i.table, "users");
-            }
-            _ => panic!("Expected INSERT statement"),
+#[test]
+fn test_parse_insert_ignore() {
+    let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice')");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert!(!i.replace, "Should not have replace flag set");
+            assert_eq!(i.table, "users");
         }
+        _ => panic!("Expected INSERT statement"),
     }
+}
 
-    #[test]
-    fn test_parse_replace_into() {
-        let result = parse("REPLACE INTO users (id, name) VALUES (1, 'Alice')");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::Insert(i) => {
-                assert!(i.replace, "Should have replace flag set");
-                assert!(!i.ignore, "Should not have ignore flag set");
-                assert_eq!(i.table, "users");
-            }
-            _ => panic!("Expected INSERT statement"),
+#[test]
+fn test_parse_replace_into() {
+    let result = parse("REPLACE INTO users (id, name) VALUES (1, 'Alice')");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.replace, "Should have replace flag set");
+            assert!(!i.ignore, "Should not have ignore flag set");
+            assert_eq!(i.table, "users");
         }
+        _ => panic!("Expected INSERT statement"),
     }
+}
 
-    #[test]
-    fn test_parse_insert_ignore_on_duplicate() {
-        let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Bob'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::Insert(i) => {
-                assert!(i.ignore, "Should have ignore flag set");
-                assert!(i.on_duplicate.is_some(), "Should have on_duplicate");
-            }
-            _ => panic!("Expected INSERT statement"),
+#[test]
+fn test_parse_insert_ignore_on_duplicate() {
+    let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Bob'");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert!(i.on_duplicate.is_some(), "Should have on_duplicate");
         }
+        _ => panic!("Expected INSERT statement"),
     }
+}
 
-    #[test]
-    fn test_parse_insert_with_set_ignore() {
-        let result = parse("INSERT IGNORE INTO users SET id=1, name='Alice'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::Insert(i) => {
-                assert!(i.ignore, "Should have ignore flag set");
-                assert_eq!(i.table, "users");
-                assert_eq!(i.columns.len(), 2);
-            }
-            _ => panic!("Expected INSERT statement"),
+#[test]
+fn test_parse_insert_with_set_ignore() {
+    let result = parse("INSERT IGNORE INTO users SET id=1, name='Alice'");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert_eq!(i.table, "users");
+            assert_eq!(i.columns.len(), 2);
         }
+        _ => panic!("Expected INSERT statement"),
     }
+}

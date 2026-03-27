@@ -72,7 +72,7 @@ fn test_index_scan_cost_less_than_seq_scan_small_result() {
     let model = SimpleCostModel::default_model();
     // Index scan with few result rows should be cheaper than seq scan
     let index_cost = model.index_scan_cost(10, 2, 100); // 10 rows, 2 index pages, 100 data pages
-    let seq_cost = model.seq_scan_cost(1000, 100);       // Full table scan
+    let seq_cost = model.seq_scan_cost(1000, 100); // Full table scan
 
     // When index returns few rows, index scan should be cheaper
     assert!(index_cost < seq_cost);
