@@ -57,6 +57,11 @@ impl<'a> LocalExecutor<'a> {
         self.cache.write().clear();
     }
 
+    /// Get the storage engine reference
+    pub fn storage(&self) -> &dyn StorageEngine {
+        self.storage
+    }
+
     /// Get cache key from SQL and params
     fn get_cache_key(&self, sql: &str, params: &[Value]) -> CacheKey {
         let (normalized, extracted) = SqlNormalizer::from_literal(sql);
