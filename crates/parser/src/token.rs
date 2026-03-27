@@ -399,6 +399,23 @@ pub fn is_keyword(s: &str) -> bool {
             | "AND"
             | "OR"
             | "NOT"
+            | "OVER"
+            | "PARTITION"
+            | "ROW_NUMBER"
+            | "RANK"
+            | "DENSE_RANK"
+            | "LEAD"
+            | "LAG"
+            | "FIRST_VALUE"
+            | "LAST_VALUE"
+            | "NTH_VALUE"
+            | "UNBOUNDED"
+            | "PRECEDING"
+            | "FOLLOWING"
+            | "EXCLUDE"
+            | "CURRENT ROW"
+            | "TIES"
+            | "NO OTHERS"
     )
 }
 
@@ -448,6 +465,23 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "AND" => Some(Token::And),
         "OR" => Some(Token::Or),
         "NOT" => Some(Token::Not),
+        "OVER" => Some(Token::Over),
+        "PARTITION" => Some(Token::Partition),
+        "ROW_NUMBER" => Some(Token::RowNumber),
+        "RANK" => Some(Token::Rank),
+        "DENSE_RANK" => Some(Token::DenseRank),
+        "LEAD" => Some(Token::Lead),
+        "LAG" => Some(Token::Lag),
+        "FIRST_VALUE" => Some(Token::FirstValue),
+        "LAST_VALUE" => Some(Token::LastValue),
+        "NTH_VALUE" => Some(Token::NthValue),
+        "UNBOUNDED" => Some(Token::Unbounded),
+        "PRECEDING" => Some(Token::Preceding),
+        "FOLLOWING" => Some(Token::Following),
+        "EXCLUDE" => Some(Token::Exclude),
+        "CURRENT ROW" => Some(Token::Current),
+        "TIES" => Some(Token::Ties),
+        "NO OTHERS" => Some(Token::NoOthers),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
