@@ -997,6 +997,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1042,6 +1043,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1087,6 +1089,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1132,6 +1135,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1459,6 +1463,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1502,6 +1507,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 

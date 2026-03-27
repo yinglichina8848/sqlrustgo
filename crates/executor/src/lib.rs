@@ -18,6 +18,7 @@ pub mod sql_log;
 pub mod sql_normalizer;
 pub mod test_framework;
 pub mod vectorization;
+pub mod reusable_vec;
 
 pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
