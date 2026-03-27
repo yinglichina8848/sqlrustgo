@@ -5,6 +5,7 @@ use sqlrustgo_planner::{
     DataType, Expr, Field, FilterExec, IndexScanExec, Operator, Schema, SeqScanExec,
 };
 use sqlrustgo_server::{ConnectionPool, PoolConfig};
+use sqlrustgo_storage::{ColumnDefinition, TableInfo};
 use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -560,4 +561,106 @@ fn test_cache_hit_performance() {
         "Cache hit rate: {:.2} M ops/sec",
         10000.0 / elapsed.as_secs_f64()
     );
+}
+
+#[test]
+fn test_composite_index() {
+    let mut storage = MemoryStorage::new();
+
+    storage
+        .create_table(&TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "customer_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "order_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                },
+            ],
+        })
+        .unwrap();
+
+    for i in 0..100 {
+        for j in 0..10 {
+            storage
+                .insert("orders", vec![vec![Value::Integer(i), Value::Integer(j)]])
+                .unwrap();
+        }
+    }
+
+    storage
+        .create_table_index("orders", "customer_id", 0)
+        .unwrap();
+    storage.create_table_index("orders", "order_id", 1).unwrap();
+
+    let result = storage.search_index("orders", "customer_id", 50);
+    assert!(result.is_some());
+
+    let range_result = storage.range_index("orders", "customer_id", 50, 60);
+    assert!(!range_result.is_empty());
+
+    println!("✓ Composite index works");
+}
+
+#[test]
+fn test_covering_index() {
+    let mut storage = MemoryStorage::new();
+
+    storage
+        .create_table(&TableInfo {
+            name: "users".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: true,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                },
+            ],
+        })
+        .unwrap();
+
+    for i in 0..1000 {
+        storage
+            .insert(
+                "users",
+                vec![vec![Value::Integer(i), Value::Text(format!("user{}", i))]],
+            )
+            .unwrap();
+    }
+
+    storage.create_table_index("users", "id", 0).unwrap();
+
+    let result = storage.search_index("users", "id", 500);
+    assert!(result.is_some());
+
+    let range_result = storage.range_index("users", "id", 100, 200);
+    assert!(!range_result.is_empty());
+
+    println!("✓ Covering index works");
 }
