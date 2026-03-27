@@ -111,6 +111,7 @@ pub enum Token {
     Current,
     Ties,
     NoOthers,
+    Between,
 
     // Aggregate Functions
     Length,
@@ -294,6 +295,7 @@ impl fmt::Display for Token {
             Token::Current => write!(f, "CURRENT"),
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
+            Token::Between => write!(f, "BETWEEN"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -416,6 +418,7 @@ pub fn is_keyword(s: &str) -> bool {
             | "CURRENT ROW"
             | "TIES"
             | "NO OTHERS"
+            | "BETWEEN"
     )
 }
 
@@ -482,6 +485,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "CURRENT ROW" => Some(Token::Current),
         "TIES" => Some(Token::Ties),
         "NO OTHERS" => Some(Token::NoOthers),
+        "BETWEEN" => Some(Token::Between),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
