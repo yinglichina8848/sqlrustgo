@@ -352,3 +352,7 @@ path = "tests/anomaly/null_handling_test.rs"
 [[test]]
 name = "upsert_test"
 path = "tests/integration/upsert_test.rs"
+
+[[test]]
+name = "teaching_scenario_client_server_test"
+path = "tests/integration/teaching_scenario_client_server_test.rs"
