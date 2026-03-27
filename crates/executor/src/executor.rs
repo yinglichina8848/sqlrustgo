@@ -34,6 +34,14 @@ pub trait VolcanoExecutor: Send + Sync {
     fn name(&self) -> &str;
     fn is_initialized(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
+
+    /// Get next row as RowRef (zero-copy access to encoded bytes)
+    ///
+    /// Default implementation returns Ok(None) - executors with efficient
+    /// storage (like SeqScan) should override this.
+    fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
+        Ok(None)
+    }
 }
 
 pub type VolIterator = Box<dyn VolcanoExecutor>;
