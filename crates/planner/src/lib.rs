@@ -18,7 +18,7 @@ pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
     AggregateExec, AnyAllSubqueryExec, ExistsExec, FilterExec, HashJoinExec, InSubqueryExec,
     IndexScanExec, LimitExec, PhysicalPlan, ProjectionExec, ScalarSubqueryExec, SeqScanExec,
-    SetOperationExec, SortMergeJoinExec,
+    SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
