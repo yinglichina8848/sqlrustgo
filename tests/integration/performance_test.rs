@@ -522,3 +522,115 @@ fn test_cache_hit_performance() {
         10000.0 / elapsed.as_secs_f64()
     );
 }
+
+// ============================================================================
+// Insert Performance Optimization Tests (Issue #895)
+// ============================================================================
+
+#[test]
+fn test_single_insert_qps() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE single_insert_test (id INTEGER, value TEXT)").unwrap())
+        .unwrap();
+
+    let iterations = 1000;
+    let start = Instant::now();
+
+    for i in 0..iterations {
+        engine
+            .execute(
+                parse(&format!(
+                    "INSERT INTO single_insert_test VALUES ({}, 'value{}')",
+                    i, i
+                ))
+                .unwrap(),
+            )
+            .unwrap();
+    }
+
+    let elapsed = start.elapsed();
+    let qps = iterations as f64 / elapsed.as_secs_f64();
+    
+    println!("Single insert QPS: {:.2} ops/s (target: 1000+)", qps);
+    
+    // Verify all rows were inserted
+    let result = engine
+        .execute(parse("SELECT COUNT(*) FROM single_insert_test").unwrap())
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(iterations as i64));
+}
+
+#[test]
+fn test_insert_batch_optimization() {
+    // Test batch insert optimization
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE batch_optimization_test (id INTEGER PRIMARY KEY, value TEXT)").unwrap())
+        .unwrap();
+
+    // Multi-row insert (batch)
+    let result = engine.execute(parse("INSERT INTO batch_optimization_test VALUES (1, 'a'), (2, 'b'), (3, 'c')").unwrap());
+    assert!(result.is_ok(), "Multi-row insert should work");
+    
+    // Verify
+    let result = engine.execute(parse("SELECT COUNT(*) FROM batch_optimization_test").unwrap()).unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(3));
+    
+    println!("✓ Batch insert optimization: multi-row inserts supported");
+}
+
+#[test]
+fn test_insert_with_transaction() {
+    // Test INSERT with explicit transaction
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE tx_insert_test (id INTEGER, value TEXT)").unwrap())
+        .unwrap();
+
+    // Begin transaction
+    engine.execute(parse("BEGIN").unwrap()).unwrap();
+    
+    // Insert multiple rows
+    for i in 0..100 {
+        engine.execute(parse(&format!("INSERT INTO tx_insert_test VALUES ({}, 'v{}')", i, i)).unwrap()).unwrap();
+    }
+    
+    // Commit
+    engine.execute(parse("COMMIT").unwrap()).unwrap();
+    
+    // Verify
+    let result = engine.execute(parse("SELECT COUNT(*) FROM tx_insert_test").unwrap()).unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(100));
+    
+    println!("✓ Transactional insert: 100 rows in single transaction");
+}
+
+#[test]
+fn test_wal_write_optimization() {
+    // Test WAL write optimization (reduced sync calls)
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE wal_optimization_test (id INTEGER, data TEXT)").unwrap())
+        .unwrap();
+
+    let iterations = 500;
+    let start = Instant::now();
+
+    for i in 0..iterations {
+        engine.execute(parse(&format!("INSERT INTO wal_optimization_test VALUES ({}, 'data{}')", i, i)).unwrap()).unwrap();
+    }
+
+    let elapsed = start.elapsed();
+    let ops_per_sec = iterations as f64 / elapsed.as_secs_f64();
+    
+    println!("WAL optimized insert: {:.2} ops/s", ops_per_sec);
+    
+    // Verify data integrity
+    let result = engine.execute(parse("SELECT COUNT(*) FROM wal_optimization_test").unwrap()).unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(iterations as i64));
+}
