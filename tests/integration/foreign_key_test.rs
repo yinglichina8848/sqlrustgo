@@ -688,7 +688,6 @@ fn test_fk_edge_case_negative_value() {
 // ============================================
 
 #[test]
-#[ignore]
 fn test_fk_delete_restrict() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -797,7 +796,6 @@ fn test_fk_delete_cascade() {
 }
 
 #[test]
-#[ignore]
 fn test_fk_delete_set_null() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -851,7 +849,6 @@ fn test_fk_delete_set_null() {
 }
 
 #[test]
-#[ignore]
 fn test_fk_update_cascade() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -906,7 +903,6 @@ fn test_fk_update_cascade() {
 }
 
 #[test]
-#[ignore]
 fn test_fk_update_set_null() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -1056,7 +1052,6 @@ fn test_fk_multiple_fk_columns_delete_cascade() {
 }
 
 #[test]
-#[ignore]
 fn test_fk_self_reference_delete_cascade() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -1105,7 +1100,6 @@ fn test_fk_self_reference_delete_cascade() {
 }
 
 #[test]
-#[ignore]
 fn test_fk_combined_actions() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 

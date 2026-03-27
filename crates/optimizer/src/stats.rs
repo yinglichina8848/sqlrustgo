@@ -971,6 +971,37 @@ mod tests {
                 column_stats: vec![],
             })
         }
+
+        fn create_trigger(
+            &mut self,
+            _info: sqlrustgo_storage::engine::TriggerInfo,
+        ) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_trigger(&mut self, _name: &str) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn get_trigger(&self, _name: &str) -> Option<sqlrustgo_storage::engine::TriggerInfo> {
+            None
+        }
+
+        fn list_triggers(&self, _table: &str) -> Vec<sqlrustgo_storage::engine::TriggerInfo> {
+            Vec::new()
+        }
+
+        fn get_next_auto_increment(
+            &mut self,
+            _table: &str,
+            _column_index: usize,
+        ) -> SqlResult<i64> {
+            Ok(1)
+        }
+
+        fn get_auto_increment_counter(&self, _table: &str, _column_index: usize) -> SqlResult<i64> {
+            Ok(0)
+        }
     }
 
     #[test]
@@ -986,14 +1017,18 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: true,
                 references: None,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
