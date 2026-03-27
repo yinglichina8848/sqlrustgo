@@ -114,6 +114,7 @@ pub enum TransactionCommand {
     Rollback,
     Savepoint { name: String },
     RollbackTo { name: String },
+    ReleaseSavepoint { name: String },
 }
 
 /// GRANT statement for permission management
@@ -360,7 +361,7 @@ impl Parser {
             Some(Token::Begin)
             | Some(Token::Commit)
             | Some(Token::Rollback)
-            | Some(Token::Savepoint) => self.parse_transaction(),
+            | Some(Token::Savepoint) | Some(Token::Release) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
@@ -1779,6 +1780,25 @@ impl Parser {
                 };
                 Ok(Statement::Transaction(TransactionStatement {
                     command: TransactionCommand::Savepoint { name },
+                }))
+            }
+            Some(Token::Release) => {
+                self.next();
+                // Expect SAVEPOINT after RELEASE
+                if !matches!(self.current(), Some(Token::Savepoint)) {
+                    return Err("Expected SAVEPOINT after RELEASE".to_string());
+                }
+                self.next(); // consume SAVEPOINT
+                let name = match self.current() {
+                    Some(Token::Identifier(n)) => {
+                        let name = n.clone();
+                        self.next();
+                        name
+                    }
+                    _ => return Err("Expected savepoint name".to_string()),
+                };
+                Ok(Statement::Transaction(TransactionStatement {
+                    command: TransactionCommand::ReleaseSavepoint { name },
                 }))
             }
             _ => Err("Invalid transaction statement".to_string()),
