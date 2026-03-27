@@ -1,3 +1,5 @@
+# SQLRustGo v1.6.1
+
 [workspace]
 members = [
     "crates/common",
@@ -12,6 +14,15 @@ members = [
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
+    "crates/tools",
+    "crates/sqlancer",
+    "crates/transaction-stress",
+    "crates/information-schema",
+    "crates/query-stats",
+    "crates/test-registry",
+    "crates/test-runner",
+    "crates/test-results",
+    "crates/test-reporter",
     "test/sql92",
 ]
 
@@ -55,6 +66,7 @@ criterion = "0.8"
 miniz_oxide = "0.7"
 rand = "0.8"
 fnv = "1.0"
+proptest = "1.1"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -62,6 +74,7 @@ tempfile = "3.25.0"
 serde_yaml = "0.9"
 rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
+proptest = "1.1"
 
 [package]
 name = "sqlrustgo"
@@ -146,6 +159,9 @@ path = "crates/bench/examples/tpch_data_gen.rs"
 version = "0.32"
 features = ["bundled"]
 
+[dev-dependencies.mysql]
+version = "25"
+
 [[test]]
 name = "optimizer_rules_test"
 path = "tests/unit/optimizer_rules_test.rs"
@@ -223,6 +239,14 @@ name = "crash_recovery_test"
 path = "tests/stress/crash_recovery_test.rs"
 
 [[test]]
+name = "wal_deterministic_test"
+path = "tests/stress/wal_deterministic_test.rs"
+
+[[test]]
+name = "wal_fuzz_test"
+path = "tests/stress/wal_fuzz_test.rs"
+
+[[test]]
 name = "stress_test"
 path = "tests/stress/stress_test.rs"
 
@@ -245,3 +269,83 @@ path = "tests/integration/teaching_scenario_test.rs"
 [[test]]
 name = "performance_test"
 path = "tests/integration/performance_test.rs"
+
+[[test]]
+name = "mysql_tpch_test"
+path = "tests/integration/mysql_tpch_test.rs"
+
+[[test]]
+name = "mvcc_concurrency_test"
+path = "tests/anomaly/mvcc_concurrency_test.rs"
+
+[[test]]
+name = "snapshot_isolation_test"
+path = "tests/anomaly/snapshot_isolation_test.rs"
+
+[[test]]
+name = "checksum_corruption_test"
+path = "tests/integration/checksum_corruption_test.rs"
+
+[[test]]
+name = "crash_injection_test"
+path = "tests/anomaly/crash_injection_test.rs"
+
+[[test]]
+name = "catalog_consistency_test"
+path = "tests/anomaly/catalog_consistency_test.rs"
+
+[[test]]
+name = "long_run_stability_test"
+path = "tests/anomaly/long_run_stability_test.rs"
+
+[[test]]
+name = "qps_benchmark_test"
+path = "tests/anomaly/qps_benchmark_test.rs"
+
+[[test]]
+name = "transaction_isolation_test"
+path = "tests/anomaly/transaction_isolation_test.rs"
+
+[[test]]
+name = "join_test"
+path = "tests/anomaly/join_test.rs"
+
+[[test]]
+name = "fk_constraint_test"
+path = "tests/anomaly/fk_constraint_test.rs"
+
+[[test]]
+name = "server_integration_test"
+path = "tests/integration/server_integration_test.rs"
+
+[[test]]
+name = "set_operations_test"
+path = "tests/anomaly/set_operations_test.rs"
+
+[[test]]
+name = "view_test"
+path = "tests/anomaly/view_test.rs"
+
+[[test]]
+name = "transaction_timeout_test"
+path = "tests/anomaly/transaction_timeout_test.rs"
+
+[[test]]
+name = "datetime_type_test"
+path = "tests/anomaly/datetime_type_test.rs"
+
+[[test]]
+name = "boundary_test"
+path = "tests/anomaly/boundary_test.rs"
+
+[[test]]
+name = "error_handling_test"
+path = "tests/anomaly/error_handling_test.rs"
+
+[[test]]
+name = "aggregate_type_test"
+path = "tests/anomaly/aggregate_type_test.rs"
+
+[[test]]
+name = "null_handling_test"
+path = "tests/anomaly/null_handling_test.rs"

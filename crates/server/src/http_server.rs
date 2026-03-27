@@ -37,6 +37,24 @@ impl HttpServer {
         self
     }
 
+    /// Get server version
+    pub fn get_version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// Bind to an available port
+    pub fn bind_to_available_port(&self) -> u16 {
+        if self.port == 0 {
+            // Bind to port 0 to get an available port
+            if let Ok(listener) = TcpListener::bind(format!("{}:0", self.host)) {
+                if let Ok(addr) = listener.local_addr() {
+                    return addr.port();
+                }
+            }
+        }
+        self.port
+    }
+
     /// Start the HTTP server
     pub fn start(&self) -> Result<(), std::io::Error> {
         let addr = format!("{}:{}", self.host, self.port);
