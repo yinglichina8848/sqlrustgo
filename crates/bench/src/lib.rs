@@ -2,6 +2,10 @@
 //!
 //! Provides benchmark functionality for SQLRustGo.
 
+#![allow(unused_imports)]
+
+use serde::{Deserialize, Serialize};
+
 pub mod analysis;
 pub mod benchmark_runner;
 pub mod cli;
@@ -110,7 +114,7 @@ impl Default for BenchmarkConfig {
 }
 
 /// Latency percentiles for benchmark results.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Percentiles {
     /// Minimum latency in microseconds.
     pub min: u64,
@@ -127,7 +131,7 @@ pub struct Percentiles {
 }
 
 /// Regression report for comparing benchmark results.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RegressionReport {
     /// Whether regression was detected.
     pub detected: bool,
@@ -136,7 +140,7 @@ pub struct RegressionReport {
 }
 
 /// Complete benchmark result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchmarkResult {
     /// Total number of queries executed.
     pub total_queries: u64,
