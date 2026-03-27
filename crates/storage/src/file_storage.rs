@@ -45,7 +45,6 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
-<<<<<<< HEAD
             insert_buffer: HashMap::new(),
             buffer_threshold: 10,
             enable_buffer: true,
