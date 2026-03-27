@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+sqlrustgo = { path = "../../" }
 sqlrustgo-common.workspace = true
 sqlrustgo-parser.workspace = true
 sqlrustgo-planner.workspace = true
@@ -25,6 +26,10 @@ async-trait.workspace = true
 actix-web = "4"
 actix-rt = "2"
 crossbeam-channel = "0.5"
+
+[[bin]]
+name = "sqlrustgo-server"
+path = "src/main.rs"
 
 [dev-dependencies]
 tempfile.workspace = true
