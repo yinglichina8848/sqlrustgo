@@ -28,6 +28,29 @@ fn main() {
     // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
+    // Check for command line arguments
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() > 1 {
+        // Command line mode - execute single SQL and exit
+        let sql = args[1..].join(" ");
+
+        // Initialize storage engine
+        let mut storage = MemoryStorage::new();
+
+        // Execute the SQL
+        match execute_sql(&sql, &mut storage) {
+            Ok(result) => {
+                print_result(result);
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     println!("SQLRustGo Interactive SQL Shell");
     println!("Type '.help' for available commands, '.exit' to quit\n");
 
@@ -120,7 +143,9 @@ fn execute_sql(sql: &str, storage: &mut dyn StorageEngine) -> Result<ExecutorRes
         Statement::Insert(insert) => execute_insert(&insert, storage),
         Statement::CreateTable(create) => execute_create_table(&create, storage),
         Statement::DropTable(drop) => execute_drop_table(&drop, storage),
-        _ => Err("Only SELECT, INSERT, CREATE TABLE, and DROP TABLE are supported".to_string()),
+        Statement::ShowStatus => execute_show_status(storage),
+        Statement::ShowProcesslist => execute_show_processlist(storage),
+        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST are supported".to_string()),
     }
 }
 
@@ -317,7 +342,9 @@ fn execute_create_table(
             data_type: col.data_type.clone(),
             nullable: col.nullable,
             is_unique: false,
+            is_primary_key: false,
             references: None,
+            auto_increment: false,
         })
         .collect();
 
@@ -343,6 +370,64 @@ fn execute_drop_table(
     Ok(ExecutorResult::new(vec![], 0))
 }
 
+/// Execute SHOW STATUS statement
+fn execute_show_status(storage: &dyn StorageEngine) -> Result<ExecutorResult, String> {
+    let mut rows = Vec::new();
+
+    // System metrics
+    rows.push(vec![
+        Value::Text("uptime".to_string()),
+        Value::Text(format!(
+            "{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        )),
+    ]);
+
+    // Table count
+    let table_count = storage.list_tables().len();
+    rows.push(vec![
+        Value::Text("table_count".to_string()),
+        Value::Text(table_count.to_string()),
+    ]);
+
+    // Database version
+    rows.push(vec![
+        Value::Text("version".to_string()),
+        Value::Text("1.9.0".to_string()),
+    ]);
+
+    // Storage path (mock)
+    rows.push(vec![
+        Value::Text("datadir".to_string()),
+        Value::Text("./data".to_string()),
+    ]);
+
+    Ok(ExecutorResult::new(rows, 0))
+}
+
+/// Execute SHOW PROCESSLIST statement
+fn execute_show_processlist(_storage: &dyn StorageEngine) -> Result<ExecutorResult, String> {
+    let mut rows = Vec::new();
+
+    // Currently no active connections in single-user mode
+    // This would be expanded in multi-threaded server mode
+    rows.push(vec![
+        Value::Text("1".to_string()),                // Id
+        Value::Text("system".to_string()),           // User
+        Value::Text("localhost".to_string()),        // Host
+        Value::Text("".to_string()),                 // DB
+        Value::Text("Query".to_string()),            // Command
+        Value::Text("0".to_string()),                // Time
+        Value::Text("".to_string()),                 // State
+        Value::Text("SHOW PROCESSLIST".to_string()), // Info
+    ]);
+
+    Ok(ExecutorResult::new(rows, 0))
+}
+
 /// Setup sample data for testing CLI commands
 fn setup_sample_data(storage: &mut dyn StorageEngine) {
     // Create users table
@@ -354,21 +439,27 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "email".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
         ],
     };
@@ -405,21 +496,27 @@ fn setup_sample_data(storage: &mut dyn StorageEngine) {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "user_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "amount".to_string(),
                 data_type: "REAL".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             },
         ],
     };

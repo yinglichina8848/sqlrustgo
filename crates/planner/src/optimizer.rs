@@ -966,6 +966,7 @@ mod tests {
         let plan = LogicalPlan::Aggregate {
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![Expr::column("id")],
+            having_expr: None,
             input: Box::new(LogicalPlan::TableScan {
                 table_name: "users".to_string(),
                 schema: schema.clone(),
@@ -1239,6 +1240,7 @@ mod tests {
             }),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema,
         };
 
@@ -1351,6 +1353,7 @@ mod tests {
             }),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema,
         };
 

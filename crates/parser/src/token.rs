@@ -31,6 +31,8 @@ pub enum Token {
     Primary,
     Key,
     Duplicate,
+    Replace,
+    Ignore,
     Begin,
     Commit,
     Rollback,
@@ -44,6 +46,7 @@ pub enum Token {
     Intersect,
     Except,
     Trigger,
+    Do,
     Before,
     After,
     Each,
@@ -69,6 +72,22 @@ pub enum Token {
     All,
     Limit,
     Offset,
+
+    // SHOW keywords (运维监控)
+    Show,
+    Status,
+    Processlist,
+
+    // Group By / Order By keywords
+    Group,
+    By,
+    Having,
+    Order,
+    Asc,
+    Desc,
+    Nulls,
+    First,
+    Last,
 
     // Aggregate Functions
     Length,
@@ -178,6 +197,8 @@ impl fmt::Display for Token {
             Token::Primary => write!(f, "PRIMARY"),
             Token::Key => write!(f, "KEY"),
             Token::Duplicate => write!(f, "DUPLICATE"),
+            Token::Replace => write!(f, "REPLACE"),
+            Token::Ignore => write!(f, "IGNORE"),
             Token::Begin => write!(f, "BEGIN"),
             Token::Commit => write!(f, "COMMIT"),
             Token::Rollback => write!(f, "ROLLBACK"),
@@ -191,6 +212,7 @@ impl fmt::Display for Token {
             Token::Intersect => write!(f, "INTERSECT"),
             Token::Except => write!(f, "EXCEPT"),
             Token::Trigger => write!(f, "TRIGGER"),
+            Token::Do => write!(f, "DO"),
             Token::Before => write!(f, "BEFORE"),
             Token::After => write!(f, "AFTER"),
 
@@ -217,6 +239,16 @@ impl fmt::Display for Token {
             Token::All => write!(f, "ALL"),
             Token::Limit => write!(f, "LIMIT"),
             Token::Offset => write!(f, "OFFSET"),
+            // Group By / Order By keywords
+            Token::Group => write!(f, "GROUP"),
+            Token::By => write!(f, "BY"),
+            Token::Having => write!(f, "HAVING"),
+            Token::Order => write!(f, "ORDER"),
+            Token::Asc => write!(f, "ASC"),
+            Token::Desc => write!(f, "DESC"),
+            Token::Nulls => write!(f, "NULLS"),
+            Token::First => write!(f, "FIRST"),
+            Token::Last => write!(f, "LAST"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -272,6 +304,10 @@ impl fmt::Display for Token {
             Token::SingleQuote => write!(f, "'"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
+            // SHOW keywords
+            Token::Show => write!(f, "SHOW"),
+            Token::Status => write!(f, "STATUS"),
+            Token::Processlist => write!(f, "PROCESSLIST"),
         }
     }
 }
@@ -343,6 +379,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),
         "DUPLICATE" => Some(Token::Duplicate),
+        "REPLACE" => Some(Token::Replace),
+        "IGNORE" => Some(Token::Ignore),
         "BEGIN" => Some(Token::Begin),
         "COMMIT" => Some(Token::Commit),
         "ROLLBACK" => Some(Token::Rollback),
@@ -368,6 +406,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
+        "SHOW" => Some(Token::Show),
+        "STATUS" => Some(Token::Status),
+        "PROCESSLIST" => Some(Token::Processlist),
         _ => None,
     }
 }

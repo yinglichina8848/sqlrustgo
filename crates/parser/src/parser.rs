@@ -31,11 +31,15 @@ pub enum Statement {
     CreateIndex(CreateIndexStatement),
     DropIndex(DropIndexStatement),
     CreateView(CreateViewStatement),
+    CreateTrigger(CreateTriggerStatement),
+    DropTrigger(DropTriggerStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
+    ShowStatus,
+    ShowProcesslist,
 }
 
 /// CREATE INDEX statement
@@ -98,6 +102,37 @@ pub struct ExplainStatement {
     pub analyze: bool,
 }
 
+/// CREATE TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTriggerStatement {
+    pub name: String,
+    pub table_name: String,
+    pub timing: TriggerTiming,
+    pub event: TriggerEvent,
+    pub body: Box<Statement>,
+}
+
+/// DROP TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTriggerStatement {
+    pub name: String,
+}
+
+/// Trigger timing: BEFORE or AFTER
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// Trigger event: INSERT, UPDATE, or DELETE
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
 /// Transaction statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionStatement {
@@ -112,6 +147,7 @@ pub enum TransactionCommand {
     Rollback,
     Savepoint { name: String },
     RollbackTo { name: String },
+    ReleaseSavepoint { name: String },
 }
 
 /// GRANT statement for permission management
@@ -174,6 +210,26 @@ pub struct AggregateCall {
     pub distinct: bool,
 }
 
+/// GROUP BY clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct GroupByClause {
+    pub columns: Vec<Expression>,
+}
+
+/// ORDER BY clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByClause {
+    pub items: Vec<OrderByItem>,
+}
+
+/// ORDER BY single item
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByItem {
+    pub expr: Expression,
+    pub asc: bool,         // true = ASC, false = DESC
+    pub nulls_first: bool, // true = NULLS FIRST, false = NULLS LAST
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
@@ -184,6 +240,10 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+    // New fields for GROUP BY / HAVING / ORDER BY
+    pub group_by: Option<GroupByClause>,
+    pub having: Option<Expression>,
+    pub order_by: Option<OrderByClause>,
 }
 
 /// Column in SELECT
@@ -200,6 +260,8 @@ pub struct InsertStatement {
     pub columns: Vec<String>,
     pub values: Vec<Vec<Expression>>, // Multiple rows
     pub on_duplicate: Option<Vec<(String, Expression)>>, // ON DUPLICATE KEY UPDATE
+    pub ignore: bool,                 // INSERT IGNORE
+    pub replace: bool,                // REPLACE INTO (aliased to INSERT or separate)
 }
 
 /// UPDATE statement
@@ -271,6 +333,12 @@ pub enum Expression {
     Identifier(String),
     BinaryOp(Box<Expression>, String, Box<Expression>),
     Wildcard,
+    /// Function call expression (for HAVING clause aggregates like COUNT(*), SUM(col))
+    FunctionCall(String, Vec<Expression>),
+    /// Subquery expression: (SELECT ...)
+    Subquery(Box<Statement>),
+    /// Qualified column: table.column
+    QualifiedColumn(String, String),
 }
 
 /// SQL Parser
@@ -318,7 +386,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Result<Statement, String> {
         match self.current() {
             Some(Token::Select) => self.parse_select(),
-            Some(Token::Insert) => self.parse_insert(),
+            Some(Token::Insert) | Some(Token::Replace) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
             Some(Token::Alter) => self.parse_alter(),
@@ -330,9 +398,11 @@ impl Parser {
             Some(Token::Begin)
             | Some(Token::Commit)
             | Some(Token::Rollback)
-            | Some(Token::Savepoint) => self.parse_transaction(),
+            | Some(Token::Savepoint)
+            | Some(Token::Release) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
+            Some(Token::Show) => self.parse_show(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -346,6 +416,36 @@ impl Parser {
         loop {
             match self.current() {
                 Some(Token::From) => break,
+                Some(Token::LParen) => {
+                    // Subquery in SELECT: (SELECT ...) AS alias
+                    self.next();
+                    if matches!(self.current(), Some(Token::Select)) {
+                        let select_stmt = self.parse_select()?;
+                        self.expect(Token::RParen)?;
+
+                        // Check for AS alias
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let a = Some(name.clone());
+                                    self.next();
+                                    a
+                                }
+                                _ => return Err("Expected alias name".to_string()),
+                            }
+                        } else {
+                            None
+                        };
+
+                        columns.push(SelectColumn {
+                            name: format!("(subquery)"),
+                            alias,
+                        });
+                    } else {
+                        return Err("Expected SELECT in subquery".to_string());
+                    }
+                }
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -389,9 +489,46 @@ impl Parser {
                     aggregates.push(agg);
                 }
                 Some(Token::Identifier(_)) => {
-                    if let Some(Token::Identifier(name)) = self.next() {
-                        columns.push(SelectColumn { name, alias: None });
-                    }
+                    let first_name = match self.current() {
+                        Some(Token::Identifier(name)) => name.clone(),
+                        _ => return Err("Expected column name".to_string()),
+                    };
+                    self.next();
+
+                    // Check for qualified column: table.column
+                    let col_name = if matches!(self.current(), Some(Token::Dot)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(col)) => {
+                                let full_name = format!("{}.{}", first_name, col);
+                                self.next();
+                                full_name
+                            }
+                            _ => return Err("Expected column name after dot".to_string()),
+                        }
+                    } else {
+                        first_name
+                    };
+
+                    // Check for alias: column AS alias or column alias
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => return Err("Expected alias name".to_string()),
+                        }
+                    } else {
+                        None
+                    };
+
+                    columns.push(SelectColumn {
+                        name: col_name,
+                        alias,
+                    });
                 }
                 Some(Token::Comma) => {
                     self.next();
@@ -418,6 +555,99 @@ impl Parser {
             None
         };
 
+        // Parse GROUP BY clause (optional)
+        let group_by = if matches!(self.current(), Some(Token::Group)) {
+            self.next(); // consume GROUP
+            if !matches!(self.current(), Some(Token::By)) {
+                return Err("Expected BY after GROUP".to_string());
+            }
+            self.next(); // consume BY
+
+            let mut columns = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+                columns.push(expr);
+
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+
+            Some(GroupByClause { columns })
+        } else {
+            None
+        };
+
+        // Parse HAVING clause (optional) - must follow GROUP BY
+        let having = if matches!(self.current(), Some(Token::Having)) {
+            self.next(); // consume HAVING
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        // Parse ORDER BY clause (optional)
+        let order_by = if matches!(self.current(), Some(Token::Order)) {
+            self.next(); // consume ORDER
+            if !matches!(self.current(), Some(Token::By)) {
+                return Err("Expected BY after ORDER".to_string());
+            }
+            self.next(); // consume BY
+
+            let mut items = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+
+                // Parse ASC/DESC (default ASC)
+                let asc = match self.current() {
+                    Some(Token::Asc) => {
+                        self.next();
+                        true
+                    }
+                    Some(Token::Desc) => {
+                        self.next();
+                        false
+                    }
+                    _ => true, // default is ASC
+                };
+
+                // Parse NULLS FIRST/LAST (default depends on ASC/DESC)
+                let nulls_first = match self.current() {
+                    Some(Token::Nulls) => {
+                        self.next(); // consume NULLS
+                        match self.current() {
+                            Some(Token::First) => {
+                                self.next();
+                                true
+                            }
+                            Some(Token::Last) => {
+                                self.next();
+                                false
+                            }
+                            _ => return Err("Expected FIRST or LAST after NULLS".to_string()),
+                        }
+                    }
+                    _ => asc, // default: NULLS FIRST for ASC, NULLS LAST for DESC
+                };
+
+                items.push(OrderByItem {
+                    expr,
+                    asc,
+                    nulls_first,
+                });
+
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+
+            Some(OrderByClause { items })
+        } else {
+            None
+        };
+
         let base_select = SelectStatement {
             columns,
             table,
@@ -426,6 +656,9 @@ impl Parser {
             aggregates,
             limit: None,
             offset: None,
+            group_by,
+            having,
+            order_by,
         };
 
         // Check for LIMIT and OFFSET
@@ -512,7 +745,30 @@ impl Parser {
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Insert)?;
+        // Check for REPLACE INTO (MySQL syntax: REPLACE INTO table...)
+        let mut replace = false;
+        let mut ignore = false;
+
+        if let Some(Token::Replace) = self.current() {
+            replace = true;
+            self.next(); // consume REPLACE
+        } else if let Some(Token::Ignore) = self.current() {
+            // Check for IGNORE (INSERT IGNORE INTO)
+            ignore = true;
+            self.next(); // consume IGNORE
+        }
+
+        // Now expect INSERT (unless we already consumed REPLACE)
+        if !replace {
+            self.expect(Token::Insert)?;
+        }
+
+        // Check for IGNORE after INSERT (INSERT IGNORE INTO)
+        if let Some(Token::Ignore) = self.current() {
+            ignore = true;
+            self.next(); // consume IGNORE
+        }
+
         self.expect(Token::Into)?;
 
         let table = match self.next() {
@@ -595,6 +851,8 @@ impl Parser {
                 columns,
                 values,
                 on_duplicate: None,
+                ignore,
+                replace,
             }));
         } else if matches!(self.current(), Some(Token::LParen)) {
             // INSERT INTO table (col1, col2) VALUES ...
@@ -652,7 +910,7 @@ impl Parser {
                         self.next();
                     }
                     Some(Token::StringLiteral(s)) => {
-                        row.push(Expression::Literal(format!("'{}'", s)));
+                        row.push(Expression::Literal(s.to_string()));
                         self.next();
                     }
                     Some(Token::Comma) => {
@@ -732,6 +990,8 @@ impl Parser {
             columns,
             values,
             on_duplicate,
+            ignore,
+            replace,
         }))
     }
 
@@ -829,22 +1089,8 @@ impl Parser {
             }
             self.next(); // consume =
 
-            // Parse value
-            let value = match self.current() {
-                Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-                Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-                Some(Token::Minus) => {
-                    self.next();
-                    if let Some(Token::NumberLiteral(n)) = self.current() {
-                        Expression::Literal(format!("-{}", n))
-                    } else {
-                        return Err("Expected number after -".to_string());
-                    }
-                }
-                _ => return Err("Expected value in SET clause".to_string()),
-            };
-            self.next();
+            // Parse value expression (supports: column = column +/- value)
+            let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
 
@@ -908,9 +1154,9 @@ impl Parser {
 
     /// Parse comparison expression (=, !=, >, <, >=, <=)
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
-        let left = self.parse_primary_expression()?;
+        let left = self.parse_arithmetic_expression()?;
 
-        // Check for binary operator
+        // Check for comparison operator
         let op = match self.current() {
             Some(Token::Equal) => "=",
             Some(Token::NotEqual) => "!=",
@@ -922,7 +1168,30 @@ impl Parser {
         };
         self.next(); // consume operator
 
-        let right = self.parse_primary_expression()?;
+        let right = self.parse_arithmetic_expression()?;
+
+        Ok(Expression::BinaryOp(
+            Box::new(left),
+            op.to_string(),
+            Box::new(right),
+        ))
+    }
+
+    /// Parse arithmetic expression (+, -, *, /)
+    fn parse_arithmetic_expression(&mut self) -> Result<Expression, String> {
+        let left = self.parse_primary_expression()?;
+
+        // Check for arithmetic operator
+        let op = match self.current() {
+            Some(Token::Plus) => "+",
+            Some(Token::Minus) => "-",
+            Some(Token::Asterisk) => "*",
+            Some(Token::Slash) => "/",
+            _ => return Ok(left), // No operator, return simple expression
+        };
+        self.next(); // consume operator
+
+        let right = self.parse_arithmetic_expression()?;
 
         Ok(Expression::BinaryOp(
             Box::new(left),
@@ -933,14 +1202,29 @@ impl Parser {
 
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
-        match self.current() {
+        let token = self.current().cloned();
+
+        match token {
             Some(Token::Identifier(name)) => {
                 if name.to_uppercase() == "NULL" {
                     return Ok(Expression::Literal("NULL".to_string()));
                 }
-                let expr = Expression::Identifier(name.clone());
                 self.next();
-                Ok(expr)
+
+                // Check for qualified column name: table.column
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next(); // consume '.'
+                    match self.current() {
+                        Some(Token::Identifier(col_name)) => {
+                            let expr = Expression::QualifiedColumn(name.clone(), col_name.clone());
+                            self.next();
+                            return Ok(expr);
+                        }
+                        _ => return Err("Expected column name after dot".to_string()),
+                    }
+                }
+
+                Ok(Expression::Identifier(name.clone()))
             }
             Some(Token::NumberLiteral(n)) => {
                 let expr = Expression::Literal(n.clone());
@@ -962,9 +1246,52 @@ impl Parser {
                     Err("Expected number after -".to_string())
                 }
             }
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+            | Some(Token::Max) => {
+                // Parse aggregate function call for HAVING clause
+                let func_name = match self.current() {
+                    Some(Token::Count) => "COUNT",
+                    Some(Token::Sum) => "SUM",
+                    Some(Token::Avg) => "AVG",
+                    Some(Token::Min) => "MIN",
+                    Some(Token::Max) => "MAX",
+                    _ => return Err("Unknown aggregate function".to_string()),
+                };
+                self.next(); // consume function name
+                self.expect(Token::LParen)?;
+
+                // Parse arguments
+                let mut args = Vec::new();
+                match self.current() {
+                    Some(Token::Star) => {
+                        args.push(Expression::Wildcard);
+                        self.next();
+                    }
+                    Some(Token::Identifier(name)) => {
+                        args.push(Expression::Identifier(name.to_string()));
+                        self.next();
+                    }
+                    Some(Token::NumberLiteral(n)) => {
+                        args.push(Expression::Literal(n.clone()));
+                        self.next();
+                    }
+                    _ => return Err("Expected *, column name, or number in aggregate".to_string()),
+                }
+
+                self.expect(Token::RParen)?;
+                Ok(Expression::FunctionCall(func_name.to_string(), args))
+            }
             Some(Token::LParen) => {
-                // Parenthesized expression
                 self.next(); // consume '('
+
+                // Check if this is a subquery: (SELECT ...)
+                if matches!(self.current(), Some(Token::Select)) {
+                    let select_stmt = self.parse_select()?;
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::Subquery(Box::new(select_stmt)));
+                }
+
+                // Regular parenthesized expression
                 let expr = self.parse_or_expression()?;
                 self.expect(Token::RParen)?;
                 Ok(expr)
@@ -1097,7 +1424,11 @@ impl Parser {
                 self.next();
                 self.parse_create_view()
             }
-            _ => Err("Expected TABLE or VIEW after CREATE".to_string()),
+            Some(Token::Trigger) => {
+                self.next();
+                self.parse_create_trigger()
+            }
+            _ => Err("Expected TABLE, VIEW, or TRIGGER after CREATE".to_string()),
         }
     }
 
@@ -1191,13 +1522,32 @@ impl Parser {
                                         }
                                         _ => "".to_string(),
                                     };
-                                    let ref_column = match self.current() {
-                                        Some(Token::Identifier(s)) => {
-                                            let c = s.clone();
+                                    // Handle optional parentheses: REFERENCES table(column)
+                                    let ref_column = if let Some(Token::LParen) = self.current() {
+                                        // Consume '('
+                                        self.next();
+                                        let col = match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        };
+                                        // Consume ')' if present
+                                        if let Some(Token::RParen) = self.current() {
                                             self.next();
-                                            c
                                         }
-                                        _ => "id".to_string(),
+                                        col
+                                    } else {
+                                        match self.current() {
+                                            Some(Token::Identifier(s)) => {
+                                                let c = s.clone();
+                                                self.next();
+                                                c
+                                            }
+                                            _ => "id".to_string(),
+                                        }
                                     };
                                     references = Some(ForeignKeyRef {
                                         table: ref_table,
@@ -1205,6 +1555,102 @@ impl Parser {
                                         on_delete: None,
                                         on_update: None,
                                     });
+                                    // Parse ON DELETE and ON UPDATE actions
+                                    loop {
+                                        match self.current() {
+                                            Some(Token::On) => {
+                                                self.next();
+                                                // Parse ON DELETE action
+                                                if let Some(Token::Delete) = self.current() {
+                                                    self.next();
+                                                    // Check for SET NULL or direct action
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) =
+                                                                self.current()
+                                                            {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper =
+                                                                action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => {
+                                                                    Some(ForeignKeyAction::Cascade)
+                                                                }
+                                                                "RESTRICT" => {
+                                                                    Some(ForeignKeyAction::Restrict)
+                                                                }
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_delete = action;
+                                                    }
+                                                }
+                                                // Check if we're at UPDATE before checking for ON (order matters!)
+                                                if let Some(Token::Update) = self.current() {
+                                                    self.next();
+                                                    let action = match self.current() {
+                                                        Some(Token::Set) => {
+                                                            self.next();
+                                                            if let Some(Token::Identifier(name)) =
+                                                                self.current()
+                                                            {
+                                                                if name.to_uppercase() == "NULL" {
+                                                                    self.next();
+                                                                    Some(ForeignKeyAction::SetNull)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        Some(Token::Identifier(action)) => {
+                                                            let action_upper =
+                                                                action.to_uppercase();
+                                                            self.next();
+                                                            match action_upper.as_str() {
+                                                                "CASCADE" => {
+                                                                    Some(ForeignKeyAction::Cascade)
+                                                                }
+                                                                "RESTRICT" => {
+                                                                    Some(ForeignKeyAction::Restrict)
+                                                                }
+                                                                _ => None,
+                                                            }
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                    if let Some(ref mut fk_ref) = references {
+                                                        fk_ref.on_update = action;
+                                                    }
+                                                }
+                                                // If we're at ON, continue to next iteration to handle it
+                                                else if let Some(Token::On) = self.current() {
+                                                    continue;
+                                                }
+                                                // Not ON DELETE or ON UPDATE, break
+                                                else {
+                                                    break;
+                                                }
+                                            }
+                                            _ => break,
+                                        }
+                                    }
                                 }
                                 _ => break,
                             }
@@ -1247,6 +1693,83 @@ impl Parser {
         };
 
         Ok(Statement::DropTable(DropTableStatement { name }))
+    }
+
+    fn parse_drop_trigger(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Trigger)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected trigger name".to_string()),
+        };
+
+        Ok(Statement::DropTrigger(DropTriggerStatement { name }))
+    }
+
+    fn parse_create_trigger(&mut self) -> Result<Statement, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected trigger name".to_string()),
+        };
+
+        // Parse ON keyword
+        self.expect(Token::On)?;
+
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        // Parse timing: BEFORE or AFTER
+        let timing = match self.current() {
+            Some(Token::Before) => {
+                self.next();
+                TriggerTiming::Before
+            }
+            Some(Token::After) => {
+                self.next();
+                TriggerTiming::After
+            }
+            _ => return Err("Expected BEFORE or AFTER".to_string()),
+        };
+
+        // Parse event: INSERT, UPDATE, DELETE
+        let event = match self.current() {
+            Some(Token::Insert) => {
+                self.next();
+                TriggerEvent::Insert
+            }
+            Some(Token::Update) => {
+                self.next();
+                TriggerEvent::Update
+            }
+            Some(Token::Delete) => {
+                self.next();
+                TriggerEvent::Delete
+            }
+            _ => return Err("Expected INSERT, UPDATE, or DELETE".to_string()),
+        };
+
+        // Parse DO keyword
+        self.expect(Token::Do)?;
+
+        // Parse trigger body (simple: single statement)
+        let body = match self.current() {
+            Some(Token::Insert) => Box::new(self.parse_insert()?),
+            Some(Token::Update) => Box::new(self.parse_update()?),
+            Some(Token::Delete) => Box::new(self.parse_delete()?),
+            Some(Token::Select) => Box::new(self.parse_select()?),
+            _ => {
+                return Err("Expected INSERT, UPDATE, DELETE, or SELECT in trigger body".to_string())
+            }
+        };
+
+        Ok(Statement::CreateTrigger(CreateTriggerStatement {
+            name,
+            table_name,
+            timing,
+            event,
+            body,
+        }))
     }
 
     fn parse_create_view(&mut self) -> Result<Statement, String> {
@@ -1425,6 +1948,22 @@ impl Parser {
         }))
     }
 
+    fn parse_show(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Show)?;
+
+        match self.current() {
+            Some(Token::Status) => {
+                self.next();
+                Ok(Statement::ShowStatus)
+            }
+            Some(Token::Processlist) => {
+                self.next();
+                Ok(Statement::ShowProcesslist)
+            }
+            _ => Err("Expected STATUS or PROCESSLIST after SHOW".to_string()),
+        }
+    }
+
     fn parse_transaction(&mut self) -> Result<Statement, String> {
         match self.current() {
             Some(Token::Begin) => {
@@ -1473,6 +2012,25 @@ impl Parser {
                 };
                 Ok(Statement::Transaction(TransactionStatement {
                     command: TransactionCommand::Savepoint { name },
+                }))
+            }
+            Some(Token::Release) => {
+                self.next();
+                // Expect SAVEPOINT after RELEASE
+                if !matches!(self.current(), Some(Token::Savepoint)) {
+                    return Err("Expected SAVEPOINT after RELEASE".to_string());
+                }
+                self.next(); // consume SAVEPOINT
+                let name = match self.current() {
+                    Some(Token::Identifier(n)) => {
+                        let name = n.clone();
+                        self.next();
+                        name
+                    }
+                    _ => return Err("Expected savepoint name".to_string()),
+                };
+                Ok(Statement::Transaction(TransactionStatement {
+                    command: TransactionCommand::ReleaseSavepoint { name },
                 }))
             }
             _ => Err("Invalid transaction statement".to_string()),
@@ -2448,6 +3006,8 @@ mod tests {
                 "name".to_string(),
                 Expression::Literal("new".to_string()),
             )]),
+            ignore: false,
+            replace: false,
         };
         let cloned = insert.clone();
         assert_eq!(insert.table, cloned.table);
@@ -2541,8 +3101,117 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_multiple_foreign_keys() {
+        // Test that multiple FK columns can be parsed correctly
+        let result = parse(
+            "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id), product_id INTEGER REFERENCES products(id))",
+        );
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateTable(ct) => {
+                assert_eq!(ct.columns.len(), 3, "Should parse all 3 columns");
+                // First column: id
+                assert_eq!(ct.columns[0].name, "id");
+                assert!(ct.columns[0].references.is_none());
+                // Second column: user_id with FK to users
+                assert_eq!(ct.columns[1].name, "user_id");
+                assert!(ct.columns[1].references.is_some());
+                let fk1 = ct.columns[1].references.as_ref().unwrap();
+                assert_eq!(fk1.table, "users");
+                assert_eq!(fk1.column, "id");
+                // Third column: product_id with FK to products
+                assert_eq!(ct.columns[2].name, "product_id");
+                assert!(ct.columns[2].references.is_some());
+                let fk2 = ct.columns[2].references.as_ref().unwrap();
+                assert_eq!(fk2.table, "products");
+                assert_eq!(fk2.column, "id");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_column_auto_increment_synonyms() {
         let result = parse("CREATE TABLE t1 (id INTEGER AUTOINCREMENT)");
         assert!(result.is_ok(), "Error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_show_status() {
+        let result = parse("SHOW STATUS");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::ShowStatus => {}
+            _ => panic!("Expected SHOW STATUS statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_processlist() {
+        let result = parse("SHOW PROCESSLIST");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::ShowProcesslist => {}
+            _ => panic!("Expected SHOW PROCESSLIST statement"),
+        }
+    }
+}
+
+// ============================================================================
+// MySQL Compatibility Tests (Issue #897)
+// ============================================================================
+
+#[test]
+fn test_parse_insert_ignore() {
+    let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice')");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert!(!i.replace, "Should not have replace flag set");
+            assert_eq!(i.table, "users");
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_parse_replace_into() {
+    let result = parse("REPLACE INTO users (id, name) VALUES (1, 'Alice')");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.replace, "Should have replace flag set");
+            assert!(!i.ignore, "Should not have ignore flag set");
+            assert_eq!(i.table, "users");
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_parse_insert_ignore_on_duplicate() {
+    let result = parse("INSERT IGNORE INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name='Bob'");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert!(i.on_duplicate.is_some(), "Should have on_duplicate");
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_parse_insert_with_set_ignore() {
+    let result = parse("INSERT IGNORE INTO users SET id=1, name='Alice'");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Insert(i) => {
+            assert!(i.ignore, "Should have ignore flag set");
+            assert_eq!(i.table, "users");
+            assert_eq!(i.columns.len(), 2);
+        }
+        _ => panic!("Expected INSERT statement"),
     }
 }

@@ -35,6 +35,8 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         sqlrustgo_storage::engine::ColumnDefinition {
@@ -42,6 +44,8 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         sqlrustgo_storage::engine::ColumnDefinition {
@@ -49,6 +53,8 @@ mod tests {
                             data_type: "FLOAT".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         sqlrustgo_storage::engine::ColumnDefinition {
@@ -56,6 +62,8 @@ mod tests {
                             data_type: "TEXT".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                     ],
@@ -71,6 +79,8 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         sqlrustgo_storage::engine::ColumnDefinition {
@@ -78,6 +88,8 @@ mod tests {
                             data_type: "TEXT".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                         sqlrustgo_storage::engine::ColumnDefinition {
@@ -85,6 +97,8 @@ mod tests {
                             data_type: "TEXT".to_string(),
                             nullable: false,
                             is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
                             references: None,
                         },
                     ],
@@ -152,14 +166,18 @@ mod tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                     sqlrustgo_storage::engine::ColumnDefinition {
                         name: "value".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                 ],
             })
@@ -204,7 +222,7 @@ mod tests {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let wal_path = temp_dir.path().join("test.wal");
 
-        let mut manager = WalManager::new(wal_path.clone());
+        let manager = WalManager::new(wal_path.clone());
 
         // Write transactions
         for i in 1..=20 {
@@ -247,14 +265,18 @@ mod tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                     sqlrustgo_storage::engine::ColumnDefinition {
                         name: "value".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                 ],
             })
@@ -304,21 +326,27 @@ mod tests {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                     sqlrustgo_storage::engine::ColumnDefinition {
                         name: "account".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                     sqlrustgo_storage::engine::ColumnDefinition {
                         name: "amount".to_string(),
                         data_type: "FLOAT".to_string(),
                         nullable: false,
                         is_unique: false,
-                            references: None,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
                     },
                 ],
             })
@@ -359,7 +387,7 @@ mod tests {
         });
 
         writer.join().unwrap();
-        let final_count = reader.join().unwrap();
+        let _final_count = reader.join().unwrap();
 
         let elapsed = start.elapsed();
 
