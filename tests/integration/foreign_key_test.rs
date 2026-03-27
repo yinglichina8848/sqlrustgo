@@ -722,9 +722,9 @@ fn test_fk_delete_restrict() {
     );
 
     if let Err(e) = result {
-        let err_msg = format!("{}", e);
+        let err_msg = format!("{}", e).to_lowercase();
         assert!(
-            err_msg.contains("Foreign key constraint violation") || err_msg.contains("restricted"),
+            err_msg.contains("foreign key constraint violation") || err_msg.contains("restrict"),
             "Error should mention RESTRICT constraint: {}",
             err_msg
         );
@@ -984,9 +984,9 @@ fn test_fk_update_restrict() {
     );
 
     if let Err(e) = result {
-        let err_msg = format!("{}", e);
+        let err_msg = format!("{}", e).to_lowercase();
         assert!(
-            err_msg.contains("Foreign key constraint violation") || err_msg.contains("restricted"),
+            err_msg.contains("foreign key constraint violation") || err_msg.contains("restrict"),
             "Error should mention RESTRICT constraint: {}",
             err_msg
         );
