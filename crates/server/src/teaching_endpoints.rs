@@ -6,10 +6,10 @@
 //! and learning query optimization.
 
 use crate::metrics_endpoint::MetricsRegistry;
+use serde::{Deserialize, Serialize};
+use sqlrustgo_executor::{OperatorProfile, QueryTrace, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
 use sqlrustgo_parser::{parse, Expression, Statement, TransactionCommand};
 use sqlrustgo_storage::engine::{StorageEngine, Value};
-use sqlrustgo_executor::{OperatorProfile, QueryTrace, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
-use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
 /// Teaching Enhanced endpoints configuration
@@ -236,132 +236,140 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
                                         error: Some(e.to_string()),
                                     },
                                 };
-                                let json = serde_json::to_string(&response).unwrap_or_else(|_| r#"{"error":"Serialization error"}"#.to_string());
+                                let json = serde_json::to_string(&response).unwrap_or_else(|_| {
+                                    r#"{"error":"Serialization error"}"#.to_string()
+                                });
                                 ("HTTP/1.1 200 OK", "application/json", json)
                             } else {
                                 let json = serde_json::json!({
                                     "error": "Storage not configured. Use with_storage() to enable SQL execution"
                                 }).to_string();
-                                ("HTTP/1.1 500 Internal Server Error", "application/json", json)
+                                (
+                                    "HTTP/1.1 500 Internal Server Error",
+                                    "application/json",
+                                    json,
+                                )
                             }
                         }
                         Err(e) => {
                             let json = serde_json::json!({
                                 "error": format!("Invalid request: {}", e)
-                            }).to_string();
+                            })
+                            .to_string();
                             ("HTTP/1.1 400 Bad Request", "application/json", json)
                         }
                     }
                 } else {
                     let json = serde_json::json!({
                         "error": "Missing request body"
-                    }).to_string();
+                    })
+                    .to_string();
                     ("HTTP/1.1 400 Bad Request", "application/json", json)
                 }
             } else {
                 // Handle GET endpoints
                 match path {
-                // Standard endpoints
-                "/health/live" => {
-                    let body = serde_json::json!({
-                        "status": "healthy",
-                        "feature": "teaching_enhanced"
-                    })
-                    .to_string();
-                    ("HTTP/1.1 200 OK", "application/json", body)
-                }
-                "/health/ready" => {
-                    let body = serde_json::json!({
-                        "status": "ready",
-                        "version": version,
-                        "edition": "SQLRustGo 2.0 - Teaching Enhanced"
-                    })
-                    .to_string();
-                    ("HTTP/1.1 200 OK", "application/json", body)
-                }
-                "/metrics" => {
-                    let registry = metrics_registry.read().unwrap();
-                    let prometheus_output = registry.to_prometheus_format();
-                    (
-                        "HTTP/1.1 200 OK",
-                        "text/plain; version=0.0.4",
-                        prometheus_output,
-                    )
-                }
+                    // Standard endpoints
+                    "/health/live" => {
+                        let body = serde_json::json!({
+                            "status": "healthy",
+                            "feature": "teaching_enhanced"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 200 OK", "application/json", body)
+                    }
+                    "/health/ready" => {
+                        let body = serde_json::json!({
+                            "status": "ready",
+                            "version": version,
+                            "edition": "SQLRustGo 2.0 - Teaching Enhanced"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 200 OK", "application/json", body)
+                    }
+                    "/metrics" => {
+                        let registry = metrics_registry.read().unwrap();
+                        let prometheus_output = registry.to_prometheus_format();
+                        (
+                            "HTTP/1.1 200 OK",
+                            "text/plain; version=0.0.4",
+                            prometheus_output,
+                        )
+                    }
 
-                // Teaching enhanced endpoints
-                "/teaching/pipeline" if teaching.enable_pipeline_viz => {
-                    let html = generate_pipeline_html();
-                    ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                }
+                    // Teaching enhanced endpoints
+                    "/teaching/pipeline" if teaching.enable_pipeline_viz => {
+                        let html = generate_pipeline_html();
+                        ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                    }
 
-                "/teaching/pipeline/json" if teaching.enable_pipeline_viz => {
-                    let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
-                    let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
-                    ("HTTP/1.1 200 OK", "application/json", json)
-                }
+                    "/teaching/pipeline/json" if teaching.enable_pipeline_viz => {
+                        let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
+                        let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
+                        ("HTTP/1.1 200 OK", "application/json", json)
+                    }
 
-                "/teaching/pipeline/latest" if teaching.enable_pipeline_viz => {
-                    let trace = GLOBAL_TRACE_COLLECTOR.latest();
-                    match trace {
-                        Some(t) => {
-                            let html = generate_pipeline_detail_html(&t);
-                            ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                        }
-                        None => {
-                            let body = serde_json::json!({
-                                "message": "No traces available",
-                                "hint": "Execute a query to see pipeline visualization"
-                            })
-                            .to_string();
-                            ("HTTP/1.1 200 OK", "application/json", body)
+                    "/teaching/pipeline/latest" if teaching.enable_pipeline_viz => {
+                        let trace = GLOBAL_TRACE_COLLECTOR.latest();
+                        match trace {
+                            Some(t) => {
+                                let html = generate_pipeline_detail_html(&t);
+                                ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                            }
+                            None => {
+                                let body = serde_json::json!({
+                                    "message": "No traces available",
+                                    "hint": "Execute a query to see pipeline visualization"
+                                })
+                                .to_string();
+                                ("HTTP/1.1 200 OK", "application/json", body)
+                            }
                         }
                     }
-                }
 
-                "/teaching/trace" if teaching.enable_trace => {
-                    let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
-                    let html = generate_trace_html(&traces);
-                    ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                }
+                    "/teaching/trace" if teaching.enable_trace => {
+                        let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
+                        let html = generate_trace_html(&traces);
+                        ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                    }
 
-                "/teaching/trace/json" if teaching.enable_trace => {
-                    let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
-                    let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
-                    ("HTTP/1.1 200 OK", "application/json", json)
-                }
+                    "/teaching/trace/json" if teaching.enable_trace => {
+                        let traces = GLOBAL_TRACE_COLLECTOR.get_traces();
+                        let json = serde_json::to_string_pretty(&traces).unwrap_or_default();
+                        ("HTTP/1.1 200 OK", "application/json", json)
+                    }
 
-                "/teaching/profile" if teaching.enable_profiling => {
-                    let report = GLOBAL_PROFILER.generate_report();
-                    let html = generate_profile_html(&report);
-                    ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                }
+                    "/teaching/profile" if teaching.enable_profiling => {
+                        let report = GLOBAL_PROFILER.generate_report();
+                        let html = generate_profile_html(&report);
+                        ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                    }
 
-                "/teaching/profile/json" if teaching.enable_profiling => {
-                    let json = GLOBAL_PROFILER.to_json();
-                    ("HTTP/1.1 200 OK", "application/json", json)
-                }
+                    "/teaching/profile/json" if teaching.enable_profiling => {
+                        let json = GLOBAL_PROFILER.to_json();
+                        ("HTTP/1.1 200 OK", "application/json", json)
+                    }
 
-                "/teaching/profile/operators" if teaching.enable_profiling => {
-                    let profiles = GLOBAL_PROFILER.get_sorted_profiles();
-                    let html = generate_operators_html(&profiles);
-                    ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                }
+                    "/teaching/profile/operators" if teaching.enable_profiling => {
+                        let profiles = GLOBAL_PROFILER.get_sorted_profiles();
+                        let html = generate_operators_html(&profiles);
+                        ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                    }
 
-                "/teaching" => {
-                    let html = generate_teaching_index_html();
-                    ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
-                }
+                    "/teaching" => {
+                        let html = generate_teaching_index_html();
+                        ("HTTP/1.1 200 OK", "text/html; charset=utf-8", html)
+                    }
 
-                _ => (
-                    "HTTP/1.1 404 Not Found",
-                    "application/json",
-                    serde_json::json!({
-                        "error": "Not Found",
-                        "message": format!("Path '{}' not found", path)
-                    })
-                    .to_string(),
-                ),
+                    _ => (
+                        "HTTP/1.1 404 Not Found",
+                        "application/json",
+                        serde_json::json!({
+                            "error": "Not Found",
+                            "message": format!("Path '{}' not found", path)
+                        })
+                        .to_string(),
+                    ),
                 } // End of GET handler match
             } // End of else (POST /sql check)
         } else {
@@ -401,7 +409,9 @@ fn execute_sql(
     // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
 
-    let mut storage = storage.write().map_err(|e| format!("Storage lock error: {}", e))?;
+    let mut storage = storage
+        .write()
+        .map_err(|e| format!("Storage lock error: {}", e))?;
 
     match statement {
         Statement::Insert(insert) => {
@@ -438,7 +448,8 @@ fn execute_sql(
                                         .iter()
                                         .position(|c| c.name.eq_ignore_ascii_case(col_name))
                                     {
-                                        new_row[target_idx] = evaluate_literal_expr(&row[value_idx]);
+                                        new_row[target_idx] =
+                                            evaluate_literal_expr(&row[value_idx]);
                                     }
                                 }
                             }
@@ -448,7 +459,9 @@ fn execute_sql(
                 })
                 .collect();
 
-            storage.insert(table_name, records).map_err(|e| e.to_string())?;
+            storage
+                .insert(table_name, records)
+                .map_err(|e| e.to_string())?;
             Ok(SqlExecResult {
                 columns: vec![],
                 rows: vec![],
@@ -476,7 +489,9 @@ fn execute_sql(
                 columns,
             };
 
-            storage.create_table(&table_info).map_err(|e| e.to_string())?;
+            storage
+                .create_table(&table_info)
+                .map_err(|e| e.to_string())?;
             Ok(SqlExecResult {
                 columns: vec![],
                 rows: vec![],
@@ -542,20 +557,21 @@ fn execute_sql(
 
             let all_rows = storage.scan(&delete.table).unwrap_or_default();
 
-            let rows_to_delete: Vec<&Vec<sqlrustgo_storage::engine::Value>> = if delete.where_clause.is_none() {
-                all_rows.iter().collect()
-            } else {
-                all_rows
-                    .iter()
-                    .filter(|row| {
-                        if let Some(ref where_clause) = delete.where_clause {
-                            evaluate_where_clause(where_clause, row, &columns)
-                        } else {
-                            false
-                        }
-                    })
-                    .collect()
-            };
+            let rows_to_delete: Vec<&Vec<sqlrustgo_storage::engine::Value>> =
+                if delete.where_clause.is_none() {
+                    all_rows.iter().collect()
+                } else {
+                    all_rows
+                        .iter()
+                        .filter(|row| {
+                            if let Some(ref where_clause) = delete.where_clause {
+                                evaluate_where_clause(where_clause, row, &columns)
+                            } else {
+                                false
+                            }
+                        })
+                        .collect()
+                };
 
             let deleted_count = rows_to_delete.len();
 
@@ -573,7 +589,9 @@ fn execute_sql(
 
                 let _ = storage.delete(&delete.table, &[]);
                 if !remaining_rows.is_empty() {
-                    storage.insert(&delete.table, remaining_rows).map_err(|e| e.to_string())?;
+                    storage
+                        .insert(&delete.table, remaining_rows)
+                        .map_err(|e| e.to_string())?;
                 }
             }
 
@@ -628,7 +646,9 @@ fn execute_sql(
                     final_rows[idx] = new_row;
                 }
                 let _ = storage.delete(&update.table, &[]);
-                storage.insert(&update.table, final_rows).map_err(|e| e.to_string())?;
+                storage
+                    .insert(&update.table, final_rows)
+                    .map_err(|e| e.to_string())?;
             }
 
             Ok(SqlExecResult {
@@ -638,30 +658,28 @@ fn execute_sql(
             })
         }
 
-        Statement::Transaction(tx) => {
-            match tx.command {
-                TransactionCommand::Begin => Ok(SqlExecResult {
-                    columns: vec![],
-                    rows: vec![],
-                    affected_rows: 0,
-                }),
-                TransactionCommand::Commit => Ok(SqlExecResult {
-                    columns: vec![],
-                    rows: vec![],
-                    affected_rows: 0,
-                }),
-                TransactionCommand::Rollback => Ok(SqlExecResult {
-                    columns: vec![],
-                    rows: vec![],
-                    affected_rows: 0,
-                }),
-                _ => Ok(SqlExecResult {
-                    columns: vec![],
-                    rows: vec![],
-                    affected_rows: 0,
-                }),
-            }
-        }
+        Statement::Transaction(tx) => match tx.command {
+            TransactionCommand::Begin => Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            }),
+            TransactionCommand::Commit => Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            }),
+            TransactionCommand::Rollback => Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            }),
+            _ => Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            }),
+        },
 
         Statement::DropTable(drop) => {
             if !storage.has_table(&drop.name) {
@@ -724,7 +742,9 @@ fn evaluate_expr(
                 .iter()
                 .position(|c| c.name.eq_ignore_ascii_case(name))
             {
-                row.get(idx).cloned().unwrap_or(sqlrustgo_storage::engine::Value::Null)
+                row.get(idx)
+                    .cloned()
+                    .unwrap_or(sqlrustgo_storage::engine::Value::Null)
             } else {
                 sqlrustgo_storage::engine::Value::Null
             }
@@ -759,29 +779,71 @@ fn compare_values(
         "=" | "==" | "EQ" => left == right,
         "!=" | "<>" | "NE" => left != right,
         ">" | "GT" => match (left, right) {
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Integer(r)) => l > r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Float(r)) => l > r,
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Float(r)) => (*l as f64) > *r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Integer(r)) => *l > (*r as f64),
-            (sqlrustgo_storage::engine::Value::Text(l), sqlrustgo_storage::engine::Value::Text(r)) => l > r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => l > r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => l > r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => (*l as f64) > *r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => *l > (*r as f64),
+            (
+                sqlrustgo_storage::engine::Value::Text(l),
+                sqlrustgo_storage::engine::Value::Text(r),
+            ) => l > r,
             _ => false,
         },
         "<" | "LT" => match (left, right) {
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Integer(r)) => l < r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Float(r)) => l < r,
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Float(r)) => (*l as f64) < *r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Integer(r)) => *l < (*r as f64),
-            (sqlrustgo_storage::engine::Value::Text(l), sqlrustgo_storage::engine::Value::Text(r)) => l < r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => l < r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => l < r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => (*l as f64) < *r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => *l < (*r as f64),
+            (
+                sqlrustgo_storage::engine::Value::Text(l),
+                sqlrustgo_storage::engine::Value::Text(r),
+            ) => l < r,
             _ => false,
         },
         ">=" | "GE" => match (left, right) {
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Integer(r)) => l >= r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Float(r)) => l >= r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => l >= r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => l >= r,
             _ => false,
         },
         "<=" | "LE" => match (left, right) {
-            (sqlrustgo_storage::engine::Value::Integer(l), sqlrustgo_storage::engine::Value::Integer(r)) => l <= r,
-            (sqlrustgo_storage::engine::Value::Float(l), sqlrustgo_storage::engine::Value::Float(r)) => l <= r,
+            (
+                sqlrustgo_storage::engine::Value::Integer(l),
+                sqlrustgo_storage::engine::Value::Integer(r),
+            ) => l <= r,
+            (
+                sqlrustgo_storage::engine::Value::Float(l),
+                sqlrustgo_storage::engine::Value::Float(r),
+            ) => l <= r,
             _ => false,
         },
         _ => false,
@@ -1352,12 +1414,42 @@ mod tests {
         assert!(endpoints.enable_pipeline_viz);
         assert!(endpoints.enable_profiling);
         assert!(endpoints.enable_trace);
+        assert_eq!(endpoints.max_traces, 1000);
+        assert_eq!(endpoints.max_profiles, 100);
+    }
+
+    #[test]
+    fn test_teaching_endpoints_custom() {
+        let endpoints = TeachingEndpoints {
+            enable_pipeline_viz: false,
+            enable_profiling: true,
+            enable_trace: true,
+            max_traces: 100,
+            max_profiles: 50,
+        };
+        assert!(!endpoints.enable_pipeline_viz);
+        assert!(endpoints.enable_profiling);
+        assert!(endpoints.enable_trace);
+        assert_eq!(endpoints.max_traces, 100);
+        assert_eq!(endpoints.max_profiles, 50);
+    }
+
+    #[test]
+    fn test_teaching_endpoints_clone() {
+        let endpoints = TeachingEndpoints::default();
+        let cloned = endpoints.clone();
+        assert_eq!(cloned.enable_pipeline_viz, endpoints.enable_pipeline_viz);
+        assert_eq!(cloned.enable_profiling, endpoints.enable_profiling);
+        assert_eq!(cloned.enable_trace, endpoints.enable_trace);
+        assert_eq!(cloned.max_traces, endpoints.max_traces);
+        assert_eq!(cloned.max_profiles, endpoints.max_profiles);
     }
 
     #[test]
     fn test_teaching_http_server_creation() {
         let server = TeachingHttpServer::new("127.0.0.1", 8080);
         assert_eq!(server.port, 8080);
+        assert_eq!(server.host, "127.0.0.1");
     }
 
     #[test]
@@ -1374,9 +1466,42 @@ mod tests {
     }
 
     #[test]
+    fn test_teaching_http_server_with_version() {
+        let server = TeachingHttpServer::new("127.0.0.1", 8080).with_version("1.5.0");
+        assert_eq!(server.get_version(), "1.5.0");
+    }
+
+    #[test]
+    fn test_teaching_http_server_get_port() {
+        let server = TeachingHttpServer::new("127.0.0.1", 8080);
+        assert_eq!(server.get_port(), 8080);
+    }
+
+    #[test]
+    fn test_teaching_http_server_bind_to_available_port() {
+        let server = TeachingHttpServer::new("127.0.0.1", 0);
+        let port = server.bind_to_available_port();
+        assert!(port > 0, "Port should be > 0 when binding to port 0");
+    }
+
+    #[test]
+    fn test_teaching_http_server_bind_preserves_configured_port() {
+        let server = TeachingHttpServer::new("127.0.0.1", 8080);
+        let port = server.bind_to_available_port();
+        assert_eq!(port, 8080, "Non-zero port should not change");
+    }
+
+    #[test]
     fn test_truncate_string() {
         assert_eq!(truncate_string("hello", 10), "hello");
         assert_eq!(truncate_string("hello world", 8), "hello...");
+        assert_eq!(truncate_string("short", 10), "short");
+        assert_eq!(truncate_string("", 5), "");
+    }
+
+    #[test]
+    fn test_truncate_string_exact_length() {
+        assert_eq!(truncate_string("hello", 5), "hello");
     }
 
     #[test]
@@ -1384,5 +1509,31 @@ mod tests {
         assert!(format_duration(500).contains("ns"));
         assert!(format_duration(50_000).contains("µs"));
         assert!(format_duration(5_000_000).contains("ms"));
+    }
+
+    #[test]
+    fn test_format_duration_seconds() {
+        let result = format_duration(5_000_000_000);
+        assert!(
+            result.contains("s"),
+            "Should contain 's' for seconds: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_teaching_http_server_builder_pattern() {
+        let server = TeachingHttpServer::new("0.0.0.0", 9090)
+            .with_version("2.0.0")
+            .with_teaching_endpoints(TeachingEndpoints {
+                enable_pipeline_viz: true,
+                enable_profiling: false,
+                enable_trace: true,
+                max_traces: 500,
+                max_profiles: 200,
+            });
+
+        assert_eq!(server.get_version(), "2.0.0");
+        assert_eq!(server.get_port(), 9090);
     }
 }
