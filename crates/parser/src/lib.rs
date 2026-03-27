@@ -12,6 +12,8 @@ pub use token::Token;
 pub use parser::parse;
 pub use parser::CreateViewStatement;
 pub use parser::Expression;
+pub use parser::ForeignKeyAction;
+pub use parser::ForeignKeyRef;
 pub use parser::GrantStatement;
 pub use parser::Privilege;
 pub use parser::RevokeStatement;

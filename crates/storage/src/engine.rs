@@ -449,11 +449,15 @@ impl StorageEngine for MemoryStorage {
 
     fn delete(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
         // If filters is empty, delete all records (original behavior)
-        // If filters has values, interpret as: filter[0] is the column index, filter[1] is the value to match
+        // If filters has 1 value, treat it as the value to match on column 0 (backward compatible)
+        // If filters has 2 values, interpret as: filter[0] is the column index, filter[1] is the value to match
 
         // First, collect information needed for FK constraint checking
         let (col_idx, match_value, needs_fk_check) = if filters.is_empty() {
             (0, &Value::Null, false)
+        } else if filters.len() == 1 {
+            // Single value: match on column 0 (backward compatible)
+            (0, &filters[0], true)
         } else if filters.len() >= 2 {
             let col_idx = match &filters[0] {
                 Value::Integer(i) => *i as usize,
@@ -498,7 +502,12 @@ impl StorageEngine for MemoryStorage {
             let mut processed_values: Vec<Value> = Vec::new(); // Track already processed to avoid infinite loops
 
             // First pass: check RESTRICT on the original values
+            // Skip self-referencing tables - their CASCADE will be processed separately
             for child_table in &referenced_by {
+                // Skip self-referencing tables - CASCADE will handle them
+                if child_table == table {
+                    continue;
+                }
                 let referencing_cols = self.get_referencing_columns(child_table, table);
                 for (child_col_idx, fk) in referencing_cols {
                     match fk.on_delete {
