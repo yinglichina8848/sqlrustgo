@@ -635,7 +635,7 @@ impl ExecutionEngine {
                     })
                     .unwrap_or_default();
 
-                // Pre-calculate auto_increment values for each row
+                // Batch get auto_increment values for all rows
                 let mut auto_increment_values: Vec<Vec<(usize, i64)>> = Vec::new();
                 for _ in 0..insert.values.len() {
                     let mut row_auto_inc: Vec<(usize, i64)> = Vec::new();
@@ -646,6 +646,7 @@ impl ExecutionEngine {
                     auto_increment_values.push(row_auto_inc);
                 }
 
+                // Build records
                 let records: Vec<Vec<Value>> = insert
                     .values
                     .iter()
