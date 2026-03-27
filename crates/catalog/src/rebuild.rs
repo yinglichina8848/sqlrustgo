@@ -130,21 +130,27 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: true,
                     references: None,
+                    auto_increment: false,
                 },
                 StorageColumn {
                     name: "email".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 },
                 StorageColumn {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
                     references: None,
+                    auto_increment: false,
                 },
             ],
         };
@@ -156,7 +162,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: true,
+                    is_primary_key: true,
                     references: None,
+                    auto_increment: false,
                 },
                 StorageColumn {
                     name: "user_id".to_string(),
@@ -224,7 +232,9 @@ mod tests {
                 data_type: "UNKNOWN_TYPE".to_string(),
                 nullable: true,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -282,7 +292,9 @@ mod tests {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: true,
+                    is_primary_key: true,
                     references: None,
+                    auto_increment: false,
                 },
                 StorageColumn {
                     name: "regular_col".to_string(),
