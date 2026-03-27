@@ -140,9 +140,8 @@ fn handle_foreign_key_delete(
                             }
                             let child_rows = storage.scan(&table_name)?;
                             if let Some(pk_val) = parent_key_values.first() {
-                                let (to_delete, to_keep): (Vec<Vec<Value>>, Vec<Vec<Value>>) = child_rows
-                                    .into_iter()
-                                    .partition(|r| r[col_idx] == *pk_val);
+                                let (to_delete, to_keep): (Vec<Vec<Value>>, Vec<Vec<Value>>) =
+                                    child_rows.into_iter().partition(|r| r[col_idx] == *pk_val);
 
                                 if !to_delete.is_empty() {
                                     let _ = storage.delete(&table_name, &[]);
@@ -351,10 +350,43 @@ fn evaluate_expr(
                 Value::Null
             }
         }
-        sqlrustgo_parser::Expression::BinaryOp(_, _, _) => {
-            // For binary ops, we'd need to evaluate recursively
-            // This shouldn't happen in a simple where clause evaluation
-            Value::Null
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expr(left, row, columns);
+            let right_val = evaluate_expr(right, row, columns);
+
+            match op.as_str() {
+                "+" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 + r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l + *r as f64),
+                    _ => Value::Null,
+                },
+                "-" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 - r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l - *r as f64),
+                    _ => Value::Null,
+                },
+                "*" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 * r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Float(l * *r as f64),
+                    _ => Value::Null,
+                },
+                "/" => match (&left_val, &right_val) {
+                    (Value::Integer(l), Value::Integer(r)) if *r != 0 => Value::Integer(l / r),
+                    (Value::Float(l), Value::Float(r)) if *r != 0.0 => Value::Float(l / r),
+                    (Value::Integer(l), Value::Float(r)) if *r != 0.0 => {
+                        Value::Float(*l as f64 / r)
+                    }
+                    (Value::Float(l), Value::Integer(r)) if *r != 0 => Value::Float(l / *r as f64),
+                    _ => Value::Null,
+                },
+                _ => Value::Null,
+            }
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
@@ -871,12 +903,17 @@ impl ExecutionEngine {
 
                         for new_row in &records {
                             // Find and remove existing row with matching PK
-                            let conflict_idx = final_rows.iter().enumerate().find(|(_, existing_row)| {
-                                key_columns.iter().all(|&key_col| {
-                                    key_col < new_row.len() && key_col < existing_row.len() &&
-                                    new_row[key_col] == existing_row[key_col]
+                            let conflict_idx = final_rows
+                                .iter()
+                                .enumerate()
+                                .find(|(_, existing_row)| {
+                                    key_columns.iter().all(|&key_col| {
+                                        key_col < new_row.len()
+                                            && key_col < existing_row.len()
+                                            && new_row[key_col] == existing_row[key_col]
+                                    })
                                 })
-                            }).map(|(idx, _)| idx);
+                                .map(|(idx, _)| idx);
 
                             if let Some(idx) = conflict_idx {
                                 final_rows.remove(idx);
@@ -916,8 +953,9 @@ impl ExecutionEngine {
                             // Check if there's an existing row with matching PK
                             let conflict_exists = final_rows.iter().any(|existing_row| {
                                 key_columns.iter().all(|&key_col| {
-                                    key_col < new_row.len() && key_col < existing_row.len() &&
-                                    new_row[key_col] == existing_row[key_col]
+                                    key_col < new_row.len()
+                                        && key_col < existing_row.len()
+                                        && new_row[key_col] == existing_row[key_col]
                                 })
                             });
 
@@ -955,14 +993,26 @@ impl ExecutionEngine {
                                 referenced_table: fk.table.clone(),
                                 referenced_column: fk.column.clone(),
                                 on_delete: fk.on_delete.as_ref().map(|a| match a {
-                                    sqlrustgo_parser::parser::ForeignKeyAction::Cascade => sqlrustgo_storage::ForeignKeyAction::Cascade,
-                                    sqlrustgo_parser::parser::ForeignKeyAction::SetNull => sqlrustgo_storage::ForeignKeyAction::SetNull,
-                                    sqlrustgo_parser::parser::ForeignKeyAction::Restrict => sqlrustgo_storage::ForeignKeyAction::Restrict,
+                                    sqlrustgo_parser::parser::ForeignKeyAction::Cascade => {
+                                        sqlrustgo_storage::ForeignKeyAction::Cascade
+                                    }
+                                    sqlrustgo_parser::parser::ForeignKeyAction::SetNull => {
+                                        sqlrustgo_storage::ForeignKeyAction::SetNull
+                                    }
+                                    sqlrustgo_parser::parser::ForeignKeyAction::Restrict => {
+                                        sqlrustgo_storage::ForeignKeyAction::Restrict
+                                    }
                                 }),
                                 on_update: fk.on_update.as_ref().map(|a| match a {
-                                    sqlrustgo_parser::parser::ForeignKeyAction::Cascade => sqlrustgo_storage::ForeignKeyAction::Cascade,
-                                    sqlrustgo_parser::parser::ForeignKeyAction::SetNull => sqlrustgo_storage::ForeignKeyAction::SetNull,
-                                    sqlrustgo_parser::parser::ForeignKeyAction::Restrict => sqlrustgo_storage::ForeignKeyAction::Restrict,
+                                    sqlrustgo_parser::parser::ForeignKeyAction::Cascade => {
+                                        sqlrustgo_storage::ForeignKeyAction::Cascade
+                                    }
+                                    sqlrustgo_parser::parser::ForeignKeyAction::SetNull => {
+                                        sqlrustgo_storage::ForeignKeyAction::SetNull
+                                    }
+                                    sqlrustgo_parser::parser::ForeignKeyAction::Restrict => {
+                                        sqlrustgo_storage::ForeignKeyAction::Restrict
+                                    }
                                 }),
                             }
                         });
@@ -1078,7 +1128,8 @@ impl ExecutionEngine {
                         .map(|info| {
                             info.columns.iter().any(|col| {
                                 col.references.as_ref().map_or(false, |fk| {
-                                    fk.referenced_table == delete.table && fk.on_delete == Some(ForeignKeyAction::Cascade)
+                                    fk.referenced_table == delete.table
+                                        && fk.on_delete == Some(ForeignKeyAction::Cascade)
                                 })
                             })
                         })
@@ -1109,7 +1160,10 @@ impl ExecutionEngine {
                             for row in &rows_to_delete {
                                 let key_value = row[pk_col_idx].clone();
                                 // Filter format: [column_index, value]
-                                storage.delete(&delete.table, &[Value::Integer(pk_col_idx as i64), key_value])?;
+                                storage.delete(
+                                    &delete.table,
+                                    &[Value::Integer(pk_col_idx as i64), key_value],
+                                )?;
                             }
                         }
                     } else {
@@ -1197,7 +1251,9 @@ impl ExecutionEngine {
                 if updated_count > 0 {
                     if let Some(pk_col_idx) = primary_key_col {
                         for (old_row, new_row) in &rows_to_update {
-                            if let (Some(old_val), Some(new_val)) = (old_row.get(pk_col_idx), new_row.get(pk_col_idx)) {
+                            if let (Some(old_val), Some(new_val)) =
+                                (old_row.get(pk_col_idx), new_row.get(pk_col_idx))
+                            {
                                 if old_val != new_val {
                                     // Check if any child table has RESTRICT that would block this update
                                     let all_tables = storage.list_tables();
@@ -1211,11 +1267,18 @@ impl ExecutionEngine {
                                             Err(_) => continue,
                                         };
 
-                                        for (col_idx, col) in table_info.columns.iter().enumerate() {
+                                        for (col_idx, col) in table_info.columns.iter().enumerate()
+                                        {
                                             if let Some(ref fk) = col.references {
-                                                if fk.referenced_table == update.table && fk.referenced_column == columns[pk_col_idx].name {
-                                                    if fk.on_update == Some(ForeignKeyAction::Restrict) {
-                                                        let child_rows = storage.scan(table_name)?;
+                                                if fk.referenced_table == update.table
+                                                    && fk.referenced_column
+                                                        == columns[pk_col_idx].name
+                                                {
+                                                    if fk.on_update
+                                                        == Some(ForeignKeyAction::Restrict)
+                                                    {
+                                                        let child_rows =
+                                                            storage.scan(table_name)?;
                                                         for child_row in &child_rows {
                                                             if child_row[col_idx] == *old_val {
                                                                 return Err(SqlError::ExecutionError(format!(
@@ -1252,7 +1315,9 @@ impl ExecutionEngine {
                     // child records reference the NEW value, not the old one
                     if let Some(pk_col_idx) = primary_key_col {
                         for (old_row, new_row) in &rows_to_update {
-                            if let (Some(old_val), Some(new_val)) = (old_row.get(pk_col_idx), new_row.get(pk_col_idx)) {
+                            if let (Some(old_val), Some(new_val)) =
+                                (old_row.get(pk_col_idx), new_row.get(pk_col_idx))
+                            {
                                 if old_val != new_val {
                                     handle_foreign_key_update(
                                         &mut *storage,
