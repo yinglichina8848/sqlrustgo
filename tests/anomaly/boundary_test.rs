@@ -20,6 +20,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -42,6 +44,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: true,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -69,6 +73,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -98,6 +104,8 @@ mod tests {
                 data_type: "VARCHAR".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -125,6 +133,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -151,6 +161,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -179,6 +191,8 @@ mod tests {
                 data_type: "FLOAT".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -207,6 +221,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             })
             .collect();
@@ -237,6 +253,8 @@ mod tests {
                 data_type: "VARCHAR".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -272,6 +290,8 @@ mod tests {
                 data_type: "VARCHAR".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };

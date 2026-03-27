@@ -65,6 +65,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -99,6 +101,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -135,6 +139,8 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
@@ -157,6 +163,8 @@ mod tests {
                 data_type: "INVALID_TYPE".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         };
