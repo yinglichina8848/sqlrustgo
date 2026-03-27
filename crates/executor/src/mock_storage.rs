@@ -20,6 +20,7 @@ use std::sync::{Arc, RwLock};
 pub struct MockStorage {
     tables: Arc<RwLock<HashMap<String, Vec<Vec<Value>>>>>,
     table_infos: Arc<RwLock<HashMap<String, TableInfo>>>,
+    auto_increment_counters: Arc<RwLock<HashMap<String, HashMap<usize, i64>>>>,
 }
 
 impl MockStorage {
@@ -28,6 +29,7 @@ impl MockStorage {
         Self {
             tables: Arc::new(RwLock::new(HashMap::new())),
             table_infos: Arc::new(RwLock::new(HashMap::new())),
+            auto_increment_counters: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -63,7 +65,9 @@ impl MockStorage {
                 data_type: format!("{:?}", data_type),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
                 references: None,
+                auto_increment: false,
             })
             .collect();
 
@@ -263,6 +267,33 @@ impl StorageEngine for MockStorage {
             column_stats,
         })
     }
+
+    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let mut counters = self
+            .auto_increment_counters
+            .write()
+            .map_err(|e| sqlrustgo_types::SqlError::ExecutionError(e.to_string()))?;
+        let table_counters = counters
+            .entry(table.to_string())
+            .or_insert_with(HashMap::new);
+        let next = table_counters.entry(column_index).or_insert(0).clone();
+        table_counters.insert(column_index, next + 1);
+        Ok(next + 1)
+    }
+
+    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let counters = self
+            .auto_increment_counters
+            .read()
+            .map_err(|e| sqlrustgo_types::SqlError::ExecutionError(e.to_string()))?;
+        let table_counters =
+            counters
+                .get(table)
+                .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound {
+                    table: table.to_string(),
+                })?;
+        Ok(*table_counters.get(&column_index).unwrap_or(&0))
+    }
 }
 
 #[cfg(test)]
@@ -327,7 +358,9 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
-                        references: None,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 }],
             })
             .unwrap();

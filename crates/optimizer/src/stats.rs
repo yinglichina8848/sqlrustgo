@@ -986,12 +986,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                references: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 is_unique: false,
+                references: None,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
@@ -1020,6 +1022,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            references: None,
         }];
         let storage = MockStorage::new().with_data("orders", records, columns);
 
@@ -1044,6 +1047,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            references: None,
         }];
         let storage = MockStorage::new().with_data("users", records, columns);
 
@@ -1073,6 +1077,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            references: None,
         }];
         let storage: Box<dyn StorageEngine> =
             Box::new(MockStorage::new().with_data("t", records, columns));

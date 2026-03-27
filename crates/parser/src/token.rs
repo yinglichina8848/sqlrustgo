@@ -72,6 +72,22 @@ pub enum Token {
     Limit,
     Offset,
 
+    // SHOW keywords (运维监控)
+    Show,
+    Status,
+    Processlist,
+
+    // Group By / Order By keywords
+    Group,
+    By,
+    Having,
+    Order,
+    Asc,
+    Desc,
+    Nulls,
+    First,
+    Last,
+
     // Aggregate Functions
     Length,
     Upper,
@@ -221,6 +237,16 @@ impl fmt::Display for Token {
             Token::All => write!(f, "ALL"),
             Token::Limit => write!(f, "LIMIT"),
             Token::Offset => write!(f, "OFFSET"),
+            // Group By / Order By keywords
+            Token::Group => write!(f, "GROUP"),
+            Token::By => write!(f, "BY"),
+            Token::Having => write!(f, "HAVING"),
+            Token::Order => write!(f, "ORDER"),
+            Token::Asc => write!(f, "ASC"),
+            Token::Desc => write!(f, "DESC"),
+            Token::Nulls => write!(f, "NULLS"),
+            Token::First => write!(f, "FIRST"),
+            Token::Last => write!(f, "LAST"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -276,6 +302,10 @@ impl fmt::Display for Token {
             Token::SingleQuote => write!(f, "'"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
+            // SHOW keywords
+            Token::Show => write!(f, "SHOW"),
+            Token::Status => write!(f, "STATUS"),
+            Token::Processlist => write!(f, "PROCESSLIST"),
         }
     }
 }
@@ -374,6 +404,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
+        "SHOW" => Some(Token::Show),
+        "STATUS" => Some(Token::Status),
+        "PROCESSLIST" => Some(Token::Processlist),
         _ => None,
     }
 }

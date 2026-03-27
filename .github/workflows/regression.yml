@@ -1,0 +1,413 @@
+name: Regression Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - incremental
+          - priority
+          - quick
+      priority:
+        description: 'Priority level (for priority mode)'
+        required: false
+        default: 'P0'
+        type: choice
+        options:
+          - P0
+          - P1
+          - P2
+          - P3
+          - P4
+  schedule:
+    - cron: '0 2 * * *'
+  pull_request:
+    branches:
+      - main
+      - develop
+      - release/*
+  push:
+    branches:
+      - main
+      - develop
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  determine-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test_count: ${{ steps.analyze.outputs.test_count }}
+      test_type: ${{ steps.analyze.outputs.test_type }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: analyze
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "test_type=${{ github.inputs.test_mode }}" >> $GITHUB_OUTPUT
+            echo "test_count=all" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "test_type=incremental" >> $GITHUB_OUTPUT
+            changed_files=$(git diff --name-only origin/${{ github.base_ref }} HEAD | grep -E '\.(rs|toml)$' | wc -l)
+            echo "test_count=$changed_files" >> $GITHUB_OUTPUT
+          else
+            echo "test_type=full" >> $GITHUB_OUTPUT
+            echo "test_count=all" >> $GITHUB_OUTPUT
+          fi
+
+  # ==================== Core Library Tests ====================
+  core-lib-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Core Lib Tests
+        run: cargo test --lib
+
+  parser-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Parser Tests
+        run: cargo test -p sqlrustgo-parser
+
+  planner-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Planner Tests
+        run: cargo test -p sqlrustgo-planner
+
+  executor-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Executor Tests
+        run: cargo test -p sqlrustgo-executor
+
+  storage-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Storage Tests
+        run: cargo test -p sqlrustgo-storage
+
+  optimizer-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Optimizer Tests
+        run: cargo test -p sqlrustgo-optimizer
+
+  # ==================== Integration Tests ====================
+  integration-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Integration Tests
+        run: |
+          cargo test --test page_test
+          cargo test --test executor_test
+          cargo test --test planner_test
+          cargo test --test optimizer_stats_test
+          cargo test --test server_integration_test
+          cargo test --test teaching_scenario_test
+          cargo test --test performance_test
+          cargo test --test mysql_tpch_test
+          cargo test --test binary_format_test
+
+  # ==================== Unit Tests ====================
+  unit-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Unit Tests
+        run: |
+          cargo test --test types_value_test
+          cargo test --test query_cache_config_test
+          cargo test --test server_health_test
+          cargo test --test bplus_tree_test
+          cargo test --test optimizer_cost_test
+          cargo test --test local_executor_test
+          cargo test --test query_cache_test
+          cargo test --test vectorization_test
+          cargo test --test file_storage_test
+          cargo test --test optimizer_rules_test
+          cargo test --test buffer_pool_test
+
+  # ==================== Anomaly Tests ====================
+  anomaly-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Anomaly Tests
+        run: |
+          cargo test --test mvcc_concurrency_test
+          cargo test --test crash_injection_test
+          cargo test --test catalog_consistency_test
+          cargo test --test long_run_stability_test
+          cargo test --test qps_benchmark_test
+          cargo test --test transaction_isolation_test
+          cargo test --test join_test
+          cargo test --test set_operations_test
+          cargo test --test view_test
+          cargo test --test transaction_timeout_test
+          cargo test --test datetime_type_test
+          cargo test --test boundary_test
+          cargo test --test error_handling_test
+          cargo test --test aggregate_type_test
+          cargo test --test null_handling_test
+
+  # ==================== Stress Tests ====================
+  stress-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Stress Tests
+        run: |
+          cargo test --test crash_recovery_test
+          cargo test --test stress_test
+          cargo test --test concurrency_stress_test
+          cargo test --test production_scenario_test
+
+  # ==================== SQL Fuzz Tests ====================
+  sql-fuzz:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add rustfmt
+
+      - name: Build SQLancer
+        run: cargo build --release -p sqlancer
+
+      - name: Run SQL Fuzz
+        run: |
+          timeout 600 cargo run --release -p sqlancer -- --duration 300 || true
+
+  # ==================== Additional Feature Tests ====================
+  feature-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run Feature Tests
+        run: |
+          cargo test --test foreign_key_test
+          cargo test --test outer_join_test
+
+  # ==================== TPC-H Tests ====================
+  tpch-tests:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Run TPC-H Tests
+        run: cargo test --test tpch_test
+
+  # ==================== Code Quality ====================
+  code-quality:
+    needs: determine-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy Check
+        run: cargo clippy --all-targets -- -D warnings
+
+  # ==================== Generate Report ====================
+  generate-report:
+    needs: [
+      core-lib-tests,
+      parser-tests,
+      planner-tests,
+      executor-tests,
+      storage-tests,
+      optimizer-tests,
+      integration-tests,
+      unit-tests,
+      anomaly-tests,
+      stress-tests,
+      sql-fuzz,
+      feature-tests,
+      tpch-tests,
+      code-quality
+    ]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup install stable
+          rustup default stable
+
+      - name: Generate Test Summary
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Core Lib Tests | ${{ needs.core-lib-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Parser Tests | ${{ needs.parser-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Planner Tests | ${{ needs.planner-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Executor Tests | ${{ needs.executor-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Storage Tests | ${{ needs.storage-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Optimizer Tests | ${{ needs.optimizer-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Anomaly Tests | ${{ needs.anomaly-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stress Tests | ${{ needs.stress-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Fuzz | ${{ needs.sql-fuzz.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Feature Tests | ${{ needs.feature-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TPC-H Tests | ${{ needs.tpch-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | ${{ needs.code-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if all passed
+          FAILURES=0
+          for job in core-lib-tests parser-tests planner-tests executor-tests storage-tests optimizer-tests integration-tests unit-tests anomaly-tests stress-tests feature-tests tpch-tests code-quality; do
+            if [ "${{ needs.$job.result }}" != "success" ]; then
+              FAILURES=$((FAILURES+1))
+            fi
+          done
+          
+          if [ $FAILURES -eq 0 ]; then
+            echo "✅ **All regression tests passed!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **$FAILURES test suite(s) failed. Please review.**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-test-results
+          path: |
+            target/**/test-results/*.json
+            target/**/test-results/*.html
+          retention-days: 30

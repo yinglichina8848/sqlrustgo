@@ -118,6 +118,8 @@ fn test_hash_join_with_condition() {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -141,6 +143,8 @@ fn test_hash_join_with_condition() {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -454,6 +458,8 @@ fn test_multiple_joins() {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
@@ -473,6 +479,8 @@ fn test_multiple_joins() {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
                 references: None,
             }],
         })
