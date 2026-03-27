@@ -326,7 +326,6 @@ impl<'a> Lexer<'a> {
                     "SIGNAL" => Token::Signal,
                     "VIEW" => Token::View,
                     "AS" => Token::As,
-                    "ALL" => Token::All,
                     "SHOW" => Token::Show,
                     "STATUS" => Token::Status,
                     "PROCESSLIST" => Token::Processlist,
