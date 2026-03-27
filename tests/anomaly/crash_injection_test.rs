@@ -8,11 +8,11 @@ mod tests {
     use sqlrustgo_storage::MemoryStorage;
     use sqlrustgo_storage::StorageEngine;
     use sqlrustgo_types::Value;
-    use std::fs;
-    use std::path::PathBuf;
+    
+    
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::time::Duration;
+    
     use tempfile::TempDir;
 
     fn create_temp_dir() -> TempDir {
@@ -51,7 +51,7 @@ mod tests {
 
         // 第二次运行：验证数据持久化
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let result = storage.scan("test_crash");
 
             // 验证：数据应该被持久化（即使发生崩溃也应该恢复）
@@ -84,7 +84,7 @@ mod tests {
 
         // 第二次运行：验证数据完整性
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let result = storage.scan("checkpoint_test");
 
             println!(
@@ -122,7 +122,7 @@ mod tests {
 
         // 第二次运行：验证索引一致性
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let has_index = storage.has_index("index_test", "id");
 
             println!("Crash during index update: has_index={}", has_index);
@@ -148,7 +148,7 @@ mod tests {
         // 模拟 schema 变更过程中的崩溃场景
         // 第二次运行：验证 schema 一致性
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let table_exists = storage.contains_table("schema_test");
 
             println!("Crash during schema change: table_exists={}", table_exists);
@@ -183,7 +183,7 @@ mod tests {
 
         // 第二次运行：验证数据恢复
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let result = storage.scan("power_fail");
 
             println!("Power failure test: {:?}", result.map(|r| r.len()));
@@ -246,7 +246,7 @@ mod tests {
 
         // 第二次运行：验证已提交数据恢复
         {
-            let mut storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
+            let storage = FileStorage::new(dir.path().to_path_buf()).unwrap();
             let result = storage.scan("partial_write");
 
             println!("Partial write recovery: {:?}", result.map(|r| r.len()));

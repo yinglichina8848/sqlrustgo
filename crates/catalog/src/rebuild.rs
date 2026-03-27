@@ -12,12 +12,10 @@ fn convert_data_type(data_type: &str) -> Option<DataType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{CatalogResult, ColumnDefinition, ForeignKeyAction, ForeignKeyRef, Table};
     use sqlrustgo_storage::{
-        ColumnDefinition as StorageColumn, ForeignKeyConstraint, ForeignKeyAction as StorageFkAction,
-        MemoryStorage, StorageEngine, TableInfo,
-    };
-    use crate::{
-        CatalogResult, ColumnDefinition, ForeignKeyAction, ForeignKeyRef, Table,
+        ColumnDefinition as StorageColumn, ForeignKeyAction as StorageFkAction,
+        ForeignKeyConstraint, MemoryStorage, StorageEngine, TableInfo,
     };
 
     /// Rebuild catalog from a storage engine (test helper)
@@ -62,26 +60,27 @@ mod tests {
             let mut table = Table::new(info.name.clone(), columns);
 
             // Collect foreign keys from column references
-            let foreign_keys: Vec<ForeignKeyRef> = if let Ok(info) = storage.get_table_info(&table.name) {
-                info.columns
-                    .iter()
-                    .filter_map(|col_info| {
-                        col_info.references.as_ref().map(|references| {
-                            let col_name = col_info.name.clone();
-                            ForeignKeyRef {
-                                referenced_schema: default_schema.clone(),
-                                referenced_table: references.referenced_table.clone(),
-                                referenced_columns: vec![references.referenced_column.clone()],
-                                columns: vec![col_name],
-                                on_delete: references.on_delete.map(convert_fk_action),
-                                on_update: references.on_update.map(convert_fk_action),
-                            }
+            let foreign_keys: Vec<ForeignKeyRef> =
+                if let Ok(info) = storage.get_table_info(&table.name) {
+                    info.columns
+                        .iter()
+                        .filter_map(|col_info| {
+                            col_info.references.as_ref().map(|references| {
+                                let col_name = col_info.name.clone();
+                                ForeignKeyRef {
+                                    referenced_schema: default_schema.clone(),
+                                    referenced_table: references.referenced_table.clone(),
+                                    referenced_columns: vec![references.referenced_column.clone()],
+                                    columns: vec![col_name],
+                                    on_delete: references.on_delete.map(convert_fk_action),
+                                    on_update: references.on_update.map(convert_fk_action),
+                                }
+                            })
                         })
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+                        .collect()
+                } else {
+                    Vec::new()
+                };
 
             // Add all foreign keys to the table
             for fk in foreign_keys {
@@ -90,9 +89,10 @@ mod tests {
 
             // Get owned schema, add table, then put back
             let schema_name = default_schema.clone();
-            let mut schema = catalog.schemas.remove(&schema_name).ok_or_else(|| {
-                crate::CatalogError::SchemaNotFound(schema_name.clone())
-            })?;
+            let mut schema = catalog
+                .schemas
+                .remove(&schema_name)
+                .ok_or_else(|| crate::CatalogError::SchemaNotFound(schema_name.clone()))?;
 
             if schema.has_table(&table.name) {
                 return Err(crate::CatalogError::DuplicateTable {
@@ -206,7 +206,11 @@ mod tests {
     fn test_rebuild_foreign_keys() {
         let storage = create_test_storage();
         let catalog = rebuild_from_storage(&storage).unwrap();
-        let orders = catalog.default_schema().unwrap().get_table("orders").unwrap();
+        let orders = catalog
+            .default_schema()
+            .unwrap()
+            .get_table("orders")
+            .unwrap();
         assert_eq!(orders.columns.len(), 2);
     }
 
@@ -253,9 +257,17 @@ mod tests {
         storage.create_table(&info).unwrap();
         let catalog = rebuild_from_storage(&storage).unwrap();
         let table = catalog.default_schema().unwrap().get_table("test").unwrap();
-        let nullable_col = table.columns.iter().find(|c| c.name == "nullable_col").unwrap();
+        let nullable_col = table
+            .columns
+            .iter()
+            .find(|c| c.name == "nullable_col")
+            .unwrap();
         assert!(nullable_col.nullable);
-        let not_null_col = table.columns.iter().find(|c| c.name == "not_null_col").unwrap();
+        let not_null_col = table
+            .columns
+            .iter()
+            .find(|c| c.name == "not_null_col")
+            .unwrap();
         assert!(!not_null_col.nullable);
     }
 
@@ -284,9 +296,17 @@ mod tests {
         storage.create_table(&info).unwrap();
         let catalog = rebuild_from_storage(&storage).unwrap();
         let table = catalog.default_schema().unwrap().get_table("test").unwrap();
-        let unique_col = table.columns.iter().find(|c| c.name == "unique_col").unwrap();
+        let unique_col = table
+            .columns
+            .iter()
+            .find(|c| c.name == "unique_col")
+            .unwrap();
         assert!(unique_col.is_unique);
-        let regular_col = table.columns.iter().find(|c| c.name == "regular_col").unwrap();
+        let regular_col = table
+            .columns
+            .iter()
+            .find(|c| c.name == "regular_col")
+            .unwrap();
         assert!(!regular_col.is_unique);
     }
 }

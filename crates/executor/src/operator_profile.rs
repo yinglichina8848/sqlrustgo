@@ -510,12 +510,7 @@ impl Profiler {
                 .or_insert_with(|| OperatorProfile::new(name, ""));
         }
 
-        GlobalProfileTimer::new(
-            self.profiles.clone(),
-            name.to_string(),
-            rows,
-            batches,
-        )
+        GlobalProfileTimer::new(self.profiles.clone(), name.to_string(), rows, batches)
     }
 
     /// Record a query profile
@@ -805,7 +800,10 @@ mod tests {
         }
 
         let profiles = profiler.get_all_profiles();
-        let test_op = profiles.iter().find(|p| p.operator_name == "TestOp").unwrap();
+        let test_op = profiles
+            .iter()
+            .find(|p| p.operator_name == "TestOp")
+            .unwrap();
         assert_eq!(test_op.execution_count, 1);
         assert!(test_op.total_time_ns > 0);
     }
@@ -821,7 +819,10 @@ mod tests {
         }
 
         let profiles = profiler.get_all_profiles();
-        let new_op = profiles.iter().find(|p| p.operator_name == "NewOp").unwrap();
+        let new_op = profiles
+            .iter()
+            .find(|p| p.operator_name == "NewOp")
+            .unwrap();
         assert_eq!(new_op.execution_count, 1);
     }
 }

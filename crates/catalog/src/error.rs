@@ -42,7 +42,9 @@ pub enum CatalogError {
     InvalidPrimaryKey(String),
 
     /// Foreign key reference failed
-    #[error("Foreign key reference to '{referenced}' in table '{schema}.{table}' failed: {reason}")]
+    #[error(
+        "Foreign key reference to '{referenced}' in table '{schema}.{table}' failed: {reason}"
+    )]
     ForeignKeyViolation {
         schema: String,
         table: String,

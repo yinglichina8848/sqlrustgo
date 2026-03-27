@@ -42,27 +42,24 @@ pub fn run() -> Result<()> {
     let opt = Opt::from_args();
 
     // Open storage engine
-    let storage = open_storage(&opt)
-        .context("Failed to open storage engine")?;
+    let storage = open_storage(&opt).context("Failed to open storage engine")?;
 
     // Rebuild catalog from storage and check invariants
     match Catalog::rebuild(&*storage) {
-        Ok(catalog) => {
-            match catalog.check_invariants() {
-                Ok(()) => {
-                    println!("✅ Catalog invariants OK");
-                    println!("   Schema: {}", catalog.default_schema_name());
-                    if let Some(schema) = catalog.default_schema() {
-                        println!("   Tables: {}", schema.table_count());
-                    }
-                    std::process::exit(0);
+        Ok(catalog) => match catalog.check_invariants() {
+            Ok(()) => {
+                println!("✅ Catalog invariants OK");
+                println!("   Schema: {}", catalog.default_schema_name());
+                if let Some(schema) = catalog.default_schema() {
+                    println!("   Tables: {}", schema.table_count());
                 }
-                Err(e) => {
-                    eprintln!("❌ Catalog invariant violation: {}", e);
-                    std::process::exit(1);
-                }
+                std::process::exit(0);
             }
-        }
+            Err(e) => {
+                eprintln!("❌ Catalog invariant violation: {}", e);
+                std::process::exit(1);
+            }
+        },
         Err(e) => {
             eprintln!("❌ Failed to rebuild catalog: {}", e);
             std::process::exit(1);

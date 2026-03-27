@@ -222,7 +222,7 @@ mod tests {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let wal_path = temp_dir.path().join("test.wal");
 
-        let mut manager = WalManager::new(wal_path.clone());
+        let manager = WalManager::new(wal_path.clone());
 
         // Write transactions
         for i in 1..=20 {
@@ -387,7 +387,7 @@ mod tests {
         });
 
         writer.join().unwrap();
-        let final_count = reader.join().unwrap();
+        let _final_count = reader.join().unwrap();
 
         let elapsed = start.elapsed();
 

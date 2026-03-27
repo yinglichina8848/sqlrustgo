@@ -5,7 +5,7 @@
 //! requiring a real database connection.
 
 use sqlrustgo_storage::engine::{
-    ColumnDefinition, ColumnStats, StorageEngine, TableInfo, TableStats, ViewInfo,
+    ColumnDefinition, ColumnStats, StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo,
 };
 use sqlrustgo_types::{SqlResult, Value};
 use std::collections::HashMap;
@@ -214,6 +214,22 @@ impl StorageEngine for MockStorage {
 
     fn has_view(&self, _name: &str) -> bool {
         false
+    }
+
+    fn create_trigger(&mut self, _info: TriggerInfo) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn drop_trigger(&mut self, _name: &str) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn get_trigger(&self, _name: &str) -> Option<TriggerInfo> {
+        None
+    }
+
+    fn list_triggers(&self, _table: &str) -> Vec<TriggerInfo> {
+        vec![]
     }
 
     fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {

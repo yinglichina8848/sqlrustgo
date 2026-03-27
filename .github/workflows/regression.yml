@@ -390,12 +390,22 @@ jobs:
           
           # Check if all passed
           FAILURES=0
-          for job in core-lib-tests parser-tests planner-tests executor-tests storage-tests optimizer-tests integration-tests unit-tests anomaly-tests stress-tests feature-tests tpch-tests code-quality; do
-            if [ "${{ needs.$job.result }}" != "success" ]; then
-              FAILURES=$((FAILURES+1))
-            fi
-          done
-          
+
+          if [ "${{ needs.core-lib-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.parser-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.planner-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.executor-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.storage-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.optimizer-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.integration-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.anomaly-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.stress-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.sql-fuzz.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.feature-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.tpch-tests.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+          if [ "${{ needs.code-quality.result }}" != "success" ]; then FAILURES=$((FAILURES+1)); fi
+
           if [ $FAILURES -eq 0 ]; then
             echo "✅ **All regression tests passed!**" >> $GITHUB_STEP_SUMMARY
           else

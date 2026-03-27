@@ -7,9 +7,7 @@
 mod tests {
     use sqlrustgo_server::{ConnectionPool, PoolConfig};
     use sqlrustgo_storage::MemoryStorage;
-    use sqlrustgo_transaction::{
-        IsolationLevel, MvccEngine, TransactionManager, TxId,
-    };
+    use sqlrustgo_transaction::{IsolationLevel, MvccEngine, TransactionManager, TxId};
     use std::sync::{Arc, RwLock};
     use std::thread;
     use std::time::Duration;
@@ -134,7 +132,10 @@ mod tests {
         }
 
         let all_success = handles.into_iter().all(|h| h.join().unwrap());
-        assert!(all_success, "High concurrency rapid transactions should all succeed");
+        assert!(
+            all_success,
+            "High concurrency rapid transactions should all succeed"
+        );
         println!("✓ High concurrency rapid transactions: PASS (50 threads x 10 txns)");
     }
 
@@ -146,7 +147,8 @@ mod tests {
 
         // Pre-commit some data
         {
-            let mut manager = create_manager_with_isolation(mvcc.clone(), IsolationLevel::ReadCommitted);
+            let mut manager =
+                create_manager_with_isolation(mvcc.clone(), IsolationLevel::ReadCommitted);
             let tx = manager.begin().unwrap();
             manager.commit().unwrap();
         }
@@ -157,7 +159,8 @@ mod tests {
         for _ in 0..20 {
             let mvcc_clone = mvcc.clone();
             let handle = thread::spawn(move || {
-                let mut manager = create_manager_with_isolation(mvcc_clone, IsolationLevel::RepeatableRead);
+                let mut manager =
+                    create_manager_with_isolation(mvcc_clone, IsolationLevel::RepeatableRead);
                 let tx = manager.begin().unwrap();
 
                 // Get context once
@@ -174,7 +177,10 @@ mod tests {
         }
 
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        assert!(results.iter().all(|&r| r), "All readers should see their own transaction");
+        assert!(
+            results.iter().all(|&r| r),
+            "All readers should see their own transaction"
+        );
         println!("✓ Concurrent readers consistent snapshot: PASS (20 readers)");
     }
 
@@ -185,7 +191,8 @@ mod tests {
         let mvcc = create_mvcc_engine();
 
         // Start long-running transaction
-        let mut long_manager = create_manager_with_isolation(mvcc.clone(), IsolationLevel::RepeatableRead);
+        let mut long_manager =
+            create_manager_with_isolation(mvcc.clone(), IsolationLevel::RepeatableRead);
         let _long_tx = long_manager.begin().unwrap();
 
         // Long transaction gets context multiple times without concurrent activity
@@ -195,14 +202,18 @@ mod tests {
         let long_ts2 = long_ctx2.snapshot.snapshot_timestamp;
 
         // Without concurrent commits between calls, timestamps should be equal
-        assert_eq!(long_ts1, long_ts2, "Snapshot should be stable without concurrent commits");
+        assert_eq!(
+            long_ts1, long_ts2,
+            "Snapshot should be stable without concurrent commits"
+        );
 
         // Many short transactions committing concurrently
         let mut short_handles = vec![];
         for _ in 0..30 {
             let mvcc_clone = mvcc.clone();
             let handle = thread::spawn(move || {
-                let mut manager = create_manager_with_isolation(mvcc_clone, IsolationLevel::ReadCommitted);
+                let mut manager =
+                    create_manager_with_isolation(mvcc_clone, IsolationLevel::ReadCommitted);
                 let tx = manager.begin().unwrap();
                 manager.commit().unwrap();
                 let _ = tx;
@@ -343,7 +354,10 @@ mod tests {
         let mut all_ts = timestamps.write().unwrap();
         all_ts.sort();
         let is_monotonic = all_ts.windows(2).all(|w| w[0] <= w[1]);
-        assert!(is_monotonic, "Timestamps should be monotonically non-decreasing");
+        assert!(
+            is_monotonic,
+            "Timestamps should be monotonically non-decreasing"
+        );
         println!("✓ Timestamp monotonicity under concurrency: PASS (4000 timestamps)");
     }
 
@@ -387,8 +401,14 @@ mod tests {
         }
 
         let all_writers_ok = writer_handles.into_iter().all(|h| h.join().is_ok());
-        let all_readers_ok = reader_handles.into_iter().map(|h| h.join().unwrap()).all(|r| r);
-        assert!(all_writers_ok && all_readers_ok, "Mixed read-write concurrency should work");
+        let all_readers_ok = reader_handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .all(|r| r);
+        assert!(
+            all_writers_ok && all_readers_ok,
+            "Mixed read-write concurrency should work"
+        );
         println!("✓ Mixed read-write concurrency: PASS (10 writers + 20 readers)");
     }
 
@@ -399,7 +419,8 @@ mod tests {
         let mvcc = create_mvcc_engine();
 
         // Start a ReadCommitted transaction
-        let mut manager = create_manager_with_isolation(mvcc.clone(), IsolationLevel::ReadCommitted);
+        let mut manager =
+            create_manager_with_isolation(mvcc.clone(), IsolationLevel::ReadCommitted);
         let _tx1 = manager.begin().unwrap();
         let ctx1 = manager.get_transaction_context().unwrap();
         let ts1 = ctx1.snapshot.snapshot_timestamp;
@@ -409,7 +430,8 @@ mod tests {
         for _ in 0..20 {
             let mvcc_clone = mvcc.clone();
             let handle = thread::spawn(move || {
-                let mut mgr = create_manager_with_isolation(mvcc_clone, IsolationLevel::ReadCommitted);
+                let mut mgr =
+                    create_manager_with_isolation(mvcc_clone, IsolationLevel::ReadCommitted);
                 let tx = mgr.begin().unwrap();
                 mgr.commit().unwrap();
                 let _ = tx;
@@ -424,7 +446,10 @@ mod tests {
         let ctx2 = manager.get_transaction_context_for_query().unwrap();
         let ts2 = ctx2.snapshot.snapshot_timestamp;
 
-        assert!(ts2 > ts1, "ReadCommitted should see fresh snapshot after concurrent commits");
+        assert!(
+            ts2 > ts1,
+            "ReadCommitted should see fresh snapshot after concurrent commits"
+        );
         manager.commit().unwrap();
         println!("✓ ReadCommitted freshness after concurrent commits: PASS");
     }
@@ -461,7 +486,10 @@ mod tests {
         }
 
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        assert!(results.iter().all(|&r| r), "All 100 concurrent transactions should succeed");
+        assert!(
+            results.iter().all(|&r| r),
+            "All 100 concurrent transactions should succeed"
+        );
         println!("✓ Maximum concurrent transaction contexts: PASS (100 concurrent)");
     }
 
@@ -525,7 +553,10 @@ mod tests {
         }
 
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        assert!(results.iter().all(|&r| r), "Nested context access should be stable");
+        assert!(
+            results.iter().all(|&r| r),
+            "Nested context access should be stable"
+        );
         println!("✓ Nested context access: PASS (50 transactions)");
     }
 }

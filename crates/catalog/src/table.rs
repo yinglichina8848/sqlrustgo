@@ -193,10 +193,7 @@ impl Table {
                     schema: schema_name.to_string(),
                     table: self.name.clone(),
                     column: fk.columns.join(", "),
-                    referenced: format!(
-                        "{}.{}",
-                        fk.referenced_schema, fk.referenced_table
-                    ),
+                    referenced: format!("{}.{}", fk.referenced_schema, fk.referenced_table),
                     reason: "Column count mismatch".to_string(),
                 });
             }
@@ -284,10 +281,11 @@ mod tests {
     fn test_validate_pk_nullable() {
         let result = Table::new(
             "users",
-            vec![ColumnDefinition::new("id", DataType::Integer)
-                .primary_key(0)
-                .not_null() // Explicitly set NOT NULL
-                ],
+            vec![
+                ColumnDefinition::new("id", DataType::Integer)
+                    .primary_key(0)
+                    .not_null(), // Explicitly set NOT NULL
+            ],
         )
         .primary_key(vec!["id".to_string()])
         .unwrap()

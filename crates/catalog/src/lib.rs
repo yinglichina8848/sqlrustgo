@@ -46,10 +46,9 @@ impl Catalog {
             schemas: HashMap::new(),
         };
         // Create the default public schema
-        catalog.schemas.insert(
-            "public".to_string(),
-            Schema::new("public"),
-        );
+        catalog
+            .schemas
+            .insert("public".to_string(), Schema::new("public"));
         catalog
     }
 
@@ -107,16 +106,11 @@ impl Catalog {
 
     /// Get a table from the default schema
     pub fn get_table(&self, table_name: &str) -> Option<Arc<Table>> {
-        self.default_schema()
-            .and_then(|s| s.get_table(table_name))
+        self.default_schema().and_then(|s| s.get_table(table_name))
     }
 
     /// Get a table from a specific schema
-    pub fn get_table_in_schema(
-        &self,
-        schema_name: &str,
-        table_name: &str,
-    ) -> Option<Arc<Table>> {
+    pub fn get_table_in_schema(&self, schema_name: &str, table_name: &str) -> Option<Arc<Table>> {
         self.schemas
             .get(schema_name)
             .and_then(|s| s.get_table(table_name))
@@ -145,10 +139,7 @@ impl Catalog {
                             schema: schema.name.clone(),
                             table: table.name.clone(),
                             column: fk.columns.join(", "),
-                            referenced: format!(
-                                "{}.{}",
-                                fk.referenced_schema, fk.referenced_table
-                            ),
+                            referenced: format!("{}.{}", fk.referenced_schema, fk.referenced_table),
                             reason: format!(
                                 "Referenced schema '{}' does not exist",
                                 fk.referenced_schema
@@ -163,10 +154,7 @@ impl Catalog {
                             schema: schema.name.clone(),
                             table: table.name.clone(),
                             column: fk.columns.join(", "),
-                            referenced: format!(
-                                "{}.{}",
-                                fk.referenced_schema, fk.referenced_table
-                            ),
+                            referenced: format!("{}.{}", fk.referenced_schema, fk.referenced_table),
                             reason: format!(
                                 "Referenced table '{}.{}' does not exist",
                                 fk.referenced_schema, fk.referenced_table
@@ -241,26 +229,27 @@ impl Catalog {
             let mut table = Table::new(info.name.clone(), columns);
 
             // Collect foreign keys from column references
-            let foreign_keys: Vec<ForeignKeyRef> = if let Ok(info) = storage.get_table_info(&table.name) {
-                info.columns
-                    .iter()
-                    .filter_map(|col_info| {
-                        col_info.references.as_ref().map(|references| {
-                            let col_name = col_info.name.clone();
-                            ForeignKeyRef {
-                                referenced_schema: default_schema.clone(),
-                                referenced_table: references.referenced_table.clone(),
-                                referenced_columns: vec![references.referenced_column.clone()],
-                                columns: vec![col_name],
-                                on_delete: references.on_delete.map(convert_fk_action),
-                                on_update: references.on_update.map(convert_fk_action),
-                            }
+            let foreign_keys: Vec<ForeignKeyRef> =
+                if let Ok(info) = storage.get_table_info(&table.name) {
+                    info.columns
+                        .iter()
+                        .filter_map(|col_info| {
+                            col_info.references.as_ref().map(|references| {
+                                let col_name = col_info.name.clone();
+                                ForeignKeyRef {
+                                    referenced_schema: default_schema.clone(),
+                                    referenced_table: references.referenced_table.clone(),
+                                    referenced_columns: vec![references.referenced_column.clone()],
+                                    columns: vec![col_name],
+                                    on_delete: references.on_delete.map(convert_fk_action),
+                                    on_update: references.on_update.map(convert_fk_action),
+                                }
+                            })
                         })
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+                        .collect()
+                } else {
+                    Vec::new()
+                };
 
             // Add all foreign keys to the table
             for fk in foreign_keys {
@@ -269,9 +258,10 @@ impl Catalog {
 
             // Get owned schema, add table, then put back
             let schema_name = default_schema.clone();
-            let mut schema = catalog.schemas.remove(&schema_name).ok_or_else(|| {
-                CatalogError::SchemaNotFound(schema_name.clone())
-            })?;
+            let mut schema = catalog
+                .schemas
+                .remove(&schema_name)
+                .ok_or_else(|| CatalogError::SchemaNotFound(schema_name.clone()))?;
 
             if schema.has_table(&table.name) {
                 return Err(CatalogError::DuplicateTable {
