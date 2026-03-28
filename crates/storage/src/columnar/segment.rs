@@ -291,6 +291,7 @@ impl ColumnSegment {
             serde_json::to_vec(values).map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         // Serialize bitmap - only write if Some (even if empty means "check nulls")
+        // Serialize bitmap - only write if Some
         let bitmap_json = match null_bitmap {
             Some(b) => {
                 let data = serde_json::to_vec(&b.bits)
@@ -300,6 +301,8 @@ impl ColumnSegment {
             None => None,
         };
         let actual_bitmap_len = bitmap_json.as_ref().map(|v| v.len()).unwrap_or(0) as u64;
+
+        let actual_bitmap_len = bitmap_json.as_ref().map(|b| b.len()).unwrap_or(0);
 
         // Apply compression if needed
         let (compressed_data, actual_compression) = match self.compression {
@@ -328,7 +331,7 @@ impl ColumnSegment {
             num_values: values.len() as u64,
             compression: actual_compression,
             stats: self.stats.clone(),
-            bitmap_size: actual_bitmap_len,
+            bitmap_size: actual_bitmap_len as u64,
             data_size: values_json.len() as u64,
             compressed_size: compressed_data.len() as u64,
         };
