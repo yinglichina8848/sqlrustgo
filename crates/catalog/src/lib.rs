@@ -99,6 +99,11 @@ impl Catalog {
         self.schemas.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Get all schemas
+    pub fn all_schemas(&self) -> Vec<&Schema> {
+        self.schemas.values().collect()
+    }
+
     /// Check if a schema exists
     pub fn has_schema(&self, name: &str) -> bool {
         self.schemas.contains_key(name)
