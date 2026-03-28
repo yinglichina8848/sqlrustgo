@@ -4,6 +4,7 @@ pub use sqlrustgo_planner::PhysicalPlan;
 pub use sqlrustgo_types::SqlError;
 
 pub mod executor;
+pub mod explain;
 pub use executor::{Executor, ExecutorResult, Storage, VolIterator, VolcanoExecutor};
 pub mod executor_metrics;
 pub mod filter;
@@ -37,6 +38,10 @@ pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use query_cache_metrics::QueryCacheMetrics;
 pub use sql_log::{global_execution_log, ExecutionLog, LogLevel, SqlLogEntry};
 pub use sql_normalizer::SqlNormalizer;
+pub use explain::{
+    ExplainConfig, ExplainExecutor, ExplainFormat, ExplainLine, ExplainOutput,
+    explain, explain_analyze,
+};
 pub use vectorization::{
     AggFunction, AggregateResult, BatchIterator, ColumnArray, DataChunk, RecordBatch, Vector,
     VectorizedExecutor,
