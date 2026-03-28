@@ -7,6 +7,7 @@ pub mod optimizer;
 pub mod physical_plan;
 #[allow(clippy::module_inception)]
 pub mod planner;
+pub mod prepared;
 
 // TODO: Add these modules after migration
 // pub mod analyzer;
@@ -21,6 +22,7 @@ pub use physical_plan::{
     SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
+pub use prepared::{PreparedStatement, PreparedStatementManager};
 
 use sqlrustgo_types::Value;
 use std::fmt;
@@ -248,6 +250,10 @@ pub enum Expr {
         subquery: Box<LogicalPlan>,
         any_all: SubqueryType,
     },
+    /// Parameter placeholder for prepared statements (e.g., ? or $1)
+    Parameter {
+        index: usize,
+    },
 }
 
 impl Expr {
@@ -293,6 +299,8 @@ impl Expr {
             Expr::InSubquery { .. } => None,
             Expr::Exists(_) => None,
             Expr::AnyAll { .. } => None,
+            // Parameter placeholder - cannot be evaluated without bound values
+            Expr::Parameter { .. } => None,
         }
     }
 
@@ -426,6 +434,7 @@ impl fmt::Display for Expr {
                 };
                 write!(f, "{} {} {} (SELECT ...)", expr, op, any_all_str)
             }
+            Expr::Parameter { index } => write!(f, "?{}", index),
         }
     }
 }
