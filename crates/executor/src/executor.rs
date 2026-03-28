@@ -3,7 +3,7 @@
 use crate::filter::FilterVolcanoExecutor;
 use crate::window_executor::WindowVolcanoExecutor;
 use sqlrustgo_planner::{PhysicalPlan, Schema};
-use sqlrustgo_types::{encode_row, SqlError, SqlResult, Value, RowRef};
+use sqlrustgo_types::{encode_row, RowRef, SqlError, SqlResult, Value};
 use std::any::Any;
 
 #[derive(Debug, Clone)]
@@ -84,8 +84,10 @@ impl SeqScanVolcanoExecutor {
             initialized: false,
             current_idx: 0,
             row_bytes: Vec::new(),
-            column_types: schema.fields.iter().map(|f| {
-                match f.data_type {
+            column_types: schema
+                .fields
+                .iter()
+                .map(|f| match f.data_type {
                     sqlrustgo_planner::DataType::Integer => sqlrustgo_types::ColumnType::Integer,
                     sqlrustgo_planner::DataType::Float => sqlrustgo_types::ColumnType::Float,
                     sqlrustgo_planner::DataType::Decimal => sqlrustgo_types::ColumnType::Float,
@@ -94,8 +96,8 @@ impl SeqScanVolcanoExecutor {
                     sqlrustgo_planner::DataType::Null => sqlrustgo_types::ColumnType::Null,
                     sqlrustgo_planner::DataType::Blob => sqlrustgo_types::ColumnType::Blob,
                     sqlrustgo_planner::DataType::Json => sqlrustgo_types::ColumnType::Text,
-                }
-            }).collect(),
+                })
+                .collect(),
         }
     }
 
