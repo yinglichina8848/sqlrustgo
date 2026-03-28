@@ -2,6 +2,7 @@
 //!
 //! Provides benchmark functionality for SQLRustGo.
 
+pub mod benchmark_suite;
 pub mod cli;
 pub mod config;
 pub mod db;
