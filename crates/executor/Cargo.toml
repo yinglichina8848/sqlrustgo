@@ -18,6 +18,8 @@ rand = "0.8"
 parking_lot.workspace = true
 lazy_static = "1.4"
 rayon = "1.10"
+query-stats = { path = "../query-stats" }
+chrono = "0.4"
 
 [dev-dependencies]
 tempfile.workspace = true
