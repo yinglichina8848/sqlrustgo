@@ -17,6 +17,10 @@ pub mod query_cache;
 pub mod query_cache_config;
 pub mod query_cache_metrics;
 pub mod reusable_vec;
+pub use reusable_vec::{
+    clear_thread_local_pool, reset_thread_local_pool, with_thread_local_pool, ReusableVec,
+    ThreadLocalExecutorVecPool,
+};
 pub mod session_config;
 pub mod sql_log;
 pub mod sql_normalizer;
