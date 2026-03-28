@@ -290,12 +290,6 @@ impl ColumnSegment {
         let values_json =
             serde_json::to_vec(values).map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
-        // Serialize bitmap (only if Some)
-        let bitmap_json = if let Some(bitmap) = null_bitmap {
-            serde_json::to_vec(&bitmap.bits)
-                .map_err(|e| SegmentError::Serialization(e.to_string()))?
-        } else {
-            vec![]
         // Serialize bitmap - only write if Some (even if empty means "check nulls")
         let (bitmap_json, actual_bitmap_len) = match null_bitmap {
             Some(b) => {
@@ -431,8 +425,6 @@ impl ColumnSegment {
         } else {
             None
         };
-            Ok::<Bitmap, SegmentError>(Bitmap::from_bits(bits, len))
-        }).transpose()?;
 
         Ok((values, null_bitmap))
     }
