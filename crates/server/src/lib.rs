@@ -6,7 +6,10 @@ pub mod metrics_endpoint;
 pub mod teaching_endpoints;
 
 pub mod connection_pool;
+pub mod security_integration;
+
 pub use connection_pool::{ConnectionPool, PoolConfig, PooledSession};
+pub use security_integration::{SecurityGuard, SecurityIntegration, SecurityStats};
 
 pub use health::{ComponentHealth, HealthChecker, HealthComponent, HealthReport, HealthStatus};
 pub use http_server::HttpServer;
