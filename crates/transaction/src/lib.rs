@@ -5,6 +5,7 @@ pub mod deadlock;
 pub mod dtc;
 pub mod gid;
 pub mod lock;
+pub mod lock_manager;
 pub mod manager;
 pub mod mvcc;
 pub mod participant;
@@ -15,6 +16,7 @@ pub use deadlock::DeadlockDetector;
 pub use dtc::*;
 pub use gid::{GlobalTransactionId, NodeId};
 pub use lock::{LockError, LockGrantMode, LockInfo, LockManager, LockMode, LockRequest};
+pub use lock_manager::{DistributedLockManager, LockError as DistLockError, LockKey, LockMode as DistLockMode};
 pub use manager::{
     IsolationLevel, TransactionCommand, TransactionContext, TransactionError, TransactionManager,
 };
