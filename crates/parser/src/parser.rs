@@ -33,6 +33,10 @@ pub enum Statement {
     CreateView(CreateViewStatement),
     CreateTrigger(CreateTriggerStatement),
     DropTrigger(DropTriggerStatement),
+    CreateProcedure(CreateProcedureStatement),
+    DropProcedure(DropProcedureStatement),
+    Call(CallProcedureStatement),
+    Delimiter(DelimiterStatement),
     Analyze(AnalyzeStatement),
     Explain(ExplainStatement),
     Transaction(TransactionStatement),
@@ -142,6 +146,65 @@ pub struct CreateTriggerStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTriggerStatement {
     pub name: String,
+}
+
+/// CREATE PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateProcedureStatement {
+    pub name: String,
+    pub params: Vec<ProcedureParam>,
+    pub body: Vec<ProcedureStatement>,
+}
+
+/// Stored procedure parameter
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcedureParam {
+    pub name: String,
+    pub mode: ParamMode,
+    pub data_type: String,
+}
+
+/// Parameter mode for stored procedure
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParamMode {
+    In,
+    Out,
+    InOut,
+}
+
+/// Procedure body statement
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcedureStatement {
+    /// Raw SQL statement
+    RawSql(String),
+    /// SELECT ... INTO var1, var2 FROM ...
+    SelectInto {
+        columns: Vec<String>,
+        into_vars: Vec<String>,
+        table: String,
+        where_clause: Option<String>,
+    },
+    /// SET variable = value
+    Set { variable: String, value: String },
+}
+
+/// DROP PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropProcedureStatement {
+    pub name: String,
+}
+
+/// CALL statement for invoking stored procedure
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallProcedureStatement {
+    pub procedure_name: String,
+    pub args: Vec<String>,
+}
+
+/// DELIMITER statement (client-side directive)
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelimiterStatement {
+    pub delimiter: String,
 }
 
 /// Trigger timing: BEFORE or AFTER
@@ -2083,6 +2146,250 @@ impl Parser {
         }))
     }
 
+    fn parse_create_procedure(&mut self) -> Result<Statement, String> {
+        // Parse procedure name
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected procedure name".to_string()),
+        };
+
+        // Parse parameters: (param1, param2, ...)
+        self.expect(Token::LParen)?;
+        
+        let mut params = Vec::new();
+        if !matches!(self.current(), Some(Token::RParen)) {
+            loop {
+                let param_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected parameter name".to_string()),
+                };
+                
+                // Parse parameter mode (IN, OUT, INOUT) - default is IN
+                let mode = match self.current() {
+                    Some(Token::Identifier(mode_str)) => {
+                        match mode_str.to_uppercase().as_str() {
+                            "IN" => {
+                                self.next();
+                                ParamMode::In
+                            }
+                            "OUT" => {
+                                self.next();
+                                ParamMode::Out
+                            }
+                            "INOUT" => {
+                                self.next();
+                                ParamMode::InOut
+                            }
+                            _ => ParamMode::In, // default
+                        }
+                    }
+                    _ => ParamMode::In,
+                };
+                
+                // Parse data type
+                let data_type = match self.next() {
+                    Some(Token::Identifier(dt)) => dt,
+                    Some(Token::Integer) => "INTEGER".to_string(),
+                    Some(Token::Text) => "TEXT".to_string(),
+                    Some(Token::Float) => "FLOAT".to_string(),
+                    Some(Token::Decimal) => "DECIMAL".to_string(),
+                    Some(Token::Boolean) => "BOOLEAN".to_string(),
+                    Some(Token::Date) => "DATE".to_string(),
+                    Some(Token::Timestamp) => "TIMESTAMP".to_string(),
+                    Some(Token::Blob) => "BLOB".to_string(),
+                    _ => return Err("Expected data type".to_string()),
+                };
+                
+                params.push(ProcedureParam {
+                    name: param_name,
+                    mode,
+                    data_type,
+                });
+                
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+        self.expect(Token::RParen)?;
+
+        // Parse BEGIN...END block
+        self.expect(Token::Begin)?;
+        
+        let mut body = Vec::new();
+        
+        // Simple body parsing: collect statements until END
+        // Note: This is a simplified implementation that stores raw SQL for now
+        while !matches!(self.current(), Some(Token::Identifier(end_str)) 
+                       if end_str.to_uppercase() == "END") 
+               && !matches!(self.current(), None) {
+            let stmt = match self.current() {
+                Some(Token::Select) => {
+                    // For now, just collect SELECT statements as raw SQL
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Set) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Identifier(_)) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Semicolon) => {
+                    self.next();
+                    continue;
+                }
+                Some(Token::If) => {
+                    let raw_sql = self.collect_until_end_if();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::While) => {
+                    let raw_sql = self.collect_until_end_loop();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Loop) => {
+                    let raw_sql = self.collect_until_end_loop();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Leave) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Iterate) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Signal) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Return) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                _ => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+            };
+            body.push(stmt);
+        }
+        
+        // Expect END
+        if matches!(self.current(), Some(Token::Identifier(end_str)) 
+                   if end_str.to_uppercase() == "END") {
+            self.next();
+        }
+
+        Ok(Statement::CreateProcedure(CreateProcedureStatement {
+            name,
+            params,
+            body,
+        }))
+    }
+
+    /// Collect tokens until semicolon (exclusive)
+    fn collect_until_semicolon(&mut self) -> String {
+        let mut sql = String::new();
+        loop {
+            match self.current() {
+                Some(Token::Semicolon) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::Eof) => break,
+                None => break,
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
+                }
+            }
+        }
+        sql.trim().to_string()
+    }
+
+    /// Collect tokens until END IF
+    fn collect_until_end_if(&mut self) -> String {
+        let mut sql = String::new();
+        let mut end_if_depth = 0;
+        loop {
+            match self.current() {
+                Some(Token::Eof) | None => break,
+                Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                    sql.push_str("END");
+                    sql.push(' ');
+                    self.next();
+                    if matches!(self.current(), Some(Token::If)) {
+                        if end_if_depth > 0 {
+                            end_if_depth -= 1;
+                            sql.push_str("IF ");
+                            self.next();
+                        } else {
+                            sql.push_str("IF");
+                            self.next();
+                            break;
+                        }
+                    }
+                }
+                Some(Token::If) => {
+                    end_if_depth += 1;
+                    sql.push_str("IF ");
+                    self.next();
+                }
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
+                }
+            }
+        }
+        sql.trim().to_string()
+    }
+
+    /// Collect tokens until END LOOP
+    fn collect_until_end_loop(&mut self) -> String {
+        let mut sql = String::new();
+        let mut end_loop_depth = 0;
+        loop {
+            match self.current() {
+                Some(Token::Eof) | None => break,
+                Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                    sql.push_str("END");
+                    sql.push(' ');
+                    self.next();
+                    if matches!(self.current(), Some(Token::Loop)) {
+                        if end_loop_depth > 0 {
+                            end_loop_depth -= 1;
+                            sql.push_str("LOOP ");
+                            self.next();
+                        } else {
+                            sql.push_str("LOOP");
+                            self.next();
+                            break;
+                        }
+                    }
+                }
+                Some(Token::Loop) => {
+                    end_loop_depth += 1;
+                    sql.push_str("LOOP ");
+                    self.next();
+                }
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
+                }
+            }
+        }
+        sql.trim().to_string()
+    }
+
     fn parse_create_view(&mut self) -> Result<Statement, String> {
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
@@ -2353,6 +2660,60 @@ impl Parser {
         };
 
         Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement { name }))
+    }
+
+    fn parse_call(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Call)?;
+        
+        // Get procedure name
+        let procedure_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected procedure name".to_string()),
+        };
+
+        // Parse arguments: (arg1, arg2, ...)
+        self.expect(Token::LParen)?;
+        
+        let mut args = Vec::new();
+        if !matches!(self.current(), Some(Token::RParen)) {
+            loop {
+                let arg = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(Token::NumberLiteral(n)) => n,
+                    Some(Token::QuestionMark) => "?".to_string(),
+                    _ => return Err("Expected argument".to_string()),
+                };
+                args.push(arg);
+                
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+        self.expect(Token::RParen)?;
+
+        Ok(Statement::Call(CallProcedureStatement {
+            procedure_name,
+            args,
+        }))
+    }
+
+    fn parse_delimiter(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Delimiter)?;
+        
+        // Get the new delimiter
+        let delimiter = match self.next() {
+            Some(Token::Semicolon) => ";".to_string(),
+            Some(Token::Identifier(d)) => d,
+            Some(Token::Eof) | None => ";".to_string(),
+            _ => return Err("Expected delimiter".to_string()),
+        };
+
+        Ok(Statement::Delimiter(DelimiterStatement { delimiter }))
     }
 
     fn parse_transaction(&mut self) -> Result<Statement, String> {
