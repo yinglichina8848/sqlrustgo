@@ -5,9 +5,9 @@
 
 use sqlrustgo_planner::PhysicalPlan;
 use sqlrustgo_planner::{
-    AggregateExec, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType,
-    LimitExec, ProjectionExec, SeqScanExec, SetOperationExec, SetOperationType,
-    SortExec, SortMergeJoinExec, WindowExec,
+    AggregateExec, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType, LimitExec,
+    ProjectionExec, SeqScanExec, SetOperationExec, SetOperationType, SortExec, SortMergeJoinExec,
+    WindowExec,
 };
 use sqlrustgo_types::Value;
 use std::any::Any;
@@ -83,22 +83,22 @@ impl ExplainLine {
     pub fn format_tree(&self) -> String {
         let prefix = "  ".repeat(self.indent);
         let arrow = if self.indent == 0 { "-> " } else { "-> " };
-        
+
         let mut line = format!("{}{}{}", prefix, arrow, self.operator);
-        
+
         if !self.details.is_empty() {
             line.push_str(": ");
             line.push_str(&self.details.join(", "));
         }
-        
+
         if let Some(rows) = self.estimated_rows {
             line.push_str(&format!(", estimated_rows={}", rows));
         }
-        
+
         if let Some(rows) = self.actual_rows {
             line.push_str(&format!(", actual_rows={}", rows));
         }
-        
+
         if let Some(us) = self.execution_time_us {
             if us >= 1000 {
                 line.push_str(&format!(", time={:.3}ms", us as f64 / 1000.0));
@@ -106,7 +106,7 @@ impl ExplainLine {
                 line.push_str(&format!(", time={}µs", us));
             }
         }
-        
+
         line
     }
 }
@@ -192,8 +192,7 @@ impl ExplainExecutor {
         }
 
         // Then explain this node
-        let (name, details, estimated_rows, actual_rows, exec_time) = 
-            self.extract_node_info(plan);
+        let (name, details, estimated_rows, actual_rows, exec_time) = self.extract_node_info(plan);
 
         let line = ExplainLine {
             indent: depth,
@@ -208,7 +207,10 @@ impl ExplainExecutor {
     }
 
     /// Extract information from a plan node
-    fn extract_node_info(&self, plan: &dyn PhysicalPlan) -> (String, Vec<String>, u64, Option<u64>, Option<u64>) {
+    fn extract_node_info(
+        &self,
+        plan: &dyn PhysicalPlan,
+    ) -> (String, Vec<String>, u64, Option<u64>, Option<u64>) {
         let name = plan.name().to_string();
         let (_, _, estimated_rows, _) = plan.estimated_cost();
         let mut details = Vec::new();
@@ -235,7 +237,10 @@ impl ExplainExecutor {
             let pred = self.format_expr(filter.predicate());
             details.push(format!("filter=[{}]", pred));
         } else if let Some(hash_join) = plan.as_any().downcast_ref::<HashJoinExec>() {
-            details.push(format!("type={}", self.format_join_type(hash_join.join_type())));
+            details.push(format!(
+                "type={}",
+                self.format_join_type(hash_join.join_type())
+            ));
             if let Some(cond) = hash_join.condition() {
                 details.push(format!("condition=[{}]", self.format_expr(cond)));
             }
@@ -257,7 +262,13 @@ impl ExplainExecutor {
             let sort_str = sort
                 .sort_expr()
                 .iter()
-                .map(|s| format!("{} {}", self.format_expr(&s.expr), if s.asc { "ASC" } else { "DESC" }))
+                .map(|s| {
+                    format!(
+                        "{} {}",
+                        self.format_expr(&s.expr),
+                        if s.asc { "ASC" } else { "DESC" }
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
             details.push(format!("sort=[{}]", sort_str));
@@ -267,7 +278,10 @@ impl ExplainExecutor {
                 details.push(format!("offset={}", offset));
             }
         } else if let Some(set_op) = plan.as_any().downcast_ref::<SetOperationExec>() {
-            details.push(format!("type={}", self.format_set_op_type(set_op.op_type())));
+            details.push(format!(
+                "type={}",
+                self.format_set_op_type(set_op.op_type())
+            ));
         } else if let Some(window) = plan.as_any().downcast_ref::<WindowExec>() {
             let window_str = self.format_window_exprs(window.window_exprs());
             details.push(format!("windows=[{}]", window_str));
@@ -278,7 +292,7 @@ impl ExplainExecutor {
             let start = Instant::now();
             let result = plan.execute();
             exec_time = Some(start.elapsed().as_micros() as u64);
-            
+
             if let Ok(rows) = result {
                 actual_rows = Some(rows.len() as u64);
             }
@@ -299,7 +313,8 @@ impl ExplainExecutor {
             JoinType::LeftAnti => "LeftAnti",
             JoinType::RightSemi => "RightSemi",
             JoinType::RightAnti => "RightAnti",
-        }.to_string()
+        }
+        .to_string()
     }
 
     /// Format a set operation type
@@ -308,7 +323,8 @@ impl ExplainExecutor {
             SetOperationType::Union | SetOperationType::UnionAll => "Union",
             SetOperationType::Intersect => "Intersect",
             SetOperationType::Except => "Except",
-        }.to_string()
+        }
+        .to_string()
     }
 
     /// Format an expression
@@ -317,7 +333,12 @@ impl ExplainExecutor {
             Expr::Column(col) => col.name.clone(),
             Expr::Literal(val) => self.format_value(val),
             Expr::BinaryExpr { left, op, right } => {
-                format!("{} {} {}", self.format_expr(left), op, self.format_expr(right))
+                format!(
+                    "{} {} {}",
+                    self.format_expr(left),
+                    op,
+                    self.format_expr(right)
+                )
             }
             Expr::AggregateFunction { func, args, .. } => {
                 let func_name = match func {
@@ -412,9 +433,10 @@ mod tests {
     }
 
     fn create_test_projection() -> ProjectionExec {
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
+        let schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
         let input = Box::new(create_test_seq_scan());
         ProjectionExec::new(input, vec![Expr::column("id")], schema)
     }
@@ -437,7 +459,7 @@ mod tests {
     fn test_explain_seq_scan() {
         let scan = create_test_seq_scan();
         let output = explain(&scan);
-        
+
         let lines = output.lines;
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].operator, "SeqScan");
@@ -449,7 +471,7 @@ mod tests {
     fn test_explain_projection() {
         let proj = create_test_projection();
         let output = explain(&proj);
-        
+
         // Should have 2 lines: SeqScan (depth 1) then Projection (depth 0)
         assert_eq!(output.lines.len(), 2);
         // First line is SeqScan (child)
@@ -464,18 +486,21 @@ mod tests {
     fn test_explain_filter() {
         let filter = create_test_filter();
         let output = explain(&filter);
-        
+
         // Should have 2 lines: SeqScan then Filter
         assert_eq!(output.lines.len(), 2);
         assert_eq!(output.lines[1].operator, "Filter");
-        assert!(output.lines[1].details.iter().any(|d| d.contains("filter=")));
+        assert!(output.lines[1]
+            .details
+            .iter()
+            .any(|d| d.contains("filter=")));
     }
 
     #[test]
     fn test_explain_tree_format() {
         let scan = create_test_seq_scan();
         let output = explain(&scan);
-        
+
         let tree = output.to_string_tree();
         assert!(tree.contains("-> SeqScan"));
         assert!(tree.contains("table=users"));
@@ -506,33 +531,37 @@ mod tests {
     fn test_explain_explain_analyze_mode() {
         let scan = create_test_seq_scan();
         let output = explain_analyze(&scan);
-        
+
         // In analyze mode, we should get actual execution info
-        assert!(output.lines[0].actual_rows.is_some() || output.lines[0].execution_time_us.is_some());
+        assert!(
+            output.lines[0].actual_rows.is_some() || output.lines[0].execution_time_us.is_some()
+        );
     }
 
     #[test]
     fn test_explain_hash_join() {
-        let left_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
-        let right_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
+        let left_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let right_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
         let join_schema = Schema::new(vec![
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
         ]);
-        
+
         let left = Box::new(SeqScanExec::new("orders".to_string(), left_schema));
         let right = Box::new(SeqScanExec::new("users".to_string(), right_schema));
-        
+
         let condition = Expr::BinaryExpr {
             left: Box::new(Expr::column("orders.id")),
             op: sqlrustgo_planner::Operator::Eq,
             right: Box::new(Expr::column("users.id")),
         };
-        
+
         let join = HashJoinExec::new(
             left,
             right,
@@ -540,16 +569,22 @@ mod tests {
             Some(condition),
             join_schema,
         );
-        
+
         let output = explain(&join);
-        
+
         // Should have 3 lines: SeqScan (orders), SeqScan (users), HashJoin
         assert_eq!(output.lines.len(), 3);
         // Last line is HashJoin
         let hash_join_line = &output.lines[2];
         assert_eq!(hash_join_line.operator, "HashJoin");
-        assert!(hash_join_line.details.iter().any(|d| d.contains("type=Inner")));
-        assert!(hash_join_line.details.iter().any(|d| d.contains("condition=")));
+        assert!(hash_join_line
+            .details
+            .iter()
+            .any(|d| d.contains("type=Inner")));
+        assert!(hash_join_line
+            .details
+            .iter()
+            .any(|d| d.contains("condition=")));
     }
 
     #[test]
@@ -562,26 +597,20 @@ mod tests {
             Field::new("dept".to_string(), sqlrustgo_planner::DataType::Text),
             Field::new("sum".to_string(), sqlrustgo_planner::DataType::Integer),
         ]);
-        
+
         let input = Box::new(SeqScanExec::new("employees".to_string(), input_schema));
-        
+
         let group_expr = vec![Expr::column("dept")];
         let aggregate_expr = vec![Expr::AggregateFunction {
             func: sqlrustgo_planner::AggregateFunction::Sum,
             args: vec![Expr::column("salary")],
             distinct: false,
         }];
-        
-        let agg = AggregateExec::new(
-            input,
-            group_expr,
-            aggregate_expr,
-            None,
-            agg_schema,
-        );
-        
+
+        let agg = AggregateExec::new(input, group_expr, aggregate_expr, None, agg_schema);
+
         let output = explain(&agg);
-        
+
         // Should have 2 lines: SeqScan, Aggregate
         assert_eq!(output.lines.len(), 2);
         let agg_line = &output.lines[1];
@@ -597,27 +626,24 @@ mod tests {
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
             Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
         ]);
-        
+
         let scan = Box::new(SeqScanExec::new("users".to_string(), scan_schema.clone()));
-        
+
         let predicate = Expr::BinaryExpr {
             left: Box::new(Expr::column("id")),
             op: sqlrustgo_planner::Operator::Gt,
             right: Box::new(Expr::Literal(Value::Integer(1))),
         };
         let filter = FilterExec::new(scan, predicate);
-        
-        let proj_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
-        let proj = ProjectionExec::new(
-            Box::new(filter),
-            vec![Expr::column("id")],
-            proj_schema,
-        );
-        
+
+        let proj_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
+        let proj = ProjectionExec::new(Box::new(filter), vec![Expr::column("id")], proj_schema);
+
         let output = explain(&proj);
-        
+
         // Should have 3 lines: SeqScan (depth 2), Filter (depth 1), Projection (depth 0)
         assert_eq!(output.lines.len(), 3);
         assert_eq!(output.lines[0].operator, "SeqScan");
@@ -632,7 +658,7 @@ mod tests {
     fn test_explain_analyze_collects_timing() {
         let scan = create_test_seq_scan();
         let output = explain_analyze(&scan);
-        
+
         // Should have timing information
         assert!(output.total_time_us.is_some());
         assert!(output.lines[0].execution_time_us.is_some());
@@ -642,9 +668,9 @@ mod tests {
     fn test_explain_output_format_tree() {
         let scan = create_test_seq_scan();
         let output = explain(&scan);
-        
+
         let tree = output.to_string_tree();
-        
+
         // Check that tree format contains expected parts
         assert!(tree.contains("-> SeqScan"));
         assert!(tree.contains("table=users"));
@@ -653,14 +679,15 @@ mod tests {
 
     #[test]
     fn test_explain_with_limit() {
-        let input_schema = Schema::new(vec![
-            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-        ]);
+        let input_schema = Schema::new(vec![Field::new(
+            "id".to_string(),
+            sqlrustgo_planner::DataType::Integer,
+        )]);
         let scan = Box::new(SeqScanExec::new("users".to_string(), input_schema));
         let limit = LimitExec::new(scan, 10, Some(5));
-        
+
         let output = explain(&limit);
-        
+
         // Should have 2 lines: SeqScan, Limit
         assert_eq!(output.lines.len(), 2);
         let limit_line = &output.lines[1];
