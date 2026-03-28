@@ -8,7 +8,6 @@ pub mod binlog_server;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
-pub mod columnar;
 pub mod clock_replacer;
 pub mod engine;
 pub mod failover_manager;
@@ -25,12 +24,17 @@ pub mod wal;
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 
 pub use binary_format::BinaryFormat;
+pub use binlog_client::{BinlogClient, BinlogClientBuilder};
+pub use binlog_protocol::{
+    BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
+};
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
 pub use columnar::{
-    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, TableStore,
+    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType,
+    ParquetCompatReader, ParquetCompatWriter, TableStore,
 };
 // pub use columnar::{
 //     ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
