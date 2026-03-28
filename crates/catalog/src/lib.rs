@@ -3,6 +3,7 @@
 //! This module provides the catalog system for managing schemas, tables, columns,
 //! and constraints in the database.
 
+mod auth;
 mod column;
 mod data_type;
 mod error;
@@ -12,6 +13,10 @@ mod schema;
 mod stored_proc;
 mod table;
 
+pub use auth::{
+    AuthError, AuthManager, AuthResult, GranteeType, ObjectRef, ObjectType, Privilege,
+    PrivilegeGrant, Role, User, UserRole,
+};
 pub use column::ColumnDefinition;
 pub use data_type::DataType;
 pub use error::{CatalogError, CatalogResult};
@@ -153,7 +158,10 @@ impl Catalog {
 
     /// Get all stored procedure names
     pub fn stored_procedure_names(&self) -> Vec<&str> {
-        self.stored_procedures.keys().map(|s: &String| s.as_str()).collect()
+        self.stored_procedures
+            .keys()
+            .map(|s: &String| s.as_str())
+            .collect()
     }
 
     /// Check all catalog invariants
