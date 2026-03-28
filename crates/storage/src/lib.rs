@@ -2,17 +2,22 @@
 
 pub mod backup;
 pub mod binary_format;
+pub mod binlog_client;
+pub mod binlog_protocol;
+pub mod binlog_server;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 pub mod columnar;
 pub mod clock_replacer;
 pub mod engine;
+pub mod failover_manager;
 pub mod file_storage;
 pub mod heap;
 pub mod page;
 pub mod page_guard;
 pub mod replication;
+pub mod replication_lag;
 pub mod stats;
 pub mod wal;
 
@@ -26,10 +31,15 @@ pub use clock_replacer::ClockReplacer;
 pub use columnar::{
     Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, TableStore,
 };
+pub use binlog_client::{BinlogClient, BinlogClientBuilder};
+pub use binlog_protocol::{
+    BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
+};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
 };
+pub use failover_manager::{FailoverConfig, FailoverState, NodeInfo, NodeType};
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
@@ -38,6 +48,7 @@ pub use replication::{
     BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, FailoverManager, MasterNode,
     ReplicationConfig, SlaveNode,
 };
+pub use replication_lag::{LagWarning, ReplicationLagMonitor, ReplicationStatus};
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
 
