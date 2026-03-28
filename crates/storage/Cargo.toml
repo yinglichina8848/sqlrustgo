@@ -18,5 +18,8 @@ hex.workspace = true
 snap = "1.1"
 zstd = "0.13"
 
+[features]
+default = []
+
 [dev-dependencies]
 tempfile.workspace = true
