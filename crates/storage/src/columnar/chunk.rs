@@ -88,16 +88,6 @@ impl Bitmap {
         }
         count
     }
-
-    /// Get the raw bits vector
-    pub fn bits(&self) -> &Vec<u64> {
-        &self.bits
-    }
-
-    /// Create a Bitmap from raw bits and length
-    pub fn from_bits(bits: Vec<u64>, len: usize) -> Self {
-        Self { bits, len }
-    }
 }
 
 impl Default for Bitmap {
@@ -205,6 +195,7 @@ impl ColumnChunk {
         // Ensure null_bitmap exists (create even for non-nulls to track positions)
         if self.null_bitmap.is_none() {
             self.null_bitmap = Some(Bitmap::with_capacity(self.data.len().max(1)));
+            self.null_bitmap = Some(Bitmap::with_capacity(self.data.len()));
         }
 
         // Update bitmap if it exists
@@ -229,11 +220,6 @@ impl ColumnChunk {
     pub fn set_null(&mut self, index: usize) {
         if index >= self.data.len() {
             return;
-        }
-
-        // Ensure bitmap exists
-        if self.null_bitmap.is_none() {
-            self.null_bitmap = Some(Bitmap::with_capacity(self.data.len()));
         }
 
         if let Some(ref mut bitmap) = self.null_bitmap {
