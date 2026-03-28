@@ -54,6 +54,12 @@ pub use vectorization::{
 pub mod window_executor;
 pub use window_executor::WindowVolcanoExecutor;
 
+// Trigger execution engine
+pub mod trigger;
+pub use trigger::{
+    TriggerExecutor, TriggerEvent, TriggerExecutionResult, TriggerTiming, TriggerType,
+};
+
 // Test framework modules - publicly accessible
 pub mod harness;
 pub mod mock_storage;

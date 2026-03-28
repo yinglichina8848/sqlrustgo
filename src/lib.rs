@@ -12,7 +12,7 @@ pub use sqlrustgo_parser::{
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
-    BPlusTree, BufferPool, ColumnarStorage, FileStorage, MemoryStorage, Page, StorageEngine,
+    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
     ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
@@ -346,6 +346,10 @@ fn evaluate_where_clause(
         sqlrustgo_parser::Expression::Subquery(_) => false,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::WindowFunction { .. } => false,
+        sqlrustgo_parser::Expression::Placeholder => {
+            // Placeholder in WHERE should be false (no param value provided)
+            false
+        }
     }
 }
 
@@ -424,6 +428,7 @@ fn evaluate_expr(
         sqlrustgo_parser::Expression::Subquery(_) => Value::Null,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
         sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
+        sqlrustgo_parser::Expression::Placeholder => Value::Null,
     }
 }
 
