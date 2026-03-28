@@ -71,9 +71,9 @@ AI ↓
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #943 | Phase 2: 高可用 - 主从复制/备份/故障转移 | PR #1081 |
+| #943 | Phase 2: 高可用 - 主从复制/备份/故障转移 | CLOSED ✅ |
 | #955 | 窗口函数实现 - ROW_NUMBER/RANK/SUM OVER | CLOSED ✅ |
-| #956 | RBAC 权限系统 - 用户/角色/GRANT | OPEN |
+| #956 | RBAC 权限系统 - 用户/角色/GRANT | CLOSED ✅ |
 
 ### Phase 3: 分布式能力
 
@@ -99,12 +99,12 @@ AI ↓
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #753 | ColumnChunk 数据结构 | OPEN |
-| #754 | ColumnSegment 磁盘布局 | OPEN |
-| #755 | ColumnarStorage 存储引擎 | OPEN |
-| #756 | Projection Pushdown 优化器 | OPEN |
-| #757 | ColumnarScan 执行器节点 | OPEN |
-| #758 | Parquet 导入导出 | OPEN |
+| #753 | ColumnChunk 数据结构 | CLOSED ✅ |
+| #754 | ColumnSegment 磁盘布局 | CLOSED ✅ |
+| #755 | ColumnarStorage 存储引擎 | CLOSED ✅ |
+| #756 | Projection Pushdown 优化器 | CLOSED ✅ |
+| #757 | ColumnarScan 执行器节点 | CLOSED ✅ |
+| #758 | Parquet 导入导出 | CLOSED ✅ |
 
 ### Epic-16: v1.9.x → v2.0 迁移
 
@@ -135,12 +135,12 @@ AI ↓
 | Phase | 总计 | CLOSED | OPEN |
 |-------|------|--------|------|
 | Phase 1 | 14 | 12 | 2 |
-| Phase 2 | 3 | 1 | 2 |
+| Phase 2 | 3 | 3 | 0 |
 | Phase 3 | 1 | 0 | 1 |
 | Phase 4 | 3 | 0 | 3 |
 | Phase 5 | 1 | 0 | 1 |
-| Epic-12 | 6 | 0 | 6 |
-| **总计** | **28** | **13 (46%)** | **15** |
+| Epic-12 | 6 | 6 | 0 |
+| **总计** | **28** | **21 (75%)** | **7** |
 
 ---
 
