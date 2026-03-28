@@ -1191,6 +1191,71 @@ impl PhysicalPlan for SetOperationExec {
     }
 }
 
+/// Window execution operator
+#[allow(dead_code)]
+pub struct WindowExec {
+    input: Box<dyn PhysicalPlan>,
+    window_exprs: Vec<crate::Expr>,
+    partition_by: Vec<crate::Expr>,
+    order_by: Vec<crate::SortExpr>,
+    schema: Schema,
+    input_schema: Schema,
+}
+
+impl WindowExec {
+    pub fn new(
+        input: Box<dyn PhysicalPlan>,
+        window_exprs: Vec<crate::Expr>,
+        partition_by: Vec<crate::Expr>,
+        order_by: Vec<crate::SortExpr>,
+        schema: Schema,
+        input_schema: Schema,
+    ) -> Self {
+        Self {
+            input,
+            window_exprs,
+            partition_by,
+            order_by,
+            schema,
+            input_schema,
+        }
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
+    pub fn window_exprs(&self) -> &Vec<crate::Expr> {
+        &self.window_exprs
+    }
+
+    pub fn partition_by(&self) -> &Vec<crate::Expr> {
+        &self.partition_by
+    }
+
+    pub fn order_by(&self) -> &Vec<crate::SortExpr> {
+        &self.order_by
+    }
+}
+
+impl PhysicalPlan for WindowExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.input.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Window"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

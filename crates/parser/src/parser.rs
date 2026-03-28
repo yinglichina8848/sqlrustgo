@@ -339,6 +339,33 @@ pub enum Expression {
     Subquery(Box<Statement>),
     /// Qualified column: table.column
     QualifiedColumn(String, String),
+    /// Window function expression: ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)
+    WindowFunction {
+        func: String,           // Function name: ROW_NUMBER, RANK, LEAD, etc.
+        args: Vec<Expression>, // Arguments for LEAD/LAG/NTH_VALUE
+        partition_by: Vec<Expression>,
+        order_by: Vec<OrderByItem>,
+        frame: Option<WindowFrameInfo>,
+    },
+}
+
+/// Window frame info parsed from SQL
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowFrameInfo {
+    pub mode: String, // ROWS, RANGE, or GROUPS
+    pub start: FrameBoundInfo,
+    pub end: FrameBoundInfo,
+    pub exclude: Option<String>, // NO OTHERS, CURRENT ROW, GROUP, or TIES
+}
+
+/// Frame bound for window frame
+#[derive(Debug, Clone, PartialEq)]
+pub enum FrameBoundInfo {
+    UnboundedPreceding,
+    Preceding(i64),
+    CurrentRow,
+    Following(i64),
+    UnboundedFollowing,
 }
 
 /// SQL Parser
@@ -487,6 +514,16 @@ impl Parser {
                         distinct: false,
                     };
                     aggregates.push(agg);
+                }
+                Some(Token::RowNumber) | Some(Token::Rank) | Some(Token::DenseRank)
+                | Some(Token::Lead) | Some(Token::Lag) | Some(Token::FirstValue)
+                | Some(Token::LastValue) | Some(Token::NthValue) => {
+                    // Parse window function
+                    let window_expr = self.parse_window_function()?;
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", window_expr),
+                        alias: None,
+                    });
                 }
                 Some(Token::Identifier(_)) => {
                     let first_name = match self.current() {
@@ -902,7 +939,11 @@ impl Parser {
                         break;
                     }
                     Some(Token::Identifier(name)) => {
-                        row.push(Expression::Identifier(name.clone()));
+                        if name.to_uppercase() == "NULL" {
+                            row.push(Expression::Literal("NULL".to_string()));
+                        } else {
+                            row.push(Expression::Identifier(name.clone()));
+                        }
                         self.next();
                     }
                     Some(Token::NumberLiteral(n)) => {
@@ -914,14 +955,6 @@ impl Parser {
                         self.next();
                     }
                     Some(Token::Comma) => {
-                        self.next();
-                    }
-                    Some(Token::Identifier(name)) => {
-                        if name.to_uppercase() == "NULL" {
-                            row.push(Expression::Literal("NULL".to_string()));
-                        } else {
-                            row.push(Expression::Identifier(name.clone()));
-                        }
                         self.next();
                     }
                     Some(Token::Minus) => {
@@ -1281,6 +1314,12 @@ impl Parser {
                 self.expect(Token::RParen)?;
                 Ok(Expression::FunctionCall(func_name.to_string(), args))
             }
+            // Window function: ROW_NUMBER() OVER (...)
+            Some(Token::RowNumber) | Some(Token::Rank) | Some(Token::DenseRank)
+            | Some(Token::Lead) | Some(Token::Lag) | Some(Token::FirstValue)
+            | Some(Token::LastValue) | Some(Token::NthValue) => {
+                return self.parse_window_function();
+            }
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -1298,6 +1337,243 @@ impl Parser {
             }
             _ => Err("Expected expression".to_string()),
         }
+    }
+
+    /// Parse a window function: ROW_NUMBER() OVER (...)
+    fn parse_window_function(&mut self) -> Result<Expression, String> {
+        // Parse function name
+        let func = match self.current() {
+            Some(Token::RowNumber) => "ROW_NUMBER".to_string(),
+            Some(Token::Rank) => "RANK".to_string(),
+            Some(Token::DenseRank) => "DENSE_RANK".to_string(),
+            Some(Token::Lead) => "LEAD".to_string(),
+            Some(Token::Lag) => "LAG".to_string(),
+            Some(Token::FirstValue) => "FIRST_VALUE".to_string(),
+            Some(Token::LastValue) => "LAST_VALUE".to_string(),
+            Some(Token::NthValue) => "NTH_VALUE".to_string(),
+            Some(Token::Sum) => "SUM".to_string(),
+            Some(Token::Avg) => "AVG".to_string(),
+            Some(Token::Count) => "COUNT".to_string(),
+            Some(Token::Min) => "MIN".to_string(),
+            Some(Token::Max) => "MAX".to_string(),
+            _ => return Err("Expected window function".to_string()),
+        };
+        self.next(); // consume function name
+
+        // Parse arguments if any (for LEAD/LAG/NTH_VALUE)
+        let mut args = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next(); // consume '('
+            if !matches!(self.current(), Some(Token::RParen)) {
+                args.push(self.parse_expression()?);
+                while matches!(self.current(), Some(Token::Comma)) {
+                    self.next(); // consume ','
+                    args.push(self.parse_expression()?);
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        // Parse OVER clause
+        self.expect(Token::Over)?;
+        self.expect(Token::LParen)?;
+
+        // Parse PARTITION BY (optional)
+        let mut partition_by = Vec::new();
+        if matches!(self.current(), Some(Token::Partition)) {
+            self.next(); // consume PARTITION
+            self.expect(Token::By)?;
+            partition_by.push(self.parse_expression()?);
+            while matches!(self.current(), Some(Token::Comma)) {
+                self.next(); // consume ','
+                partition_by.push(self.parse_expression()?);
+            }
+        }
+
+        // Parse ORDER BY (optional)
+        let mut order_by = Vec::new();
+        if matches!(self.current(), Some(Token::Order)) {
+            self.next(); // consume ORDER
+            self.expect(Token::By)?;
+            order_by.push(self.parse_order_by_item()?);
+            while matches!(self.current(), Some(Token::Comma)) {
+                self.next(); // consume ','
+                order_by.push(self.parse_order_by_item()?);
+            }
+        }
+
+        // Parse window frame (optional)
+        let frame = self.parse_window_frame().ok();
+
+        self.expect(Token::RParen)?;
+
+        Ok(Expression::WindowFunction {
+            func,
+            args,
+            partition_by,
+            order_by,
+            frame,
+        })
+    }
+
+    /// Parse window frame: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    fn parse_window_frame(&mut self) -> Result<WindowFrameInfo, String> {
+        // Parse frame mode (ROWS, RANGE, or GROUPS) - optional, defaults to ROWS
+        let mode = match self.current() {
+            Some(Token::Rows) => {
+                self.next();
+                "ROWS".to_string()
+            }
+            Some(Token::Range) => {
+                self.next();
+                "RANGE".to_string()
+            }
+            Some(Token::Groups) => {
+                self.next();
+                "GROUPS".to_string()
+            }
+            // No frame specified - will return early
+            _ => {
+                return Err("Expected ROWS, RANGE, or GROUPS".to_string());
+            }
+        };
+
+        // Parse BETWEEN
+        self.expect(Token::Between)?;
+
+        let start = self.parse_frame_bound()?;
+        self.expect(Token::And)?;
+        let end = self.parse_frame_bound()?;
+
+        // Parse EXCLUDE (optional)
+        let exclude = if matches!(self.current(), Some(Token::Exclude)) {
+            self.next(); // consume EXCLUDE
+            Some(match self.current() {
+                Some(Token::NoOthers) => {
+                    self.next();
+                    "NO OTHERS".to_string()
+                }
+                Some(Token::Current) => {
+                    self.next();
+                    self.expect(Token::Row)?;
+                    "CURRENT ROW".to_string()
+                }
+                Some(Token::Ties) => {
+                    self.next();
+                    "TIES".to_string()
+                }
+                _ => return Err("Expected NO OTHERS, CURRENT ROW, or TIES after EXCLUDE".to_string()),
+            })
+        } else {
+            None
+        };
+
+        Ok(WindowFrameInfo { mode, start, end, exclude })
+    }
+
+    /// Parse frame bound: UNBOUNDED PRECEDING, PRECEDING(n), CURRENT ROW, FOLLOWING(n), UNBOUNDED FOLLOWING
+    fn parse_frame_bound(&mut self) -> Result<FrameBoundInfo, String> {
+        match self.current() {
+            Some(Token::Unbounded) => {
+                self.next(); // consume UNBOUNDED
+                match self.current() {
+                    Some(Token::Preceding) => {
+                        self.next();
+                        Ok(FrameBoundInfo::UnboundedPreceding)
+                    }
+                    Some(Token::Following) => {
+                        self.next();
+                        Ok(FrameBoundInfo::UnboundedFollowing)
+                    }
+                    _ => Err("Expected PRECEDING or FOLLOWING after UNBOUNDED".to_string()),
+                }
+            }
+            Some(Token::Preceding) => {
+                self.next(); // consume PRECEDING
+                // Try to parse optional number: PRECEDING(n)
+                if matches!(self.current(), Some(Token::LParen)) {
+                    self.next(); // consume '('
+                    let n = match self.current() {
+                        Some(Token::NumberLiteral(n)) => n.parse::<i64>().unwrap_or(1),
+                        _ => 1,
+                    };
+                    if let Some(Token::NumberLiteral(_)) = self.current() {
+                        self.next();
+                    }
+                    self.expect(Token::RParen)?;
+                    Ok(FrameBoundInfo::Preceding(n))
+                } else {
+                    Ok(FrameBoundInfo::Preceding(1))
+                }
+            }
+            Some(Token::Following) => {
+                self.next(); // consume FOLLOWING
+                // Try to parse optional number: FOLLOWING(n)
+                if matches!(self.current(), Some(Token::LParen)) {
+                    self.next(); // consume '('
+                    let n = match self.current() {
+                        Some(Token::NumberLiteral(n)) => n.parse::<i64>().unwrap_or(1),
+                        _ => 1,
+                    };
+                    if let Some(Token::NumberLiteral(_)) = self.current() {
+                        self.next();
+                    }
+                    self.expect(Token::RParen)?;
+                    Ok(FrameBoundInfo::Following(n))
+                } else {
+                    Ok(FrameBoundInfo::Following(1))
+                }
+            }
+            Some(Token::Current) => {
+                self.next(); // consume CURRENT
+                self.expect(Token::Row)?;
+                Ok(FrameBoundInfo::CurrentRow)
+            }
+            _ => Err("Expected frame bound (UNBOUNDED PRECEDING, PRECEDING, CURRENT ROW, FOLLOWING, UNBOUNDED FOLLOWING)".to_string()),
+        }
+    }
+
+    /// Parse ORDER BY item
+    fn parse_order_by_item(&mut self) -> Result<OrderByItem, String> {
+        let expr = self.parse_expression()?;
+
+        // Parse ASC/DESC (default ASC)
+        let asc = match self.current() {
+            Some(Token::Asc) => {
+                self.next();
+                true
+            }
+            Some(Token::Desc) => {
+                self.next();
+                false
+            }
+            _ => true, // default is ASC
+        };
+
+        // Parse NULLS FIRST/LAST (default depends on ASC/DESC)
+        let nulls_first = match self.current() {
+            Some(Token::Nulls) => {
+                self.next(); // consume NULLS
+                match self.current() {
+                    Some(Token::First) => {
+                        self.next();
+                        true
+                    }
+                    Some(Token::Last) => {
+                        self.next();
+                        false
+                    }
+                    _ => return Err("Expected FIRST or LAST after NULLS".to_string()),
+                }
+            }
+            _ => asc, // default: NULLS FIRST for ASC, NULLS LAST for DESC
+        };
+
+        Ok(OrderByItem {
+            expr,
+            asc,
+            nulls_first,
+        })
     }
 
     fn parse_delete(&mut self) -> Result<Statement, String> {
