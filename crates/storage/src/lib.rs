@@ -10,6 +10,7 @@ pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 pub mod columnar;
 pub mod clock_replacer;
+pub mod columnar;
 pub mod engine;
 pub mod failover_manager;
 pub mod file_storage;
