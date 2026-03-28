@@ -1,5 +1,6 @@
 // SQLRustGo transaction module
 
+pub mod coordinator;
 pub mod deadlock;
 pub mod dtc;
 pub mod gid;
@@ -7,6 +8,7 @@ pub mod lock;
 pub mod manager;
 pub mod mvcc;
 
+pub use coordinator::{CommitResult, Coordinator, PrepareResult};
 pub use deadlock::DeadlockDetector;
 pub use dtc::*;
 pub use gid::{GlobalTransactionId, NodeId};
