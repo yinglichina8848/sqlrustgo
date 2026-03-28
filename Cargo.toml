@@ -69,6 +69,8 @@ miniz_oxide = "0.7"
 rand = "0.8"
 fnv = "1.0"
 proptest = "1.1"
+arrow = { version = "52" }
+parquet = { version = "52" }
 
 [dev-dependencies]
 criterion = "0.8"
