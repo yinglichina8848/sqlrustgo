@@ -1786,9 +1786,7 @@ impl VolExecutorBuilder {
         let window_exec = plan
             .as_any()
             .downcast_ref::<sqlrustgo_planner::WindowExec>()
-            .ok_or_else(|| {
-                SqlError::ExecutionError("Failed to cast to WindowExec".to_string())
-            })?;
+            .ok_or_else(|| SqlError::ExecutionError("Failed to cast to WindowExec".to_string()))?;
 
         Ok(Box::new(WindowVolcanoExecutor::new(
             child,
