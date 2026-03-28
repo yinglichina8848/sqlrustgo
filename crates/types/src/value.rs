@@ -140,6 +140,14 @@ impl Value {
         }
     }
 
+    /// Get float value if this is a Float
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Value::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
     /// Convert to boolean for predicate evaluation
     pub fn to_bool(&self) -> bool {
         match self {

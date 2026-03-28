@@ -1,6 +1,7 @@
 //! Volcano Executor trait - 统一的查询执行接口
 
 use crate::filter::FilterVolcanoExecutor;
+use crate::window_executor::WindowVolcanoExecutor;
 use sqlrustgo_planner::{PhysicalPlan, Schema};
 use sqlrustgo_types::{encode_row, SqlError, SqlResult, Value, RowRef};
 use std::any::Any;
@@ -1601,6 +1602,7 @@ impl VolExecutorBuilder {
             "HashJoin" => self.build_hash_join(plan),
             "Sort" => self.build_sort(plan),
             "Limit" => self.build_limit(plan),
+            "Window" => self.build_window(plan),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported plan type: {}",
                 plan.name()
@@ -1768,6 +1770,31 @@ impl VolExecutorBuilder {
             limit,
             offset,
             plan.schema().clone(),
+        )))
+    }
+
+    fn build_window(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
+        let children = plan.children();
+        if children.is_empty() {
+            return Err(SqlError::ExecutionError(
+                "Window has no children".to_string(),
+            ));
+        }
+        let child = self.build(children[0])?;
+        let window_exec = plan
+            .as_any()
+            .downcast_ref::<sqlrustgo_planner::WindowExec>()
+            .ok_or_else(|| {
+                SqlError::ExecutionError("Failed to cast to WindowExec".to_string())
+            })?;
+
+        Ok(Box::new(WindowVolcanoExecutor::new(
+            child,
+            window_exec.window_exprs().clone(),
+            plan.schema().clone(),
+            window_exec.input().schema().clone(),
+            window_exec.partition_by().clone(),
+            window_exec.order_by().clone(),
         )))
     }
 }

@@ -18,7 +18,7 @@ pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
     AggregateExec, AnyAllSubqueryExec, ExistsExec, FilterExec, HashJoinExec, InSubqueryExec,
     IndexScanExec, LimitExec, PhysicalPlan, ProjectionExec, ScalarSubqueryExec, SeqScanExec,
-    SetOperationExec, SortMergeJoinExec,
+    SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
@@ -57,6 +57,65 @@ pub enum WindowFunction {
     FirstValue,
     LastValue,
     NthValue,
+    // Aggregate window functions
+    Sum,
+    Avg,
+    Count,
+    Min,
+    Max,
+}
+
+/// Window frame type for window functions
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFrame {
+    /// ROWS mode - physical row offset
+    Rows {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+    /// RANGE mode - logical range based on ORDER BY values
+    Range {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+    /// GROUPS mode - peer groups based on ORDER BY
+    Groups {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+}
+
+/// Frame bound for window frame start/end
+#[derive(Debug, Clone, PartialEq)]
+pub enum FrameBound {
+    /// UNBOUNDED PRECEDING
+    UnboundedPreceding,
+    /// PRECEDING(n) - n rows/groups before current
+    Preceding(i64),
+    /// CURRENT ROW
+    CurrentRow,
+    /// FOLLOWING(n) - n rows/groups after current
+    Following(i64),
+    /// UNBOUNDED FOLLOWING
+    UnboundedFollowing,
+}
+
+/// EXCLUDE mode for window frame
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExcludeMode {
+    /// No exclusion (default)
+    None,
+    /// EXCLUDE CURRENT ROW
+    CurrentRow,
+    /// EXCLUDE GROUP
+    Group,
+    /// EXCLUDE TIES
+    Ties,
+    /// EXCLUDE NO OTHERS
+    NoOthers,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -163,6 +222,7 @@ pub enum Expr {
         args: Vec<Expr>,
         partition_by: Vec<Expr>,
         order_by: Vec<SortExpr>,
+        frame: Option<WindowFrame>,
     },
     Alias {
         expr: Box<Expr>,
@@ -312,7 +372,7 @@ impl fmt::Display for Expr {
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
                 write!(f, "{}({}{})", func_name, distinct_str, args_str.join(", "))
             }
-            Expr::WindowFunction { func, args, .. } => {
+            Expr::WindowFunction { func, args, partition_by, order_by, frame } => {
                 let func_name = match func {
                     WindowFunction::RowNumber => "ROW_NUMBER",
                     WindowFunction::Rank => "RANK",
@@ -322,9 +382,33 @@ impl fmt::Display for Expr {
                     WindowFunction::FirstValue => "FIRST_VALUE",
                     WindowFunction::LastValue => "LAST_VALUE",
                     WindowFunction::NthValue => "NTH_VALUE",
+                    WindowFunction::Sum => "SUM",
+                    WindowFunction::Avg => "AVG",
+                    WindowFunction::Count => "COUNT",
+                    WindowFunction::Min => "MIN",
+                    WindowFunction::Max => "MAX",
                 };
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-                write!(f, "{}({})", func_name, args_str.join(", "))
+                write!(f, "{}({})", func_name, args_str.join(", "))?;
+
+                // Add PARTITION BY clause
+                if !partition_by.is_empty() {
+                    let partition_str: Vec<String> = partition_by.iter().map(|p| p.to_string()).collect();
+                    write!(f, " PARTITION BY {}", partition_str.join(", "))?;
+                }
+
+                // Add ORDER BY clause
+                if !order_by.is_empty() {
+                    let order_str: Vec<String> = order_by.iter().map(|o| o.to_string()).collect();
+                    write!(f, " ORDER BY {}", order_str.join(", "))?;
+                }
+
+                // Add window frame specification
+                if let Some(fr) = frame {
+                    write!(f, " {}", fr)?;
+                }
+
+                Ok(())
             }
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
@@ -365,6 +449,64 @@ impl fmt::Display for Operator {
             Operator::Not => write!(f, "NOT"),
             Operator::Like => write!(f, "LIKE"),
             Operator::Concatenate => write!(f, "||"),
+        }
+    }
+}
+
+impl fmt::Display for SortExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.expr, if self.asc { "ASC" } else { "DESC" })
+    }
+}
+
+impl fmt::Display for WindowFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowFrame::Rows { start, end, exclude } => {
+                write!(f, "ROWS {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+            WindowFrame::Range { start, end, exclude } => {
+                write!(f, "RANGE {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+            WindowFrame::Groups { start, end, exclude } => {
+                write!(f, "GROUPS {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl fmt::Display for FrameBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FrameBound::UnboundedPreceding => write!(f, "UNBOUNDED PRECEDING"),
+            FrameBound::Preceding(n) => write!(f, "PRECEDING({})", n),
+            FrameBound::CurrentRow => write!(f, "CURRENT ROW"),
+            FrameBound::Following(n) => write!(f, "FOLLOWING({})", n),
+            FrameBound::UnboundedFollowing => write!(f, "UNBOUNDED FOLLOWING"),
+        }
+    }
+}
+
+impl fmt::Display for ExcludeMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExcludeMode::None => write!(f, "EXCLUDE NO OTHERS"),
+            ExcludeMode::CurrentRow => write!(f, "EXCLUDE CURRENT ROW"),
+            ExcludeMode::Group => write!(f, "EXCLUDE GROUP"),
+            ExcludeMode::Ties => write!(f, "EXCLUDE TIES"),
+            ExcludeMode::NoOthers => write!(f, "EXCLUDE NO OTHERS"),
         }
     }
 }
@@ -1288,5 +1430,130 @@ mod tests {
         };
         let result = planner.create_physical_plan(&plan);
         assert!(result.is_ok());
+    }
+
+    // === Tests for WindowFrame, FrameBound, ExcludeMode ===
+
+    #[test]
+    fn test_window_frame_variants() {
+        // Test all WindowFrame variants are constructible
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Rows { .. }));
+
+        let frame = WindowFrame::Range {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::UnboundedFollowing,
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Range { .. }));
+
+        let frame = WindowFrame::Groups {
+            start: FrameBound::Preceding(1),
+            end: FrameBound::Following(1),
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Groups { .. }));
+    }
+
+    #[test]
+    fn test_frame_bound_variants() {
+        assert!(matches!(FrameBound::UnboundedPreceding, FrameBound::UnboundedPreceding));
+        assert!(matches!(FrameBound::Preceding(5), FrameBound::Preceding(5)));
+        assert!(matches!(FrameBound::CurrentRow, FrameBound::CurrentRow));
+        assert!(matches!(FrameBound::Following(3), FrameBound::Following(3)));
+        assert!(matches!(FrameBound::UnboundedFollowing, FrameBound::UnboundedFollowing));
+    }
+
+    #[test]
+    fn test_exclude_mode_variants() {
+        assert!(matches!(ExcludeMode::None, ExcludeMode::None));
+        assert!(matches!(ExcludeMode::CurrentRow, ExcludeMode::CurrentRow));
+        assert!(matches!(ExcludeMode::Group, ExcludeMode::Group));
+        assert!(matches!(ExcludeMode::Ties, ExcludeMode::Ties));
+        assert!(matches!(ExcludeMode::NoOthers, ExcludeMode::NoOthers));
+    }
+
+    #[test]
+    fn test_window_frame_display_rows() {
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        assert_eq!(frame.to_string(), "ROWS UNBOUNDED PRECEDING CURRENT ROW");
+
+        let frame_with_exclude = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::CurrentRow,
+        };
+        assert_eq!(frame_with_exclude.to_string(), "ROWS UNBOUNDED PRECEDING CURRENT ROW EXCLUDE CURRENT ROW");
+    }
+
+    #[test]
+    fn test_window_frame_display_range() {
+        let frame = WindowFrame::Range {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::UnboundedFollowing,
+            exclude: ExcludeMode::None,
+        };
+        assert_eq!(frame.to_string(), "RANGE UNBOUNDED PRECEDING UNBOUNDED FOLLOWING");
+    }
+
+    #[test]
+    fn test_window_frame_display_groups() {
+        let frame = WindowFrame::Groups {
+            start: FrameBound::Preceding(1),
+            end: FrameBound::Following(1),
+            exclude: ExcludeMode::Ties,
+        };
+        assert_eq!(frame.to_string(), "GROUPS PRECEDING(1) FOLLOWING(1) EXCLUDE TIES");
+    }
+
+    #[test]
+    fn test_frame_bound_display() {
+        assert_eq!(FrameBound::UnboundedPreceding.to_string(), "UNBOUNDED PRECEDING");
+        assert_eq!(FrameBound::Preceding(5).to_string(), "PRECEDING(5)");
+        assert_eq!(FrameBound::CurrentRow.to_string(), "CURRENT ROW");
+        assert_eq!(FrameBound::Following(3).to_string(), "FOLLOWING(3)");
+        assert_eq!(FrameBound::UnboundedFollowing.to_string(), "UNBOUNDED FOLLOWING");
+    }
+
+    #[test]
+    fn test_exclude_mode_display() {
+        assert_eq!(ExcludeMode::None.to_string(), "EXCLUDE NO OTHERS");
+        assert_eq!(ExcludeMode::CurrentRow.to_string(), "EXCLUDE CURRENT ROW");
+        assert_eq!(ExcludeMode::Group.to_string(), "EXCLUDE GROUP");
+        assert_eq!(ExcludeMode::Ties.to_string(), "EXCLUDE TIES");
+        assert_eq!(ExcludeMode::NoOthers.to_string(), "EXCLUDE NO OTHERS");
+    }
+
+    #[test]
+    fn test_window_frame_clone() {
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        let cloned = frame.clone();
+        assert_eq!(frame, cloned);
+    }
+
+    #[test]
+    fn test_frame_bound_clone() {
+        let bound = FrameBound::Preceding(5);
+        let cloned = bound.clone();
+        assert_eq!(bound, cloned);
+    }
+
+    #[test]
+    fn test_exclude_mode_clone() {
+        let exclude = ExcludeMode::CurrentRow;
+        let cloned = exclude.clone();
+        assert_eq!(exclude, cloned);
     }
 }

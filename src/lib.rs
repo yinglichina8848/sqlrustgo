@@ -344,6 +344,7 @@ fn evaluate_where_clause(
         }
         sqlrustgo_parser::Expression::Subquery(_) => false,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
+        sqlrustgo_parser::Expression::WindowFunction { .. } => false,
     }
 }
 
@@ -421,6 +422,7 @@ fn evaluate_expr(
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
         sqlrustgo_parser::Expression::Subquery(_) => Value::Null,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
+        sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
     }
 }
 
