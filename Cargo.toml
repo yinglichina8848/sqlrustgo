@@ -51,6 +51,7 @@ sqlrustgo-network = { path = "crates/network" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
+tonic = "0.12"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"

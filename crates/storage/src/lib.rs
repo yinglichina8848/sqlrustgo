@@ -10,14 +10,13 @@ pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 pub mod columnar;
 pub mod clock_replacer;
-pub mod columnar;
 pub mod engine;
 pub mod failover_manager;
 pub mod file_storage;
 pub mod heap;
 pub mod page;
 pub mod page_guard;
-pub mod parquet;
+// pub mod parquet;  // Parquet module not yet implemented
 pub mod replication;
 pub mod replication_lag;
 pub mod stats;
@@ -42,7 +41,6 @@ pub use binlog_protocol::{
 };
 
 pub use columnar::{ParquetCompatReader, ParquetCompatWriter};
-pub use columnar::{ColumnarStorage, TableStore};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
@@ -52,7 +50,6 @@ pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
 pub use page_guard::PageGuard;
-pub use parquet::{export_to_parquet, import_from_parquet, ParquetReader, ParquetWriter};
 pub use replication::{
     BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, FailoverManager, MasterNode,
     ReplicationConfig, SlaveNode,
