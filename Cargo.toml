@@ -82,6 +82,7 @@ rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
 proptest = "1.1"
 sqlrustgo-server = { path = "crates/server" }
+sqlrustgo-transaction = { path = "crates/transaction" }
 
 [package]
 name = "sqlrustgo"
@@ -366,6 +367,10 @@ path = "tests/integration/upsert_test.rs"
 [[test]]
 name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
+
+[[test]]
+name = "distributed_transaction_test"
+path = "tests/integration/distributed_transaction_test.rs"
 
 [[test]]
 name = "regression_test"
