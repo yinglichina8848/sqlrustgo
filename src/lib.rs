@@ -13,6 +13,7 @@ pub use sqlrustgo_parser::{
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
+    BPlusTree, BufferPool, ColumnarStorage, FileStorage, MemoryStorage, Page, StorageEngine,
     ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
