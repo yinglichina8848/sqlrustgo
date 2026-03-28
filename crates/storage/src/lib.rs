@@ -31,6 +31,9 @@ pub use clock_replacer::ClockReplacer;
 pub use columnar::{
     Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, TableStore,
 };
+// pub use columnar::{
+//     ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
+// };
 pub use binlog_client::{BinlogClient, BinlogClientBuilder};
 pub use binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
