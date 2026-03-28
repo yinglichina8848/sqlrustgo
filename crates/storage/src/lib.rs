@@ -28,7 +28,7 @@ pub use clock_replacer::ClockReplacer;
 // };
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
-    TableData, TableInfo, ViewInfo,
+    TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
 };
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
