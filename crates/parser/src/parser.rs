@@ -40,6 +40,32 @@ pub enum Statement {
     Revoke(RevokeStatement),
     ShowStatus,
     ShowProcesslist,
+    /// PREPARE stmt FROM 'sql text'
+    Prepare(PrepareStatement),
+    /// EXECUTE stmt USING param1, param2, ...
+    Execute(ExecuteStatement),
+    /// DEALLOCATE PREPARE stmt
+    DeallocatePrepare(DeallocatePrepareStatement),
+}
+
+/// PREPARE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareStatement {
+    pub name: String,
+    pub sql: String,
+}
+
+/// EXECUTE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecuteStatement {
+    pub name: String,
+    pub params: Vec<Expression>,
+}
+
+/// DEALLOCATE PREPARE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeallocatePrepareStatement {
+    pub name: String,
 }
 
 /// CREATE INDEX statement
@@ -347,6 +373,8 @@ pub enum Expression {
         order_by: Vec<OrderByItem>,
         frame: Option<WindowFrameInfo>,
     },
+    /// Parameter placeholder for prepared statements (?)
+    Placeholder,
 }
 
 /// Window frame info parsed from SQL
@@ -430,6 +458,9 @@ impl Parser {
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
+            Some(Token::Prepare) => self.parse_prepare(),
+            Some(Token::Execute) => self.parse_execute(),
+            Some(Token::Deallocate) => self.parse_deallocate(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1335,6 +1366,10 @@ impl Parser {
                 self.expect(Token::RParen)?;
                 Ok(expr)
             }
+            Some(Token::QuestionMark) => {
+                self.next(); // consume '?'
+                Ok(Expression::Placeholder)
+            }
             _ => Err("Expected expression".to_string()),
         }
     }
@@ -2238,6 +2273,86 @@ impl Parser {
             }
             _ => Err("Expected STATUS or PROCESSLIST after SHOW".to_string()),
         }
+    }
+
+    /// Parse PREPARE statement: PREPARE stmt FROM 'sql text'
+    fn parse_prepare(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Prepare)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after PREPARE".to_string()),
+        };
+
+        self.expect(Token::From)?;
+
+        // Get SQL string literal
+        let sql = match self.current() {
+            Some(Token::StringLiteral(s)) => {
+                let sql = s.clone();
+                self.next();
+                sql
+            }
+            _ => return Err("Expected SQL string literal after FROM".to_string()),
+        };
+
+        Ok(Statement::Prepare(PrepareStatement { name, sql }))
+    }
+
+    /// Parse EXECUTE statement: EXECUTE stmt USING param1, param2, ...
+    fn parse_execute(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Execute)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after EXECUTE".to_string()),
+        };
+
+        // Parse optional USING clause
+        let mut params = Vec::new();
+        if let Some(Token::Using) = self.current() {
+            self.next();
+            // Parse parameter list
+            loop {
+                params.push(self.parse_expression()?);
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+
+        Ok(Statement::Execute(ExecuteStatement { name, params }))
+    }
+
+    /// Parse DEALLOCATE PREPARE statement: DEALLOCATE PREPARE stmt
+    fn parse_deallocate(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Deallocate)?;
+        self.expect(Token::Prepare)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after DEALLOCATE PREPARE".to_string()),
+        };
+
+        Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement { name }))
     }
 
     fn parse_transaction(&mut self) -> Result<Statement, String> {
