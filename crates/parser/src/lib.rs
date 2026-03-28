@@ -303,3 +303,6 @@ fn test_parse_window_frame_with_exclude() {
     let result = parse(sql);
     assert!(result.is_ok(), "Failed to parse window frame with EXCLUDE: {:?}", result);
 }
+
+// Stored Procedures
+pub use parser::{CreateProcedureStatement, DropProcedureStatement, CallProcedureStatement, ProcedureParam, ParamMode, ProcedureStatement, DelimiterStatement};
