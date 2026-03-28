@@ -12,7 +12,8 @@ pub use sqlrustgo_parser::{
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
-    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
+    BPlusTree, BufferPool, ColumnarStorage, FileStorage, MemoryStorage, Page, StorageEngine,
+    ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
@@ -1628,6 +1629,20 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(result_rows, 0))
             }
+            "ColumnarScan" => {
+                let scan_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::ColumnarScanExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast ColumnarScanExec".to_string())
+                    })?;
+
+                let table = scan_plan.table_name();
+                let projection = scan_plan.projection();
+
+                let rows = storage.scan_columns(table, projection)?;
+                Ok(ExecutorResult::new(rows, 0))
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -1723,6 +1738,51 @@ mod tests {
         assert_eq!(result.rows.len(), 2);
         assert_eq!(result.rows[0][0], Value::Integer(1));
         assert_eq!(result.rows[0][1], Value::Text("Alice".to_string()));
+    }
+
+    #[test]
+    fn test_execute_plan_columnar_scan() {
+        use sqlrustgo_planner::{ColumnarScanExec, DataType, Field, Schema};
+
+        let mut storage = MemoryStorage::new();
+        storage
+            .insert(
+                "users",
+                vec![
+                    vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)],
+                    vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Float(2.71)],
+                    vec![Value::Integer(3), Value::Text("Charlie".to_string()), Value::Float(1.41)],
+                ],
+            )
+            .unwrap();
+
+        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
+
+        // Full schema with 3 columns: id, name, value
+        let schema = Schema::new(vec![
+            Field::new("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+            Field::new("value".to_string(), DataType::Float),
+        ]);
+
+        // Scan only columns 0 and 2 (id and value), projecting out name
+        let plan = ColumnarScanExec::new("users".to_string(), schema, vec![0, 2]);
+        let result = engine.execute_plan(&plan).unwrap();
+
+        assert_eq!(result.rows.len(), 3);
+
+        // First row - should only have id and value
+        assert_eq!(result.rows[0].len(), 2);
+        assert_eq!(result.rows[0][0], Value::Integer(1));
+        assert_eq!(result.rows[0][1], Value::Float(3.14));
+
+        // Second row
+        assert_eq!(result.rows[1][0], Value::Integer(2));
+        assert_eq!(result.rows[1][1], Value::Float(2.71));
+
+        // Third row
+        assert_eq!(result.rows[2][0], Value::Integer(3));
+        assert_eq!(result.rows[2][1], Value::Float(1.41));
     }
 
     #[test]

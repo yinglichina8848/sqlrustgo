@@ -189,6 +189,22 @@ pub trait StorageEngine: Send + Sync {
     /// Callback triggered after write operations (INSERT/UPDATE/DELETE)
     /// Used by upper layers to invalidate query caches
     fn on_write_complete(&mut self, _table: &str) {}
+
+    /// Scan specific columns from a table (projection pushdown)
+    /// Returns rows with only the requested column indices
+    fn scan_columns(&self, table: &str, column_indices: &[usize]) -> SqlResult<Vec<Record>> {
+        let all_records = self.scan(table)?;
+        let projected: Vec<Record> = all_records
+            .into_iter()
+            .map(|row| {
+                column_indices
+                    .iter()
+                    .filter_map(|&idx| row.get(idx).cloned())
+                    .collect()
+            })
+            .collect();
+        Ok(projected)
+    }
 }
 
 /// In-memory storage implementation for testing and caching
