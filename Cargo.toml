@@ -157,6 +157,10 @@ harness = false
 name = "tpch_bench"
 harness = false
 
+[[bench]]
+name = "bench_columnar"
+harness = false
+
 # [[bin]]
 # name = "tpch_benchmark"
 # path = "benches/tpch_comprehensive_main.rs"
@@ -378,3 +382,7 @@ path = "tests/integration/distributed_transaction_test.rs"
 [[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
+
+[[test]]
+name = "columnar_storage_test"
+path = "tests/integration/columnar_storage_test.rs"
