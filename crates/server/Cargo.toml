@@ -15,6 +15,7 @@ sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 sqlrustgo-transaction.workspace = true
+sqlrustgo-telemetry.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

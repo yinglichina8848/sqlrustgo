@@ -1,0 +1,14 @@
+[package]
+name = "sqlrustgo-telemetry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo-common.workspace = true
+parking_lot = "0.12"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
