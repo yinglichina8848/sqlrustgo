@@ -10,6 +10,7 @@ members = [
     "crates/storage",
     "crates/catalog",
     "crates/distributed",
+    "crates/security",
     "crates/transaction",
     "crates/server",
     "crates/telemetry",
@@ -46,6 +47,7 @@ sqlrustgo-executor = { path = "crates/executor" }
 sqlrustgo-storage = { path = "crates/storage" }
 sqlrustgo-catalog = { path = "crates/catalog" }
 sqlrustgo-distributed = { path = "crates/distributed" }
+sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
