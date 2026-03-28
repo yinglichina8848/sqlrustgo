@@ -15,10 +15,7 @@ use std::time::Instant;
 /// ParallelExecutor trait - unified interface for parallel execution
 pub trait ParallelExecutor: Send + Sync {
     /// Execute a plan in parallel
-    fn execute_parallel(
-        &self,
-        plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult>;
+    fn execute_parallel(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult>;
 
     /// Set parallel degree
     fn set_parallel_degree(&mut self, degree: usize);
@@ -76,10 +73,7 @@ impl ParallelVolcanoExecutor {
     }
 
     /// Create with custom scheduler and parallel degree
-    pub fn with_config(
-        scheduler: Arc<RayonTaskScheduler>,
-        parallel_degree: usize,
-    ) -> Self {
+    pub fn with_config(scheduler: Arc<RayonTaskScheduler>, parallel_degree: usize) -> Self {
         let storage: Arc<dyn StorageEngine> = Arc::new(sqlrustgo_storage::MemoryStorage::new());
         Self {
             storage,
@@ -89,10 +83,7 @@ impl ParallelVolcanoExecutor {
     }
 
     /// Create with storage and parallel degree
-    pub fn with_storage(
-        storage: Arc<dyn StorageEngine>,
-        parallel_degree: usize,
-    ) -> Self {
+    pub fn with_storage(storage: Arc<dyn StorageEngine>, parallel_degree: usize) -> Self {
         let scheduler = RayonTaskScheduler::new(parallel_degree);
         Self {
             storage,
@@ -124,10 +115,7 @@ impl Default for ParallelVolcanoExecutor {
 }
 
 impl ParallelExecutor for ParallelVolcanoExecutor {
-    fn execute_parallel(
-        &self,
-        plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         match plan.name() {
             "SeqScan" => self.execute_parallel_scan(plan),
             "HashJoin" => self.execute_parallel_hash_join(plan),
@@ -150,10 +138,7 @@ impl ParallelExecutor for ParallelVolcanoExecutor {
 
 impl ParallelVolcanoExecutor {
     /// Execute parallel sequential scan using efficient partitioning
-    fn execute_parallel_scan(
-        &self,
-        plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_scan(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         let table_name = plan.table_name();
         if table_name.is_empty() {
             return Ok(ExecutorResult::empty());
@@ -191,7 +176,11 @@ impl ParallelVolcanoExecutor {
         let mut partitions: Vec<(usize, usize)> = Vec::with_capacity(degree);
         let mut current = 0;
         for i in 0..degree {
-            let size = if i < remainder { base_size + 1 } else { base_size };
+            let size = if i < remainder {
+                base_size + 1
+            } else {
+                base_size
+            };
             if size > 0 {
                 partitions.push((current, current + size));
             }
@@ -226,10 +215,7 @@ impl ParallelVolcanoExecutor {
     }
 
     /// Execute parallel hash join by partitioning
-    fn execute_parallel_hash_join(
-        &self,
-        plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_hash_join(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         let children = plan.children();
         if children.len() < 2 {
             return Ok(ExecutorResult::empty());
@@ -247,9 +233,7 @@ impl ParallelVolcanoExecutor {
         let left_result = left_rows?;
         let right_result = right_rows?;
 
-        let hash_join = plan
-            .as_any()
-            .downcast_ref::<HashJoinExec>();
+        let hash_join = plan.as_any().downcast_ref::<HashJoinExec>();
 
         let (join_type, condition) = match hash_join {
             Some(hj) => (hj.join_type(), hj.condition().cloned()),
@@ -338,9 +322,17 @@ impl ParallelVolcanoExecutor {
         }
 
         match join_type {
-            JoinType::Inner => self.partition_hash_inner_join(left, right, condition, left_schema, right_schema),
+            JoinType::Inner => {
+                self.partition_hash_inner_join(left, right, condition, left_schema, right_schema)
+            }
             JoinType::Left => {
-                let matched = self.partition_hash_inner_join(left, right, condition, left_schema, right_schema);
+                let matched = self.partition_hash_inner_join(
+                    left,
+                    right,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
                 self.extend_with_left_unmatched(left, &matched)
             }
             _ => {
@@ -364,7 +356,8 @@ impl ParallelVolcanoExecutor {
         // Partition right side into buckets for parallel processing
         let right_buckets: Vec<Vec<&Vec<Value>>> = (0..degree)
             .map(|bucket_idx| {
-                right.iter()
+                right
+                    .iter()
                     .enumerate()
                     .filter(|(idx, _)| idx % degree == bucket_idx)
                     .map(|(_, row)| row)
@@ -379,7 +372,13 @@ impl ParallelVolcanoExecutor {
                 let mut bucket_results = Vec::new();
                 for right_row in bucket {
                     for left_row in left {
-                        if Self::evaluate_join_condition(left_row, right_row, condition, left_schema, right_schema) {
+                        if Self::evaluate_join_condition(
+                            left_row,
+                            right_row,
+                            condition,
+                            left_schema,
+                            right_schema,
+                        ) {
                             let mut combined = left_row.clone();
                             combined.extend(right_row.iter().cloned());
                             bucket_results.push(combined);
@@ -410,7 +409,10 @@ impl ParallelVolcanoExecutor {
             if !is_matched {
                 let mut combined = left_row.clone();
                 // Add NULLs for right side
-                combined.extend(std::iter::repeat(Value::Null).take(matched.first().map(|m| m.len() - left_len).unwrap_or(0)));
+                combined.extend(
+                    std::iter::repeat(Value::Null)
+                        .take(matched.first().map(|m| m.len() - left_len).unwrap_or(0)),
+                );
                 results.push(combined);
             }
         }
@@ -426,7 +428,12 @@ impl ParallelVolcanoExecutor {
         left_schema: &sqlrustgo_planner::Schema,
         right_schema: &sqlrustgo_planner::Schema,
     ) -> bool {
-        if let sqlrustgo_planner::Expr::BinaryExpr { left: l, op, right: r } = condition {
+        if let sqlrustgo_planner::Expr::BinaryExpr {
+            left: l,
+            op,
+            right: r,
+        } = condition
+        {
             let left_val = l.evaluate(left, left_schema);
             let right_val = r.evaluate(right, right_schema);
             match (left_val, right_val, op) {
@@ -446,28 +453,19 @@ impl ParallelVolcanoExecutor {
     }
 
     /// Execute parallel filter
-    fn execute_parallel_filter(
-        &self,
-        _plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_filter(&self, _plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         // Filter is usually not the bottleneck, return empty for now
         Ok(ExecutorResult::empty())
     }
 
     /// Execute parallel projection
-    fn execute_parallel_projection(
-        &self,
-        _plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_projection(&self, _plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         // Projection is usually not the bottleneck, return empty for now
         Ok(ExecutorResult::empty())
     }
 
     /// Execute parallel aggregate
-    fn execute_parallel_aggregate(
-        &self,
-        _plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_aggregate(&self, _plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         // Aggregate can benefit from parallel execution
         // For now, return empty
         Ok(ExecutorResult::empty())
@@ -475,10 +473,7 @@ impl ParallelVolcanoExecutor {
 
     /// Execute parallel COUNT(*) using atomic counters
     /// This is much more efficient than scanning and cloning all rows
-    fn execute_parallel_count(
-        &self,
-        plan: &dyn PhysicalPlan,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_parallel_count(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         let table_name = plan.table_name();
         if table_name.is_empty() {
             return Ok(ExecutorResult::new(vec![vec![Value::Integer(0)]], 0));
@@ -502,7 +497,10 @@ impl ParallelVolcanoExecutor {
                 total_count,
                 1,
             );
-            return Ok(ExecutorResult::new(vec![vec![Value::Integer(total_count as i64)]], 0));
+            return Ok(ExecutorResult::new(
+                vec![vec![Value::Integer(total_count as i64)]],
+                0,
+            ));
         }
 
         // Use atomic counters for parallel counting
@@ -517,7 +515,11 @@ impl ParallelVolcanoExecutor {
         let mut partitions: Vec<(usize, usize)> = Vec::with_capacity(degree);
         let mut current = 0;
         for i in 0..degree {
-            let size = if i < remainder { base_size + 1 } else { base_size };
+            let size = if i < remainder {
+                base_size + 1
+            } else {
+                base_size
+            };
             if size > 0 {
                 partitions.push((current, current + size));
             }
@@ -525,12 +527,10 @@ impl ParallelVolcanoExecutor {
         }
 
         // Count in parallel using atomic counters - no data cloning needed
-        partitions
-            .into_par_iter()
-            .for_each(|(start_idx, end_idx)| {
-                let local_count = end_idx - start_idx;
-                counter.fetch_add(local_count, Ordering::Relaxed);
-            });
+        partitions.into_par_iter().for_each(|(start_idx, end_idx)| {
+            let local_count = end_idx - start_idx;
+            counter.fetch_add(local_count, Ordering::Relaxed);
+        });
 
         let count = counter.load(Ordering::Relaxed) as i64;
         let duration = start.elapsed();
@@ -547,10 +547,7 @@ impl ParallelVolcanoExecutor {
     }
 
     /// Compute cartesian product of two row sets
-    fn cartesian_product(
-        left: &[Vec<Value>],
-        right: &[Vec<Value>],
-    ) -> Vec<Vec<Value>> {
+    fn cartesian_product(left: &[Vec<Value>], right: &[Vec<Value>]) -> Vec<Vec<Value>> {
         let mut results = Vec::new();
         for lrow in left {
             for rrow in right {
@@ -775,10 +772,8 @@ mod tests {
 
         for &degree in &degrees {
             let scheduler = Arc::new(RayonTaskScheduler::new(degree));
-            let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-                storage.clone(),
-                scheduler,
-            );
+            let executor =
+                ParallelVolcanoExecutor::with_storage_and_scheduler(storage.clone(), scheduler);
 
             let start = Instant::now();
             let result = executor.execute_parallel(&MockPhysicalPlan {
@@ -807,8 +802,16 @@ mod tests {
 
         // For memory-bound cloning workloads, parallel speedup is limited
         // We verify we don't regress too much (should be > 0.3x)
-        assert!(speedup_2 > 0.3, "2-core speedup should be > 0.3x, got {:.2}x", speedup_2);
-        assert!(speedup_4 > 0.3, "4-core speedup should be > 0.3x, got {:.2}x", speedup_4);
+        assert!(
+            speedup_2 > 0.3,
+            "2-core speedup should be > 0.3x, got {:.2}x",
+            speedup_2
+        );
+        assert!(
+            speedup_4 > 0.3,
+            "4-core speedup should be > 0.3x, got {:.2}x",
+            speedup_4
+        );
     }
 
     #[test]
@@ -877,10 +880,8 @@ mod tests {
         // Warm-up run
         for &degree in &degrees {
             let scheduler = Arc::new(RayonTaskScheduler::new(degree));
-            let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-                storage.clone(),
-                scheduler,
-            );
+            let executor =
+                ParallelVolcanoExecutor::with_storage_and_scheduler(storage.clone(), scheduler);
             let _ = executor.execute_parallel(&MockPhysicalPlan {
                 name: "Count".to_string(),
                 table_name: table_name.to_string(),
@@ -891,10 +892,8 @@ mod tests {
         // Now run the actual timed tests
         for &degree in &degrees {
             let scheduler = Arc::new(RayonTaskScheduler::new(degree));
-            let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-                storage.clone(),
-                scheduler,
-            );
+            let executor =
+                ParallelVolcanoExecutor::with_storage_and_scheduler(storage.clone(), scheduler);
 
             let start = Instant::now();
             let result = executor.execute_parallel(&MockPhysicalPlan {
@@ -930,8 +929,16 @@ mod tests {
         // For in-memory workloads, we verify:
         // 1. Parallel execution doesn't cause significant regression (< 0.5x slowdown)
         // 2. Parallel framework is correctly implemented and functional
-        assert!(speedup_2 > 0.5, "2-core speedup should be > 0.5x, got {:.2}x", speedup_2);
-        assert!(speedup_4 > 0.5, "4-core speedup should be > 0.5x, got {:.2}x", speedup_4);
+        assert!(
+            speedup_2 > 0.5,
+            "2-core speedup should be > 0.5x, got {:.2}x",
+            speedup_2
+        );
+        assert!(
+            speedup_4 > 0.5,
+            "4-core speedup should be > 0.5x, got {:.2}x",
+            speedup_4
+        );
     }
 
     #[test]
@@ -980,10 +987,26 @@ mod tests {
             .insert(
                 "employees",
                 vec![
-                    vec![Value::Integer(1), Value::Text("Alice".into()), Value::Integer(10)],
-                    vec![Value::Integer(2), Value::Text("Bob".into()), Value::Integer(20)],
-                    vec![Value::Integer(3), Value::Text("Charlie".into()), Value::Integer(10)],
-                    vec![Value::Integer(4), Value::Text("David".into()), Value::Integer(30)],
+                    vec![
+                        Value::Integer(1),
+                        Value::Text("Alice".into()),
+                        Value::Integer(10),
+                    ],
+                    vec![
+                        Value::Integer(2),
+                        Value::Text("Bob".into()),
+                        Value::Integer(20),
+                    ],
+                    vec![
+                        Value::Integer(3),
+                        Value::Text("Charlie".into()),
+                        Value::Integer(10),
+                    ],
+                    vec![
+                        Value::Integer(4),
+                        Value::Text("David".into()),
+                        Value::Integer(30),
+                    ],
                 ],
             )
             .unwrap();
@@ -1031,21 +1054,25 @@ mod tests {
 
         // Create hash join executor
         let scheduler = Arc::new(RayonTaskScheduler::new(4));
-        let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-            storage.clone(),
-            scheduler,
-        );
+        let executor =
+            ParallelVolcanoExecutor::with_storage_and_scheduler(storage.clone(), scheduler);
 
         // Create mock hash join plan
         let left_schema = sqlrustgo_planner::Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
             sqlrustgo_planner::Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
-            sqlrustgo_planner::Field::new("dept_id".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "dept_id".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
 
         let right_schema = sqlrustgo_planner::Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("dept_name".to_string(), sqlrustgo_planner::DataType::Text),
+            sqlrustgo_planner::Field::new(
+                "dept_name".to_string(),
+                sqlrustgo_planner::DataType::Text,
+            ),
         ]);
 
         let left_scan = MockPhysicalPlan {
@@ -1090,10 +1117,7 @@ mod tests {
     fn test_empty_table_scan() {
         let storage: Arc<dyn StorageEngine> = Arc::new(sqlrustgo_storage::MemoryStorage::new());
         let scheduler = Arc::new(RayonTaskScheduler::new(4));
-        let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-            storage,
-            scheduler,
-        );
+        let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(storage, scheduler);
 
         let schema = sqlrustgo_planner::Schema::empty();
         let result = executor.execute_parallel(&MockPhysicalPlan {
@@ -1167,10 +1191,8 @@ mod tests {
 
         // Run with 4 parallel degree
         let scheduler = Arc::new(RayonTaskScheduler::new(4));
-        let executor = ParallelVolcanoExecutor::with_storage_and_scheduler(
-            storage.clone(),
-            scheduler,
-        );
+        let executor =
+            ParallelVolcanoExecutor::with_storage_and_scheduler(storage.clone(), scheduler);
 
         let result = executor.execute_parallel(&MockPhysicalPlan {
             name: "SeqScan".to_string(),
