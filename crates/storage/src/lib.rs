@@ -34,6 +34,8 @@ pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
+
+pub use columnar::{ParquetCompatReader, ParquetCompatWriter};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,

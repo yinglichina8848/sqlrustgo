@@ -322,6 +322,9 @@ impl StorageEngine for ColumnarStorage {
         let store = self.tables.get(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         let mut records = Vec::with_capacity(store.row_count());
         for i in 0..store.row_count() {
@@ -347,6 +350,9 @@ impl StorageEngine for ColumnarStorage {
 
         let store = self.tables.get_mut(table)
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get_mut(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         for record in records {
             store
@@ -401,6 +407,9 @@ impl StorageEngine for ColumnarStorage {
         self.tables.remove(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
+        self.tables.remove(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         // Remove from disk
         if !self.base_path.as_os_str().is_empty() {
@@ -419,6 +428,9 @@ impl StorageEngine for ColumnarStorage {
             .get(table)
             .map(|s| s.info.clone())
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
+            .ok_or_else(|| {
+                crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+            })
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -712,6 +724,21 @@ mod tests {
                 Value::Text("Charlie".to_string()),
                 Value::Float(1.41),
             ],
+            vec![
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ],
+            vec![
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Float(2.71),
+            ],
+            vec![
+                Value::Integer(3),
+                Value::Text("Charlie".to_string()),
+                Value::Float(1.41),
+            ],
         ];
 
         storage.insert("test_table", records).unwrap();
@@ -741,6 +768,16 @@ mod tests {
         storage.create_table(&info).unwrap();
 
         let records = vec![
+            vec![
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ],
+            vec![
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Float(2.71),
+            ],
             vec![
                 Value::Integer(1),
                 Value::Text("Alice".to_string()),
