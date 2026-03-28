@@ -39,6 +39,8 @@ pub use binlog_client::{BinlogClient, BinlogClientBuilder};
 pub use binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
 };
+
+pub use columnar::{ParquetCompatReader, ParquetCompatWriter};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
