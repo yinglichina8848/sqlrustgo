@@ -11,14 +11,14 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "catalog_check", about = "Validate catalog invariants")]
-struct Opt {
+pub struct Opt {
     /// Storage file path (for file-based storage)
     #[structopt(short = "d", long = "data-dir", default_value = "./data")]
-    data_dir: PathBuf,
+    pub data_dir: PathBuf,
 
     /// Use memory storage instead of file storage
     #[structopt(short = "m", long = "memory")]
-    memory: bool,
+    pub memory: bool,
 }
 
 /// Open storage engine based on options
@@ -41,6 +41,10 @@ pub fn run() -> Result<()> {
     // Parse command line options
     let opt = Opt::from_args();
 
+    run_with_opt(opt)
+}
+
+pub fn run_with_opt(opt: Opt) -> Result<()> {
     // Open storage engine
     let storage = open_storage(&opt).context("Failed to open storage engine")?;
 
