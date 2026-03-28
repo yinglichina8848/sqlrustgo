@@ -296,6 +296,14 @@ impl ColumnSegment {
                 .map_err(|e| SegmentError::Serialization(e.to_string()))?
         } else {
             vec![]
+        // Serialize bitmap - only write if Some (even if empty means "check nulls")
+        let (bitmap_json, actual_bitmap_len) = match null_bitmap {
+            Some(b) => {
+                let data = serde_json::to_vec(b.bits())
+                    .map_err(|e| SegmentError::Serialization(e.to_string()))?;
+                (Some(data.clone()), data.len() as u64)
+            }
+            None => (None, 0),
         };
 
         // Apply compression if needed
@@ -325,7 +333,7 @@ impl ColumnSegment {
             num_values: values.len() as u64,
             compression: actual_compression,
             stats: self.stats.clone(),
-            bitmap_size: bitmap_json.len() as u64,
+            bitmap_size: actual_bitmap_len,
             data_size: values_json.len() as u64,
             compressed_size: compressed_data.len() as u64,
         };
@@ -340,10 +348,12 @@ impl ColumnSegment {
         // Write header
         file.write_all(&header_json)?;
 
-        // Write bitmap length and data
-        let bitmap_len = bitmap_json.len() as u32;
+        // Write bitmap length and data (only if Some)
+        let bitmap_len = actual_bitmap_len as u32;
         file.write_all(&bitmap_len.to_le_bytes())?;
-        file.write_all(&bitmap_json)?;
+        if let Some(json) = bitmap_json {
+            file.write_all(&json)?;
+        }
 
         // Write data length and data
         let data_len = compressed_data.len() as u32;
@@ -421,6 +431,8 @@ impl ColumnSegment {
         } else {
             None
         };
+            Ok::<Bitmap, SegmentError>(Bitmap::from_bits(bits, len))
+        }).transpose()?;
 
         Ok((values, null_bitmap))
     }
