@@ -20,7 +20,6 @@ pub use physical_plan::{
     AggregateExec, AnyAllSubqueryExec, ColumnarScanExec, ExistsExec, FilterExec, HashJoinExec,
     InSubqueryExec, IndexScanExec, LimitExec, PhysicalPlan, ProjectionExec, ScalarSubqueryExec,
     SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
-    SeqScanExec, SetOperationExec, SortMergeJoinExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 pub use prepared::{PreparedStatement, PreparedStatementManager};
