@@ -60,6 +60,10 @@ pub use trigger::{
     TriggerExecutor, TriggerEvent, TriggerExecutionResult, TriggerTiming, TriggerType,
 };
 
+// Stored procedure executor
+pub mod stored_proc;
+pub use stored_proc::StoredProcExecutor;
+
 // Test framework modules - publicly accessible
 pub mod harness;
 pub mod mock_storage;
