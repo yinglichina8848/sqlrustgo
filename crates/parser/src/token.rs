@@ -78,6 +78,12 @@ pub enum Token {
     Status,
     Processlist,
 
+    // Prepared Statements
+    Prepare,
+    Execute,
+    Deallocate,
+    Using,
+
     // Group By / Order By keywords
     Group,
     By,
@@ -167,6 +173,7 @@ pub enum Token {
     Semicolon,
     Colon,
     SingleQuote,
+    QuestionMark,
 
     // Column constraints
     AutoIncrement,
@@ -349,12 +356,18 @@ impl fmt::Display for Token {
             Token::Semicolon => write!(f, ";"),
             Token::Colon => write!(f, ":"),
             Token::SingleQuote => write!(f, "'"),
+            Token::QuestionMark => write!(f, "?"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
             // SHOW keywords
             Token::Show => write!(f, "SHOW"),
             Token::Status => write!(f, "STATUS"),
             Token::Processlist => write!(f, "PROCESSLIST"),
+            // Prepared Statements
+            Token::Prepare => write!(f, "PREPARE"),
+            Token::Execute => write!(f, "EXECUTE"),
+            Token::Deallocate => write!(f, "DEALLOCATE"),
+            Token::Using => write!(f, "USING"),
         }
     }
 }
@@ -419,6 +432,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "TIES"
             | "NO OTHERS"
             | "BETWEEN"
+            | "PREPARE"
+            | "EXECUTE"
+            | "DEALLOCATE"
+            | "USING"
     )
 }
 
@@ -492,6 +509,10 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "SHOW" => Some(Token::Show),
         "STATUS" => Some(Token::Status),
         "PROCESSLIST" => Some(Token::Processlist),
+        "PREPARE" => Some(Token::Prepare),
+        "EXECUTE" => Some(Token::Execute),
+        "DEALLOCATE" => Some(Token::Deallocate),
+        "USING" => Some(Token::Using),
         _ => None,
     }
 }

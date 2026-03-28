@@ -197,6 +197,10 @@ impl<'a> Lexer<'a> {
                 Token::Colon
             }
             '\'' => Token::StringLiteral(self.read_string()),
+            '?' => {
+                self.position += 1;
+                Token::QuestionMark
+            }
             '=' => {
                 self.position += 1;
                 Token::Equal
