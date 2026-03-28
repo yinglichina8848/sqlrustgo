@@ -16,6 +16,7 @@ pub mod heap;
 pub mod page;
 pub mod page_guard;
 // pub mod parquet;  // Parquet module not yet implemented
+pub mod columnar;
 pub mod replication;
 pub mod replication_lag;
 pub mod stats;
@@ -24,6 +25,7 @@ pub mod wal;
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 
 pub use binary_format::BinaryFormat;
+pub use columnar::{Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, ParquetCompatReader, ParquetCompatWriter, TableStore};
 pub use binlog_client::{BinlogClient, BinlogClientBuilder};
 pub use binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,

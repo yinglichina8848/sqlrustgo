@@ -182,7 +182,6 @@ impl TableStore {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
             if segment_path.exists() {
                 let mut segment = ColumnSegment::new(col_idx as u32);
-                let (values, null_bitmap) = segment.read_from_file(&segment_path)
                 let (values, null_bitmap) = segment
                     .read_from_file(&segment_path)
                     .map_err(|e| ColumnarError::Storage(e.to_string()))?;
@@ -350,12 +349,6 @@ impl StorageEngine for ColumnarStorage {
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
 
         for record in records {
-            store.insert_row(&record)
-        let store = self.tables.get_mut(table).ok_or_else(|| {
-            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-        })?;
-
-        for record in records {
             store
                 .insert_row(&record)
                 .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
@@ -363,7 +356,6 @@ impl StorageEngine for ColumnarStorage {
 
         // Persist if we have a base path
         if let Some(path) = path {
-            store.serialize(&path)
             store
                 .serialize(&path)
                 .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
@@ -427,9 +419,6 @@ impl StorageEngine for ColumnarStorage {
             .get(table)
             .map(|s| s.info.clone())
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
-            .ok_or_else(|| {
-                crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-            })
     }
 
     fn has_table(&self, table: &str) -> bool {

@@ -291,20 +291,15 @@ impl ColumnSegment {
             serde_json::to_vec(values).map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         // Serialize bitmap - only write if Some (even if empty means "check nulls")
-        let (bitmap_json, actual_bitmap_len) = match null_bitmap {
+        let bitmap_json = match null_bitmap {
             Some(b) => {
-                let data = serde_json::to_vec(b.bits())
+                let data = serde_json::to_vec(&b.bits)
                     .map_err(|e| SegmentError::Serialization(e.to_string()))?;
-                (Some(data.clone()), data.len() as u64)
+                Some(data)
             }
-            None => (None, 0),
-        // Serialize bitmap (only if Some)
-        let bitmap_json = if let Some(bitmap) = null_bitmap {
-            serde_json::to_vec(&bitmap.bits)
-                .map_err(|e| SegmentError::Serialization(e.to_string()))?
-        } else {
-            vec![]
+            None => None,
         };
+        let actual_bitmap_len = bitmap_json.as_ref().map(|v| v.len()).unwrap_or(0) as u64;
 
         // Apply compression if needed
         let (compressed_data, actual_compression) = match self.compression {
@@ -333,7 +328,7 @@ impl ColumnSegment {
             num_values: values.len() as u64,
             compression: actual_compression,
             stats: self.stats.clone(),
-            bitmap_size: bitmap_json.len() as u64,
+            bitmap_size: actual_bitmap_len,
             data_size: values_json.len() as u64,
             compressed_size: compressed_data.len() as u64,
         };
@@ -349,9 +344,11 @@ impl ColumnSegment {
         file.write_all(&header_json)?;
 
         // Write bitmap length and data
-        let bitmap_len = bitmap_json.len() as u32;
+        let bitmap_len = actual_bitmap_len as u32;
         file.write_all(&bitmap_len.to_le_bytes())?;
-        file.write_all(&bitmap_json)?;
+        if let Some(ref data) = bitmap_json {
+            file.write_all(data)?;
+        }
 
         // Write data length and data
         let data_len = compressed_data.len() as u32;
