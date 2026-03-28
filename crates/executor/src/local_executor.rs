@@ -16,9 +16,11 @@ use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use crate::sql_normalizer::SqlNormalizer;
 use crate::{Executor, ExecutorResult};
-
 use parking_lot::RwLock;
+use query_stats::SlowQueryConfig;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 
 /// LocalExecutor - executes physical plans using StorageEngine
@@ -26,6 +28,10 @@ pub struct LocalExecutor<'a> {
     storage: &'a dyn StorageEngine,
     cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
+    /// Slow query logger (optional)
+    slow_query_log: StdRwLock<Option<query_stats::SlowQueryLog>>,
+    /// SQL text for slow query logging (set when executing with cache)
+    current_sql: StdRwLock<String>,
 }
 
 impl<'a> LocalExecutor<'a> {
@@ -35,6 +41,8 @@ impl<'a> LocalExecutor<'a> {
             storage,
             cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            slow_query_log: StdRwLock::new(None),
+            current_sql: StdRwLock::new(String::new()),
         }
     }
 
@@ -44,7 +52,30 @@ impl<'a> LocalExecutor<'a> {
             storage,
             cache: Arc::new(RwLock::new(QueryCache::new(config.clone()))),
             cache_config: config,
+            slow_query_log: StdRwLock::new(None),
+            current_sql: StdRwLock::new(String::new()),
         }
+    }
+
+    /// Enable slow query logging with the given configuration
+    pub fn with_slow_query_log(self, config: SlowQueryConfig) -> Self {
+        if config.enabled {
+            let log = query_stats::SlowQueryLog::from_config(&config);
+            *self.slow_query_log.write().unwrap() = Some(log);
+        }
+        self
+    }
+
+    /// Enable slow query logging with a simple threshold and path
+    pub fn with_slow_query_log_enabled(self, threshold_ms: u64, log_path: PathBuf) -> Self {
+        let config = SlowQueryConfig {
+            enabled: true,
+            threshold_ms,
+            log_path,
+        };
+        let log = query_stats::SlowQueryLog::from_config(&config);
+        *self.slow_query_log.write().unwrap() = Some(log);
+        self
     }
 
     /// Invalidate cache for a specific table
@@ -86,12 +117,17 @@ impl<'a> LocalExecutor<'a> {
         sql: &str,
         params: &[Value],
     ) -> SqlResult<ExecutorResult> {
+        // Store SQL for slow query logging
+        *self.current_sql.write().unwrap() = sql.to_string();
+
         if self.cache_config.enabled && !sql.is_empty() {
             let cache_key = self.get_cache_key(sql, params);
             if let Some(result) = self.cache.write().get(&cache_key) {
+                // Still log cached queries if they were slow
                 return Ok(result);
             }
 
+            let start = Instant::now();
             let result = match plan.name() {
                 "SeqScan" => self.execute_seq_scan(plan),
                 "Projection" => self.execute_projection(plan),
@@ -103,6 +139,11 @@ impl<'a> LocalExecutor<'a> {
                 "Limit" => self.execute_limit(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let row_count = result.rows.len() as u64;
+
+            // Log slow query
+            self.log_slow_query(sql, duration_ms, row_count);
 
             if should_cache(&result) {
                 let tables = self.extract_tables(plan);
@@ -118,7 +159,8 @@ impl<'a> LocalExecutor<'a> {
             return Ok(result);
         }
 
-        match plan.name() {
+        let start = Instant::now();
+        let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
@@ -128,6 +170,20 @@ impl<'a> LocalExecutor<'a> {
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
             _ => Ok(ExecutorResult::empty()),
+        }?;
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let row_count = result.rows.len() as u64;
+
+        // Log slow query
+        self.log_slow_query(sql, duration_ms, row_count);
+
+        Ok(result)
+    }
+
+    /// Log a slow query if it exceeds the threshold
+    fn log_slow_query(&self, sql: &str, duration_ms: u64, rows: u64) {
+        if let Some(ref log) = *self.slow_query_log.read().unwrap() {
+            log.maybe_log(sql, duration_ms, rows);
         }
     }
 

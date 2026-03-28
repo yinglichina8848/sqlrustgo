@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub mod slow_query_log;
+pub use slow_query_log::{SlowQueryConfig, SlowQueryLog, SlowQueryRecord};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryStats {
     pub query: String,
@@ -84,7 +87,7 @@ impl QueryNormalizer {
         }
 
         if self.replace_strings {
-            let mut chars: Vec<char> = result.chars().collect();
+            let chars: Vec<char> = result.chars().collect();
             let mut in_string = false;
             let mut result_chars = Vec::new();
 
