@@ -12,6 +12,7 @@ members = [
     "crates/transaction",
     "crates/server",
     "crates/telemetry",
+    "crates/network",
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
@@ -46,6 +47,7 @@ sqlrustgo-catalog = { path = "crates/catalog" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-network = { path = "crates/network" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
