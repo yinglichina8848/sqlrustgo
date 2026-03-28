@@ -204,9 +204,6 @@ impl ColumnChunk {
 
         // Ensure null_bitmap exists (create even for non-nulls to track positions)
         if self.null_bitmap.is_none() {
-            self.null_bitmap = Some(Bitmap::with_capacity(self.data.len()));
-        // Ensure null_bitmap exists
-        if self.null_bitmap.is_none() {
             self.null_bitmap = Some(Bitmap::with_capacity(self.data.len().max(1)));
         }
 

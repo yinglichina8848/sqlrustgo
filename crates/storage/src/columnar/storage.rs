@@ -5,10 +5,6 @@
 use crate::columnar::chunk::{Bitmap, ColumnChunk, ColumnStats};
 use crate::columnar::segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
 use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
-use crate::columnar::segment::{ColumnSegment, CompressionType, ColumnStatsDisk};
-use crate::engine::{
-    StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo,
-};
 use crate::wal::{WalManager, WalWriter};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
@@ -154,7 +150,6 @@ impl TableStore {
 
             segment
                 .write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
-            segment.write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
                 .map_err(|e| ColumnarError::Storage(e.to_string()))?;
         }
 
@@ -187,8 +182,6 @@ impl TableStore {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
             if segment_path.exists() {
                 let mut segment = ColumnSegment::new(col_idx as u32);
-                let (values, null_bitmap) = segment
-                    .read_from_file(&segment_path)
                 let (values, null_bitmap) = segment.read_from_file(&segment_path)
                     .map_err(|e| ColumnarError::Storage(e.to_string()))?;
 
@@ -323,9 +316,6 @@ impl Default for ColumnarStorage {
 
 impl StorageEngine for ColumnarStorage {
     fn scan(&self, table: &str) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table).ok_or_else(|| {
-            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-        })?;
         let store = self.tables.get(table)
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
 
@@ -351,13 +341,6 @@ impl StorageEngine for ColumnarStorage {
             None
         };
 
-        let store = self.tables.get_mut(table).ok_or_else(|| {
-            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-        })?;
-
-        for record in records {
-            store
-                .insert_row(&record)
         let store = self.tables.get_mut(table)
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
 
@@ -368,8 +351,6 @@ impl StorageEngine for ColumnarStorage {
 
         // Persist if we have a base path
         if let Some(path) = path {
-            store
-                .serialize(&path)
             store.serialize(&path)
                 .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
         }
@@ -433,9 +414,6 @@ impl StorageEngine for ColumnarStorage {
         self.tables
             .get(table)
             .map(|s| s.info.clone())
-            .ok_or_else(|| {
-                crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-            })
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
@@ -543,10 +521,6 @@ impl StorageEngine for ColumnarStorage {
         table: &str,
         column_indices: &[usize],
     ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table).ok_or_else(|| {
-            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-        })?;
-    fn scan_columns(&self, table: &str, column_indices: &[usize]) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
         let store = self.tables.get(table)
             .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
 
