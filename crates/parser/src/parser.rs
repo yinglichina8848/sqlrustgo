@@ -447,7 +447,7 @@ impl Parser {
                     // Subquery in SELECT: (SELECT ...) AS alias
                     self.next();
                     if matches!(self.current(), Some(Token::Select)) {
-                        let _select_stmt = self.parse_select()?;
+                        let select_stmt = self.parse_select()?;
                         self.expect(Token::RParen)?;
 
                         // Check for AS alias
