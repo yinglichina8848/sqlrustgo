@@ -1,7 +1,9 @@
 // SQLRustGo window function executor module
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
-use sqlrustgo_planner::{Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction};
+use sqlrustgo_planner::{
+    Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction,
+};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::collections::HashMap;
@@ -197,7 +199,8 @@ impl WindowVolcanoExecutor {
                 let target_local_idx = local_idx + offset;
                 if target_local_idx < partition.indices.len() {
                     let target_idx = partition.indices[target_local_idx];
-                    Ok(args[0].evaluate(&partition.rows[target_idx], &self.input_schema)
+                    Ok(args[0]
+                        .evaluate(&partition.rows[target_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -216,7 +219,8 @@ impl WindowVolcanoExecutor {
                 if local_idx >= offset {
                     let target_local_idx = local_idx - offset;
                     let target_idx = partition.indices[target_local_idx];
-                    Ok(args[0].evaluate(&partition.rows[target_idx], &self.input_schema)
+                    Ok(args[0]
+                        .evaluate(&partition.rows[target_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -225,7 +229,8 @@ impl WindowVolcanoExecutor {
             WindowFunction::FirstValue => {
                 let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
                 if let Some(&first_idx) = frame_rows.first() {
-                    Ok(args[0].evaluate(&partition.rows[first_idx], &self.input_schema)
+                    Ok(args[0]
+                        .evaluate(&partition.rows[first_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -234,7 +239,8 @@ impl WindowVolcanoExecutor {
             WindowFunction::LastValue => {
                 let frame_rows = self.get_frame_rows(partition, local_idx, frame)?;
                 if let Some(&last_idx) = frame_rows.last() {
-                    Ok(args[0].evaluate(&partition.rows[last_idx], &self.input_schema)
+                    Ok(args[0]
+                        .evaluate(&partition.rows[last_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -252,7 +258,8 @@ impl WindowVolcanoExecutor {
                     .unwrap_or(1) as usize;
                 if n > 0 && n <= frame_rows.len() {
                     let target_idx = frame_rows[n - 1];
-                    Ok(args[0].evaluate(&partition.rows[target_idx], &self.input_schema)
+                    Ok(args[0]
+                        .evaluate(&partition.rows[target_idx], &self.input_schema)
                         .unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -329,7 +336,11 @@ impl WindowVolcanoExecutor {
                 // If prev_row is less than current_row (current row is greater), increment rank
                 let is_less = match (val_curr, val_prev) {
                     (Some(vc), Some(vp)) => {
-                        let cmp = if sort_expr.asc { vp.cmp(&vc) } else { vp.cmp(&vc).reverse() };
+                        let cmp = if sort_expr.asc {
+                            vp.cmp(&vc)
+                        } else {
+                            vp.cmp(&vc).reverse()
+                        };
                         cmp == std::cmp::Ordering::Less
                     }
                     (Some(_), None) => false,
@@ -652,7 +663,10 @@ mod tests {
         // Provide schema with field to enable evaluation
         let input_schema = Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "value".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
         let executor = WindowVolcanoExecutor::new(
             Box::new(MockExecutor::new()),
@@ -706,7 +720,10 @@ mod tests {
         }];
         let input_schema = Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "value".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
         let executor = WindowVolcanoExecutor::new(
             Box::new(MockExecutor::new()),
@@ -766,7 +783,9 @@ mod tests {
             exclude: ExcludeMode::None,
         };
 
-        let frame_rows = executor.get_frame_rows(&partition, 2, &Some(frame)).unwrap();
+        let frame_rows = executor
+            .get_frame_rows(&partition, 2, &Some(frame))
+            .unwrap();
         // Should include indices 1, 2, 3 (local_idx=2, 1 before, 1 after)
         assert_eq!(frame_rows.len(), 3);
     }
@@ -776,7 +795,10 @@ mod tests {
         let partition = create_test_partition();
         let input_schema = Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "value".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
         let executor = WindowVolcanoExecutor::new(
             Box::new(MockExecutor::new()),
@@ -806,7 +828,10 @@ mod tests {
         let partition = create_test_partition();
         let input_schema = Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "value".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
         let executor = WindowVolcanoExecutor::new(
             Box::new(MockExecutor::new()),
@@ -836,7 +861,10 @@ mod tests {
         let partition = create_test_partition();
         let input_schema = Schema::new(vec![
             sqlrustgo_planner::Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
-            sqlrustgo_planner::Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+            sqlrustgo_planner::Field::new(
+                "value".to_string(),
+                sqlrustgo_planner::DataType::Integer,
+            ),
         ]);
         let executor = WindowVolcanoExecutor::new(
             Box::new(MockExecutor::new()),
