@@ -201,7 +201,7 @@ impl ColumnChunk {
         // Update bitmap if it exists
         if let Some(ref mut bitmap) = self.null_bitmap {
             // Extend bitmap if needed
-            while bitmap.len <= index {
+            while bitmap.len() <= index {
                 bitmap.bits.push(0);
                 bitmap.len += 1;
             }
