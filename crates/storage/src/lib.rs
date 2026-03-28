@@ -10,6 +10,7 @@ pub mod buffer_pool;
 pub mod buffer_pool_metrics;
 pub mod columnar;
 pub mod clock_replacer;
+pub mod columnar;
 pub mod engine;
 pub mod failover_manager;
 pub mod file_storage;
@@ -38,6 +39,8 @@ pub use binlog_client::{BinlogClient, BinlogClientBuilder};
 pub use binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
 };
+
+pub use columnar::{ParquetCompatReader, ParquetCompatWriter};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
