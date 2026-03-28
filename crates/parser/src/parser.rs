@@ -447,7 +447,7 @@ impl Parser {
                     // Subquery in SELECT: (SELECT ...) AS alias
                     self.next();
                     if matches!(self.current(), Some(Token::Select)) {
-                        let select_stmt = self.parse_select()?;
+                        let _select_stmt = self.parse_select()?;
                         self.expect(Token::RParen)?;
 
                         // Check for AS alias
@@ -517,9 +517,7 @@ impl Parser {
                 }
                 Some(Token::RowNumber) | Some(Token::Rank) | Some(Token::DenseRank)
                 | Some(Token::Lead) | Some(Token::Lag) | Some(Token::FirstValue)
-                | Some(Token::LastValue) | Some(Token::NthValue)
-                | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Count)
-                | Some(Token::Min) | Some(Token::Max) => {
+                | Some(Token::LastValue) | Some(Token::NthValue) => {
                     // Parse window function
                     let window_expr = self.parse_window_function()?;
                     columns.push(SelectColumn {
@@ -941,7 +939,11 @@ impl Parser {
                         break;
                     }
                     Some(Token::Identifier(name)) => {
-                        row.push(Expression::Identifier(name.clone()));
+                        if name.to_uppercase() == "NULL" {
+                            row.push(Expression::Literal("NULL".to_string()));
+                        } else {
+                            row.push(Expression::Identifier(name.clone()));
+                        }
                         self.next();
                     }
                     Some(Token::NumberLiteral(n)) => {
@@ -953,14 +955,6 @@ impl Parser {
                         self.next();
                     }
                     Some(Token::Comma) => {
-                        self.next();
-                    }
-                    Some(Token::Identifier(name)) => {
-                        if name.to_uppercase() == "NULL" {
-                            row.push(Expression::Literal("NULL".to_string()));
-                        } else {
-                            row.push(Expression::Identifier(name.clone()));
-                        }
                         self.next();
                     }
                     Some(Token::Minus) => {
