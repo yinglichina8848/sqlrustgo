@@ -60,7 +60,7 @@ pub use replication::{
 };
 pub use replication_lag::{LagWarning, ReplicationLagMonitor, ReplicationStatus};
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
-pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
+pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
 
 #[cfg(test)]
 mod tests {
