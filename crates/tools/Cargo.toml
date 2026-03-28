@@ -8,7 +8,10 @@ license.workspace = true
 [dependencies]
 sqlrustgo-catalog.workspace = true
 sqlrustgo-storage.workspace = true
+sqlrustgo-types.workspace = true
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 structopt = "0.3"
