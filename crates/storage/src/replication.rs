@@ -137,24 +137,36 @@ impl BinlogEvent {
         // TX ID
         let tx_id = u64::from_le_bytes([
             data[offset],
-            data[1],
-            data[2],
-            data[3],
-            data[4],
-            data[5],
-            data[6],
-            data[7],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
         ]);
         offset += 8;
 
         // Table ID
         let table_id = u64::from_le_bytes([
-            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
         ]);
         offset += 8;
 
         // Database
-        let db_len = u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize;
+        let db_len = u32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]) as usize;
         offset += 4;
         let database = String::from_utf8(data[offset..offset + db_len].to_vec()).ok()?;
         offset += db_len;
