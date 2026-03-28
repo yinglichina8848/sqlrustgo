@@ -42,6 +42,9 @@ pub use vectorization::{
     VectorizedExecutor,
 };
 
+pub mod window_executor;
+pub use window_executor::WindowVolcanoExecutor;
+
 // Test framework modules - publicly accessible
 pub mod harness;
 pub mod mock_storage;
