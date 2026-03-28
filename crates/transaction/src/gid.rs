@@ -1,8 +1,9 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
+use serde::{Deserialize, Serialize};
 
 /// 节点 ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub u64);
 
 impl NodeId {
@@ -18,7 +19,7 @@ impl fmt::Display for NodeId {
 }
 
 /// 全局唯一事务 ID
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GlobalTransactionId {
     pub node_id: NodeId,
     pub txn_id: u64,
