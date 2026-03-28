@@ -5,7 +5,7 @@ pub mod binary_format;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
-// pub mod columnar;
+pub mod columnar;
 pub mod clock_replacer;
 pub mod engine;
 pub mod file_storage;
@@ -23,9 +23,9 @@ pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
-// pub use columnar::{
-//     ColumnarColumn, ColumnarStorage, ColumnarTable, ColumnStats, ParquetReader, ParquetWriter,
-// };
+pub use columnar::{
+    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, TableStore,
+};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
