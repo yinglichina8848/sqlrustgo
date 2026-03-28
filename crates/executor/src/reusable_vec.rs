@@ -40,18 +40,20 @@ use std::cell::RefCell;
 /// # Example
 ///
 /// ```rust
+/// use sqlrustgo_executor::ReusableVec;
+///
 /// let mut reusable = ReusableVec::<i32>::new();
 ///
 /// // First use
 /// reusable.push(1);
 /// reusable.push(2);
-/// process(&reusable);
+/// assert_eq!(reusable.len(), 2);
 /// reusable.clear();
 ///
 /// // Second use - no reallocation
 /// reusable.push(3);
 /// reusable.push(4);
-/// process(&reusable);
+/// assert_eq!(reusable.len(), 2);
 /// ```
 pub struct ReusableVec<T> {
     /// The inner buffer
@@ -335,7 +337,10 @@ thread_local! {
 /// # Example
 ///
 /// ```rust
-/// with_thread_local_pool(|pool| {
+/// use sqlrustgo_executor::{with_thread_local_pool, ThreadLocalExecutorVecPool};
+/// use sqlrustgo_types::Value;
+///
+/// with_thread_local_pool(|pool: &mut ThreadLocalExecutorVecPool| {
 ///     pool.rows.push(vec![Value::Integer(1)]);
 /// });
 /// ```
