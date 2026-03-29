@@ -4,15 +4,13 @@
 
 use crate::columnar::chunk::{Bitmap, ColumnChunk, ColumnStats};
 use crate::columnar::segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
-use crate::engine::{
-    StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo,
-};
+use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
 use crate::wal::{WalManager, WalWriter};
+use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs;
 use std::path::PathBuf;
-use sqlrustgo_types::Value;
 use thiserror::Error;
 
 /// Columnar storage error types
@@ -144,16 +142,15 @@ impl TableStore {
         // Write each column as a segment
         for (col_idx, chunk) in &self.columns {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
-            let mut segment = ColumnSegment::with_compression(
-                *col_idx as u32,
-                CompressionType::Zstd,
-            );
+            let mut segment =
+                ColumnSegment::with_compression(*col_idx as u32, CompressionType::Zstd);
 
             let stats = ColumnStatsDisk::from(chunk.stats());
             segment.stats = stats;
             segment.num_values = chunk.len() as u64;
 
-            segment.write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
+            segment
+                .write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
                 .map_err(|e| ColumnarError::Storage(e.to_string()))?;
         }
 
@@ -186,7 +183,8 @@ impl TableStore {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
             if segment_path.exists() {
                 let mut segment = ColumnSegment::new(col_idx as u32);
-                let (values, null_bitmap) = segment.read_from_file(&segment_path)
+                let (values, null_bitmap) = segment
+                    .read_from_file(&segment_path)
                     .map_err(|e| ColumnarError::Storage(e.to_string()))?;
 
                 let mut chunk = ColumnChunk::with_capacity(values.len());
@@ -315,8 +313,9 @@ impl Default for ColumnarStorage {
 
 impl StorageEngine for ColumnarStorage {
     fn scan(&self, table: &str) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         let mut records = Vec::with_capacity(store.row_count());
         for i in 0..store.row_count() {
@@ -334,11 +333,13 @@ impl StorageEngine for ColumnarStorage {
                 .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
         }
 
-        let store = self.tables.get_mut(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get_mut(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         for record in records {
-            store.insert_row(&record)
+            store
+                .insert_row(&record)
                 .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
         }
 
@@ -348,7 +349,8 @@ impl StorageEngine for ColumnarStorage {
             drop(store);
             let path = self.get_table_path(table);
             if let Some(store) = self.tables.get_mut(table) {
-                store.serialize(&path)
+                store
+                    .serialize(&path)
                     .map_err(|e| crate::engine::SqlError::ExecutionError(e.to_string()))?;
             }
         }
@@ -390,8 +392,9 @@ impl StorageEngine for ColumnarStorage {
     }
 
     fn drop_table(&mut self, table: &str) -> crate::engine::SqlResult<()> {
-        self.tables.remove(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        self.tables.remove(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
 
         // Remove from disk
         if !self.base_path.as_os_str().is_empty() {
@@ -406,9 +409,12 @@ impl StorageEngine for ColumnarStorage {
     }
 
     fn get_table_info(&self, table: &str) -> crate::engine::SqlResult<TableInfo> {
-        self.tables.get(table)
+        self.tables
+            .get(table)
             .map(|s| s.info.clone())
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
+            .ok_or_else(|| {
+                crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+            })
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -577,8 +583,16 @@ mod tests {
         storage.create_table(&info).unwrap();
 
         let records = vec![
-            vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)],
-            vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Float(2.71)],
+            vec![
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ],
+            vec![
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Float(2.71),
+            ],
             vec![Value::Integer(3), Value::Null, Value::Float(1.41)],
         ];
 
@@ -609,8 +623,20 @@ mod tests {
         let info = create_test_table_info();
         let mut store = TableStore::new(info);
 
-        store.insert_row(&[Value::Integer(1), Value::Text("A".to_string()), Value::Float(1.0)]).unwrap();
-        store.insert_row(&[Value::Integer(2), Value::Text("B".to_string()), Value::Float(2.0)]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(1),
+                Value::Text("A".to_string()),
+                Value::Float(1.0),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(2),
+                Value::Text("B".to_string()),
+                Value::Float(2.0),
+            ])
+            .unwrap();
 
         assert_eq!(store.row_count(), 2);
     }
@@ -620,8 +646,20 @@ mod tests {
         let info = create_test_table_info();
         let mut store = TableStore::new(info);
 
-        store.insert_row(&[Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)]).unwrap();
-        store.insert_row(&[Value::Integer(2), Value::Text("Bob".to_string()), Value::Null]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Null,
+            ])
+            .unwrap();
 
         let row0 = store.get_row(0).unwrap();
         assert_eq!(row0[0], Value::Integer(1));

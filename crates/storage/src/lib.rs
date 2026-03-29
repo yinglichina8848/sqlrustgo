@@ -5,17 +5,17 @@ pub mod binary_format;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
-pub mod columnar;
 pub mod clock_replacer;
+pub mod columnar;
 pub mod engine;
 pub mod file_storage;
 pub mod heap;
 pub mod page;
 pub mod page_guard;
+pub mod parquet;
 pub mod replication;
 pub mod stats;
 pub mod wal;
-pub mod parquet;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 
@@ -24,10 +24,12 @@ pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
+
 pub use columnar::{
-    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk, CompressionType, ColumnarStorage,
-    TableStore,
+    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk, ColumnarStorage,
+    CompressionType, TableStore,
 };
+
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
@@ -36,13 +38,13 @@ pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
 pub use page_guard::PageGuard;
+pub use parquet::{export_to_parquet, import_from_parquet};
 pub use replication::{
     BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, FailoverManager, MasterNode,
     ReplicationConfig, SlaveNode,
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
-pub use parquet::{export_to_parquet, import_from_parquet};
 
 #[cfg(test)]
 mod tests {

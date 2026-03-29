@@ -38,9 +38,18 @@ mod tests {
 
         // Create test records
         let records = vec![
-            vec![sqlrustgo_types::Value::Integer(1), sqlrustgo_types::Value::Text("hello".to_string())],
-            vec![sqlrustgo_types::Value::Integer(2), sqlrustgo_types::Value::Text("world".to_string())],
-            vec![sqlrustgo_types::Value::Null, sqlrustgo_types::Value::Text("null_test".to_string())],
+            vec![
+                sqlrustgo_types::Value::Integer(1),
+                sqlrustgo_types::Value::Text("hello".to_string()),
+            ],
+            vec![
+                sqlrustgo_types::Value::Integer(2),
+                sqlrustgo_types::Value::Text("world".to_string()),
+            ],
+            vec![
+                sqlrustgo_types::Value::Null,
+                sqlrustgo_types::Value::Text("null_test".to_string()),
+            ],
         ];
 
         let columns = vec!["id".to_string(), "name".to_string()];
