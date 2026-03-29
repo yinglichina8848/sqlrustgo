@@ -125,6 +125,16 @@ pub enum Token {
     NoOthers,
     Between,
 
+    // CTE (Common Table Expression) - SQL-99
+    With,
+    Recursive,
+
+    // MERGE and TRUNCATE - SQL-2003
+    Merge,
+    Truncate,
+    When,
+    Matched,
+
     // Aggregate Functions
     Length,
     Upper,
@@ -310,6 +320,12 @@ impl fmt::Display for Token {
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
             Token::Between => write!(f, "BETWEEN"),
+            Token::With => write!(f, "WITH"),
+            Token::Recursive => write!(f, "RECURSIVE"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Truncate => write!(f, "TRUNCATE"),
+            Token::When => write!(f, "WHEN"),
+            Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
