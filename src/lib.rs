@@ -705,9 +705,7 @@ impl ExecutionEngine {
                                 if col_idx < num_columns {
                                     new_row[col_idx] = match expr {
                                         Expression::Literal(value) => {
-                                            if value.to_uppercase() == "NULL" {
-                                                Value::Null
-                                            } else if let Some(ref info) = table_info {
+                                            if let Some(ref info) = table_info {
                                                 if col_idx < info.columns.len() {
                                                     let col_type = &info.columns[col_idx].data_type;
                                                     let upper = col_type.to_uppercase();
@@ -765,43 +763,37 @@ impl ExecutionEngine {
                                             let expr = &row[value_idx];
                                             new_row[target_idx] = match expr {
                                                 Expression::Literal(value) => {
-                                                    if value.to_uppercase() == "NULL" {
-                                                        Value::Null
-                                                    } else {
-                                                        let col_type =
-                                                            &info.columns[target_idx].data_type;
-                                                        let upper = col_type.to_uppercase();
-                                                        if upper.contains("INT")
-                                                            || upper == "BIGINT"
-                                                            || upper == "SMALLINT"
-                                                        {
-                                                            if let Ok(n) = value.parse::<i64>() {
-                                                                Value::Integer(n)
-                                                            } else {
-                                                                Value::Text(value.clone())
-                                                            }
-                                                        } else if upper == "FLOAT"
-                                                            || upper == "DOUBLE"
-                                                            || upper == "DECIMAL"
-                                                        {
-                                                            if let Ok(n) = value.parse::<f64>() {
-                                                                Value::Float(n)
-                                                            } else {
-                                                                Value::Text(value.clone())
-                                                            }
-                                                        } else if upper == "BOOLEAN" {
-                                                            if value.to_uppercase() == "TRUE" {
-                                                                Value::Boolean(true)
-                                                            } else if value.to_uppercase()
-                                                                == "FALSE"
-                                                            {
-                                                                Value::Boolean(false)
-                                                            } else {
-                                                                Value::Text(value.clone())
-                                                            }
+                                                    let col_type =
+                                                        &info.columns[target_idx].data_type;
+                                                    let upper = col_type.to_uppercase();
+                                                    if upper.contains("INT")
+                                                        || upper == "BIGINT"
+                                                        || upper == "SMALLINT"
+                                                    {
+                                                        if let Ok(n) = value.parse::<i64>() {
+                                                            Value::Integer(n)
                                                         } else {
                                                             Value::Text(value.clone())
                                                         }
+                                                    } else if upper == "FLOAT"
+                                                        || upper == "DOUBLE"
+                                                        || upper == "DECIMAL"
+                                                    {
+                                                        if let Ok(n) = value.parse::<f64>() {
+                                                            Value::Float(n)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else if upper == "BOOLEAN" {
+                                                        if value.to_uppercase() == "TRUE" {
+                                                            Value::Boolean(true)
+                                                        } else if value.to_uppercase() == "FALSE" {
+                                                            Value::Boolean(false)
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
+                                                    } else {
+                                                        Value::Text(value.clone())
                                                     }
                                                 }
                                                 _ => Value::Null,
@@ -1515,15 +1507,14 @@ impl ExecutionEngine {
                     }
 
                     // Get table info for column names
-                    let table_info = storage.get_table_info(table_name).ok().ok_or_else(|| {
-                        SqlError::ExecutionError(format!(
+                    let table_info = storage.get_table_info(table_name)
+                        .ok()
+                        .ok_or_else(|| SqlError::ExecutionError(format!(
                             "Could not get table info for '{}'",
                             table_name
-                        ))
-                    })?;
+                        )))?;
 
-                    let column_names: Vec<String> =
-                        table_info.columns.iter().map(|c| c.name.clone()).collect();
+                    let column_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
 
                     // Import records from Parquet
                     let records = import_from_parquet(path, &column_names)?;
@@ -1547,15 +1538,14 @@ impl ExecutionEngine {
                     }
 
                     // Get table info for column names
-                    let table_info = storage.get_table_info(table_name).ok().ok_or_else(|| {
-                        SqlError::ExecutionError(format!(
+                    let table_info = storage.get_table_info(table_name)
+                        .ok()
+                        .ok_or_else(|| SqlError::ExecutionError(format!(
                             "Could not get table info for '{}'",
                             table_name
-                        ))
-                    })?;
+                        )))?;
 
-                    let column_names: Vec<String> =
-                        table_info.columns.iter().map(|c| c.name.clone()).collect();
+                    let column_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
 
                     // Scan all rows from table
                     let records = storage.scan(table_name)?;
@@ -1565,10 +1555,7 @@ impl ExecutionEngine {
 
                     let row_count = records.len();
                     Ok(ExecutorResult::new(
-                        vec![vec![Value::Text(format!(
-                            "Exported {} rows to {}",
-                            row_count, path
-                        ))]],
+                        vec![vec![Value::Text(format!("Exported {} rows to {}", row_count, path))]],
                         row_count,
                     ))
                 }
