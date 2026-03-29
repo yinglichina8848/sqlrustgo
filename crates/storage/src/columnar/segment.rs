@@ -113,30 +113,23 @@ fn value_from_string(s: &str, value_type: &str) -> SegmentResult<Value> {
         "NULL" => Ok(Value::Null),
         "TRUE" => Ok(Value::Boolean(true)),
         "FALSE" => Ok(Value::Boolean(false)),
-        "INTEGER" => s
-            .parse::<i64>()
+        "INTEGER" => s.parse::<i64>()
             .map(Value::Integer)
             .map_err(|_| SegmentError::InvalidData(format!("Invalid integer: {}", s))),
-        "FLOAT" => s
-            .parse::<f64>()
+        "FLOAT" => s.parse::<f64>()
             .map(Value::Float)
             .map_err(|_| SegmentError::InvalidData(format!("Invalid float: {}", s))),
         "TEXT" => Ok(Value::Text(s.to_string())),
         "BLOB" => hex::decode(s)
             .map(Value::Blob)
             .map_err(|_| SegmentError::InvalidData(format!("Invalid blob: {}", s))),
-        "DATE" => s
-            .parse::<i32>()
+        "DATE" => s.parse::<i32>()
             .map(Value::Date)
             .map_err(|_| SegmentError::InvalidData(format!("Invalid date: {}", s))),
-        "TIMESTAMP" => s
-            .parse::<i64>()
+        "TIMESTAMP" => s.parse::<i64>()
             .map(Value::Timestamp)
             .map_err(|_| SegmentError::InvalidData(format!("Invalid timestamp: {}", s))),
-        _ => Err(SegmentError::InvalidData(format!(
-            "Unknown type: {}",
-            value_type
-        ))),
+        _ => Err(SegmentError::InvalidData(format!("Unknown type: {}", value_type))),
     }
 }
 
@@ -171,9 +164,9 @@ pub struct ColumnSegment {
     /// Compression type used
     compression: CompressionType,
     /// Statistics for this segment
-    stats: ColumnStatsDisk,
+    pub stats: ColumnStatsDisk,
     /// Number of values in this segment
-    num_values: u64,
+    pub num_values: u64,
 }
 
 impl ColumnSegment {
@@ -233,12 +226,12 @@ impl ColumnSegment {
         self.num_values
     }
 
-    /// Set statistics for this segment
+    /// Set statistics
     pub fn set_stats(&mut self, stats: ColumnStatsDisk) {
         self.stats = stats;
     }
 
-    /// Set number of values in this segment
+    /// Set number of values
     pub fn set_num_values(&mut self, num_values: u64) {
         self.num_values = num_values;
     }
@@ -255,13 +248,14 @@ impl ColumnSegment {
             compressed_size: 0,
         };
 
-        serde_json::to_vec(&header).map_err(|e| SegmentError::Serialization(e.to_string()))
+        serde_json::to_vec(&header)
+            .map_err(|e| SegmentError::Serialization(e.to_string()))
     }
 
     /// Deserialize segment metadata from bytes
     pub fn deserialize_metadata(data: &[u8]) -> SegmentResult<Self> {
-        let header: SegmentHeader =
-            serde_json::from_slice(data).map_err(|e| SegmentError::Serialization(e.to_string()))?;
+        let header: SegmentHeader = serde_json::from_slice(data)
+            .map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         Ok(Self {
             column_id: header.column_id,
@@ -287,22 +281,13 @@ impl ColumnSegment {
             .open(path)?;
 
         // Serialize values
-        let values_json =
-            serde_json::to_vec(values).map_err(|e| SegmentError::Serialization(e.to_string()))?;
+        let values_json = serde_json::to_vec(values)
+            .map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
-        // Serialize bitmap - only write if Some (even if empty means "check nulls")
-        // Serialize bitmap - only write if Some
-        let bitmap_json = match null_bitmap {
-            Some(b) => {
-                let data = serde_json::to_vec(&b.bits)
-                    .map_err(|e| SegmentError::Serialization(e.to_string()))?;
-                Some(data)
-            }
-            None => None,
-        };
-        let actual_bitmap_len = bitmap_json.as_ref().map(|v| v.len()).unwrap_or(0) as u64;
-
-        let actual_bitmap_len = bitmap_json.as_ref().map(|b| b.len()).unwrap_or(0);
+        // Serialize bitmap
+        let bitmap_data = null_bitmap.map(|b| b.bits.clone()).unwrap_or_default();
+        let bitmap_json = serde_json::to_vec(&bitmap_data)
+            .map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         // Apply compression if needed
         let (compressed_data, actual_compression) = match self.compression {
@@ -331,13 +316,13 @@ impl ColumnSegment {
             num_values: values.len() as u64,
             compression: actual_compression,
             stats: self.stats.clone(),
-            bitmap_size: actual_bitmap_len as u64,
+            bitmap_size: bitmap_json.len() as u64,
             data_size: values_json.len() as u64,
             compressed_size: compressed_data.len() as u64,
         };
 
-        let header_json =
-            serde_json::to_vec(&header).map_err(|e| SegmentError::Serialization(e.to_string()))?;
+        let header_json = serde_json::to_vec(&header)
+            .map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         // Write header length
         let header_len = header_json.len() as u32;
@@ -347,11 +332,9 @@ impl ColumnSegment {
         file.write_all(&header_json)?;
 
         // Write bitmap length and data
-        let bitmap_len = actual_bitmap_len as u32;
+        let bitmap_len = bitmap_json.len() as u32;
         file.write_all(&bitmap_len.to_le_bytes())?;
-        if let Some(ref data) = bitmap_json {
-            file.write_all(data)?;
-        }
+        file.write_all(&bitmap_json)?;
 
         // Write data length and data
         let data_len = compressed_data.len() as u32;
@@ -406,8 +389,7 @@ impl ColumnSegment {
         let mut compressed_data = vec![0u8; data_len as usize];
         file.read_exact(&mut compressed_data)?;
 
-        self.length =
-            (4 + header_json.len() + 4 + bitmap_len as usize + 4 + data_len as usize) as u64;
+        self.length = (4 + header_json.len() + 4 + bitmap_len as usize + 4 + data_len as usize) as u64;
 
         // Decompress if needed
         let decompressed = match header.compression {
@@ -439,14 +421,11 @@ fn compress_snappy(data: &[u8]) -> SegmentResult<Vec<u8>> {
     use std::io::Write;
 
     let mut encoder = snap::write::FrameEncoder::new(Vec::new());
-    encoder
-        .write_all(data)
+    encoder.write_all(data)
         .map_err(|e| SegmentError::Compression(e.to_string()))?;
-    encoder
-        .flush()
+    encoder.flush()
         .map_err(|e| SegmentError::Compression(e.to_string()))?;
-    encoder
-        .into_inner()
+    encoder.into_inner()
         .map_err(|e| SegmentError::Compression(format!("Snappy error: {:?}", e)))
 }
 
@@ -466,8 +445,7 @@ fn compress_zstd(data: &[u8], level: i32) -> SegmentResult<Vec<u8>> {
         .map_err(|e| SegmentError::Compression(format!("Zstd init error: {:?}", e)))?;
     std::io::Write::write_all(&mut encoder, data)
         .map_err(|e| SegmentError::Compression(e.to_string()))?;
-    encoder
-        .finish()
+    encoder.finish()
         .map_err(|e| SegmentError::Compression(format!("Zstd finish error: {:?}", e)))?;
     Ok(compressed)
 }
@@ -493,18 +471,9 @@ mod tests {
         assert_eq!(CompressionType::Snappy.magic_bytes(), *b"SNAP");
         assert_eq!(CompressionType::Zstd.magic_bytes(), *b"ZSTD");
 
-        assert_eq!(
-            CompressionType::from_magic(b"NONE"),
-            Some(CompressionType::None)
-        );
-        assert_eq!(
-            CompressionType::from_magic(b"SNAP"),
-            Some(CompressionType::Snappy)
-        );
-        assert_eq!(
-            CompressionType::from_magic(b"ZSTD"),
-            Some(CompressionType::Zstd)
-        );
+        assert_eq!(CompressionType::from_magic(b"NONE"), Some(CompressionType::None));
+        assert_eq!(CompressionType::from_magic(b"SNAP"), Some(CompressionType::Snappy));
+        assert_eq!(CompressionType::from_magic(b"ZSTD"), Some(CompressionType::Zstd));
         assert_eq!(CompressionType::from_magic(b"XXXX"), None);
     }
 
@@ -558,9 +527,7 @@ mod tests {
         bitmap.set(3);
 
         let segment = ColumnSegment::new(1);
-        segment
-            .write_to_file(&path, &values, Some(&bitmap))
-            .unwrap();
+        segment.write_to_file(&path, &values, Some(&bitmap)).unwrap();
 
         let mut read_segment = ColumnSegment::new(0);
         let (read_values, read_bitmap) = read_segment.read_from_file(&path).unwrap();
@@ -584,7 +551,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("segment_snappy.bin");
 
-        let values: Vec<Value> = (0..1000).map(|i| Value::Integer(i)).collect();
+        let values: Vec<Value> = (0..1000)
+            .map(|i| Value::Integer(i))
+            .collect();
 
         let mut bitmap = Bitmap::with_capacity(1000);
         for i in 0..1000 {
@@ -594,9 +563,7 @@ mod tests {
         }
 
         let segment = ColumnSegment::with_compression(1, CompressionType::Snappy);
-        segment
-            .write_to_file(&path, &values, Some(&bitmap))
-            .unwrap();
+        segment.write_to_file(&path, &values, Some(&bitmap)).unwrap();
 
         let mut read_segment = ColumnSegment::new(0);
         let (read_values, read_bitmap) = read_segment.read_from_file(&path).unwrap();

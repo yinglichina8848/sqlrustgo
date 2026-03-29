@@ -9,6 +9,6 @@ pub mod audit;
 pub mod session;
 pub mod tls;
 
-pub use audit::{AuditConfig, AuditEvent, AuditManager, AuditRecord};
-pub use session::{Session, SessionManager};
+pub use audit::{AuditConfig, AuditEvent, AuditFilter, AuditManager, AuditRecord, AuditStats};
+pub use session::{Session, SessionManager, SessionStatus};
 pub use tls::{CertificateManager, TlsConfig};
