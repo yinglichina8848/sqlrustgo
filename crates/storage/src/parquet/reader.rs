@@ -21,10 +21,9 @@ pub fn read_parquet_file(path: &str, columns: &[String]) -> SqlResult<Vec<Record
 
     let record_batch_reader = if columns.is_empty() {
         // Read all columns
-        builder
-            .with_batch_size(1024)
-            .build()
-            .map_err(|e| SqlError::ExecutionError(format!("Failed to build record reader: {}", e)))?
+        builder.with_batch_size(1024).build().map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to build record reader: {}", e))
+        })?
     } else {
         // Project only specified columns
         let parquet_schema = builder.parquet_schema();
@@ -40,7 +39,8 @@ pub fn read_parquet_file(path: &str, columns: &[String]) -> SqlResult<Vec<Record
 
         if field_indices.is_empty() {
             return Err(SqlError::ExecutionError(format!(
-                "No matching columns found: {:?}", columns
+                "No matching columns found: {:?}",
+                columns
             )));
         }
 
@@ -49,7 +49,9 @@ pub fn read_parquet_file(path: &str, columns: &[String]) -> SqlResult<Vec<Record
             .with_projection(mask)
             .with_batch_size(1024)
             .build()
-            .map_err(|e| SqlError::ExecutionError(format!("Failed to build record reader: {}", e)))?
+            .map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to build record reader: {}", e))
+            })?
     };
 
     let mut records = Vec::new();
@@ -89,37 +91,59 @@ fn extract_value(array: &ArrayRef, row_idx: usize) -> SqlResult<sqlrustgo_types:
 
     match array.data_type() {
         DataType::Int64 => {
-            let arr = array.as_any().downcast_ref::<Int64Array>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to Int64Array".to_string()))?;
+            let arr = array.as_any().downcast_ref::<Int64Array>().ok_or_else(|| {
+                SqlError::ExecutionError("Failed to downcast to Int64Array".to_string())
+            })?;
             Ok(Value::Integer(arr.value(row_idx)))
         }
         DataType::Float64 => {
-            let arr = array.as_any().downcast_ref::<Float64Array>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to Float64Array".to_string()))?;
+            let arr = array
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .ok_or_else(|| {
+                    SqlError::ExecutionError("Failed to downcast to Float64Array".to_string())
+                })?;
             Ok(Value::Float(arr.value(row_idx)))
         }
         DataType::Utf8 => {
-            let arr = array.as_any().downcast_ref::<StringArray>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to StringArray".to_string()))?;
+            let arr = array
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| {
+                    SqlError::ExecutionError("Failed to downcast to StringArray".to_string())
+                })?;
             Ok(Value::Text(arr.value(row_idx).to_string()))
         }
         DataType::Boolean => {
-            let arr = array.as_any().downcast_ref::<BooleanArray>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to BooleanArray".to_string()))?;
+            let arr = array
+                .as_any()
+                .downcast_ref::<BooleanArray>()
+                .ok_or_else(|| {
+                    SqlError::ExecutionError("Failed to downcast to BooleanArray".to_string())
+                })?;
             Ok(Value::Boolean(arr.value(row_idx)))
         }
         DataType::Binary => {
-            let arr = array.as_any().downcast_ref::<arrow::array::BinaryArray>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to BinaryArray".to_string()))?;
+            let arr = array
+                .as_any()
+                .downcast_ref::<arrow::array::BinaryArray>()
+                .ok_or_else(|| {
+                    SqlError::ExecutionError("Failed to downcast to BinaryArray".to_string())
+                })?;
             Ok(Value::Blob(arr.value(row_idx).to_vec()))
         }
         DataType::Date32 => {
-            let arr = array.as_any().downcast_ref::<arrow::array::Date32Array>()
-                .ok_or_else(|| SqlError::ExecutionError("Failed to downcast to Date32Array".to_string()))?;
+            let arr = array
+                .as_any()
+                .downcast_ref::<arrow::array::Date32Array>()
+                .ok_or_else(|| {
+                    SqlError::ExecutionError("Failed to downcast to Date32Array".to_string())
+                })?;
             Ok(Value::Date(arr.value(row_idx)))
         }
         _ => Err(SqlError::ExecutionError(format!(
-            "Unsupported Parquet type: {:?}", array.data_type()
+            "Unsupported Parquet type: {:?}",
+            array.data_type()
         ))),
     }
 }
@@ -149,8 +173,9 @@ impl ParquetReader {
         let file = File::open(&self.path)
             .map_err(|e| SqlError::ExecutionError(format!("Failed to open Parquet file: {}", e)))?;
 
-        let builder = ParquetRecordBatchReaderBuilder::try_new(file)
-            .map_err(|e| SqlError::ExecutionError(format!("Failed to create Parquet reader: {}", e)))?;
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to create Parquet reader: {}", e))
+        })?;
 
         Ok(builder.metadata().file_metadata().num_rows() as usize)
     }
