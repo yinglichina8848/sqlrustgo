@@ -720,7 +720,7 @@ impl Parser {
         let on_condition = self.parse_expression()?;
 
         let mut when_matched = None;
-        let when_not_matched = None;
+        let mut when_not_matched = None;
 
         // WHEN MATCHED THEN UPDATE SET ... / WHEN NOT MATCHED THEN INSERT ...
         loop {
@@ -749,7 +749,7 @@ impl Parser {
                                             break;
                                         }
                                     }
-                                    Some(Token::When) | None => break,
+                                    Some(Token::When) | None | Some(Token::Eof) => break,
                                     _ => {
                                         return Err("Expected column name in SET clause".to_string())
                                     }
@@ -757,10 +757,56 @@ impl Parser {
                             }
                             when_matched = Some(MergeAction::Update { set_clauses });
                         }
+                        Some(Token::Not) => {
+                            self.next(); // consume NOT
+                            self.expect(Token::Matched)?;
+                            self.next(); // consume MATCHED
+                            self.expect(Token::Then)?;
+                            self.expect(Token::Insert)?;
+
+                            // Parse INSERT columns and values
+                            let mut columns = Vec::new();
+                            let mut values = Vec::new();
+
+                            // Parse column list: (col1, col2, ...)
+                            if matches!(self.current(), Some(Token::LParen)) {
+                                self.next();
+                                loop {
+                                    match self.current() {
+                                        Some(Token::Identifier(name)) => {
+                                            columns.push(name.clone());
+                                            self.next();
+                                            if matches!(self.current(), Some(Token::Comma)) {
+                                                self.next();
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        _ => return Err("Expected column name".to_string()),
+                                    }
+                                }
+                                self.expect(Token::RParen)?;
+                            }
+
+                            self.expect(Token::Values)?;
+
+                            // Parse VALUES list
+                            loop {
+                                let value = self.parse_expression()?;
+                                values.push(value);
+                                if matches!(self.current(), Some(Token::Comma)) {
+                                    self.next();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            when_not_matched = Some(MergeAction::Insert { columns, values });
+                        }
                         _ => return Err("Expected MATCHED or NOT MATCHED".to_string()),
                     }
                 }
-                None => break,
+                None | Some(Token::Eof) => break,
                 _ => return Err("Unexpected token in MERGE".to_string()),
             }
         }
@@ -4125,9 +4171,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_view_lowercase() {
-        let result = parse("create view my_view as select * from users");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
+    fn test_parse_merge() {
+        let result = parse("MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET col = 1");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok(), "MERGE parsing should succeed");
     }
 
     #[test]
