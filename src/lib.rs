@@ -19,9 +19,10 @@ pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
-use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
+use sqlrustgo_storage::ForeignKeyAction;
 
 /// Format EXPLAIN output with cost information
+#[allow(dead_code)]
 fn format_explain_output(plan: &dyn PhysicalPlan, indent: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let prefix = "  ".repeat(indent);
@@ -258,7 +259,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::Cascade) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -279,7 +280,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::SetNull) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -481,8 +482,8 @@ fn like_match(text: &str, pattern: &str) -> bool {
     // Simple implementation for LIKE patterns
     // % matches any sequence of characters
     // _ matches any single character
-    let mut text_chars: Vec<char> = text.chars().collect();
-    let mut pattern_chars: Vec<char> = pattern.chars().collect();
+    let text_chars: Vec<char> = text.chars().collect();
+    let pattern_chars: Vec<char> = pattern.chars().collect();
 
     fn do_match(pi: usize, ti: usize, pc: &[char], tc: &[char]) -> bool {
         if pi == pc.len() {
@@ -530,7 +531,7 @@ fn compute_aggregate(
         AggregateFunction::Count => {
             if agg.args.is_empty()
                 || matches!(
-                    agg.args.get(0),
+                    agg.args.first(),
                     Some(sqlrustgo_parser::Expression::Wildcard)
                 )
             {
@@ -824,7 +825,7 @@ impl ExecutionEngine {
                     .collect();
 
                 // Handle UPSERT: INSERT ... ON DUPLICATE KEY UPDATE
-                if insert.on_duplicate.is_some() {
+                if let Some(updates) = &insert.on_duplicate {
                     let existing_rows = storage.scan(table_name)?;
 
                     let key_columns: Vec<usize> = table_info
@@ -839,7 +840,6 @@ impl ExecutionEngine {
                         })
                         .unwrap_or_default();
 
-                    let updates = insert.on_duplicate.as_ref().unwrap();
                     let mut total_affected = 0;
                     let mut final_rows = existing_rows.clone();
 
@@ -849,10 +849,11 @@ impl ExecutionEngine {
                             for (idx, existing_row) in final_rows.iter().enumerate() {
                                 let mut match_count = 0;
                                 for &key_col in &key_columns {
-                                    if key_col < new_row.len() && key_col < existing_row.len() {
-                                        if new_row[key_col] == existing_row[key_col] {
-                                            match_count += 1;
-                                        }
+                                    if key_col < new_row.len()
+                                        && key_col < existing_row.len()
+                                        && new_row[key_col] == existing_row[key_col]
+                                    {
+                                        match_count += 1;
                                     }
                                 }
                                 if match_count == key_columns.len() {
@@ -1168,7 +1169,7 @@ impl ExecutionEngine {
                         .as_ref()
                         .map(|info| {
                             info.columns.iter().any(|col| {
-                                col.references.as_ref().map_or(false, |fk| {
+                                col.references.as_ref().is_some_and(|fk| {
                                     fk.referenced_table == delete.table
                                         && fk.on_delete == Some(ForeignKeyAction::Cascade)
                                 })
@@ -1262,7 +1263,7 @@ impl ExecutionEngine {
                     }
 
                     let mut new_row = row.clone();
-                    let mut old_key_value: Option<Value> = None;
+                    let mut _old_key_value: Option<Value> = None;
 
                     // Apply SET clauses and track if primary key is being updated
                     for (col_name, expr) in &update.set_clauses {
@@ -1272,7 +1273,7 @@ impl ExecutionEngine {
                         {
                             // Track old key value if this is the primary key
                             if primary_key_col == Some(col_idx) {
-                                old_key_value = Some(row[col_idx].clone());
+                                _old_key_value = Some(row[col_idx].clone());
                             }
 
                             let new_value = evaluate_expr(expr, &new_row, &columns);
@@ -1314,19 +1315,16 @@ impl ExecutionEngine {
                                                 if fk.referenced_table == update.table
                                                     && fk.referenced_column
                                                         == columns[pk_col_idx].name
-                                                {
-                                                    if fk.on_update
+                                                    && fk.on_update
                                                         == Some(ForeignKeyAction::Restrict)
-                                                    {
-                                                        let child_rows =
-                                                            storage.scan(table_name)?;
-                                                        for child_row in &child_rows {
-                                                            if child_row[col_idx] == *old_val {
-                                                                return Err(SqlError::ExecutionError(format!(
-                                                                    "Cannot update: foreign key constraint violation - table '{}' has referenced rows",
-                                                                    table_name
-                                                                )));
-                                                            }
+                                                {
+                                                    let child_rows = storage.scan(table_name)?;
+                                                    for child_row in &child_rows {
+                                                        if child_row[col_idx] == *old_val {
+                                                            return Err(SqlError::ExecutionError(format!(
+                                                                "Cannot update: foreign key constraint violation - table '{}' has referenced rows",
+                                                                table_name
+                                                            )));
                                                         }
                                                     }
                                                 }
@@ -1363,7 +1361,7 @@ impl ExecutionEngine {
                                     handle_foreign_key_update(
                                         &mut *storage,
                                         &update.table,
-                                        &old_val,
+                                        old_val,
                                         new_val,
                                         &columns[pk_col_idx].name,
                                     )?;
@@ -1459,7 +1457,7 @@ impl ExecutionEngine {
                 // EXPLAIN (without ANALYZE) - show query plan with cost
                 let rows = vec![vec![
                     Value::Text("Plan:".to_string()),
-                    Value::Text(format!("cost=0.00..100.00 rows=1000 width=64")),
+                    Value::Text("cost=0.00..100.00 rows=1000 width=64".to_string()),
                 ]];
                 Ok(ExecutorResult::new(rows, 0))
             }

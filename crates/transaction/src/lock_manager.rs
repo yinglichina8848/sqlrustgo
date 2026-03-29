@@ -1,4 +1,4 @@
-use crate::gid::{GlobalTransactionId, NodeId};
+use crate::gid::GlobalTransactionId;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 

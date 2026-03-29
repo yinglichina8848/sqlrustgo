@@ -298,7 +298,7 @@ impl MemoryStorage {
         self.triggers.insert(info.name.clone(), info.clone());
         self.table_triggers
             .entry(info.table_name.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(info.name.clone());
         Ok(())
     }
@@ -623,7 +623,7 @@ impl StorageEngine for MemoryStorage {
                                 }
 
                                 // Delete the child records
-                                let deleted = self.delete_internal(
+                                let _deleted = self.delete_internal(
                                     child_table,
                                     &[Value::Integer(child_col_idx as i64), current_value.clone()],
                                 )?;
@@ -696,7 +696,7 @@ impl StorageEngine for MemoryStorage {
         #[derive(Debug)]
         struct UpdatedColumn {
             col_idx: usize,
-            col_name: String,
+            _col_name: String,
             referenced_by: Vec<(String, usize, ForeignKeyConstraint)>, // (child_table, child_col_idx, fk)
         }
 
@@ -718,7 +718,7 @@ impl StorageEngine for MemoryStorage {
                 if !referencing.is_empty() {
                     updated_columns.push(UpdatedColumn {
                         col_idx: *col_idx,
-                        col_name: col_def.name.clone(),
+                        _col_name: col_def.name.clone(),
                         referenced_by: referencing,
                     });
                 }
@@ -990,7 +990,7 @@ impl StorageEngine for MemoryStorage {
         self.triggers.insert(info.name.clone(), info.clone());
         self.table_triggers
             .entry(info.table_name.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(info.name.clone());
         Ok(())
     }
@@ -1083,8 +1083,8 @@ impl StorageEngine for MemoryStorage {
         let counters = self
             .auto_increment_counters
             .entry(table.to_string())
-            .or_insert_with(HashMap::new);
-        let next = counters.entry(column_index).or_insert(0).clone();
+            .or_default();
+        let next = *counters.entry(column_index).or_insert(0);
         counters.insert(column_index, next + 1);
         Ok(next + 1)
     }
@@ -1156,6 +1156,7 @@ impl MemoryStorage {
             })?;
 
         for row in records.iter_mut() {
+            #[allow(clippy::collapsible_if)]
             if let Some(value) = row.get(col_idx) {
                 if value == match_value {
                     if col_idx < row.len() {

@@ -16,6 +16,7 @@ pub enum BackupFormat {
 }
 
 impl BackupFormat {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "csv" => Some(BackupFormat::Csv),
@@ -65,7 +66,7 @@ impl BackupExporter {
             .map_err(|e: std::io::Error| SqlError::IoError(e.to_string()))?;
 
         for row in rows {
-            let values: Vec<String> = row.iter().map(|v| Self::csv_escape(v)).collect();
+            let values: Vec<String> = row.iter().map(Self::csv_escape).collect();
             writeln!(writer, "{}", values.join(","))
                 .map_err(|e: std::io::Error| SqlError::IoError(e.to_string()))?;
         }
@@ -157,7 +158,7 @@ impl BackupExporter {
         let table_name = &info.name;
 
         for row in rows {
-            let values: Vec<String> = row.iter().map(|v| Self::sql_value(v)).collect();
+            let values: Vec<String> = row.iter().map(Self::sql_value).collect();
             writeln!(
                 writer,
                 "INSERT INTO {} ({}) VALUES ({});",
@@ -229,7 +230,7 @@ impl DataRestorer {
         let mut rows = Vec::new();
 
         for line in &lines[1..] {
-            let values: Vec<Value> = line.split(',').map(|s| Self::parse_csv_value(s)).collect();
+            let values: Vec<Value> = line.split(',').map(Self::parse_csv_value).collect();
             if !values.is_empty() {
                 rows.push(values);
             }
@@ -353,7 +354,7 @@ impl DataRestorer {
             }
 
             if let Some((table_name, values_part)) = Self::parse_insert(line) {
-                let rows = Self::parse_insert_values(&values_part);
+                let rows = Self::parse_insert_values(values_part);
 
                 if !storage.has_table(&table_name) {
                     let table_info = TableInfo {

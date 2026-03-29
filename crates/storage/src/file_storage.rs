@@ -6,7 +6,7 @@ use crate::engine::{
     ColumnDefinition, ColumnStats, Record, StorageEngine, TableData, TableInfo, TableStats,
     TriggerInfo,
 };
-use crate::wal::{WalEntry, WalManager, WalWriter};
+use crate::wal::{WalManager, WalWriter};
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 /// File-based storage manager
+#[allow(dead_code)]
 pub struct FileStorage {
     /// Base directory for database files
     data_dir: PathBuf,
@@ -70,6 +71,7 @@ impl FileStorage {
     }
 
     /// 从 WAL 恢复数据 (简化版 - 待完善)
+    #[allow(dead_code)]
     fn recover_from_wal(&mut self, _manager: &WalManager) -> SqlResult<()> {
         // TODO: 实现 WAL 恢复
         Ok(())
@@ -1179,7 +1181,7 @@ impl StorageEngine for FileStorage {
             // 批量模式：先缓冲，达到阈值后批量写入
             self.insert_buffer
                 .entry(table.to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .extend(records);
 
             // 达到阈值，批量持久化
@@ -1324,7 +1326,7 @@ impl StorageEngine for FileStorage {
             .write()
             .unwrap()
             .entry(table_name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(name);
         Ok(())
     }
@@ -1422,7 +1424,7 @@ impl StorageEngine for FileStorage {
         let table_counters = counters
             .entry(table.to_string())
             .or_insert_with(HashMap::new);
-        let next = table_counters.entry(column_index).or_insert(0).clone();
+        let next = *table_counters.entry(column_index).or_insert(0);
         table_counters.insert(column_index, next + 1);
         Ok(next + 1)
     }

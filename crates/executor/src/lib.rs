@@ -57,7 +57,7 @@ pub use window_executor::WindowVolcanoExecutor;
 // Trigger execution engine
 pub mod trigger;
 pub use trigger::{
-    TriggerExecutor, TriggerEvent, TriggerExecutionResult, TriggerTiming, TriggerType,
+    TriggerEvent, TriggerExecutionResult, TriggerExecutor, TriggerTiming, TriggerType,
 };
 
 // Stored procedure executor
@@ -233,6 +233,7 @@ mod tests {
     }
 }
 
+#[allow(dead_code)]
 struct MockExecutor;
 
 impl Executor for MockExecutor {

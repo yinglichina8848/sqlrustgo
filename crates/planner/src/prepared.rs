@@ -134,7 +134,9 @@ impl PreparedStatementManager {
     /// Note: This returns the plan and parameters; actual execution
     /// is done by the executor with parameter binding
     pub fn execute(&self, id: &str) -> Option<(&Arc<dyn PhysicalPlan>, &Vec<DataType>)> {
-        self.statements.get(id).map(|stmt| (&stmt.plan, &stmt.param_types))
+        self.statements
+            .get(id)
+            .map(|stmt| (&stmt.plan, &stmt.param_types))
     }
 
     /// Record that a statement was used (for LRU tracking)
@@ -182,8 +184,7 @@ impl PreparedStatementManager {
     pub fn cleanup_idle(&mut self, max_idle: std::time::Duration) -> usize {
         let now = Utc::now();
         // Convert std::time::Duration to chrono::Duration
-        let idle_duration = Duration::from_std(max_idle)
-            .unwrap_or_else(|_| Duration::hours(1)); // Default to 1 hour if conversion fails
+        let idle_duration = Duration::from_std(max_idle).unwrap_or_else(|_| Duration::hours(1)); // Default to 1 hour if conversion fails
         let idle_threshold = now - idle_duration;
 
         let to_remove: Vec<String> = self
@@ -214,7 +215,7 @@ impl PreparedStatementManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Schema, Field};
+    use crate::{Field, Schema};
 
     /// A simple mock physical plan for testing
     struct MockPhysicalPlan {
@@ -348,12 +349,7 @@ mod tests {
         );
 
         // Adding a third should evict one
-        manager.prepare(
-            "stmt3".to_string(),
-            "SELECT 3".to_string(),
-            plan,
-            vec![],
-        );
+        manager.prepare("stmt3".to_string(), "SELECT 3".to_string(), plan, vec![]);
 
         // At least one of the first two should be evicted
         let remaining: Vec<_> = ["stmt1", "stmt2", "stmt3"]
