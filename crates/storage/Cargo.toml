@@ -17,11 +17,8 @@ miniz_oxide.workspace = true
 hex.workspace = true
 snap = "1.1"
 zstd = "0.13"
-arrow = { workspace = true }
-parquet = { workspace = true }
-
-[features]
-default = []
+arrow.workspace = true
+parquet.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

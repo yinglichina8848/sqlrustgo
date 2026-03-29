@@ -367,6 +367,9 @@ impl<'a> Lexer<'a> {
                     "NOT" => Token::Not,
                     "AUTO_INCREMENT" | "AUTOINCREMENT" => Token::AutoIncrement,
                     "REFERENCES" => Token::References,
+                    "COPY" => Token::Copy,
+                    "FORMAT" => Token::Format,
+                    "PARQUET" => Token::Parquet,
                     _ => Token::Identifier(ident),
                 }
             }
