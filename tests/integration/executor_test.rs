@@ -206,7 +206,6 @@ fn test_foreign_key_constraint_violation() {
 }
 
 #[test]
-#[ignore]
 fn test_foreign_key_constraint_null_value() {
     // TODO: NULL FK constraint support not yet implemented
     // This test is ignored until NULL foreign key handling is added
