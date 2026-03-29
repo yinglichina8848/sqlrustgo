@@ -1,7 +1,8 @@
 # SQLRustGo 2.x 系列开发规划
-> 版本: 2.0 → 2.5  
-> 更新日期: 2026-03-28  
-> 目标: 企业级 GMP 文档精准检索 + RAG + 知识图谱 + OpenClaw AI 驱动
+
+> 版本: 2.0 → 2.5
+> 更新日期: 2026-03-29
+> 目标: 企业级 GMP 文档精准检索 + RAG + 知识图谱 + OpenClaw AI 驱动 + **AgentSQL Native**
 
 ---
 
@@ -10,7 +11,7 @@
 | 版本 | 核心目标 | 主要功能 | AI 开发线 |
 |------|----------|----------|------------|
 | **2.0** | GA 单机稳定 | Phase1-5 完成，RDBMS 核心，TaskScheduler, ParallelExecutor | OpenCode A/B, Claude A/B |
-| **2.1** | GMP 文档精准检索原型 | 文档导入/向量化/OpenClaw SQL API | OpenCode A/B, Claude A |
+| **2.1** | AgentSQL + GMP检索 | 文档导入/向量化/OpenClaw SQL API/**AgentSQL Extension** | OpenCode A/B, Claude A |
 | **2.2** | 高性能向量数据库 | 向量索引/并行KNN/SQL+Vector联合查询 | OpenCode B, Claude A |
 | **2.3** | RAG + 全文检索 | 文档问答/LLM集成/OpenClaw驱动 | Claude A, Claude B |
 | **2.4** | 知识图谱 + 图检索 | 节点/边表/BFS/DFS/路径搜索 | OpenCode A, Claude B |
