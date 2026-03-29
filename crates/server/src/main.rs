@@ -59,7 +59,7 @@ fn handle_client(
             };
 
             let duration_ms = start.elapsed().as_millis() as u64;
-            let rows = result.as_ref().map(|r| r.affected_rows).unwrap_or(0);
+            let rows = result.as_ref().map(|r| r.affected_rows as u64).unwrap_or(0);
 
             if parse(query).is_ok() && is_ddl(query) {
                 security.log_ddl(&user, query, session_id);
@@ -122,9 +122,10 @@ fn main() {
     let listener = TcpListener::bind(addr).expect("Failed to bind to address");
     println!("Ready to accept connections");
 
+    let security_for_shutdown = security.clone();
     ctrlc::set_handler(move || {
         println!("\nShutting down...");
-        let stats = security.get_security_stats();
+        let stats = security_for_shutdown.get_security_stats();
         println!("Security stats: {} events, {} sessions",
             stats.audit_total_events, stats.total_sessions);
         std::process::exit(0);
@@ -139,14 +140,6 @@ fn main() {
                     if let Err(e) = handle_client(stream, engine, security) {
                         eprintln!("Client handler error: {}", e);
                     }
-                });
-            }
-            Err(e) => {
-                eprintln!("Connection error: {}", e);
-            }
-        }
-    }
-}
                 });
             }
             Err(e) => {

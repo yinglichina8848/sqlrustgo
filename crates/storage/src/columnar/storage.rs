@@ -429,9 +429,7 @@ impl StorageEngine for ColumnarStorage {
         self.tables
             .get(table)
             .map(|s| s.info.clone())
-            .ok_or_else(|| {
-                crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
-            })
+            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
     fn has_table(&self, table: &str) -> bool {
