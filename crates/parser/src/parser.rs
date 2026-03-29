@@ -50,6 +50,8 @@ pub enum Statement {
     Execute(ExecuteStatement),
     /// DEALLOCATE PREPARE stmt
     DeallocatePrepare(DeallocatePrepareStatement),
+    /// COPY table FROM/TO 'path' (FORMAT PARQUET)
+    Copy(CopyStatement),
 }
 
 /// PREPARE statement
@@ -70,6 +72,19 @@ pub struct ExecuteStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeallocatePrepareStatement {
     pub name: String,
+}
+
+/// COPY statement - COPY table FROM 'path' (FORMAT PARQUET) or COPY table TO 'path' (FORMAT PARQUET)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CopyStatement {
+    /// Table name
+    pub table_name: String,
+    /// Direction: true = FROM (import), false = TO (export)
+    pub from: bool,
+    /// File path
+    pub path: String,
+    /// Format (only PARQUET supported currently)
+    pub format: String,
 }
 
 /// CREATE INDEX statement
@@ -524,6 +539,7 @@ impl Parser {
             Some(Token::Prepare) => self.parse_prepare(),
             Some(Token::Execute) => self.parse_execute(),
             Some(Token::Deallocate) => self.parse_deallocate(),
+            Some(Token::Copy) => self.parse_copy(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -2662,6 +2678,64 @@ impl Parser {
         Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement { name }))
     }
 
+    /// Parse COPY statement
+    /// COPY table_name FROM 'path' (FORMAT PARQUET)
+    /// COPY table_name TO 'path' (FORMAT PARQUET)
+    fn parse_copy(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Copy)?;
+
+        // Get table name
+        let table_name = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let name = name.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected table name after COPY".to_string()),
+        };
+
+        // Get direction (FROM or TO)
+        let from = match self.current() {
+            Some(Token::From) => {
+                self.next();
+                true
+            }
+            Some(Token::To) => {
+                self.next();
+                false
+            }
+            _ => return Err("Expected FROM or TO after table name".to_string()),
+        };
+
+        // Get file path
+        let path = match self.current() {
+            Some(Token::StringLiteral(s)) => {
+                let path = s.clone();
+                self.next();
+                path
+            }
+            _ => return Err("Expected file path string after FROM/TO".to_string()),
+        };
+
+        // Parse optional format clause: (FORMAT PARQUET)
+        let format = if matches!(self.current(), Some(Token::LParen)) {
+            self.next().ok_or_else(|| "Unexpected end of input".to_string())?;
+            self.expect(Token::Format)?;
+            self.expect(Token::Parquet)?;
+            self.expect(Token::RParen)?;
+            "PARQUET".to_string()
+        } else {
+            "PARQUET".to_string() // Default format
+        };
+
+        Ok(Statement::Copy(CopyStatement {
+            table_name,
+            from,
+            path,
+            format,
+        }))
+    }
+
     fn parse_call(&mut self) -> Result<Statement, String> {
         self.expect(Token::Call)?;
         
@@ -3906,6 +3980,89 @@ mod tests {
             Statement::ShowProcesslist => {}
             _ => panic!("Expected SHOW PROCESSLIST statement"),
         }
+    }
+
+    // ========================================================================
+    // COPY Statement Tests (Issue #758 - Parquet Import/Export)
+    // ========================================================================
+
+    #[test]
+    fn test_parse_copy_from_parquet() {
+        let result = parse("COPY users FROM 'users.parquet' (FORMAT PARQUET)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Copy(c) => {
+                assert_eq!(c.table_name, "users");
+                assert!(c.from, "COPY FROM should have from=true");
+                assert_eq!(c.path, "users.parquet");
+                assert_eq!(c.format, "PARQUET");
+            }
+            _ => panic!("Expected COPY statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_copy_to_parquet() {
+        let result = parse("COPY users TO 'backup.parquet' (FORMAT PARQUET)");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Copy(c) => {
+                assert_eq!(c.table_name, "users");
+                assert!(!c.from, "COPY TO should have from=false");
+                assert_eq!(c.path, "backup.parquet");
+                assert_eq!(c.format, "PARQUET");
+            }
+            _ => panic!("Expected COPY statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_copy_from_parquet_without_format() {
+        // FORMAT PARQUET should be optional and default to PARQUET
+        let result = parse("COPY users FROM 'users.parquet'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Copy(c) => {
+                assert_eq!(c.table_name, "users");
+                assert!(c.from, "COPY FROM should have from=true");
+                assert_eq!(c.path, "users.parquet");
+                assert_eq!(c.format, "PARQUET", "Default format should be PARQUET");
+            }
+            _ => panic!("Expected COPY statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_copy_to_parquet_without_format() {
+        let result = parse("COPY products TO 'products.parquet'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Copy(c) => {
+                assert_eq!(c.table_name, "products");
+                assert!(!c.from, "COPY TO should have from=false");
+                assert_eq!(c.path, "products.parquet");
+                assert_eq!(c.format, "PARQUET");
+            }
+            _ => panic!("Expected COPY statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_copy_error_no_table() {
+        let result = parse("COPY FROM 'file.parquet'");
+        assert!(result.is_err(), "Should fail without table name");
+    }
+
+    #[test]
+    fn test_parse_copy_error_no_direction() {
+        let result = parse("COPY users 'file.parquet'");
+        assert!(result.is_err(), "Should fail without FROM/TO");
+    }
+
+    #[test]
+    fn test_parse_copy_error_no_path() {
+        let result = parse("COPY users FROM");
+        assert!(result.is_err(), "Should fail without file path");
     }
 }
 

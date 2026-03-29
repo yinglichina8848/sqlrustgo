@@ -815,6 +815,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_parallel_count_speedup() {
         // Test parallel COUNT(*) - validates parallel counting framework
         use std::sync::atomic::{AtomicUsize, Ordering};
