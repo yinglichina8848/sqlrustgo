@@ -56,7 +56,7 @@ AI ↓
 | #942 | Phase 1: 存储稳定性 | CLOSED ✅ |
 | #952 | 性能基准工具搭建 - sysbench | CLOSED ✅ |
 | #953 | 主从复制 - Binlog/故障转移 | CLOSED ✅ |
-| #954 | 并行查询框架 - ParallelExecutor | OPEN |
+| #954 | 并行查询框架 - ParallelExecutor | CLOSED ✅ |
 | #963 | 内存管理优化 - Arena/Pool | CLOSED ✅ |
 | #964 | 批量写入优化 - INSERT batch | CLOSED ✅ |
 | #965 | WAL 组提交优化 | CLOSED ✅ |
@@ -134,13 +134,13 @@ AI ↓
 
 | Phase | 总计 | CLOSED | OPEN |
 |-------|------|--------|------|
-| Phase 1 | 14 | 13 | 1 |
+| Phase 1 | 14 | 14 | 0 |
 | Phase 2 | 3 | 3 | 0 |
 | Phase 3 | 1 | 1 | 0 |
 | Phase 4 | 3 | 1 | 2 |
 | Phase 5 | 1 | 1 | 0 |
 | Epic-12 | 6 | 6 | 0 |
-| **总计** | **28** | **25 (89%)** | **3** |
+| **总计** | **28** | **26 (93%)** | **2** |
 
 ---
 
