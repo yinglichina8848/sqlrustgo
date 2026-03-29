@@ -110,7 +110,10 @@ impl ClockReplacer {
             }
 
             // Get frame at current hand position
-            let current_id = frame_ids_static.keys().nth(*hand % frame_ids_static.len()).copied();
+            let current_id = frame_ids_static
+                .keys()
+                .nth(*hand % frame_ids_static.len())
+                .copied();
 
             if let Some(page_id) = current_id {
                 let frame = frame_ids_static.get(&page_id).unwrap();

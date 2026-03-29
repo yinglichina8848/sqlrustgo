@@ -317,8 +317,9 @@ impl Default for ColumnarStorage {
 
 impl StorageEngine for ColumnarStorage {
     fn scan(&self, table: &str) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
         let store = self.tables.get(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
@@ -348,8 +349,9 @@ impl StorageEngine for ColumnarStorage {
             None
         };
 
-        let store = self.tables.get_mut(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get_mut(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
         let store = self.tables.get_mut(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
@@ -427,7 +429,6 @@ impl StorageEngine for ColumnarStorage {
         self.tables
             .get(table)
             .map(|s| s.info.clone())
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))
             .ok_or_else(|| {
                 crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
             })
@@ -537,8 +538,9 @@ impl StorageEngine for ColumnarStorage {
         table: &str,
         column_indices: &[usize],
     ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table)
-            .ok_or_else(|| crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
         let store = self.tables.get(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
