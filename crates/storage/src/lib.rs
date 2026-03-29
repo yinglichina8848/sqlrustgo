@@ -15,6 +15,7 @@ pub mod page_guard;
 pub mod replication;
 pub mod stats;
 pub mod wal;
+pub mod parquet;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 
@@ -40,6 +41,7 @@ pub use replication::{
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
+pub use parquet::{export_to_parquet, import_from_parquet};
 
 #[cfg(test)]
 mod tests {
