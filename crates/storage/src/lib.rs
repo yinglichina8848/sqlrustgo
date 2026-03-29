@@ -25,7 +25,6 @@ pub mod wal;
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 
 pub use binary_format::BinaryFormat;
-pub use columnar::{Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType, ParquetCompatReader, ParquetCompatWriter, TableStore};
 pub use binlog_client::{BinlogClient, BinlogClientBuilder};
 pub use binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
@@ -34,8 +33,10 @@ pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
-
-pub use columnar::{ParquetCompatReader, ParquetCompatWriter};
+pub use columnar::{
+    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnarStorage, CompressionType,
+    ParquetCompatReader, ParquetCompatWriter, TableStore,
+};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
