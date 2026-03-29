@@ -6,16 +6,18 @@
 //! - Two-Phase Commit for distributed transactions
 //! - Distributed locking
 
+pub mod distributed_lock;
 pub mod partition;
+pub mod raft;
 pub mod shard_manager;
 pub mod shard_router;
-pub mod raft;
 pub mod two_phase_commit;
-pub mod distributed_lock;
 
+pub use distributed_lock::{DistributedLockManager, LockEntry};
 pub use partition::{PartitionKey, PartitionStrategy};
+pub use raft::{RaftMessage, RaftNode, RaftState};
 pub use shard_manager::{ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{RoutedPlan, ShardRouter};
-pub use raft::{RaftMessage, RaftNode, RaftState};
-pub use two_phase_commit::{DistributedTransaction, Participant, TwoPhaseCommit, TransactionState, Vote};
-pub use distributed_lock::{DistributedLockManager, LockEntry};
+pub use two_phase_commit::{
+    DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
+};

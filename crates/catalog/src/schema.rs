@@ -61,7 +61,7 @@ impl Schema {
 
     /// Remove a table from the schema
     pub fn remove_table(&mut self, name: &str) -> Option<TableRef> {
-        self.tables.remove(name).map(|t| Arc::new(t))
+        self.tables.remove(name).map(Arc::new)
     }
 
     /// Get the number of tables

@@ -1,7 +1,7 @@
 use crate::gid::GlobalTransactionId;
 use crate::gid::NodeId;
-use sqlrustgo_storage::{WalEntryType, WalManager};
 use serde::{Deserialize, Serialize};
+use sqlrustgo_storage::{WalEntryType, WalManager};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -111,7 +111,11 @@ impl Recovery {
     }
 
     /// Log transaction prepare to WAL
-    pub fn log_prepare(&self, gid: &GlobalTransactionId, participants: &[u64]) -> Result<(), String> {
+    pub fn log_prepare(
+        &self,
+        gid: &GlobalTransactionId,
+        participants: &[u64],
+    ) -> Result<(), String> {
         if let Some(ref wal) = self.wal_manager {
             let tx_id = Self::gid_to_tx_id(gid);
             wal.log_prepare(tx_id)
@@ -119,18 +123,24 @@ impl Recovery {
         }
         // Update in-memory state
         let tx_id = Self::gid_to_tx_id(gid);
-        let mut states = self.tx_states.write().map_err(|_| "Lock poisoned".to_string())?;
-        states.insert(tx_id, TxState {
-            gid: gid.clone(),
-            has_prepare: true,
-            has_commit: false,
-            has_rollback: false,
-            participants: participants.to_vec(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        });
+        let mut states = self
+            .tx_states
+            .write()
+            .map_err(|_| "Lock poisoned".to_string())?;
+        states.insert(
+            tx_id,
+            TxState {
+                gid: gid.clone(),
+                has_prepare: true,
+                has_commit: false,
+                has_rollback: false,
+                participants: participants.to_vec(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            },
+        );
         Ok(())
     }
 
@@ -143,7 +153,10 @@ impl Recovery {
         }
         // Update in-memory state
         let tx_id = Self::gid_to_tx_id(gid);
-        let mut states = self.tx_states.write().map_err(|_| "Lock poisoned".to_string())?;
+        let mut states = self
+            .tx_states
+            .write()
+            .map_err(|_| "Lock poisoned".to_string())?;
         if let Some(state) = states.get_mut(&tx_id) {
             state.has_commit = true;
         }
@@ -159,7 +172,10 @@ impl Recovery {
         }
         // Update in-memory state
         let tx_id = Self::gid_to_tx_id(gid);
-        let mut states = self.tx_states.write().map_err(|_| "Lock poisoned".to_string())?;
+        let mut states = self
+            .tx_states
+            .write()
+            .map_err(|_| "Lock poisoned".to_string())?;
         if let Some(state) = states.get_mut(&tx_id) {
             state.has_rollback = true;
         }
@@ -236,7 +252,10 @@ impl Recovery {
 
         // Also check in-memory state for any transactions that were logged but not yet committed
         {
-            let states = self.tx_states.read().map_err(|_| "Lock poisoned".to_string())?;
+            let states = self
+                .tx_states
+                .read()
+                .map_err(|_| "Lock poisoned".to_string())?;
             for (tx_id, state) in states.iter() {
                 if state.has_prepare && !state.has_commit && !state.has_rollback {
                     // Check if not already in incomplete list
@@ -275,7 +294,9 @@ impl Recovery {
                         .await?;
                     report.rolled_back += 1;
                 }
-                WalEntry::TxPrepare { gid, participants, .. } => {
+                WalEntry::TxPrepare {
+                    gid, participants, ..
+                } => {
                     // 等待协调者指令或主动查询
                     let outcome = self
                         .query_coordinator_for_outcome(&gid, &participants)
@@ -303,7 +324,11 @@ impl Recovery {
     }
 
     /// 向参与者发送 Rollback 请求
-    async fn rollback_incomplete_tx(&self, gid: &GlobalTransactionId, reason: &str) -> Result<(), String> {
+    async fn rollback_incomplete_tx(
+        &self,
+        gid: &GlobalTransactionId,
+        reason: &str,
+    ) -> Result<(), String> {
         log::info!("Rolling back incomplete transaction {}: {}", gid, reason);
 
         // 记录回滚日志
@@ -316,7 +341,11 @@ impl Recovery {
     }
 
     /// 查询协调者事务状态
-    async fn query_coordinator_for_outcome(&self, gid: &GlobalTransactionId, _participants: &[u64]) -> Result<TxOutcome, String> {
+    async fn query_coordinator_for_outcome(
+        &self,
+        gid: &GlobalTransactionId,
+        _participants: &[u64],
+    ) -> Result<TxOutcome, String> {
         log::debug!("Querying coordinator for transaction outcome: {}", gid);
 
         // 在实际实现中，这里会查询协调者获取事务状态
@@ -333,7 +362,10 @@ impl Recovery {
 
         // 清理内存中的状态
         let tx_id = Self::gid_to_tx_id(gid);
-        let mut states = self.tx_states.write().map_err(|_| "Lock poisoned".to_string())?;
+        let mut states = self
+            .tx_states
+            .write()
+            .map_err(|_| "Lock poisoned".to_string())?;
         states.remove(&tx_id);
 
         Ok(())
@@ -348,7 +380,10 @@ impl Recovery {
 
         // 清理内存中的状态
         let tx_id = Self::gid_to_tx_id(gid);
-        let mut states = self.tx_states.write().map_err(|_| "Lock poisoned".to_string())?;
+        let mut states = self
+            .tx_states
+            .write()
+            .map_err(|_| "Lock poisoned".to_string())?;
         states.remove(&tx_id);
 
         Ok(())

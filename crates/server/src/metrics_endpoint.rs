@@ -202,7 +202,7 @@ mod tests {
         let mut registry = MetricsRegistry::new();
         // Help text is only output when metrics with that name are registered
         registry.register_help("queries".to_string(), "Help for queries".to_string());
-        
+
         // Without registering metrics, help text won't appear in output
         let output = registry.to_prometheus_format();
         // Just verify the registry can be created and used without panic

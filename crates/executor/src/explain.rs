@@ -10,8 +10,7 @@ use sqlrustgo_planner::{
     WindowExec,
 };
 use sqlrustgo_types::Value;
-use std::any::Any;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Configuration for EXPLAIN output
 #[derive(Debug, Clone)]
@@ -82,7 +81,7 @@ impl ExplainLine {
     /// Format this line as tree-style output
     pub fn format_tree(&self) -> String {
         let prefix = "  ".repeat(self.indent);
-        let arrow = if self.indent == 0 { "-> " } else { "-> " };
+        let arrow = "-> ";
 
         let mut line = format!("{}{}{}", prefix, arrow, self.operator);
 

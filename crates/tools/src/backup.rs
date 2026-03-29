@@ -10,8 +10,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sqlrustgo_storage::{
-    BackupExporter, BackupFormat, ColumnDefinition, DataRestorer, MemoryStorage,
-    StorageEngine, TableInfo,
+    BackupExporter, BackupFormat, ColumnDefinition, DataRestorer, MemoryStorage, StorageEngine,
+    TableInfo,
 };
 use sqlrustgo_types::Value;
 use std::fs;
@@ -123,7 +123,11 @@ pub enum BackupCommand {
         target: PathBuf,
 
         /// Drop existing tables before restore
-        #[structopt(short = "c", long = "clean", long_help = "Drop existing tables before restore")]
+        #[structopt(
+            short = "c",
+            long = "clean",
+            long_help = "Drop existing tables before restore"
+        )]
         clean: bool,
     },
 }
@@ -151,8 +155,8 @@ pub fn run() -> Result<()> {
 
 /// Create a full backup
 pub fn create_full_backup(dir: &Path, format: &str, data_dir: &Path) -> Result<()> {
-    let format = BackupFormat::from_str(format)
-        .context("Invalid format. Use: sql, csv, or json")?;
+    let format =
+        BackupFormat::from_str(format).context("Invalid format. Use: sql, csv, or json")?;
 
     println!("Creating full backup to: {}", dir.display());
 
@@ -195,9 +199,10 @@ pub fn create_full_backup(dir: &Path, format: &str, data_dir: &Path) -> Result<(
                     is_primary_key: c.is_primary_key,
                     is_unique: c.is_unique,
                     auto_increment: c.auto_increment,
-                    references: c.references.as_ref().map(|r| {
-                        format!("{}.{}", r.referenced_table, r.referenced_column)
-                    }),
+                    references: c
+                        .references
+                        .as_ref()
+                        .map(|r| format!("{}.{}", r.referenced_table, r.referenced_column)),
                 })
                 .collect(),
         };
@@ -247,9 +252,14 @@ pub fn create_full_backup(dir: &Path, format: &str, data_dir: &Path) -> Result<(
 }
 
 /// Create an incremental backup
-pub fn create_incremental_backup(parent: &Path, dir: &Path, format: &str, data_dir: &Path) -> Result<()> {
-    let format = BackupFormat::from_str(format)
-        .context("Invalid format. Use: sql, csv, or json")?;
+pub fn create_incremental_backup(
+    parent: &Path,
+    dir: &Path,
+    format: &str,
+    data_dir: &Path,
+) -> Result<()> {
+    let format =
+        BackupFormat::from_str(format).context("Invalid format. Use: sql, csv, or json")?;
 
     // Load parent manifest to get parent LSN
     let parent_manifest_file = parent.join("manifest.json");
@@ -305,9 +315,10 @@ pub fn create_incremental_backup(parent: &Path, dir: &Path, format: &str, data_d
                     is_primary_key: c.is_primary_key,
                     is_unique: c.is_unique,
                     auto_increment: c.auto_increment,
-                    references: c.references.as_ref().map(|r| {
-                        format!("{}.{}", r.referenced_table, r.referenced_column)
-                    }),
+                    references: c
+                        .references
+                        .as_ref()
+                        .map(|r| format!("{}.{}", r.referenced_table, r.referenced_column)),
                 })
                 .collect(),
         };
@@ -317,11 +328,7 @@ pub fn create_incremental_backup(parent: &Path, dir: &Path, format: &str, data_d
         let data_file = data_subdir.join(format!("{}.sql", table_name));
         BackupExporter::export_table(&storage, table_name, &data_file, format)?;
 
-        println!(
-            "  Exported table '{}': {} rows",
-            table_name,
-            row_count
-        );
+        println!("  Exported table '{}': {} rows", table_name, row_count);
     }
 
     // Create manifest
@@ -429,8 +436,8 @@ pub fn verify_backup(dir: &Path) -> Result<()> {
 
     // Load manifest
     let content = fs::read_to_string(&manifest_file)?;
-    let manifest: BackupManifest = serde_json::from_str(&content)
-        .context("Invalid manifest format")?;
+    let manifest: BackupManifest =
+        serde_json::from_str(&content).context("Invalid manifest format")?;
 
     println!("✅ Manifest loaded");
     println!("   Version: {}", manifest.version);
@@ -514,8 +521,8 @@ pub fn restore_backup(dir: &Path, target: &Path, clean: bool) -> Result<()> {
 
     // Load manifest
     let content = fs::read_to_string(&manifest_file)?;
-    let manifest: BackupManifest = serde_json::from_str(&content)
-        .context("Invalid manifest format")?;
+    let manifest: BackupManifest =
+        serde_json::from_str(&content).context("Invalid manifest format")?;
 
     // Create target directory
     fs::create_dir_all(target).context("Failed to create target directory")?;
@@ -563,11 +570,8 @@ pub fn restore_backup(dir: &Path, target: &Path, clean: bool) -> Result<()> {
         // Restore data
         let data_file = data_subdir.join(format!("{}.sql", table_info.name));
         if data_file.exists() {
-            let rows_restored = DataRestorer::restore_from_backup(
-                &mut storage,
-                &data_file,
-                format,
-            )?;
+            let rows_restored =
+                DataRestorer::restore_from_backup(&mut storage, &data_file, format)?;
             println!("  Restored {} rows", rows_restored);
         }
     }
@@ -590,7 +594,11 @@ fn generate_lsn() -> String {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    format!("{:016x}-{:08x}", duration.as_secs(), duration.subsec_nanos())
+    format!(
+        "{:016x}-{:08x}",
+        duration.as_secs(),
+        duration.subsec_nanos()
+    )
 }
 
 /// Generate a simple ISO8601 timestamp
@@ -614,7 +622,11 @@ fn chrono_lite_timestamp() -> String {
 
     // Approximate year (365 days + leap year handling)
     while remaining_days >= 365 {
-        let leap_years = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
+        let leap_years = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+            366
+        } else {
+            365
+        };
         if remaining_days >= leap_years {
             remaining_days -= leap_years;
             year += 1;
@@ -629,7 +641,11 @@ fn chrono_lite_timestamp() -> String {
 
     let mut month = 1;
     for (i, days_in_month) in days_per_month.iter().enumerate() {
-        let actual_days = if is_leap && i == 1 { 29 } else { *days_in_month };
+        let actual_days = if is_leap && i == 1 {
+            29
+        } else {
+            *days_in_month
+        };
         if remaining_days < actual_days as i64 {
             break;
         }
@@ -638,7 +654,10 @@ fn chrono_lite_timestamp() -> String {
     }
     let day = remaining_days + 1;
 
-    format!("{:04}-{:02}-{:02}_{:02}:{:02}:{:02}", year, month, day, hours, minutes, seconds)
+    format!(
+        "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}",
+        year, month, day, hours, minutes, seconds
+    )
 }
 
 /// Calculate checksum for backup verification
@@ -654,7 +673,12 @@ fn calculate_checksum(data_dir: &Path) -> Result<String> {
 
     let mut files: Vec<_> = fs::read_dir(data_dir)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|ext| ext == "sql").unwrap_or(false))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "sql")
+                .unwrap_or(false)
+        })
         .collect();
     files.sort_by_key(|e| e.file_name());
 
@@ -773,11 +797,31 @@ fn create_demo_storage() -> MemoryStorage {
     storage.create_table(&users_table).unwrap();
 
     // Insert demo users (using TEXT for timestamp to simplify demo)
-    storage.insert("users", vec![
-        vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Text("alice@example.com".to_string()), Value::Text("2024-01-15 10:30:00".to_string())],
-        vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Text("bob@example.com".to_string()), Value::Text("2024-01-16 14:22:00".to_string())],
-        vec![Value::Integer(3), Value::Text("Charlie".to_string()), Value::Text("charlie@example.com".to_string()), Value::Text("2024-01-17 09:15:00".to_string())],
-    ]).unwrap();
+    storage
+        .insert(
+            "users",
+            vec![
+                vec![
+                    Value::Integer(1),
+                    Value::Text("Alice".to_string()),
+                    Value::Text("alice@example.com".to_string()),
+                    Value::Text("2024-01-15 10:30:00".to_string()),
+                ],
+                vec![
+                    Value::Integer(2),
+                    Value::Text("Bob".to_string()),
+                    Value::Text("bob@example.com".to_string()),
+                    Value::Text("2024-01-16 14:22:00".to_string()),
+                ],
+                vec![
+                    Value::Integer(3),
+                    Value::Text("Charlie".to_string()),
+                    Value::Text("charlie@example.com".to_string()),
+                    Value::Text("2024-01-17 09:15:00".to_string()),
+                ],
+            ],
+        )
+        .unwrap();
 
     // Create orders table
     let orders_table = TableInfo {
@@ -829,11 +873,31 @@ fn create_demo_storage() -> MemoryStorage {
     storage.create_table(&orders_table).unwrap();
 
     // Insert demo orders
-    storage.insert("orders", vec![
-        vec![Value::Integer(1), Value::Integer(1), Value::Float(99.99), Value::Text("completed".to_string())],
-        vec![Value::Integer(2), Value::Integer(1), Value::Float(149.50), Value::Text("pending".to_string())],
-        vec![Value::Integer(3), Value::Integer(2), Value::Float(29.99), Value::Text("completed".to_string())],
-    ]).unwrap();
+    storage
+        .insert(
+            "orders",
+            vec![
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(1),
+                    Value::Float(99.99),
+                    Value::Text("completed".to_string()),
+                ],
+                vec![
+                    Value::Integer(2),
+                    Value::Integer(1),
+                    Value::Float(149.50),
+                    Value::Text("pending".to_string()),
+                ],
+                vec![
+                    Value::Integer(3),
+                    Value::Integer(2),
+                    Value::Float(29.99),
+                    Value::Text("completed".to_string()),
+                ],
+            ],
+        )
+        .unwrap();
 
     // Create products table
     let products_table = TableInfo {
@@ -871,11 +935,28 @@ fn create_demo_storage() -> MemoryStorage {
     storage.create_table(&products_table).unwrap();
 
     // Insert demo products
-    storage.insert("products", vec![
-        vec![Value::Integer(1), Value::Text("Widget".to_string()), Value::Float(19.99)],
-        vec![Value::Integer(2), Value::Text("Gadget".to_string()), Value::Float(49.99)],
-        vec![Value::Integer(3), Value::Text("Doohickey".to_string()), Value::Float(99.99)],
-    ]).unwrap();
+    storage
+        .insert(
+            "products",
+            vec![
+                vec![
+                    Value::Integer(1),
+                    Value::Text("Widget".to_string()),
+                    Value::Float(19.99),
+                ],
+                vec![
+                    Value::Integer(2),
+                    Value::Text("Gadget".to_string()),
+                    Value::Float(49.99),
+                ],
+                vec![
+                    Value::Integer(3),
+                    Value::Text("Doohickey".to_string()),
+                    Value::Float(99.99),
+                ],
+            ],
+        )
+        .unwrap();
 
     storage
 }

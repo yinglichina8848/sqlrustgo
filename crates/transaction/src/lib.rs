@@ -17,7 +17,9 @@ pub use deadlock::DeadlockDetector;
 pub use dtc::*;
 pub use gid::{GlobalTransactionId, NodeId};
 pub use lock::{LockError, LockGrantMode, LockInfo, LockManager, LockMode, LockRequest};
-pub use lock_manager::{DistributedLockManager, LockError as DistLockError, LockKey, LockMode as DistLockMode};
+pub use lock_manager::{
+    DistributedLockManager, LockError as DistLockError, LockKey, LockMode as DistLockMode,
+};
 pub use manager::{
     IsolationLevel, TransactionCommand, TransactionContext, TransactionError, TransactionManager,
 };

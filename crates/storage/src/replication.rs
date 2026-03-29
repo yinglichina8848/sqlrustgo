@@ -7,7 +7,6 @@
 //! - Simple failover (heartbeat monitoring, leader election)
 
 use std::io::{Read, Write};
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -377,6 +376,7 @@ impl Default for ReplicationConfig {
 }
 
 /// Master node for replication
+#[allow(dead_code)]
 pub struct MasterNode {
     binlog_writer: Arc<Mutex<BinlogWriter>>,
     config: ReplicationConfig,
@@ -477,6 +477,7 @@ impl MasterNode {
 }
 
 /// Slave node for replication
+#[allow(dead_code)]
 pub struct SlaveNode {
     binlog_path: PathBuf,
     config: ReplicationConfig,
@@ -497,7 +498,6 @@ impl SlaveNode {
     /// Start IO thread (fetch binlog from master)
     pub fn start_io_thread(&self) {
         let binlog_path = self.binlog_path.clone();
-        let config = self.config.clone();
         let master_lsn = self.master_lsn.clone();
         let is_running = self.is_running.clone();
 
@@ -592,6 +592,7 @@ impl SlaveNode {
 }
 
 /// Simple failover manager
+#[allow(dead_code)]
 pub struct FailoverManager {
     master_address: String,
     slave_addresses: Vec<String>,
