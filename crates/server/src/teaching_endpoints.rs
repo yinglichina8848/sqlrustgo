@@ -693,7 +693,7 @@ fn execute_sql(
             })
         }
 
-        _ => Err(format!("Unsupported statement type")),
+        _ => Err("Unsupported statement type".to_string()),
     }
 }
 
@@ -899,6 +899,7 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 /// Generate HTML for pipeline visualization index
+#[allow(clippy::useless_format)]
 fn generate_teaching_index_html() -> String {
     format!(
         r#"<!DOCTYPE html>
@@ -1293,6 +1294,7 @@ fn generate_profile_html(report: &str) -> String {
 }
 
 /// Generate HTML for individual operator stats
+#[allow(clippy::format_in_format_args)]
 fn generate_operators_html(profiles: &[OperatorProfile]) -> String {
     let mut operator_rows = String::new();
     for profile in profiles.iter().take(50) {

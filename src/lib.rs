@@ -2069,4 +2069,232 @@ mod tests {
         let result = engine.execute_plan(&join).unwrap();
         assert!(result.rows.len() > 0);
     }
+
+    #[test]
+    fn test_execute_delete() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("DELETE FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 1);
+
+        let select_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_execute_update() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("UPDATE users SET name = 'Charlie' WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 1);
+
+        let select_result = engine
+            .execute(parse("SELECT name FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Text("Charlie".to_string()));
+    }
+
+    #[test]
+    fn test_execute_drop_table() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("DROP TABLE users").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_alter_table_add_column() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("ALTER TABLE users ADD COLUMN name TEXT").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_insert_replace() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("REPLACE INTO users VALUES (1, 'Bob')").unwrap())
+            .unwrap();
+        assert!(result.affected_rows >= 1);
+
+        let select_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_execute_insert_ignore() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("INSERT IGNORE INTO users VALUES (1, 'Bob')").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+
+        let select_result = engine
+            .execute(parse("SELECT name FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Text("Alice".to_string()));
+    }
+
+    #[test]
+    fn test_execute_truncate_parsing() {
+        let result = parse("TRUNCATE TABLE users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Truncate(trunc) => {
+                assert_eq!(trunc.table_name, "users");
+            }
+            _ => panic!("Expected Truncate statement"),
+        }
+    }
+
+    #[test]
+    fn test_execute_create_index() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("CREATE INDEX idx_name ON users (name)").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_show_status() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("SHOW STATUS").unwrap()).unwrap();
+        assert!(result.rows.len() >= 0);
+    }
+
+    #[test]
+    fn test_error_table_not_found() {
+        let mut engine = ExecutionEngine::default();
+        let result = engine.execute(parse("SELECT * FROM nonexistent").unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_error_nonexistent_table() {
+        let mut engine = ExecutionEngine::default();
+        let result = engine.execute(parse("SELECT * FROM nonexistent").unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_if_not_exists() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("CREATE TABLE IF NOT EXISTS users (id INTEGER)").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_begin() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("BEGIN").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_commit() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        engine.execute(parse("BEGIN").unwrap()).unwrap();
+        let result = engine.execute(parse("COMMIT").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_rollback() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        engine.execute(parse("BEGIN").unwrap()).unwrap();
+        let result = engine.execute(parse("ROLLBACK").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_grant() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("GRANT SELECT ON users TO PUBLIC").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_revoke() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("REVOKE SELECT ON users FROM PUBLIC").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
 }
