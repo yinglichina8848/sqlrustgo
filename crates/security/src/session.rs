@@ -6,18 +6,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SessionStatus {
+    #[default]
     Active,
     Idle,
     Closing,
     Closed,
-}
-
-impl Default for SessionStatus {
-    fn default() -> Self {
-        SessionStatus::Active
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
