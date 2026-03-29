@@ -58,7 +58,10 @@ impl crate::workload::Workload for OltpReadOnly {
             0..=4 => {
                 let start = rng.gen_range(1..self.max_id);
                 let end = start + rng.gen_range(1..100).min(self.max_id - start + 1);
-                format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+                format!(
+                    "SELECT c FROM sbtest WHERE id BETWEEN {} AND {}",
+                    start, end
+                )
             }
             // 5-7: Aggregation query (30%)
             5..=7 => {

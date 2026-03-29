@@ -45,7 +45,7 @@ mod tests {
         let component = ComponentHealth::new("test_component", HealthStatus::Healthy)
             .with_message("All good")
             .with_latency(100);
-        
+
         assert_eq!(component.name, "test_component");
         assert_eq!(component.status, HealthStatus::Healthy);
         assert_eq!(component.message.as_deref(), Some("All good"));
@@ -56,7 +56,7 @@ mod tests {
     fn test_health_report_builder() {
         let component = ComponentHealth::new("db", HealthStatus::Healthy);
         let report = HealthReport::new("2.0.0", vec![component]);
-        
+
         assert_eq!(report.version, "2.0.0");
         assert_eq!(report.components.len(), 1);
         assert_eq!(report.components[0].name, "db");
@@ -96,8 +96,7 @@ mod tests {
 
     #[test]
     fn test_http_server_builder() {
-        let server = HttpServer::new("127.0.0.1", 8080)
-            .with_version("3.0.0");
+        let server = HttpServer::new("127.0.0.1", 8080).with_version("3.0.0");
         assert_eq!(server.get_version(), "3.0.0");
     }
 }

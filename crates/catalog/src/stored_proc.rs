@@ -64,7 +64,7 @@ mod tests {
             }],
             vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
         );
-        
+
         assert_eq!(proc.name, "test_proc");
         assert_eq!(proc.params.len(), 1);
         assert_eq!(proc.body.len(), 1);

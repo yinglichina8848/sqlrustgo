@@ -49,12 +49,8 @@ impl Participant {
         hasher.finish()
     }
 
-    pub async fn handle_prepare(
-        &self,
-        request: PrepareRequest,
-    ) -> Result<VoteResponse, String> {
-        let gid = GlobalTransactionId::parse(&request.gid)
-            .map_err(|e| e.to_string())?;
+    pub async fn handle_prepare(&self, request: PrepareRequest) -> Result<VoteResponse, String> {
+        let gid = GlobalTransactionId::parse(&request.gid).map_err(|e| e.to_string())?;
 
         // 尝试获取锁 - 如果已有锁则失败
         {
@@ -78,7 +74,8 @@ impl Participant {
         // 记录 Prepare 日志到 WAL
         if let Some(ref wal) = self.wal_manager {
             let tx_id = Self::gid_to_tx_id(&gid);
-            wal.log_prepare(tx_id).map_err(|e| format!("WAL error: {}", e))?;
+            wal.log_prepare(tx_id)
+                .map_err(|e| format!("WAL error: {}", e))?;
         }
 
         self.local_transactions
@@ -94,18 +91,16 @@ impl Participant {
         })
     }
 
-    pub async fn handle_commit(
-        &self,
-        request: CommitRequest,
-    ) -> Result<ExecutionResponse, String> {
-        let gid = GlobalTransactionId::parse(&request.gid)
-            .map_err(|e| e.to_string())?;
+    pub async fn handle_commit(&self, request: CommitRequest) -> Result<ExecutionResponse, String> {
+        let gid = GlobalTransactionId::parse(&request.gid).map_err(|e| e.to_string())?;
 
         // 从 WAL 恢复事务状态
         let mut recovered_ctx = None;
         if let Some(ref wal) = self.wal_manager {
             let tx_id = Self::gid_to_tx_id(&gid);
-            let entries = wal.recover().map_err(|e| format!("WAL recovery error: {}", e))?;
+            let entries = wal
+                .recover()
+                .map_err(|e| format!("WAL recovery error: {}", e))?;
             // 查找该事务的 Prepare 条目
             for entry in entries {
                 if entry.tx_id == tx_id && entry.entry_type == WalEntryType::Prepare {
@@ -118,7 +113,8 @@ impl Participant {
 
         // 如果没有 WAL 或没有找到恢复状态，使用内存中的上下文
         if recovered_ctx.is_none() {
-            let ctx = self.local_transactions
+            let ctx = self
+                .local_transactions
                 .read()
                 .map_err(|_| "Lock poisoned")?
                 .get(&gid)
@@ -134,7 +130,8 @@ impl Participant {
         // 记录提交日志到 WAL
         if let Some(ref wal) = self.wal_manager {
             let tx_id = Self::gid_to_tx_id(&gid);
-            wal.log_commit(tx_id).map_err(|e| format!("WAL error: {}", e))?;
+            wal.log_commit(tx_id)
+                .map_err(|e| format!("WAL error: {}", e))?;
         }
 
         // 释放锁
@@ -164,12 +161,12 @@ impl Participant {
         &self,
         request: RollbackRequest,
     ) -> Result<ExecutionResponse, String> {
-        let gid = GlobalTransactionId::parse(&request.gid)
-            .map_err(|e| e.to_string())?;
+        let gid = GlobalTransactionId::parse(&request.gid).map_err(|e| e.to_string())?;
 
         // 检查事务是否存在
         {
-            let ctx = self.local_transactions
+            let ctx = self
+                .local_transactions
                 .read()
                 .map_err(|_| "Lock poisoned")?
                 .get(&gid)
@@ -180,12 +177,17 @@ impl Participant {
         }
 
         // 执行本地回滚 (在实际实现中，这里会撤销数据变更)
-        log::debug!("Executing local rollback for GID: {}, reason: {}", gid, request.reason);
+        log::debug!(
+            "Executing local rollback for GID: {}, reason: {}",
+            gid,
+            request.reason
+        );
 
         // 记录回滚日志到 WAL
         if let Some(ref wal) = self.wal_manager {
             let tx_id = Self::gid_to_tx_id(&gid);
-            wal.log_rollback(tx_id).map_err(|e| format!("WAL error: {}", e))?;
+            wal.log_rollback(tx_id)
+                .map_err(|e| format!("WAL error: {}", e))?;
         }
 
         // 释放锁

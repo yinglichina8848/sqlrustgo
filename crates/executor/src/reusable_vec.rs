@@ -326,7 +326,7 @@ impl Default for ThreadLocalExecutorVecPool {
 // ============================================================
 
 thread_local! {
-    static EXECUTOR_VEC_POOL: RefCell<Option<ThreadLocalExecutorVecPool>> = RefCell::new(None);
+    static EXECUTOR_VEC_POOL: RefCell<Option<ThreadLocalExecutorVecPool>> = const { RefCell::new(None) };
 }
 
 /// Execute a closure with the thread-local executor vec pool

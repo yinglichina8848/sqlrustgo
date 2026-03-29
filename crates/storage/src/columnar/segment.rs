@@ -32,9 +32,10 @@ pub enum SegmentError {
 pub type SegmentResult<T> = Result<T, SegmentError>;
 
 /// Compression type for column data
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum CompressionType {
     /// No compression
+    #[default]
     None,
     /// Snappy compression
     Snappy,
@@ -63,12 +64,6 @@ impl CompressionType {
     }
 }
 
-impl Default for CompressionType {
-    fn default() -> Self {
-        CompressionType::None
-    }
-}
-
 /// Statistics stored on disk for a column segment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnStatsDisk {
@@ -86,8 +81,8 @@ impl From<&ColumnStats> for ColumnStatsDisk {
     fn from(stats: &ColumnStats) -> Self {
         Self {
             null_count: stats.null_count,
-            min_value: stats.min_value.as_ref().map(|v| value_to_string(v)),
-            max_value: stats.max_value.as_ref().map(|v| value_to_string(v)),
+            min_value: stats.min_value.as_ref().map(value_to_string),
+            max_value: stats.max_value.as_ref().map(value_to_string),
             distinct_count: stats.distinct_count,
         }
     }
@@ -108,6 +103,7 @@ fn value_to_string(value: &Value) -> String {
 }
 
 /// Parse value from string representation
+#[allow(dead_code)]
 fn value_from_string(s: &str, value_type: &str) -> SegmentResult<Value> {
     match value_type {
         "NULL" => Ok(Value::Null),

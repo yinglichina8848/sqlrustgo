@@ -14,6 +14,7 @@ pub use parser::CreateViewStatement;
 pub use parser::Expression;
 pub use parser::ForeignKeyAction;
 pub use parser::ForeignKeyRef;
+pub use parser::FrameBoundInfo;
 pub use parser::GrantStatement;
 pub use parser::Privilege;
 pub use parser::RevokeStatement;
@@ -23,7 +24,6 @@ pub use parser::Statement;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
 pub use parser::WindowFrameInfo;
-pub use parser::FrameBoundInfo;
 
 #[cfg(test)]
 mod tests {
@@ -294,15 +294,26 @@ fn test_parse_window_frame_range() {
     // Test RANK with frame (simple version)
     let sql = "SELECT RANK() OVER (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM employees";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse RANGE window frame: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse RANGE window frame: {:?}",
+        result
+    );
 }
 
 #[test]
 fn test_parse_window_frame_with_exclude() {
     let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM employees";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse window frame with EXCLUDE: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse window frame with EXCLUDE: {:?}",
+        result
+    );
 }
 
 // Stored Procedures
-pub use parser::{CreateProcedureStatement, DropProcedureStatement, CallProcedureStatement, ProcedureParam, ParamMode, ProcedureStatement, DelimiterStatement};
+pub use parser::{
+    CallProcedureStatement, CreateProcedureStatement, DelimiterStatement, DropProcedureStatement,
+    ParamMode, ProcedureParam, ProcedureStatement,
+};

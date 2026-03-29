@@ -274,7 +274,6 @@ impl DataChunk {
 
 /// SIMD-accelerated aggregate functions
 pub mod simd_agg {
-    use super::*;
 
     /// SIMD-accelerated sum for integer vectors
     /// Uses pairwise summation for better numerical stability
@@ -489,15 +488,13 @@ pub mod vectorized_expr {
         }
 
         // Handle patterns that start with %
-        if pattern.starts_with('%') {
-            let suffix = &pattern[1..];
-            return text.ends_with(suffix) || like_pattern(&text[1..], pattern);
+        if let Some(remaining) = pattern.strip_prefix('%') {
+            return text.ends_with(remaining) || like_pattern(&text[1..], remaining);
         }
 
         // Handle patterns that end with %
-        if pattern.ends_with('%') {
-            let prefix = &pattern[..pattern.len() - 1];
-            return text.starts_with(prefix) || like_pattern(&text[..text.len() - 1], pattern);
+        if let Some(remaining) = pattern.strip_suffix('%') {
+            return text.starts_with(remaining) || like_pattern(&text[..text.len() - 1], remaining);
         }
 
         // No wildcards - exact match
@@ -519,7 +516,7 @@ pub mod vectorized_expr {
                     }
                     // Try skipping one character from text
                     if text_chars.peek().is_some() {
-                        let mut text_copy: String = text_chars.clone().collect();
+                        let text_copy: String = text_chars.clone().collect();
                         if like_pattern(
                             &text_copy[1..],
                             &pattern[pattern.len() - pattern_chars.clone().count()..],

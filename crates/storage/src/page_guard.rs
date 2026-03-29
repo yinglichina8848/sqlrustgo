@@ -27,7 +27,7 @@
 
 use std::sync::Arc;
 
-use crate::page::{Page, PageType};
+use crate::page::Page;
 
 /// Trait for pool-like types that support pin/unpin
 pub trait PoolLike {

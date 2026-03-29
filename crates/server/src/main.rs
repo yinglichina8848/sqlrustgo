@@ -126,10 +126,13 @@ fn main() {
     ctrlc::set_handler(move || {
         println!("\nShutting down...");
         let stats = security_for_shutdown.get_security_stats();
-        println!("Security stats: {} events, {} sessions",
-            stats.audit_total_events, stats.total_sessions);
+        println!(
+            "Security stats: {} events, {} sessions",
+            stats.audit_total_events, stats.total_sessions
+        );
         std::process::exit(0);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     for stream in listener.incoming() {
         match stream {

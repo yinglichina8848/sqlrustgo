@@ -292,7 +292,7 @@ impl StorageEngine for MockStorage {
         let table_counters = counters
             .entry(table.to_string())
             .or_insert_with(HashMap::new);
-        let next = table_counters.entry(column_index).or_insert(0).clone();
+        let next = *table_counters.entry(column_index).or_insert(0);
         table_counters.insert(column_index, next + 1);
         Ok(next + 1)
     }

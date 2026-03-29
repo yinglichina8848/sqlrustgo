@@ -22,9 +22,9 @@ mod metrics;
 mod workload;
 
 use anyhow::Result;
+use benchmark_runner::run_benchmark;
 use clap::Parser;
 use cli::BenchArgs;
-use benchmark_runner::run_benchmark;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Represents profiling data for a single operator
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,18 +191,13 @@ impl QueryProfile {
     }
 
     /// Generate profiling report
+    #[allow(clippy::useless_format)]
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
 
-        report.push_str(&format!(
-            "╔══════════════════════════════════════════════════════════════════╗\n"
-        ));
-        report.push_str(&format!(
-            "║          SQLRustGo 2.0 - Query Performance Profile               ║\n"
-        ));
-        report.push_str(&format!(
-            "╠══════════════════════════════════════════════════════════════════╣\n"
-        ));
+        report.push_str("╔══════════════════════════════════════════════════════════════════╗\n");
+        report.push_str("║          SQLRustGo 2.0 - Query Performance Profile               ║\n");
+        report.push_str("╠══════════════════════════════════════════════════════════════════╣\n");
         report.push_str(&format!(
             "║ Query ID: {}                                          ║\n",
             self.query_id
@@ -219,9 +214,7 @@ impl QueryProfile {
             "║ Status: {}                                                     ║\n",
             if self.success { "SUCCESS" } else { "FAILED" }
         ));
-        report.push_str(&format!(
-            "╚══════════════════════════════════════════════════════════════════╝\n\n"
-        ));
+        report.push_str("╚══════════════════════════════════════════════════════════════════╝\n\n");
 
         report.push_str("Operator Breakdown:\n");
         report.push_str(
@@ -570,15 +563,9 @@ impl Profiler {
 
         let mut report = String::new();
 
-        report.push_str(&format!(
-            "╔════════════════════════════════════════════════════════════════════╗\n"
-        ));
-        report.push_str(&format!(
-            "║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n"
-        ));
-        report.push_str(&format!(
-            "╠════════════════════════════════════════════════════════════════════╣\n"
-        ));
+        report.push_str("╔════════════════════════════════════════════════════════════════════╗\n");
+        report.push_str("║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n");
+        report.push_str("╠════════════════════════════════════════════════════════════════════╣\n");
 
         let total_queries = self.query_profiles.read().map(|p| p.len()).unwrap_or(0);
         report.push_str(&format!(
@@ -598,9 +585,8 @@ impl Profiler {
             format_duration(total_time)
         ));
 
-        report.push_str(&format!(
-            "╚════════════════════════════════════════════════════════════════════╝\n\n"
-        ));
+        report
+            .push_str("╚════════════════════════════════════════════════════════════════════╝\n\n");
 
         if !profiles.is_empty() {
             report.push_str("Top Operators by Execution Time:\n");
@@ -640,8 +626,8 @@ impl Profiler {
     }
 }
 
-/// Global profiler instance
 lazy_static::lazy_static! {
+    #[allow(unused_doc_comments)]
     pub static ref GLOBAL_PROFILER: Profiler = Profiler::new();
 }
 

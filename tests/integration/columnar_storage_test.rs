@@ -6,9 +6,11 @@
 //! - Column projection pushdown
 //! - Statistics tracking
 
-use sqlrustgo_storage::columnar::{ColumnChunk, ColumnSegment, ColumnStats, CompressionType, ColumnStatsDisk};
-use sqlrustgo_storage::engine::{ColumnDefinition, TableInfo};
 use sqlrustgo_storage::columnar::TableStore;
+use sqlrustgo_storage::columnar::{
+    ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk, CompressionType,
+};
+use sqlrustgo_storage::engine::{ColumnDefinition, TableInfo};
 use sqlrustgo_types::Value;
 use tempfile::TempDir;
 
@@ -139,26 +141,32 @@ fn test_table_store_insert_and_get() {
     let info = create_test_table_info();
     let mut store = TableStore::new(info);
 
-    store.insert_row(&[
-        Value::Integer(1),
-        Value::Text("Alice".to_string()),
-        Value::Float(3.14),
-        Value::Boolean(true),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(1),
+            Value::Text("Alice".to_string()),
+            Value::Float(3.14),
+            Value::Boolean(true),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Integer(2),
-        Value::Text("Bob".to_string()),
-        Value::Float(2.71),
-        Value::Boolean(false),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(2),
+            Value::Text("Bob".to_string()),
+            Value::Float(2.71),
+            Value::Boolean(false),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Integer(3),
-        Value::Null,
-        Value::Float(1.41),
-        Value::Boolean(true),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(3),
+            Value::Null,
+            Value::Float(1.41),
+            Value::Boolean(true),
+        ])
+        .unwrap();
 
     assert_eq!(store.row_count(), 3);
 
@@ -182,12 +190,14 @@ fn test_table_store_scan_columns_projection() {
 
     // Insert 100 rows
     for i in 0..100 {
-        store.insert_row(&[
-            Value::Integer(i as i64),
-            Value::Text(format!("name_{}", i)),
-            Value::Float(i as f64 * 1.5),
-            Value::Boolean(i % 2 == 0),
-        ]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(i as i64),
+                Value::Text(format!("name_{}", i)),
+                Value::Float(i as f64 * 1.5),
+                Value::Boolean(i % 2 == 0),
+            ])
+            .unwrap();
     }
 
     assert_eq!(store.row_count(), 100);
@@ -220,40 +230,50 @@ fn test_table_store_column_stats() {
     let mut store = TableStore::new(info);
 
     // Insert integer values: 10, 20, 30, null, 40, 50
-    store.insert_row(&[
-        Value::Integer(10),
-        Value::Text("a".to_string()),
-        Value::Float(1.0),
-        Value::Boolean(true),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(10),
+            Value::Text("a".to_string()),
+            Value::Float(1.0),
+            Value::Boolean(true),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Integer(20),
-        Value::Text("b".to_string()),
-        Value::Float(2.0),
-        Value::Boolean(false),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(20),
+            Value::Text("b".to_string()),
+            Value::Float(2.0),
+            Value::Boolean(false),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Integer(30),
-        Value::Text("c".to_string()),
-        Value::Float(3.0),
-        Value::Boolean(true),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(30),
+            Value::Text("c".to_string()),
+            Value::Float(3.0),
+            Value::Boolean(true),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Null,
-        Value::Text("d".to_string()),
-        Value::Float(4.0),
-        Value::Boolean(false),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Null,
+            Value::Text("d".to_string()),
+            Value::Float(4.0),
+            Value::Boolean(false),
+        ])
+        .unwrap();
 
-    store.insert_row(&[
-        Value::Integer(40),
-        Value::Text("e".to_string()),
-        Value::Float(5.0),
-        Value::Boolean(true),
-    ]).unwrap();
+    store
+        .insert_row(&[
+            Value::Integer(40),
+            Value::Text("e".to_string()),
+            Value::Float(5.0),
+            Value::Boolean(true),
+        ])
+        .unwrap();
 
     // Check stats for id column (index 0)
     let id_stats = store.get_column_stats(0).unwrap();
@@ -261,8 +281,10 @@ fn test_table_store_column_stats() {
     assert_eq!(id_stats.min_value, Some(Value::Integer(10)));
     assert_eq!(id_stats.max_value, Some(Value::Integer(40)));
 
-    println!("✓ TableStore column stats: null_count={}, min={:?}, max={:?}",
-        id_stats.null_count, id_stats.min_value, id_stats.max_value);
+    println!(
+        "✓ TableStore column stats: null_count={}, min={:?}, max={:?}",
+        id_stats.null_count, id_stats.min_value, id_stats.max_value
+    );
 }
 
 // ============================================================================
@@ -289,7 +311,9 @@ fn test_column_segment_roundtrip_no_compression() {
     let stats = ColumnStatsDisk::from(chunk.stats());
     segment.set_stats(stats);
     segment.set_num_values(chunk.len() as u64);
-    segment.write_to_file(&segment_path, chunk.values(), chunk.null_bitmap()).unwrap();
+    segment
+        .write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
+        .unwrap();
 
     // Read segment
     let mut read_segment = ColumnSegment::new(0);
@@ -332,7 +356,9 @@ fn test_column_segment_roundtrip_zstd_compression() {
     let stats = ColumnStatsDisk::from(chunk.stats());
     segment.set_stats(stats);
     segment.set_num_values(chunk.len() as u64);
-    segment.write_to_file(&segment_path, chunk.values(), chunk.null_bitmap()).unwrap();
+    segment
+        .write_to_file(&segment_path, chunk.values(), chunk.null_bitmap())
+        .unwrap();
 
     // Read segment
     let mut read_segment = ColumnSegment::new(0);
@@ -364,12 +390,14 @@ fn test_table_store_serialize_deserialize() {
     let mut store = TableStore::new(info);
 
     for i in 0..50 {
-        store.insert_row(&[
-            Value::Integer(i as i64),
-            Value::Text(format!("user_{}", i)),
-            Value::Float(i as f64 * 0.5),
-            Value::Boolean(i % 2 == 0),
-        ]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(i as i64),
+                Value::Text(format!("user_{}", i)),
+                Value::Float(i as f64 * 0.5),
+                Value::Boolean(i % 2 == 0),
+            ])
+            .unwrap();
     }
 
     assert_eq!(store.row_count(), 50);
@@ -406,12 +434,14 @@ fn test_table_store_large_scale_insert() {
     let row_count = 10_000;
 
     for i in 0..row_count {
-        store.insert_row(&[
-            Value::Integer(i as i64),
-            Value::Text(format!("record_{}", i)),
-            Value::Float(i as f64 * 0.01),
-            Value::Boolean(i % 100 == 0), // Every 100th is active=true
-        ]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(i as i64),
+                Value::Text(format!("record_{}", i)),
+                Value::Float(i as f64 * 0.01),
+                Value::Boolean(i % 100 == 0), // Every 100th is active=true
+            ])
+            .unwrap();
     }
 
     assert_eq!(store.row_count(), row_count);
@@ -442,12 +472,14 @@ fn test_table_store_null_handling_large_scale() {
             Value::Text(format!("name_{}", i))
         };
 
-        store.insert_row(&[
-            Value::Integer(i as i64),
-            name,
-            Value::Float(i as f64),
-            Value::Boolean(true),
-        ]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(i as i64),
+                name,
+                Value::Float(i as f64),
+                Value::Boolean(true),
+            ])
+            .unwrap();
     }
 
     assert_eq!(store.row_count(), 1000);
@@ -457,7 +489,10 @@ fn test_table_store_null_handling_large_scale() {
     let null_count = names.iter().filter(|v| v[0] == Value::Null).count();
     assert_eq!(null_count, 100); // Every 10th = 1000/10 = 100
 
-    println!("✓ TableStore null handling large scale: {} nulls out of 1000", null_count);
+    println!(
+        "✓ TableStore null handling large scale: {} nulls out of 1000",
+        null_count
+    );
 }
 
 #[test]
@@ -467,12 +502,14 @@ fn test_column_projection_efficiency() {
 
     // Insert 1000 rows
     for i in 0..1000 {
-        store.insert_row(&[
-            Value::Integer(i as i64),
-            Value::Text(format!("data_{}", i)),
-            Value::Float(i as f64),
-            Value::Boolean(i % 2 == 0),
-        ]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(i as i64),
+                Value::Text(format!("data_{}", i)),
+                Value::Float(i as f64),
+                Value::Boolean(i % 2 == 0),
+            ])
+            .unwrap();
     }
 
     // Full scan
@@ -496,7 +533,10 @@ fn test_column_projection_efficiency() {
     println!("  Two columns:       {:?}", two_time);
 
     // Single column should be faster than full scan
-    assert!(single_time <= full_time, "Single column should be <= full scan time");
+    assert!(
+        single_time <= full_time,
+        "Single column should be <= full scan time"
+    );
 
     println!("✓ Column projection efficiency verified");
 }

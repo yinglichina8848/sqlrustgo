@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod tests {
     use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-    
+
     use std::sync::{Arc, RwLock};
 
     fn create_engine() -> ExecutionEngine {
