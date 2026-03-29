@@ -8,6 +8,7 @@ pub mod buffer_pool_metrics;
 pub mod clock_replacer;
 pub mod columnar;
 pub mod engine;
+pub mod failover_manager;
 pub mod file_storage;
 pub mod heap;
 pub mod page;
@@ -34,14 +35,15 @@ pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
 };
+pub use failover_manager::{FailoverConfig, FailoverManager, FailoverState, NodeInfo, NodeType};
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
 pub use page::Page;
 pub use page_guard::PageGuard;
 pub use parquet::{export_to_parquet, import_from_parquet};
 pub use replication::{
-    BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, FailoverManager, MasterNode,
-    ReplicationConfig, SlaveNode,
+    BinlogEvent, BinlogEventType, BinlogReader, BinlogWriter, MasterNode, ReplicationConfig,
+    SlaveNode,
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
