@@ -12,8 +12,7 @@ pub use sqlrustgo_parser::{
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
-    BPlusTree, BufferPool, ColumnarStorage, FileStorage, MemoryStorage, Page, StorageEngine,
-    ViewInfo,
+    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
@@ -346,10 +345,7 @@ fn evaluate_where_clause(
         sqlrustgo_parser::Expression::Subquery(_) => false,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::WindowFunction { .. } => false,
-        sqlrustgo_parser::Expression::Placeholder => {
-            // Placeholder in WHERE should be false (no param value provided)
-            false
-        }
+        sqlrustgo_parser::Expression::Placeholder => false,
     }
 }
 
@@ -1484,6 +1480,86 @@ impl ExecutionEngine {
                     ))
                 }
             },
+            Statement::Copy(copy) => {
+                use sqlrustgo_storage::parquet::{export_to_parquet, import_from_parquet};
+
+                let table_name = &copy.table_name;
+                let path = &copy.path;
+                let format = &copy.format;
+
+                // Validate format
+                if format.to_uppercase() != "PARQUET" {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Unsupported COPY format: {}. Only PARQUET is supported.",
+                        format
+                    )));
+                }
+
+                let mut storage = self.storage.write().unwrap();
+
+                if copy.from {
+                    // COPY FROM PARQUET - Import data from Parquet file
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+
+                    // Get table info for column names
+                    let table_info = storage.get_table_info(table_name)
+                        .ok()
+                        .ok_or_else(|| SqlError::ExecutionError(format!(
+                            "Could not get table info for '{}'",
+                            table_name
+                        )))?;
+
+                    let column_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+                    // Import records from Parquet
+                    let records = import_from_parquet(path, &column_names)?;
+
+                    // Insert records into table
+                    let mut rows_inserted = 0;
+                    for record in &records {
+                        if storage.insert(table_name, vec![record.clone()]).is_ok() {
+                            rows_inserted += 1;
+                        }
+                    }
+
+                    Ok(ExecutorResult::new(vec![], rows_inserted))
+                } else {
+                    // COPY TO PARQUET - Export data to Parquet file
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+
+                    // Get table info for column names
+                    let table_info = storage.get_table_info(table_name)
+                        .ok()
+                        .ok_or_else(|| SqlError::ExecutionError(format!(
+                            "Could not get table info for '{}'",
+                            table_name
+                        )))?;
+
+                    let column_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+                    // Scan all rows from table
+                    let records = storage.scan(table_name)?;
+
+                    // Export records to Parquet
+                    export_to_parquet(path, &records, &column_names)?;
+
+                    let row_count = records.len();
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!("Exported {} rows to {}", row_count, path))]],
+                        row_count,
+                    ))
+                }
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -1634,20 +1710,6 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(result_rows, 0))
             }
-            "ColumnarScan" => {
-                let scan_plan = plan
-                    .as_any()
-                    .downcast_ref::<sqlrustgo_planner::ColumnarScanExec>()
-                    .ok_or_else(|| {
-                        SqlError::ExecutionError("Failed to downcast ColumnarScanExec".to_string())
-                    })?;
-
-                let table = scan_plan.table_name();
-                let projection = scan_plan.projection();
-
-                let rows = storage.scan_columns(table, projection)?;
-                Ok(ExecutorResult::new(rows, 0))
-            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -1743,51 +1805,6 @@ mod tests {
         assert_eq!(result.rows.len(), 2);
         assert_eq!(result.rows[0][0], Value::Integer(1));
         assert_eq!(result.rows[0][1], Value::Text("Alice".to_string()));
-    }
-
-    #[test]
-    fn test_execute_plan_columnar_scan() {
-        use sqlrustgo_planner::{ColumnarScanExec, DataType, Field, Schema};
-
-        let mut storage = MemoryStorage::new();
-        storage
-            .insert(
-                "users",
-                vec![
-                    vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)],
-                    vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Float(2.71)],
-                    vec![Value::Integer(3), Value::Text("Charlie".to_string()), Value::Float(1.41)],
-                ],
-            )
-            .unwrap();
-
-        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
-
-        // Full schema with 3 columns: id, name, value
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-            Field::new("name".to_string(), DataType::Text),
-            Field::new("value".to_string(), DataType::Float),
-        ]);
-
-        // Scan only columns 0 and 2 (id and value), projecting out name
-        let plan = ColumnarScanExec::new("users".to_string(), schema, vec![0, 2]);
-        let result = engine.execute_plan(&plan).unwrap();
-
-        assert_eq!(result.rows.len(), 3);
-
-        // First row - should only have id and value
-        assert_eq!(result.rows[0].len(), 2);
-        assert_eq!(result.rows[0][0], Value::Integer(1));
-        assert_eq!(result.rows[0][1], Value::Float(3.14));
-
-        // Second row
-        assert_eq!(result.rows[1][0], Value::Integer(2));
-        assert_eq!(result.rows[1][1], Value::Float(2.71));
-
-        // Third row
-        assert_eq!(result.rows[2][0], Value::Integer(3));
-        assert_eq!(result.rows[2][1], Value::Float(1.41));
     }
 
     #[test]
