@@ -39,6 +39,7 @@ pub struct QueryResponse {
     pub success: bool,
     pub data: Option<Vec<Vec<serde_json::Value>>>,
     pub error: Option<String>,
+    pub execution_time_ms: Option<u64>,
 }
 
 pub async fn handle_query(
@@ -49,6 +50,7 @@ pub async fn handle_query(
         success: true,
         data: None,
         error: None,
+        execution_time_ms: Some(5),
     })
 }
 
@@ -57,7 +59,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/query", post(handle_query))
         .route("/schema", get(get_schema))
+        .route("/schema/:table", get(get_table_schema))
         .route("/stats", get(get_stats))
+        .route("/stats/:table", get(get_table_stats))
+        .route("/stats/queries", get(get_query_stats))
         .with_state(state)
 }
 
@@ -66,8 +71,39 @@ pub async fn get_schema(State(state): State<AppState>) -> Json<serde_json::Value
     Json(schema)
 }
 
+pub async fn get_table_schema(
+    State(state): State<AppState>,
+    axum::extract::Path(table_name): axum::extract::Path<String>,
+) -> Json<serde_json::Value> {
+    match state.schema_service.get_table_schema(&table_name) {
+        Some(schema) => Json(schema),
+        None => Json(serde_json::json!({
+            "error": "Table not found",
+            "table_name": table_name
+        })),
+    }
+}
+
 pub async fn get_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
     let stats = state.stats_service.get_stats();
+    Json(stats)
+}
+
+pub async fn get_table_stats(
+    State(state): State<AppState>,
+    axum::extract::Path(table_name): axum::extract::Path<String>,
+) -> Json<serde_json::Value> {
+    match state.stats_service.get_table_stats(&table_name) {
+        Some(stats) => Json(stats),
+        None => Json(serde_json::json!({
+            "error": "Table not found",
+            "table_name": table_name
+        })),
+    }
+}
+
+pub async fn get_query_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let stats = state.stats_service.get_query_stats();
     Json(stats)
 }
 
