@@ -5,7 +5,7 @@
 
 use crate::engine::{Record, SqlError, SqlResult};
 use arrow::array::{ArrayRef, PrimitiveBuilder, StringBuilder};
-use arrow::datatypes::{DataType, Field, Int64Type, Float64Type, Date32Type, Schema};
+use arrow::datatypes::{DataType, Date32Type, Field, Float64Type, Int64Type, Schema};
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
@@ -16,20 +16,29 @@ use std::sync::Arc;
 use arrow::array::{BinaryBuilder, BooleanBuilder};
 
 /// Write records to a Parquet file
-pub fn write_parquet_file(path: &str, records: &[Record], column_names: &[String]) -> SqlResult<()> {
+pub fn write_parquet_file(
+    path: &str,
+    records: &[Record],
+    column_names: &[String],
+) -> SqlResult<()> {
     if records.is_empty() {
-        return Err(SqlError::ExecutionError("Cannot write empty records to Parquet".to_string()));
+        return Err(SqlError::ExecutionError(
+            "Cannot write empty records to Parquet".to_string(),
+        ));
     }
 
     if column_names.is_empty() {
-        return Err(SqlError::ExecutionError("Column names required for Parquet export".to_string()));
+        return Err(SqlError::ExecutionError(
+            "Column names required for Parquet export".to_string(),
+        ));
     }
 
     let num_columns = records[0].len();
     if num_columns != column_names.len() {
         return Err(SqlError::ExecutionError(format!(
             "Column count mismatch: {} values but {} column names",
-            num_columns, column_names.len()
+            num_columns,
+            column_names.len()
         )));
     }
 
@@ -43,8 +52,7 @@ pub fn write_parquet_file(path: &str, records: &[Record], column_names: &[String
     let file = File::create(path)
         .map_err(|e| SqlError::ExecutionError(format!("Failed to create Parquet file: {}", e)))?;
 
-    let props = WriterProperties::builder()
-        .build();
+    let props = WriterProperties::builder().build();
 
     let mut writer = ArrowWriter::try_new(file, Arc::new(schema.clone()), Some(props))
         .map_err(|e| SqlError::ExecutionError(format!("Failed to create Arrow writer: {}", e)))?;
@@ -53,10 +61,12 @@ pub fn write_parquet_file(path: &str, records: &[Record], column_names: &[String
     let batch = RecordBatch::try_new(Arc::new(schema), arrays)
         .map_err(|e| SqlError::ExecutionError(format!("Failed to create record batch: {}", e)))?;
 
-    writer.write(&batch)
+    writer
+        .write(&batch)
         .map_err(|e| SqlError::ExecutionError(format!("Failed to write batch: {}", e)))?;
 
-    writer.close()
+    writer
+        .close()
         .map_err(|e| SqlError::ExecutionError(format!("Failed to close writer: {}", e)))?;
 
     Ok(())
@@ -67,7 +77,9 @@ fn infer_schema(records: &[Record], column_names: &[String]) -> SqlResult<Schema
     use sqlrustgo_types::Value;
 
     if records.is_empty() {
-        return Err(SqlError::ExecutionError("Cannot infer schema from empty records".to_string()));
+        return Err(SqlError::ExecutionError(
+            "Cannot infer schema from empty records".to_string(),
+        ));
     }
 
     let mut fields = Vec::new();
@@ -80,13 +92,34 @@ fn infer_schema(records: &[Record], column_names: &[String]) -> SqlResult<Schema
             if idx < record.len() {
                 match &record[idx] {
                     Value::Null => continue,
-                    Value::Integer(_) => { data_type = DataType::Int64; break; },
-                    Value::Float(_) => { data_type = DataType::Float64; break; },
-                    Value::Boolean(_) => { data_type = DataType::Boolean; break; },
-                    Value::Text(_) => { data_type = DataType::Utf8; break; },
-                    Value::Blob(_) => { data_type = DataType::Binary; break; },
-                    Value::Date(_) => { data_type = DataType::Date32; break; },
-                    Value::Timestamp(_) => { data_type = DataType::Int64; break; },
+                    Value::Integer(_) => {
+                        data_type = DataType::Int64;
+                        break;
+                    }
+                    Value::Float(_) => {
+                        data_type = DataType::Float64;
+                        break;
+                    }
+                    Value::Boolean(_) => {
+                        data_type = DataType::Boolean;
+                        break;
+                    }
+                    Value::Text(_) => {
+                        data_type = DataType::Utf8;
+                        break;
+                    }
+                    Value::Blob(_) => {
+                        data_type = DataType::Binary;
+                        break;
+                    }
+                    Value::Date(_) => {
+                        data_type = DataType::Date32;
+                        break;
+                    }
+                    Value::Timestamp(_) => {
+                        data_type = DataType::Int64;
+                        break;
+                    }
                 }
             }
         }
@@ -201,7 +234,8 @@ fn records_to_arrays(records: &[Record], schema: &Schema) -> SqlResult<Vec<Array
             }
             _ => {
                 return Err(SqlError::ExecutionError(format!(
-                    "Unsupported Arrow type for export: {:?}", field.data_type()
+                    "Unsupported Arrow type for export: {:?}",
+                    field.data_type()
                 )));
             }
         };
