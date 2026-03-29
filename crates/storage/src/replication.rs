@@ -591,54 +591,6 @@ impl SlaveNode {
     }
 }
 
-/// Simple failover manager
-#[allow(dead_code)]
-pub struct FailoverManager {
-    master_address: String,
-    slave_addresses: Vec<String>,
-    current_master: Arc<Mutex<Option<String>>>,
-}
-
-impl FailoverManager {
-    pub fn new(master_address: String, slave_addresses: Vec<String>) -> Self {
-        Self {
-            master_address,
-            slave_addresses,
-            current_master: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    /// Monitor master health and trigger failover if needed
-    pub fn start_monitoring(&self) {
-        let master_addr = self.master_address.clone();
-        let current_master = self.current_master.clone();
-
-        thread::spawn(move || {
-            loop {
-                // Simple health check (try to connect)
-                let healthy = std::net::TcpStream::connect_timeout(
-                    &master_addr.parse().unwrap(),
-                    Duration::from_secs(1),
-                )
-                .is_ok();
-
-                if !healthy {
-                    println!("Master {} is unhealthy, initiating failover", master_addr);
-                    // In production: promote a slave to master
-                    *current_master.lock().unwrap() = Some(master_addr.clone());
-                }
-
-                thread::sleep(Duration::from_secs(5));
-            }
-        });
-    }
-
-    /// Get current master address
-    pub fn current_master(&self) -> Option<String> {
-        self.current_master.lock().unwrap().clone()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
