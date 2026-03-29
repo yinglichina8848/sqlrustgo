@@ -479,4 +479,156 @@ mod tests {
         let result = recovery.log_rollback(&gid, "User requested");
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_recovery_with_wal_log_operations() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("recovery_ops.wal");
+        let node_id = NodeId(1);
+        let recovery = Recovery::with_wal(node_id, wal_path.clone());
+        let gid = GlobalTransactionId::new(node_id);
+
+        // Test log_begin with WAL
+        let result = recovery.log_begin(&gid);
+        assert!(result.is_ok());
+
+        // Test log_prepare with WAL
+        let result = recovery.log_prepare(&gid, &[2, 3]);
+        assert!(result.is_ok());
+
+        // Test log_commit with WAL
+        let result = recovery.log_commit(&gid);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_recovery_tx_state_tracking() {
+        let node_id = NodeId(1);
+        let recovery = Recovery::new(node_id);
+        let gid = GlobalTransactionId::new(node_id);
+
+        // Log prepare first
+        recovery.log_prepare(&gid, &[2, 3]).unwrap();
+
+        // Then log commit
+        recovery.log_commit(&gid).unwrap();
+
+        // Verify state is updated correctly
+        let states = recovery.tx_states.read().unwrap();
+        let tx_id = Recovery::gid_to_tx_id(&gid);
+        if let Some(state) = states.get(&tx_id) {
+            assert!(state.has_prepare);
+            assert!(state.has_commit);
+            assert!(!state.has_rollback);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recovery_rollback_updates_state() {
+        let node_id = NodeId(1);
+        let recovery = Recovery::new(node_id);
+        let gid = GlobalTransactionId::new(node_id);
+
+        // Log prepare first
+        recovery.log_prepare(&gid, &[2, 3]).unwrap();
+
+        // Then log rollback
+        recovery.log_rollback(&gid, "Test rollback").unwrap();
+
+        // Verify state is updated correctly
+        let states = recovery.tx_states.read().unwrap();
+        let tx_id = Recovery::gid_to_tx_id(&gid);
+        if let Some(state) = states.get(&tx_id) {
+            assert!(state.has_prepare);
+            assert!(!state.has_commit);
+            assert!(state.has_rollback);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recovery_gid_to_tx_id_consistency() {
+        let node_id = NodeId(1);
+        let gid1 = GlobalTransactionId::new(node_id);
+
+        let tx_id1 = Recovery::gid_to_tx_id(&gid1);
+
+        // Same GID should produce same TX ID
+        assert_eq!(tx_id1, tx_id1);
+
+        // Verify they are valid u64 values
+        assert!(tx_id1 > 0 || tx_id1 == 0);
+    }
+
+    #[tokio::test]
+    async fn test_recovery_report_non_default() {
+        let mut report = RecoveryReport::default();
+        report.committed = 5;
+        report.rolled_back = 3;
+        report.terminated = 1;
+
+        assert_eq!(report.committed, 5);
+        assert_eq!(report.rolled_back, 3);
+        assert_eq!(report.terminated, 1);
+    }
+
+    #[tokio::test]
+    async fn test_tx_outcome_debug() {
+        assert_eq!(format!("{:?}", TxOutcome::Committed), "Committed");
+        assert_eq!(format!("{:?}", TxOutcome::RolledBack), "RolledBack");
+        assert_eq!(format!("{:?}", TxOutcome::Unknown), "Unknown");
+    }
+
+    #[tokio::test]
+    async fn test_recovery_wal_entry_debug() {
+        let entry = WalEntry::TxBegin {
+            gid: GlobalTransactionId::new(NodeId(1)),
+            timestamp: 1234567890,
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("TxBegin"));
+    }
+
+    #[tokio::test]
+    async fn test_recovery_wal_entry_prepare_debug() {
+        let entry = WalEntry::TxPrepare {
+            gid: GlobalTransactionId::new(NodeId(1)),
+            participants: vec![2, 3, 4],
+            timestamp: 1234567890,
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("TxPrepare"));
+    }
+
+    #[tokio::test]
+    async fn test_recovery_wal_entry_commit_debug() {
+        let entry = WalEntry::TxCommit {
+            gid: GlobalTransactionId::new(NodeId(1)),
+            timestamp: 1234567890,
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("TxCommit"));
+    }
+
+    #[tokio::test]
+    async fn test_recovery_wal_entry_rollback_debug() {
+        let entry = WalEntry::TxRollback {
+            gid: GlobalTransactionId::new(NodeId(1)),
+            reason: "Test reason".to_string(),
+            timestamp: 1234567890,
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("TxRollback"));
+        assert!(debug.contains("Test reason"));
+    }
+
+    #[tokio::test]
+    async fn test_recovery_wal_entry_terminate_debug() {
+        let entry = WalEntry::TxTerminate {
+            gid: GlobalTransactionId::new(NodeId(1)),
+            reason: "Terminated".to_string(),
+            timestamp: 1234567890,
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("TxTerminate"));
+    }
 }

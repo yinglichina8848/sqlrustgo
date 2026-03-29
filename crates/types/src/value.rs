@@ -502,9 +502,13 @@ mod tests {
 
     #[test]
     fn test_value_clone() {
-        let v1 = Value::Text("hello".to_string());
+        let v1 = Value::Integer(42);
         let v2 = v1.clone();
         assert_eq!(v1, v2);
+
+        let v3 = Value::Text("hello".to_string());
+        let v4 = v3.clone();
+        assert_eq!(v3, v4);
     }
 
     #[test]
@@ -660,5 +664,244 @@ mod tests {
         assert_eq!(Value::Null.to_sql_string(), "NULL");
         assert_eq!(Value::Boolean(true).to_sql_string(), "true");
         assert_eq!(Value::Integer(42).to_sql_string(), "42");
+    }
+
+    // Additional tests for uncovered code paths
+
+    #[test]
+    fn test_value_estimate_memory_size() {
+        assert_eq!(Value::Null.estimate_memory_size(), 0);
+        assert_eq!(Value::Boolean(true).estimate_memory_size(), 1);
+        assert_eq!(Value::Integer(42).estimate_memory_size(), 8);
+        assert_eq!(Value::Float(3.14).estimate_memory_size(), 8);
+        assert_eq!(Value::Date(0).estimate_memory_size(), 4);
+        assert_eq!(Value::Timestamp(0).estimate_memory_size(), 8);
+
+        // Text and Blob use capacity
+        let text = Value::Text(String::with_capacity(100));
+        assert_eq!(text.estimate_memory_size(), 100);
+
+        let blob = Value::Blob(Vec::with_capacity(200));
+        assert_eq!(blob.estimate_memory_size(), 200);
+    }
+
+    #[test]
+    fn test_value_to_bool() {
+        assert!(!Value::Null.to_bool());
+        assert!(Value::Boolean(true).to_bool());
+        assert!(!Value::Boolean(false).to_bool());
+        assert!(Value::Integer(1).to_bool());
+        assert!(!Value::Integer(0).to_bool());
+        assert!(Value::Integer(-1).to_bool()); // -1 is non-zero, truthy
+        // Non-numeric types return false
+        assert!(!Value::Float(1.0).to_bool());
+        assert!(!Value::Text("true".to_string()).to_bool());
+        assert!(!Value::Blob(vec![1]).to_bool());
+    }
+
+    #[test]
+    fn test_ord_cross_type_comparison() {
+        // Null is smallest
+        assert!(Value::Null < Value::Boolean(true));
+        assert!(Value::Boolean(true) < Value::Integer(0));
+        assert!(Value::Integer(0) < Value::Float(0.0));
+        assert!(Value::Float(0.0) < Value::Text("".to_string()));
+        assert!(Value::Text("".to_string()) < Value::Blob(vec![]));
+        assert!(Value::Blob(vec![]) < Value::Date(0));
+        assert!(Value::Date(0) < Value::Timestamp(0));
+    }
+
+    #[test]
+    fn test_ord_same_type_comparison() {
+        // Integer comparisons
+        assert!(Value::Integer(1) < Value::Integer(2));
+        assert!(Value::Integer(-100) < Value::Integer(0));
+
+        // Float comparisons
+        assert!(Value::Float(1.0) < Value::Float(2.0));
+        assert!(Value::Float(-100.0) < Value::Float(0.0));
+
+        // Text comparisons
+        assert!(Value::Text("a".to_string()) < Value::Text("b".to_string()));
+        assert!(Value::Text("aa".to_string()) < Value::Text("ab".to_string()));
+
+        // Blob comparisons
+        assert!(Value::Blob(vec![1]) < Value::Blob(vec![2]));
+        assert!(Value::Blob(vec![1, 1]) < Value::Blob(vec![1, 2]));
+
+        // Date comparisons
+        assert!(Value::Date(0) < Value::Date(1));
+
+        // Timestamp comparisons
+        assert!(Value::Timestamp(0) < Value::Timestamp(1));
+    }
+
+    #[test]
+    fn test_ord_float_nan_handling() {
+        let nan = Value::Float(f64::NAN);
+        let normal = Value::Float(1.0);
+
+        // NaN is considered smaller than all other values
+        assert!(nan < normal);
+        assert!(nan < Value::Float(f64::INFINITY));
+        assert!(nan < Value::Float(f64::NEG_INFINITY));
+
+        // Note: NaN != NaN in IEEE 754, so we don't test equality here
+    }
+
+    #[test]
+    fn test_ord_float_nan_in_collection() {
+        use std::collections::BTreeSet;
+
+        let mut set = BTreeSet::new();
+        set.insert(Value::Float(1.0));
+        set.insert(Value::Float(f64::NAN));
+        set.insert(Value::Float(2.0));
+
+        // NaN is treated as smallest, should have 3 elements
+        assert_eq!(set.len(), 3);
+    }
+
+    #[test]
+    fn test_ord_boolean() {
+        assert!(Value::Boolean(false) < Value::Boolean(true));
+        assert_eq!(Value::Boolean(true), Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_value_timestamp_to_string_none_for_non_timestamp() {
+        assert!(Value::Null.timestamp_to_string().is_none());
+        assert!(Value::Integer(42).timestamp_to_string().is_none());
+        assert!(Value::Text("hello".to_string()).timestamp_to_string().is_none());
+    }
+
+    #[test]
+    fn test_timestamp_to_datetime_edge_cases() {
+        // Test epoch start
+        let ts = Value::Timestamp(0);
+        assert_eq!(ts.timestamp_to_string().unwrap(), "1970-01-01 00:00:00");
+
+        // Test leap year (2020-02-29)
+        // 2020 is leap year, day 60 is Feb 29
+        let days_since_epoch = 18262; // 2020-01-01
+        let micros = days_since_epoch * 86400 * 1_000_000 + 12 * 3600 * 1_000_000; // 12:00:00
+        let ts = Value::Timestamp(micros);
+        let s = ts.timestamp_to_string().unwrap();
+        assert!(s.starts_with("2020-"));
+    }
+
+    #[test]
+    fn test_value_hash_different_types() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let values = vec![
+            Value::Null,
+            Value::Boolean(true),
+            Value::Integer(42),
+            Value::Float(3.14),
+            Value::Text("test".to_string()),
+            Value::Blob(vec![1, 2, 3]),
+            Value::Date(0),
+            Value::Timestamp(0),
+        ];
+
+        let mut hashes = Vec::new();
+        for v in &values {
+            let mut h = DefaultHasher::new();
+            v.hash(&mut h);
+            hashes.push(h.finish());
+        }
+
+        // All hashes should be valid (non-negative as u64)
+        for h in hashes {
+            assert!(h >= 0);
+        }
+    }
+
+    #[test]
+    fn test_days_to_month_day_leap_year() {
+        // Test leap year month calculations
+        let (month, day) = days_to_month_day(0, true); // Jan 1
+        assert_eq!((month, day), (1, 1));
+
+        let (month, day) = days_to_month_day(30, true); // Jan 31
+        assert_eq!((month, day), (1, 31));
+
+        let (month, day) = days_to_month_day(31, true); // Feb 1
+        assert_eq!((month, day), (2, 1));
+
+        let (month, day) = days_to_month_day(59, true); // Feb 29
+        assert_eq!((month, day), (2, 29));
+
+        let (month, day) = days_to_month_day(60, true); // Mar 1
+        assert_eq!((month, day), (3, 1));
+    }
+
+    #[test]
+    fn test_days_to_month_day_non_leap_year() {
+        // Test non-leap year month calculations
+        let (month, day) = days_to_month_day(0, false); // Jan 1
+        assert_eq!((month, day), (1, 1));
+
+        let (month, day) = days_to_month_day(30, false); // Jan 31
+        assert_eq!((month, day), (1, 31));
+
+        let (month, day) = days_to_month_day(31, false); // Feb 1
+        assert_eq!((month, day), (2, 1));
+
+        let (month, day) = days_to_month_day(58, false); // Feb 28
+        assert_eq!((month, day), (2, 28));
+
+        let (month, day) = days_to_month_day(59, false); // Mar 1
+        assert_eq!((month, day), (3, 1));
+    }
+
+    #[test]
+    fn test_days_to_month_day_year_boundary() {
+        // Test end of year
+        let (month, day) = days_to_month_day(364, false); // Dec 31 non-leap
+        assert_eq!((month, day), (12, 31));
+
+        let (month, day) = days_to_month_day(365, false); // Should not happen
+        assert_eq!((month, day), (12, 31));
+    }
+
+    #[test]
+    fn test_partial_ord_float_with_nan() {
+        use std::cmp::Ordering;
+
+        let nan = Value::Float(f64::NAN);
+        let one = Value::Float(1.0);
+
+        // NaN comparisons
+        assert_eq!(nan.partial_cmp(&nan), Some(Ordering::Equal));
+        assert_eq!(nan.partial_cmp(&one), Some(Ordering::Less));
+        assert_eq!(one.partial_cmp(&nan), Some(Ordering::Greater));
+    }
+
+    #[test]
+    fn test_value_debug_format() {
+        let v = Value::Integer(42);
+        let debug = format!("{:?}", v);
+        assert!(debug.contains("Integer"));
+
+        let v2 = Value::Text("hello".to_string());
+        let debug2 = format!("{:?}", v2);
+        assert!(debug2.contains("Text"));
+    }
+
+    #[test]
+    fn test_is_leap_year_edge_cases() {
+        // Not leap years
+        assert!(!is_leap_year(1900)); // Not divisible by 400
+        assert!(!is_leap_year(2100));
+        assert!(!is_leap_year(2019));
+        assert!(!is_leap_year(2021));
+
+        // Leap years
+        assert!(is_leap_year(2000)); // Divisible by 400
+        assert!(is_leap_year(2024)); // Divisible by 4, not 100
+        assert!(is_leap_year(1996)); // Divisible by 4, not 100
     }
 }

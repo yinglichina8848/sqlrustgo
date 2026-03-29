@@ -455,4 +455,114 @@ mod tests {
             .await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_coordinator_get_state_none_for_unknown_gid() {
+        let coordinator = Coordinator::new(NodeId(1));
+        let gid = coordinator.generate_gid();
+        assert_eq!(coordinator.get_state(&gid), None);
+    }
+
+    #[tokio::test]
+    async fn test_coordinator_set_grpc_pool() {
+        let coordinator = Coordinator::new(NodeId(1));
+        let pool = GrpcClientPool::new();
+        coordinator.set_grpc_pool(pool);
+        // Should not panic
+    }
+
+    #[tokio::test]
+    async fn test_coordinator_multiple_transactions() {
+        let coordinator = Coordinator::new(NodeId(1));
+
+        let gid1 = coordinator.generate_gid();
+        let gid2 = coordinator.generate_gid();
+
+        coordinator.begin_transaction(gid1.clone()).unwrap();
+        coordinator.begin_transaction(gid2.clone()).unwrap();
+
+        let participants = vec![2];
+
+        // Prepare first transaction
+        coordinator.prepare(&gid1, &participants).await.unwrap();
+        assert_eq!(
+            coordinator.get_state(&gid1),
+            Some(DistributedTransactionState::Prepared)
+        );
+
+        // Second transaction should still be Started
+        assert_eq!(
+            coordinator.get_state(&gid2),
+            Some(DistributedTransactionState::Started)
+        );
+
+        // Commit first transaction
+        coordinator.commit(&gid1).await.unwrap();
+        assert_eq!(coordinator.get_state(&gid1), None);
+    }
+
+    #[tokio::test]
+    async fn test_grpc_client_pool_register_node() {
+        let pool = GrpcClientPool::new();
+        pool.register_node(NodeId(1), "http://localhost:50051".to_string()).await;
+
+        let endpoints = pool.endpoints.read().await;
+        assert_eq!(endpoints.get(&NodeId(1)), Some(&"http://localhost:50051".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_grpc_client_pool_get_client_no_endpoint() {
+        let pool = GrpcClientPool::new();
+
+        // Should fail because no endpoint registered
+        let result = pool.get_client(NodeId(99)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_node_endpoint_debug() {
+        let endpoint = NodeEndpoint {
+            node_id: NodeId(1),
+            address: "localhost:50051".to_string(),
+        };
+        let debug = format!("{:?}", endpoint);
+        assert!(debug.contains("NodeEndpoint"));
+    }
+
+    #[tokio::test]
+    async fn test_grpc_client_pool_debug() {
+        let pool = GrpcClientPool::new();
+        let debug = format!("{:?}", pool);
+        assert!(debug.contains("GrpcClientPool"));
+    }
+
+    #[tokio::test]
+    async fn test_coordinator_begin_unknown_transaction() {
+        let coordinator = Coordinator::new(NodeId(1));
+        let gid = coordinator.generate_gid();
+
+        // Cannot prepare unknown transaction
+        let participants = vec![2];
+        let result = coordinator.prepare(&gid, &participants).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_prepare_result_debug() {
+        assert_eq!(
+            format!("{:?}", PrepareResult::AllCommitted),
+            "AllCommitted"
+        );
+        assert_eq!(
+            format!("{:?}", PrepareResult::NeedsRollback),
+            "NeedsRollback"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_commit_result_debug() {
+        let result = CommitResult { success: true };
+        let debug = format!("{:?}", result);
+        assert!(debug.contains("CommitResult"));
+    }
 }

@@ -162,6 +162,10 @@ impl WalEntry {
             bytes[offset + 3],
         ]) as usize;
         offset += 4;
+        // Bounds check for key data
+        if key_len > 0 && offset + key_len > bytes.len() {
+            return None;
+        }
         let key = if key_len > 0 {
             Some(bytes[offset..offset + key_len].to_vec())
         } else {
@@ -1517,5 +1521,415 @@ mod tests {
 
         let entries = manager.recover().unwrap();
         assert_eq!(entries.len(), 3);
+    }
+
+    #[test]
+    fn test_wal_writer_batch_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_batch.wal");
+
+        let mut writer = WalWriter::new(&wal_path).unwrap();
+
+        // Enable batch mode
+        writer.enable_batch_mode(true);
+
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Begin,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        // Append entries in batch mode
+        for i in 0..10 {
+            let mut e = entry.clone();
+            e.tx_id = i as u64;
+            e.lsn = i as u64;
+            writer.append(&e).unwrap();
+        }
+
+        // Flush should work
+        writer.flush().unwrap();
+
+        // Disable batch mode
+        writer.enable_batch_mode(false);
+    }
+
+    #[test]
+    fn test_wal_writer_batch_mode_threshold() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_batch_threshold.wal");
+
+        let mut writer = WalWriter::new(&wal_path).unwrap();
+
+        // Set flush threshold to 5 by enabling/disabling batch mode
+        writer.enable_batch_mode(true);
+
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 1,
+            key: Some(vec![1]),
+            data: Some(vec![2]),
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        // Append exactly at threshold (100 by default)
+        for i in 0..100 {
+            let mut e = entry.clone();
+            e.tx_id = i as u64;
+            writer.append(&e).unwrap();
+        }
+
+        // LSN should be 100
+        assert_eq!(writer.current_lsn(), 100);
+
+        writer.flush().unwrap();
+    }
+
+    #[test]
+    fn test_wal_manager_log_prepare() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_prepare.wal");
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_prepare(1).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[2].entry_type, WalEntryType::Prepare);
+    }
+
+    #[test]
+    fn test_wal_archive_metadata_compression_ratio() {
+        let metadata = WalArchiveMetadata::new(
+            1,
+            "test.wal".to_string(),
+            "archive_1.wal".to_string(),
+            true,
+            1000,
+            500,
+            100,
+        );
+        assert_eq!(metadata.compression_ratio(), 0.5);
+
+        // Edge case: zero original size
+        let metadata2 = WalArchiveMetadata::new(
+            2,
+            "test.wal".to_string(),
+            "archive_2.wal".to_string(),
+            false,
+            0,
+            0,
+            0,
+        );
+        assert_eq!(metadata2.compression_ratio(), 1.0);
+    }
+
+    #[test]
+    fn test_wal_archive_metadata_from_bytes_truncated() {
+        // Test with insufficient bytes
+        assert!(WalArchiveMetadata::from_bytes(&[1, 2, 3]).is_none());
+        assert!(WalArchiveMetadata::from_bytes(&[]).is_none());
+    }
+
+    #[test]
+    fn test_wal_archive_metadata_to_bytes_roundtrip() {
+        let metadata = WalArchiveMetadata::new(
+            42,
+            "original.wal".to_string(),
+            "archived_42.wal".to_string(),
+            true,
+            10000,
+            3000,
+            500,
+        );
+
+        let bytes = metadata.to_bytes();
+        let restored = WalArchiveMetadata::from_bytes(&bytes).unwrap();
+
+        assert_eq!(metadata.archive_id, restored.archive_id);
+        assert_eq!(metadata.original_file, restored.original_file);
+        assert_eq!(metadata.archived_file, restored.archived_file);
+        assert_eq!(metadata.compressed, restored.compressed);
+        assert_eq!(metadata.original_size, restored.original_size);
+        assert_eq!(metadata.archived_size, restored.archived_size);
+        assert_eq!(metadata.entry_count, restored.entry_count);
+    }
+
+    #[test]
+    fn test_wal_archive_manager_set_compression() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
+
+        let mut manager = WalArchiveManager::new(wal_dir, archive_dir).unwrap();
+
+        manager.set_compression(false);
+        manager.set_max_age(86400);
+        manager.set_max_size(50 * 1024 * 1024);
+
+        // Should not panic
+    }
+
+    #[test]
+    fn test_wal_archive_manager_cleanup_with_no_archives() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
+
+        let manager = WalArchiveManager::new(wal_dir, archive_dir).unwrap();
+
+        // Cleanup with nothing to delete
+        let deleted = manager.cleanup_old_archives(5).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn test_wal_archive_manager_list_archives_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
+
+        let manager = WalArchiveManager::new(wal_dir, archive_dir).unwrap();
+        let archives = manager.list_archives().unwrap();
+        assert!(archives.is_empty());
+    }
+
+    #[test]
+    fn test_wal_entry_debug_format() {
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 100,
+            key: Some(vec![1, 2, 3]),
+            data: Some(vec![10, 20, 30]),
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("WalEntry"));
+        assert!(debug.contains("Insert"));
+    }
+
+    #[test]
+    fn test_wal_entry_type_debug_format() {
+        assert_eq!(format!("{:?}", WalEntryType::Begin), "Begin");
+        assert_eq!(format!("{:?}", WalEntryType::Insert), "Insert");
+        assert_eq!(format!("{:?}", WalEntryType::Update), "Update");
+        assert_eq!(format!("{:?}", WalEntryType::Delete), "Delete");
+        assert_eq!(format!("{:?}", WalEntryType::Commit), "Commit");
+        assert_eq!(format!("{:?}", WalEntryType::Rollback), "Rollback");
+        assert_eq!(format!("{:?}", WalEntryType::Checkpoint), "Checkpoint");
+        assert_eq!(format!("{:?}", WalEntryType::Prepare), "Prepare");
+    }
+
+    #[test]
+    fn test_wal_reader_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("empty.wal");
+
+        // Create empty file
+        std::fs::write(&wal_path, &[]).unwrap();
+
+        let mut reader = WalReader::new(&wal_path).unwrap();
+        let entries = reader.read_all().unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_wal_writer_current_lsn_initial() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_lsn_init.wal");
+
+        let writer = WalWriter::new(&wal_path).unwrap();
+        assert_eq!(writer.current_lsn(), 0);
+    }
+
+    #[test]
+    fn test_wal_recover_with_log_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_delete.wal");
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_delete(1, 1, vec![1]).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[2].entry_type, WalEntryType::Delete);
+    }
+
+    #[test]
+    fn test_wal_recover_with_log_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_update.wal");
+
+        let manager = WalManager::new(wal_path);
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        let _ = manager.log_update(1, 1, vec![1], vec![20]).unwrap();
+        let _ = manager.log_commit(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[2].entry_type, WalEntryType::Update);
+    }
+
+    #[test]
+    fn test_wal_multiple_transactions_interleaved() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_interleaved.wal");
+
+        let manager = WalManager::new(wal_path);
+
+        // Transaction 1: begin, insert
+        let _ = manager.log_begin(1).unwrap();
+        let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+
+        // Transaction 2: begin, insert
+        let _ = manager.log_begin(2).unwrap();
+        let _ = manager.log_insert(2, 1, vec![2], vec![20]).unwrap();
+
+        // Transaction 1: commit
+        let _ = manager.log_commit(1).unwrap();
+
+        // Transaction 3: begin, insert
+        let _ = manager.log_begin(3).unwrap();
+        let _ = manager.log_insert(3, 1, vec![3], vec![30]).unwrap();
+
+        // Transaction 2: commit
+        let _ = manager.log_commit(2).unwrap();
+
+        // Transaction 3: rollback
+        let _ = manager.log_rollback(3).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 9);
+    }
+
+    #[test]
+    fn test_wal_entry_from_bytes_with_key_only() {
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Delete,
+            table_id: 100,
+            key: Some(vec![1, 2, 3]),
+            data: None,
+            lsn: 0,
+            timestamp: 1234567890,
+        };
+
+        let bytes = entry.to_bytes();
+        let restored = WalEntry::from_bytes(&bytes).unwrap();
+
+        assert_eq!(restored.key, Some(vec![1, 2, 3]));
+        assert_eq!(restored.data, None);
+    }
+
+    #[test]
+    fn test_wal_archive_manager_compress_file_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("nonexistent.wal");
+        let output = dir.path().join("output.gz");
+
+        let result = WalArchiveManager::compress_file(&input, &output);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wal_archive_manager_recover_nonexistent_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_dir = dir.path().join("wal");
+        let archive_dir = dir.path().join("archive");
+
+        let manager = WalArchiveManager::new(wal_dir, archive_dir).unwrap();
+
+        let result = manager.recover_from_archive(99999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wal_reader_read_from_lsn_beyond_end() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("test_read_beyond.wal");
+
+        {
+            let mut manager = WalManager::new(wal_path.clone());
+            for i in 0u64..3 {
+                let entry = WalEntry {
+                    tx_id: 1,
+                    entry_type: WalEntryType::Insert,
+                    table_id: 1,
+                    key: Some(vec![i as u8]),
+                    data: Some(vec![i as u8]),
+                    lsn: i,
+                    timestamp: 1234567890 + i,
+                };
+                let _ = manager.get_writer().unwrap().append(&entry);
+            }
+        }
+
+        // Read from LSN beyond available entries
+        let mut reader = WalReader::new(&wal_path).unwrap();
+        let entries = reader.read_from(100).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_wal_entry_from_bytes_malformed_data() {
+        // Key length claims more data than available
+        let mut bytes = vec![0u8; 100];
+
+        // LSN
+        bytes[0..8].copy_from_slice(&0u64.to_le_bytes());
+        // Timestamp
+        bytes[8..16].copy_from_slice(&0u64.to_le_bytes());
+        // TX ID
+        bytes[16..24].copy_from_slice(&1u64.to_le_bytes());
+        // Entry type
+        bytes[24] = 2; // Insert
+        // Table ID
+        bytes[25..33].copy_from_slice(&100u64.to_le_bytes());
+        // Key len (claims 1000 bytes but only 66 available)
+        bytes[33..37].copy_from_slice(&1000u32.to_le_bytes());
+
+        let result = WalEntry::from_bytes(&bytes);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_wal_entry_from_bytes_data_len_claims_beyond() {
+        let mut bytes = vec![0u8; 100];
+
+        // LSN
+        bytes[0..8].copy_from_slice(&0u64.to_le_bytes());
+        // Timestamp
+        bytes[8..16].copy_from_slice(&0u64.to_le_bytes());
+        // TX ID
+        bytes[16..24].copy_from_slice(&1u64.to_le_bytes());
+        // Entry type
+        bytes[24] = 2; // Insert
+        // Table ID
+        bytes[25..33].copy_from_slice(&100u64.to_le_bytes());
+        // Key len = 0
+        bytes[33..37].copy_from_slice(&0u32.to_le_bytes());
+        // Data len (claims 100 bytes but only ~63 available)
+        bytes[37..41].copy_from_slice(&100u32.to_le_bytes());
+
+        let result = WalEntry::from_bytes(&bytes);
+        // Entry parses but data is None due to insufficient bytes
+        assert!(result.is_some());
+        assert!(result.unwrap().data.is_none());
     }
 }
