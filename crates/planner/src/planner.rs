@@ -6,7 +6,7 @@ use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer};
 use crate::physical_plan::{
     AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec,
+    ProjectionExec, SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 use crate::Expr;
 use crate::{Column, Schema};
@@ -211,7 +211,25 @@ impl DefaultPlanner {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
-            LogicalPlan::Window { input, .. } => self.create_physical_plan_internal(input),
+            LogicalPlan::Window {
+                input,
+                window_expr,
+                partition_by,
+                order_by,
+                schema,
+            } => {
+                let input_plan = self.create_physical_plan_internal(input)?;
+                let input_schema = input.as_ref().schema().clone();
+
+                Ok(Box::new(WindowExec::new(
+                    input_plan,
+                    window_expr.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    schema.clone(),
+                    input_schema,
+                )))
+            }
             LogicalPlan::SetOperation {
                 op_type,
                 left,

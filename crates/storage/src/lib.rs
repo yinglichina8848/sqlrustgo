@@ -29,7 +29,7 @@ pub use clock_replacer::ClockReplacer;
 // };
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
-    TableData, TableInfo, ViewInfo,
+    TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
 };
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
@@ -40,7 +40,7 @@ pub use replication::{
     ReplicationConfig, SlaveNode,
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
-pub use wal::{WalEntry, WalManager, WalReader, WalWriter};
+pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
 pub use parquet::{export_to_parquet, import_from_parquet};
 
 #[cfg(test)]

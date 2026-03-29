@@ -261,4 +261,63 @@ mod tests {
         assert!(session1.is_available());
         assert!(session2.is_available());
     }
+
+    #[test]
+    fn test_connection_pool_try_acquire_success() {
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn = pool.try_acquire();
+        assert!(conn.is_some());
+    }
+
+    #[test]
+    fn test_connection_pool_try_acquire_when_empty() {
+        let config = PoolConfig {
+            size: 1,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        // Acquire the only connection
+        let conn1 = pool.try_acquire();
+        assert!(conn1.is_some());
+
+        // Try to acquire when none available
+        let conn2 = pool.try_acquire();
+        assert!(conn2.is_none());
+    }
+
+    #[test]
+    fn test_connection_pool_get_pool_size() {
+        let config = PoolConfig {
+            size: 10,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        assert_eq!(pool.get_pool_size(), 10);
+        assert_eq!(pool.size(), 10);
+    }
+
+    #[test]
+    fn test_pooled_connection_executor() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn = pool.acquire();
+        let _executor = conn.executor();
+    }
+
+    #[test]
+    fn test_pooled_session_transaction_id() {
+        let session = PooledSession::new();
+        assert!(session.transaction_id.is_none());
+    }
 }

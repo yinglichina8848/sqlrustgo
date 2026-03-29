@@ -197,6 +197,10 @@ impl<'a> Lexer<'a> {
                 Token::Colon
             }
             '\'' => Token::StringLiteral(self.read_string()),
+            '?' => {
+                self.position += 1;
+                Token::QuestionMark
+            }
             '=' => {
                 self.position += 1;
                 Token::Equal
@@ -273,6 +277,28 @@ impl<'a> Lexer<'a> {
                     "NULLS" => Token::Nulls,
                     "FIRST" => Token::First,
                     "LAST" => Token::Last,
+                    "ROW_NUMBER" => Token::RowNumber,
+                    "RANK" => Token::Rank,
+                    "DENSE_RANK" => Token::DenseRank,
+                    "LEAD" => Token::Lead,
+                    "LAG" => Token::Lag,
+                    "FIRST_VALUE" => Token::FirstValue,
+                    "LAST_VALUE" => Token::LastValue,
+                    "NTH_VALUE" => Token::NthValue,
+                    "OVER" => Token::Over,
+                    "PARTITION" => Token::Partition,
+                    "WITHIN" => Token::Within,
+                    "ROWS" => Token::Rows,
+                    "RANGE" => Token::Range,
+                    "GROUPS" => Token::Groups,
+                    "UNBOUNDED" => Token::Unbounded,
+                    "PRECEDING" => Token::Preceding,
+                    "FOLLOWING" => Token::Following,
+                    "EXCLUDE" => Token::Exclude,
+                    "CURRENT" => Token::Current,
+                    "TIES" => Token::Ties,
+                    "NO" => Token::NoOthers,
+                    "BETWEEN" => Token::Between,
                     "ALL" => Token::All,
                     "ANALYZE" => Token::Analyze,
                     "EXPLAIN" => Token::Explain,
@@ -303,9 +329,9 @@ impl<'a> Lexer<'a> {
                     "LEAVE" => Token::Leave,
                     "ITERATE" => Token::Iterate,
                     "SIGNAL" => Token::Signal,
+                    "DELIMITER" => Token::Delimiter,
                     "VIEW" => Token::View,
                     "AS" => Token::As,
-                    "ALL" => Token::All,
                     "SHOW" => Token::Show,
                     "STATUS" => Token::Status,
                     "PROCESSLIST" => Token::Processlist,

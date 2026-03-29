@@ -4,11 +4,12 @@ pub use sqlrustgo_planner::PhysicalPlan;
 pub use sqlrustgo_types::SqlError;
 
 pub mod executor;
-pub use executor::{Executor, ExecutorResult, Storage, VolIterator, VolcanoExecutor};
 pub mod executor_metrics;
+pub mod explain;
 pub mod filter;
 pub mod local_executor;
 pub mod operator_profile;
+pub mod parallel_executor;
 pub mod pipeline_trace;
 pub mod query_cache;
 pub mod query_cache_config;
@@ -18,29 +19,50 @@ pub mod session_config;
 pub mod sql_log;
 pub mod sql_normalizer;
 pub mod task_scheduler;
-pub mod parallel_executor;
 pub mod test_framework;
 pub mod vectorization;
-pub use task_scheduler::{create_default_scheduler, RayonTaskScheduler, TaskScheduler};
-pub use parallel_executor::{ParallelExecutor, ParallelVolcanoExecutor};
 
 pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
+pub use executor::{Executor, ExecutorResult, Storage, VolIterator, VolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
+pub use explain::{
+    explain, explain_analyze, ExplainConfig, ExplainExecutor, ExplainFormat, ExplainLine,
+    ExplainOutput,
+};
 pub use filter::FilterVolcanoExecutor;
 pub use local_executor::LocalExecutor;
 pub use operator_profile::{
     OperatorProfile, ProfileTimer, Profiler, QueryProfile, GLOBAL_PROFILER,
 };
+pub use parallel_executor::{ParallelExecutor, ParallelVolcanoExecutor};
 pub use pipeline_trace::{OperatorTrace, QueryTrace, TraceCollector, GLOBAL_TRACE_COLLECTOR};
 pub use query_cache::{QueryCache, QueryCacheStats};
 pub use query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 pub use query_cache_metrics::QueryCacheMetrics;
+pub use reusable_vec::{
+    clear_thread_local_pool, reset_thread_local_pool, with_thread_local_pool, ReusableVec,
+    ThreadLocalExecutorVecPool,
+};
 pub use sql_log::{global_execution_log, ExecutionLog, LogLevel, SqlLogEntry};
 pub use sql_normalizer::SqlNormalizer;
+pub use task_scheduler::{create_default_scheduler, RayonTaskScheduler, TaskScheduler};
 pub use vectorization::{
     AggFunction, AggregateResult, BatchIterator, ColumnArray, DataChunk, RecordBatch, Vector,
     VectorizedExecutor,
 };
+
+pub mod window_executor;
+pub use window_executor::WindowVolcanoExecutor;
+
+// Trigger execution engine
+pub mod trigger;
+pub use trigger::{
+    TriggerExecutor, TriggerEvent, TriggerExecutionResult, TriggerTiming, TriggerType,
+};
+
+// Stored procedure executor
+pub mod stored_proc;
+pub use stored_proc::StoredProcExecutor;
 
 // Test framework modules - publicly accessible
 pub mod harness;

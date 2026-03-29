@@ -8,8 +8,8 @@ use std::cmp::Ordering;
 /// Bitmap for null value tracking
 #[derive(Debug, Clone)]
 pub struct Bitmap {
-    bits: Vec<u64>,
-    len: usize,
+    pub bits: Vec<u64>,
+    pub len: usize,
 }
 
 impl Bitmap {
@@ -192,8 +192,9 @@ impl ColumnChunk {
     fn push_value(&mut self, value: Value, is_null: bool) {
         let index = self.data.len();
 
-        // Ensure null_bitmap exists if we're adding nulls
-        if is_null && self.null_bitmap.is_none() {
+        // Ensure null_bitmap exists (create even for non-nulls to track positions)
+        if self.null_bitmap.is_none() {
+            self.null_bitmap = Some(Bitmap::with_capacity(self.data.len().max(1)));
             self.null_bitmap = Some(Bitmap::with_capacity(self.data.len()));
         }
 

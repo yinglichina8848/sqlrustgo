@@ -40,18 +40,20 @@ use std::cell::RefCell;
 /// # Example
 ///
 /// ```rust
+/// use sqlrustgo_executor::ReusableVec;
+///
 /// let mut reusable = ReusableVec::<i32>::new();
 ///
 /// // First use
 /// reusable.push(1);
 /// reusable.push(2);
-/// process(&reusable);
+/// assert_eq!(reusable.len(), 2);
 /// reusable.clear();
 ///
 /// // Second use - no reallocation
 /// reusable.push(3);
 /// reusable.push(4);
-/// process(&reusable);
+/// assert_eq!(reusable.len(), 2);
 /// ```
 pub struct ReusableVec<T> {
     /// The inner buffer
@@ -335,7 +337,10 @@ thread_local! {
 /// # Example
 ///
 /// ```rust
-/// with_thread_local_pool(|pool| {
+/// use sqlrustgo_executor::{with_thread_local_pool, ThreadLocalExecutorVecPool};
+/// use sqlrustgo_types::Value;
+///
+/// with_thread_local_pool(|pool: &mut ThreadLocalExecutorVecPool| {
 ///     pool.rows.push(vec![Value::Integer(1)]);
 /// });
 /// ```
@@ -437,6 +442,336 @@ mod tests {
             pool.clear_all();
             assert!(pool.rows.is_empty());
             assert!(pool.indices.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_reusable_vec_with_capacity() {
+        let vec = ReusableVec::<i32>::with_capacity(100);
+        assert!(vec.capacity() >= 100);
+        assert_eq!(vec.len(), 0);
+        assert!(vec.is_empty());
+    }
+
+    #[test]
+    fn test_reusable_vec_get() {
+        let mut vec = ReusableVec::new();
+        vec.push(10);
+        vec.push(20);
+        vec.push(30);
+        assert_eq!(vec.get(0), Some(&10));
+        assert_eq!(vec.get(1), Some(&20));
+        assert_eq!(vec.get(2), Some(&30));
+        assert_eq!(vec.get(3), None);
+        assert_eq!(vec.get(usize::MAX), None);
+    }
+
+    #[test]
+    fn test_reusable_vec_get_mut() {
+        let mut vec = ReusableVec::new();
+        vec.push(10);
+        vec.push(20);
+        if let Some(elem) = vec.get_mut(1) {
+            *elem = 25;
+        }
+        assert_eq!(vec.get(1), Some(&25));
+    }
+
+    #[test]
+    fn test_reusable_vec_iter() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        let sum: i32 = vec.iter().sum();
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn test_reusable_vec_iter_mut() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        for elem in vec.iter_mut() {
+            *elem *= 2;
+        }
+        assert_eq!(vec.get(0), Some(&2));
+        assert_eq!(vec.get(1), Some(&4));
+        assert_eq!(vec.get(2), Some(&6));
+    }
+
+    #[test]
+    fn test_reusable_vec_extend() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.extend(vec![2, 3, 4]);
+        assert_eq!(vec.len(), 4);
+        assert_eq!(vec.get(3), Some(&4));
+    }
+
+    #[test]
+    fn test_reusable_vec_drain() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        let drained: Vec<i32> = vec.drain().collect();
+        assert_eq!(drained, vec![1, 2, 3]);
+        assert!(vec.is_empty());
+        assert!(vec.capacity() > 0);
+    }
+
+    #[test]
+    fn test_reusable_vec_reset() {
+        let mut vec = ReusableVec::with_capacity(10);
+        vec.push(1);
+        vec.push(2);
+        let cap = vec.capacity();
+        vec.reset();
+        assert!(vec.is_empty());
+        assert_eq!(vec.capacity(), cap);
+    }
+
+    #[test]
+    fn test_reusable_vec_as_slice() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        let slice: &[i32] = vec.as_slice();
+        assert_eq!(slice, &[1, 2]);
+    }
+
+    #[test]
+    fn test_reusable_vec_as_mut_slice() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        let slice: &mut [i32] = vec.as_mut_slice();
+        slice[0] = 10;
+        assert_eq!(vec.get(0), Some(&10));
+    }
+
+    #[test]
+    fn test_reusable_vec_append() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        let mut other = vec![10, 20];
+        vec.append(&mut other);
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.get(2), Some(&20));
+        assert!(other.is_empty());
+    }
+
+    #[test]
+    fn test_reusable_vec_reserve() {
+        let mut vec: ReusableVec<i32> = ReusableVec::with_capacity(5);
+        let initial_cap = vec.capacity();
+        vec.reserve(100);
+        assert!(vec.capacity() > initial_cap);
+        assert!(!vec.is_empty() || initial_cap >= 5);
+    }
+
+    #[test]
+    fn test_reusable_vec_resize() {
+        let mut vec = ReusableVec::new();
+        vec.resize(3, 5);
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.get(0), Some(&5));
+        assert_eq!(vec.get(1), Some(&5));
+        assert_eq!(vec.get(2), Some(&5));
+    }
+
+    #[test]
+    fn test_reusable_vec_truncate() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+        vec.truncate(2);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec.get(2), None);
+    }
+
+    #[test]
+    fn test_reusable_vec_truncate_larger() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.truncate(100);
+        assert_eq!(vec.len(), 1);
+    }
+
+    #[test]
+    fn test_reusable_vec_pop() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        let popped = vec.pop();
+        assert_eq!(popped, Some(2));
+        assert_eq!(vec.len(), 1);
+    }
+
+    #[test]
+    fn test_reusable_vec_pop_empty() {
+        let mut vec = ReusableVec::<i32>::new();
+        let popped = vec.pop();
+        assert_eq!(popped, None);
+    }
+
+    #[test]
+    fn test_reusable_vec_last() {
+        let mut vec = ReusableVec::new();
+        assert_eq!(vec.last(), None);
+        vec.push(1);
+        vec.push(2);
+        assert_eq!(vec.last(), Some(&2));
+    }
+
+    #[test]
+    fn test_reusable_vec_first() {
+        let mut vec = ReusableVec::new();
+        assert_eq!(vec.first(), None);
+        vec.push(1);
+        vec.push(2);
+        assert_eq!(vec.first(), Some(&1));
+    }
+
+    #[test]
+    fn test_reusable_vec_contains() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        assert!(vec.contains(&2));
+        assert!(!vec.contains(&4));
+    }
+
+    #[test]
+    fn test_reusable_vec_binary_search() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(3);
+        vec.push(5);
+        vec.push(7);
+        assert_eq!(vec.binary_search(&5), Ok(2));
+        assert_eq!(vec.binary_search(&4), Err(2));
+    }
+
+    #[test]
+    fn test_reusable_vec_reverse() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        vec.reverse();
+        assert_eq!(vec.get(0), Some(&3));
+        assert_eq!(vec.get(2), Some(&1));
+    }
+
+    #[test]
+    fn test_reusable_vec_sort() {
+        let mut vec = ReusableVec::new();
+        vec.push(3);
+        vec.push(1);
+        vec.push(2);
+        vec.sort();
+        assert_eq!(vec.get(0), Some(&1));
+        assert_eq!(vec.get(1), Some(&2));
+        assert_eq!(vec.get(2), Some(&3));
+    }
+
+    #[test]
+    fn test_reusable_vec_dedup() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(1);
+        vec.push(2);
+        vec.push(1);
+        vec.dedup();
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.get(0), Some(&1));
+        assert_eq!(vec.get(1), Some(&2));
+        assert_eq!(vec.get(2), Some(&1));
+    }
+
+    #[test]
+    fn test_reusable_vec_swap_remove() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+        let removed = vec.swap_remove(1);
+        assert_eq!(removed, 2);
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.get(1), Some(&4));
+    }
+
+    #[test]
+    fn test_reusable_vec_insert() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(3);
+        vec.insert(1, 2);
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.get(1), Some(&2));
+    }
+
+    #[test]
+    fn test_reusable_vec_remove() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        let removed = vec.remove(1);
+        assert_eq!(removed, 2);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec.get(1), Some(&3));
+    }
+
+    #[test]
+    fn test_reusable_vec_retain() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+        vec.retain(|x| x % 2 == 0);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec.get(0), Some(&2));
+        assert_eq!(vec.get(1), Some(&4));
+    }
+
+    #[test]
+    fn test_reusable_vec_value_type() {
+        let mut vec = ReusableVec::new();
+        vec.push(Value::Integer(42));
+        vec.push(Value::Text("hello".to_string()));
+        assert_eq!(vec.len(), 2);
+    }
+
+    #[test]
+    fn test_thread_local_pool_multiple_operations() {
+        clear_thread_local_pool();
+        with_thread_local_pool(|pool| {
+            pool.rows.push(vec![Value::Integer(1)]);
+            pool.indices.push(0);
+            pool.rows.push(vec![Value::Integer(2)]);
+            pool.indices.push(1);
+            assert_eq!(pool.rows.len(), 2);
+            assert_eq!(pool.indices.len(), 2);
+        });
+    }
+
+    #[test]
+    fn test_thread_local_pool_preserves_capacity() {
+        clear_thread_local_pool();
+        with_thread_local_pool(|pool| {
+            pool.rows.push(vec![Value::Integer(1); 100]);
+            let cap = pool.rows.capacity();
+            pool.clear_all();
+            assert_eq!(pool.rows.capacity(), cap);
         });
     }
 }

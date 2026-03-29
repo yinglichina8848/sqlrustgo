@@ -3,19 +3,26 @@
 //! This module provides the catalog system for managing schemas, tables, columns,
 //! and constraints in the database.
 
+mod auth;
 mod column;
 mod data_type;
 mod error;
 mod index;
 mod rebuild;
 mod schema;
+mod stored_proc;
 mod table;
 
+pub use auth::{
+    AuthError, AuthManager, AuthResult, GranteeType, ObjectRef, ObjectType, Privilege,
+    PrivilegeGrant, Role, User, UserRole,
+};
 pub use column::ColumnDefinition;
 pub use data_type::DataType;
 pub use error::{CatalogError, CatalogResult};
 pub use index::{IndexInfo, IndexType};
 pub use schema::Schema;
+pub use stored_proc::{ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure};
 pub use table::{ForeignKeyAction, ForeignKeyRef, Table, TableRef};
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +37,8 @@ pub struct Catalog {
     default_schema: String,
     /// Schemas in the catalog (name -> Schema)
     schemas: HashMap<String, Schema>,
+    /// Stored procedures in the catalog (name -> StoredProcedure)
+    stored_procedures: HashMap<String, StoredProcedure>,
 }
 
 impl Default for Catalog {
@@ -44,6 +53,7 @@ impl Catalog {
         let mut catalog = Self {
             default_schema: "public".to_string(),
             schemas: HashMap::new(),
+            stored_procedures: HashMap::new(),
         };
         // Create the default public schema
         catalog
@@ -57,6 +67,7 @@ impl Catalog {
         let mut catalog = Self {
             default_schema: default_schema.into(),
             schemas: HashMap::new(),
+            stored_procedures: HashMap::new(),
         };
         catalog.schemas.insert(
             catalog.default_schema.clone(),
@@ -99,6 +110,11 @@ impl Catalog {
         self.schemas.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Get all schemas
+    pub fn all_schemas(&self) -> Vec<&Schema> {
+        self.schemas.values().collect()
+    }
+
     /// Check if a schema exists
     pub fn has_schema(&self, name: &str) -> bool {
         self.schemas.contains_key(name)
@@ -114,6 +130,38 @@ impl Catalog {
         self.schemas
             .get(schema_name)
             .and_then(|s| s.get_table(table_name))
+    }
+
+    /// Add a stored procedure to the catalog
+    pub fn add_stored_procedure(&mut self, proc: StoredProcedure) -> CatalogResult<()> {
+        if self.stored_procedures.contains_key(&proc.name) {
+            return Err(CatalogError::DuplicateSchema(proc.name.clone()));
+        }
+        self.stored_procedures.insert(proc.name.clone(), proc);
+        Ok(())
+    }
+
+    /// Get a stored procedure by name
+    pub fn get_stored_procedure(&self, name: &str) -> Option<&StoredProcedure> {
+        self.stored_procedures.get(name)
+    }
+
+    /// Check if a stored procedure exists
+    pub fn has_stored_procedure(&self, name: &str) -> bool {
+        self.stored_procedures.contains_key(name)
+    }
+
+    /// Remove a stored procedure
+    pub fn drop_stored_procedure(&mut self, name: &str) -> Option<StoredProcedure> {
+        self.stored_procedures.remove(name)
+    }
+
+    /// Get all stored procedure names
+    pub fn stored_procedure_names(&self) -> Vec<&str> {
+        self.stored_procedures
+            .keys()
+            .map(|s: &String| s.as_str())
+            .collect()
     }
 
     /// Check all catalog invariants
