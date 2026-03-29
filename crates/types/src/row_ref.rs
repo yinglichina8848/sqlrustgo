@@ -282,10 +282,7 @@ pub fn encode_row(values: &[Value]) -> Vec<u8> {
     let num_cols = values.len() as u32;
 
     // First pass: calculate sizes and collect data
-    let col_data: Vec<Vec<u8>> = values
-        .iter()
-        .map(|v| binary_encode_value(v))
-        .collect();
+    let col_data: Vec<Vec<u8>> = values.iter().map(binary_encode_value).collect();
 
     let total_data_len: usize = col_data.iter().map(|d| d.len()).sum();
 
@@ -362,7 +359,10 @@ mod tests {
         assert_eq!(row_ref.num_cols(), Some(4));
 
         assert_eq!(row_ref.get_column(0, &schema), Some(Value::Integer(42)));
-        assert_eq!(row_ref.get_column(1, &schema), Some(Value::Text("hello".to_string())));
+        assert_eq!(
+            row_ref.get_column(1, &schema),
+            Some(Value::Text("hello".to_string()))
+        );
         assert_eq!(row_ref.get_column(2, &schema), Some(Value::Float(3.14)));
         assert_eq!(row_ref.get_column(3, &schema), Some(Value::Boolean(true)));
     }
@@ -389,10 +389,7 @@ mod tests {
 
     #[test]
     fn test_row_ref_to_owned_row() {
-        let values = vec![
-            Value::Integer(1),
-            Value::Text("test".to_string()),
-        ];
+        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
         let schema = vec![ColumnType::Integer, ColumnType::Text];
 
         let encoded = encode_row(&values);
