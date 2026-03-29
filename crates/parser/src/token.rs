@@ -79,6 +79,11 @@ pub enum Token {
     Status,
     Processlist,
 
+    // KILL command keywords
+    Kill,
+    Connection,
+    Query,
+
     // COPY keywords
     Copy,
     Format,
@@ -386,6 +391,10 @@ impl fmt::Display for Token {
             Token::Show => write!(f, "SHOW"),
             Token::Status => write!(f, "STATUS"),
             Token::Processlist => write!(f, "PROCESSLIST"),
+            // KILL keywords
+            Token::Kill => write!(f, "KILL"),
+            Token::Connection => write!(f, "CONNECTION"),
+            Token::Query => write!(f, "QUERY"),
             // COPY keywords
             Token::Copy => write!(f, "COPY"),
             Token::Format => write!(f, "FORMAT"),
@@ -466,6 +475,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "COPY"
             | "FORMAT"
             | "PARQUET"
+            | "KILL"
+            | "CONNECTION"
+            | "QUERY"
     )
 }
 
@@ -546,6 +558,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "COPY" => Some(Token::Copy),
         "FORMAT" => Some(Token::Format),
         "PARQUET" => Some(Token::Parquet),
+        "KILL" => Some(Token::Kill),
+        "CONNECTION" => Some(Token::Connection),
+        "QUERY" => Some(Token::Query),
         _ => None,
     }
 }
