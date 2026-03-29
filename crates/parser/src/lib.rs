@@ -16,6 +16,7 @@ pub use parser::ForeignKeyAction;
 pub use parser::ForeignKeyRef;
 pub use parser::FrameBoundInfo;
 pub use parser::GrantStatement;
+pub use parser::MergeStatement;
 pub use parser::Privilege;
 pub use parser::RevokeStatement;
 pub use parser::SetOperation;
