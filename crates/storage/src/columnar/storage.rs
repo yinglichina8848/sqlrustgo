@@ -4,14 +4,12 @@
 
 use crate::columnar::chunk::{Bitmap, ColumnChunk, ColumnStats};
 use crate::columnar::segment::{ColumnSegment, CompressionType};
-use crate::engine::{
-    StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo,
-};
+use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
 use crate::wal::{WalManager, WalWriter};
+use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use sqlrustgo_types::Value;
 use thiserror::Error;
 
 /// Columnar storage error types
@@ -144,10 +142,8 @@ impl TableStore {
         // Write each column as a segment
         for (col_idx, chunk) in &self.columns {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
-            let mut segment = ColumnSegment::with_compression(
-                *col_idx as u32,
-                CompressionType::Zstd,
-            );
+            let mut segment =
+                ColumnSegment::with_compression(*col_idx as u32, CompressionType::Zstd);
 
             let stats = ColumnStatsDisk::from(chunk.stats());
             segment.stats = stats;
@@ -305,8 +301,9 @@ impl Default for ColumnarStorage {
 
 impl StorageEngine for ColumnarStorage {
     fn scan(&self, table: &str) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
-        let store = self.tables.get(table)
-            .ok_or_else(|| crate::engine::SqlError::Internal(format!("Table not found: {}", table)))?;
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::Internal(format!("Table not found: {}", table))
+        })?;
 
         let mut records = Vec::with_capacity(store.row_count());
         for i in 0..store.row_count() {
@@ -323,18 +320,21 @@ impl StorageEngine for ColumnarStorage {
             self.load_table(table)?;
         }
 
-        let store = self.tables.get_mut(table)
-            .ok_or_else(|| crate::engine::SqlError::Internal(format!("Table not found: {}", table)))?;
+        let store = self.tables.get_mut(table).ok_or_else(|| {
+            crate::engine::SqlError::Internal(format!("Table not found: {}", table))
+        })?;
 
         for record in records {
-            store.insert_row(&record)
+            store
+                .insert_row(&record)
                 .map_err(|e| crate::engine::SqlError::Internal(e.to_string()))?;
         }
 
         // Persist if we have a base path
         if !self.base_path.as_os_str().is_empty() {
             let path = self.get_table_path(table);
-            store.serialize(&path)
+            store
+                .serialize(&path)
                 .map_err(|e| crate::engine::SqlError::Internal(e.to_string()))?;
         }
 
@@ -375,8 +375,9 @@ impl StorageEngine for ColumnarStorage {
     }
 
     fn drop_table(&mut self, table: &str) -> crate::engine::SqlResult<()> {
-        self.tables.remove(table)
-            .ok_or_else(|| crate::engine::SqlError::Internal(format!("Table not found: {}", table)))?;
+        self.tables.remove(table).ok_or_else(|| {
+            crate::engine::SqlError::Internal(format!("Table not found: {}", table))
+        })?;
 
         // Remove from disk
         if !self.base_path.as_os_str().is_empty() {
@@ -391,7 +392,8 @@ impl StorageEngine for ColumnarStorage {
     }
 
     fn get_table_info(&self, table: &str) -> crate::engine::SqlResult<TableInfo> {
-        self.tables.get(table)
+        self.tables
+            .get(table)
             .map(|s| s.info.clone())
             .ok_or_else(|| crate::engine::SqlError::Internal(format!("Table not found: {}", table)))
     }
@@ -503,7 +505,8 @@ impl StorageEngine for ColumnarStorage {
         if !self.base_path.as_os_str().is_empty() {
             for (name, store) in &self.tables {
                 let path = self.get_table_path(name);
-                store.serialize(&path)
+                store
+                    .serialize(&path)
                     .map_err(|e| crate::engine::SqlError::Internal(e.to_string()))?;
             }
         }
@@ -514,41 +517,40 @@ impl StorageEngine for ColumnarStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::{ColumnInfo, ColumnType, TableInfo};
-    use std::sync::Arc;
+    use crate::engine::{ColumnDefinition, TableInfo};
 
     fn create_test_table_info() -> TableInfo {
         TableInfo {
-            id: 1,
             name: "test_table".to_string(),
             columns: vec![
-                ColumnInfo {
-                    id: 0,
+                ColumnDefinition {
                     name: "id".to_string(),
-                    col_type: ColumnType::Integer,
+                    data_type: "INTEGER".to_string(),
                     nullable: false,
-                    default_value: None,
-                    primary_key: true,
+                    is_unique: true,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
                 },
-                ColumnInfo {
-                    id: 1,
+                ColumnDefinition {
                     name: "name".to_string(),
-                    col_type: ColumnType::Text,
+                    data_type: "TEXT".to_string(),
                     nullable: true,
-                    default_value: None,
-                    primary_key: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
-                ColumnInfo {
-                    id: 2,
+                ColumnDefinition {
                     name: "value".to_string(),
-                    col_type: ColumnType::Float,
+                    data_type: "FLOAT".to_string(),
                     nullable: true,
-                    default_value: None,
-                    primary_key: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
             ],
-            foreign_keys: vec![],
-            indexes: vec![],
         }
     }
 
@@ -578,8 +580,16 @@ mod tests {
         storage.create_table(&info).unwrap();
 
         let records = vec![
-            vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)],
-            vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Float(2.71)],
+            vec![
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ],
+            vec![
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Float(2.71),
+            ],
             vec![Value::Integer(3), Value::Null, Value::Float(1.41)],
         ];
 
@@ -610,8 +620,20 @@ mod tests {
         let info = create_test_table_info();
         let mut store = TableStore::new(info);
 
-        store.insert_row(&[Value::Integer(1), Value::Text("A".to_string()), Value::Float(1.0)]).unwrap();
-        store.insert_row(&[Value::Integer(2), Value::Text("B".to_string()), Value::Float(2.0)]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(1),
+                Value::Text("A".to_string()),
+                Value::Float(1.0),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(2),
+                Value::Text("B".to_string()),
+                Value::Float(2.0),
+            ])
+            .unwrap();
 
         assert_eq!(store.row_count(), 2);
     }
@@ -621,8 +643,20 @@ mod tests {
         let info = create_test_table_info();
         let mut store = TableStore::new(info);
 
-        store.insert_row(&[Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)]).unwrap();
-        store.insert_row(&[Value::Integer(2), Value::Text("Bob".to_string()), Value::Null]).unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(1),
+                Value::Text("Alice".to_string()),
+                Value::Float(3.14),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                Value::Integer(2),
+                Value::Text("Bob".to_string()),
+                Value::Null,
+            ])
+            .unwrap();
 
         let row0 = store.get_row(0).unwrap();
         assert_eq!(row0[0], Value::Integer(1));
