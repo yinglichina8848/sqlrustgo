@@ -79,6 +79,11 @@ pub enum Token {
     Status,
     Processlist,
 
+    // COPY keywords
+    Copy,
+    Format,
+    Parquet,
+
     // Prepared Statements
     Prepare,
     Execute,
@@ -365,6 +370,10 @@ impl fmt::Display for Token {
             Token::Show => write!(f, "SHOW"),
             Token::Status => write!(f, "STATUS"),
             Token::Processlist => write!(f, "PROCESSLIST"),
+            // COPY keywords
+            Token::Copy => write!(f, "COPY"),
+            Token::Format => write!(f, "FORMAT"),
+            Token::Parquet => write!(f, "PARQUET"),
             // Prepared Statements
             Token::Prepare => write!(f, "PREPARE"),
             Token::Execute => write!(f, "EXECUTE"),
@@ -438,6 +447,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "EXECUTE"
             | "DEALLOCATE"
             | "USING"
+            | "COPY"
+            | "FORMAT"
+            | "PARQUET"
     )
 }
 
@@ -515,6 +527,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "EXECUTE" => Some(Token::Execute),
         "DEALLOCATE" => Some(Token::Deallocate),
         "USING" => Some(Token::Using),
+        "COPY" => Some(Token::Copy),
+        "FORMAT" => Some(Token::Format),
+        "PARQUET" => Some(Token::Parquet),
         _ => None,
     }
 }
