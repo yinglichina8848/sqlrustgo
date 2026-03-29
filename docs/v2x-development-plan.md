@@ -1,7 +1,8 @@
 # SQLRustGo 2.x 系列开发规划
-> 版本: 2.0 → 2.5  
-> 更新日期: 2026-03-28  
-> 目标: 企业级 GMP 文档精准检索 + RAG + 知识图谱 + OpenClaw AI 驱动
+
+> 版本: 2.0 → 2.5
+> 更新日期: 2026-03-29
+> 目标: 企业级 GMP 文档精准检索 + RAG + 知识图谱 + OpenClaw AI 驱动 + **AgentSQL Native**
 
 ---
 
@@ -10,7 +11,7 @@
 | 版本 | 核心目标 | 主要功能 | AI 开发线 |
 |------|----------|----------|------------|
 | **2.0** | GA 单机稳定 | Phase1-5 完成，RDBMS 核心，TaskScheduler, ParallelExecutor | OpenCode A/B, Claude A/B |
-| **2.1** | GMP 文档精准检索原型 | 文档导入/向量化/OpenClaw SQL API | OpenCode A/B, Claude A |
+| **2.1** | AgentSQL + GMP检索 | 文档导入/向量化/OpenClaw SQL API/**AgentSQL Extension** | OpenCode A/B, Claude A |
 | **2.2** | 高性能向量数据库 | 向量索引/并行KNN/SQL+Vector联合查询 | OpenCode B, Claude A |
 | **2.3** | RAG + 全文检索 | 文档问答/LLM集成/OpenClaw驱动 | Claude A, Claude B |
 | **2.4** | 知识图谱 + 图检索 | 节点/边表/BFS/DFS/路径搜索 | OpenCode A, Claude B |
@@ -86,12 +87,75 @@
 
 ---
 
-## 📦 v2.1 GMP 文档精准检索原型
+## 📦 v2.1 AgentSQL + GMP 文档精准检索原型
 
-**Issue**: #1075  
-**目标**: 构建企业级 GMP 文档精准检索原型，支持文档管理和 OpenClaw SQL 访问
+**Issue**: #1075
+**目标**: 构建企业级 GMP 文档精准检索原型 + AgentSQL原生AI接口，支持文档管理和 OpenClaw SQL 访问
 
-### 1. 文档表结构
+### 1. AgentSQL Extension（核心新功能）
+
+#### 1.1 模块结构
+
+```
+agentsql/
+├── agentsql-core/           # 核心模块
+│   ├── gateway/             # HTTP入口
+│   ├── schema/              # Schema查询
+│   ├── nl2sql/             # 自然语言转SQL
+│   ├── optimizer/           # 查询优化
+│   ├── explain/            # 执行计划
+│   ├── stats/              # 统计信息
+│   ├── memory/             # 上下文记忆
+│   └── security/           # 权限策略
+└── openclaw-extension/      # OpenClaw插件
+    ├── index.ts
+    ├── client.ts
+    ├── tools/
+    └── skill.yaml
+```
+
+#### 1.2 REST API端点
+
+| API | 方法 | 功能 |
+|-----|------|------|
+| `/agentsql/schema` | GET | Schema introspection |
+| `/agentsql/schema_graph` | GET | Schema关系图谱 |
+| `/agentsql/query` | POST | SQL执行 |
+| `/agentsql/nl_query` | POST | 自然语言查询 |
+| `/agentsql/explain` | POST | 查询计划解释 |
+| `/agentsql/optimize` | POST | SQL优化建议 |
+| `/agentsql/stats` | GET | 表统计 |
+| `/agentsql/memory/save` | POST | 保存记忆 |
+| `/agentsql/memory/load` | GET | 加载记忆 |
+
+#### 1.3 核心接口示例
+
+**自然语言查询**：
+```json
+POST /agentsql/nl_query
+{
+  "question": "最近7天新增多少用户"
+}
+
+响应：
+{
+  "sql": "SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
+  "rows": [[42]],
+  "summary": "最近7天新增42个用户",
+  "confidence": 0.93
+}
+```
+
+**Memory Context**：
+```json
+POST /agentsql/memory/save
+{
+  "session_id": "analysis001",
+  "memory": "用户增长异常来自渠道A"
+}
+```
+
+### 2. 文档表结构
 
 ```sql
 -- 文档主表
