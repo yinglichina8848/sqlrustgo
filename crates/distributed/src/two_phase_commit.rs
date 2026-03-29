@@ -537,15 +537,18 @@ mod tests {
         let participants = vec![Participant::new(2, 0)];
         let mut tx = DistributedTransaction::new(1, 1, participants);
 
-        tx.timeout = Duration::from_millis(1);
-        std::thread::sleep(Duration::from_millis(2));
+        tx.timeout_ms = 1; // 1 second (current_timestamp is in seconds)
+        std::thread::sleep(Duration::from_secs(2));
 
         assert!(tx.is_timed_out());
     }
 
     #[test]
     fn test_all_voted_yes() {
-        let participants = vec![Participant::new(2, 0), Participant::new(3, 1)];
+        let mut participants = vec![Participant::new(2, 0), Participant::new(3, 1)];
+        for p in &mut participants {
+            p.vote = Some(Vote::Yes);
+        }
         let tx = DistributedTransaction::new(1, 1, participants);
 
         assert!(tx.all_voted_yes());
