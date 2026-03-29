@@ -137,31 +137,33 @@ impl SlowQueryLog {
         let reader = BufReader::new(file);
         let mut lines: Vec<String> = Vec::new();
 
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if line.starts_with("# Time:") || line.starts_with("# User@Host:") || line.starts_with("# Query_time:") || line.starts_with("SET timestamp=") {
-                    // Skip header lines for now
-                    continue;
-                }
-
-                if line.starts_with("#") {
-                    // Other comment lines
-                    continue;
-                }
-
-                if line.trim().is_empty() {
-                    // Empty line separates records
-                    if !lines.is_empty() {
-                        if let Some(record) = self.parse_record(&lines) {
-                            records.push(record);
-                        }
-                        lines.clear();
-                    }
-                    continue;
-                }
-
-                lines.push(line);
+        for line in reader.lines().map_while(Result::ok) {
+            if line.starts_with("# Time:")
+                || line.starts_with("# User@Host:")
+                || line.starts_with("# Query_time:")
+                || line.starts_with("SET timestamp=")
+            {
+                // Skip header lines for now
+                continue;
             }
+
+            if line.starts_with("#") {
+                // Other comment lines
+                continue;
+            }
+
+            if line.trim().is_empty() {
+                // Empty line separates records
+                if !lines.is_empty() {
+                    if let Some(record) = self.parse_record(&lines) {
+                        records.push(record);
+                    }
+                    lines.clear();
+                }
+                continue;
+            }
+
+            lines.push(line);
         }
 
         // Handle last record
@@ -275,7 +277,10 @@ mod tests {
 
         let recent = log.get_recent();
         assert_eq!(recent.len(), 1);
-        assert_eq!(recent[0].query, "SELECT * FROM orders WHERE status = 'pending'");
+        assert_eq!(
+            recent[0].query,
+            "SELECT * FROM orders WHERE status = 'pending'"
+        );
         assert_eq!(recent[0].duration_ms, 500);
         assert_eq!(recent[0].rows, 100);
 

@@ -6,7 +6,6 @@
 use crate::engine::{Record, SqlError, SqlResult};
 use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
 use arrow::datatypes::DataType;
-use arrow::record_batch::RecordBatchReader;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ProjectionMask;
 use std::fs::File;

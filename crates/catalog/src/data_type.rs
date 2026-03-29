@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SQL data types supported by the database
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum DataType {
     /// NULL type
     Null,
@@ -19,6 +19,7 @@ pub enum DataType {
     /// 64-bit floating point
     Float,
     /// Variable-length text
+    #[default]
     Text,
     /// Binary large object
     Blob,
@@ -80,12 +81,6 @@ impl DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.sql_name())
-    }
-}
-
-impl Default for DataType {
-    fn default() -> Self {
-        DataType::Text
     }
 }
 

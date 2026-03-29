@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
-use serde::{Deserialize, Serialize};
 
 /// 节点 ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,7 +29,6 @@ pub struct GlobalTransactionId {
 static TXN_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl GlobalTransactionId {
-
     pub fn new(node_id: NodeId) -> Self {
         let txn_id = TXN_COUNTER.fetch_add(1, Ordering::SeqCst);
         let timestamp = std::time::SystemTime::now()

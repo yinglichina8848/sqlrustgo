@@ -60,11 +60,7 @@ impl Default for BenchmarkResult {
 
 impl BenchmarkResult {
     /// Create a new benchmark result from a histogram of latencies
-    fn from_histogram(
-        hist: &Histogram<u64>,
-        duration_secs: f64,
-        total_ops: u64,
-    ) -> Self {
+    fn from_histogram(hist: &Histogram<u64>, duration_secs: f64, total_ops: u64) -> Self {
         if hist.len() == 0 || total_ops == 0 {
             return Self::default();
         }
@@ -291,7 +287,10 @@ impl BenchmarkSuite {
 
         // Header
         output.push_str(&format!("# Benchmark Suite: {}\n\n", self.name));
-        output.push_str(&format!("**Generated**: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        output.push_str(&format!(
+            "**Generated**: {}\n\n",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        ));
         output.push_str(&format!("**Concurrency**: {} threads\n\n", 50));
 
         // Target QPS table
@@ -305,18 +304,32 @@ impl BenchmarkSuite {
 
         // Results table
         output.push_str("## Results\n\n");
-        output.push_str("| Benchmark | QPS | P50 (ms) | P95 (ms) | P99 (ms) | Avg (ms) | Status |\n");
-        output.push_str("|-----------|-----|----------|----------|----------|----------|--------|\n");
+        output
+            .push_str("| Benchmark | QPS | P50 (ms) | P95 (ms) | P99 (ms) | Avg (ms) | Status |\n");
+        output
+            .push_str("|-----------|-----|----------|----------|----------|----------|--------|\n");
 
         for (name, result) in results {
-            let target = self.tests.iter()
+            let target = self
+                .tests
+                .iter()
                 .find(|t| t.name() == name)
                 .map(|t| t.target_qps())
                 .unwrap_or(0.0);
-            let status = if result.qps >= target { "✅ PASS" } else { "❌ FAIL" };
+            let status = if result.qps >= target {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            };
             output.push_str(&format!(
                 "| {} | {:.1} | {:.3} | {:.3} | {:.3} | {:.3} | {} |\n",
-                name, result.qps, result.p50_ms, result.p95_ms, result.p99_ms, result.avg_ms, status
+                name,
+                result.qps,
+                result.p50_ms,
+                result.p95_ms,
+                result.p99_ms,
+                result.avg_ms,
+                status
             ));
         }
         output.push_str("\n");
@@ -355,7 +368,9 @@ impl BenchmarkSuite {
     fn check_targets_internal(&self, results: &[(String, BenchmarkResult)]) -> Vec<String> {
         let mut failures = Vec::new();
         for (name, result) in results {
-            let target = self.tests.iter()
+            let target = self
+                .tests
+                .iter()
                 .find(|t| t.name() == name)
                 .map(|t| t.target_qps())
                 .unwrap_or(0.0);
@@ -481,7 +496,10 @@ impl Benchmark for OltpRangeSelect {
         run_benchmark(concurrency, 10, move |rng, _| {
             let start = rng.gen_range(1..max_id);
             let end = (start + rng.gen_range(1..=range_size)).min(max_id);
-            format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+            format!(
+                "SELECT c FROM sbtest WHERE id BETWEEN {} AND {}",
+                start, end
+            )
         })
     }
 
@@ -529,7 +547,10 @@ impl Benchmark for OltpInsert {
             let k = rng.gen_range(0..1_000_000);
             let c = format!("'c{:x}'", rng.gen::<u32>());
             let pad = format!("'pad{:x}'", rng.gen::<u32>());
-            format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
+            format!(
+                "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
+                id, k, c, pad
+            )
         })
     }
 
@@ -679,7 +700,10 @@ impl Benchmark for OltpMixed {
                 // 20% Range Select
                 let start = rng.gen_range(1..max_id);
                 let end = (start + rng.gen_range(1..=100)).min(max_id);
-                format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+                format!(
+                    "SELECT c FROM sbtest WHERE id BETWEEN {} AND {}",
+                    start, end
+                )
             } else if op < 90 {
                 // 20% Update
                 let id = rng.gen_range(1..=max_id);
@@ -691,7 +715,10 @@ impl Benchmark for OltpMixed {
                 let k = rng.gen_range(0..1_000_000);
                 let c = format!("'c{:x}'", rng.gen::<u32>());
                 let pad = format!("'pad{:x}'", rng.gen::<u32>());
-                format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
+                format!(
+                    "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
+                    id, k, c, pad
+                )
             }
         })
     }
@@ -798,8 +825,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_check_targets_pass() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -807,8 +835,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let failures = suite.check_targets(&results);
         assert!(failures.is_empty());
     }
@@ -816,8 +844,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_check_targets_fail() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 500.0, // Below 1000 target
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -825,8 +854,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 5000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let failures = suite.check_targets(&results);
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains("oltp_point_select"));
@@ -836,8 +865,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_report_json() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -845,8 +875,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let json = suite.report_json(&results);
         assert!(json.contains("oltp_standard"));
         assert!(json.contains("oltp_point_select"));
@@ -856,8 +886,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_report_markdown() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -865,8 +896,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let md = suite.report_markdown(&results);
         assert!(md.contains("# Benchmark Suite: oltp_standard"));
         assert!(md.contains("| Benchmark |"));

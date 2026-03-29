@@ -658,7 +658,7 @@ mod network_stress {
 mod wal_stress {
     use super::*;
     use sqlrustgo_storage::wal::WalManager;
-    
+
     use std::path::PathBuf;
 
     fn create_test_wal() -> (tempfile::TempDir, PathBuf) {
@@ -1117,7 +1117,6 @@ mod crud_correctness {
     #[test]
     fn test_wal_recovery_correctness() {
         use sqlrustgo_storage::wal::WalManager;
-        
 
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("recovery_test.wal");

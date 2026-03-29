@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Select(SelectStatement),
     SetOperation(SetOperation),
@@ -445,7 +446,7 @@ pub enum Expression {
     QualifiedColumn(String, String),
     /// Window function expression: ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)
     WindowFunction {
-        func: String,           // Function name: ROW_NUMBER, RANK, LEAD, etc.
+        func: String,          // Function name: ROW_NUMBER, RANK, LEAD, etc.
         args: Vec<Expression>, // Arguments for LEAD/LAG/NTH_VALUE
         partition_by: Vec<Expression>,
         order_by: Vec<OrderByItem>,
@@ -480,6 +481,7 @@ pub struct Parser {
     position: usize,
 }
 
+#[allow(dead_code)]
 impl Parser {
     /// Create a parser from tokens
     pub fn new(tokens: Vec<Token>) -> Self {
@@ -557,7 +559,7 @@ impl Parser {
                     // Subquery in SELECT: (SELECT ...) AS alias
                     self.next();
                     if matches!(self.current(), Some(Token::Select)) {
-                        let select_stmt = self.parse_select()?;
+                        let _select_stmt = self.parse_select()?;
                         self.expect(Token::RParen)?;
 
                         // Check for AS alias
@@ -576,7 +578,7 @@ impl Parser {
                         };
 
                         columns.push(SelectColumn {
-                            name: format!("(subquery)"),
+                            name: "(subquery)".to_string(),
                             alias,
                         });
                     } else {
@@ -625,9 +627,14 @@ impl Parser {
                     };
                     aggregates.push(agg);
                 }
-                Some(Token::RowNumber) | Some(Token::Rank) | Some(Token::DenseRank)
-                | Some(Token::Lead) | Some(Token::Lag) | Some(Token::FirstValue)
-                | Some(Token::LastValue) | Some(Token::NthValue) => {
+                Some(Token::RowNumber)
+                | Some(Token::Rank)
+                | Some(Token::DenseRank)
+                | Some(Token::Lead)
+                | Some(Token::Lag)
+                | Some(Token::FirstValue)
+                | Some(Token::LastValue)
+                | Some(Token::NthValue) => {
                     // Parse window function
                     let window_expr = self.parse_window_function()?;
                     columns.push(SelectColumn {
@@ -810,6 +817,7 @@ impl Parser {
 
         // Check for LIMIT and OFFSET
         let mut select = base_select.clone();
+        #[allow(clippy::single_match)]
         match self.current() {
             Some(Token::Limit) => {
                 self.next();
@@ -823,6 +831,7 @@ impl Parser {
             _ => {}
         }
 
+        #[allow(clippy::single_match)]
         match self.current() {
             Some(Token::Offset) => {
                 self.next();
@@ -931,6 +940,7 @@ impl Parser {
             // INSERT INTO table SET col1=val1, col2=val2
             self.next(); // consume SET
 
+            #[allow(clippy::while_let_loop)]
             loop {
                 // Parse column name
                 let col_name = match self.current() {
@@ -1425,11 +1435,14 @@ impl Parser {
                 Ok(Expression::FunctionCall(func_name.to_string(), args))
             }
             // Window function: ROW_NUMBER() OVER (...)
-            Some(Token::RowNumber) | Some(Token::Rank) | Some(Token::DenseRank)
-            | Some(Token::Lead) | Some(Token::Lag) | Some(Token::FirstValue)
-            | Some(Token::LastValue) | Some(Token::NthValue) => {
-                return self.parse_window_function();
-            }
+            Some(Token::RowNumber)
+            | Some(Token::Rank)
+            | Some(Token::DenseRank)
+            | Some(Token::Lead)
+            | Some(Token::Lag)
+            | Some(Token::FirstValue)
+            | Some(Token::LastValue)
+            | Some(Token::NthValue) => self.parse_window_function(),
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -1576,13 +1589,20 @@ impl Parser {
                     self.next();
                     "TIES".to_string()
                 }
-                _ => return Err("Expected NO OTHERS, CURRENT ROW, or TIES after EXCLUDE".to_string()),
+                _ => {
+                    return Err("Expected NO OTHERS, CURRENT ROW, or TIES after EXCLUDE".to_string())
+                }
             })
         } else {
             None
         };
 
-        Ok(WindowFrameInfo { mode, start, end, exclude })
+        Ok(WindowFrameInfo {
+            mode,
+            start,
+            end,
+            exclude,
+        })
     }
 
     /// Parse frame bound: UNBOUNDED PRECEDING, PRECEDING(n), CURRENT ROW, FOLLOWING(n), UNBOUNDED FOLLOWING
@@ -1946,6 +1966,7 @@ impl Parser {
                                         on_update: None,
                                     });
                                     // Parse ON DELETE and ON UPDATE actions
+                                    #[allow(clippy::while_let_loop)]
                                     loop {
                                         match self.current() {
                                             Some(Token::On) => {
@@ -2171,7 +2192,7 @@ impl Parser {
 
         // Parse parameters: (param1, param2, ...)
         self.expect(Token::LParen)?;
-        
+
         let mut params = Vec::new();
         if !matches!(self.current(), Some(Token::RParen)) {
             loop {
@@ -2179,7 +2200,7 @@ impl Parser {
                     Some(Token::Identifier(name)) => name,
                     _ => return Err("Expected parameter name".to_string()),
                 };
-                
+
                 // Parse parameter mode (IN, OUT, INOUT) - default is IN
                 let mode = match self.current() {
                     Some(Token::Identifier(mode_str)) => {
@@ -2201,7 +2222,7 @@ impl Parser {
                     }
                     _ => ParamMode::In,
                 };
-                
+
                 // Parse data type
                 let data_type = match self.next() {
                     Some(Token::Identifier(dt)) => dt,
@@ -2215,13 +2236,13 @@ impl Parser {
                     Some(Token::Blob) => "BLOB".to_string(),
                     _ => return Err("Expected data type".to_string()),
                 };
-                
+
                 params.push(ProcedureParam {
                     name: param_name,
                     mode,
                     data_type,
                 });
-                
+
                 match self.current() {
                     Some(Token::Comma) => {
                         self.next();
@@ -2234,14 +2255,15 @@ impl Parser {
 
         // Parse BEGIN...END block
         self.expect(Token::Begin)?;
-        
+
         let mut body = Vec::new();
-        
+
         // Simple body parsing: collect statements until END
         // Note: This is a simplified implementation that stores raw SQL for now
-        while !matches!(self.current(), Some(Token::Identifier(end_str)) 
-                       if end_str.to_uppercase() == "END") 
-               && !matches!(self.current(), None) {
+        while !matches!(self.current(), Some(Token::Identifier(end_str))
+                       if end_str.to_uppercase() == "END")
+            && self.current().is_some()
+        {
             let stmt = match self.current() {
                 Some(Token::Select) => {
                     // For now, just collect SELECT statements as raw SQL
@@ -2295,10 +2317,11 @@ impl Parser {
             };
             body.push(stmt);
         }
-        
+
         // Expect END
-        if matches!(self.current(), Some(Token::Identifier(end_str)) 
-                   if end_str.to_uppercase() == "END") {
+        if matches!(self.current(), Some(Token::Identifier(end_str))
+                   if end_str.to_uppercase() == "END")
+        {
             self.next();
         }
 
@@ -2675,7 +2698,9 @@ impl Parser {
             _ => return Err("Expected statement name after DEALLOCATE PREPARE".to_string()),
         };
 
-        Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement { name }))
+        Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement {
+            name,
+        }))
     }
 
     /// Parse COPY statement
@@ -2719,7 +2744,8 @@ impl Parser {
 
         // Parse optional format clause: (FORMAT PARQUET)
         let format = if matches!(self.current(), Some(Token::LParen)) {
-            self.next().ok_or_else(|| "Unexpected end of input".to_string())?;
+            self.next()
+                .ok_or_else(|| "Unexpected end of input".to_string())?;
             self.expect(Token::Format)?;
             self.expect(Token::Parquet)?;
             self.expect(Token::RParen)?;
@@ -2738,7 +2764,7 @@ impl Parser {
 
     fn parse_call(&mut self) -> Result<Statement, String> {
         self.expect(Token::Call)?;
-        
+
         // Get procedure name
         let procedure_name = match self.next() {
             Some(Token::Identifier(name)) => name,
@@ -2747,7 +2773,7 @@ impl Parser {
 
         // Parse arguments: (arg1, arg2, ...)
         self.expect(Token::LParen)?;
-        
+
         let mut args = Vec::new();
         if !matches!(self.current(), Some(Token::RParen)) {
             loop {
@@ -2759,7 +2785,7 @@ impl Parser {
                     _ => return Err("Expected argument".to_string()),
                 };
                 args.push(arg);
-                
+
                 match self.current() {
                     Some(Token::Comma) => {
                         self.next();
@@ -2778,7 +2804,7 @@ impl Parser {
 
     fn parse_delimiter(&mut self) -> Result<Statement, String> {
         self.expect(Token::Delimiter)?;
-        
+
         // Get the new delimiter
         let delimiter = match self.next() {
             Some(Token::Semicolon) => ";".to_string(),

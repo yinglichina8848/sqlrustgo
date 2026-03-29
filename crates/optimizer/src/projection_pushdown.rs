@@ -4,7 +4,7 @@
 //! reducing I/O and memory usage by reading only required columns.
 
 use crate::Rule;
-use crate::{Expr, Plan, Value};
+use crate::{Expr, Plan};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -77,8 +77,7 @@ impl ProjectionPushdownRule {
             Plan::Projection { expr, input } => {
                 // Check if input is a table scan without projection
                 if let Plan::TableScan {
-                    projection: None,
-                    ..
+                    projection: None, ..
                 } = &mut **input
                 {
                     // Collect columns used in the projection expression
@@ -96,10 +95,13 @@ impl ProjectionPushdownRule {
                 }
 
                 // Try to push through Filter
-                if let Plan::Filter { input: filter_input, .. } = &mut **input {
+                if let Plan::Filter {
+                    input: filter_input,
+                    ..
+                } = &mut **input
+                {
                     if let Plan::TableScan {
-                        projection: None,
-                        ..
+                        projection: None, ..
                     } = &mut **filter_input
                     {
                         // Collect columns needed by both filter and projection
@@ -123,7 +125,7 @@ impl ProjectionPushdownRule {
             Plan::Filter { input, .. } => self.pushdown(input),
 
             // Propagate through Aggregate - aggregate needs all columns
-            Plan::Aggregate { input, .. } => false,
+            Plan::Aggregate { input: _, .. } => false,
 
             // Propagate through Join - push to both children
             Plan::Join { left, right, .. } => {
@@ -147,8 +149,7 @@ impl ProjectionPushdownRule {
         match plan {
             Plan::Projection { expr, input } => {
                 if let Plan::TableScan {
-                    projection: None,
-                    ..
+                    projection: None, ..
                 } = &mut **input
                 {
                     let used_cols = self.collect_columns(expr);
@@ -201,7 +202,8 @@ impl ProjectionPushdownRule {
     }
 
     /// Merge two consecutive projections
-    fn merge_projections(&self, outer: &[Expr], inner: &[Expr]) -> Option<Vec<Expr>> {
+    #[allow(dead_code)]
+    fn merge_projections(&self, outer: &[Expr], _inner: &[Expr]) -> Option<Vec<Expr>> {
         // This is a simplified merge - in reality we'd need expression analysis
         let mut merged = Vec::new();
         for expr in outer {
@@ -222,6 +224,7 @@ pub struct ColumnPruner;
 
 impl ColumnPruner {
     /// Create a new ColumnPruner
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

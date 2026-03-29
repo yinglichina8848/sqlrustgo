@@ -209,7 +209,7 @@ impl IndexStats {
             return 1.0;
         }
         let selectivity = self.cardinality as f64 / self.num_entries as f64;
-        selectivity.min(1.0).max(0.0)
+        selectivity.clamp(0.0, 1.0)
     }
 }
 
@@ -428,26 +428,26 @@ impl BTreeIndex {
 
     /// Collect index statistics
     pub fn collect_stats(&self) -> IndexStats {
-        let mut stats = IndexStats::default();
-        stats.num_entries = self.metadata.num_entries;
-        stats.height = self.metadata.height;
+        let mut stats = IndexStats {
+            num_entries: self.metadata.num_entries,
+            height: self.metadata.height,
+            ..Default::default()
+        };
 
         // Count nodes
         let mut leaf_count = 0u64;
         let mut internal_count = 0u64;
         let mut total_size = 0u64;
 
-        for node_opt in &self.nodes {
-            if let Some(ref node) = node_opt {
-                total_size += std::mem::size_of::<BTreeNode>() as u64;
-                total_size += (node.keys.capacity() * std::mem::size_of::<i64>()) as u64;
-                total_size += (node.values.capacity() * std::mem::size_of::<u32>()) as u64;
+        for node_opt in self.nodes.iter().flatten() {
+            total_size += std::mem::size_of::<BTreeNode>() as u64;
+            total_size += (node_opt.keys.capacity() * std::mem::size_of::<i64>()) as u64;
+            total_size += (node_opt.values.capacity() * std::mem::size_of::<u32>()) as u64;
 
-                if node.is_leaf {
-                    leaf_count += 1;
-                } else {
-                    internal_count += 1;
-                }
+            if node_opt.is_leaf {
+                leaf_count += 1;
+            } else {
+                internal_count += 1;
             }
         }
 
@@ -920,10 +920,7 @@ impl FullTextIndex {
 
         // Add document to each term's posting list
         for term in terms {
-            let entry = self
-                .inverted_index
-                .entry(term)
-                .or_insert_with(PostingList::new);
+            let entry = self.inverted_index.entry(term).or_default();
             entry.add_doc_id(doc_id);
         }
 

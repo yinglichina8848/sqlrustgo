@@ -100,7 +100,7 @@ pub struct DefaultOptimizer {
 
 impl DefaultOptimizer {
     pub fn new() -> Self {
-        let mut rule_set = RuleSet::new();
+        let rule_set = RuleSet::new();
 
         Self {
             rule_set,
@@ -115,9 +115,9 @@ impl DefaultOptimizer {
         self
     }
 
-    pub fn enable_rule(&mut self, rule_name: &str) {}
+    pub fn enable_rule(&mut self, _rule_name: &str) {}
 
-    pub fn disable_rule(&mut self, rule_name: &str) {}
+    pub fn disable_rule(&mut self, _rule_name: &str) {}
 }
 
 impl Optimizer for DefaultOptimizer {

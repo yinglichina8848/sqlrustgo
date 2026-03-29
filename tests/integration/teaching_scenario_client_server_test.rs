@@ -10,8 +10,8 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
-use sqlrustgo_storage::engine::{MemoryStorage, StorageEngine};
 use sqlrustgo_server::teaching_endpoints::TeachingHttpServer;
+use sqlrustgo_storage::engine::{MemoryStorage, StorageEngine};
 
 struct TestServer {
     handle: thread::JoinHandle<()>,
@@ -21,8 +21,7 @@ struct TestServer {
 impl TestServer {
     fn new() -> Self {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-        let server = TeachingHttpServer::new("127.0.0.1", 0)
-            .with_storage(storage);
+        let server = TeachingHttpServer::new("127.0.0.1", 0).with_storage(storage);
 
         // Clone server for the thread
         let server_clone = server.clone();
@@ -116,7 +115,11 @@ fn test_client_server_create_table() {
 
     let result = server.sql("CREATE TABLE users (id INT, name TEXT)");
 
-    assert!(result.error.is_none(), "CREATE TABLE should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "CREATE TABLE should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 0);
 }
 
@@ -128,7 +131,11 @@ fn test_client_server_insert() {
 
     let result = server.sql("INSERT INTO t VALUES (1, 'Alice')");
 
-    assert!(result.error.is_none(), "INSERT should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "INSERT should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 1);
 }
 
@@ -142,7 +149,11 @@ fn test_client_server_select() {
 
     let result = server.sql("SELECT * FROM t");
 
-    assert!(result.error.is_none(), "SELECT should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "SELECT should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 0);
     assert!(result.rows.is_some());
     let rows = result.rows.unwrap();
@@ -159,7 +170,11 @@ fn test_client_server_select_with_filter() {
 
     let result = server.sql("SELECT * FROM t WHERE id = 1");
 
-    assert!(result.error.is_none(), "SELECT WHERE should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "SELECT WHERE should succeed: {:?}",
+        result.error
+    );
     let rows = result.rows.unwrap();
     assert_eq!(rows.len(), 1);
 }
@@ -173,7 +188,11 @@ fn test_client_server_update() {
 
     let result = server.sql("UPDATE t SET name = 'Bob' WHERE id = 1");
 
-    assert!(result.error.is_none(), "UPDATE should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "UPDATE should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 1);
 }
 
@@ -187,7 +206,11 @@ fn test_client_server_delete() {
 
     let result = server.sql("DELETE FROM t WHERE id = 1");
 
-    assert!(result.error.is_none(), "DELETE should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "DELETE should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 1);
 }
 
@@ -199,7 +222,11 @@ fn test_client_server_multiple_inserts() {
 
     let result = server.sql("INSERT INTO t VALUES (1, 'A'), (2, 'B'), (3, 'C')");
 
-    assert!(result.error.is_none(), "Bulk INSERT should succeed: {:?}", result.error);
+    assert!(
+        result.error.is_none(),
+        "Bulk INSERT should succeed: {:?}",
+        result.error
+    );
     assert_eq!(result.affected_rows, 3);
 
     let select_result = server.sql("SELECT * FROM t");
@@ -213,7 +240,11 @@ fn test_client_server_drop_table() {
     server.sql("CREATE TABLE t (id INT, name TEXT)");
     let drop_result = server.sql("DROP TABLE t");
 
-    assert!(drop_result.error.is_none(), "DROP TABLE should succeed: {:?}", drop_result.error);
+    assert!(
+        drop_result.error.is_none(),
+        "DROP TABLE should succeed: {:?}",
+        drop_result.error
+    );
 
     // Verify table is gone
     let select_result = server.sql("SELECT * FROM t");
@@ -237,7 +268,10 @@ fn test_client_server_error_nonexistent_table() {
 
     let result = server.sql("SELECT * FROM nonexistent_table");
 
-    assert!(result.error.is_some(), "Query on nonexistent table should return error");
+    assert!(
+        result.error.is_some(),
+        "Query on nonexistent table should return error"
+    );
 }
 
 #[test]

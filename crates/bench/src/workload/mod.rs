@@ -63,16 +63,32 @@ mod tests {
 
             // Test single SQL generation
             let sql = workload.generate_sql(&mut rng);
-            assert!(!sql.is_empty(), "SQL should not be empty for {}", workload.name());
+            assert!(
+                !sql.is_empty(),
+                "SQL should not be empty for {}",
+                workload.name()
+            );
 
             // Test transaction generation
             let tx = workload.generate_transaction(&mut rng);
-            assert!(!tx.is_empty(), "Transaction should have statements for {}", workload.name());
-            assert_eq!(tx.len(), workload.statements_per_tx(), "Statement count should match");
+            assert!(
+                !tx.is_empty(),
+                "Transaction should have statements for {}",
+                workload.name()
+            );
+            assert_eq!(
+                tx.len(),
+                workload.statements_per_tx(),
+                "Statement count should match"
+            );
 
             // Test table names
             let tables = workload.table_names();
-            assert!(!tables.is_empty(), "Should have table names for {}", workload.name());
+            assert!(
+                !tables.is_empty(),
+                "Should have table names for {}",
+                workload.name()
+            );
         }
     }
 
@@ -91,7 +107,10 @@ mod tests {
 
         // Test table names
         let tables = workload.table_names();
-        assert!(tables.iter().any(|t| t.starts_with("sbtest")), "Should use sbtest table");
+        assert!(
+            tables.iter().any(|t| t.starts_with("sbtest")),
+            "Should use sbtest table"
+        );
     }
 
     #[test]
@@ -107,7 +126,10 @@ mod tests {
         for sql in &tx {
             let upper = sql.to_uppercase();
             assert!(
-                upper.contains("SELECT") && !upper.contains("UPDATE") && !upper.contains("INSERT") && !upper.contains("DELETE"),
+                upper.contains("SELECT")
+                    && !upper.contains("UPDATE")
+                    && !upper.contains("INSERT")
+                    && !upper.contains("DELETE"),
                 "Read-only transaction should only contain SELECT: {}",
                 sql
             );
@@ -120,7 +142,10 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(42);
 
         assert_eq!(workload.name(), "oltp_read_write");
-        assert!(!workload.is_read_only(), "Read-write should not be read-only");
+        assert!(
+            !workload.is_read_only(),
+            "Read-write should not be read-only"
+        );
 
         // Test transaction contains both read and write operations
         let tx = workload.generate_transaction(&mut rng);

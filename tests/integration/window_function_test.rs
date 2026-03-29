@@ -15,7 +15,12 @@ use std::sync::{Arc, RwLock};
 /// Helper to test window function parsing
 fn test_window_parse(sql: &str) {
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse window function: {:?} - SQL: {}", result, sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse window function: {:?} - SQL: {}",
+        result,
+        sql
+    );
 }
 
 // ============================================================================
@@ -30,7 +35,9 @@ fn test_parse_row_number_basic() {
 
 #[test]
 fn test_parse_row_number_with_partition() {
-    test_window_parse("SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary) FROM employees");
+    test_window_parse(
+        "SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary) FROM employees",
+    );
 }
 
 #[test]
@@ -65,7 +72,9 @@ fn test_parse_lag_with_default() {
 
 #[test]
 fn test_parse_first_value_window() {
-    test_window_parse("SELECT FIRST_VALUE(salary) OVER (PARTITION BY dept ORDER BY hire_date) FROM employees");
+    test_window_parse(
+        "SELECT FIRST_VALUE(salary) OVER (PARTITION BY dept ORDER BY hire_date) FROM employees",
+    );
 }
 
 #[test]
@@ -106,7 +115,9 @@ fn test_parse_window_nth_value() {
 #[test]
 fn test_parse_multiple_partitions() {
     // Multiple PARTITION BY columns
-    test_window_parse("SELECT ROW_NUMBER() OVER (PARTITION BY dept, location ORDER BY salary) FROM employees");
+    test_window_parse(
+        "SELECT ROW_NUMBER() OVER (PARTITION BY dept, location ORDER BY salary) FROM employees",
+    );
 }
 
 #[test]
@@ -139,7 +150,12 @@ fn test_summary_window_parse_works() {
 
     for sql in test_cases {
         let result = parse(sql);
-        assert!(result.is_ok(), "Failed to parse: {} - Error: {:?}", sql, result);
+        assert!(
+            result.is_ok(),
+            "Failed to parse: {} - Error: {:?}",
+            sql,
+            result
+        );
     }
 }
 
@@ -151,9 +167,15 @@ fn test_summary_window_parse_works() {
 fn test_basic_table_operations() {
     // Test basic CREATE and INSERT works
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
-    engine.execute(parse("CREATE TABLE test (id INTEGER)").unwrap()).unwrap();
-    engine.execute(parse("INSERT INTO test VALUES (1), (2), (3)").unwrap()).unwrap();
+    engine
+        .execute(parse("CREATE TABLE test (id INTEGER)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("INSERT INTO test VALUES (1), (2), (3)").unwrap())
+        .unwrap();
 
-    let result = engine.execute(parse("SELECT * FROM test").unwrap()).unwrap();
+    let result = engine
+        .execute(parse("SELECT * FROM test").unwrap())
+        .unwrap();
     assert_eq!(result.rows.len(), 3);
 }

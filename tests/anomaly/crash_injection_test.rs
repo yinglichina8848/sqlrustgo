@@ -8,11 +8,10 @@ mod tests {
     use sqlrustgo_storage::MemoryStorage;
     use sqlrustgo_storage::StorageEngine;
     use sqlrustgo_types::Value;
-    
-    
+
     use std::sync::{Arc, Mutex};
     use std::thread;
-    
+
     use tempfile::TempDir;
 
     fn create_temp_dir() -> TempDir {

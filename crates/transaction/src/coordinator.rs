@@ -9,8 +9,8 @@ use sqlrustgo_network::dtc::{
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Duration;
-use tonic::transport::Channel;
 use tokio::sync::RwLock;
+use tonic::transport::Channel;
 
 /// Node endpoint for gRPC connection
 #[derive(Debug, Clone)]
@@ -41,7 +41,10 @@ impl GrpcClientPool {
     }
 
     /// Get or create a client for a node
-    async fn get_client(&self, node_id: NodeId) -> Result<DistributedTransactionServiceClient<Channel>, String> {
+    async fn get_client(
+        &self,
+        node_id: NodeId,
+    ) -> Result<DistributedTransactionServiceClient<Channel>, String> {
         // Try to get existing client
         {
             let clients = self.clients.read().await;
@@ -56,7 +59,8 @@ impl GrpcClientPool {
             endpoints.get(&node_id).cloned()
         };
 
-        let address = address.ok_or_else(|| format!("No endpoint registered for node {:?}", node_id))?;
+        let address =
+            address.ok_or_else(|| format!("No endpoint registered for node {:?}", node_id))?;
 
         // Create new client
         let endpoint = Channel::from_shared(address.clone())
@@ -170,7 +174,7 @@ impl Coordinator {
     }
 
     /// Set the gRPC client pool for communicating with participants
-    pub fn set_grpc_pool(&self, pool: GrpcClientPool) {
+    pub fn set_grpc_pool(&self, _pool: GrpcClientPool) {
         // Note: In a real implementation, we'd use Arc<Coordinator> or similar
         // For now, we store it in a thread-local or use a different architecture
         log::info!("gRPC pool configured for coordinator");
@@ -180,10 +184,7 @@ impl Coordinator {
         GlobalTransactionId::new(self.node_id)
     }
 
-    pub fn begin_transaction(
-        &self,
-        gid: GlobalTransactionId,
-    ) -> Result<(), String> {
+    pub fn begin_transaction(&self, gid: GlobalTransactionId) -> Result<(), String> {
         let ctx = TransactionContext::new(gid.clone());
         self.pending_transactions
             .write()
@@ -200,7 +201,11 @@ impl Coordinator {
     }
 
     /// Register a participant node for gRPC communication
-    pub async fn register_participant(&self, node_id: NodeId, address: String) -> Result<(), String> {
+    pub async fn register_participant(
+        &self,
+        node_id: NodeId,
+        address: String,
+    ) -> Result<(), String> {
         // This would typically be stored in a shared state
         // For now, we just log it
         log::info!("Registering participant {} at {}", node_id, address);
@@ -214,7 +219,10 @@ impl Coordinator {
     ) -> Result<PrepareResult, String> {
         // Update state to Preparing
         {
-            let mut map = self.pending_transactions.write().map_err(|_| "Lock poisoned")?;
+            let mut map = self
+                .pending_transactions
+                .write()
+                .map_err(|_| "Lock poisoned")?;
             if let Some(ctx) = map.get_mut(gid) {
                 ctx.state = DistributedTransactionState::Preparing;
                 for &p in participants {
@@ -227,7 +235,10 @@ impl Coordinator {
         // For now, we simulate the gRPC calls
         let all_commit = self.send_prepare_to_participants(gid, participants).await?;
 
-        let mut map = self.pending_transactions.write().map_err(|_| "Lock poisoned")?;
+        let mut map = self
+            .pending_transactions
+            .write()
+            .map_err(|_| "Lock poisoned")?;
         if let Some(ctx) = map.get_mut(gid) {
             if all_commit {
                 ctx.state = DistributedTransactionState::Prepared;
@@ -266,13 +277,18 @@ impl Coordinator {
         Ok(all_commit)
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub async fn commit(&self, gid: &GlobalTransactionId) -> Result<CommitResult, String> {
-        let mut map = self.pending_transactions.write().map_err(|_| "Lock poisoned")?;
+        let mut map = self
+            .pending_transactions
+            .write()
+            .map_err(|_| "Lock poisoned")?;
         if let Some(ctx) = map.get_mut(gid) {
             ctx.state = DistributedTransactionState::Committing;
 
             // Send Commit requests to all participants via gRPC
-            self.send_commit_to_participants(gid, &ctx.participants).await?;
+            self.send_commit_to_participants(gid, &ctx.participants)
+                .await?;
 
             ctx.state = DistributedTransactionState::Committed;
             map.remove(gid);
@@ -296,13 +312,18 @@ impl Coordinator {
         Ok(())
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub async fn rollback(&self, gid: &GlobalTransactionId, reason: &str) -> Result<(), String> {
-        let mut map = self.pending_transactions.write().map_err(|_| "Lock poisoned")?;
+        let mut map = self
+            .pending_transactions
+            .write()
+            .map_err(|_| "Lock poisoned")?;
         if let Some(ctx) = map.get_mut(gid) {
             ctx.state = DistributedTransactionState::RollingBack;
 
             // Send Rollback requests to all participants via gRPC
-            self.send_rollback_to_participants(gid, &ctx.participants, reason).await?;
+            self.send_rollback_to_participants(gid, &ctx.participants, reason)
+                .await?;
 
             ctx.state = DistributedTransactionState::RolledBack;
             map.remove(gid);
@@ -321,7 +342,12 @@ impl Coordinator {
     ) -> Result<(), String> {
         for &participant_node_id in participants {
             let node_id = NodeId(participant_node_id);
-            log::debug!("Sending Rollback to node {:?} for GID {}: {}", node_id, gid, reason);
+            log::debug!(
+                "Sending Rollback to node {:?} for GID {}: {}",
+                node_id,
+                gid,
+                reason
+            );
             // In real implementation: grpc_pool.send_rollback(node_id, gid, reason).await?
         }
         Ok(())
@@ -364,7 +390,10 @@ mod tests {
         let gid = coordinator.generate_gid();
 
         coordinator.begin_transaction(gid.clone()).unwrap();
-        assert_eq!(coordinator.get_state(&gid), Some(DistributedTransactionState::Started));
+        assert_eq!(
+            coordinator.get_state(&gid),
+            Some(DistributedTransactionState::Started)
+        );
     }
 
     #[tokio::test]
@@ -377,7 +406,10 @@ mod tests {
 
         let result = coordinator.prepare(&gid, &participants).await.unwrap();
         assert!(matches!(result, PrepareResult::AllCommitted));
-        assert_eq!(coordinator.get_state(&gid), Some(DistributedTransactionState::Prepared));
+        assert_eq!(
+            coordinator.get_state(&gid),
+            Some(DistributedTransactionState::Prepared)
+        );
     }
 
     #[tokio::test]
@@ -418,7 +450,9 @@ mod tests {
     #[tokio::test]
     async fn test_register_participant() {
         let coordinator = Coordinator::new(NodeId(1));
-        let result = coordinator.register_participant(NodeId(2), "http://localhost:50051".to_string()).await;
+        let result = coordinator
+            .register_participant(NodeId(2), "http://localhost:50051".to_string())
+            .await;
         assert!(result.is_ok());
     }
 }

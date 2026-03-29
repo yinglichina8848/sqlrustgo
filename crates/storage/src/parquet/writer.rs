@@ -191,9 +191,9 @@ fn records_to_arrays(records: &[Record], schema: &Schema) -> SqlResult<Vec<Array
                         match &record[idx] {
                             Value::Null => builder.append_null(),
                             Value::Text(s) => builder.append_value(s),
-                            Value::Integer(i) => builder.append_value(&i.to_string()),
-                            Value::Float(f) => builder.append_value(&f.to_string()),
-                            Value::Boolean(b) => builder.append_value(&b.to_string()),
+                            Value::Integer(i) => builder.append_value(i.to_string()),
+                            Value::Float(f) => builder.append_value(f.to_string()),
+                            Value::Boolean(b) => builder.append_value(b.to_string()),
                             _ => builder.append_null(),
                         }
                     } else {

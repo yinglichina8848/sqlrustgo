@@ -7,7 +7,7 @@
 //! - Configurable log levels
 //! - Log persistence and recovery
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -23,6 +23,7 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "debug" => Some(LogLevel::Debug),
@@ -54,6 +55,7 @@ pub struct SqlLogEntry {
 }
 
 impl SqlLogEntry {
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         format!(
             "{}|{}|{}ms|{}|{}|{}",
@@ -66,6 +68,7 @@ impl SqlLogEntry {
         )
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         let parts: Vec<&str> = s.split('|').collect();
         if parts.len() < 5 {
@@ -197,16 +200,14 @@ impl ExecutionLog {
         let reader = BufReader::new(file);
         let mut count = 0;
 
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if let Some(entry) = SqlLogEntry::from_str(&line) {
-                    let mut entries = self.entries.write().unwrap();
-                    if entries.len() >= self.max_entries {
-                        entries.remove(0);
-                    }
-                    entries.push(entry);
-                    count += 1;
+        for line in reader.lines().map_while(Result::ok) {
+            if let Some(entry) = SqlLogEntry::from_str(&line) {
+                let mut entries = self.entries.write().unwrap();
+                if entries.len() >= self.max_entries {
+                    entries.remove(0);
                 }
+                entries.push(entry);
+                count += 1;
             }
         }
 

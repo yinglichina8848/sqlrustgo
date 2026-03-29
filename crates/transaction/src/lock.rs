@@ -137,7 +137,7 @@ impl LockManager {
                 }
             }
 
-            if let Some(cycle) = self.deadlock_detector.detect_cycle(tx_id) {
+            if let Some(_cycle) = self.deadlock_detector.detect_cycle(tx_id) {
                 return Err(LockError::Deadlock);
             }
 
@@ -147,6 +147,7 @@ impl LockManager {
 
     pub fn upgrade_lock(&mut self, tx_id: TxId, key: Vec<u8>) -> Result<LockGrantMode, LockError> {
         if let Some(lock) = self.locks.get_mut(&key) {
+            #[allow(clippy::collapsible_if)]
             if lock.holders.contains(&tx_id) && lock.mode == LockMode::Shared {
                 if lock.holders.len() == 1 && lock.waiters.is_empty() {
                     lock.holders.clear();
