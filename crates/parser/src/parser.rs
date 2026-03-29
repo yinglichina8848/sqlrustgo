@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Select(SelectStatement),
     SetOperation(SetOperation),
@@ -533,6 +534,7 @@ pub struct Parser {
     position: usize,
 }
 
+#[allow(dead_code)]
 impl Parser {
     /// Create a parser from tokens
     pub fn new(tokens: Vec<Token>) -> Self {
@@ -718,7 +720,7 @@ impl Parser {
         let on_condition = self.parse_expression()?;
 
         let mut when_matched = None;
-        let mut when_not_matched = None;
+        let when_not_matched = None;
 
         // WHEN MATCHED THEN UPDATE SET ... / WHEN NOT MATCHED THEN INSERT ...
         loop {
@@ -758,7 +760,7 @@ impl Parser {
                         _ => return Err("Expected MATCHED or NOT MATCHED".to_string()),
                     }
                 }
-                Some(Token::When) | None => break,
+                None => break,
                 _ => return Err("Unexpected token in MERGE".to_string()),
             }
         }
@@ -799,7 +801,7 @@ impl Parser {
                     // Subquery in SELECT: (SELECT ...) AS alias
                     self.next();
                     if matches!(self.current(), Some(Token::Select)) {
-                        let select_stmt = self.parse_select()?;
+                        let _select_stmt = self.parse_select()?;
                         self.expect(Token::RParen)?;
 
                         // Check for AS alias
@@ -818,7 +820,7 @@ impl Parser {
                         };
 
                         columns.push(SelectColumn {
-                            name: format!("(subquery)"),
+                            name: "(subquery)".to_string(),
                             alias,
                         });
                     } else {
@@ -1058,30 +1060,24 @@ impl Parser {
 
         // Check for LIMIT and OFFSET
         let mut select = base_select.clone();
-        match self.current() {
-            Some(Token::Limit) => {
+        if let Some(Token::Limit) = self.current() {
+            self.next();
+            if let Some(Token::NumberLiteral(n)) = self.current() {
+                select.limit = Some(n.parse().unwrap_or(0));
                 self.next();
-                if let Some(Token::NumberLiteral(n)) = self.current() {
-                    select.limit = Some(n.parse().unwrap_or(0));
-                    self.next();
-                } else {
-                    return Err("Expected number after LIMIT".to_string());
-                }
+            } else {
+                return Err("Expected number after LIMIT".to_string());
             }
-            _ => {}
         }
 
-        match self.current() {
-            Some(Token::Offset) => {
+        if let Some(Token::Offset) = self.current() {
+            self.next();
+            if let Some(Token::NumberLiteral(n)) = self.current() {
+                select.offset = Some(n.parse().unwrap_or(0));
                 self.next();
-                if let Some(Token::NumberLiteral(n)) = self.current() {
-                    select.offset = Some(n.parse().unwrap_or(0));
-                    self.next();
-                } else {
-                    return Err("Expected number after OFFSET".to_string());
-                }
+            } else {
+                return Err("Expected number after OFFSET".to_string());
             }
-            _ => {}
         }
 
         // Check for set operations (UNION, INTERSECT, EXCEPT)
@@ -1179,12 +1175,8 @@ impl Parser {
             // INSERT INTO table SET col1=val1, col2=val2
             self.next(); // consume SET
 
-            loop {
-                // Parse column name
-                let col_name = match self.current() {
-                    Some(Token::Identifier(name)) => name.clone(),
-                    _ => break,
-                };
+            while let Some(Token::Identifier(name)) = self.current() {
+                let col_name = name.clone();
                 self.next();
                 columns.push(col_name);
 
@@ -1680,9 +1672,7 @@ impl Parser {
             | Some(Token::Lag)
             | Some(Token::FirstValue)
             | Some(Token::LastValue)
-            | Some(Token::NthValue) => {
-                return self.parse_window_function();
-            }
+            | Some(Token::NthValue) => self.parse_window_function(),
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -2022,6 +2012,7 @@ impl Parser {
         }))
     }
 
+    #[allow(dead_code)]
     fn parse_drop_index(&mut self) -> Result<Statement, String> {
         // DROP INDEX index_name
         self.expect(Token::Index)?;
@@ -2033,6 +2024,7 @@ impl Parser {
         Ok(Statement::DropIndex(DropIndexStatement { name }))
     }
 
+    #[allow(dead_code)]
     fn peek(&self) -> Option<Token> {
         self.tokens.get(self.position).cloned()
     }
@@ -2206,99 +2198,84 @@ impl Parser {
                                         on_update: None,
                                     });
                                     // Parse ON DELETE and ON UPDATE actions
-                                    loop {
-                                        match self.current() {
-                                            Some(Token::On) => {
-                                                self.next();
-                                                // Parse ON DELETE action
-                                                if let Some(Token::Delete) = self.current() {
+                                    while let Some(Token::On) = self.current() {
+                                        self.next();
+                                        // Parse ON DELETE action
+                                        if let Some(Token::Delete) = self.current() {
+                                            self.next();
+                                            // Check for SET NULL or direct action
+                                            let action = match self.current() {
+                                                Some(Token::Set) => {
                                                     self.next();
-                                                    // Check for SET NULL or direct action
-                                                    let action = match self.current() {
-                                                        Some(Token::Set) => {
+                                                    if let Some(Token::Identifier(name)) =
+                                                        self.current()
+                                                    {
+                                                        if name.to_uppercase() == "NULL" {
                                                             self.next();
-                                                            if let Some(Token::Identifier(name)) =
-                                                                self.current()
-                                                            {
-                                                                if name.to_uppercase() == "NULL" {
-                                                                    self.next();
-                                                                    Some(ForeignKeyAction::SetNull)
-                                                                } else {
-                                                                    None
-                                                                }
-                                                            } else {
-                                                                None
-                                                            }
+                                                            Some(ForeignKeyAction::SetNull)
+                                                        } else {
+                                                            None
                                                         }
-                                                        Some(Token::Identifier(action)) => {
-                                                            let action_upper =
-                                                                action.to_uppercase();
-                                                            self.next();
-                                                            match action_upper.as_str() {
-                                                                "CASCADE" => {
-                                                                    Some(ForeignKeyAction::Cascade)
-                                                                }
-                                                                "RESTRICT" => {
-                                                                    Some(ForeignKeyAction::Restrict)
-                                                                }
-                                                                _ => None,
-                                                            }
-                                                        }
-                                                        _ => None,
-                                                    };
-                                                    if let Some(ref mut fk_ref) = references {
-                                                        fk_ref.on_delete = action;
+                                                    } else {
+                                                        None
                                                     }
                                                 }
-                                                // Check if we're at UPDATE before checking for ON (order matters!)
-                                                if let Some(Token::Update) = self.current() {
+                                                Some(Token::Identifier(action)) => {
+                                                    let action_upper = action.to_uppercase();
                                                     self.next();
-                                                    let action = match self.current() {
-                                                        Some(Token::Set) => {
-                                                            self.next();
-                                                            if let Some(Token::Identifier(name)) =
-                                                                self.current()
-                                                            {
-                                                                if name.to_uppercase() == "NULL" {
-                                                                    self.next();
-                                                                    Some(ForeignKeyAction::SetNull)
-                                                                } else {
-                                                                    None
-                                                                }
-                                                            } else {
-                                                                None
-                                                            }
+                                                    match action_upper.as_str() {
+                                                        "CASCADE" => {
+                                                            Some(ForeignKeyAction::Cascade)
                                                         }
-                                                        Some(Token::Identifier(action)) => {
-                                                            let action_upper =
-                                                                action.to_uppercase();
-                                                            self.next();
-                                                            match action_upper.as_str() {
-                                                                "CASCADE" => {
-                                                                    Some(ForeignKeyAction::Cascade)
-                                                                }
-                                                                "RESTRICT" => {
-                                                                    Some(ForeignKeyAction::Restrict)
-                                                                }
-                                                                _ => None,
-                                                            }
+                                                        "RESTRICT" => {
+                                                            Some(ForeignKeyAction::Restrict)
                                                         }
                                                         _ => None,
-                                                    };
-                                                    if let Some(ref mut fk_ref) = references {
-                                                        fk_ref.on_update = action;
                                                     }
                                                 }
-                                                // If we're at ON, continue to next iteration to handle it
-                                                else if let Some(Token::On) = self.current() {
-                                                    continue;
-                                                }
-                                                // Not ON DELETE or ON UPDATE, break
-                                                else {
-                                                    break;
-                                                }
+                                                _ => None,
+                                            };
+                                            if let Some(ref mut fk_ref) = references {
+                                                fk_ref.on_delete = action;
                                             }
-                                            _ => break,
+                                        }
+                                        // Check if we're at UPDATE before checking for ON (order matters!)
+                                        if let Some(Token::Update) = self.current() {
+                                            self.next();
+                                            let action = match self.current() {
+                                                Some(Token::Set) => {
+                                                    self.next();
+                                                    if let Some(Token::Identifier(name)) =
+                                                        self.current()
+                                                    {
+                                                        if name.to_uppercase() == "NULL" {
+                                                            self.next();
+                                                            Some(ForeignKeyAction::SetNull)
+                                                        } else {
+                                                            None
+                                                        }
+                                                    } else {
+                                                        None
+                                                    }
+                                                }
+                                                Some(Token::Identifier(action)) => {
+                                                    let action_upper = action.to_uppercase();
+                                                    self.next();
+                                                    match action_upper.as_str() {
+                                                        "CASCADE" => {
+                                                            Some(ForeignKeyAction::Cascade)
+                                                        }
+                                                        "RESTRICT" => {
+                                                            Some(ForeignKeyAction::Restrict)
+                                                        }
+                                                        _ => None,
+                                                    }
+                                                }
+                                                _ => None,
+                                            };
+                                            if let Some(ref mut fk_ref) = references {
+                                                fk_ref.on_update = action;
+                                            }
                                         }
                                     }
                                 }
@@ -2499,9 +2476,9 @@ impl Parser {
 
         // Simple body parsing: collect statements until END
         // Note: This is a simplified implementation that stores raw SQL for now
-        while !matches!(self.current(), Some(Token::Identifier(end_str)) 
+        while self.current().is_some()
+            && !matches!(self.current(), Some(Token::Identifier(end_str)) 
                        if end_str.to_uppercase() == "END")
-            && !matches!(self.current(), None)
         {
             let stmt = match self.current() {
                 Some(Token::Select) => {
