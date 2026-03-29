@@ -119,6 +119,15 @@ async fn test_participant_commit_handling() {
     let node_id = NodeId(2);
     let participant = Participant::new(node_id);
 
+    // First prepare the transaction
+    let prepare_request = sqlrustgo_transaction::participant::PrepareRequest {
+        gid: "1:1:1000".to_string(),
+        coordinator_node_id: "1".to_string(),
+        changes: vec![],
+    };
+    participant.handle_prepare(prepare_request).await.unwrap();
+
+    // Then commit
     let request = sqlrustgo_transaction::participant::CommitRequest {
         gid: "1:1:1000".to_string(),
     };
@@ -133,6 +142,15 @@ async fn test_participant_rollback_handling() {
     let node_id = NodeId(2);
     let participant = Participant::new(node_id);
 
+    // First prepare the transaction
+    let prepare_request = sqlrustgo_transaction::participant::PrepareRequest {
+        gid: "1:1:1000".to_string(),
+        coordinator_node_id: "1".to_string(),
+        changes: vec![],
+    };
+    participant.handle_prepare(prepare_request).await.unwrap();
+
+    // Then rollback
     let request = sqlrustgo_transaction::participant::RollbackRequest {
         gid: "1:1:1000".to_string(),
         reason: "User requested".to_string(),
@@ -294,14 +312,14 @@ async fn test_distributed_lock_manager_get_holder() {
 
 #[tokio::test]
 async fn test_recovery_initialization() {
-    let recovery = Recovery::new();
+    let recovery = Recovery::new(NodeId(1));
     let incomplete = recovery.scan_incomplete_transactions().await.unwrap();
     assert!(incomplete.is_empty(), "New recovery should have no incomplete transactions");
 }
 
 #[tokio::test]
 async fn test_recovery_empty_wal_recovery() {
-    let recovery = Recovery::new();
+    let recovery = Recovery::new(NodeId(1));
     let report = recovery.recover().await.unwrap();
 
     assert_eq!(report.committed, 0);
