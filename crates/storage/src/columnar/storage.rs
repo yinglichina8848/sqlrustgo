@@ -519,41 +519,41 @@ impl StorageEngine for ColumnarStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::{ColumnInfo, ColumnType, TableInfo};
+    use crate::engine::{ColumnDefinition, TableInfo};
     use std::sync::Arc;
 
     fn create_test_table_info() -> TableInfo {
         TableInfo {
-            id: 1,
             name: "test_table".to_string(),
             columns: vec![
-                ColumnInfo {
-                    id: 0,
+                ColumnDefinition {
                     name: "id".to_string(),
-                    col_type: ColumnType::Integer,
+                    data_type: "INTEGER".to_string(),
                     nullable: false,
-                    default_value: None,
-                    primary_key: true,
+                    is_unique: true,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
                 },
-                ColumnInfo {
-                    id: 1,
+                ColumnDefinition {
                     name: "name".to_string(),
-                    col_type: ColumnType::Text,
+                    data_type: "TEXT".to_string(),
                     nullable: true,
-                    default_value: None,
-                    primary_key: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
-                ColumnInfo {
-                    id: 2,
+                ColumnDefinition {
                     name: "value".to_string(),
-                    col_type: ColumnType::Float,
+                    data_type: "FLOAT".to_string(),
                     nullable: true,
-                    default_value: None,
-                    primary_key: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
             ],
-            foreign_keys: vec![],
-            indexes: vec![],
         }
     }
 
