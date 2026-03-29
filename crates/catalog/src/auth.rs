@@ -721,9 +721,9 @@ mod tests {
         );
         auth.grant_privilege(grant).unwrap();
 
-        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("anything")));
-        assert!(auth.check_privilege(user_id, Privilege::Insert, &ObjectRef::table("anything")));
-        assert!(auth.check_privilege(user_id, Privilege::Delete, &ObjectRef::table("anything")));
+        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::database("anything")));
+        assert!(auth.check_privilege(user_id, Privilege::Insert, &ObjectRef::database("anything")));
+        assert!(auth.check_privilege(user_id, Privilege::Delete, &ObjectRef::database("anything")));
     }
 
     #[test]
