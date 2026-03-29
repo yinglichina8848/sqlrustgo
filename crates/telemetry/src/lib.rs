@@ -255,6 +255,13 @@ impl<'a> MetricsTimer<'a> {
     }
 }
 
+impl<'a> Drop for MetricsTimer<'a> {
+    fn drop(&mut self) {
+        let duration = self.start.elapsed();
+        self.metrics.record_query("QUERY", duration);
+    }
+}
+
 /// Global metrics instance
 pub static GLOBAL_METRICS: Metrics = Metrics {
     queries_total: AtomicU64::new(0),
@@ -364,12 +371,12 @@ mod tests {
         metrics.record_query("Q", Duration::from_micros(50)); // < 100us
         metrics.record_query("Q", Duration::from_micros(300)); // < 500us
         metrics.record_query("Q", Duration::from_millis(2)); // < 5ms
-        metrics.record_query("Q", Duration::from_millis(100)); // < 500ms
+        metrics.record_query("Q", Duration::from_millis(100)); // 100ms = threshold for bucket 6
         let buckets = metrics.duration_buckets();
         assert_eq!(buckets[0], 1); // 50 < 100
         assert_eq!(buckets[1], 1); // 300 < 500
         assert_eq!(buckets[3], 1); // 2ms < 5ms
-        assert_eq!(buckets[7], 1); // 100ms < 500ms
+        assert_eq!(buckets[6], 1); // 100ms = 100ms threshold, goes into bucket 6
     }
 
     #[test]
