@@ -6,7 +6,8 @@ use rustyline::history::FileHistory;
 use rustyline::Editor;
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    CreateTableStatement, DropTableStatement, Expression, InsertStatement, SelectStatement,
+    CreateTableStatement, DropTableStatement, Expression, InsertStatement, KillStatement, KillType,
+    SelectStatement,
 };
 use sqlrustgo_parser::{parse, Statement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
@@ -145,7 +146,8 @@ fn execute_sql(sql: &str, storage: &mut dyn StorageEngine) -> Result<ExecutorRes
         Statement::DropTable(drop) => execute_drop_table(&drop, storage),
         Statement::ShowStatus => execute_show_status(storage),
         Statement::ShowProcesslist => execute_show_processlist(storage),
-        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST are supported".to_string()),
+        Statement::Kill(kill) => execute_kill(&kill, storage),
+        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST, KILL are supported".to_string()),
     }
 }
 
@@ -426,6 +428,33 @@ fn execute_show_processlist(_storage: &dyn StorageEngine) -> Result<ExecutorResu
     ]);
 
     Ok(ExecutorResult::new(rows, 0))
+}
+
+/// Execute KILL statement
+fn execute_kill(
+    kill: &KillStatement,
+    _storage: &dyn StorageEngine,
+) -> Result<ExecutorResult, String> {
+    let kill_type_str = match kill.kill_type {
+        KillType::Connection => "CONNECTION",
+        KillType::Query => "QUERY",
+    };
+
+    // In single-user CLI mode, there are no other connections to kill
+    // This would be expanded in multi-threaded server mode
+    log::info!(
+        "KILL {} {} - not applicable in single-user mode",
+        kill_type_str,
+        kill.process_id
+    );
+
+    Ok(ExecutorResult::new(
+        vec![vec![Value::Text(format!(
+            "KILL {} {} executed (no-op in single-user mode)",
+            kill_type_str, kill.process_id
+        ))]],
+        1,
+    ))
 }
 
 /// Setup sample data for testing CLI commands
