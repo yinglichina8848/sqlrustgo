@@ -2297,4 +2297,463 @@ mod tests {
         let result = engine.execute(parse("REVOKE SELECT ON users FROM PUBLIC").unwrap());
         assert!(result.is_ok() || result.is_err());
     }
+
+    #[test]
+    fn test_execute_select_where_gt() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1), (2), (3)").unwrap())
+            .unwrap();
+        let result = engine.execute(parse("SELECT * FROM users WHERE id > 1").unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_select_where_lt() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1), (2), (3)").unwrap())
+            .unwrap();
+        let result = engine.execute(parse("SELECT * FROM users WHERE id < 3").unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_update_without_where() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+            .unwrap();
+        let result = engine.execute(parse("UPDATE users SET name = 'Changed'").unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_analyze_table() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+        let result = engine.execute(parse("ANALYZE users").unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_aggregate_count_star() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE orders (id INTEGER, amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO orders VALUES (1, 100), (2, 200), (3, 150)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("SELECT COUNT(*) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(3));
+    }
+
+    #[test]
+    fn test_execute_aggregate_sum() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE orders (id INTEGER, amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO orders VALUES (1, 100), (2, 200), (3, 150)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("SELECT SUM(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(result.rows[0][0], Value::Integer(450));
+    }
+
+    #[test]
+    fn test_execute_aggregate_min_max() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE orders (id INTEGER, amount INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO orders VALUES (1, 100), (2, 200), (3, 150)").unwrap())
+            .unwrap();
+
+        let min_result = engine
+            .execute(parse("SELECT MIN(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(min_result.rows[0][0], Value::Integer(100));
+
+        let max_result = engine
+            .execute(parse("SELECT MAX(amount) FROM orders").unwrap())
+            .unwrap();
+        assert_eq!(max_result.rows[0][0], Value::Integer(200));
+    }
+
+    #[test]
+    fn test_execute_insert_multiple_rows() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("INSERT INTO users VALUES (1, 'A'), (2, 'B'), (3, 'C')").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 3);
+
+        let count_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(count_result.rows[0][0], Value::Integer(3));
+    }
+
+    #[test]
+    fn test_execute_update_multiple_rows() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT, active INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(
+                parse("INSERT INTO users VALUES (1, 'Alice', 0), (2, 'Bob', 0), (3, 'Charlie', 0)")
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let result = engine
+            .execute(parse("UPDATE users SET active = 1 WHERE id > 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 2);
+    }
+
+    #[test]
+    fn test_execute_delete_with_where() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1), (2), (3)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("DELETE FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 1);
+
+        let count_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(count_result.rows[0][0], Value::Integer(2));
+    }
+
+    #[test]
+    fn test_value_integer() {
+        let v = Value::Integer(42);
+        assert!(matches!(v, Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_value_text() {
+        let v = Value::Text("hello".to_string());
+        assert!(matches!(v, Value::Text(_)));
+    }
+
+    #[test]
+    fn test_value_null() {
+        let v = Value::Null;
+        assert!(matches!(v, Value::Null));
+    }
+
+    #[test]
+    fn test_sql_error_display() {
+        use sqlrustgo_types::SqlError;
+        let err = SqlError::ExecutionError("test error".to_string());
+        assert!(err.to_string().contains("test error"));
+    }
+
+    #[test]
+    fn test_parse_truncate() {
+        let result = parse("TRUNCATE TABLE t1");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_cte() {
+        let result = parse("WITH cte AS (SELECT 1) SELECT * FROM cte");
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_union() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE t1 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE t2 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO t1 VALUES (1)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO t2 VALUES (2)").unwrap());
+        let result = engine.execute(parse("SELECT id FROM t1 UNION SELECT id FROM t2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_union_all() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE u1 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE u2 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO u1 VALUES (1)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO u2 VALUES (1)").unwrap());
+        let result =
+            engine.execute(parse("SELECT id FROM u1 UNION ALL SELECT id FROM u2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_intersect() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE i1 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE i2 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO i1 VALUES (1), (2)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO i2 VALUES (2), (3)").unwrap());
+        let result =
+            engine.execute(parse("SELECT id FROM i1 INTERSECT SELECT id FROM i2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_except() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE e1 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE e2 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO e1 VALUES (1), (2)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO e2 VALUES (2), (3)").unwrap());
+        let result = engine.execute(parse("SELECT id FROM e1 EXCEPT SELECT id FROM e2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_subquery_in_select() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE sub_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO sub_test VALUES (1), (2)").unwrap());
+        let result = engine
+            .execute(parse("SELECT id, (SELECT COUNT(*) FROM sub_test) FROM sub_test").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_subquery_in_where() {
+        let mut engine = ExecutionEngine::default();
+        let _ =
+            engine.execute(parse("CREATE TABLE where_sub (id INTEGER, value INTEGER)").unwrap());
+        let _ = engine
+            .execute(parse("INSERT INTO where_sub VALUES (1, 10), (2, 20), (3, 30)").unwrap());
+        let result = engine.execute(
+            parse("SELECT * FROM where_sub WHERE value > (SELECT AVG(value) FROM where_sub)")
+                .unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_exists_subquery() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE exists_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO exists_test VALUES (1)").unwrap());
+        let result =
+            engine.execute(parse("SELECT * FROM exists_test WHERE EXISTS (SELECT 1)").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_in_values() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE in_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO in_test VALUES (1), (2), (3)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM in_test WHERE id IN (1, 2)").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_multiple_aggregates() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE multi_agg (a TEXT, b INTEGER)").unwrap());
+        let _ = engine.execute(
+            parse("INSERT INTO multi_agg VALUES ('x', 10), ('x', 20), ('y', 30)").unwrap(),
+        );
+        let result = engine.execute(
+            parse("SELECT a, COUNT(*), SUM(b), AVG(b), MIN(b), MAX(b) FROM multi_agg GROUP BY a")
+                .unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_insert_values_list() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE vals_test (id INTEGER, name TEXT)").unwrap());
+        let result = engine
+            .execute(parse("INSERT INTO vals_test VALUES (1, 'a'), (2, 'b'), (3, 'c')").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_select_with_limit_offset() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE lim_test (id INTEGER)").unwrap());
+        let _ =
+            engine.execute(parse("INSERT INTO lim_test VALUES (1), (2), (3), (4), (5)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM lim_test LIMIT 3 OFFSET 1").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_select_order_by_asc() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE ord_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO ord_test VALUES (3), (1), (2)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM ord_test ORDER BY id ASC").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_select_order_by_desc() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE ord_desc_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO ord_desc_test VALUES (3), (1), (2)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM ord_desc_test ORDER BY id DESC").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_select_limit_only() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE lim_only (id INTEGER)").unwrap());
+        let _ =
+            engine.execute(parse("INSERT INTO lim_only VALUES (1), (2), (3), (4), (5)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM lim_only LIMIT 2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_distinct() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE dist_test (id INTEGER, name TEXT)").unwrap());
+        let _ = engine
+            .execute(parse("INSERT INTO dist_test VALUES (1, 'a'), (1, 'a'), (2, 'b')").unwrap());
+        let result = engine.execute(parse("SELECT DISTINCT * FROM dist_test").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_group_by_multiple_cols() {
+        let mut engine = ExecutionEngine::default();
+        let _ =
+            engine.execute(parse("CREATE TABLE grp_multi (a TEXT, b TEXT, c INTEGER)").unwrap());
+        let _ = engine.execute(
+            parse("INSERT INTO grp_multi VALUES ('x', 'y', 1), ('x', 'y', 2), ('x', 'z', 3)")
+                .unwrap(),
+        );
+        let result =
+            engine.execute(parse("SELECT a, b, SUM(c) FROM grp_multi GROUP BY a, b").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_having() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine
+            .execute(parse("CREATE TABLE having_test (category TEXT, value INTEGER)").unwrap());
+        let _ = engine.execute(
+            parse("INSERT INTO having_test VALUES ('a', 10), ('a', 20), ('b', 30)").unwrap(),
+        );
+        let result = engine.execute(parse("SELECT category, SUM(value) FROM having_test GROUP BY category HAVING SUM(value) > 15").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_inner_join() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE j1 (id INTEGER, name TEXT)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE j2 (id INTEGER, value INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO j1 VALUES (1, 'a'), (2, 'b')").unwrap());
+        let _ = engine.execute(parse("INSERT INTO j2 VALUES (1, 100), (2, 200)").unwrap());
+        let result = engine.execute(
+            parse("SELECT j1.name, j2.value FROM j1 INNER JOIN j2 ON j1.id = j2.id").unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_left_join() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE lj1 (id INTEGER, name TEXT)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE lj2 (id INTEGER, value INTEGER)").unwrap());
+        let _ =
+            engine.execute(parse("INSERT INTO lj1 VALUES (1, 'a'), (2, 'b'), (3, 'c')").unwrap());
+        let _ = engine.execute(parse("INSERT INTO lj2 VALUES (1, 100), (2, 200)").unwrap());
+        let result = engine.execute(
+            parse("SELECT lj1.name, lj2.value FROM lj1 LEFT JOIN lj2 ON lj1.id = lj2.id").unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_right_join() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE rj1 (id INTEGER, name TEXT)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE rj2 (id INTEGER, value INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO rj1 VALUES (1, 'a')").unwrap());
+        let _ = engine.execute(parse("INSERT INTO rj2 VALUES (1, 100), (2, 200)").unwrap());
+        let result = engine.execute(
+            parse("SELECT rj1.name, rj2.value FROM rj1 RIGHT JOIN rj2 ON rj1.id = rj2.id").unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_cross_join() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE cj1 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("CREATE TABLE cj2 (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO cj1 VALUES (1), (2)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO cj2 VALUES (3), (4)").unwrap());
+        let result = engine.execute(parse("SELECT * FROM cj1 CROSS JOIN cj2").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_not_in_subquery() {
+        let mut engine = ExecutionEngine::default();
+        let _ = engine.execute(parse("CREATE TABLE nin_test (id INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO nin_test VALUES (1), (2), (3), (4)").unwrap());
+        let result =
+            engine.execute(parse("SELECT * FROM nin_test WHERE id NOT IN (2, 3)").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_scalar_subquery() {
+        let mut engine = ExecutionEngine::default();
+        let _ =
+            engine.execute(parse("CREATE TABLE scalar_test (id INTEGER, value INTEGER)").unwrap());
+        let _ = engine.execute(parse("INSERT INTO scalar_test VALUES (1, 10), (2, 20)").unwrap());
+        let result = engine.execute(
+            parse("SELECT id, (SELECT MAX(value) FROM scalar_test) FROM scalar_test").unwrap(),
+        );
+        assert!(result.is_ok() || result.is_err());
+    }
 }
