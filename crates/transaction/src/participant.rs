@@ -1,4 +1,5 @@
-use crate::dtc::{Change, DistributedTransactionState, TransactionContext};
+#[allow(unused_imports)]
+use crate::dtc::{Change, ChangeOperation, DistributedTransactionState, TransactionContext};
 use crate::gid::{GlobalTransactionId, NodeId};
 use sqlrustgo_storage::{WalEntryType, WalManager};
 use std::collections::HashMap;
@@ -377,5 +378,126 @@ mod tests {
 
         let response = participant.handle_rollback(request).await;
         assert!(response.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_participant_with_wal_commit() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_commit.wal");
+        let node_id = NodeId(1);
+        let participant = Participant::with_wal(node_id, wal_path);
+
+        // First prepare
+        let prepare_request = PrepareRequest {
+            gid: "1:1:5000".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes: vec![],
+        };
+        participant.handle_prepare(prepare_request).await.unwrap();
+
+        // Then commit
+        let commit_request = CommitRequest {
+            gid: "1:1:5000".to_string(),
+        };
+
+        let response = participant.handle_commit(commit_request).await.unwrap();
+        assert!(response.success);
+    }
+
+    #[tokio::test]
+    async fn test_participant_with_wal_rollback() {
+        let dir = tempdir().unwrap();
+        let wal_path = dir.path().join("test_rollback.wal");
+        let node_id = NodeId(1);
+        let participant = Participant::with_wal(node_id, wal_path);
+
+        // First prepare
+        let prepare_request = PrepareRequest {
+            gid: "1:1:6000".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes: vec![],
+        };
+        participant.handle_prepare(prepare_request).await.unwrap();
+
+        // Then rollback
+        let rollback_request = RollbackRequest {
+            gid: "1:1:6000".to_string(),
+            reason: "Test rollback".to_string(),
+        };
+
+        let response = participant.handle_rollback(rollback_request).await.unwrap();
+        assert!(response.success);
+    }
+
+    #[tokio::test]
+    async fn test_participant_prepare_different_gids() {
+        let node_id = NodeId(1);
+        let participant = Participant::new(node_id);
+
+        // First transaction
+        let request1 = PrepareRequest {
+            gid: "1:1:7000".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes: vec![],
+        };
+        let response1 = participant.handle_prepare(request1).await.unwrap();
+        assert_eq!(response1.vote, VoteType::VoteCommit as i32);
+
+        // Second transaction (different GID)
+        let request2 = PrepareRequest {
+            gid: "1:1:7001".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes: vec![],
+        };
+        let response2 = participant.handle_prepare(request2).await.unwrap();
+        assert_eq!(response2.vote, VoteType::VoteCommit as i32);
+    }
+
+    #[tokio::test]
+    async fn test_participant_handle_prepare_with_changes() {
+        let node_id = NodeId(1);
+        let participant = Participant::new(node_id);
+
+        // Use Change from dtc module
+        let changes = vec![
+            Change {
+                table: "test_table".to_string(),
+                operation: ChangeOperation::Insert,
+                key: vec![1, 2, 3],
+                value: Some(vec![10, 20, 30]),
+            },
+            Change {
+                table: "test_table".to_string(),
+                operation: ChangeOperation::Update,
+                key: vec![4, 5, 6],
+                value: Some(vec![40, 50, 60]),
+            },
+        ];
+
+        let request = PrepareRequest {
+            gid: "1:1:8000".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes,
+        };
+
+        let response = participant.handle_prepare(request).await.unwrap();
+        assert_eq!(response.vote, VoteType::VoteCommit as i32);
+    }
+
+    #[tokio::test]
+    async fn test_participant_gid_parsing_error() {
+        let node_id = NodeId(1);
+        let participant = Participant::new(node_id);
+
+        // Invalid GID format should fail
+        let request = PrepareRequest {
+            gid: "invalid-gid".to_string(),
+            coordinator_node_id: "2".to_string(),
+            changes: vec![],
+        };
+
+        let response = participant.handle_prepare(request).await;
+        // GID parsing should fail and return error
+        assert!(response.is_err() || response.unwrap().vote == VoteType::VoteAbort as i32);
     }
 }

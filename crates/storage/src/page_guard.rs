@@ -143,6 +143,7 @@ impl<'a, P: PoolLike> std::ops::Deref for PageGuard<'a, P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::page::PageType;
 
     // Mock BufferPool for testing
     struct MockBufferPool {
