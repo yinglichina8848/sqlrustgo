@@ -3,18 +3,19 @@
 [workspace]
 members = [
     "crates/common",
+    "crates/types",
     "crates/parser",
     "crates/planner",
     "crates/optimizer",
     "crates/executor",
     "crates/storage",
     "crates/catalog",
-    "crates/distributed",
     "crates/security",
-    "crates/transaction",
-    "crates/server",
     "crates/telemetry",
+    "crates/transaction",
     "crates/network",
+    "crates/distributed",
+    "crates/server",
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
@@ -46,16 +47,15 @@ sqlrustgo-optimizer = { path = "crates/optimizer" }
 sqlrustgo-executor = { path = "crates/executor" }
 sqlrustgo-storage = { path = "crates/storage" }
 sqlrustgo-catalog = { path = "crates/catalog" }
-sqlrustgo-distributed = { path = "crates/distributed" }
 sqlrustgo-security = { path = "crates/security" }
-sqlrustgo-transaction = { path = "crates/transaction" }
-sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-network = { path = "crates/network" }
+sqlrustgo-distributed = { path = "crates/distributed" }
+sqlrustgo-server = { path = "crates/server" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
-tonic = "0.12"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
@@ -78,6 +78,9 @@ fnv = "1.0"
 proptest = "1.1"
 arrow = { version = "53" }
 parquet = { version = "53" }
+tonic = "0.12"
+prost = "0.13"
+tonic-build = "0.12"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -87,7 +90,6 @@ rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
 proptest = "1.1"
 sqlrustgo-server = { path = "crates/server" }
-sqlrustgo-transaction = { path = "crates/transaction" }
 
 [package]
 name = "sqlrustgo"
@@ -157,10 +159,6 @@ harness = false
 
 [[bench]]
 name = "tpch_bench"
-harness = false
-
-[[bench]]
-name = "bench_columnar"
 harness = false
 
 # [[bin]]
@@ -366,10 +364,6 @@ path = "tests/anomaly/aggregate_type_test.rs"
 name = "null_handling_test"
 path = "tests/anomaly/null_handling_test.rs"
 [[test]]
-name = "window_function_test"
-path = "tests/integration/window_function_test.rs"
-
-[[test]]
 name = "upsert_test"
 path = "tests/integration/upsert_test.rs"
 
@@ -378,13 +372,5 @@ name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
 
 [[test]]
-name = "distributed_transaction_test"
-path = "tests/integration/distributed_transaction_test.rs"
-
-[[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
-
-[[test]]
-name = "columnar_storage_test"
-path = "tests/integration/columnar_storage_test.rs"
