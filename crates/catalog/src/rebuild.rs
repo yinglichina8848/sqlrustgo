@@ -4,6 +4,7 @@
 
 use crate::DataType;
 
+#[allow(dead_code)]
 /// Convert a storage data type string to catalog DataType
 fn convert_data_type(data_type: &str) -> Option<DataType> {
     DataType::parse_sql_name(data_type)

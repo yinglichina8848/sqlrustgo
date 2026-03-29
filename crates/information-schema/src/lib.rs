@@ -111,7 +111,11 @@ impl<'a> InformationSchema<'a> {
                         column_name: column.name.clone(),
                         ordinal_position: (i + 1) as i32,
                         column_default: column.default_value.as_ref().map(|v| format!("{}", v)),
-                        is_nullable: if column.nullable { "YES".to_string() } else { "NO".to_string() },
+                        is_nullable: if column.nullable {
+                            "YES".to_string()
+                        } else {
+                            "NO".to_string()
+                        },
                         data_type: column.data_type.sql_name().to_string(),
                         character_maximum_length,
                         numeric_precision,
@@ -195,10 +199,7 @@ mod tests {
         )
         .primary_key(vec!["id".to_string()])
         .unwrap()
-        .add_index(
-            IndexInfo::new("idx_users_email", "users", vec!["email".to_string()])
-                .unique(),
-        );
+        .add_index(IndexInfo::new("idx_users_email", "users", vec!["email".to_string()]).unique());
 
         // Create orders table
         let orders_table = Table::new(
@@ -269,10 +270,7 @@ mod tests {
         let columns = info_schema.get_columns();
 
         // Find users table columns
-        let users_columns: Vec<_> = columns
-            .iter()
-            .filter(|c| c.table_name == "users")
-            .collect();
+        let users_columns: Vec<_> = columns.iter().filter(|c| c.table_name == "users").collect();
 
         assert_eq!(users_columns.len(), 4); // id, name, email, created_at
 
@@ -306,11 +304,17 @@ mod tests {
             .collect();
 
         // id and name are NOT NULL
-        let id_col = users_columns.iter().find(|c| c.column_name == "id").unwrap();
+        let id_col = users_columns
+            .iter()
+            .find(|c| c.column_name == "id")
+            .unwrap();
         assert_eq!(id_col.is_nullable, "NO");
 
         // email is nullable
-        let email_col = users_columns.iter().find(|c| c.column_name == "email").unwrap();
+        let email_col = users_columns
+            .iter()
+            .find(|c| c.column_name == "email")
+            .unwrap();
         assert_eq!(email_col.is_nullable, "YES");
     }
 

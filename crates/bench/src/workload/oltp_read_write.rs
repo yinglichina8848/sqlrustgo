@@ -113,7 +113,10 @@ impl OltpReadWrite {
                 let k = rng.gen_range(0..1_000_000);
                 let c = format!("'c{:x}'", rng.gen::<u32>());
                 let pad = format!("'pad{:x}'", rng.gen::<u32>());
-                format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
+                format!(
+                    "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
+                    id, k, c, pad
+                )
             }
         }
     }

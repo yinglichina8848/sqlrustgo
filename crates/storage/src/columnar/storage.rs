@@ -2,10 +2,10 @@
 //!
 //! A column-oriented storage engine implementing the StorageEngine trait.
 
-use crate::columnar::chunk::{Bitmap, ColumnChunk, ColumnStats};
+use crate::columnar::chunk::{ColumnChunk, ColumnStats};
 use crate::columnar::segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
 use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
-use crate::wal::{WalManager, WalWriter};
+use crate::wal::WalManager;
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -36,6 +36,7 @@ pub type ColumnarResult<T> = Result<T, ColumnarError>;
 
 /// A column-oriented storage for a single table
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TableStore {
     /// Table metadata
     info: TableInfo,
@@ -81,7 +82,7 @@ impl TableStore {
         }
 
         for (col_idx, value) in record.iter().enumerate() {
-            let chunk = self.columns.entry(col_idx).or_insert_with(ColumnChunk::new);
+            let chunk = self.columns.entry(col_idx).or_default();
             if matches!(value, Value::Null) {
                 chunk.push_null();
             } else {
@@ -169,6 +170,7 @@ impl TableStore {
     }
 
     /// Deserialize from disk
+    #[allow(clippy::ptr_arg)]
     pub fn deserialize(path: &PathBuf) -> ColumnarResult<Self> {
         // Read metadata
         let metadata_path = path.join("metadata.json");
@@ -346,7 +348,7 @@ impl StorageEngine for ColumnarStorage {
         // Persist if we have a base path
         if !self.base_path.as_os_str().is_empty() {
             // Drop mutable borrow of store before calling get_table_path
-            drop(store);
+            let _ = store;
             let path = self.get_table_path(table);
             if let Some(store) = self.tables.get_mut(table) {
                 store
@@ -358,7 +360,7 @@ impl StorageEngine for ColumnarStorage {
         Ok(())
     }
 
-    fn delete(&mut self, table: &str, _filters: &[Value]) -> crate::engine::SqlResult<usize> {
+    fn delete(&mut self, _table: &str, _filters: &[Value]) -> crate::engine::SqlResult<usize> {
         // For now, not implemented - would require creating new ColumnChunks without deleted rows
         Err(crate::engine::SqlError::ExecutionError(
             "DELETE not yet implemented for ColumnarStorage".to_string(),
@@ -367,7 +369,7 @@ impl StorageEngine for ColumnarStorage {
 
     fn update(
         &mut self,
-        table: &str,
+        _table: &str,
         _filters: &[Value],
         _updates: &[(usize, Value)],
     ) -> crate::engine::SqlResult<usize> {

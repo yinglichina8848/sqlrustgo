@@ -3,7 +3,6 @@
 //! Core component for column-oriented storage in SQLRustGo.
 
 use sqlrustgo_types::Value;
-use std::cmp::Ordering;
 
 /// Bitmap for null value tracking
 #[derive(Debug, Clone)]
@@ -23,7 +22,7 @@ impl Bitmap {
 
     /// Create a bitmap with capacity for `capacity` elements
     pub fn with_capacity(capacity: usize) -> Self {
-        let num_words = (capacity + 63) / 64;
+        let num_words = capacity.div_ceil(64);
         Self {
             bits: vec![0u64; num_words],
             len: capacity,
@@ -276,7 +275,7 @@ impl ColumnChunk {
     }
 
     /// Iterate over non-null values
-    pub fn iter(&self) -> ColumnChunkIter {
+    pub fn iter(&self) -> ColumnChunkIter<'_> {
         ColumnChunkIter {
             chunk: self,
             index: 0,

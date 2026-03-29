@@ -7,9 +7,9 @@
 //! - Recovery and WAL operations
 
 use sqlrustgo_transaction::{
-    Coordinator, DistributedLockManager, GlobalTransactionId, NodeId, Participant,
-    Recovery, RecoveryReport, Router, TxOutcome, WalEntry,
     dtc::{DistributedTransactionState, TransactionContext},
+    Coordinator, DistributedLockManager, GlobalTransactionId, NodeId, Participant, Recovery,
+    RecoveryReport, Router, TxOutcome, WalEntry,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -67,7 +67,10 @@ async fn test_single_node_transaction_flow() {
 
     // Prepare phase
     let prepare_result = coordinator.prepare(&gid, &participants).await.unwrap();
-    assert!(matches!(prepare_result, sqlrustgo_transaction::PrepareResult::AllCommitted));
+    assert!(matches!(
+        prepare_result,
+        sqlrustgo_transaction::PrepareResult::AllCommitted
+    ));
 
     // Commit phase
     let commit_result = coordinator.commit(&gid).await.unwrap();
@@ -91,7 +94,10 @@ async fn test_multi_node_transaction_flow() {
 
     // Prepare phase - all participants vote commit
     let prepare_result = coordinator.prepare(&gid, &participants).await.unwrap();
-    assert!(matches!(prepare_result, sqlrustgo_transaction::PrepareResult::AllCommitted));
+    assert!(matches!(
+        prepare_result,
+        sqlrustgo_transaction::PrepareResult::AllCommitted
+    ));
 
     // Commit phase
     let commit_result = coordinator.commit(&gid).await.unwrap();
@@ -314,7 +320,10 @@ async fn test_distributed_lock_manager_get_holder() {
 async fn test_recovery_initialization() {
     let recovery = Recovery::new(NodeId(1));
     let incomplete = recovery.scan_incomplete_transactions().await.unwrap();
-    assert!(incomplete.is_empty(), "New recovery should have no incomplete transactions");
+    assert!(
+        incomplete.is_empty(),
+        "New recovery should have no incomplete transactions"
+    );
 }
 
 #[tokio::test]
@@ -428,38 +437,23 @@ async fn test_transaction_context_state_transitions() {
     let mut ctx = TransactionContext::new(gid);
 
     // Initial state should be Started
-    assert!(matches!(
-        ctx.state,
-        DistributedTransactionState::Started
-    ));
+    assert!(matches!(ctx.state, DistributedTransactionState::Started));
 
     // Transition to Preparing
     ctx.state = DistributedTransactionState::Preparing;
-    assert!(matches!(
-        ctx.state,
-        DistributedTransactionState::Preparing
-    ));
+    assert!(matches!(ctx.state, DistributedTransactionState::Preparing));
 
     // Transition to Prepared
     ctx.state = DistributedTransactionState::Prepared;
-    assert!(matches!(
-        ctx.state,
-        DistributedTransactionState::Prepared
-    ));
+    assert!(matches!(ctx.state, DistributedTransactionState::Prepared));
 
     // Transition to Committing
     ctx.state = DistributedTransactionState::Committing;
-    assert!(matches!(
-        ctx.state,
-        DistributedTransactionState::Committing
-    ));
+    assert!(matches!(ctx.state, DistributedTransactionState::Committing));
 
     // Transition to Committed
     ctx.state = DistributedTransactionState::Committed;
-    assert!(matches!(
-        ctx.state,
-        DistributedTransactionState::Committed
-    ));
+    assert!(matches!(ctx.state, DistributedTransactionState::Committed));
 }
 
 #[tokio::test]
@@ -488,7 +482,10 @@ async fn test_full_2pc_flow_with_router_and_locks() {
 
     // Prepare phase
     let prepare_result = coordinator.prepare(&gid, &nodes).await.unwrap();
-    assert!(matches!(prepare_result, sqlrustgo_transaction::PrepareResult::AllCommitted));
+    assert!(matches!(
+        prepare_result,
+        sqlrustgo_transaction::PrepareResult::AllCommitted
+    ));
 
     // Acquire locks
     let users_lock = sqlrustgo_transaction::LockKey::Table("users".to_string());
