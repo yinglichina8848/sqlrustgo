@@ -46,6 +46,7 @@ mod tests {
             group_by: None,
             having: None,
             order_by: None,
+            with_clause: None,
         });
     }
 
@@ -87,6 +88,40 @@ mod tests {
                 ..
             }) => {}
             _ => panic!("Expected UnionAll"),
+        }
+    }
+
+    #[test]
+    fn test_parse_cte() {
+        let result = parse("WITH RECURSIVE cnt AS (SELECT n FROM t UNION ALL SELECT n FROM cnt WHERE n < 10) SELECT * FROM cnt");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(select) => {
+                assert!(select.with_clause.is_some(), "Expected WITH clause");
+                let with = select.with_clause.unwrap();
+                assert!(with.recursive, "Expected RECURSIVE flag");
+                assert_eq!(with.cte_tables.len(), 1);
+                assert_eq!(with.cte_tables[0].name, "cnt");
+            }
+            _ => panic!("Expected Select statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_truncate() {
+        let result = parse("TRUNCATE TABLE t1");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Truncate(trunc) => {
+                assert_eq!(trunc.table_name, "t1");
+            }
+            _ => panic!("Expected Truncate statement"),
         }
     }
 

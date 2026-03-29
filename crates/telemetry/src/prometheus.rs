@@ -5,6 +5,7 @@
 use crate::Metrics;
 
 /// Prometheus metric types
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum MetricType {
     Counter,
@@ -12,6 +13,7 @@ pub enum MetricType {
     Histogram,
 }
 
+#[allow(dead_code)]
 impl MetricType {
     pub fn as_str(&self) -> &'static str {
         match self {

@@ -2,12 +2,12 @@
 //!
 //! Provides integration between server components and security features.
 
+#[allow(unused_imports)]
 use sqlrustgo_security::{
     AuditConfig, AuditEvent, AuditFilter, AuditManager, AuditRecord, AuditStats, Session,
     SessionManager, SessionStatus,
 };
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SecurityIntegration {
