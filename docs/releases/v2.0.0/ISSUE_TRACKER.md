@@ -52,7 +52,7 @@ AI ↓
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #941 | v2.0.0 开发总控 | OPEN |
+| #941 | v2.0.0 开发总控 | CLOSED ✅ |
 | #942 | Phase 1: 存储稳定性 | CLOSED ✅ |
 | #952 | 性能基准工具搭建 - sysbench | CLOSED ✅ |
 | #953 | 主从复制 - Binlog/故障转移 | CLOSED ✅ |
@@ -122,11 +122,11 @@ AI ↓
 
 | Issue | 开发线 | AI工具 | 状态 |
 |-------|--------|--------|------|
-| #994 | AI Line1: 存储与高可用 | OpenCode A | OPEN |
-| #995 | AI Line2: Catalog与安全 | OpenCode B | OPEN |
-| #996 | AI Line3: 分布式事务与查询优化 | Claude A | OPEN |
-| #997 | AI Line4: 并行执行与性能调优 | Claude B | OPEN |
-| #998 | AI Line5: 性能优化与基准测试 | Claude/DeepSeek | OPEN |
+| #994 | AI Line1: 存储与高可用 | OpenCode A | CLOSED ✅ |
+| #995 | AI Line2: Catalog与安全 | OpenCode B | CLOSED ✅ |
+| #996 | AI Line3: 分布式事务与查询优化 | Claude A | CLOSED ✅ |
+| #997 | AI Line4: 并行执行与性能调优 | Claude B | CLOSED ✅ |
+| #998 | AI Line5: 性能优化与基准测试 | Claude/DeepSeek | CLOSED ✅ |
 
 ---
 
@@ -144,4 +144,4 @@ AI ↓
 
 ---
 
-*最后更新: 2026-03-29*
+*最后更新: 2026-03-29 12:35*
