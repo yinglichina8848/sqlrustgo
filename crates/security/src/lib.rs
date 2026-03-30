@@ -6,9 +6,11 @@
 //! - TLS configuration
 //! - SQL Firewall for injection detection and query control
 //! - Alert system for security event notifications
+//! - Cooperative cancellation (CancelToken, CancelGuard)
 
 pub mod alert;
 pub mod audit;
+pub mod cancel;
 pub mod firewall;
 pub mod session;
 pub mod tls;
@@ -18,11 +20,12 @@ pub use alert::{
     create_shared_alert_manager,
 };
 pub use audit::{AuditConfig, AuditEvent, AuditFilter, AuditManager, AuditRecord, AuditStats};
+pub use cancel::{check_cancel, CancelGuard, CancelToken, SqlError};
 pub use firewall::{
     create_shared_firewall, BlacklistPattern, FirewallConfig, FirewallError, FirewallStats,
     SharedFirewall, SqlFirewall, ThreatSeverity, WhitelistPattern,
 };
-pub use session::{ProcesslistRow, Session, SessionManager, SessionStatus};
+pub use session::{ProcesslistRow, Session, SessionManager, SessionPrivilege, SessionStatus};
 pub use tls::{CertificateManager, TlsConfig};
 
 #[cfg(test)]
