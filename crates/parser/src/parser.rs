@@ -2655,14 +2655,11 @@ impl Parser {
 
         // Condition
         let condition = self.collect_until_token(&[Token::Then]);
-        println!("DEBUG IF: condition = '{}', current = {:?}", condition, self.current());
 
         self.expect(Token::Then)?;
-        println!("DEBUG IF: after THEN, current = {:?}", self.current());
 
         // THEN body
         let then_body = self.parse_procedure_body()?;
-        println!("DEBUG IF: after then_body, current = {:?}", self.current());
 
         // ELSEIF branches
         let mut elseif_body = Vec::new();
@@ -2675,13 +2672,10 @@ impl Parser {
         }
 
         // ELSE body
-        println!("DEBUG IF: checking ELSE, current = {:?}", self.current());
         let else_body = if matches!(self.current(), Some(Token::Else)) {
             self.next(); // consume ELSE
-            println!("DEBUG IF: consumed ELSE, current = {:?}", self.current());
             self.parse_procedure_body()?
         } else {
-            println!("DEBUG IF: NOT matched ELSE, current = {:?}", self.current());
             Vec::new()
         };
 
