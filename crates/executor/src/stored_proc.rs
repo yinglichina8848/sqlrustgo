@@ -11,8 +11,10 @@ use std::sync::Arc;
 /// Session-level variables for stored procedure execution
 #[derive(Debug, Clone, Default)]
 pub struct ProcedureContext {
-    /// Local variables declared in the procedure
-    variables: HashMap<String, Value>,
+    /// Local variables declared in the procedure (key without @)
+    local_variables: HashMap<String, Value>,
+    /// Session-level variables (key without @, e.g., "uid" for @uid)
+    session_variables: HashMap<String, Value>,
     /// Return value (if RETURN was called)
     return_value: Option<Value>,
     /// Whether to exit the current loop/block
@@ -27,7 +29,8 @@ impl ProcedureContext {
     /// Create a new procedure context
     pub fn new() -> Self {
         Self {
-            variables: HashMap::new(),
+            local_variables: HashMap::new(),
+            session_variables: HashMap::new(),
             return_value: None,
             leave: false,
             iterate: false,
@@ -35,19 +38,55 @@ impl ProcedureContext {
         }
     }
 
-    /// Set a variable value
-    pub fn set_var(&mut self, name: &str, value: Value) {
-        self.variables.insert(name.to_string(), value);
+    /// Set a variable value (local variable, without @ prefix)
+    pub fn set_local_var(&mut self, name: &str, value: Value) {
+        self.local_variables.insert(name.to_string(), value);
     }
 
-    /// Get a variable value
+    /// Get a local variable value (without @ prefix)
+    pub fn get_local_var(&self, name: &str) -> Option<&Value> {
+        self.local_variables.get(name)
+    }
+
+    /// Set a session variable (without @ prefix, e.g., "uid" for @uid)
+    pub fn set_session_var(&mut self, name: &str, value: Value) {
+        self.session_variables.insert(name.to_string(), value);
+    }
+
+    /// Get a session variable value (without @ prefix)
+    pub fn get_session_var(&self, name: &str) -> Option<&Value> {
+        self.session_variables.get(name)
+    }
+
+    /// Get any variable (local first, then session)
     pub fn get_var(&self, name: &str) -> Option<&Value> {
-        self.variables.get(name)
+        self.local_variables.get(name)
+            .or_else(|| self.session_variables.get(name))
     }
 
-    /// Check if a variable exists
+    /// Set any variable (local or session based on @ prefix)
+    pub fn set_var(&mut self, name: &str, value: Value) {
+        if name.starts_with('@') {
+            self.session_variables.insert(name[1..].to_string(), value);
+        } else {
+            self.local_variables.insert(name.to_string(), value);
+        }
+    }
+
+    /// Check if a variable exists (local or session)
     pub fn has_var(&self, name: &str) -> bool {
-        self.variables.contains_key(name)
+        let key = if name.starts_with('@') { &name[1..] } else { name };
+        self.local_variables.contains_key(key) || self.session_variables.contains_key(key)
+    }
+
+    /// Clear all local variables (called when exiting procedure)
+    pub fn clear_local_vars(&mut self) {
+        self.local_variables.clear();
+    }
+
+    /// Get all session variables for persistence
+    pub fn get_session_vars(&self) -> &HashMap<String, Value> {
+        &self.session_variables
     }
 
     /// Set return value and signal exit
@@ -504,6 +543,19 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.set_var("x", Value::Integer(42));
         assert_eq!(ctx.get_var("x"), Some(&Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_procedure_context_session_vars() {
+        let mut ctx = ProcedureContext::new();
+        // Set session variable with @ prefix
+        ctx.set_var("@uid", Value::Integer(100));
+        // Should be accessible both ways
+        assert_eq!(ctx.get_var("@uid"), Some(&Value::Integer(100)));
+        assert_eq!(ctx.get_var("uid"), Some(&Value::Integer(100)));
+        // Session variables persist
+        ctx.clear_local_vars();
+        assert_eq!(ctx.get_var("uid"), Some(&Value::Integer(100)));
     }
 
     #[test]
