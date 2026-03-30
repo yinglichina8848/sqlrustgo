@@ -2,8 +2,10 @@
 //!
 //! Provides session tracking for audit and security purposes.
 
+use crate::cancel::CancelToken;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -13,6 +15,12 @@ pub enum SessionStatus {
     Idle,
     Closing,
     Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionPrivilege {
+    Process,
+    Super,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +33,9 @@ pub struct Session {
     pub status: SessionStatus,
     pub database: Option<String>,
     pub connection_id: u64,
+    pub privileges: HashSet<SessionPrivilege>,
+    #[serde(skip)]
+    cancel_token: Arc<CancelToken>,
 }
 
 impl Session {
@@ -39,7 +50,37 @@ impl Session {
             status: SessionStatus::Active,
             database: None,
             connection_id: 0,
+            privileges: HashSet::new(),
+            cancel_token: Arc::new(CancelToken::new()),
         }
+    }
+
+    pub fn cancel_token(&self) -> Arc<CancelToken> {
+        self.cancel_token.clone()
+    }
+
+    pub fn is_query_cancelled(&self) -> bool {
+        self.cancel_token.is_query_cancelled()
+    }
+
+    pub fn cancel_query(&self) {
+        self.cancel_token.cancel_query();
+    }
+
+    pub fn is_connection_killed(&self) -> bool {
+        self.cancel_token.is_connection_killed()
+    }
+
+    pub fn kill_connection(&self) {
+        self.cancel_token.kill_connection();
+    }
+
+    pub fn reset_query_cancelled(&self) {
+        self.cancel_token.reset_query_cancelled();
+    }
+
+    pub fn cancel_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+        self.cancel_token.query_cancelled_flag()
     }
 
     pub fn update_activity(&mut self) {
@@ -47,6 +88,27 @@ impl Session {
         if self.status == SessionStatus::Idle {
             self.status = SessionStatus::Active;
         }
+    }
+
+    pub fn has_privilege(&self, privilege: SessionPrivilege) -> bool {
+        self.privileges.contains(&privilege)
+    }
+
+    pub fn grant_privilege(&mut self, privilege: SessionPrivilege) {
+        self.privileges.insert(privilege);
+    }
+
+    pub fn revoke_privilege(&mut self, privilege: SessionPrivilege) {
+        self.privileges.remove(&privilege);
+    }
+
+    pub fn can_kill(&self) -> bool {
+        self.privileges.contains(&SessionPrivilege::Super)
+    }
+
+    pub fn can_view_processlist(&self) -> bool {
+        self.privileges.contains(&SessionPrivilege::Super)
+            || self.privileges.contains(&SessionPrivilege::Process)
     }
 
     pub fn set_idle(&mut self) {
@@ -259,6 +321,50 @@ impl SessionManager {
             .values()
             .filter(|s| s.user == user && s.is_active())
             .count()
+    }
+
+    pub fn kill_session(&self, session_id: u64) -> Result<(), String> {
+        let mut sessions = self.sessions.write().unwrap();
+        match sessions.get_mut(&session_id) {
+            Some(session) => {
+                session.kill_connection();
+                session.close();
+                Ok(())
+            }
+            None => Err(format!("Session {} not found", session_id)),
+        }
+    }
+
+    pub fn kill_query(&self, session_id: u64) -> Result<(), String> {
+        let mut sessions = self.sessions.write().unwrap();
+        match sessions.get_mut(&session_id) {
+            Some(session) => {
+                session.cancel_query();
+                Ok(())
+            }
+            None => Err(format!("Session {} not found", session_id)),
+        }
+    }
+
+    pub fn can_kill(&self, requester_id: u64, target_id: u64) -> Result<bool, String> {
+        let sessions = self.sessions.read().unwrap();
+        let requester = sessions
+            .get(&requester_id)
+            .ok_or_else(|| format!("Requester session {} not found", requester_id))?;
+
+        if !requester.can_kill() {
+            return Ok(false);
+        }
+
+        if requester_id == target_id {
+            return Ok(true);
+        }
+
+        if let Some(target) = sessions.get(&target_id) {
+            Ok(target.can_kill() || requester.has_privilege(SessionPrivilege::Super))
+        } else {
+            Err(format!("Target session {} not found", target_id))
+        }
     }
 }
 

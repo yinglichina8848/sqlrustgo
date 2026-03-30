@@ -3,6 +3,7 @@
 //! A simple TCP server that accepts SQL queries and returns results.
 
 use sqlrustgo::{parse, ExecutionEngine, SqlError};
+use sqlrustgo_parser::{KillStatement, KillType, Statement};
 use sqlrustgo_server::SecurityIntegration;
 use sqlrustgo_storage::MemoryStorage;
 use std::io::{Read, Write};
@@ -53,7 +54,18 @@ fn handle_client(
             let result = {
                 let mut eng = engine.write().unwrap();
                 match parse(query) {
-                    Ok(statement) => eng.execute(statement),
+                    Ok(Statement::Kill(kill)) => execute_server_kill(&kill, &security, session_id),
+                    Ok(statement) => {
+                        security.reset_session_query_state(session_id);
+                        if let Some(flag) = security.get_session_cancel_flag(session_id) {
+                            eng.storage.write().unwrap().set_cancel_flag(flag);
+                        }
+                        if let Err(e) = security.check_session_and_reset(session_id) {
+                            Err(SqlError::ExecutionError(e))
+                        } else {
+                            eng.execute(statement)
+                        }
+                    }
                     Err(e) => Err(SqlError::ParseError(format!("{:?}", e))),
                 }
             };
@@ -94,6 +106,70 @@ fn handle_client(
             if let Err(e) = stream.flush() {
                 return Err(e);
             }
+        }
+    }
+}
+
+fn execute_server_kill(
+    kill: &KillStatement,
+    security: &Arc<SecurityIntegration>,
+    session_id: u64,
+) -> Result<sqlrustgo::ExecutorResult, SqlError> {
+    let target_session_id = kill.process_id;
+
+    let current_session = security
+        .sessions()
+        .get_session(session_id)
+        .ok_or_else(|| SqlError::ExecutionError("Not in a valid session".to_string()))?;
+
+    if target_session_id == session_id {
+        return Err(SqlError::ExecutionError(
+            "Cannot kill self session".to_string(),
+        ));
+    }
+
+    let target_session = security.sessions().get_session(target_session_id);
+    if target_session.is_none() {
+        return Err(SqlError::ExecutionError(format!(
+            "Unknown thread id: {}",
+            target_session_id
+        )));
+    }
+
+    let target_session = target_session.unwrap();
+    let is_own_session = target_session.user == current_session.user;
+    if !is_own_session && !current_session.can_kill() {
+        return Err(SqlError::ExecutionError(
+            "Access denied: need SUPER privilege to kill other user's sessions".to_string(),
+        ));
+    }
+
+    match kill.kill_type {
+        KillType::Connection => {
+            security
+                .sessions()
+                .kill_session(target_session_id)
+                .map_err(|e| SqlError::ExecutionError(e))?;
+            Ok(sqlrustgo::ExecutorResult::new(
+                vec![vec![sqlrustgo::Value::Text(format!(
+                    "CONNECTION {} executed",
+                    target_session_id
+                ))]],
+                0,
+            ))
+        }
+        KillType::Query => {
+            security
+                .sessions()
+                .kill_query(target_session_id)
+                .map_err(|e| SqlError::ExecutionError(e))?;
+            Ok(sqlrustgo::ExecutorResult::new(
+                vec![vec![sqlrustgo::Value::Text(format!(
+                    "QUERY {} executed",
+                    target_session_id
+                ))]],
+                0,
+            ))
         }
     }
 }
