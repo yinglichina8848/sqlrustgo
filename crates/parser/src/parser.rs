@@ -4458,3 +4458,248 @@ fn test_parse_insert_with_set_ignore() {
         _ => panic!("Expected INSERT statement"),
     }
 }
+
+#[test]
+fn test_parse_alter_table_add_column() {
+    let result = parse("ALTER TABLE users ADD COLUMN email TEXT");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::AlterTable(a) => {
+            assert_eq!(a.table, "users");
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+
+#[test]
+fn test_parse_alter_table_drop_column() {
+    let result = parse("ALTER TABLE users DROP COLUMN age");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::AlterTable(a) => {
+            assert_eq!(a.table, "users");
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_index() {
+    let result = parse("CREATE INDEX idx_name ON users (id)");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateIndex(i) => {
+            assert_eq!(i.name, "idx_name");
+            assert_eq!(i.table, "users");
+            assert!(!i.unique);
+        }
+        _ => panic!("Expected CREATE INDEX statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_unique_index() {
+    let result = parse("CREATE UNIQUE INDEX idx_unique ON users (email)");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateIndex(i) => {
+            assert_eq!(i.name, "idx_unique");
+            assert_eq!(i.table, "users");
+            assert!(i.unique);
+        }
+        _ => panic!("Expected CREATE INDEX statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_view() {
+    let result = parse("CREATE VIEW active_users AS SELECT * FROM users WHERE active = true");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateView(v) => {
+            assert_eq!(v.name, "active_users");
+            assert!(!v.query.is_empty());
+        }
+        _ => panic!("Expected CREATE VIEW statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_begin() {
+    let result = parse("BEGIN");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Begin);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_commit() {
+    let result = parse("COMMIT");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Commit);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_rollback() {
+    let result = parse("ROLLBACK");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Rollback);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_show_status() {
+    let result = parse("SHOW STATUS");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::ShowStatus => {}
+        _ => panic!("Expected SHOW STATUS statement"),
+    }
+}
+
+#[test]
+fn test_parse_show_processlist() {
+    let result = parse("SHOW PROCESSLIST");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::ShowProcesslist => {}
+        _ => panic!("Expected SHOW PROCESSLIST statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill() {
+    let result = parse("KILL 123");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 123);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill_connection() {
+    let result = parse("KILL CONNECTION 456");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 456);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill_query() {
+    let result = parse("KILL QUERY 789");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 789);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_truncate() {
+    let result = parse("TRUNCATE TABLE users");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Truncate(t) => {
+            assert_eq!(t.table_name, "users");
+        }
+        _ => panic!("Expected TRUNCATE statement"),
+    }
+}
+
+#[test]
+fn test_parse_delete_with_limit() {
+    let result = parse("DELETE FROM users WHERE id > 10");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Delete(d) => {
+            assert_eq!(d.table, "users");
+            assert!(d.where_clause.is_some());
+        }
+        _ => panic!("Expected DELETE statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_order_by() {
+    let result = parse("SELECT * FROM users ORDER BY name ASC");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert!(s.order_by.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_group_by() {
+    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "employees");
+            assert!(s.group_by.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_having() {
+    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.group_by.is_some());
+            assert!(s.having.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_union() {
+    let result = parse("SELECT id FROM users UNION SELECT id FROM admins");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::SetOperation(op) => {
+            assert_eq!(op.op_type, SetOperationType::Union);
+        }
+        _ => panic!("Expected SetOperation statement"),
+    }
+}
+
+#[test]
+fn test_parse_union_all() {
+    let result = parse("SELECT id FROM users UNION ALL SELECT id FROM admins");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::SetOperation(op) => {
+            assert_eq!(op.op_type, SetOperationType::UnionAll);
+        }
+        _ => panic!("Expected SetOperation statement"),
+    }
+}
