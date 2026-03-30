@@ -1,9 +1,10 @@
 # Stored Procedure & Trigger Execution Engine Design
 
-> **Version**: 1.0  
+> **Version**: 2.0  
 > **Date**: 2026-03-31  
 > **Status**: Draft  
-> **Related Issue**: #1165
+> **Related Issue**: #1164  
+> **Review Status**: Architecture reviewed, adjustments incorporated
 
 ---
 
@@ -29,6 +30,20 @@ SQLRustGo's parser already supports stored procedure control flow statements (IF
 2. **Enhanced trigger execution**: Support complex trigger bodies beyond simple SET NEW.col
 3. **Integration with existing Volcano executor**: Seamlessly integrate procedure execution with the existing query execution pipeline
 
+### 1.3 Classification
+
+This is **SQL Runtime Interpreter Subsystem** implementation, not a simple feature extension.
+
+Impact scope:
+- executor pipeline
+- expression evaluator
+- variable scope engine
+- control-flow interpreter
+- error propagation semantics
+- trigger integration into DML pipeline
+
+Complexity level: MySQL Stored Program Runtime / PostgreSQL PL/pgSQL interpreter
+
 ---
 
 ## 2. Architecture
@@ -39,435 +54,97 @@ SQLRustGo's parser already supports stored procedure control flow statements (IF
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Session / Connection                         │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │              ProcedureExecutionEngine                      │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐                │  │
-│  │  │ ProcedureContext │  │ VariableScope   │                │  │
-│  │  │ - procedure_name │  │ - local_vars    │                │  │
-│  │  │ - params         │  │ - param_modes   │                │  │
-│  │  │ - caller_ctx     │  │ - return_value  │                │  │
-│  │  └─────────────────┘  └─────────────────┘                │  │
-│  │                                                           │  │
+│  │                    ProcedureRuntime                         │  │
 │  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │           ProcedureStatementExecutor                 │  │  │
-│  │  │  - execute_declare()                               │  │  │
-│  │  │  - execute_if()                                     │  │  │
-│  │  │  - execute_while()                                  │  │  │
-│  │  │  - execute_loop()                                   │  │  │
-│  │  │  - execute_call()                                   │  │  │
-│  │  │  - execute_set()                                    │  │  │
-│  │  │  - execute_return()                                 │  │  │
+│  │  │              ProcedureContext                         │  │  │
+│  │  │  - scopes: Vec<VariableScope>                      │  │  │
+│  │  │  - labels: Vec<String>                             │  │  │
+│  │  │  - handler_stack: Vec<HandlerFrame>                │  │  │
+│  │  │  - call_stack_depth: usize                         │  │  │
 │  │  └─────────────────────────────────────────────────────┘  │  │
 │  │                           │                                 │  │
-│  │                           ▼                                 │  │
 │  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │           ExpressionEvaluator                       │  │  │
-│  │  │  - evaluate_condition()                             │  │  │
-│  │  │  - evaluate_expression()                            │  │  │
-│  │  │  - evaluate_assignment()                            │  │  │
+│  │  │           ExpressionEvaluator (trait)                │  │  │
+│  │  │  fn eval_expr(&self, expr: &Expr, ctx: &mut ProcedureContext) -> Result<Value>  │  │
+│  │  └─────────────────────────────────────────────────────┘  │  │
+│  │                           │                                 │  │
+│  │  ┌─────────────────────────────────────────────────────┐  │  │
+│  │  │           StatementInterpreter                       │  │  │
+│  │  │  - execute_declare()                               │  │  │
+│  │  │  - execute_if()                                    │  │  │
+│  │  │  - execute_while()                                 │  │  │
+│  │  │  - execute_loop()                                  │  │  │
+│  │  │  - execute_call()                                  │  │  │
+│  │  │  - execute_sql()                                   │  │  │
 │  │  └─────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                           │                                      │
 │                           ▼                                      │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    VolcanoExecutor                         │  │
-│  │  (SeqScan, Projection, Aggregate, Join, etc.)              │  │
+│  │                    SQL Executor Bridge                      │  │
+│  │         session.execute_with_context(stmt, ctx)           │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                           │                                      │
 │                           ▼                                      │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │                      StorageEngine                         │  │
+│  │                    VolcanoExecutor                          │  │
+│  │  (SeqScan, Projection, Aggregate, Join, etc.)            │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Component Breakdown
+**Key Design Principle**: ProcedureRuntime and TriggerRuntime are UNIFIED, not separate.
 
-#### 2.2.1 ProcedureContext
+### 2.2 Unified Runtime Design
+
+```
+┌─────────────────────────────────────────────┐
+│              ProcedureRuntime                │
+│    (Unified runtime for procedure + trigger)│
+├─────────────────────────────────────────────┤
+│ - context: ProcedureContext               │
+│ - expr_eval: Arc<dyn ExpressionEvaluator> │
+│ - sql_bridge: Session                    │
+└─────────────────────────────────────────────┘
+                      ▲
+                      │ triggers are implicit procedures
+                      │
+┌─────────────────────────────────────────────┐
+│              TriggerRuntime                 │
+│   (thin wrapper around ProcedureRuntime)    │
+└─────────────────────────────────────────────┘
+```
+
+NOT two separate runtimes. This is the correct architecture (PostgreSQL PL/pgSQL model).
+
+---
+
+## 3. Core Data Structures
+
+### 3.1 ProcedureContext (ENHANCED)
 
 ```rust
 pub struct ProcedureContext {
-    pub procedure_name: String,
-    pub params: Vec<Value>,                    // IN/OUT parameters
-    pub caller_context: Option<Box<ProcedureContext>>,  // For nested calls
+    /// Stack of variable scopes (block-level)
+    pub scopes: Vec<VariableScope>,
+    /// Label stack for LEAVE/ITERATE
+    pub labels: Vec<String>,
+    /// Handler stack for error handling
+    pub handler_stack: Vec<HandlerFrame>,
+    /// Current call stack depth (for recursion protection)
+    pub call_stack_depth: usize,
+    /// Maximum allowed call depth
+    pub max_call_depth: usize,
 }
 
 pub struct VariableScope {
     pub variables: HashMap<String, Value>,
-    pub param_modes: HashMap<String, ParamMode>,
 }
 
-pub enum ParamMode {
-    In(Value),
-    Out,           // Caller-provided, may be set
-    InOut(Value),  // Both
-}
-```
-
-#### 2.2.2 ProcedureStatementExecutor
-
-Each statement type from `ProcedureStatement` enum has a corresponding executor:
-
-| Statement | Executor Method | Description |
-|-----------|-----------------|-------------|
-| Declare | `execute_declare()` | Allocate local variable |
-| Set | `execute_set()` | Assign value to variable |
-| If | `execute_if()` | Conditional branching |
-| While | `execute_while()` | Loop execution |
-| Loop | `execute_loop()` | Infinite loop with LEAVE |
-| Leave | `execute_leave()` | Exit loop |
-| Iterate | `execute_iterate()` | Continue to next iteration |
-| Return | `execute_return()` | Return from procedure |
-| Call | `execute_call()` | Nested procedure call |
-| RawSql | `execute_sql()` | Execute embedded SQL |
-
-#### 2.2.3 ExpressionEvaluator
-
-```rust
-pub trait ExpressionEvaluator {
-    fn evaluate_condition(&self, expr: &str, ctx: &VariableScope) -> Result<bool, ProcedureError>;
-    fn evaluate_expression(&self, expr: &str, ctx: &VariableScope) -> Result<Value, ProcedureError>;
-    fn evaluate_assignment(&self, target: &str, value: Value, ctx: &mut VariableScope) -> Result<(), ProcedureError>;
-}
-```
-
----
-
-## 3. Detailed Design
-
-### 3.1 Procedure Execution Flow
-
-```
-execute_procedure(name, args):
-    1. Look up procedure in catalog
-    2. Create ProcedureContext with parameters
-    3. Create VariableScope
-    4. For each statement in procedure.body:
-       a. Execute statement via ProcedureStatementExecutor
-       b. If Return, exit and return value
-       c. If LEAVE with matching label, break loop
-       d. If error, handle via SIGNAL/RESIGNAL or propagate
-    5. Return OUT parameters to caller
-```
-
-### 3.2 Variable Declaration
-
-```sql
-DECLARE variable_name DATA_TYPE [DEFAULT value];
-```
-
-```rust
-fn execute_declare(&self, stmt: &ProcedureStatement) -> Result<(), ProcedureError> {
-    if let ProcedureStatement::Declare { name, data_type, default_value } = stmt {
-        let value = default_value
-            .as_ref()
-            .map(|v| self.eval_expression(v))
-            .unwrap_or_else(|| Value::Null)?;
-        
-        self.scope.variables.insert(name.clone(), value);
-        Ok(())
-    }
-}
-```
-
-### 3.3 Control Flow: IF Statement
-
-```sql
-IF condition THEN
-    statements
-[ELSEIF condition THEN
-    statements]
-[ELSE
-    statements]
-END IF;
-```
-
-```rust
-fn execute_if(&self, stmt: &ProcedureStatement) -> Result<(), ProcedureError> {
-    if let ProcedureStatement::If { condition, then_body, elseif_body, else_body } = stmt {
-        // Evaluate main condition
-        if self.eval_condition(condition)? {
-            return self.execute_statements(then_body);
-        }
-        
-        // Evaluate ELSEIF conditions
-        for (elsif_cond, elsif_body) in elseif_body {
-            if self.eval_condition(elsif_cond)? {
-                return self.execute_statements(elsif_body);
-            }
-        }
-        
-        // Execute ELSE body
-        self.execute_statements(else_body)
-    }
-}
-```
-
-### 3.4 Control Flow: WHILE Loop
-
-```sql
-WHILE condition DO
-    statements
-END WHILE;
-```
-
-```rust
-fn execute_while(&self, stmt: &ProcedureStatement) -> Result<(), ProcedureError> {
-    if let ProcedureStatement::While { condition, body } = stmt {
-        while self.eval_condition(condition)? {
-            match self.execute_statements(body) {
-                Ok(()) => continue,
-                Err(ProcedureError::Leave(_)) => break,
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(())
-    }
-}
-```
-
-### 3.5 Control Flow: LOOP
-
-```sql
-[label:] LOOP
-    statements
-END LOOP;
-```
-
-```rust
-fn execute_loop(&self, label: Option<String>, body: &[ProcedureStatement]) -> Result<(), ProcedureError> {
-    loop {
-        match self.execute_statements(body) {
-            Ok(()) => continue,
-            Err(ProcedureError::Leave(lbl)) => {
-                if lbl == label {
-                    break;  // Label matches, exit loop
-                }
-                return Err(ProcedureError::UnhandledLeave(lbl));
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(())
-}
-```
-
-### 3.6 LEAVE and ITERATE
-
-```sql
-LEAVE label;  -- Exit loop
-ITERATE label;  -- Continue to next iteration
-```
-
-```rust
-#[derive(Debug)]
-pub enum ProcedureControlFlow {
-    Leave(String),      // Exit loop with optional label
-    Iterate(String),   // Continue to next iteration with optional label
-    Return(Value),     // Return from procedure
-}
-
-fn execute_leave(&self, label: String) -> Result<!, ProcedureError> {
-    Err(ProcedureControlFlow::Leave(label).into())
-}
-
-fn execute_iterate(&self, label: String) -> Result<!, ProcedureError> {
-    Err(ProcedureControlFlow::Iterate(label).into())
-}
-```
-
-### 3.7 CALL Statement (Nested Procedures)
-
-```sql
-CALL procedure_name(param1, param2, ...);
-CALL procedure_name(param1, ...) INTO var;
-```
-
-```rust
-fn execute_call(&self, stmt: &ProcedureStatement) -> Result<Option<Value>, ProcedureError> {
-    if let ProcedureStatement::Call { procedure_name, args, into_var } = stmt {
-        // Evaluate arguments
-        let evaluated_args: Vec<Value> = args.iter()
-            .map(|arg| self.eval_expression(arg))
-            .collect::<Result<_, _>>()?;
-        
-        // Push new context for nested call
-        let nested_ctx = ProcedureContext::new(procedure_name, evaluated_args);
-        self.push_context(nested_ctx);
-        
-        // Execute nested procedure
-        let result = self.execute_procedure(procedure_name, evaluated_args)?;
-        
-        // Pop context
-        self.pop_context();
-        
-        // Handle INTO clause
-        if let Some(var_name) = into_var {
-            self.scope.variables.insert(var_name, result);
-        }
-        
-        Ok(None)  // CALL doesn't return value unless INTO is used
-    }
-}
-```
-
-### 3.8 Embedded SQL Execution
-
-For statements like `SELECT`, `INSERT`, `UPDATE`, `DELETE` within procedures:
-
-```rust
-fn execute_sql(&self, sql: &str) -> Result<ExecutorResult, ProcedureError> {
-    // Parse the SQL statement
-    let statement = parse(sql).map_err(|e| ProcedureError::SqlError(e))?;
-    
-    // Plan the statement using existing planner
-    let plan = self.planner.create_plan(statement)
-        .map_err(|e| ProcedureError::PlanningError(e))?;
-    
-    // Execute using existing executor
-    let result = self.executor.execute(&plan)
-        .map_err(|e| ProcedureError::ExecutionError(e))?;
-    
-    Ok(result)
-}
-```
-
-### 3.9 SELECT ... INTO
-
-```sql
-SELECT col1, col2 INTO var1, var2 FROM table_name WHERE condition;
-```
-
-```rust
-fn execute_select_into(&self, stmt: &ProcedureStatement) -> Result<(), ProcedureError> {
-    if let ProcedureStatement::SelectInto { columns, into_vars, table, where_clause } = stmt {
-        let sql = format!("SELECT {} FROM {} {}", columns.join(", "), table, where_clause.unwrap_or_default());
-        let result = self.execute_sql(&sql)?;
-        
-        // Assign first row to variables
-        if let Some(row) = result.rows.first() {
-            for (i, var_name) in into_vars.iter().enumerate() {
-                if let Some(value) = row.get(i) {
-                    self.scope.variables.insert(var_name.clone(), value.clone());
-                }
-            }
-        }
-        
-        Ok(())
-    }
-}
-```
-
----
-
-## 4. Trigger Execution Enhancement
-
-### 4.1 Current State
-
-The current trigger executor only supports simple `SET NEW.col = value` patterns.
-
-### 4.2 Enhanced Design
-
-```rust
-pub struct EnhancedTriggerExecutor<S: StorageEngine> {
-    storage: Arc<S>,
-    executor: Arc<ProcedureExecutor>,
-}
-
-impl<S: StorageEngine> EnhancedTriggerExecutor<S> {
-    pub fn execute_trigger(&self, trigger: &TriggerInfo, context: &TriggerContext) -> Result<TriggerResult, TriggerError> {
-        match &trigger.body_stmts {
-            TriggerBody::Simple(sql) => self.execute_simple_trigger(sql, context),
-            TriggerBody::Block(stmts) => self.execute_block_trigger(stmts, context),
-        }
-    }
-    
-    fn execute_block_trigger(&self, stmts: &[TriggerStatement], context: &TriggerContext) -> Result<TriggerResult, TriggerError> {
-        let mut scope = VariableScope::with_trigger_context(context);
-        
-        for stmt in stmts {
-            match stmt {
-                TriggerStatement::Set { target, value } => {
-                    let evaluated_value = self.eval_expression(value, &scope)?;
-                    scope.set_variable(target, evaluated_value)?;
-                }
-                TriggerStatement::If { condition, then_body, else_body } => {
-                    if self.eval_condition(condition, &scope)? {
-                        self.execute_block_trigger(then_body, &mut scope)?;
-                    } else if let Some(else_stmts) = else_body {
-                        self.execute_block_trigger(else_stmts, &mut scope)?;
-                    }
-                }
-                TriggerStatement::Insert { ... } => { /* DML in trigger */ }
-                TriggerStatement::Update { ... } => { /* DML in trigger */ }
-            }
-        }
-        
-        Ok(TriggerResult::Modified(context.new_row.clone()))
-    }
-}
-```
-
----
-
-## 5. Integration with Existing System
-
-### 5.1 Integration Points
-
-1. **Catalog**: Procedures stored in `Catalog.stored_procedures`
-2. **Parser**: `ProcedureStatement` enum already defined
-3. **Executor**: `StoredProcExecutor` exists as placeholder
-4. **Storage**: `StorageEngine` triggers API exists
-
-### 5.2 Modified File Structure
-
-```
-crates/executor/src/
-├── lib.rs                    # Add procedure module exports
-├── stored_proc.rs            # Rename/replace with full implementation
-├── procedure/
-│   ├── mod.rs               # ProcedureExecutor
-│   ├── context.rs           # ProcedureContext, VariableScope
-│   ├── evaluator.rs         # ExpressionEvaluator
-│   ├── statements.rs        # Statement executors
-│   └── control_flow.rs      # Loop/branch handling
-└── trigger.rs               # Enhanced with block body support
-```
-
----
-
-## 6. Error Handling
-
-### 6.1 SIGNAL / RESIGNAL
-
-```rust
-pub enum ProcedureError {
-    Signal(String),           // User-defined error
-    SqlError(String),        // SQL execution error
-    Return(Value),           // Return value (control flow)
-    Leave(String),           // LEAVE label
-    Iterate(String),         // ITERATE label
-    DivisionByZero,
-    // ... etc
-}
-
-fn execute_signal(&self, condition: &str) -> Result<!, ProcedureError> {
-    Err(ProcedureError::Signal(condition.to_string()))
-}
-```
-
-### 6.2 Handler Support
-
-```sql
-DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
-BEGIN
-    -- error handling code
-END;
-```
-
-```rust
-pub struct Handler {
-    condition: HandlerCondition,
-    body: Vec<ProcedureStatement>,
+pub struct HandlerFrame {
+    pub condition: HandlerCondition,
+    pub body: Vec<ProcedureStatement>,
+    pub action: HandlerAction,
 }
 
 pub enum HandlerCondition {
@@ -477,51 +154,383 @@ pub enum HandlerCondition {
     SpecificError(String),
 }
 
-impl ProcedureExecutor {
-    fn find_handler(&self, condition: &HandlerCondition) -> Option<&Handler> {
-        self.handlers.iter().find(|h| h.condition == *condition)
+pub enum HandlerAction {
+    Continue,
+    Exit,
+}
+```
+
+**Critical**: `scopes: Vec<VariableScope>` enables block-level scoping.
+
+### 3.2 Block-Level Scope Semantics
+
+```rust
+// Entering a BEGIN block
+fn enter_block(&mut self) {
+    self.scopes.push(VariableScope::new());
+}
+
+// Exiting a BEGIN block
+fn exit_block(&mut self) {
+    self.scopes.pop();
+}
+
+// Variable declaration
+fn declare_variable(&mut self, name: &str, value: Value) {
+    // Always declare in current (top) scope
+    self.scopes.last_mut().unwrap().variables.insert(name.to_string(), value);
+}
+
+// Variable lookup (search from top to bottom)
+fn lookup_variable(&self, name: &str) -> Option<&Value> {
+    for scope in self.scopes.iter().rev() {
+        if let Some(v) = scope.variables.get(name) {
+            return Some(v);
+        }
+    }
+    None
+}
+
+// Variable assignment (assign to innermost scope where variable exists)
+fn assign_variable(&mut self, name: &str, value: Value) -> Result<(), ProcedureError> {
+    for scope in self.scopes.iter_mut().rev() {
+        if scope.variables.contains_key(name) {
+            scope.variables.insert(name.to_string(), value);
+            return Ok(());
+        }
+    }
+    Err(ProcedureError::UnknownVariable(name.to_string()))
+}
+```
+
+### 3.3 ExpressionEvaluator Trait
+
+**CRITICAL DESIGN RULE**: Must reuse SQL expression engine, NOT create a separate one.
+
+```rust
+pub trait ExpressionEvaluator: Send + Sync {
+    fn eval_expr(
+        &self,
+        expr: &Expr,
+        ctx: &mut ProcedureContext,
+    ) -> Result<Value, ProcedureError>;
+    
+    fn eval_condition(
+        &self,
+        expr: &Expr,
+        ctx: &mut ProcedureContext,
+    ) -> Result<bool, ProcedureError>;
+}
+```
+
+**Why this matters**: Avoids "two expression engines problem" - a catastrophic design error in database projects.
+
+### 3.4 Control Flow Structures
+
+```rust
+pub enum ProcedureControlFlow {
+    Continue,
+    Leave(String),      // Exit loop with optional label
+    Iterate(String),    // Continue to next iteration with optional label
+    Return(Value),      // Return from procedure
+    Error(ProcedureError),
+}
+
+pub struct LoopFrame {
+    pub label: Option<String>,
+    pub body: Vec<ProcedureStatement>,
+}
+```
+
+---
+
+## 4. Execution Flow
+
+### 4.1 Procedure Execution Lifecycle
+
+```
+CALL proc(args)
+       │
+       ▼
+┌──────────────────┐
+│ Lookup metadata   │
+│ (from Catalog)   │
+└──────────────────┘
+       │
+       ▼
+┌──────────────────┐
+│ Create Runtime    │
+│ - push scope     │
+│ - bind params    │
+└──────────────────┘
+       │
+       ▼
+┌──────────────────┐
+│ Execute Stmts     │◄─────────────────┐
+│ sequentially      │                  │
+└──────────────────┘                  │
+       │                               │
+       ├──[IF]── evaluate condition ────┤
+       ├──[WHILE]── evaluate condition ─┤
+       ├──[LOOP]─── check LEAVE ──────┤
+       ├──[CALL]─── recursive call ────┤
+       ├──[RETURN]── exit proc ───────┘
+       │
+       ▼
+┌──────────────────┐
+│ Pop scope        │
+│ Return value     │
+└──────────────────┘
+```
+
+### 4.2 Label Stack for LEAVE/ITERATE
+
+```rust
+impl ProcedureRuntime {
+    fn execute_loop(&mut self, label: Option<String>, body: Vec<ProcedureStatement>) -> Result<(), ProcedureError> {
+        // Push label onto stack
+        if let Some(ref lbl) = label {
+            self.context.labels.push(lbl.clone());
+        }
+        
+        loop {
+            match self.execute_statements(body.clone())? {
+                ProcedureControlFlow::Leave(lbl) => {
+                    // If label matches, exit; if no label, exit innermost
+                    if lbl.is_none() || (label.is_some() && label == Some(lbl)) {
+                        break;
+                    }
+                    return Err(ProcedureError::UnhandledLeave(lbl));
+                }
+                ProcedureControlFlow::Iterate(lbl) => {
+                    if lbl.is_none() || (label.is_some() && label == Some(lbl)) {
+                        continue;
+                    }
+                    return Err(ProcedureError::UnhandledIterate(lbl));
+                }
+                ProcedureControlFlow::Return(v) => {
+                    return Err(ProcedureError::Return(v));
+                }
+                ProcedureControlFlow::Continue => {
+                    continue;
+                }
+                ProcedureControlFlow::Error(e) => {
+                    // Check handler stack
+                    if let Some(handler) = self.find_handler(&e) {
+                        self.execute_handler(handler)?;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        
+        // Pop label
+        if label.is_some() {
+            self.context.labels.pop();
+        }
+        
+        Ok(())
+    }
+}
+```
+
+### 4.3 CALL with Recursion Protection
+
+```rust
+const MAX_CALL_DEPTH: usize = 32;
+
+impl ProcedureRuntime {
+    fn execute_call(&mut self, name: &str, args: Vec<Value>) -> Result<Option<Value>, ProcedureError> {
+        // Recursion protection
+        if self.context.call_stack_depth >= MAX_CALL_DEPTH {
+            return Err(ProcedureError::MaxCallDepthExceeded(MAX_CALL_DEPTH));
+        }
+        
+        // Increment call depth
+        self.context.call_stack_depth += 1;
+        
+        // Push new context for nested call
+        self.push_scope();
+        
+        let result = self.execute_procedure(name, args);
+        
+        // Pop context
+        self.pop_scope();
+        
+        // Decrement call depth
+        self.context.call_stack_depth -= 1;
+        
+        result
     }
 }
 ```
 
 ---
 
-## 7. Testing Strategy
+## 5. SQL Bridge (Critical Integration Point)
 
-### 7.1 Unit Tests
+### 5.1 SQL Executor Bridge Design
 
-- `test_declare_*`: Variable declaration and default values
-- `test_if_*`: Conditional branching
-- `test_while_*`: Loop execution
-- `test_loop_*`: Infinite loop with LEAVE/ITERATE
-- `test_call_*`: Nested procedure calls
-- `test_return_*`: Return value propagation
-
-### 7.2 Integration Tests
-
-- Procedure with multiple control flow statements
-- Nested procedure calls with parameter passing
-- Trigger execution during DML operations
-
-### 7.3 Test Cases
+**CRITICAL**: Must use `session.execute_with_context()` NOT `planner.execute()` directly.
 
 ```rust
-#[test]
-fn test_procedure_with_if_and_variables() {
-    let sql = "CREATE PROCEDURE test_if(x INT) BEGIN 
-        DECLARE result INT DEFAULT 0;
-        IF x > 0 THEN 
-            SET result = 1;
-        ELSEIF x < 0 THEN 
-            SET result = -1;
-        ELSE 
-            SET result = 0;
-        END IF;
-        RETURN result;
-    END";
+impl ProcedureRuntime {
+    fn execute_sql(&mut self, stmt: &Statement) -> Result<QueryResult, ProcedureError> {
+        // Use session bridge to maintain transaction scope
+        self.session.execute_with_context(stmt, &mut self.context)
+            .map_err(|e| ProcedureError::SqlError(e.to_string()))
+    }
+}
+```
+
+**Why this matters**: Direct planner.execute() breaks transaction scope - a severe bug.
+
+### 5.2 SELECT INTO Semantics
+
+**MySQL-compatible behavior**:
+
+```rust
+fn execute_select_into(&mut self, stmt: &SelectIntoStatement) -> Result<(), ProcedureError> {
+    let result = self.execute_sql(&stmt.select)?;
     
-    let result = execute_procedure("test_if", vec![Value::Integer(5)]);
-    assert_eq!(result, Value::Integer(1));
+    match result.rows.len() {
+        0 => Err(ProcedureError::NoDataFound),
+        1 => {
+            let row = &result.rows[0];
+            for (i, var_name) in stmt.into_vars.iter().enumerate() {
+                if let Some(value) = row.get(i) {
+                    self.assign_variable(var_name, value.clone())?;
+                }
+            }
+            Ok(())
+        }
+        _ => Err(ProcedureError::TooManyRows),
+    }
+}
+```
+
+**Required semantics**:
+- 0 rows → error (NOTFOUND condition)
+- 1 row → assign values
+- >1 rows → error (TOO_MANY_ROWS condition)
+
+---
+
+## 6. Trigger Integration
+
+### 6.1 Unified Runtime for Triggers
+
+Triggers are implicit procedures - use same runtime:
+
+```rust
+pub struct TriggerRuntime {
+    runtime: ProcedureRuntime,
+}
+
+impl TriggerRuntime {
+    pub fn execute_trigger(&self, trigger: &TriggerInfo, context: &TriggerContext) -> Result<TriggerResult, TriggerError> {
+        // Convert trigger body to ProcedureStatement
+        let stmts = self.parse_trigger_body(&trigger.body)?;
+        
+        // Execute using unified runtime
+        self.runtime.execute_statements(stmts)
+        
+        // Return modified row if any
+    }
+}
+```
+
+### 6.2 DML Pipeline Integration
+
+```
+INSERT executor
+       │
+       ├──► BEFORE triggers ──► modify NEW.* ──┐
+       │                                      │
+       ├──► Row modification                   │
+       │                                      │
+       └──► AFTER triggers ────────────────────┘
+       
+TriggerRuntime executes at each point, integrated into DML executor pipeline.
+```
+
+### 6.3 Phase 6 Decomposition
+
+```
+Phase 6A: BEFORE trigger runtime
+Phase 6B: AFTER trigger runtime  
+Phase 6C: Statement-level trigger support (future)
+```
+
+---
+
+## 7. Error Handling
+
+### 7.1 SIGNAL / RESIGNAL
+
+```rust
+#[derive(Debug)]
+pub enum ProcedureError {
+    Signal(String),
+    SqlError(String),
+    Return(Value),
+    Leave(String),
+    Iterate(String),
+    NoDataFound,
+    TooManyRows,
+    MaxCallDepthExceeded(usize),
+    UnknownVariable(String),
+    DivisionByZero,
+}
+
+impl ProcedureRuntime {
+    fn execute_signal(&self, condition: &str) -> Result<!, ProcedureError> {
+        Err(ProcedureError::Signal(condition.to_string()))
+    }
+}
+```
+
+### 7.2 Handler Execution
+
+```rust
+impl ProcedureRuntime {
+    fn find_handler(&self, error: &ProcedureError) -> Option<&HandlerFrame> {
+        for handler in self.context.handler_stack.iter().rev() {
+            match &handler.condition {
+                HandlerCondition::Sqlexception => {
+                    if matches!(error, ProcedureError::SqlError(_)) {
+                        return Some(handler);
+                    }
+                }
+                HandlerCondition::NotFound => {
+                    if matches!(error, ProcedureError::NoDataFound) {
+                        return Some(handler);
+                    }
+                }
+                HandlerCondition::SpecificError(code) => {
+                    // Match specific error code
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+    
+    fn execute_handler(&mut self, handler: &HandlerFrame) -> Result<ProcedureControlFlow, ProcedureError> {
+        match handler.action {
+            HandlerAction::Continue => {
+                // Execute handler body then continue
+                self.execute_statements(handler.body.clone())?;
+                Ok(ProcedureControlFlow::Continue)
+            }
+            HandlerAction::Exit => {
+                // Execute handler body then exit current scope
+                self.execute_statements(handler.body.clone())?;
+                Err(ProcedureControlFlow::Leave(String::new()))
+            }
+        }
+    }
 }
 ```
 
@@ -530,71 +539,146 @@ fn test_procedure_with_if_and_variables() {
 ## 8. Implementation Phases
 
 ### Phase 1: Core Infrastructure
-- `ProcedureContext` and `VariableScope`
-- Basic `ProcedureExecutor` skeleton
-- `ExpressionEvaluator` trait
+- [x] `ProcedureContext` with enhanced structure (scopes, labels, handlers, call_depth)
+- [x] `VariableScope` with block-level semantics
+- [x] `ExpressionEvaluator` trait (reusing SQL expression engine)
+- [x] `ProcedureRuntime` skeleton
+- [x] `MAX_CALL_DEPTH` constant
 
-### Phase 2: Statement Executors
-- `execute_declare()`
-- `execute_set()`
-- `execute_return()`
+### Phase 2: Basic Statement Executors
+- [ ] `execute_declare()` - Block-level variable declaration
+- [ ] `execute_set()` - Variable assignment
+- [ ] `execute_return()` - Return value from procedure
+- [ ] `execute_begin_end()` - Block scoping
 
 ### Phase 3: Control Flow
-- `execute_if()` with ELSEIF/ELSE
-- `execute_while()`
-- `execute_loop()` with LEAVE/ITERATE
+- [ ] `execute_if()` - IF/ELSEIF/ELSE branching
+- [ ] `execute_while()` - WHILE loop
+- [ ] `execute_loop()` - Infinite loop
+
+### Phase 3.5: Label Engine (NEW PHASE)
+- [ ] Label stack management
+- [ ] `execute_leave()` with label matching
+- [ ] `execute_iterate()` with label matching
 
 ### Phase 4: SQL Integration
-- `execute_sql()` using existing planner/executor
-- `execute_select_into()`
-- `execute_call()` for nested procedures
+- [ ] `execute_sql()` via session bridge
+- [ ] `execute_select_into()` with proper row count checking
+- [ ] `execute_call()` with recursion protection
+- [ ] `execute_insert/update/delete()`
 
 ### Phase 5: Error Handling
-- SIGNAL/RESIGNAL implementation
-- Handler support (CONTINUE, EXIT)
-- Proper error propagation
+- [ ] SIGNAL/RESIGNAL implementation
+- [ ] Handler support (CONTINUE, EXIT HANDLER FOR SQLEXCEPTION)
+- [ ] Condition handling (NOT FOUND, SQLWARNING)
+- [ ] Proper error propagation
 
-### Phase 6: Trigger Enhancement
-- Enhanced trigger body support
-- Trigger execution integration with DML
+### Phase 6: Trigger Integration
+- [ ] Phase 6A: BEFORE trigger runtime
+- [ ] Phase 6B: AFTER trigger runtime
+- [ ] Phase 6C: Statement-level trigger support (future)
 
 ---
 
-## 9. Risks and Mitigations
+## 9. File Structure
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Recursive procedure calls | Stack overflow | Implement call depth limit |
-| Infinite loops | Hang | Implement statement count limit |
-| Performance regression | Slow queries | Benchmark before/after |
-| Memory leaks | OOM | Clear VariableScope on exit |
+```
+crates/executor/src/
+├── lib.rs                    # Add procedure module exports
+├── procedure/
+│   ├── mod.rs               # ProcedureRuntime, ProcedureContext
+│   ├── context.rs           # Enhanced context with scopes/labels/handlers
+│   ├── scope.rs             # VariableScope with block semantics
+│   ├── evaluator.rs         # ExpressionEvaluator trait
+│   ├── statements.rs        # Statement executors (declare, set, return)
+│   ├── control_flow.rs       # IF, WHILE, LOOP, LEAVE, ITERATE
+│   ├── sql_bridge.rs         # SQL executor bridge
+│   ├── error.rs             # ProcedureError enum
+│   └── handler.rs           # SIGNAL, RESIGNAL, handlers
+└── trigger.rs               # Enhanced (or deprecated in favor of unified runtime)
+```
 
 ---
 
 ## 10. Dependencies
 
-- `crates/parser`: ProcedureStatement definitions
-- `crates/planner`: SQL planning
-- `crates/executor`: VolcanoExecutor for SQL execution
-- `crates/storage`: Storage engine
-- `crates/catalog`: Procedure registry
-- `crates/types`: Value types
+| Issue | Depends On |
+|-------|-----------|
+| Phase 1-5 (Procedure) | None (can start immediately) |
+| Trigger privilege check | Issue #956 (RBAC) |
+| Full trigger integration | Phase 1-5 complete |
+
+**Recommended order**: Issue #956 (RBAC) → Procedure Phases 1-5 → Trigger Phase 6
 
 ---
 
-## 11. Open Questions
+## 11. RBAC Integration
 
-1. **Recursion**: Should procedures support recursive calls? If yes, implement tail-call optimization or explicit recursion limit.
+```
+RBAC
+  │
+  ▼
+permission check
+  │
+  ▼
+ProcedureRuntime.execute()
+  │
+  ▼
+(Procedures execute with caller's privileges)
+```
 
-2. **Transaction integration**: Should procedure execution be atomic? How to handle COMMIT/ROLLBACK within procedures?
-
-3. **Cursor support**: For `SELECT * FROM table WHERE ...` followed by `FETCH`, need cursor management.
-
-4. **OUT parameter semantics**: Should OUT parameters be returned in result set or via special mechanism?
+Stored procedure privilege escalation must be prevented by RBAC framework.
 
 ---
 
-## 12. References
+## 12. Testing Strategy
+
+### Unit Tests
+- Block-level scope shadowing
+- Label matching for LEAVE/ITERATE
+- SELECT INTO row count handling
+- Recursion depth protection
+- Handler execution
+
+### Integration Tests
+- Procedure with multiple control flow statements
+- Nested procedure calls with parameter passing
+- Trigger execution during DML operations
+
+---
+
+## 13. Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Recursive procedure calls | Stack overflow | MAX_CALL_DEPTH = 32 |
+| Infinite loops | Hang | Statement count limit |
+| Two expression engines | Maintenance nightmare | Reuse SQL expression engine |
+| Transaction scope broken | Data corruption | Use session bridge, not direct planner |
+
+---
+
+## 14. Key Design Principles
+
+1. **UNIFIED runtime**: ProcedureRuntime = TriggerRuntime (triggers are implicit procedures)
+2. **ExpressionEvaluator trait**: Reuse SQL expression engine, never create separate one
+3. **Block-level scoping**: scopes Vec<VariableScope>, push on BEGIN, pop on END
+4. **Label stack**: LEAVE/ITERATE with label matching
+5. **SQL bridge via session**: Maintain transaction scope
+6. **SELECT INTO semantics**: 0 rows → error, 1 row → assign, >1 rows → error
+7. **Recursion protection**: MAX_CALL_DEPTH limit
+
+---
+
+## 15. Related Issues
+
+- Issue #1162: Parser support for stored procedure control flow (merged)
+- Issue #956: RBAC implementation (recommended to complete first)
+- Issue #1164: This implementation issue
+
+---
+
+## 16. References
 
 - MySQL Stored Procedure Language: https://dev.mysql.com/doc/refman/8.0/en/stored-programs-defined.html
 - PostgreSQL PL/pgSQL: https://www.postgresql.org/docs/current/plpgsql.html
