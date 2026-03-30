@@ -8,18 +8,11 @@
 use std::process::Command;
 use std::time::Instant;
 
-/// 测试类型
-#[derive(Debug, Clone, PartialEq)]
-enum TestType {
-    IntegrationTest,
-    CrateTest { crate_name: &'static str },
-}
-
 /// 测试类别
 #[derive(Debug, Clone)]
 struct TestCategory {
     name: &'static str,
-    test_files: Vec<(&'static str, TestType)>,
+    test_files: Vec<&'static str>,
     description: &'static str,
 }
 
@@ -30,243 +23,143 @@ fn get_test_categories() -> Vec<TestCategory> {
         TestCategory {
             name: "单元测试 (Unit Tests)",
             test_files: vec![
-                ("bplus_tree_test", TestType::IntegrationTest),
-                ("buffer_pool_test", TestType::IntegrationTest),
-                ("file_storage_test", TestType::IntegrationTest),
-                ("local_executor_test", TestType::IntegrationTest),
-                ("optimizer_cost_test", TestType::IntegrationTest),
-                ("optimizer_rules_test", TestType::IntegrationTest),
-                ("parser_token_test", TestType::IntegrationTest),
-                ("query_cache_config_test", TestType::IntegrationTest),
-                ("query_cache_test", TestType::IntegrationTest),
-                ("server_health_test", TestType::IntegrationTest),
-                ("types_value_test", TestType::IntegrationTest),
-                ("vectorization_test", TestType::IntegrationTest),
+                "bplus_tree_test",
+                "buffer_pool_test",
+                "file_storage_test",
+                "local_executor_test",
+                "optimizer_cost_test",
+                "optimizer_rules_test",
+                "parser_token_test",
+                "prometheus_test",
+                "query_cache_config_test",
+                "query_cache_test",
+                "server_health_test",
+                "slow_query_log_test",
+                "types_value_test",
+                "vectorization_test",
             ],
             description: "测试底层组件：存储、缓冲区、解析器、类型系统",
         },
         // 集成测试 - 核心
         TestCategory {
             name: "集成测试 - 核心 (Core Integration)",
-            test_files: vec![
-                ("executor_test", TestType::IntegrationTest),
-                ("planner_test", TestType::IntegrationTest),
-                ("page_test", TestType::IntegrationTest),
-                ("index_integration_test", TestType::IntegrationTest),
-                ("session_config_test", TestType::IntegrationTest),
-                // ("integration_test", TestType::IntegrationTest), // TODO: 缺少 harness 模块
-            ],
-            description: "测试执行器、规划器、页面管理、索引、会话配置",
+            test_files: vec!["executor_test", "planner_test", "page_test"],
+            description: "测试执行器、规划器、页面管理",
         },
         // 集成测试 - SQL功能
         TestCategory {
             name: "集成测试 - SQL功能 (SQL Functionality)",
-            test_files: vec![
-                ("foreign_key_test", TestType::IntegrationTest),
-                ("fk_actions_test", TestType::IntegrationTest),
-                ("server_integration_test", TestType::IntegrationTest),
-                ("upsert_test", TestType::IntegrationTest),
-                ("autoinc_test", TestType::IntegrationTest),
-                ("savepoint_test", TestType::IntegrationTest),
-            ],
-            description: "测试外键、服务器、UPSERT、自增、保存点",
+            test_files: vec!["foreign_key_test", "server_integration_test", "upsert_test"],
+            description: "测试外键、服务器、UPSERT",
         },
         // 集成测试 - 存储
         TestCategory {
             name: "集成测试 - 存储 (Storage)",
             test_files: vec![
-                ("query_cache_test", TestType::IntegrationTest),
-                ("optimizer_stats_test", TestType::IntegrationTest),
-                ("checksum_corruption_test", TestType::IntegrationTest),
-                ("storage_integration_test", TestType::IntegrationTest),
-                ("batch_insert_test", TestType::IntegrationTest),
+                "query_cache_test",
+                "optimizer_stats_test",
+                "checksum_corruption_test",
             ],
-            description: "测试查询缓存、优化器统计、校验和完整性、批量插入",
+            description: "测试查询缓存、优化器统计、校验和完整性",
         },
         // 教学场景测试
         TestCategory {
             name: "教学场景测试 (Teaching Scenarios)",
-            test_files: vec![
-                ("teaching_scenario_test", TestType::IntegrationTest),
-                (
-                    "teaching_scenario_client_server_test",
-                    TestType::IntegrationTest,
-                ),
-            ],
+            test_files: vec!["teaching_scenario_test"],
             description: "35+ 教学场景测试：CRUD、事务、JOIN、聚合、子查询、视图、优化器",
         },
         // 性能测试
         TestCategory {
             name: "性能测试 (Performance)",
-            test_files: vec![("performance_test", TestType::IntegrationTest)],
+            test_files: vec!["performance_test"],
             description: "22 性能测试：批量插入、索引扫描、JOIN、缓存、向量化",
-        },
-        // v2.0.0 新功能测试
-        TestCategory {
-            name: "v2.0.0 新功能 - 列式存储 (Columnar Storage)",
-            test_files: vec![("columnar_storage_test", TestType::IntegrationTest)],
-            description:
-                "Epic-12 列式存储测试：ColumnChunk/ColumnSegment/ColumnarScan/ProjectionPushdown",
-        },
-        TestCategory {
-            name: "v2.0.0 新功能 - 窗口函数与高级SQL (Window Functions)",
-            test_files: vec![("window_function_test", TestType::IntegrationTest)],
-            description: "Phase 2 窗口函数测试：ROW_NUMBER/RANK/SUM OVER",
-        },
-        TestCategory {
-            name: "v2.0.0 新功能 - 分布式事务 (Distributed Transaction)",
-            test_files: vec![("distributed_transaction_test", TestType::IntegrationTest)],
-            description: "Phase 3 分布式事务测试：Sharding/2PC",
-        },
-        TestCategory {
-            name: "v2.0.0 新功能 - TPC-H基准测试 (TPC-H Benchmark)",
-            test_files: vec![
-                ("tpch_test", TestType::IntegrationTest),
-                ("mysql_tpch_test", TestType::IntegrationTest),
-            ],
-            description: "Epic-12 TPC-H 基准测试：Parquet 导入导出",
         },
         // 异常测试 - 并发
         TestCategory {
             name: "异常测试 - 并发 (Anomaly - Concurrency)",
             test_files: vec![
-                ("mvcc_concurrency_test", TestType::IntegrationTest),
-                ("snapshot_isolation_test", TestType::IntegrationTest),
-                ("concurrency_stress_test", TestType::IntegrationTest),
+                "mvcc_concurrency_test",
+                "snapshot_isolation_test",
+                "concurrency_stress_test",
             ],
             description: "MVCC并发、快照隔离、并发压力测试",
         },
         // 异常测试 - 隔离级别
         TestCategory {
             name: "异常测试 - 隔离级别 (Anomaly - Isolation)",
-            test_files: vec![
-                ("transaction_isolation_test", TestType::IntegrationTest),
-                ("transaction_timeout_test", TestType::IntegrationTest),
-            ],
+            test_files: vec!["transaction_isolation_test", "transaction_timeout_test"],
             description: "事务隔离级别、超时测试",
         },
         // 异常测试 - 数据处理
         TestCategory {
             name: "异常测试 - 数据处理 (Anomaly - Data Handling)",
             test_files: vec![
-                ("boundary_test", TestType::IntegrationTest),
-                ("null_handling_test", TestType::IntegrationTest),
-                ("aggregate_type_test", TestType::IntegrationTest),
-                ("error_handling_test", TestType::IntegrationTest),
-                ("datetime_type_test", TestType::IntegrationTest),
+                "boundary_test",
+                "null_handling_test",
+                "aggregate_type_test",
+                "error_handling_test",
+                "datetime_type_test",
             ],
             description: "边界条件、NULL处理、聚合类型、错误处理、日期时间",
         },
         // 异常测试 - 查询
         TestCategory {
             name: "异常测试 - 查询 (Anomaly - Query)",
-            test_files: vec![
-                ("join_test", TestType::IntegrationTest),
-                ("set_operations_test", TestType::IntegrationTest),
-                ("view_test", TestType::IntegrationTest),
-            ],
+            test_files: vec!["join_test", "set_operations_test", "view_test"],
             description: "JOIN、集合操作、视图",
         },
         // 异常测试 - 约束
         TestCategory {
             name: "异常测试 - 约束 (Anomaly - Constraints)",
-            test_files: vec![
-                ("fk_constraint_test", TestType::IntegrationTest),
-                ("catalog_consistency_test", TestType::IntegrationTest),
-            ],
+            test_files: vec!["fk_constraint_test", "catalog_consistency_test"],
             description: "外键约束、目录一致性",
         },
         // 压力测试
         TestCategory {
             name: "压力测试 (Stress)",
             test_files: vec![
-                ("chaos_test", TestType::IntegrationTest),
-                ("crash_recovery_test", TestType::IntegrationTest),
-                ("stress_test", TestType::IntegrationTest),
-                ("production_scenario_test", TestType::IntegrationTest),
-                ("wal_deterministic_test", TestType::IntegrationTest),
-                ("wal_fuzz_test", TestType::IntegrationTest),
+                "chaos_test",
+                "crash_recovery_test",
+                "stress_test",
+                "production_scenario_test",
+                "wal_deterministic_test",
+                "wal_fuzz_test",
             ],
             description: "混沌工程、崩溃恢复、压力测试、WAL确定性测试",
         },
         // 异常测试 - 稳定性
         TestCategory {
             name: "异常测试 - 稳定性 (Anomaly - Stability)",
-            test_files: vec![
-                ("long_run_stability_test", TestType::IntegrationTest),
-                ("qps_benchmark_test", TestType::IntegrationTest),
-            ],
+            test_files: vec!["long_run_stability_test", "qps_benchmark_test"],
             description: "长时间运行稳定性、QPS基准测试",
         },
         // 异常测试 - 崩溃注入
         TestCategory {
             name: "异常测试 - 崩溃注入 (Anomaly - Crash Injection)",
-            test_files: vec![("crash_injection_test", TestType::IntegrationTest)],
+            test_files: vec!["crash_injection_test"],
             description: "崩溃注入测试",
         },
         // CI 测试
         TestCategory {
             name: "CI 测试 (CI)",
-            test_files: vec![("ci_test", TestType::IntegrationTest)],
+            test_files: vec!["ci_test"],
             description: "CI 环境检查",
         },
         // 其他测试
         TestCategory {
             name: "其他测试 (Other)",
-            test_files: vec![
-                ("binary_format_test", TestType::IntegrationTest),
-                ("wal_integration_test", TestType::IntegrationTest),
-            ],
+            test_files: vec!["binary_format_test", "wal_integration_test"],
             description: "二进制格式、WAL集成测试",
-        },
-        // SQL Firewall 模块测试 (Issue #1134)
-        TestCategory {
-            name: "SQL Firewall 模块 (SQL Firewall)",
-            test_files: vec![(
-                "sqlrustgo-security",
-                TestType::CrateTest {
-                    crate_name: "sqlrustgo-security",
-                },
-            )],
-            description: "SQL防火墙测试：SQL注入防护、批量操作拦截、告警系统",
-        },
-        // 版本升级CLI模块测试 (Issue #1132)
-        TestCategory {
-            name: "版本升级CLI模块 (Upgrade CLI)",
-            test_files: vec![(
-                "sqlrustgo-tools",
-                TestType::CrateTest {
-                    crate_name: "sqlrustgo-tools",
-                },
-            )],
-            description: "版本升级CLI工具测试：版本检测、升级执行、回滚支持",
-        },
-        // AgentSQL模块测试 (Issue #1128)
-        TestCategory {
-            name: "AgentSQL模块 (AgentSQL)",
-            test_files: vec![(
-                "sqlrustgo-agentsql",
-                TestType::CrateTest {
-                    crate_name: "sqlrustgo-agentsql",
-                },
-            )],
-            description: "AgentSQL NL2SQL、内存管理、REST API测试",
         },
     ]
 }
 
 /// 运行单个测试文件
-fn run_test_file(test_file: &str, test_type: &TestType) -> TestResult {
+fn run_test_file(test_file: &str) -> TestResult {
     let start = Instant::now();
-
-    let output = match test_type {
-        TestType::IntegrationTest => Command::new("cargo")
-            .args(&["test", "--test", test_file, "--", "--nocapture"])
-            .output(),
-        TestType::CrateTest { crate_name } => Command::new("cargo")
-            .args(&["test", "-p", crate_name, "--", "--nocapture"])
-            .output(),
-    };
+    let output = Command::new("cargo")
+        .args(&["test", "--test", test_file, "--", "--nocapture"])
+        .output();
 
     let duration = start.elapsed();
 
@@ -390,7 +283,7 @@ fn print_header() {
         "╔══════════════════════════════════════════════════════════════════════════════════╗"
     );
     println!(
-        "║                     SQLRustGo v2.1.0 综合回归测试报告                              ║"
+        "║                     SQLRustGo v1.9.0 综合回归测试报告                              ║"
     );
     println!(
         "╚══════════════════════════════════════════════════════════════════════════════════╝"
@@ -558,9 +451,9 @@ fn test_regression_suite() {
         println!("▶ 正在运行: {}", category.name);
 
         let mut category_results = Vec::new();
-        for (test_file, test_type) in &category.test_files {
+        for test_file in &category.test_files {
             print!("  ⏳ {}... ", test_file);
-            let result = run_test_file(test_file, test_type);
+            let result = run_test_file(test_file);
 
             if result.success {
                 println!("✅ ({}, {} passed)", result.duration_ms, result.passed);
@@ -587,12 +480,7 @@ fn test_regression_suite() {
     for category in &categories {
         let category_results: Vec<_> = all_results
             .iter()
-            .filter(|r| {
-                category
-                    .test_files
-                    .iter()
-                    .any(|(name, _)| name == &r.test_file)
-            })
+            .filter(|r| category.test_files.contains(&r.test_file.as_str()))
             .cloned()
             .collect();
         print_category_report(category, &category_results);
