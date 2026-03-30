@@ -182,6 +182,22 @@ impl Privilege {
     }
 }
 
+impl std::fmt::Display for Privilege {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Privilege::Read => write!(f, "READ"),
+            Privilege::Insert => write!(f, "INSERT"),
+            Privilege::Update => write!(f, "UPDATE"),
+            Privilege::Delete => write!(f, "DELETE"),
+            Privilege::Alter => write!(f, "ALTER"),
+            Privilege::Drop => write!(f, "DROP"),
+            Privilege::Create => write!(f, "CREATE"),
+            Privilege::Grant => write!(f, "GRANT"),
+            Privilege::All => write!(f, "ALL"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
     Database,
@@ -296,6 +312,35 @@ impl PrivilegeGrant {
             with_grant_option: false,
         }
     }
+
+    pub fn matches(&self, required: Privilege, object: &ObjectRef) -> bool {
+        if self.object_type != object.object_type {
+            return false;
+        }
+
+        if self.object_name.eq_ignore_ascii_case(&object.object_name) {
+            return match self.privilege {
+                Privilege::All => true,
+                p => p == required,
+            };
+        }
+
+        if self.object_name == "*" {
+            return match self.privilege {
+                Privilege::All => true,
+                p => p == required,
+            };
+        }
+
+        if self.object_type == ObjectType::Database && self.object_name == "%" {
+            return match self.privilege {
+                Privilege::All => true,
+                p => p == required,
+            };
+        }
+
+        false
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -328,6 +373,10 @@ impl ObjectRef {
             object_name: name.to_string(),
             column_name: None,
         }
+    }
+
+    pub fn matches(&self, other: &ObjectRef) -> bool {
+        self.object_type == other.object_type && self.object_name == other.object_name
     }
 }
 
@@ -643,18 +692,35 @@ impl AuthManager {
     pub fn check_privilege(
         &self,
         identity: &UserIdentity,
-        privilege: Privilege,
         object: &ObjectRef,
-    ) -> bool {
-        if self.has_direct_privilege(identity, privilege, object) {
-            return true;
+        required_privilege: Privilege,
+    ) -> AuthResult<()> {
+        let normalized_identity = identity.normalize();
+
+        if let Some(grants) = self.privileges.get(&normalized_identity) {
+            for grant in grants {
+                if grant.matches(required_privilege, object) {
+                    return Ok(());
+                }
+            }
         }
 
-        if self.has_public_privilege(privilege, object) {
-            return true;
+        let wildcard_identity = UserIdentity::new(&normalized_identity.username, "%");
+        if let Some(grants) = self.privileges.get(&wildcard_identity) {
+            for grant in grants {
+                if grant.matches(required_privilege, object) {
+                    return Ok(());
+                }
+            }
         }
 
-        false
+        Err(AuthError {
+            code: AuthErrorCode::PermissionDenied,
+            message: format!(
+                "User '{}'@'{}' does not have {} privilege on '{}'",
+                identity.username, identity.host, required_privilege, object.object_name
+            ),
+        })
     }
 
     fn has_direct_privilege(
@@ -747,6 +813,14 @@ impl AuthManager {
 
     pub fn list_grants(&self) -> Vec<&PrivilegeGrant> {
         self.privileges.values().flat_map(|v| v.iter()).collect()
+    }
+
+    pub fn all_users(&self) -> impl Iterator<Item = &UserAuthInfo> {
+        self.users.values()
+    }
+
+    pub fn all_privileges(&self) -> impl Iterator<Item = (&UserIdentity, &Vec<PrivilegeGrant>)> {
+        self.privileges.iter()
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {
@@ -954,8 +1028,12 @@ mod tests {
         auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
             .unwrap();
 
-        assert!(auth.check_privilege(&identity, Privilege::Read, &ObjectRef::table("users")));
-        assert!(!auth.check_privilege(&identity, Privilege::Insert, &ObjectRef::table("users")));
+        assert!(auth
+            .check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read)
+            .is_ok());
+        assert!(auth
+            .check_privilege(&identity, &ObjectRef::table("users"), Privilege::Insert)
+            .is_err());
     }
 
     #[test]
@@ -969,17 +1047,23 @@ mod tests {
         auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0)
             .unwrap();
 
-        assert!(auth.check_privilege(&identity, Privilege::Read, &ObjectRef::database("anything")));
-        assert!(auth.check_privilege(
-            &identity,
-            Privilege::Insert,
-            &ObjectRef::database("anything")
-        ));
-        assert!(auth.check_privilege(
-            &identity,
-            Privilege::Delete,
-            &ObjectRef::database("anything")
-        ));
+        assert!(auth
+            .check_privilege(&identity, &ObjectRef::database("anything"), Privilege::Read)
+            .is_ok());
+        assert!(auth
+            .check_privilege(
+                &identity,
+                &ObjectRef::database("anything"),
+                Privilege::Insert
+            )
+            .is_ok());
+        assert!(auth
+            .check_privilege(
+                &identity,
+                &ObjectRef::database("anything"),
+                Privilege::Delete
+            )
+            .is_ok());
     }
 
     #[test]
