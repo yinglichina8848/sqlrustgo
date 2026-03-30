@@ -252,6 +252,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             )],
             description: "AgentSQL NL2SQL、内存管理、REST API测试",
         },
+        // 存储过程与触发器测试
+        TestCategory {
+            name: "存储过程与触发器 (Stored Procedures & Triggers)",
+            test_files: vec![("stored_procedure_trigger_test", TestType::IntegrationTest)],
+            description: "存储过程和触发器解析与执行测试",
+        },
     ]
 }
 

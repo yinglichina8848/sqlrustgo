@@ -253,6 +253,40 @@ pub enum ProcedureStatement {
     },
     /// SET variable = value
     Set { variable: String, value: String },
+    /// DECLARE variable statement
+    Declare {
+        name: String,
+        data_type: String,
+        default_value: Option<String>,
+    },
+    /// IF condition THEN statements [ELSEIF ...] [ELSE ...] END IF
+    If {
+        condition: String,
+        then_body: Vec<ProcedureStatement>,
+        elseif_body: Vec<(String, Vec<ProcedureStatement>)>,
+        else_body: Vec<ProcedureStatement>,
+    },
+    /// WHILE condition DO statements END WHILE
+    While {
+        condition: String,
+        body: Vec<ProcedureStatement>,
+    },
+    /// LOOP statements END LOOP (with optional LEAVE to exit)
+    Loop {
+        body: Vec<ProcedureStatement>,
+    },
+    /// RETURN expression
+    Return { value: String },
+    /// LEAVE label - exit a loop
+    Leave { label: String },
+    /// ITERATE label - continue to next iteration
+    Iterate { label: String },
+    /// CALL another stored procedure
+    Call {
+        procedure_name: String,
+        args: Vec<String>,
+        into_var: Option<String>,
+    },
 }
 
 /// DROP PROCEDURE statement
@@ -2086,7 +2120,11 @@ impl Parser {
                 self.next();
                 self.parse_create_trigger()
             }
-            _ => Err("Expected TABLE, VIEW, or TRIGGER after CREATE".to_string()),
+            Some(Token::Procedure) => {
+                self.next();
+                self.parse_create_procedure()
+            }
+            _ => Err("Expected TABLE, VIEW, TRIGGER, or PROCEDURE after CREATE".to_string()),
         }
     }
 
@@ -2488,80 +2526,363 @@ impl Parser {
         // Parse BEGIN...END block
         self.expect(Token::Begin)?;
 
-        let mut body = Vec::new();
-
-        // Simple body parsing: collect statements until END
-        // Note: This is a simplified implementation that stores raw SQL for now
-        while self.current().is_some()
-            && !matches!(self.current(), Some(Token::Identifier(end_str)) 
-                       if end_str.to_uppercase() == "END")
-        {
-            let stmt = match self.current() {
-                Some(Token::Select) => {
-                    // For now, just collect SELECT statements as raw SQL
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Set) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Identifier(_)) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Semicolon) => {
-                    self.next();
-                    continue;
-                }
-                Some(Token::If) => {
-                    let raw_sql = self.collect_until_end_if();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::While) => {
-                    let raw_sql = self.collect_until_end_loop();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Loop) => {
-                    let raw_sql = self.collect_until_end_loop();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Leave) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Iterate) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Signal) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Return) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                _ => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-            };
-            body.push(stmt);
-        }
-
-        // Expect END
-        if matches!(self.current(), Some(Token::Identifier(end_str)) 
-                   if end_str.to_uppercase() == "END")
-        {
-            self.next();
-        }
+        let body = self.parse_procedure_body()?;
 
         Ok(Statement::CreateProcedure(CreateProcedureStatement {
             name,
             params,
             body,
         }))
+    }
+
+    /// Parse procedure body statements until END (but don't consume END)
+    fn parse_procedure_body(&mut self) -> Result<Vec<ProcedureStatement>, String> {
+        let mut body = Vec::new();
+
+        loop {
+            // Check for END before parsing statement
+            if matches!(self.current(), Some(Token::Identifier(end_str)) 
+                       if end_str.to_uppercase() == "END")
+            {
+                break;
+            }
+            
+            if self.current().is_none() {
+                break;
+            }
+            
+            match self.parse_procedure_statement() {
+                Ok(stmt) => {
+                    // Skip empty statements
+                    if !matches!(stmt, ProcedureStatement::RawSql(ref s) if s.is_empty()) {
+                        body.push(stmt);
+                    }
+                }
+                Err(e) if e == "END" || e == "ELSE" || e == "ELSEIF" => break, // Control flow signals
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Don't consume END - let the caller handle it
+        Ok(body)
+    }
+
+    /// Parse a single procedure statement
+    fn parse_procedure_statement(&mut self) -> Result<ProcedureStatement, String> {
+        match self.current() {
+            None => Err("Unexpected end of input".to_string()),
+            Some(Token::Semicolon) => {
+                self.next();
+                Ok(ProcedureStatement::RawSql(String::new())) // Skip empty statements
+            }
+            // END/ELSE/ELSEIF signals end of procedure body - return error to signal caller to stop
+            Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                Err("END".to_string()) // Signal to caller to stop
+            }
+            Some(Token::Else) => Err("ELSE".to_string()), // Signal ELSE to caller
+            Some(Token::Elsif) => Err("ELSEIF".to_string()), // Signal ELSEIF to caller
+            Some(Token::Declare) => self.parse_procedure_declare(),
+            Some(Token::If) => self.parse_procedure_if(),
+            Some(Token::While) => self.parse_procedure_while(),
+            Some(Token::Loop) => self.parse_procedure_loop(),
+            Some(Token::Leave) => self.parse_procedure_leave(),
+            Some(Token::Iterate) => self.parse_procedure_iterate(),
+            Some(Token::Return) => self.parse_procedure_return(),
+            Some(Token::Call) => self.parse_procedure_call(),
+            Some(Token::Set) => self.parse_procedure_set(),
+            Some(Token::Select) => {
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
+            }
+            Some(Token::Identifier(id)) if id.to_uppercase() == "CALL" => {
+                self.next(); // consume CALL
+                self.parse_procedure_call()
+            }
+            _ => {
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
+            }
+        }
+    }
+
+    /// Parse DECLARE variable statement
+    fn parse_procedure_declare(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Declare)?;
+        
+        // Variable name
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected variable name after DECLARE".to_string()),
+        };
+
+        // Data type
+        let data_type = match self.current() {
+            Some(Token::Identifier(dt)) => {
+                let dt = dt.clone();
+                self.next();
+                dt
+            }
+            Some(Token::Integer) => {
+                self.next();
+                "INTEGER".to_string()
+            }
+            Some(Token::Text) => {
+                self.next();
+                "TEXT".to_string()
+            }
+            _ => return Err("Expected data type after DECLARE".to_string()),
+        };
+
+        // Optional DEFAULT value
+        let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT") {
+            self.next();
+            Some(self.collect_until_semicolon().trim().to_string())
+        } else {
+            self.expect(Token::Semicolon)?;
+            None
+        };
+
+        Ok(ProcedureStatement::Declare {
+            name,
+            data_type,
+            default_value,
+        })
+    }
+
+    /// Parse IF condition THEN ... END IF statement
+    fn parse_procedure_if(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::If)?;
+
+        // Condition
+        let condition = self.collect_until_token(&[Token::Then]);
+        println!("DEBUG IF: condition = '{}', current = {:?}", condition, self.current());
+
+        self.expect(Token::Then)?;
+        println!("DEBUG IF: after THEN, current = {:?}", self.current());
+
+        // THEN body
+        let then_body = self.parse_procedure_body()?;
+        println!("DEBUG IF: after then_body, current = {:?}", self.current());
+
+        // ELSEIF branches
+        let mut elseif_body = Vec::new();
+        while matches!(self.current(), Some(Token::Elsif)) {
+            self.next(); // consume ELSEIF
+            let elseif_condition = self.collect_until_token(&[Token::Then]);
+            self.expect(Token::Then)?;
+            let elseif_then_body = self.parse_procedure_body()?;
+            elseif_body.push((elseif_condition, elseif_then_body));
+        }
+
+        // ELSE body
+        println!("DEBUG IF: checking ELSE, current = {:?}", self.current());
+        let else_body = if matches!(self.current(), Some(Token::Else)) {
+            self.next(); // consume ELSE
+            println!("DEBUG IF: consumed ELSE, current = {:?}", self.current());
+            self.parse_procedure_body()?
+        } else {
+            println!("DEBUG IF: NOT matched ELSE, current = {:?}", self.current());
+            Vec::new()
+        };
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("IF")?;
+
+        Ok(ProcedureStatement::If {
+            condition,
+            then_body,
+            elseif_body,
+            else_body,
+        })
+    }
+
+    /// Parse WHILE condition DO ... END WHILE statement
+    fn parse_procedure_while(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::While)?;
+
+        let condition = self.collect_until_token(&[Token::Do]);
+        self.expect(Token::Do)?;
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("WHILE")?;
+
+        Ok(ProcedureStatement::While {
+            condition,
+            body,
+        })
+    }
+
+    /// Parse LOOP ... END LOOP statement
+    fn parse_procedure_loop(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Loop)?;
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("LOOP")?;
+
+        Ok(ProcedureStatement::Loop {
+            body,
+        })
+    }
+
+    /// Parse LEAVE label statement
+    fn parse_procedure_leave(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Leave)?;
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after LEAVE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Leave { label })
+    }
+
+    /// Parse ITERATE label statement
+    fn parse_procedure_iterate(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Iterate)?;
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after ITERATE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Iterate { label })
+    }
+
+    /// Parse RETURN expression statement
+    fn parse_procedure_return(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Return)?;
+        let value = self.collect_until_semicolon();
+        Ok(ProcedureStatement::Return { value })
+    }
+
+    /// Parse CALL statement for stored procedure invocation
+    fn parse_procedure_call(&mut self) -> Result<ProcedureStatement, String> {
+        // Procedure name
+        let procedure_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected procedure name".to_string()),
+        };
+
+        // Arguments
+        let mut args = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next(); // consume (
+            while !matches!(self.current(), Some(Token::RParen) | None) {
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::Identifier(id)) => {
+                        args.push(id.clone());
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        // Optional INTO variable
+        let into_var = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "INTO") {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => Some(name),
+                _ => return Err("Expected variable name after INTO".to_string()),
+            }
+        } else {
+            None
+        };
+
+        self.expect(Token::Semicolon)?;
+
+        Ok(ProcedureStatement::Call {
+            procedure_name,
+            args,
+            into_var,
+        })
+    }
+
+    /// Parse SET variable = value statement
+    fn parse_procedure_set(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Set)?;
+        let variable = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected variable name".to_string()),
+        };
+        
+        // Handle = or := assignment
+        if matches!(self.current(), Some(Token::Equal)) {
+            self.next();
+        }
+        
+        let value = self.collect_until_semicolon();
+        
+        Ok(ProcedureStatement::Set {
+            variable,
+            value,
+        })
+    }
+
+    /// Collect tokens until one of the specified tokens is encountered
+    fn collect_until_token(&mut self, tokens: &[Token]) -> String {
+        let mut result = String::new();
+        let mut paren_depth = 0;
+        
+        loop {
+            match self.current() {
+                None => break,
+                Some(t) if tokens.contains(&t) && paren_depth == 0 => break,
+                Some(Token::LParen) => {
+                    paren_depth += 1;
+                    result.push('(');
+                    self.next();
+                }
+                Some(Token::RParen) if paren_depth > 0 => {
+                    paren_depth -= 1;
+                    result.push(')');
+                    self.next();
+                }
+                Some(tok) => {
+                    if !result.is_empty() && !result.ends_with('(') {
+                        result.push(' ');
+                    }
+                    result.push_str(&tok.to_string());
+                    self.next();
+                }
+            }
+        }
+        result.trim().to_string()
+    }
+
+    /// Expect a token case-insensitively for identifiers or keywords
+    fn expect_token_case_insensitive(&mut self, expected: &str) -> Result<(), String> {
+        match self.current() {
+            // Handle Token::Identifier
+            Some(Token::Identifier(id)) if id.to_uppercase() == expected.to_uppercase() => {
+                self.next();
+                Ok(())
+            }
+            // Handle keyword tokens that match the expected string
+            Some(Token::While) if "WHILE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Loop) if "LOOP".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::If) | Some(Token::EndIf) if "IF".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Else) if "ELSE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            _ => Err(format!("Expected '{}'", expected)),
+        }
     }
 
     /// Collect tokens until semicolon (exclusive)
@@ -4456,5 +4777,340 @@ fn test_parse_insert_with_set_ignore() {
             assert_eq!(i.columns.len(), 2);
         }
         _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_parse_alter_table_add_column() {
+    let result = parse("ALTER TABLE users ADD COLUMN email TEXT");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::AlterTable(a) => {
+            assert_eq!(a.table, "users");
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+
+#[test]
+fn test_parse_alter_table_drop_column() {
+    let result = parse("ALTER TABLE users DROP COLUMN age");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::AlterTable(a) => {
+            assert_eq!(a.table, "users");
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_index() {
+    let result = parse("CREATE INDEX idx_name ON users (id)");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateIndex(i) => {
+            assert_eq!(i.name, "idx_name");
+            assert_eq!(i.table, "users");
+            assert!(!i.unique);
+        }
+        _ => panic!("Expected CREATE INDEX statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_unique_index() {
+    let result = parse("CREATE UNIQUE INDEX idx_unique ON users (email)");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateIndex(i) => {
+            assert_eq!(i.name, "idx_unique");
+            assert_eq!(i.table, "users");
+            assert!(i.unique);
+        }
+        _ => panic!("Expected CREATE INDEX statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_view() {
+    let result = parse("CREATE VIEW active_users AS SELECT * FROM users WHERE active = true");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateView(v) => {
+            assert_eq!(v.name, "active_users");
+            assert!(!v.query.is_empty());
+        }
+        _ => panic!("Expected CREATE VIEW statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_begin() {
+    let result = parse("BEGIN");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Begin);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_commit() {
+    let result = parse("COMMIT");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Commit);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_transaction_rollback() {
+    let result = parse("ROLLBACK");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Transaction(t) => {
+            assert_eq!(t.command, TransactionCommand::Rollback);
+        }
+        _ => panic!("Expected Transaction statement"),
+    }
+}
+
+#[test]
+fn test_parse_show_status() {
+    let result = parse("SHOW STATUS");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::ShowStatus => {}
+        _ => panic!("Expected SHOW STATUS statement"),
+    }
+}
+
+#[test]
+fn test_parse_show_processlist() {
+    let result = parse("SHOW PROCESSLIST");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::ShowProcesslist => {}
+        _ => panic!("Expected SHOW PROCESSLIST statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill() {
+    let result = parse("KILL 123");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 123);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill_connection() {
+    let result = parse("KILL CONNECTION 456");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 456);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_kill_query() {
+    let result = parse("KILL QUERY 789");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Kill(k) => {
+            assert_eq!(k.process_id, 789);
+        }
+        _ => panic!("Expected KILL statement"),
+    }
+}
+
+#[test]
+fn test_parse_truncate() {
+    let result = parse("TRUNCATE TABLE users");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Truncate(t) => {
+            assert_eq!(t.table_name, "users");
+        }
+        _ => panic!("Expected TRUNCATE statement"),
+    }
+}
+
+#[test]
+fn test_parse_delete_with_limit() {
+    let result = parse("DELETE FROM users WHERE id > 10");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Delete(d) => {
+            assert_eq!(d.table, "users");
+            assert!(d.where_clause.is_some());
+        }
+        _ => panic!("Expected DELETE statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_order_by() {
+    let result = parse("SELECT * FROM users ORDER BY name ASC");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert!(s.order_by.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_group_by() {
+    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "employees");
+            assert!(s.group_by.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_having() {
+    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.group_by.is_some());
+            assert!(s.having.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_union() {
+    let result = parse("SELECT id FROM users UNION SELECT id FROM admins");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::SetOperation(op) => {
+            assert_eq!(op.op_type, SetOperationType::Union);
+        }
+        _ => panic!("Expected SetOperation statement"),
+    }
+}
+
+#[test]
+fn test_parse_union_all() {
+    let result = parse("SELECT id FROM users UNION ALL SELECT id FROM admins");
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::SetOperation(op) => {
+            assert_eq!(op.op_type, SetOperationType::UnionAll);
+        }
+        _ => panic!("Expected SetOperation statement"),
+    }
+}
+
+// Stored Procedure Control Flow Tests
+
+#[test]
+fn test_parse_procedure_with_if() {
+    let sql = "CREATE PROCEDURE test_if(x INT) BEGIN IF x > 0 THEN SELECT 1; END IF; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert_eq!(proc.name, "test_if");
+            assert_eq!(proc.body.len(), 1);
+            assert!(matches!(proc.body[0], ProcedureStatement::If { .. }));
+        }
+        _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+#[test]
+fn test_parse_procedure_with_while() {
+    let sql = "CREATE PROCEDURE test_while() BEGIN WHILE 1 = 1 DO SELECT 1; END WHILE; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert_eq!(proc.name, "test_while");
+            assert!(matches!(proc.body[0], ProcedureStatement::While { .. }));
+        }
+        _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+#[test]
+fn test_parse_procedure_with_loop_leave() {
+    let sql = "CREATE PROCEDURE test_loop() BEGIN LOOP SELECT 1; END LOOP; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert_eq!(proc.name, "test_loop");
+            assert!(matches!(proc.body[0], ProcedureStatement::Loop { .. }));
+        }
+        _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+#[test]
+fn test_parse_procedure_if_else() {
+    let sql = "CREATE PROCEDURE test_if_else(x INT) BEGIN IF x > 0 THEN SELECT 1; ELSE SELECT 2; END IF; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert_eq!(proc.name, "test_if_else");
+            match &proc.body[0] {
+                ProcedureStatement::If { else_body, .. } => {
+                    assert!(!else_body.is_empty());
+                }
+                _ => panic!("Expected IF statement"),
+            }
+        }
+        _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+#[test]
+fn test_parse_procedure_with_declare() {
+    let sql = "CREATE PROCEDURE test_declare() BEGIN DECLARE x INT DEFAULT 0; SET x = 1; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert!(matches!(proc.body[0], ProcedureStatement::Declare { .. }));
+        }
+        _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+#[test]
+fn test_parse_procedure_return() {
+    let sql = "CREATE PROCEDURE test_return() BEGIN RETURN 1; END";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateProcedure(proc) => {
+            assert!(matches!(proc.body[0], ProcedureStatement::Return { .. }));
+        }
+        _ => panic!("Expected CreateProcedure statement"),
     }
 }
