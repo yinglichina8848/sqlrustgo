@@ -79,6 +79,10 @@ impl Session {
         self.cancel_token.reset_query_cancelled();
     }
 
+    pub fn cancel_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+        self.cancel_token.query_cancelled_flag()
+    }
+
     pub fn update_activity(&mut self) {
         self.last_activity = current_timestamp();
         if self.status == SessionStatus::Idle {

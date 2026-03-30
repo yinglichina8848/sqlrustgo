@@ -140,6 +140,21 @@ impl SecurityIntegration {
         }
         Ok(())
     }
+
+    pub fn get_session_cancel_flag(
+        &self,
+        session_id: u64,
+    ) -> Option<Arc<std::sync::atomic::AtomicBool>> {
+        self.session_manager
+            .get_session(session_id)
+            .map(|s| s.cancel_flag())
+    }
+
+    pub fn reset_session_query_state(&self, session_id: u64) {
+        if let Some(session) = self.session_manager.get_session(session_id) {
+            session.reset_query_cancelled();
+        }
+    }
 }
 
 impl Default for SecurityIntegration {

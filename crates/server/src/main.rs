@@ -56,6 +56,10 @@ fn handle_client(
                 match parse(query) {
                     Ok(Statement::Kill(kill)) => execute_server_kill(&kill, &security, session_id),
                     Ok(statement) => {
+                        security.reset_session_query_state(session_id);
+                        if let Some(flag) = security.get_session_cancel_flag(session_id) {
+                            eng.storage.write().unwrap().set_cancel_flag(flag);
+                        }
                         if let Err(e) = security.check_session_and_reset(session_id) {
                             Err(SqlError::ExecutionError(e))
                         } else {

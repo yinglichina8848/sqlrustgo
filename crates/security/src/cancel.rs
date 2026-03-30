@@ -20,19 +20,19 @@ use std::sync::Arc;
 pub struct CancelToken {
     /// 取消当前查询（KILL QUERY）
     /// 设置后，查询应在下一个检查点中止
-    query_cancelled: AtomicBool,
+    query_cancelled: Arc<AtomicBool>,
 
     /// 终止会话（KILL CONNECTION）
     /// 设置后，整个会话应立即终止
-    connection_killed: AtomicBool,
+    connection_killed: Arc<AtomicBool>,
 }
 
 impl CancelToken {
     /// 创建新的 CancelToken
     pub fn new() -> Self {
         Self {
-            query_cancelled: AtomicBool::new(false),
-            connection_killed: AtomicBool::new(false),
+            query_cancelled: Arc::new(AtomicBool::new(false)),
+            connection_killed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -77,6 +77,14 @@ impl CancelToken {
     pub fn is_active(&self) -> bool {
         !self.query_cancelled.load(Ordering::SeqCst)
             && !self.connection_killed.load(Ordering::SeqCst)
+    }
+
+    pub fn query_cancelled_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.query_cancelled)
+    }
+
+    pub fn connection_killed_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.connection_killed)
     }
 }
 
