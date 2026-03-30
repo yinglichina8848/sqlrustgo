@@ -63,7 +63,7 @@ pub struct BlacklistPattern {
     pub severity: ThreatSeverity,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Serialize, Deserialize)]
 pub enum ThreatSeverity {
     Low,
     Medium,
