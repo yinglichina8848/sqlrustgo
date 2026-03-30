@@ -64,6 +64,10 @@ pub use trigger::{
 pub mod stored_proc;
 pub use stored_proc::StoredProcExecutor;
 
+// DDL executor for user and privilege management
+pub mod ddl_executor;
+pub use ddl_executor::DdlExecutor;
+
 // Test framework modules - publicly accessible
 pub mod harness;
 pub mod mock_storage;

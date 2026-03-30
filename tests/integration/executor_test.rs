@@ -151,7 +151,10 @@ fn test_grant_syntax() {
     if let sqlrustgo_parser::Statement::Grant(grant) = stmt {
         assert_eq!(grant.privilege, Privilege::Read);
         assert_eq!(grant.table, "users");
-        assert_eq!(grant.to_user, "alice");
+        assert_eq!(
+            grant.to_user,
+            sqlrustgo_parser::parser::UserIdentity::new("alice", "%")
+        );
     } else {
         panic!("Expected Grant statement");
     }
@@ -165,7 +168,10 @@ fn test_revoke_syntax() {
     if let sqlrustgo_parser::Statement::Revoke(revoke) = stmt {
         assert_eq!(revoke.privilege, Privilege::Write);
         assert_eq!(revoke.table, "orders");
-        assert_eq!(revoke.from_user, "bob");
+        assert_eq!(
+            revoke.from_user,
+            sqlrustgo_parser::parser::UserIdentity::new("bob", "%")
+        );
     } else {
         panic!("Expected Revoke statement");
     }
