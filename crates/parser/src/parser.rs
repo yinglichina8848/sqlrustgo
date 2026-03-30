@@ -2594,6 +2594,353 @@ impl Parser {
         }))
     }
 
+<<<<<<< HEAD
+=======
+    /// Parse procedure body statements until END (but don't consume END)
+    fn parse_procedure_body(&mut self) -> Result<Vec<ProcedureStatement>, String> {
+        let mut body = Vec::new();
+
+        loop {
+            // Check for END before parsing statement
+            if matches!(self.current(), Some(Token::Identifier(end_str)) 
+                       if end_str.to_uppercase() == "END")
+            {
+                break;
+            }
+            
+            if self.current().is_none() {
+                break;
+            }
+            
+            match self.parse_procedure_statement() {
+                Ok(stmt) => {
+                    // Skip empty statements
+                    if !matches!(stmt, ProcedureStatement::RawSql(ref s) if s.is_empty()) {
+                        body.push(stmt);
+                    }
+                }
+                Err(e) if e == "END" || e == "ELSE" || e == "ELSEIF" => break, // Control flow signals
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Don't consume END - let the caller handle it
+        Ok(body)
+    }
+
+    /// Parse a single procedure statement
+    fn parse_procedure_statement(&mut self) -> Result<ProcedureStatement, String> {
+        match self.current() {
+            None => Err("Unexpected end of input".to_string()),
+            Some(Token::Semicolon) => {
+                self.next();
+                Ok(ProcedureStatement::RawSql(String::new())) // Skip empty statements
+            }
+            // END/ELSE/ELSEIF signals end of procedure body - return error to signal caller to stop
+            Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                Err("END".to_string()) // Signal to caller to stop
+            }
+            Some(Token::Else) => Err("ELSE".to_string()), // Signal ELSE to caller
+            Some(Token::Elsif) => Err("ELSEIF".to_string()), // Signal ELSEIF to caller
+            Some(Token::Declare) => self.parse_procedure_declare(),
+            Some(Token::If) => self.parse_procedure_if(),
+            Some(Token::While) => self.parse_procedure_while(),
+            Some(Token::Loop) => self.parse_procedure_loop(),
+            Some(Token::Leave) => self.parse_procedure_leave(),
+            Some(Token::Iterate) => self.parse_procedure_iterate(),
+            Some(Token::Return) => self.parse_procedure_return(),
+            Some(Token::Call) => self.parse_procedure_call(),
+            Some(Token::Set) => self.parse_procedure_set(),
+            Some(Token::Select) => {
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
+            }
+            Some(Token::Identifier(id)) if id.to_uppercase() == "CALL" => {
+                self.next(); // consume CALL
+                self.parse_procedure_call()
+            }
+            _ => {
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
+            }
+        }
+    }
+
+    /// Parse DECLARE variable statement
+    fn parse_procedure_declare(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Declare)?;
+        
+        // Variable name
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected variable name after DECLARE".to_string()),
+        };
+
+        // Data type
+        let data_type = match self.current() {
+            Some(Token::Identifier(dt)) => {
+                let dt = dt.clone();
+                self.next();
+                dt
+            }
+            Some(Token::Integer) => {
+                self.next();
+                "INTEGER".to_string()
+            }
+            Some(Token::Text) => {
+                self.next();
+                "TEXT".to_string()
+            }
+            _ => return Err("Expected data type after DECLARE".to_string()),
+        };
+
+        // Optional DEFAULT value
+        let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT") {
+            self.next();
+            Some(self.collect_until_semicolon().trim().to_string())
+        } else {
+            self.expect(Token::Semicolon)?;
+            None
+        };
+
+        Ok(ProcedureStatement::Declare {
+            name,
+            data_type,
+            default_value,
+        })
+    }
+
+    /// Parse IF condition THEN ... END IF statement
+    fn parse_procedure_if(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::If)?;
+
+        // Condition
+        let condition = self.collect_until_token(&[Token::Then]);
+
+        self.expect(Token::Then)?;
+
+        // THEN body
+        let then_body = self.parse_procedure_body()?;
+
+        // ELSEIF branches
+        let mut elseif_body = Vec::new();
+        while matches!(self.current(), Some(Token::Elsif)) {
+            self.next(); // consume ELSEIF
+            let elseif_condition = self.collect_until_token(&[Token::Then]);
+            self.expect(Token::Then)?;
+            let elseif_then_body = self.parse_procedure_body()?;
+            elseif_body.push((elseif_condition, elseif_then_body));
+        }
+
+        // ELSE body
+        let else_body = if matches!(self.current(), Some(Token::Else)) {
+            self.next(); // consume ELSE
+            self.parse_procedure_body()?
+        } else {
+            Vec::new()
+        };
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("IF")?;
+
+        Ok(ProcedureStatement::If {
+            condition,
+            then_body,
+            elseif_body,
+            else_body,
+        })
+    }
+
+    /// Parse WHILE condition DO ... END WHILE statement
+    fn parse_procedure_while(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::While)?;
+
+        let condition = self.collect_until_token(&[Token::Do]);
+        self.expect(Token::Do)?;
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("WHILE")?;
+
+        Ok(ProcedureStatement::While {
+            condition,
+            body,
+        })
+    }
+
+    /// Parse LOOP ... END LOOP statement
+    fn parse_procedure_loop(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Loop)?;
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("LOOP")?;
+
+        Ok(ProcedureStatement::Loop {
+            body,
+        })
+    }
+
+    /// Parse LEAVE label statement
+    fn parse_procedure_leave(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Leave)?;
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after LEAVE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Leave { label })
+    }
+
+    /// Parse ITERATE label statement
+    fn parse_procedure_iterate(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Iterate)?;
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after ITERATE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Iterate { label })
+    }
+
+    /// Parse RETURN expression statement
+    fn parse_procedure_return(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Return)?;
+        let value = self.collect_until_semicolon();
+        Ok(ProcedureStatement::Return { value })
+    }
+
+    /// Parse CALL statement for stored procedure invocation
+    fn parse_procedure_call(&mut self) -> Result<ProcedureStatement, String> {
+        // Procedure name
+        let procedure_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected procedure name".to_string()),
+        };
+
+        // Arguments
+        let mut args = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next(); // consume (
+            while !matches!(self.current(), Some(Token::RParen) | None) {
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::Identifier(id)) => {
+                        args.push(id.clone());
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        // Optional INTO variable
+        let into_var = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "INTO") {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => Some(name),
+                _ => return Err("Expected variable name after INTO".to_string()),
+            }
+        } else {
+            None
+        };
+
+        self.expect(Token::Semicolon)?;
+
+        Ok(ProcedureStatement::Call {
+            procedure_name,
+            args,
+            into_var,
+        })
+    }
+
+    /// Parse SET variable = value statement
+    fn parse_procedure_set(&mut self) -> Result<ProcedureStatement, String> {
+        self.expect(Token::Set)?;
+        let variable = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected variable name".to_string()),
+        };
+        
+        // Handle = or := assignment
+        if matches!(self.current(), Some(Token::Equal)) {
+            self.next();
+        }
+        
+        let value = self.collect_until_semicolon();
+        
+        Ok(ProcedureStatement::Set {
+            variable,
+            value,
+        })
+    }
+
+    /// Collect tokens until one of the specified tokens is encountered
+    fn collect_until_token(&mut self, tokens: &[Token]) -> String {
+        let mut result = String::new();
+        let mut paren_depth = 0;
+        
+        loop {
+            match self.current() {
+                None => break,
+                Some(t) if tokens.contains(&t) && paren_depth == 0 => break,
+                Some(Token::LParen) => {
+                    paren_depth += 1;
+                    result.push('(');
+                    self.next();
+                }
+                Some(Token::RParen) if paren_depth > 0 => {
+                    paren_depth -= 1;
+                    result.push(')');
+                    self.next();
+                }
+                Some(tok) => {
+                    if !result.is_empty() && !result.ends_with('(') {
+                        result.push(' ');
+                    }
+                    result.push_str(&tok.to_string());
+                    self.next();
+                }
+            }
+        }
+        result.trim().to_string()
+    }
+
+    /// Expect a token case-insensitively for identifiers or keywords
+    fn expect_token_case_insensitive(&mut self, expected: &str) -> Result<(), String> {
+        match self.current() {
+            // Handle Token::Identifier
+            Some(Token::Identifier(id)) if id.to_uppercase() == expected.to_uppercase() => {
+                self.next();
+                Ok(())
+            }
+            // Handle keyword tokens that match the expected string
+            Some(Token::While) if "WHILE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Loop) if "LOOP".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::If) | Some(Token::EndIf) if "IF".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Else) if "ELSE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            _ => Err(format!("Expected '{}'", expected)),
+        }
+    }
+
+>>>>>>> 2509fe94 (feat(parser): add stored procedure control flow statements (IF/WHILE/LOOP/DECLARE))
     /// Collect tokens until semicolon (exclusive)
     fn collect_until_semicolon(&mut self) -> String {
         let mut sql = String::new();
