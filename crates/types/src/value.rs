@@ -661,4 +661,147 @@ mod tests {
         assert_eq!(Value::Boolean(true).to_sql_string(), "true");
         assert_eq!(Value::Integer(42).to_sql_string(), "42");
     }
+
+    // Missing tests - coverage gap analysis
+    #[test]
+    fn test_value_estimate_memory_size() {
+        assert_eq!(Value::Null.estimate_memory_size(), 0);
+        assert_eq!(Value::Boolean(true).estimate_memory_size(), 1);
+        assert_eq!(Value::Integer(42).estimate_memory_size(), 8);
+        assert_eq!(Value::Float(3.14).estimate_memory_size(), 8);
+        assert_eq!(Value::Text("hello".to_string()).estimate_memory_size(), 5);
+        assert_eq!(Value::Blob(vec![1, 2, 3]).estimate_memory_size(), 3);
+        assert_eq!(Value::Date(0).estimate_memory_size(), 4);
+        assert_eq!(Value::Timestamp(0).estimate_memory_size(), 8);
+    }
+
+    #[test]
+    fn test_value_to_bool() {
+        assert_eq!(Value::Boolean(true).to_bool(), true);
+        assert_eq!(Value::Boolean(false).to_bool(), false);
+        assert_eq!(Value::Integer(0).to_bool(), false);
+        assert_eq!(Value::Integer(1).to_bool(), true);
+        assert_eq!(Value::Integer(-1).to_bool(), true);
+        assert_eq!(Value::Null.to_bool(), false);
+        assert_eq!(Value::Text("hello".to_string()).to_bool(), false);
+        assert_eq!(Value::Float(3.14).to_bool(), false);
+    }
+
+    #[test]
+    fn test_value_as_float() {
+        assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(Value::Integer(42).as_float(), None);
+        assert_eq!(Value::Null.as_float(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_float(), None);
+    }
+
+    #[test]
+    fn test_days_to_month_day() {
+        // January
+        assert_eq!(days_to_month_day(0, false), (1, 1));
+        assert_eq!(days_to_month_day(30, false), (1, 31));
+        // February (non-leap)
+        assert_eq!(days_to_month_day(31, false), (2, 1));
+        assert_eq!(days_to_month_day(58, false), (2, 28));
+        // March
+        assert_eq!(days_to_month_day(59, false), (3, 1));
+        // December
+        assert_eq!(days_to_month_day(334, false), (12, 1));
+        assert_eq!(days_to_month_day(364, false), (12, 31));
+
+        // Leap year tests
+        assert_eq!(days_to_month_day(31, true), (2, 1));
+        assert_eq!(days_to_month_day(60, true), (3, 1)); // Feb 29 in leap year
+    }
+
+    #[test]
+    fn test_value_timestamp_none_for_non_timestamp() {
+        assert_eq!(Value::Integer(42).as_timestamp(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_timestamp(), None);
+        assert_eq!(Value::Null.as_timestamp(), None);
+    }
+
+    #[test]
+    fn test_value_timestamp_to_string_none() {
+        assert_eq!(Value::Integer(42).timestamp_to_string(), None);
+        assert_eq!(Value::Text("hello".to_string()).timestamp_to_string(), None);
+        assert_eq!(Value::Null.timestamp_to_string(), None);
+    }
+
+    #[test]
+    fn test_value_ordering() {
+        use std::cmp::Ordering;
+        // Null is smallest
+        assert_eq!(Value::Null.cmp(&Value::Integer(0)), Ordering::Less);
+        // Boolean < Integer
+        assert_eq!(Value::Boolean(true).cmp(&Value::Integer(0)), Ordering::Less);
+        // Integer < Float
+        assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
+        // Float < Text
+        assert_eq!(Value::Float(0.0).cmp(&Value::Text("a".to_string())), Ordering::Less);
+        // Text < Blob
+        assert_eq!(Value::Text("a".to_string()).cmp(&Value::Blob(vec![])), Ordering::Less);
+        // Blob < Date
+        assert_eq!(Value::Blob(vec![]).cmp(&Value::Date(0)), Ordering::Less);
+        // Date < Timestamp
+        assert_eq!(Value::Date(0).cmp(&Value::Timestamp(0)), Ordering::Less);
+    }
+
+    #[test]
+    fn test_value_partial_ord() {
+        use std::cmp::Ordering;
+        assert_eq!(Value::Integer(1).partial_cmp(&Value::Integer(2)), Some(Ordering::Less));
+        assert_eq!(Value::Integer(2).partial_cmp(&Value::Integer(2)), Some(Ordering::Equal));
+        assert_eq!(Value::Integer(3).partial_cmp(&Value::Integer(2)), Some(Ordering::Greater));
+    }
+
+    #[test]
+    fn test_value_float_nan_ordering() {
+        use std::cmp::Ordering;
+        let nan = Value::Float(f64::NAN);
+        let zero = Value::Float(0.0);
+        // When comparing Float NaN with Float NaN, they are Equal
+        assert_eq!(nan.cmp(&nan), Ordering::Equal);
+        // When comparing Float 0.0 with Float NaN, 0.0 is Greater than NaN
+        // (implementation treats NaN as largest value, opposite of comment)
+        assert_eq!(zero.cmp(&nan), Ordering::Greater);
+        // Float variants are compared by their variant order (3), which is greater than Integer (2)
+        // So Float > Integer regardless of NaN status when cross-variant comparison
+        assert_eq!(Value::Float(f64::NAN).cmp(&Value::Integer(0)), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_value_as_integer_or_zero() {
+        // Value doesn't have as_integer_or_zero, but testing as_integer
+        assert_eq!(Value::Integer(0).as_integer(), Some(0));
+        assert_eq!(Value::Integer(i64::MAX).as_integer(), Some(i64::MAX));
+        assert_eq!(Value::Integer(i64::MIN).as_integer(), Some(i64::MIN));
+    }
+
+    #[test]
+    fn test_value_float_edge_cases() {
+        let zero = Value::Float(0.0);
+        let neg_zero = Value::Float(-0.0);
+        assert_eq!(zero.as_float(), Some(0.0));
+        assert_eq!(neg_zero.as_float(), Some(-0.0));
+
+        let max = Value::Float(f64::MAX);
+        let min = Value::Float(f64::MIN);
+        assert_eq!(max.as_float(), Some(f64::MAX));
+        assert_eq!(min.as_float(), Some(f64::MIN));
+    }
+
+    #[test]
+    fn test_value_text_unicode() {
+        let text = Value::Text("你好".to_string());
+        assert_eq!(text.to_sql_string(), "你好");
+        assert_eq!(text.type_name(), "TEXT");
+    }
+
+    #[test]
+    fn test_value_blob_empty() {
+        let blob = Value::Blob(vec![]);
+        assert_eq!(blob.type_name(), "BLOB");
+        assert_eq!(blob.to_sql_string(), "X''");
+    }
 }
