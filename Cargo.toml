@@ -430,3 +430,15 @@ path = "tests/integration/storage_integration_test.rs"
 [[test]]
 name = "tpch_test"
 path = "tests/integration/tpch_test.rs"
+
+[[test]]
+name = "parquet_test"
+path = "tests/integration/parquet_test.rs"
+
+[[test]]
+name = "prometheus_test"
+path = "tests/unit/prometheus_test.rs"
+
+[[test]]
+name = "slow_query_log_test"
+path = "tests/unit/slow_query_log_test.rs"
