@@ -6,10 +6,65 @@
 //! - Privilege grants and revocation
 //! - Permission checking
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UserIdentity {
+    pub username: String,
+    pub host: String,
+}
+
+impl UserIdentity {
+    pub fn new(username: &str, host: &str) -> Self {
+        Self {
+            username: username.to_lowercase(),
+            host: host.to_lowercase(),
+        }
+    }
+
+    pub fn normalize(&self) -> Self {
+        Self {
+            username: self.username.to_lowercase(),
+            host: self.host.to_lowercase(),
+        }
+    }
+}
+
+impl Serialize for UserIdentity {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{}@{}", self.username, self.host))
+    }
+}
+
+impl<'de> Deserialize<'de> for UserIdentity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let parts: Vec<&str> = s.split('@').collect();
+        if parts.len() == 2 {
+            Ok(UserIdentity::new(parts[0], parts[1]))
+        } else {
+            Ok(UserIdentity::new(&s, "%"))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAuthInfo {
+    pub identity: UserIdentity,
+    pub password_hash: String,
+    pub is_active: bool,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Privilege {
     Read,
     Insert,
@@ -223,12 +278,11 @@ impl std::error::Error for AuthError {}
 pub type AuthResult<T> = Result<T, AuthError>;
 
 pub struct AuthManager {
-    users: HashMap<u64, User>,
-    users_by_name: HashMap<String, u64>,
+    users: HashMap<UserIdentity, UserAuthInfo>,
     roles: HashMap<u64, Role>,
     roles_by_name: HashMap<String, u64>,
     user_roles: Vec<UserRole>,
-    privileges: Vec<PrivilegeGrant>,
+    privileges: HashMap<UserIdentity, Vec<PrivilegeGrant>>,
     next_user_id: u64,
     next_role_id: u64,
     next_grant_id: u64,
@@ -238,51 +292,69 @@ impl AuthManager {
     pub fn new() -> Self {
         Self {
             users: HashMap::new(),
-            users_by_name: HashMap::new(),
             roles: HashMap::new(),
             roles_by_name: HashMap::new(),
             user_roles: Vec::new(),
-            privileges: Vec::new(),
+            privileges: HashMap::new(),
             next_user_id: 1,
             next_role_id: 1,
             next_grant_id: 1,
         }
     }
 
-    pub fn create_user(&mut self, username: &str, password: &str) -> AuthResult<u64> {
-        if self.users_by_name.contains_key(username) {
+    pub fn create_user(&mut self, identity: &UserIdentity, password_hash: &str) -> AuthResult<()> {
+        if self.users.contains_key(identity) {
             return Err(AuthError {
                 code: AuthErrorCode::DuplicateUser,
-                message: format!("User '{}' already exists", username),
+                message: format!(
+                    "User '{}'@'{}' already exists",
+                    identity.username, identity.host
+                ),
             });
         }
 
-        let id = self.next_user_id;
-        self.next_user_id += 1;
+        let user = UserAuthInfo {
+            identity: identity.clone(),
+            password_hash: password_hash.to_string(),
+            is_active: true,
+            created_at: current_timestamp(),
+            updated_at: current_timestamp(),
+        };
 
-        let user = User::new(id, username.to_string(), hash_password(password));
-        self.users.insert(id, user);
-        self.users_by_name.insert(username.to_string(), id);
-
-        Ok(id)
+        self.users.insert(identity.clone(), user);
+        Ok(())
     }
 
-    pub fn get_user(&self, id: u64) -> Option<&User> {
-        self.users.get(&id)
+    pub fn find_exact_user(&self, identity: &UserIdentity) -> Option<&UserAuthInfo> {
+        self.users.get(&identity.normalize())
     }
 
-    pub fn get_user_by_name(&self, username: &str) -> Option<&User> {
-        self.users_by_name
-            .get(username)
-            .and_then(|id| self.users.get(id))
+    pub fn find_wildcard_user(&self, username: &str) -> Option<&UserAuthInfo> {
+        self.users.get(&UserIdentity::new(username, "%"))
     }
 
-    pub fn authenticate(&self, username: &str, password: &str) -> AuthResult<u64> {
-        let user = self.get_user_by_name(username).ok_or(AuthError {
+    pub fn authenticate(&self, identity: &UserIdentity, password: &str) -> AuthResult<u64> {
+        if let Some(user) = self.users.get(identity) {
+            return self.verify_and_return(identity, password, user);
+        }
+
+        let wildcard_identity = UserIdentity::new(&identity.username, "%");
+        if let Some(user) = self.users.get(&wildcard_identity) {
+            return self.verify_and_return(identity, password, user);
+        }
+
+        Err(AuthError {
             code: AuthErrorCode::AuthenticationFailed,
             message: "Invalid username or password".to_string(),
-        })?;
+        })
+    }
 
+    fn verify_and_return(
+        &self,
+        identity: &UserIdentity,
+        password: &str,
+        user: &UserAuthInfo,
+    ) -> AuthResult<u64> {
         if !user.is_active {
             return Err(AuthError {
                 code: AuthErrorCode::AuthenticationFailed,
@@ -297,7 +369,19 @@ impl AuthManager {
             });
         }
 
-        Ok(user.id)
+        Ok(0)
+    }
+
+    pub fn drop_user(&mut self, identity: &UserIdentity) -> AuthResult<()> {
+        let normalized = identity.normalize();
+        if self.users.remove(&normalized).is_some() {
+            Ok(())
+        } else {
+            Err(AuthError {
+                code: AuthErrorCode::UserNotFound,
+                message: format!("User '{}'@'{}' not found", identity.username, identity.host),
+            })
+        }
     }
 
     pub fn create_role(&mut self, name: &str, parent_role_id: Option<u64>) -> AuthResult<u64> {
@@ -337,13 +421,6 @@ impl AuthManager {
         role_id: u64,
         granted_by: u64,
     ) -> AuthResult<()> {
-        if !self.users.contains_key(&user_id) {
-            return Err(AuthError {
-                code: AuthErrorCode::UserNotFound,
-                message: format!("User {} not found", user_id),
-            });
-        }
-
         if !self.roles.contains_key(&role_id) {
             return Err(AuthError {
                 code: AuthErrorCode::RoleNotFound,
@@ -400,42 +477,96 @@ impl AuthManager {
         }
     }
 
-    pub fn grant_privilege(&mut self, grant: PrivilegeGrant) -> AuthResult<u64> {
+    pub fn grant_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+        granted_by: u64,
+    ) -> AuthResult<u64> {
         let id = self.next_grant_id;
         self.next_grant_id += 1;
 
-        let mut g = grant;
-        g.id = id;
-        g.granted_at = current_timestamp();
+        let grant = PrivilegeGrant {
+            id,
+            grantee_type: GranteeType::User,
+            grantee_id: 0,
+            privilege,
+            object_type,
+            object_name: object_name.to_string(),
+            column_name: None,
+            granted_by,
+            granted_at: current_timestamp(),
+            with_grant_option: false,
+        };
 
-        self.privileges.push(g);
+        self.privileges
+            .entry(identity.clone())
+            .or_insert_with(Vec::new)
+            .push(grant);
+
         Ok(id)
     }
 
-    pub fn revoke_privilege(&mut self, grant_id: u64) -> AuthResult<()> {
-        let pos = self
-            .privileges
-            .iter()
-            .position(|g| g.id == grant_id)
-            .ok_or(AuthError {
-                code: AuthErrorCode::InvalidGrant,
-                message: format!("Grant {} not found", grant_id),
-            })?;
+    pub fn grant_role_privilege(
+        &mut self,
+        role_id: u64,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+        granted_by: u64,
+    ) -> AuthResult<u64> {
+        let id = self.next_grant_id;
+        self.next_grant_id += 1;
 
-        self.privileges.remove(pos);
+        let grant = PrivilegeGrant {
+            id,
+            grantee_type: GranteeType::Role,
+            grantee_id: role_id,
+            privilege,
+            object_type,
+            object_name: object_name.to_string(),
+            column_name: None,
+            granted_by,
+            granted_at: current_timestamp(),
+            with_grant_option: false,
+        };
+
+        let public_identity = UserIdentity::new("%", "%");
+        self.privileges
+            .entry(public_identity)
+            .or_insert_with(Vec::new)
+            .push(grant);
+
+        Ok(id)
+    }
+
+    pub fn revoke_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+    ) -> AuthResult<()> {
+        if let Some(grants) = self.privileges.get_mut(identity) {
+            grants.retain(|g| {
+                !(g.privilege == privilege
+                    && g.object_type == object_type
+                    && g.object_name == object_name)
+            });
+        }
         Ok(())
     }
 
-    pub fn check_privilege(&self, user_id: u64, privilege: Privilege, object: &ObjectRef) -> bool {
-        if self.has_direct_privilege(user_id, privilege, object) {
+    pub fn check_privilege(
+        &self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object: &ObjectRef,
+    ) -> bool {
+        if self.has_direct_privilege(identity, privilege, object) {
             return true;
-        }
-
-        let role_ids = self.get_user_roles_recursive(user_id);
-        for role_id in role_ids {
-            if self.has_role_privilege(role_id, privilege, object) {
-                return true;
-            }
         }
 
         if self.has_public_privilege(privilege, object) {
@@ -445,31 +576,33 @@ impl AuthManager {
         false
     }
 
-    fn has_direct_privilege(&self, user_id: u64, privilege: Privilege, object: &ObjectRef) -> bool {
-        self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::User
-                && g.grantee_id == user_id
-                && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
-        })
-    }
-
-    fn has_role_privilege(&self, role_id: u64, privilege: Privilege, object: &ObjectRef) -> bool {
-        self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::Role
-                && g.grantee_id == role_id
-                && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
-        })
+    fn has_direct_privilege(
+        &self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object: &ObjectRef,
+    ) -> bool {
+        if let Some(grants) = self.privileges.get(identity) {
+            return grants.iter().any(|g| {
+                g.grantee_type == GranteeType::User
+                    && g.privilege.implies(privilege)
+                    && self.matches_object(&g.object_type, &g.object_name, object)
+            });
+        }
+        false
     }
 
     fn has_public_privilege(&self, privilege: Privilege, object: &ObjectRef) -> bool {
-        self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::Role
-                && g.grantee_id == 0
-                && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
-        })
+        let public_identity = UserIdentity::new("%", "%");
+        if let Some(grants) = self.privileges.get(&public_identity) {
+            return grants.iter().any(|g| {
+                g.grantee_type == GranteeType::Role
+                    && g.grantee_id == 0
+                    && g.privilege.implies(privilege)
+                    && self.matches_object(&g.object_type, &g.object_name, object)
+            });
+        }
+        false
     }
 
     fn matches_object(
@@ -497,32 +630,33 @@ impl AuthManager {
         false
     }
 
-    pub fn get_user_privileges(&self, user_id: u64) -> Vec<&PrivilegeGrant> {
+    pub fn get_user_privileges(&self, identity: &UserIdentity) -> Vec<&PrivilegeGrant> {
         self.privileges
-            .iter()
-            .filter(|g| {
-                (g.grantee_type == GranteeType::User && g.grantee_id == user_id)
-                    || (g.grantee_type == GranteeType::Role
-                        && self.user_has_role(user_id, g.grantee_id))
-            })
-            .collect()
+            .get(identity)
+            .map(|grants| grants.iter().collect())
+            .unwrap_or_default()
     }
 
-    fn user_has_role(&self, user_id: u64, role_id: u64) -> bool {
-        let role_ids = self.get_user_roles_recursive(user_id);
-        role_ids.contains(&role_id)
-    }
-
-    pub fn has_grant_option(&self, user_id: u64, grant_id: u64) -> bool {
-        if let Some(grant) = self.privileges.iter().find(|g| g.id == grant_id) {
-            if grant.grantee_type == GranteeType::User && grant.grantee_id == user_id {
-                return grant.with_grant_option;
-            }
+    pub fn has_grant_option(
+        &self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+    ) -> bool {
+        if let Some(grants) = self.privileges.get(identity) {
+            return grants.iter().any(|g| {
+                g.grantee_type == GranteeType::User
+                    && g.privilege == privilege
+                    && g.object_type == object_type
+                    && g.object_name == object_name
+                    && g.with_grant_option
+            });
         }
         false
     }
 
-    pub fn list_users(&self) -> Vec<&User> {
+    pub fn list_users(&self) -> Vec<&UserAuthInfo> {
         self.users.values().collect()
     }
 
@@ -531,21 +665,7 @@ impl AuthManager {
     }
 
     pub fn list_grants(&self) -> Vec<&PrivilegeGrant> {
-        self.privileges.iter().collect()
-    }
-
-    pub fn drop_user(&mut self, user_id: u64) -> AuthResult<()> {
-        let user = self.users.remove(&user_id).ok_or(AuthError {
-            code: AuthErrorCode::UserNotFound,
-            message: format!("User {} not found", user_id),
-        })?;
-
-        self.users_by_name.remove(&user.username);
-        self.user_roles.retain(|ur| ur.user_id != user_id);
-        self.privileges
-            .retain(|g| !(g.grantee_type == GranteeType::User && g.grantee_id == user_id));
-
-        Ok(())
+        self.privileges.values().flat_map(|v| v.iter()).collect()
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {
@@ -556,8 +676,10 @@ impl AuthManager {
 
         self.roles_by_name.remove(&role.name);
         self.user_roles.retain(|ur| ur.role_id != role_id);
-        self.privileges
-            .retain(|g| !(g.grantee_type == GranteeType::Role && g.grantee_id == role_id));
+
+        for (_, grants) in self.privileges.iter_mut() {
+            grants.retain(|g| !(g.grantee_type == GranteeType::Role && g.grantee_id == role_id));
+        }
 
         for r in self.roles.values_mut() {
             if r.parent_role_id == Some(role_id) {
@@ -600,25 +722,71 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_user_identity_new_and_normalize() {
+        let identity = UserIdentity::new("Alice", "Localhost");
+        assert_eq!(identity.username, "alice");
+        assert_eq!(identity.host, "localhost");
+
+        let normalized = identity.normalize();
+        assert_eq!(normalized.username, "alice");
+        assert_eq!(normalized.host, "localhost");
+    }
+
+    #[test]
+    fn test_user_identity_hash_and_eq() {
+        let id1 = UserIdentity::new("alice", "localhost");
+        let id2 = UserIdentity::new("Alice", "Localhost");
+        let id3 = UserIdentity::new("alice", "127.0.0.1");
+
+        assert_eq!(id1, id2);
+        assert_ne!(id1, id3);
+
+        let mut map: HashMap<UserIdentity, i32> = HashMap::new();
+        map.insert(id1.clone(), 1);
+        assert_eq!(map.get(&id2), Some(&1));
+    }
+
+    #[test]
     fn test_create_user() {
         let mut auth = AuthManager::new();
-        let id = auth.create_user("alice", "password123").unwrap();
-        assert_eq!(id, 1);
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("password123");
 
-        let user = auth.get_user(id).unwrap();
-        assert_eq!(user.username, "alice");
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let user = auth.find_exact_user(&identity).unwrap();
+        assert_eq!(user.identity.username, "alice");
+        assert_eq!(user.identity.host, "localhost");
+        assert!(user.is_active);
     }
 
     #[test]
     fn test_authenticate() {
         let mut auth = AuthManager::new();
-        auth.create_user("alice", "password123").unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("password123");
 
-        let id = auth.authenticate("alice", "password123").unwrap();
-        assert_eq!(id, 1);
+        auth.create_user(&identity, &password_hash).unwrap();
 
-        assert!(auth.authenticate("alice", "wrong").is_err());
-        assert!(auth.authenticate("bob", "password").is_err());
+        let result = auth.authenticate(&identity, "password123");
+        assert!(result.is_ok());
+
+        let wrong_identity = UserIdentity::new("alice", "wronghost");
+        assert!(auth.authenticate(&wrong_identity, "password123").is_err());
+        assert!(auth.authenticate(&identity, "wrong").is_err());
+    }
+
+    #[test]
+    fn test_authenticate_wildcard() {
+        let mut auth = AuthManager::new();
+        let wildcard_identity = UserIdentity::new("alice", "%");
+        let password_hash = hash_password("password123");
+
+        auth.create_user(&wildcard_identity, &password_hash)
+            .unwrap();
+
+        let exact_identity = UserIdentity::new("alice", "localhost");
+        assert!(auth.authenticate(&exact_identity, "password123").is_ok());
     }
 
     #[test]
@@ -632,154 +800,104 @@ mod tests {
     }
 
     #[test]
-    fn test_grant_role_to_user() {
+    fn test_find_exact_user_and_wildcard_user() {
         let mut auth = AuthManager::new();
-        let user_id = auth.create_user("alice", "pass").unwrap();
-        let role_id = auth.create_role("admin", None).unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let wildcard_identity = UserIdentity::new("alice", "%");
+        let password_hash = hash_password("pass");
 
-        auth.grant_role_to_user(user_id, role_id, 0).unwrap();
+        auth.create_user(&identity, &password_hash).unwrap();
+        auth.create_user(&wildcard_identity, &password_hash)
+            .unwrap();
 
-        let roles = auth.get_user_roles(user_id);
-        assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0].name, "admin");
+        assert!(auth.find_exact_user(&identity).is_some());
+        assert!(auth.find_exact_user(&wildcard_identity).is_some());
+        assert!(auth.find_wildcard_user("alice").is_some());
+        assert!(auth.find_wildcard_user("bob").is_none());
     }
 
     #[test]
-    fn test_role_inheritance() {
+    fn test_drop_user() {
         let mut auth = AuthManager::new();
-        let parent_id = auth.create_role("parent", None).unwrap();
-        let child_id = auth.create_role("child", Some(parent_id)).unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
 
-        auth.create_role("grandchild", Some(child_id)).unwrap();
+        auth.create_user(&identity, &password_hash).unwrap();
+        assert!(auth.find_exact_user(&identity).is_some());
 
-        let mut user_id = auth.create_user("test", "pass").unwrap();
-        auth.grant_role_to_user(user_id, 3, 0).unwrap(); // grandchild role
-
-        let role_ids = auth.get_user_roles_recursive(user_id);
-        assert!(role_ids.contains(&3)); // grandchild
-        assert!(role_ids.contains(&2)); // child
-        assert!(role_ids.contains(&1)); // parent
+        auth.drop_user(&identity).unwrap();
+        assert!(auth.find_exact_user(&identity).is_none());
     }
 
     #[test]
-    fn test_grant_privilege() {
+    fn test_drop_user_not_found() {
         let mut auth = AuthManager::new();
-        let user_id = auth.create_user("alice", "pass").unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
 
-        let grant = PrivilegeGrant::new(
-            0,
-            GranteeType::User,
-            user_id,
-            Privilege::Read,
-            ObjectType::Table,
-            "users".to_string(),
-            0,
-        );
-
-        let grant_id = auth.grant_privilege(grant).unwrap();
-        assert_eq!(grant_id, 1);
-
-        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("users")));
-        assert!(!auth.check_privilege(user_id, Privilege::Insert, &ObjectRef::table("users")));
-    }
-
-    #[test]
-    fn test_privilege_via_role() {
-        let mut auth = AuthManager::new();
-        let user_id = auth.create_user("alice", "pass").unwrap();
-        let role_id = auth.create_role("reader", None).unwrap();
-
-        auth.grant_role_to_user(user_id, role_id, 0).unwrap();
-
-        let grant = PrivilegeGrant::new(
-            0,
-            GranteeType::Role,
-            role_id,
-            Privilege::Read,
-            ObjectType::Table,
-            "orders".to_string(),
-            0,
-        );
-        auth.grant_privilege(grant).unwrap();
-
-        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("orders")));
-    }
-
-    #[test]
-    fn test_all_privilege_implies_all() {
-        let mut auth = AuthManager::new();
-        let user_id = auth.create_user("admin", "pass").unwrap();
-
-        let grant = PrivilegeGrant::new(
-            0,
-            GranteeType::User,
-            user_id,
-            Privilege::All,
-            ObjectType::Database,
-            "*".to_string(),
-            0,
-        );
-        auth.grant_privilege(grant).unwrap();
-
-        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("anything")));
-        assert!(auth.check_privilege(user_id, Privilege::Insert, &ObjectRef::table("anything")));
-        assert!(auth.check_privilege(user_id, Privilege::Delete, &ObjectRef::table("anything")));
-    }
-
-    #[test]
-    fn test_revoke_privilege() {
-        let mut auth = AuthManager::new();
-        let user_id = auth.create_user("alice", "pass").unwrap();
-
-        let grant = PrivilegeGrant::new(
-            0,
-            GranteeType::User,
-            user_id,
-            Privilege::Read,
-            ObjectType::Table,
-            "users".to_string(),
-            0,
-        );
-
-        let grant_id = auth.grant_privilege(grant).unwrap();
-        assert!(auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("users")));
-
-        auth.revoke_privilege(grant_id).unwrap();
-        assert!(!auth.check_privilege(user_id, Privilege::Read, &ObjectRef::table("users")));
-    }
-
-    #[test]
-    fn test_drop_user_removes_grants() {
-        let mut auth = AuthManager::new();
-        let user_id = auth.create_user("alice", "pass").unwrap();
-
-        let grant = PrivilegeGrant::new(
-            0,
-            GranteeType::User,
-            user_id,
-            Privilege::Read,
-            ObjectType::Table,
-            "users".to_string(),
-            0,
-        );
-        auth.grant_privilege(grant).unwrap();
-
-        auth.drop_user(user_id).unwrap();
-        assert!(auth.list_grants().is_empty());
+        let result = auth.drop_user(&identity);
+        assert!(matches!(
+            result,
+            Err(AuthError {
+                code: AuthErrorCode::UserNotFound,
+                ..
+            })
+        ));
     }
 
     #[test]
     fn test_duplicate_user_error() {
         let mut auth = AuthManager::new();
-        auth.create_user("alice", "pass").unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
 
-        let result = auth.create_user("alice", "pass2");
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let result = auth.create_user(&identity, &password_hash);
         assert!(matches!(
             result,
             Err(AuthError {
                 code: AuthErrorCode::DuplicateUser,
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn test_grant_privilege() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        assert!(auth.check_privilege(&identity, Privilege::Read, &ObjectRef::table("users")));
+        assert!(!auth.check_privilege(&identity, Privilege::Insert, &ObjectRef::table("users")));
+    }
+
+    #[test]
+    fn test_all_privilege_implies_all() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("admin", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0)
+            .unwrap();
+
+        assert!(auth.check_privilege(&identity, Privilege::Read, &ObjectRef::database("anything")));
+        assert!(auth.check_privilege(
+            &identity,
+            Privilege::Insert,
+            &ObjectRef::database("anything")
+        ));
+        assert!(auth.check_privilege(
+            &identity,
+            Privilege::Delete,
+            &ObjectRef::database("anything")
         ));
     }
 
