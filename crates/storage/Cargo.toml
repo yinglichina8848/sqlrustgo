@@ -17,6 +17,11 @@ miniz_oxide.workspace = true
 hex.workspace = true
 snap = "1.1"
 zstd = "0.13"
+arrow.workspace = true
+parquet.workspace = true
+flate2 = "1.0"
+tar = "0.4"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
 
 [dev-dependencies]
 tempfile.workspace = true

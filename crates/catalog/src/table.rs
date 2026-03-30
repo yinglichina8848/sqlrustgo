@@ -293,4 +293,113 @@ mod tests {
 
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_add_column() {
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .add_column(ColumnDefinition::new("name", DataType::Text))
+        .unwrap();
+        assert_eq!(table.columns.len(), 2);
+        assert!(table.get_column("name").is_some());
+    }
+
+    #[test]
+    fn test_add_column_duplicate_error() {
+        let result = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .add_column(ColumnDefinition::new("id", DataType::Text));
+        assert!(matches!(result, Err(CatalogError::DuplicateColumn { .. })));
+    }
+
+    #[test]
+    fn test_add_foreign_key() {
+        let fk = ForeignKeyRef {
+            referenced_schema: "public".to_string(),
+            referenced_table: "parent".to_string(),
+            referenced_columns: vec!["id".to_string()],
+            columns: vec!["parent_id".to_string()],
+            on_delete: Some(ForeignKeyAction::Cascade),
+            on_update: Some(ForeignKeyAction::Cascade),
+        };
+        let table = Table::new(
+            "child",
+            vec![ColumnDefinition::new("parent_id", DataType::Integer)],
+        )
+        .add_foreign_key(fk);
+        assert_eq!(table.foreign_keys.len(), 1);
+    }
+
+    #[test]
+    fn test_add_index() {
+        let index = IndexInfo::new("idx_name", "users", vec!["name".to_string()]);
+        let table = Table::new("users", vec![ColumnDefinition::new("name", DataType::Text)])
+            .add_index(index);
+        assert_eq!(table.indices.len(), 1);
+    }
+
+    #[test]
+    fn test_set_row_count() {
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .set_row_count(100);
+        assert_eq!(table.row_count, 100);
+    }
+
+    #[test]
+    fn test_get_primary_key_columns() {
+        let table = create_test_table();
+        let pk_cols = table.get_primary_key_columns();
+        assert!(pk_cols.is_some());
+        let cols = pk_cols.unwrap();
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].name, "id");
+    }
+
+    #[test]
+    fn test_get_primary_key_columns_none() {
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        );
+        assert!(table.get_primary_key_columns().is_none());
+    }
+
+    #[test]
+    fn test_validate_foreign_key_column_count_mismatch() {
+        let fk = ForeignKeyRef {
+            referenced_schema: "public".to_string(),
+            referenced_table: "parent".to_string(),
+            referenced_columns: vec!["id".to_string(), "other".to_string()],
+            columns: vec!["parent_id".to_string()], // Mismatch: 1 vs 2
+            on_delete: None,
+            on_update: None,
+        };
+        let table = Table::new(
+            "child",
+            vec![ColumnDefinition::new("parent_id", DataType::Integer)],
+        )
+        .add_foreign_key(fk);
+        let result = table.validate("public");
+        assert!(matches!(
+            result,
+            Err(CatalogError::ForeignKeyViolation { .. })
+        ));
+    }
+
+    #[test]
+    fn test_primary_key_column_not_found() {
+        let result = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .primary_key(vec!["nonexistent".to_string()]);
+        assert!(matches!(result, Err(CatalogError::ColumnNotFound { .. })));
+    }
 }

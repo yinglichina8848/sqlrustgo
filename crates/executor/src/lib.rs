@@ -237,6 +237,7 @@ mod tests {
     }
 }
 
+#[allow(dead_code)]
 struct MockExecutor;
 
 impl Executor for MockExecutor {

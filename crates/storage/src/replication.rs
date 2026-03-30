@@ -7,7 +7,6 @@
 //! - Simple failover (heartbeat monitoring, leader election)
 
 use std::io::{Read, Write};
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -377,6 +376,7 @@ impl Default for ReplicationConfig {
 }
 
 /// Master node for replication
+#[allow(dead_code)]
 pub struct MasterNode {
     binlog_writer: Arc<Mutex<BinlogWriter>>,
     config: ReplicationConfig,
@@ -477,6 +477,7 @@ impl MasterNode {
 }
 
 /// Slave node for replication
+#[allow(dead_code)]
 pub struct SlaveNode {
     binlog_path: PathBuf,
     config: ReplicationConfig,
@@ -497,7 +498,6 @@ impl SlaveNode {
     /// Start IO thread (fetch binlog from master)
     pub fn start_io_thread(&self) {
         let binlog_path = self.binlog_path.clone();
-        let config = self.config.clone();
         let master_lsn = self.master_lsn.clone();
         let is_running = self.is_running.clone();
 
@@ -588,53 +588,6 @@ impl SlaveNode {
     pub fn replication_lag(&self) -> u64 {
         // Simplified: return 0 (in production, compare timestamps)
         0
-    }
-}
-
-/// Simple failover manager
-pub struct FailoverManager {
-    master_address: String,
-    slave_addresses: Vec<String>,
-    current_master: Arc<Mutex<Option<String>>>,
-}
-
-impl FailoverManager {
-    pub fn new(master_address: String, slave_addresses: Vec<String>) -> Self {
-        Self {
-            master_address,
-            slave_addresses,
-            current_master: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    /// Monitor master health and trigger failover if needed
-    pub fn start_monitoring(&self) {
-        let master_addr = self.master_address.clone();
-        let current_master = self.current_master.clone();
-
-        thread::spawn(move || {
-            loop {
-                // Simple health check (try to connect)
-                let healthy = std::net::TcpStream::connect_timeout(
-                    &master_addr.parse().unwrap(),
-                    Duration::from_secs(1),
-                )
-                .is_ok();
-
-                if !healthy {
-                    println!("Master {} is unhealthy, initiating failover", master_addr);
-                    // In production: promote a slave to master
-                    *current_master.lock().unwrap() = Some(master_addr.clone());
-                }
-
-                thread::sleep(Duration::from_secs(5));
-            }
-        });
-    }
-
-    /// Get current master address
-    pub fn current_master(&self) -> Option<String> {
-        self.current_master.lock().unwrap().clone()
     }
 }
 

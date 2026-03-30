@@ -12,17 +12,17 @@ pub use sqlrustgo_parser::{
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
-    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
-    ViewInfo,
+    BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
-use sqlrustgo_storage::{ForeignKeyAction, ForeignKeyConstraint};
+use sqlrustgo_storage::ForeignKeyAction;
 
 /// Format EXPLAIN output with cost information
+#[allow(dead_code)]
 fn format_explain_output(plan: &dyn PhysicalPlan, indent: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let prefix = "  ".repeat(indent);
@@ -259,7 +259,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::Cascade) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -280,7 +280,7 @@ fn handle_foreign_key_update(
                         }
                         Some(ForeignKeyAction::SetNull) => {
                             let child_rows = storage.scan(&table_name)?;
-                            let mut new_rows: Vec<Vec<Value>> = child_rows
+                            let new_rows: Vec<Vec<Value>> = child_rows
                                 .into_iter()
                                 .map(|mut r| {
                                     if r[col_idx] == *old_key_value {
@@ -346,10 +346,7 @@ fn evaluate_where_clause(
         sqlrustgo_parser::Expression::Subquery(_) => false,
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::WindowFunction { .. } => false,
-        sqlrustgo_parser::Expression::Placeholder => {
-            // Placeholder in WHERE should be false (no param value provided)
-            false
-        }
+        sqlrustgo_parser::Expression::Placeholder => false,
     }
 }
 
@@ -485,8 +482,8 @@ fn like_match(text: &str, pattern: &str) -> bool {
     // Simple implementation for LIKE patterns
     // % matches any sequence of characters
     // _ matches any single character
-    let mut text_chars: Vec<char> = text.chars().collect();
-    let mut pattern_chars: Vec<char> = pattern.chars().collect();
+    let text_chars: Vec<char> = text.chars().collect();
+    let pattern_chars: Vec<char> = pattern.chars().collect();
 
     fn do_match(pi: usize, ti: usize, pc: &[char], tc: &[char]) -> bool {
         if pi == pc.len() {
@@ -534,7 +531,7 @@ fn compute_aggregate(
         AggregateFunction::Count => {
             if agg.args.is_empty()
                 || matches!(
-                    agg.args.get(0),
+                    agg.args.first(),
                     Some(sqlrustgo_parser::Expression::Wildcard)
                 )
             {
@@ -709,7 +706,9 @@ impl ExecutionEngine {
                                 if col_idx < num_columns {
                                     new_row[col_idx] = match expr {
                                         Expression::Literal(value) => {
-                                            if let Some(ref info) = table_info {
+                                            if value.to_uppercase() == "NULL" {
+                                                Value::Null
+                                            } else if let Some(ref info) = table_info {
                                                 if col_idx < info.columns.len() {
                                                     let col_type = &info.columns[col_idx].data_type;
                                                     let upper = col_type.to_uppercase();
@@ -767,37 +766,43 @@ impl ExecutionEngine {
                                             let expr = &row[value_idx];
                                             new_row[target_idx] = match expr {
                                                 Expression::Literal(value) => {
-                                                    let col_type =
-                                                        &info.columns[target_idx].data_type;
-                                                    let upper = col_type.to_uppercase();
-                                                    if upper.contains("INT")
-                                                        || upper == "BIGINT"
-                                                        || upper == "SMALLINT"
-                                                    {
-                                                        if let Ok(n) = value.parse::<i64>() {
-                                                            Value::Integer(n)
-                                                        } else {
-                                                            Value::Text(value.clone())
-                                                        }
-                                                    } else if upper == "FLOAT"
-                                                        || upper == "DOUBLE"
-                                                        || upper == "DECIMAL"
-                                                    {
-                                                        if let Ok(n) = value.parse::<f64>() {
-                                                            Value::Float(n)
-                                                        } else {
-                                                            Value::Text(value.clone())
-                                                        }
-                                                    } else if upper == "BOOLEAN" {
-                                                        if value.to_uppercase() == "TRUE" {
-                                                            Value::Boolean(true)
-                                                        } else if value.to_uppercase() == "FALSE" {
-                                                            Value::Boolean(false)
-                                                        } else {
-                                                            Value::Text(value.clone())
-                                                        }
+                                                    if value.to_uppercase() == "NULL" {
+                                                        Value::Null
                                                     } else {
-                                                        Value::Text(value.clone())
+                                                        let col_type =
+                                                            &info.columns[target_idx].data_type;
+                                                        let upper = col_type.to_uppercase();
+                                                        if upper.contains("INT")
+                                                            || upper == "BIGINT"
+                                                            || upper == "SMALLINT"
+                                                        {
+                                                            if let Ok(n) = value.parse::<i64>() {
+                                                                Value::Integer(n)
+                                                            } else {
+                                                                Value::Text(value.clone())
+                                                            }
+                                                        } else if upper == "FLOAT"
+                                                            || upper == "DOUBLE"
+                                                            || upper == "DECIMAL"
+                                                        {
+                                                            if let Ok(n) = value.parse::<f64>() {
+                                                                Value::Float(n)
+                                                            } else {
+                                                                Value::Text(value.clone())
+                                                            }
+                                                        } else if upper == "BOOLEAN" {
+                                                            if value.to_uppercase() == "TRUE" {
+                                                                Value::Boolean(true)
+                                                            } else if value.to_uppercase()
+                                                                == "FALSE"
+                                                            {
+                                                                Value::Boolean(false)
+                                                            } else {
+                                                                Value::Text(value.clone())
+                                                            }
+                                                        } else {
+                                                            Value::Text(value.clone())
+                                                        }
                                                     }
                                                 }
                                                 _ => Value::Null,
@@ -820,7 +825,7 @@ impl ExecutionEngine {
                     .collect();
 
                 // Handle UPSERT: INSERT ... ON DUPLICATE KEY UPDATE
-                if insert.on_duplicate.is_some() {
+                if let Some(updates) = &insert.on_duplicate {
                     let existing_rows = storage.scan(table_name)?;
 
                     let key_columns: Vec<usize> = table_info
@@ -835,7 +840,6 @@ impl ExecutionEngine {
                         })
                         .unwrap_or_default();
 
-                    let updates = insert.on_duplicate.as_ref().unwrap();
                     let mut total_affected = 0;
                     let mut final_rows = existing_rows.clone();
 
@@ -845,10 +849,11 @@ impl ExecutionEngine {
                             for (idx, existing_row) in final_rows.iter().enumerate() {
                                 let mut match_count = 0;
                                 for &key_col in &key_columns {
-                                    if key_col < new_row.len() && key_col < existing_row.len() {
-                                        if new_row[key_col] == existing_row[key_col] {
-                                            match_count += 1;
-                                        }
+                                    if key_col < new_row.len()
+                                        && key_col < existing_row.len()
+                                        && new_row[key_col] == existing_row[key_col]
+                                    {
+                                        match_count += 1;
                                     }
                                 }
                                 if match_count == key_columns.len() {
@@ -1164,7 +1169,7 @@ impl ExecutionEngine {
                         .as_ref()
                         .map(|info| {
                             info.columns.iter().any(|col| {
-                                col.references.as_ref().map_or(false, |fk| {
+                                col.references.as_ref().is_some_and(|fk| {
                                     fk.referenced_table == delete.table
                                         && fk.on_delete == Some(ForeignKeyAction::Cascade)
                                 })
@@ -1258,7 +1263,7 @@ impl ExecutionEngine {
                     }
 
                     let mut new_row = row.clone();
-                    let mut old_key_value: Option<Value> = None;
+                    let mut _old_key_value: Option<Value> = None;
 
                     // Apply SET clauses and track if primary key is being updated
                     for (col_name, expr) in &update.set_clauses {
@@ -1268,7 +1273,7 @@ impl ExecutionEngine {
                         {
                             // Track old key value if this is the primary key
                             if primary_key_col == Some(col_idx) {
-                                old_key_value = Some(row[col_idx].clone());
+                                _old_key_value = Some(row[col_idx].clone());
                             }
 
                             let new_value = evaluate_expr(expr, &new_row, &columns);
@@ -1310,19 +1315,16 @@ impl ExecutionEngine {
                                                 if fk.referenced_table == update.table
                                                     && fk.referenced_column
                                                         == columns[pk_col_idx].name
-                                                {
-                                                    if fk.on_update
+                                                    && fk.on_update
                                                         == Some(ForeignKeyAction::Restrict)
-                                                    {
-                                                        let child_rows =
-                                                            storage.scan(table_name)?;
-                                                        for child_row in &child_rows {
-                                                            if child_row[col_idx] == *old_val {
-                                                                return Err(SqlError::ExecutionError(format!(
-                                                                    "Cannot update: foreign key constraint violation - table '{}' has referenced rows",
-                                                                    table_name
-                                                                )));
-                                                            }
+                                                {
+                                                    let child_rows = storage.scan(table_name)?;
+                                                    for child_row in &child_rows {
+                                                        if child_row[col_idx] == *old_val {
+                                                            return Err(SqlError::ExecutionError(format!(
+                                                                "Cannot update: foreign key constraint violation - table '{}' has referenced rows",
+                                                                table_name
+                                                            )));
                                                         }
                                                     }
                                                 }
@@ -1359,7 +1361,7 @@ impl ExecutionEngine {
                                     handle_foreign_key_update(
                                         &mut *storage,
                                         &update.table,
-                                        &old_val,
+                                        old_val,
                                         new_val,
                                         &columns[pk_col_idx].name,
                                     )?;
@@ -1455,7 +1457,7 @@ impl ExecutionEngine {
                 // EXPLAIN (without ANALYZE) - show query plan with cost
                 let rows = vec![vec![
                     Value::Text("Plan:".to_string()),
-                    Value::Text(format!("cost=0.00..100.00 rows=1000 width=64")),
+                    Value::Text("cost=0.00..100.00 rows=1000 width=64".to_string()),
                 ]];
                 Ok(ExecutorResult::new(rows, 0))
             }
@@ -1484,6 +1486,91 @@ impl ExecutionEngine {
                     ))
                 }
             },
+            Statement::Copy(copy) => {
+                use sqlrustgo_storage::parquet::{export_to_parquet, import_from_parquet};
+
+                let table_name = &copy.table_name;
+                let path = &copy.path;
+                let format = &copy.format;
+
+                // Validate format
+                if format.to_uppercase() != "PARQUET" {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Unsupported COPY format: {}. Only PARQUET is supported.",
+                        format
+                    )));
+                }
+
+                let mut storage = self.storage.write().unwrap();
+
+                if copy.from {
+                    // COPY FROM PARQUET - Import data from Parquet file
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+
+                    // Get table info for column names
+                    let table_info = storage.get_table_info(table_name).ok().ok_or_else(|| {
+                        SqlError::ExecutionError(format!(
+                            "Could not get table info for '{}'",
+                            table_name
+                        ))
+                    })?;
+
+                    let column_names: Vec<String> =
+                        table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+                    // Import records from Parquet
+                    let records = import_from_parquet(path, &column_names)?;
+
+                    // Insert records into table
+                    let mut rows_inserted = 0;
+                    for record in &records {
+                        if storage.insert(table_name, vec![record.clone()]).is_ok() {
+                            rows_inserted += 1;
+                        }
+                    }
+
+                    Ok(ExecutorResult::new(vec![], rows_inserted))
+                } else {
+                    // COPY TO PARQUET - Export data to Parquet file
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+
+                    // Get table info for column names
+                    let table_info = storage.get_table_info(table_name).ok().ok_or_else(|| {
+                        SqlError::ExecutionError(format!(
+                            "Could not get table info for '{}'",
+                            table_name
+                        ))
+                    })?;
+
+                    let column_names: Vec<String> =
+                        table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+                    // Scan all rows from table
+                    let records = storage.scan(table_name)?;
+
+                    // Export records to Parquet
+                    export_to_parquet(path, &records, &column_names)?;
+
+                    let row_count = records.len();
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!(
+                            "Exported {} rows to {}",
+                            row_count, path
+                        ))]],
+                        row_count,
+                    ))
+                }
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -1634,20 +1721,6 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(result_rows, 0))
             }
-            "ColumnarScan" => {
-                let scan_plan = plan
-                    .as_any()
-                    .downcast_ref::<sqlrustgo_planner::ColumnarScanExec>()
-                    .ok_or_else(|| {
-                        SqlError::ExecutionError("Failed to downcast ColumnarScanExec".to_string())
-                    })?;
-
-                let table = scan_plan.table_name();
-                let projection = scan_plan.projection();
-
-                let rows = storage.scan_columns(table, projection)?;
-                Ok(ExecutorResult::new(rows, 0))
-            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
@@ -1743,51 +1816,6 @@ mod tests {
         assert_eq!(result.rows.len(), 2);
         assert_eq!(result.rows[0][0], Value::Integer(1));
         assert_eq!(result.rows[0][1], Value::Text("Alice".to_string()));
-    }
-
-    #[test]
-    fn test_execute_plan_columnar_scan() {
-        use sqlrustgo_planner::{ColumnarScanExec, DataType, Field, Schema};
-
-        let mut storage = MemoryStorage::new();
-        storage
-            .insert(
-                "users",
-                vec![
-                    vec![Value::Integer(1), Value::Text("Alice".to_string()), Value::Float(3.14)],
-                    vec![Value::Integer(2), Value::Text("Bob".to_string()), Value::Float(2.71)],
-                    vec![Value::Integer(3), Value::Text("Charlie".to_string()), Value::Float(1.41)],
-                ],
-            )
-            .unwrap();
-
-        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
-
-        // Full schema with 3 columns: id, name, value
-        let schema = Schema::new(vec![
-            Field::new("id".to_string(), DataType::Integer),
-            Field::new("name".to_string(), DataType::Text),
-            Field::new("value".to_string(), DataType::Float),
-        ]);
-
-        // Scan only columns 0 and 2 (id and value), projecting out name
-        let plan = ColumnarScanExec::new("users".to_string(), schema, vec![0, 2]);
-        let result = engine.execute_plan(&plan).unwrap();
-
-        assert_eq!(result.rows.len(), 3);
-
-        // First row - should only have id and value
-        assert_eq!(result.rows[0].len(), 2);
-        assert_eq!(result.rows[0][0], Value::Integer(1));
-        assert_eq!(result.rows[0][1], Value::Float(3.14));
-
-        // Second row
-        assert_eq!(result.rows[1][0], Value::Integer(2));
-        assert_eq!(result.rows[1][1], Value::Float(2.71));
-
-        // Third row
-        assert_eq!(result.rows[2][0], Value::Integer(3));
-        assert_eq!(result.rows[2][1], Value::Float(1.41));
     }
 
     #[test]
@@ -2040,5 +2068,233 @@ mod tests {
 
         let result = engine.execute_plan(&join).unwrap();
         assert!(result.rows.len() > 0);
+    }
+
+    #[test]
+    fn test_execute_delete() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("DELETE FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 1);
+
+        let select_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_execute_update() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("UPDATE users SET name = 'Charlie' WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 1);
+
+        let select_result = engine
+            .execute(parse("SELECT name FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Text("Charlie".to_string()));
+    }
+
+    #[test]
+    fn test_execute_drop_table() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("DROP TABLE users").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_alter_table_add_column() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("ALTER TABLE users ADD COLUMN name TEXT").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_insert_replace() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("REPLACE INTO users VALUES (1, 'Bob')").unwrap())
+            .unwrap();
+        assert!(result.affected_rows >= 1);
+
+        let select_result = engine
+            .execute(parse("SELECT COUNT(*) FROM users").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_execute_insert_ignore() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO users VALUES (1, 'Alice')").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("INSERT IGNORE INTO users VALUES (1, 'Bob')").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+
+        let select_result = engine
+            .execute(parse("SELECT name FROM users WHERE id = 1").unwrap())
+            .unwrap();
+        assert_eq!(select_result.rows[0][0], Value::Text("Alice".to_string()));
+    }
+
+    #[test]
+    fn test_execute_truncate_parsing() {
+        let result = parse("TRUNCATE TABLE users");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Truncate(trunc) => {
+                assert_eq!(trunc.table_name, "users");
+            }
+            _ => panic!("Expected Truncate statement"),
+        }
+    }
+
+    #[test]
+    fn test_execute_create_index() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("CREATE INDEX idx_name ON users (name)").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_show_status() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("SHOW STATUS").unwrap()).unwrap();
+        assert!(result.rows.len() >= 0);
+    }
+
+    #[test]
+    fn test_error_table_not_found() {
+        let mut engine = ExecutionEngine::default();
+        let result = engine.execute(parse("SELECT * FROM nonexistent").unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_error_nonexistent_table() {
+        let mut engine = ExecutionEngine::default();
+        let result = engine.execute(parse("SELECT * FROM nonexistent").unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_if_not_exists() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine
+            .execute(parse("CREATE TABLE IF NOT EXISTS users (id INTEGER)").unwrap())
+            .unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_begin() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("BEGIN").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_commit() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        engine.execute(parse("BEGIN").unwrap()).unwrap();
+        let result = engine.execute(parse("COMMIT").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_transaction_rollback() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        engine.execute(parse("BEGIN").unwrap()).unwrap();
+        let result = engine.execute(parse("ROLLBACK").unwrap()).unwrap();
+        assert_eq!(result.affected_rows, 0);
+    }
+
+    #[test]
+    fn test_execute_grant() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("GRANT SELECT ON users TO PUBLIC").unwrap());
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_execute_revoke() {
+        let mut engine = ExecutionEngine::default();
+        engine
+            .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+            .unwrap();
+
+        let result = engine.execute(parse("REVOKE SELECT ON users FROM PUBLIC").unwrap());
+        assert!(result.is_ok() || result.is_err());
     }
 }

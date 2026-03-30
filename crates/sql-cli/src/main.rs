@@ -6,12 +6,15 @@ use rustyline::history::FileHistory;
 use rustyline::Editor;
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    CreateTableStatement, DropTableStatement, Expression, InsertStatement, SelectStatement,
+    CreateTableStatement, DropTableStatement, Expression, InsertStatement, KillStatement, KillType,
+    SelectStatement,
 };
 use sqlrustgo_parser::{parse, Statement};
+use sqlrustgo_security::SessionManager;
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::env;
+use std::sync::Arc;
 
 /// Check if teaching mode is enabled via environment variable
 fn is_teaching_mode() -> bool {
@@ -38,8 +41,13 @@ fn main() {
         // Initialize storage engine
         let mut storage = MemoryStorage::new();
 
+        // Initialize session manager for CLI
+        let session_manager = Arc::new(SessionManager::new());
+        let cli_session_id =
+            session_manager.create_session("sqlrustgo".to_string(), "localhost".to_string());
+
         // Execute the SQL
-        match execute_sql(&sql, &mut storage) {
+        match execute_sql(&sql, &mut storage, &session_manager, cli_session_id) {
             Ok(result) => {
                 print_result(result);
             }
@@ -56,6 +64,12 @@ fn main() {
 
     // Initialize storage engine
     let mut storage = MemoryStorage::new();
+
+    // Initialize session manager and create CLI session
+    let session_manager = Arc::new(SessionManager::new());
+    let cli_session_id =
+        session_manager.create_session("sqlrustgo".to_string(), "localhost".to_string());
+    log::info!("CLI session started: id={}", cli_session_id);
 
     // Pre-populate with some sample data for testing
     setup_sample_data(&mut storage);
@@ -105,7 +119,7 @@ fn main() {
                     }
                 } else {
                     // Execute SQL query
-                    match execute_sql(&trimmed, &mut storage) {
+                    match execute_sql(&trimmed, &mut storage, &session_manager, cli_session_id) {
                         Ok(result) => {
                             print_result(result);
                         }
@@ -133,19 +147,33 @@ fn main() {
 }
 
 /// Execute SQL query
-fn execute_sql(sql: &str, storage: &mut dyn StorageEngine) -> Result<ExecutorResult, String> {
+fn execute_sql(
+    sql: &str,
+    storage: &mut dyn StorageEngine,
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
     // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
 
-    // For now, implement simple execution for SELECT queries
+    // Update session activity
+    session_manager.update_activity(current_session_id);
+
     match statement {
-        Statement::Select(select) => execute_select(&select, storage),
+        Statement::Select(select) => {
+            if select.table == "information_schema.processlist" {
+                execute_information_schema_processlist(session_manager, current_session_id)
+            } else {
+                execute_select(&select, storage)
+            }
+        }
         Statement::Insert(insert) => execute_insert(&insert, storage),
         Statement::CreateTable(create) => execute_create_table(&create, storage),
         Statement::DropTable(drop) => execute_drop_table(&drop, storage),
         Statement::ShowStatus => execute_show_status(storage),
-        Statement::ShowProcesslist => execute_show_processlist(storage),
-        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST are supported".to_string()),
+        Statement::ShowProcesslist => execute_show_processlist(session_manager, current_session_id),
+        Statement::Kill(kill) => execute_kill(&kill, session_manager, current_session_id),
+        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST, KILL are supported".to_string()),
     }
 }
 
@@ -409,23 +437,200 @@ fn execute_show_status(storage: &dyn StorageEngine) -> Result<ExecutorResult, St
 }
 
 /// Execute SHOW PROCESSLIST statement
-fn execute_show_processlist(_storage: &dyn StorageEngine) -> Result<ExecutorResult, String> {
+fn execute_show_processlist(
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
+
+    if !current_session.can_view_processlist() {
+        return Err(
+            "Access denied: you need PROCESS or SUPER privilege to view processlist".to_string(),
+        );
+    }
+
     let mut rows = Vec::new();
 
-    // Currently no active connections in single-user mode
-    // This would be expanded in multi-threaded server mode
-    rows.push(vec![
-        Value::Text("1".to_string()),                // Id
-        Value::Text("system".to_string()),           // User
-        Value::Text("localhost".to_string()),        // Host
-        Value::Text("".to_string()),                 // DB
-        Value::Text("Query".to_string()),            // Command
-        Value::Text("0".to_string()),                // Time
-        Value::Text("".to_string()),                 // State
-        Value::Text("SHOW PROCESSLIST".to_string()), // Info
-    ]);
+    // Get all active sessions from SessionManager
+    let sessions = session_manager.get_active_sessions();
+
+    if sessions.is_empty() {
+        rows.push(vec![
+            Value::Text("0".to_string()),                // Id
+            Value::Text("system".to_string()),           // User
+            Value::Text("localhost".to_string()),        // Host
+            Value::Text("".to_string()),                 // DB
+            Value::Text("Daemon".to_string()),           // Command
+            Value::Text("0".to_string()),                // Time
+            Value::Text("".to_string()),                 // State
+            Value::Text("SHOW PROCESSLIST".to_string()), // Info
+        ]);
+    } else {
+        for session in sessions {
+            let command = match session.status {
+                sqlrustgo_security::SessionStatus::Active => "Query",
+                sqlrustgo_security::SessionStatus::Idle => "Sleep",
+                sqlrustgo_security::SessionStatus::Closing => "Closing",
+                sqlrustgo_security::SessionStatus::Closed => "Dead",
+            };
+
+            let time = session.idle_time_seconds().to_string();
+            let db = session.database.clone().unwrap_or_default();
+
+            rows.push(vec![
+                Value::Text(session.id.to_string()), // Id
+                Value::Text(session.user.clone()),   // User
+                Value::Text(session.ip.clone()),     // Host
+                Value::Text(db),                     // DB
+                Value::Text(command.to_string()),    // Command
+                Value::Text(time),                   // Time
+                Value::Text("".to_string()),         // State
+                Value::Text("".to_string()),         // Info
+            ]);
+        }
+    }
 
     Ok(ExecutorResult::new(rows, 0))
+}
+
+/// Execute SELECT * FROM information_schema.processlist
+fn execute_information_schema_processlist(
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
+
+    if !current_session.can_view_processlist() {
+        return Err(
+            "Access denied: you need PROCESS or SUPER privilege to view processlist".to_string(),
+        );
+    }
+
+    let mut rows = Vec::new();
+
+    let sessions = session_manager.get_active_sessions();
+
+    if sessions.is_empty() {
+        rows.push(vec![
+            Value::Text("0".to_string()),
+            Value::Text("system".to_string()),
+            Value::Text("localhost".to_string()),
+            Value::Text("".to_string()),
+            Value::Text("Daemon".to_string()),
+            Value::Text("0".to_string()),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+    } else {
+        for session in sessions {
+            let command = match session.status {
+                sqlrustgo_security::SessionStatus::Active => "Query",
+                sqlrustgo_security::SessionStatus::Idle => "Sleep",
+                sqlrustgo_security::SessionStatus::Closing => "Closing",
+                sqlrustgo_security::SessionStatus::Closed => "Dead",
+            };
+
+            let time = session.idle_time_seconds().to_string();
+            let db = session.database.clone().unwrap_or_default();
+
+            rows.push(vec![
+                Value::Text(session.id.to_string()),
+                Value::Text(session.user.clone()),
+                Value::Text(session.ip.clone()),
+                Value::Text(db),
+                Value::Text(command.to_string()),
+                Value::Text(time),
+                Value::Text("".to_string()),
+                Value::Text("".to_string()),
+            ]);
+        }
+    }
+
+    Ok(ExecutorResult::new(rows, 0))
+}
+
+/// Execute KILL statement
+fn execute_kill(
+    kill: &KillStatement,
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
+    let kill_type_str = match kill.kill_type {
+        KillType::Connection => "CONNECTION",
+        KillType::Query => "QUERY",
+    };
+
+    let target_session_id = kill.process_id;
+
+    // Get current session for privilege check
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
+
+    // Cannot kill self
+    if target_session_id == current_session_id {
+        return Err(format!(
+            "Cannot KILL {} {} (cannot kill self session)",
+            kill_type_str, target_session_id
+        ));
+    }
+
+    // Check if target session exists
+    let target_session = session_manager.get_session(target_session_id);
+    if target_session.is_none() {
+        return Err(format!("Unknown thread id: {}", target_session_id));
+    }
+
+    let target_session = target_session.unwrap();
+
+    // Permission check: can kill if current user has SUPER privilege
+    // or if killing own session (same user)
+    let is_own_session = target_session.user == current_session.user;
+    if !is_own_session && !current_session.can_kill() {
+        return Err(format!(
+            "Access denied: cannot KILL {} {} (need SUPER privilege to kill other user's sessions)",
+            kill_type_str, target_session_id
+        ));
+    }
+
+    // Perform the kill based on type
+    match kill.kill_type {
+        KillType::Connection => {
+            // Close the entire connection
+            log::info!(
+                "KILL CONNECTION {} - closing session (user: {}, ip: {}) by {}",
+                target_session_id,
+                target_session.user,
+                target_session.ip,
+                current_session.user
+            );
+            session_manager.close_session(target_session_id);
+        }
+        KillType::Query => {
+            // Just interrupt the query, keep connection alive
+            log::info!(
+                "KILL QUERY {} - interrupting query in session (user: {}, ip: {}) by {}",
+                target_session_id,
+                target_session.user,
+                target_session.ip,
+                current_session.user
+            );
+            // In a real implementation, we would signal the query to interrupt
+            // For now, we just log it
+        }
+    }
+
+    Ok(ExecutorResult::new(
+        vec![vec![Value::Text(format!(
+            "{} {} {}",
+            kill_type_str, target_session_id, "executed"
+        ))]],
+        0,
+    ))
 }
 
 /// Setup sample data for testing CLI commands

@@ -68,6 +68,7 @@ pub enum Token {
     Leave,
     Iterate,
     Signal,
+    Declare,
     Delimiter,
     View,
     All,
@@ -78,6 +79,16 @@ pub enum Token {
     Show,
     Status,
     Processlist,
+
+    // KILL command keywords
+    Kill,
+    Connection,
+    Query,
+
+    // COPY keywords
+    Copy,
+    Format,
+    Parquet,
 
     // Prepared Statements
     Prepare,
@@ -121,6 +132,16 @@ pub enum Token {
     Ties,
     NoOthers,
     Between,
+
+    // CTE (Common Table Expression) - SQL-99
+    With,
+    Recursive,
+
+    // MERGE and TRUNCATE - SQL-2003
+    Merge,
+    Truncate,
+    When,
+    Matched,
 
     // Aggregate Functions
     Length,
@@ -270,6 +291,7 @@ impl fmt::Display for Token {
             Token::Leave => write!(f, "LEAVE"),
             Token::Iterate => write!(f, "ITERATE"),
             Token::Signal => write!(f, "SIGNAL"),
+            Token::Declare => write!(f, "DECLARE"),
             Token::Delimiter => write!(f, "DELIMITER"),
             Token::View => write!(f, "VIEW"),
             Token::All => write!(f, "ALL"),
@@ -310,6 +332,12 @@ impl fmt::Display for Token {
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
             Token::Between => write!(f, "BETWEEN"),
+            Token::With => write!(f, "WITH"),
+            Token::Recursive => write!(f, "RECURSIVE"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Truncate => write!(f, "TRUNCATE"),
+            Token::When => write!(f, "WHEN"),
+            Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -371,6 +399,14 @@ impl fmt::Display for Token {
             Token::Show => write!(f, "SHOW"),
             Token::Status => write!(f, "STATUS"),
             Token::Processlist => write!(f, "PROCESSLIST"),
+            // KILL keywords
+            Token::Kill => write!(f, "KILL"),
+            Token::Connection => write!(f, "CONNECTION"),
+            Token::Query => write!(f, "QUERY"),
+            // COPY keywords
+            Token::Copy => write!(f, "COPY"),
+            Token::Format => write!(f, "FORMAT"),
+            Token::Parquet => write!(f, "PARQUET"),
             // Prepared Statements
             Token::Prepare => write!(f, "PREPARE"),
             Token::Execute => write!(f, "EXECUTE"),
@@ -444,6 +480,12 @@ pub fn is_keyword(s: &str) -> bool {
             | "EXECUTE"
             | "DEALLOCATE"
             | "USING"
+            | "COPY"
+            | "FORMAT"
+            | "PARQUET"
+            | "KILL"
+            | "CONNECTION"
+            | "QUERY"
     )
 }
 
@@ -521,6 +563,12 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "EXECUTE" => Some(Token::Execute),
         "DEALLOCATE" => Some(Token::Deallocate),
         "USING" => Some(Token::Using),
+        "COPY" => Some(Token::Copy),
+        "FORMAT" => Some(Token::Format),
+        "PARQUET" => Some(Token::Parquet),
+        "KILL" => Some(Token::Kill),
+        "CONNECTION" => Some(Token::Connection),
+        "QUERY" => Some(Token::Query),
         _ => None,
     }
 }

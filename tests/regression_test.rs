@@ -30,9 +30,11 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "optimizer_cost_test",
                 "optimizer_rules_test",
                 "parser_token_test",
+                "prometheus_test",
                 "query_cache_config_test",
                 "query_cache_test",
                 "server_health_test",
+                "slow_query_log_test",
                 "types_value_test",
                 "vectorization_test",
             ],
@@ -41,21 +43,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 集成测试 - 核心
         TestCategory {
             name: "集成测试 - 核心 (Core Integration)",
-            test_files: vec![
-                "executor_test",
-                "planner_test",
-                "page_test",
-            ],
+            test_files: vec!["executor_test", "planner_test", "page_test"],
             description: "测试执行器、规划器、页面管理",
         },
         // 集成测试 - SQL功能
         TestCategory {
             name: "集成测试 - SQL功能 (SQL Functionality)",
-            test_files: vec![
-                "foreign_key_test",
-                "server_integration_test",
-                "upsert_test",
-            ],
+            test_files: vec!["foreign_key_test", "server_integration_test", "upsert_test"],
             description: "测试外键、服务器、UPSERT",
         },
         // 集成测试 - 存储
@@ -71,17 +65,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 教学场景测试
         TestCategory {
             name: "教学场景测试 (Teaching Scenarios)",
-            test_files: vec![
-                "teaching_scenario_test",
-            ],
+            test_files: vec!["teaching_scenario_test"],
             description: "35+ 教学场景测试：CRUD、事务、JOIN、聚合、子查询、视图、优化器",
         },
         // 性能测试
         TestCategory {
             name: "性能测试 (Performance)",
-            test_files: vec![
-                "performance_test",
-            ],
+            test_files: vec!["performance_test"],
             description: "22 性能测试：批量插入、索引扫描、JOIN、缓存、向量化",
         },
         // 异常测试 - 并发
@@ -97,10 +87,7 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 异常测试 - 隔离级别
         TestCategory {
             name: "异常测试 - 隔离级别 (Anomaly - Isolation)",
-            test_files: vec![
-                "transaction_isolation_test",
-                "transaction_timeout_test",
-            ],
+            test_files: vec!["transaction_isolation_test", "transaction_timeout_test"],
             description: "事务隔离级别、超时测试",
         },
         // 异常测试 - 数据处理
@@ -118,20 +105,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 异常测试 - 查询
         TestCategory {
             name: "异常测试 - 查询 (Anomaly - Query)",
-            test_files: vec![
-                "join_test",
-                "set_operations_test",
-                "view_test",
-            ],
+            test_files: vec!["join_test", "set_operations_test", "view_test"],
             description: "JOIN、集合操作、视图",
         },
         // 异常测试 - 约束
         TestCategory {
             name: "异常测试 - 约束 (Anomaly - Constraints)",
-            test_files: vec![
-                "fk_constraint_test",
-                "catalog_consistency_test",
-            ],
+            test_files: vec!["fk_constraint_test", "catalog_consistency_test"],
             description: "外键约束、目录一致性",
         },
         // 压力测试
@@ -150,35 +130,25 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 异常测试 - 稳定性
         TestCategory {
             name: "异常测试 - 稳定性 (Anomaly - Stability)",
-            test_files: vec![
-                "long_run_stability_test",
-                "qps_benchmark_test",
-            ],
+            test_files: vec!["long_run_stability_test", "qps_benchmark_test"],
             description: "长时间运行稳定性、QPS基准测试",
         },
         // 异常测试 - 崩溃注入
         TestCategory {
             name: "异常测试 - 崩溃注入 (Anomaly - Crash Injection)",
-            test_files: vec![
-                "crash_injection_test",
-            ],
+            test_files: vec!["crash_injection_test"],
             description: "崩溃注入测试",
         },
         // CI 测试
         TestCategory {
             name: "CI 测试 (CI)",
-            test_files: vec![
-                "ci_test",
-            ],
+            test_files: vec!["ci_test"],
             description: "CI 环境检查",
         },
         // 其他测试
         TestCategory {
             name: "其他测试 (Other)",
-            test_files: vec![
-                "binary_format_test",
-                "wal_integration_test",
-            ],
+            test_files: vec!["binary_format_test", "wal_integration_test"],
             description: "二进制格式、WAL集成测试",
         },
     ]
@@ -309,9 +279,15 @@ fn extract_error_message(stdout: &str, stderr: &str) -> String {
 /// 打印测试报告头部
 fn print_header() {
     println!();
-    println!("╔══════════════════════════════════════════════════════════════════════════════════╗");
-    println!("║                     SQLRustGo v1.9.0 综合回归测试报告                              ║");
-    println!("╚══════════════════════════════════════════════════════════════════════════════════╝");
+    println!(
+        "╔══════════════════════════════════════════════════════════════════════════════════╗"
+    );
+    println!(
+        "║                     SQLRustGo v1.9.0 综合回归测试报告                              ║"
+    );
+    println!(
+        "╚══════════════════════════════════════════════════════════════════════════════════╝"
+    );
     println!();
 }
 
@@ -352,11 +328,7 @@ fn print_category_report(category: &TestCategory, results: &[TestResult]) {
     println!("├─────────────────────────────────────────────────────────────────────────────────┤");
     println!(
         "│ {:>35} {:>6} / {:>5} / {:>5}  (总计: {:>4}ms)",
-        "类别汇总",
-        total_passed,
-        total_failed,
-        total_ignored,
-        total_duration
+        "类别汇总", total_passed, total_failed, total_ignored, total_duration
     );
     println!("└─────────────────────────────────────────────────────────────────────────────────┘");
 }
@@ -374,22 +346,53 @@ fn print_summary(results: &[TestResult], total_duration_ms: u64) {
     };
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════════════════════════╗");
-    println!("║                                    测试汇总                                      ║");
-    println!("╠══════════════════════════════════════════════════════════════════════════════════╣");
-    println!("║  总测试文件数: {:>10}                                                      ║", results.len());
-    println!("║  总测试数:     {:>10}                                                      ║", total_tests);
-    println!("║  通过:         {:>10} ({:.1}%)                                             ║", total_passed, success_rate);
-    println!("║  失败:         {:>10}                                                      ║", total_failed);
-    println!("║  忽略:         {:>10}                                                      ║", total_ignored);
-    println!("║  总耗时:       {:>10} ms (~{:.1} 秒)                                        ║", total_duration_ms, total_duration_ms as f64 / 1000.0);
-    println!("╚══════════════════════════════════════════════════════════════════════════════════╝");
+    println!(
+        "╔══════════════════════════════════════════════════════════════════════════════════╗"
+    );
+    println!(
+        "║                                    测试汇总                                      ║"
+    );
+    println!(
+        "╠══════════════════════════════════════════════════════════════════════════════════╣"
+    );
+    println!(
+        "║  总测试文件数: {:>10}                                                      ║",
+        results.len()
+    );
+    println!(
+        "║  总测试数:     {:>10}                                                      ║",
+        total_tests
+    );
+    println!(
+        "║  通过:         {:>10} ({:.1}%)                                             ║",
+        total_passed, success_rate
+    );
+    println!(
+        "║  失败:         {:>10}                                                      ║",
+        total_failed
+    );
+    println!(
+        "║  忽略:         {:>10}                                                      ║",
+        total_ignored
+    );
+    println!(
+        "║  总耗时:       {:>10} ms (~{:.1} 秒)                                        ║",
+        total_duration_ms,
+        total_duration_ms as f64 / 1000.0
+    );
+    println!(
+        "╚══════════════════════════════════════════════════════════════════════════════════╝"
+    );
 
     if total_failed > 0 {
         println!();
         println!("❌ 回归测试失败！请检查以下失败的测试:");
         for result in results.iter().filter(|r| !r.success) {
-            println!("  - {}: {}", result.test_file, result.error.clone().unwrap_or_default());
+            println!(
+                "  - {}: {}",
+                result.test_file,
+                result.error.clone().unwrap_or_default()
+            );
         }
     } else {
         println!();
@@ -465,7 +468,10 @@ fn test_regression_suite() {
         // 打印类别汇总
         let total_passed: u32 = category_results.iter().map(|r| r.passed).sum();
         let total_failed: u32 = category_results.iter().map(|r| r.failed).sum();
-        println!("  📊 {}: {} passed, {} failed", category.name, total_passed, total_failed);
+        println!(
+            "  📊 {}: {} passed, {} failed",
+            category.name, total_passed, total_failed
+        );
     }
 
     let total_duration_ms = start.elapsed().as_millis() as u64;

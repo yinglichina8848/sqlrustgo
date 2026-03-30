@@ -40,6 +40,40 @@ pub enum StoredProcStatement {
     },
     /// SET variable = value
     Set { variable: String, value: String },
+    /// DECLARE variable statement
+    Declare {
+        name: String,
+        data_type: String,
+        default_value: Option<String>,
+    },
+    /// IF condition THEN statements [ELSEIF ...] [ELSE ...] END IF
+    If {
+        condition: String,
+        then_body: Vec<StoredProcStatement>,
+        elseif_body: Vec<(String, Vec<StoredProcStatement>)>,
+        else_body: Vec<StoredProcStatement>,
+    },
+    /// WHILE condition DO statements END WHILE
+    While {
+        condition: String,
+        body: Vec<StoredProcStatement>,
+    },
+    /// LOOP statements END LOOP (with optional LEAVE to exit)
+    Loop {
+        body: Vec<StoredProcStatement>,
+    },
+    /// RETURN expression
+    Return { value: String },
+    /// LEAVE label - exit a loop
+    Leave { label: String },
+    /// ITERATE label - continue to next iteration
+    Iterate { label: String },
+    /// CALL another stored procedure
+    Call {
+        procedure_name: String,
+        args: Vec<String>,
+        into_var: Option<String>,
+    },
 }
 
 impl StoredProcedure {

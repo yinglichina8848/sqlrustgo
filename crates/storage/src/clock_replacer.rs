@@ -23,7 +23,7 @@ use std::sync::{Arc, RwLock};
 /// Page frame with reference bit for CLOCK algorithm
 struct ClockFrame {
     /// Page ID stored in this frame
-    page_id: u32,
+    _page_id: u32,
     /// Reference bit - 1 means recently used, don't evict
     referenced: bool,
 }
@@ -31,7 +31,7 @@ struct ClockFrame {
 impl ClockFrame {
     fn new(page_id: u32) -> Self {
         Self {
-            page_id,
+            _page_id: page_id,
             referenced: true, // New pages start as recently used
         }
     }
@@ -110,7 +110,10 @@ impl ClockReplacer {
             }
 
             // Get frame at current hand position
-            let current_id = frame_ids_static.keys().nth(*hand % frame_ids_static.len()).copied();
+            let current_id = frame_ids_static
+                .keys()
+                .nth(*hand % frame_ids_static.len())
+                .copied();
 
             if let Some(page_id) = current_id {
                 let frame = frame_ids_static.get(&page_id).unwrap();
@@ -129,7 +132,7 @@ impl ClockReplacer {
                     // Found victim - remove from frames
                     *hand = (*hand + 1) % capacity;
                     drop(frame_guard);
-                    drop(frame);
+                    let _ = frame;
                     drop(frame_ids_static);
 
                     // Remove from frames

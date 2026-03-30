@@ -282,10 +282,7 @@ pub fn encode_row(values: &[Value]) -> Vec<u8> {
     let num_cols = values.len() as u32;
 
     // First pass: calculate sizes and collect data
-    let col_data: Vec<Vec<u8>> = values
-        .iter()
-        .map(|v| binary_encode_value(v))
-        .collect();
+    let col_data: Vec<Vec<u8>> = values.iter().map(binary_encode_value).collect();
 
     let total_data_len: usize = col_data.iter().map(|d| d.len()).sum();
 
@@ -362,7 +359,10 @@ mod tests {
         assert_eq!(row_ref.num_cols(), Some(4));
 
         assert_eq!(row_ref.get_column(0, &schema), Some(Value::Integer(42)));
-        assert_eq!(row_ref.get_column(1, &schema), Some(Value::Text("hello".to_string())));
+        assert_eq!(
+            row_ref.get_column(1, &schema),
+            Some(Value::Text("hello".to_string()))
+        );
         assert_eq!(row_ref.get_column(2, &schema), Some(Value::Float(3.14)));
         assert_eq!(row_ref.get_column(3, &schema), Some(Value::Boolean(true)));
     }
@@ -389,10 +389,7 @@ mod tests {
 
     #[test]
     fn test_row_ref_to_owned_row() {
-        let values = vec![
-            Value::Integer(1),
-            Value::Text("test".to_string()),
-        ];
+        let values = vec![Value::Integer(1), Value::Text("test".to_string())];
         let schema = vec![ColumnType::Integer, ColumnType::Text];
 
         let encoded = encode_row(&values);
@@ -456,5 +453,195 @@ mod tests {
         let row_ref = RowRef::from_bytes(&encoded);
         let debug = format!("{:?}", row_ref);
         assert!(debug.contains("RowRef"));
+    }
+
+    #[test]
+    fn test_row_ref_num_cols_truncated_data() {
+        // Data too short to contain num_cols
+        let row_ref = RowRef::from_bytes(&[0x00]);
+        assert_eq!(row_ref.num_cols(), None);
+    }
+
+    #[test]
+    fn test_row_ref_column_offset_truncated() {
+        // num_cols says 4 columns but data is too short for offset array
+        let data = vec![0x04, 0x00, 0x00, 0x00]; // num_cols = 4
+        let row_ref = RowRef::from_bytes(&data);
+        assert_eq!(row_ref.column_offset(0), None);
+    }
+
+    #[test]
+    fn test_row_ref_column_offset_out_of_bounds() {
+        let values = vec![Value::Integer(42)];
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+        assert!(row_ref.column_offset(10).is_none());
+    }
+
+    #[test]
+    fn test_row_ref_as_bytes() {
+        let values = vec![Value::Integer(42), Value::Text("test".to_string())];
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+        assert_eq!(row_ref.as_bytes(), &encoded);
+    }
+
+    #[test]
+    fn test_row_ref_multiple_columns() {
+        let values = vec![
+            Value::Integer(1),
+            Value::Text("first".to_string()),
+            Value::Integer(2),
+            Value::Text("second".to_string()),
+            Value::Boolean(true),
+        ];
+        let schema = vec![
+            ColumnType::Integer,
+            ColumnType::Text,
+            ColumnType::Integer,
+            ColumnType::Text,
+            ColumnType::Boolean,
+        ];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+
+        assert_eq!(row_ref.num_cols(), Some(5));
+        assert_eq!(row_ref.get_column(0, &schema), Some(Value::Integer(1)));
+        assert_eq!(
+            row_ref.get_column(1, &schema),
+            Some(Value::Text("first".to_string()))
+        );
+        assert_eq!(row_ref.get_column(2, &schema), Some(Value::Integer(2)));
+        assert_eq!(
+            row_ref.get_column(3, &schema),
+            Some(Value::Text("second".to_string()))
+        );
+        assert_eq!(row_ref.get_column(4, &schema), Some(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn test_row_ref_large_text() {
+        let large_text = "x".repeat(1000);
+        let values = vec![Value::Text(large_text.clone())];
+        let schema = vec![ColumnType::Text];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+
+        assert_eq!(
+            row_ref.get_column(0, &schema),
+            Some(Value::Text(large_text))
+        );
+    }
+
+    #[test]
+    fn test_row_ref_large_blob() {
+        let large_blob = vec![0xDE; 1000];
+        let values = vec![Value::Blob(large_blob.clone())];
+        let schema = vec![ColumnType::Blob];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+
+        assert_eq!(
+            row_ref.get_column(0, &schema),
+            Some(Value::Blob(large_blob))
+        );
+    }
+
+    #[test]
+    fn test_row_ref_get_column_truncated_data() {
+        // Encoded row that claims to have data but is truncated
+        let values = vec![Value::Text("hello".to_string())];
+        let encoded = encode_row(&values);
+        // Create a truncated version (missing text data)
+        let truncated = &encoded[..8]; // Keep header but truncate text data
+        let row_ref = RowRef::from_bytes(truncated);
+
+        // Should return Null due to truncated data
+        assert_eq!(
+            row_ref.get_column(0, &vec![ColumnType::Text]),
+            Some(Value::Null)
+        );
+    }
+
+    #[test]
+    fn test_row_ref_all_column_types() {
+        let values = vec![
+            Value::Null,
+            Value::Boolean(true),
+            Value::Integer(42),
+            Value::Float(3.14),
+            Value::Text("hello".to_string()),
+            Value::Blob(vec![0xDE, 0xAD]),
+            Value::Date(19780),
+            Value::Timestamp(1_000_000),
+        ];
+        let schema = vec![
+            ColumnType::Null,
+            ColumnType::Boolean,
+            ColumnType::Integer,
+            ColumnType::Float,
+            ColumnType::Text,
+            ColumnType::Blob,
+            ColumnType::Date,
+            ColumnType::Timestamp,
+        ];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+
+        assert_eq!(row_ref.num_cols(), Some(8));
+        assert_eq!(row_ref.get_column(0, &schema), Some(Value::Null));
+        assert_eq!(row_ref.get_column(1, &schema), Some(Value::Boolean(true)));
+        assert_eq!(row_ref.get_column(2, &schema), Some(Value::Integer(42)));
+        assert_eq!(row_ref.get_column(3, &schema), Some(Value::Float(3.14)));
+        assert_eq!(
+            row_ref.get_column(4, &schema),
+            Some(Value::Text("hello".to_string()))
+        );
+        assert_eq!(
+            row_ref.get_column(5, &schema),
+            Some(Value::Blob(vec![0xDE, 0xAD]))
+        );
+        assert_eq!(row_ref.get_column(6, &schema), Some(Value::Date(19780)));
+        assert_eq!(
+            row_ref.get_column(7, &schema),
+            Some(Value::Timestamp(1_000_000))
+        );
+    }
+
+    #[test]
+    fn test_vec_column_type_impl() {
+        let schema: Vec<ColumnType> = vec![ColumnType::Integer, ColumnType::Text, ColumnType::Null];
+        assert_eq!(schema.num_columns(), 3);
+        assert_eq!(schema.column_type(0), Some(ColumnType::Integer));
+        assert_eq!(schema.column_type(1), Some(ColumnType::Text));
+        assert_eq!(schema.column_type(2), Some(ColumnType::Null));
+        assert_eq!(schema.column_type(3), None);
+    }
+
+    #[test]
+    fn test_row_ref_to_owned_empty_row() {
+        let values: Vec<Value> = vec![];
+        let schema: Vec<ColumnType> = vec![];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+        let owned = row_ref.to_owned_row(&schema);
+
+        assert!(owned.is_empty());
+    }
+
+    #[test]
+    fn test_row_ref_boolean_false() {
+        let values = vec![Value::Boolean(false)];
+        let schema = vec![ColumnType::Boolean];
+
+        let encoded = encode_row(&values);
+        let row_ref = RowRef::from_bytes(&encoded);
+
+        assert_eq!(row_ref.get_column(0, &schema), Some(Value::Boolean(false)));
     }
 }

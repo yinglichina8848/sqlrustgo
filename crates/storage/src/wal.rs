@@ -31,6 +31,8 @@ pub enum WalEntryType {
     Rollback = 6,
     /// Checkpoint
     Checkpoint = 7,
+    /// Prepare for 2PC commit (distributed transaction)
+    Prepare = 8,
 }
 
 impl WalEntryType {
@@ -43,6 +45,7 @@ impl WalEntryType {
             5 => Some(WalEntryType::Commit),
             6 => Some(WalEntryType::Rollback),
             7 => Some(WalEntryType::Checkpoint),
+            8 => Some(WalEntryType::Prepare),
             _ => None,
         }
     }
@@ -503,6 +506,26 @@ impl WalManager {
 
         writer.append(&entry)
     }
+
+    /// Log prepare for 2PC distributed transaction
+    pub fn log_prepare(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Prepare,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -676,7 +699,7 @@ impl WalArchiveManager {
 
         let wal_files: Vec<_> = std::fs::read_dir(&self.wal_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "wal"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "wal"))
             .filter(|e| {
                 if let Ok(metadata) = e.metadata() {
                     if let Ok(modified) = metadata.modified() {
@@ -724,6 +747,7 @@ impl WalArchiveManager {
             std::fs::remove_file(&original_path)?;
         }
 
+        #[allow(clippy::collapsible_if)]
         let archived_size = if self.enable_compression {
             std::fs::read_dir(&self.archive_dir)?
                 .filter_map(|e| e.ok())
@@ -1349,8 +1373,9 @@ mod tests {
         assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
         assert_eq!(WalEntryType::from_u8(6), Some(WalEntryType::Rollback));
         assert_eq!(WalEntryType::from_u8(7), Some(WalEntryType::Checkpoint));
+        assert_eq!(WalEntryType::from_u8(8), Some(WalEntryType::Prepare));
         assert_eq!(WalEntryType::from_u8(0), None);
-        assert_eq!(WalEntryType::from_u8(8), None);
+        assert_eq!(WalEntryType::from_u8(9), None);
     }
 
     #[test]

@@ -380,7 +380,13 @@ impl fmt::Display for Expr {
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
                 write!(f, "{}({}{})", func_name, distinct_str, args_str.join(", "))
             }
-            Expr::WindowFunction { func, args, partition_by, order_by, frame } => {
+            Expr::WindowFunction {
+                func,
+                args,
+                partition_by,
+                order_by,
+                frame,
+            } => {
                 let func_name = match func {
                     WindowFunction::RowNumber => "ROW_NUMBER",
                     WindowFunction::Rank => "RANK",
@@ -401,7 +407,8 @@ impl fmt::Display for Expr {
 
                 // Add PARTITION BY clause
                 if !partition_by.is_empty() {
-                    let partition_str: Vec<String> = partition_by.iter().map(|p| p.to_string()).collect();
+                    let partition_str: Vec<String> =
+                        partition_by.iter().map(|p| p.to_string()).collect();
                     write!(f, " PARTITION BY {}", partition_str.join(", "))?;
                 }
 
@@ -471,21 +478,33 @@ impl fmt::Display for SortExpr {
 impl fmt::Display for WindowFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowFrame::Rows { start, end, exclude } => {
+            WindowFrame::Rows {
+                start,
+                end,
+                exclude,
+            } => {
                 write!(f, "ROWS {} {}", start, end)?;
                 if *exclude != ExcludeMode::None {
                     write!(f, " {}", exclude)?;
                 }
                 Ok(())
             }
-            WindowFrame::Range { start, end, exclude } => {
+            WindowFrame::Range {
+                start,
+                end,
+                exclude,
+            } => {
                 write!(f, "RANGE {} {}", start, end)?;
                 if *exclude != ExcludeMode::None {
                     write!(f, " {}", exclude)?;
                 }
                 Ok(())
             }
-            WindowFrame::Groups { start, end, exclude } => {
+            WindowFrame::Groups {
+                start,
+                end,
+                exclude,
+            } => {
                 write!(f, "GROUPS {} {}", start, end)?;
                 if *exclude != ExcludeMode::None {
                     write!(f, " {}", exclude)?;
@@ -1470,11 +1489,17 @@ mod tests {
 
     #[test]
     fn test_frame_bound_variants() {
-        assert!(matches!(FrameBound::UnboundedPreceding, FrameBound::UnboundedPreceding));
+        assert!(matches!(
+            FrameBound::UnboundedPreceding,
+            FrameBound::UnboundedPreceding
+        ));
         assert!(matches!(FrameBound::Preceding(5), FrameBound::Preceding(5)));
         assert!(matches!(FrameBound::CurrentRow, FrameBound::CurrentRow));
         assert!(matches!(FrameBound::Following(3), FrameBound::Following(3)));
-        assert!(matches!(FrameBound::UnboundedFollowing, FrameBound::UnboundedFollowing));
+        assert!(matches!(
+            FrameBound::UnboundedFollowing,
+            FrameBound::UnboundedFollowing
+        ));
     }
 
     #[test]
@@ -1500,7 +1525,10 @@ mod tests {
             end: FrameBound::CurrentRow,
             exclude: ExcludeMode::CurrentRow,
         };
-        assert_eq!(frame_with_exclude.to_string(), "ROWS UNBOUNDED PRECEDING CURRENT ROW EXCLUDE CURRENT ROW");
+        assert_eq!(
+            frame_with_exclude.to_string(),
+            "ROWS UNBOUNDED PRECEDING CURRENT ROW EXCLUDE CURRENT ROW"
+        );
     }
 
     #[test]
@@ -1510,7 +1538,10 @@ mod tests {
             end: FrameBound::UnboundedFollowing,
             exclude: ExcludeMode::None,
         };
-        assert_eq!(frame.to_string(), "RANGE UNBOUNDED PRECEDING UNBOUNDED FOLLOWING");
+        assert_eq!(
+            frame.to_string(),
+            "RANGE UNBOUNDED PRECEDING UNBOUNDED FOLLOWING"
+        );
     }
 
     #[test]
@@ -1520,16 +1551,25 @@ mod tests {
             end: FrameBound::Following(1),
             exclude: ExcludeMode::Ties,
         };
-        assert_eq!(frame.to_string(), "GROUPS PRECEDING(1) FOLLOWING(1) EXCLUDE TIES");
+        assert_eq!(
+            frame.to_string(),
+            "GROUPS PRECEDING(1) FOLLOWING(1) EXCLUDE TIES"
+        );
     }
 
     #[test]
     fn test_frame_bound_display() {
-        assert_eq!(FrameBound::UnboundedPreceding.to_string(), "UNBOUNDED PRECEDING");
+        assert_eq!(
+            FrameBound::UnboundedPreceding.to_string(),
+            "UNBOUNDED PRECEDING"
+        );
         assert_eq!(FrameBound::Preceding(5).to_string(), "PRECEDING(5)");
         assert_eq!(FrameBound::CurrentRow.to_string(), "CURRENT ROW");
         assert_eq!(FrameBound::Following(3).to_string(), "FOLLOWING(3)");
-        assert_eq!(FrameBound::UnboundedFollowing.to_string(), "UNBOUNDED FOLLOWING");
+        assert_eq!(
+            FrameBound::UnboundedFollowing.to_string(),
+            "UNBOUNDED FOLLOWING"
+        );
     }
 
     #[test]

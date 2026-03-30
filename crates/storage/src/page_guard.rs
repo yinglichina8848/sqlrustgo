@@ -27,7 +27,7 @@
 
 use std::sync::Arc;
 
-use crate::page::{Page, PageType};
+use crate::page::Page;
 
 /// Trait for pool-like types that support pin/unpin
 pub trait PoolLike {
@@ -143,6 +143,7 @@ impl<'a, P: PoolLike> std::ops::Deref for PageGuard<'a, P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::page::PageType;
 
     // Mock BufferPool for testing
     struct MockBufferPool {

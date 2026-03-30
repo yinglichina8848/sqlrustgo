@@ -14,7 +14,10 @@ pub use parser::CreateViewStatement;
 pub use parser::Expression;
 pub use parser::ForeignKeyAction;
 pub use parser::ForeignKeyRef;
+pub use parser::FrameBoundInfo;
 pub use parser::GrantStatement;
+pub use parser::KillStatement;
+pub use parser::KillType;
 pub use parser::Privilege;
 pub use parser::RevokeStatement;
 pub use parser::SetOperation;
@@ -23,7 +26,6 @@ pub use parser::Statement;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
 pub use parser::WindowFrameInfo;
-pub use parser::FrameBoundInfo;
 
 #[cfg(test)]
 mod tests {
@@ -46,6 +48,7 @@ mod tests {
             group_by: None,
             having: None,
             order_by: None,
+            with_clause: None,
         });
     }
 
@@ -87,6 +90,40 @@ mod tests {
                 ..
             }) => {}
             _ => panic!("Expected UnionAll"),
+        }
+    }
+
+    #[test]
+    fn test_parse_cte() {
+        let result = parse("WITH RECURSIVE cnt AS (SELECT n FROM t UNION ALL SELECT n FROM cnt WHERE n < 10) SELECT * FROM cnt");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Select(select) => {
+                assert!(select.with_clause.is_some(), "Expected WITH clause");
+                let with = select.with_clause.unwrap();
+                assert!(with.recursive, "Expected RECURSIVE flag");
+                assert_eq!(with.cte_tables.len(), 1);
+                assert_eq!(with.cte_tables[0].name, "cnt");
+            }
+            _ => panic!("Expected Select statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_truncate() {
+        let result = parse("TRUNCATE TABLE t1");
+        if let Err(e) = &result {
+            eprintln!("Parse error: {}", e);
+        }
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::Truncate(trunc) => {
+                assert_eq!(trunc.table_name, "t1");
+            }
+            _ => panic!("Expected Truncate statement"),
         }
     }
 
@@ -294,15 +331,26 @@ fn test_parse_window_frame_range() {
     // Test RANK with frame (simple version)
     let sql = "SELECT RANK() OVER (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM employees";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse RANGE window frame: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse RANGE window frame: {:?}",
+        result
+    );
 }
 
 #[test]
 fn test_parse_window_frame_with_exclude() {
     let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM employees";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse window frame with EXCLUDE: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse window frame with EXCLUDE: {:?}",
+        result
+    );
 }
 
 // Stored Procedures
-pub use parser::{CreateProcedureStatement, DropProcedureStatement, CallProcedureStatement, ProcedureParam, ParamMode, ProcedureStatement, DelimiterStatement};
+pub use parser::{
+    CallProcedureStatement, CreateProcedureStatement, DelimiterStatement, DropProcedureStatement,
+    ParamMode, ProcedureParam, ProcedureStatement,
+};

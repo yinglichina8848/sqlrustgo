@@ -3,27 +3,43 @@
 //! A simple TCP server that accepts SQL queries and returns results.
 
 use sqlrustgo::{parse, ExecutionEngine, SqlError};
+use sqlrustgo_parser::{KillStatement, KillType, Statement};
+use sqlrustgo_server::SecurityIntegration;
 use sqlrustgo_storage::MemoryStorage;
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, RwLock};
 use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::{Arc, RwLock};
 
 /// Handle a single client connection
-fn handle_client(mut stream: TcpStream, engine: Arc<RwLock<ExecutionEngine>>) -> std::io::Result<()> {
+fn handle_client(
+    mut stream: TcpStream,
+    engine: Arc<RwLock<ExecutionEngine>>,
+    security: Arc<SecurityIntegration>,
+) -> std::io::Result<()> {
+    let peer_addr = stream
+        .peer_addr()
+        .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
+    let ip = peer_addr.ip().to_string();
+    let user = "anonymous".to_string();
+
+    let session_id = security.create_secure_session(user.clone(), ip.clone());
+
     let mut buffer = [0u8; 4096];
 
     loop {
-        // Read data from client
         let bytes_read = match stream.read(&mut buffer) {
-            Ok(0) => return Ok(()), // Connection closed
+            Ok(0) => {
+                security.close_secure_session(session_id, user);
+                return Ok(());
+            }
             Ok(n) => n,
             Err(e) => {
-                eprintln!("Read error: {}", e);
+                security.log_error(&user, &format!("Read error: {}", e), session_id);
+                security.close_secure_session(session_id, user);
                 return Err(e);
             }
         };
 
-        // Convert bytes to string and split by newline
         let received = String::from_utf8_lossy(&buffer[..bytes_read]);
         let queries: Vec<&str> = received.lines().collect();
 
@@ -33,78 +49,174 @@ fn handle_client(mut stream: TcpStream, engine: Arc<RwLock<ExecutionEngine>>) ->
                 continue;
             }
 
-            // Execute query
+            let start = std::time::Instant::now();
+
             let result = {
                 let mut eng = engine.write().unwrap();
                 match parse(query) {
-                    Ok(statement) => eng.execute(statement),
+                    Ok(Statement::Kill(kill)) => execute_server_kill(&kill, &security, session_id),
+                    Ok(statement) => {
+                        security.reset_session_query_state(session_id);
+                        if let Some(flag) = security.get_session_cancel_flag(session_id) {
+                            eng.storage.write().unwrap().set_cancel_flag(flag);
+                        }
+                        if let Err(e) = security.check_session_and_reset(session_id) {
+                            Err(SqlError::ExecutionError(e))
+                        } else {
+                            eng.execute(statement)
+                        }
+                    }
                     Err(e) => Err(SqlError::ParseError(format!("{:?}", e))),
                 }
             };
 
-            // Send response
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let rows = result.as_ref().map(|r| r.affected_rows as u64).unwrap_or(0);
+
+            if parse(query).is_ok() && is_ddl(query) {
+                security.log_ddl(&user, query, session_id);
+            }
+
+            security.log_sql_execution(&user, query, duration_ms, rows, session_id);
+
             let response = match result {
-                Ok(result) => {
-                    serde_json::json!({
-                        "status": "ok",
-                        "rows_affected": result.affected_rows,
-                        "result": result.rows
-                    }).to_string()
-                }
+                Ok(result) => serde_json::json!({
+                    "status": "ok",
+                    "rows_affected": result.affected_rows,
+                    "result": result.rows
+                })
+                .to_string(),
                 Err(e) => {
+                    security.log_error(&user, &e.to_string(), session_id);
                     serde_json::json!({
                         "status": "error",
                         "error": e.to_string()
-                    }).to_string()
+                    })
+                    .to_string()
                 }
             };
 
-            // Send response followed by newline
             if let Err(e) = stream.write_all(response.as_bytes()) {
-                eprintln!("Write error: {}", e);
+                security.log_error(&user, &format!("Write error: {}", e), session_id);
                 return Err(e);
             }
             if let Err(e) = stream.write_all(b"\n") {
-                eprintln!("Write error: {}", e);
                 return Err(e);
             }
             if let Err(e) = stream.flush() {
-                eprintln!("Flush error: {}", e);
                 return Err(e);
             }
         }
     }
 }
 
+fn execute_server_kill(
+    kill: &KillStatement,
+    security: &Arc<SecurityIntegration>,
+    session_id: u64,
+) -> Result<sqlrustgo::ExecutorResult, SqlError> {
+    let target_session_id = kill.process_id;
+
+    let current_session = security
+        .sessions()
+        .get_session(session_id)
+        .ok_or_else(|| SqlError::ExecutionError("Not in a valid session".to_string()))?;
+
+    if target_session_id == session_id {
+        return Err(SqlError::ExecutionError(
+            "Cannot kill self session".to_string(),
+        ));
+    }
+
+    let target_session = security.sessions().get_session(target_session_id);
+    if target_session.is_none() {
+        return Err(SqlError::ExecutionError(format!(
+            "Unknown thread id: {}",
+            target_session_id
+        )));
+    }
+
+    let target_session = target_session.unwrap();
+    let is_own_session = target_session.user == current_session.user;
+    if !is_own_session && !current_session.can_kill() {
+        return Err(SqlError::ExecutionError(
+            "Access denied: need SUPER privilege to kill other user's sessions".to_string(),
+        ));
+    }
+
+    match kill.kill_type {
+        KillType::Connection => {
+            security
+                .sessions()
+                .kill_session(target_session_id)
+                .map_err(|e| SqlError::ExecutionError(e))?;
+            Ok(sqlrustgo::ExecutorResult::new(
+                vec![vec![sqlrustgo::Value::Text(format!(
+                    "CONNECTION {} executed",
+                    target_session_id
+                ))]],
+                0,
+            ))
+        }
+        KillType::Query => {
+            security
+                .sessions()
+                .kill_query(target_session_id)
+                .map_err(|e| SqlError::ExecutionError(e))?;
+            Ok(sqlrustgo::ExecutorResult::new(
+                vec![vec![sqlrustgo::Value::Text(format!(
+                    "QUERY {} executed",
+                    target_session_id
+                ))]],
+                0,
+            ))
+        }
+    }
+}
+
+fn is_ddl(query: &str) -> bool {
+    let upper = query.to_uppercase();
+    upper.starts_with("CREATE")
+        || upper.starts_with("DROP")
+        || upper.starts_with("ALTER")
+        || upper.starts_with("TRUNCATE")
+}
+
 fn main() {
-    // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let addr = "127.0.0.1:4000";
     println!("SQLRustGo TCP Server v1.6.1");
     println!("Listening on {}", addr);
 
-    // Create storage and execution engine
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     let engine = Arc::new(RwLock::new(ExecutionEngine::new(storage)));
+    let security = Arc::new(SecurityIntegration::new());
 
-    // Create TCP listener
+    println!("Security: audit logging enabled");
+
     let listener = TcpListener::bind(addr).expect("Failed to bind to address");
     println!("Ready to accept connections");
 
-    // Set up Ctrl+C handler
+    let security_for_shutdown = security.clone();
     ctrlc::set_handler(move || {
         println!("\nShutting down...");
+        let stats = security_for_shutdown.get_security_stats();
+        println!(
+            "Security stats: {} events, {} sessions",
+            stats.audit_total_events, stats.total_sessions
+        );
         std::process::exit(0);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
-    // Accept connections
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let engine = engine.clone();
+                let security = security.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = handle_client(stream, engine) {
+                    if let Err(e) = handle_client(stream, engine, security) {
                         eprintln!("Client handler error: {}", e);
                     }
                 });

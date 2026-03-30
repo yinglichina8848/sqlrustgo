@@ -60,17 +60,14 @@ impl Default for BenchmarkResult {
 
 impl BenchmarkResult {
     /// Create a new benchmark result from a histogram of latencies
-    fn from_histogram(
-        hist: &Histogram<u64>,
-        duration_secs: f64,
-        total_ops: u64,
-    ) -> Self {
+    fn from_histogram(hist: &Histogram<u64>, duration_secs: f64, total_ops: u64) -> Self {
         if hist.len() == 0 || total_ops == 0 {
             return Self::default();
         }
 
-        let total_ns: u64 = hist.sum();
-        let avg_ms = (total_ns as f64 / total_ops as f64) / 1_000_000.0;
+        // Use histogram's built-in mean to calculate average
+        // mean() returns the average recorded value
+        let avg_ms = hist.mean() / 1_000_000.0;
 
         Self {
             qps: total_ops as f64 / duration_secs,
@@ -82,6 +79,117 @@ impl BenchmarkResult {
             duration_ms: (duration_secs * 1000.0) as u64,
         }
     }
+}
+
+/// Internal benchmark runner function
+fn run_benchmark<F>(concurrency: u32, stmts_per_tx: usize, sql_gen: F) -> BenchmarkResult
+where
+    F: Fn(&mut SmallRng, usize) -> String + Send + Sync + 'static,
+{
+    let duration_secs: u64 = 10; // 10 second measurement window
+    let warmup_secs: u64 = 2;
+    let total_threads = concurrency.max(1) as usize;
+
+    // Wrap sql_gen in Arc so threads can share it
+    let sql_gen = Arc::new(sql_gen);
+
+    // Create histogram for latencies (nanoseconds)
+    let hist = Arc::new(std::sync::Mutex::new(
+        Histogram::<u64>::new_with_max(3_600_000_000_000u64, 3)
+            .expect("Failed to create histogram"),
+    ));
+    let ops_count = Arc::new(AtomicU64::new(0));
+    let barrier = Arc::new(tokio::sync::Barrier::new(total_threads + 1));
+
+    // Warmup phase
+    let warmup_hist = Arc::new(std::sync::Mutex::new(
+        Histogram::<u64>::new_with_max(3_600_000_000_000u64, 3)
+            .expect("Failed to create warmup histogram"),
+    ));
+    let warmup_barrier = Arc::new(tokio::sync::Barrier::new(total_threads + 1));
+
+    // Run warmup phase
+    let warmup_handles: Vec<_> = (0..total_threads)
+        .map(|thread_id| {
+            let barrier = warmup_barrier.clone();
+            let warmup_hist = warmup_hist.clone();
+            let sql_gen = sql_gen.clone();
+
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                    .expect("Failed to create runtime");
+                let mut rng = SmallRng::seed_from_u64(42 + thread_id as u64);
+                let start = Instant::now();
+
+                // Wait for all threads to start
+                rt.block_on(barrier.wait());
+
+                while start.elapsed() < Duration::from_secs(warmup_secs as u64) {
+                    let tx_start = Instant::now();
+                    for _ in 0..stmts_per_tx {
+                        let _sql = sql_gen(&mut rng, thread_id);
+                        // Simulate minimal processing
+                        std::hint::spin_loop();
+                    }
+                    let tx_latency = tx_start.elapsed().as_nanos() as u64;
+                    if let Ok(mut h) = warmup_hist.lock() {
+                        let _ = h.record(tx_latency);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    for handle in warmup_handles {
+        let _ = handle.join();
+    }
+
+    // Run measurement phase
+    let handles: Vec<_> = (0..total_threads)
+        .map(|thread_id| {
+            let barrier = barrier.clone();
+            let hist = hist.clone();
+            let ops_count = ops_count.clone();
+            let sql_gen = sql_gen.clone();
+
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                    .expect("Failed to create runtime");
+                let mut rng = SmallRng::seed_from_u64(12345 + thread_id as u64);
+                let start = Instant::now();
+
+                // Wait for all threads to start together
+                rt.block_on(barrier.wait());
+
+                while start.elapsed() < Duration::from_secs(duration_secs) {
+                    let tx_start = Instant::now();
+                    for _ in 0..stmts_per_tx {
+                        let _sql = sql_gen(&mut rng, thread_id);
+                        // Simulate minimal processing
+                        std::hint::spin_loop();
+                    }
+                    let tx_latency = tx_start.elapsed().as_nanos() as u64;
+
+                    if let Ok(mut h) = hist.lock() {
+                        let _ = h.record(tx_latency);
+                    }
+                    ops_count.fetch_add(stmts_per_tx as u64, Ordering::Relaxed);
+                }
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    let total_ops = ops_count.load(Ordering::Relaxed);
+    let hist_guard = hist.lock().unwrap();
+    BenchmarkResult::from_histogram(&hist_guard, duration_secs as f64, total_ops)
 }
 
 /// Benchmark trait - defines a single benchmark test
@@ -98,40 +206,6 @@ pub trait Benchmark: Send + Sync {
     /// Whether this benchmark is read-only
     fn is_read_only(&self) -> bool {
         false
-    }
-
-    /// Generate SQL statement for point select
-    fn generate_point_select_sql(&self, _rng: &mut SmallRng) -> String {
-        format!("SELECT c FROM sbtest WHERE id = {}", rng.gen_range(1..=1_000_000))
-    }
-
-    /// Generate SQL statement for range select
-    fn generate_range_select_sql(&self, rng: &mut SmallRng) -> String {
-        let start = rng.gen_range(1..=999_990);
-        let end = start + rng.gen_range(1..=100.min(1_000_000 - start));
-        format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
-    }
-
-    /// Generate SQL statement for insert
-    fn generate_insert_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=1_000_000);
-        let k = rng.gen_range(0..1_000_000);
-        let c = format!("'c{:x}'", rng.gen::<u32>());
-        let pad = format!("'pad{:x}'", rng.gen::<u32>());
-        format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
-    }
-
-    /// Generate SQL statement for update
-    fn generate_update_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=1_000_000);
-        let c_value = format!("'{:x}'", rng.gen::<u32>());
-        format!("UPDATE sbtest SET c = {} WHERE id = {}", c_value, id)
-    }
-
-    /// Generate SQL statement for delete
-    fn generate_delete_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=1_000_000);
-        format!("DELETE FROM sbtest WHERE id = {}", id)
     }
 }
 
@@ -213,7 +287,10 @@ impl BenchmarkSuite {
 
         // Header
         output.push_str(&format!("# Benchmark Suite: {}\n\n", self.name));
-        output.push_str(&format!("**Generated**: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        output.push_str(&format!(
+            "**Generated**: {}\n\n",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        ));
         output.push_str(&format!("**Concurrency**: {} threads\n\n", 50));
 
         // Target QPS table
@@ -227,18 +304,32 @@ impl BenchmarkSuite {
 
         // Results table
         output.push_str("## Results\n\n");
-        output.push_str("| Benchmark | QPS | P50 (ms) | P95 (ms) | P99 (ms) | Avg (ms) | Status |\n");
-        output.push_str("|-----------|-----|----------|----------|----------|----------|--------|\n");
+        output
+            .push_str("| Benchmark | QPS | P50 (ms) | P95 (ms) | P99 (ms) | Avg (ms) | Status |\n");
+        output
+            .push_str("|-----------|-----|----------|----------|----------|----------|--------|\n");
 
         for (name, result) in results {
-            let target = self.tests.iter()
+            let target = self
+                .tests
+                .iter()
                 .find(|t| t.name() == name)
                 .map(|t| t.target_qps())
                 .unwrap_or(0.0);
-            let status = if result.qps >= target { "✅ PASS" } else { "❌ FAIL" };
+            let status = if result.qps >= target {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            };
             output.push_str(&format!(
                 "| {} | {:.1} | {:.3} | {:.3} | {:.3} | {:.3} | {} |\n",
-                name, result.qps, result.p50_ms, result.p95_ms, result.p99_ms, result.avg_ms, status
+                name,
+                result.qps,
+                result.p50_ms,
+                result.p95_ms,
+                result.p99_ms,
+                result.avg_ms,
+                status
             ));
         }
         output.push_str("\n");
@@ -277,7 +368,9 @@ impl BenchmarkSuite {
     fn check_targets_internal(&self, results: &[(String, BenchmarkResult)]) -> Vec<String> {
         let mut failures = Vec::new();
         for (name, result) in results {
-            let target = self.tests.iter()
+            let target = self
+                .tests
+                .iter()
                 .find(|t| t.name() == name)
                 .map(|t| t.target_qps())
                 .unwrap_or(0.0);
@@ -328,8 +421,6 @@ pub struct OltpPointSelect {
     target_qps: f64,
     /// Maximum ID range
     max_id: u64,
-    /// Number of statements per transaction
-    stmts_per_tx: usize,
 }
 
 impl OltpPointSelect {
@@ -337,7 +428,6 @@ impl OltpPointSelect {
         Self {
             target_qps: 1000.0,
             max_id: 1_000_000,
-            stmts_per_tx: 10,
         }
     }
 }
@@ -354,8 +444,9 @@ impl Benchmark for OltpPointSelect {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        self.run_internal(concurrency, 10, |rng, _| {
-            let id = rng.gen_range(1..=self.max_id);
+        let max_id = self.max_id;
+        run_benchmark(concurrency, 10, move |rng, _| {
+            let id = rng.gen_range(1..=max_id);
             format!("SELECT c FROM sbtest WHERE id = {}", id)
         })
     }
@@ -367,11 +458,6 @@ impl Benchmark for OltpPointSelect {
     fn is_read_only(&self) -> bool {
         true
     }
-
-    fn generate_point_select_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=self.max_id);
-        format!("SELECT c FROM sbtest WHERE id = {}", id)
-    }
 }
 
 /// OLTP Range Select - range query (SELECT WHERE id BETWEEN ? AND ?)
@@ -381,7 +467,6 @@ pub struct OltpRangeSelect {
     target_qps: f64,
     max_id: u64,
     range_size: u64,
-    stmts_per_tx: usize,
 }
 
 impl OltpRangeSelect {
@@ -390,7 +475,6 @@ impl OltpRangeSelect {
             target_qps: 800.0,
             max_id: 1_000_000,
             range_size: 100,
-            stmts_per_tx: 10,
         }
     }
 }
@@ -407,10 +491,15 @@ impl Benchmark for OltpRangeSelect {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        self.run_internal(concurrency, 10, |rng, _| {
-            let start = rng.gen_range(1..self.max_id);
-            let end = (start + rng.gen_range(1..=self.range_size)).min(self.max_id);
-            format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+        let max_id = self.max_id;
+        let range_size = self.range_size;
+        run_benchmark(concurrency, 10, move |rng, _| {
+            let start = rng.gen_range(1..max_id);
+            let end = (start + rng.gen_range(1..=range_size)).min(max_id);
+            format!(
+                "SELECT c FROM sbtest WHERE id BETWEEN {} AND {}",
+                start, end
+            )
         })
     }
 
@@ -420,12 +509,6 @@ impl Benchmark for OltpRangeSelect {
 
     fn is_read_only(&self) -> bool {
         true
-    }
-
-    fn generate_range_select_sql(&self, rng: &mut SmallRng) -> String {
-        let start = rng.gen_range(1..self.max_id);
-        let end = (start + rng.gen_range(1..=self.range_size)).min(self.max_id);
-        format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
     }
 }
 
@@ -458,12 +541,16 @@ impl Benchmark for OltpInsert {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        self.run_internal(concurrency, 1, |rng, _| {
-            let id = rng.gen_range(1..=self.max_id);
+        let max_id = self.max_id;
+        run_benchmark(concurrency, 1, move |rng, _| {
+            let id = rng.gen_range(1..=max_id);
             let k = rng.gen_range(0..1_000_000);
             let c = format!("'c{:x}'", rng.gen::<u32>());
             let pad = format!("'pad{:x}'", rng.gen::<u32>());
-            format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
+            format!(
+                "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
+                id, k, c, pad
+            )
         })
     }
 
@@ -473,14 +560,6 @@ impl Benchmark for OltpInsert {
 
     fn is_read_only(&self) -> bool {
         false
-    }
-
-    fn generate_insert_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=self.max_id);
-        let k = rng.gen_range(0..1_000_000);
-        let c = format!("'c{:x}'", rng.gen::<u32>());
-        let pad = format!("'pad{:x}'", rng.gen::<u32>());
-        format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
     }
 }
 
@@ -513,8 +592,9 @@ impl Benchmark for OltpUpdate {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        self.run_internal(concurrency, 1, |rng, _| {
-            let id = rng.gen_range(1..=self.max_id);
+        let max_id = self.max_id;
+        run_benchmark(concurrency, 1, move |rng, _| {
+            let id = rng.gen_range(1..=max_id);
             let c_value = format!("'{:x}'", rng.gen::<u32>());
             format!("UPDATE sbtest SET c = {} WHERE id = {}", c_value, id)
         })
@@ -526,12 +606,6 @@ impl Benchmark for OltpUpdate {
 
     fn is_read_only(&self) -> bool {
         false
-    }
-
-    fn generate_update_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=self.max_id);
-        let c_value = format!("'{:x}'", rng.gen::<u32>());
-        format!("UPDATE sbtest SET c = {} WHERE id = {}", c_value, id)
     }
 }
 
@@ -564,8 +638,9 @@ impl Benchmark for OltpDelete {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        self.run_internal(concurrency, 1, |rng, _| {
-            let id = rng.gen_range(1..=self.max_id);
+        let max_id = self.max_id;
+        run_benchmark(concurrency, 1, move |rng, _| {
+            let id = rng.gen_range(1..=max_id);
             format!("DELETE FROM sbtest WHERE id = {}", id)
         })
     }
@@ -576,11 +651,6 @@ impl Benchmark for OltpDelete {
 
     fn is_read_only(&self) -> bool {
         false
-    }
-
-    fn generate_delete_sql(&self, rng: &mut SmallRng) -> String {
-        let id = rng.gen_range(1..=self.max_id);
-        format!("DELETE FROM sbtest WHERE id = {}", id)
     }
 }
 
@@ -619,30 +689,36 @@ impl Benchmark for OltpMixed {
     }
 
     fn run(&self, concurrency: u32) -> BenchmarkResult {
-        // Mixed workload: 10 statements per transaction
-        self.run_internal(concurrency, 10, |rng, _| {
+        let max_id = self.max_id;
+        run_benchmark(concurrency, 10, move |rng, _| {
             let op = rng.gen_range(0..100);
             if op < 50 {
                 // 50% Point Select
-                let id = rng.gen_range(1..=self.max_id);
+                let id = rng.gen_range(1..=max_id);
                 format!("SELECT c FROM sbtest WHERE id = {}", id)
             } else if op < 70 {
                 // 20% Range Select
-                let start = rng.gen_range(1..self.max_id);
-                let end = (start + rng.gen_range(1..=100)).min(self.max_id);
-                format!("SELECT c FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+                let start = rng.gen_range(1..max_id);
+                let end = (start + rng.gen_range(1..=100)).min(max_id);
+                format!(
+                    "SELECT c FROM sbtest WHERE id BETWEEN {} AND {}",
+                    start, end
+                )
             } else if op < 90 {
                 // 20% Update
-                let id = rng.gen_range(1..=self.max_id);
+                let id = rng.gen_range(1..=max_id);
                 let c_value = format!("'{:x}'", rng.gen::<u32>());
                 format!("UPDATE sbtest SET c = {} WHERE id = {}", c_value, id)
             } else {
                 // 10% Insert
-                let id = rng.gen_range(1..=self.max_id);
+                let id = rng.gen_range(1..=max_id);
                 let k = rng.gen_range(0..1_000_000);
                 let c = format!("'c{:x}'", rng.gen::<u32>());
                 let pad = format!("'pad{:x}'", rng.gen::<u32>());
-                format!("INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})", id, k, c, pad)
+                format!(
+                    "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
+                    id, k, c, pad
+                )
             }
         })
     }
@@ -653,121 +729,6 @@ impl Benchmark for OltpMixed {
 
     fn is_read_only(&self) -> bool {
         false
-    }
-}
-
-// =============================================================================
-// Shared Benchmark Runner Implementation
-// =============================================================================
-
-impl dyn Benchmark {
-    /// Internal benchmark runner shared by all benchmark types
-    ///
-    /// Uses hdrhistogram for accurate latency tracking with:
-    /// - 3 significant figures precision
-    /// - Range from 1µs to 1 hour
-    fn run_internal<F>(&self, concurrency: u32, stmts_per_tx: usize, sql_gen: F) -> BenchmarkResult
-    where
-        F: Fn(&mut SmallRng, usize) -> String + Send + Sync,
-    {
-        let duration_secs: u64 = 10; // 10 second measurement window
-        let warmup_secs: u64 = 2;
-        let total_threads = concurrency.max(1) as usize;
-
-        // Create histogram for latencies (nanoseconds)
-        let hist = Arc::new(std::sync::Mutex::new(
-            Histogram::new_with_max(3_600_000_000_000u64, 3)
-                .expect("Failed to create histogram"),
-        ));
-        let ops_count = Arc::new(AtomicU64::new(0));
-        let barrier = Arc::new(tokio::sync::Barrier::new(total_threads + 1));
-
-        // Warmup phase
-        let warmup_hist = Arc::new(std::sync::Mutex::new(
-            Histogram::new_with_max(3_600_000_000_000u64, 3)
-                .expect("Failed to create warmup histogram"),
-        ));
-        let warmup_barrier = Arc::new(tokio::sync::Barrier::new(total_threads + 1));
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .expect("Failed to create runtime");
-
-        // Run warmup phase
-        let warmup_handles: Vec<_> = (0..total_threads)
-            .map(|thread_id| {
-                let barrier = warmup_barrier.clone();
-                let warmup_hist = warmup_hist.clone();
-                let sql_gen = &sql_gen;
-
-                std::thread::spawn(move || {
-                    let mut rng = SmallRng::seed_from_u64(42 + thread_id as u64);
-                    let start = Instant::now();
-
-                    // Wait for all threads to start
-                    rt.block_on(barrier.wait());
-
-                    while start.elapsed() < Duration::from_secs(warmup_secs as u64) {
-                        let tx_start = Instant::now();
-                        for _ in 0..stmts_per_tx {
-                            let _sql = sql_gen(&mut rng, thread_id);
-                            // Simulate minimal processing
-                            std::hint::spin_loop();
-                        }
-                        let tx_latency = tx_start.elapsed().as_nanos() as u64;
-                        if let Ok(mut h) = warmup_hist.lock() {
-                            let _ = h.record(tx_latency);
-                        }
-                    }
-                })
-            })
-            .collect();
-
-        for handle in warmup_handles {
-            let _ = handle.join();
-        }
-
-        // Run measurement phase
-        let handles: Vec<_> = (0..total_threads)
-            .map(|thread_id| {
-                let barrier = barrier.clone();
-                let hist = hist.clone();
-                let ops_count = ops_count.clone();
-                let sql_gen = &sql_gen;
-
-                std::thread::spawn(move || {
-                    let mut rng = SmallRng::seed_from_u64(12345 + thread_id as u64);
-                    let start = Instant::now();
-
-                    // Wait for all threads to start together
-                    rt.block_on(barrier.wait());
-
-                    while start.elapsed() < Duration::from_secs(duration_secs) {
-                        let tx_start = Instant::now();
-                        for _ in 0..stmts_per_tx {
-                            let _sql = sql_gen(&mut rng, thread_id);
-                            // Simulate minimal processing
-                            std::hint::spin_loop();
-                        }
-                        let tx_latency = tx_start.elapsed().as_nanos() as u64;
-
-                        if let Ok(mut h) = hist.lock() {
-                            let _ = h.record(tx_latency);
-                        }
-                        ops_count.fetch_add(stmts_per_tx as u64, Ordering::Relaxed);
-                    }
-                })
-            })
-            .collect();
-
-        for handle in handles {
-            let _ = handle.join();
-        }
-
-        let total_ops = ops_count.load(Ordering::Relaxed);
-        let hist_guard = hist.lock().unwrap();
-        BenchmarkResult::from_histogram(&hist_guard, duration_secs as f64, total_ops)
     }
 }
 
@@ -864,8 +825,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_check_targets_pass() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -873,8 +835,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let failures = suite.check_targets(&results);
         assert!(failures.is_empty());
     }
@@ -882,8 +844,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_check_targets_fail() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 500.0, // Below 1000 target
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -891,8 +854,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 5000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let failures = suite.check_targets(&results);
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains("oltp_point_select"));
@@ -902,8 +865,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_report_json() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -911,8 +875,8 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let json = suite.report_json(&results);
         assert!(json.contains("oltp_standard"));
         assert!(json.contains("oltp_point_select"));
@@ -922,8 +886,9 @@ mod tests {
     #[test]
     fn test_benchmark_suite_report_markdown() {
         let suite = BenchmarkSuite::standard();
-        let results = vec![
-            ("oltp_point_select".to_string(), BenchmarkResult {
+        let results = vec![(
+            "oltp_point_select".to_string(),
+            BenchmarkResult {
                 qps: 1200.0,
                 p50_ms: 0.1,
                 p95_ms: 0.5,
@@ -931,53 +896,13 @@ mod tests {
                 avg_ms: 0.2,
                 total_ops: 12000,
                 duration_ms: 10000,
-            }),
-        ];
+            },
+        )];
         let md = suite.report_markdown(&results);
         assert!(md.contains("# Benchmark Suite: oltp_standard"));
         assert!(md.contains("| Benchmark |"));
         assert!(md.contains("oltp_point_select"));
         assert!(md.contains("✅ PASS"));
-    }
-
-    #[test]
-    fn test_point_select_sql_generation() {
-        let bench = OltpPointSelect::new();
-        let mut rng = SmallRng::seed_from_u64(42);
-        let sql = bench.generate_point_select_sql(&mut rng);
-        assert!(sql.contains("SELECT c FROM sbtest WHERE id ="));
-    }
-
-    #[test]
-    fn test_range_select_sql_generation() {
-        let bench = OltpRangeSelect::new();
-        let mut rng = SmallRng::seed_from_u64(42);
-        let sql = bench.generate_range_select_sql(&mut rng);
-        assert!(sql.contains("SELECT c FROM sbtest WHERE id BETWEEN"));
-    }
-
-    #[test]
-    fn test_insert_sql_generation() {
-        let bench = OltpInsert::new();
-        let mut rng = SmallRng::seed_from_u64(42);
-        let sql = bench.generate_insert_sql(&mut rng);
-        assert!(sql.contains("INSERT INTO sbtest"));
-    }
-
-    #[test]
-    fn test_update_sql_generation() {
-        let bench = OltpUpdate::new();
-        let mut rng = SmallRng::seed_from_u64(42);
-        let sql = bench.generate_update_sql(&mut rng);
-        assert!(sql.contains("UPDATE sbtest SET c ="));
-    }
-
-    #[test]
-    fn test_delete_sql_generation() {
-        let bench = OltpDelete::new();
-        let mut rng = SmallRng::seed_from_u64(42);
-        let sql = bench.generate_delete_sql(&mut rng);
-        assert!(sql.contains("DELETE FROM sbtest WHERE id ="));
     }
 
     #[test]

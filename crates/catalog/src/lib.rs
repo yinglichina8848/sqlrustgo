@@ -386,4 +386,117 @@ mod tests {
         let catalog = Catalog::new();
         assert!(catalog.check_invariants().is_ok());
     }
+
+    #[test]
+    fn test_get_schema_mut_read() {
+        let mut catalog = Catalog::new();
+        let schema = catalog.get_schema_mut("public").unwrap();
+        // get_schema_mut returns a mutable reference, can read from it
+        assert!(schema.has_table("nonexistent") == false);
+    }
+
+    #[test]
+    fn test_all_schemas() {
+        let mut catalog = Catalog::new();
+        catalog.add_schema(Schema::new("test1")).unwrap();
+        catalog.add_schema(Schema::new("test2")).unwrap();
+        let schemas = catalog.all_schemas();
+        assert_eq!(schemas.len(), 3); // public + test1 + test2
+    }
+
+    #[test]
+    fn test_add_stored_procedure() {
+        let mut catalog = Catalog::new();
+        let proc = StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![StoredProcParam {
+                name: "param1".to_string(),
+                mode: ParamMode::In,
+                data_type: "INTEGER".to_string(),
+            }],
+            vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+        );
+        let result = catalog.add_stored_procedure(proc);
+        assert!(result.is_ok());
+        assert!(catalog.has_stored_procedure("test_proc"));
+    }
+
+    #[test]
+    fn test_duplicate_stored_procedure() {
+        let mut catalog = Catalog::new();
+        let proc = StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![],
+            vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+        );
+        catalog.add_stored_procedure(proc).unwrap();
+        let result = catalog.add_stored_procedure(StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![],
+            vec![StoredProcStatement::RawSql("SELECT 2".to_string())],
+        ));
+        assert!(matches!(result, Err(CatalogError::DuplicateSchema(_))));
+    }
+
+    #[test]
+    fn test_get_stored_procedure() {
+        let mut catalog = Catalog::new();
+        let proc = StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![],
+            vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+        );
+        catalog.add_stored_procedure(proc).unwrap();
+        assert!(catalog.get_stored_procedure("test_proc").is_some());
+        assert!(catalog.get_stored_procedure("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_has_stored_procedure() {
+        let mut catalog = Catalog::new();
+        let proc = StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![],
+            vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+        );
+        catalog.add_stored_procedure(proc).unwrap();
+        assert!(catalog.has_stored_procedure("test_proc"));
+        assert!(!catalog.has_stored_procedure("nonexistent"));
+    }
+
+    #[test]
+    fn test_drop_stored_procedure() {
+        let mut catalog = Catalog::new();
+        let proc = StoredProcedure::new(
+            "test_proc".to_string(),
+            vec![],
+            vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+        );
+        catalog.add_stored_procedure(proc).unwrap();
+        let dropped = catalog.drop_stored_procedure("test_proc");
+        assert!(dropped.is_some());
+        assert!(catalog.get_stored_procedure("test_proc").is_none());
+    }
+
+    #[test]
+    fn test_stored_procedure_names() {
+        let mut catalog = Catalog::new();
+        catalog
+            .add_stored_procedure(StoredProcedure::new(
+                "proc1".to_string(),
+                vec![],
+                vec![StoredProcStatement::RawSql("SELECT 1".to_string())],
+            ))
+            .unwrap();
+        catalog
+            .add_stored_procedure(StoredProcedure::new(
+                "proc2".to_string(),
+                vec![],
+                vec![StoredProcStatement::RawSql("SELECT 2".to_string())],
+            ))
+            .unwrap();
+        let names = catalog.stored_procedure_names();
+        assert!(names.contains(&"proc1"));
+        assert!(names.contains(&"proc2"));
+    }
 }

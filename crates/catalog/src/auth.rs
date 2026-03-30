@@ -158,6 +158,7 @@ pub enum Privilege {
     All,
 }
 
+#[allow(clippy::should_implement_trait)]
 impl Privilege {
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
@@ -205,6 +206,7 @@ pub enum ObjectType {
     Column,
 }
 
+#[allow(clippy::should_implement_trait)]
 impl ObjectType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
@@ -750,6 +752,7 @@ impl AuthManager {
             });
         }
         false
+    }
     }
 
     fn matches_object(

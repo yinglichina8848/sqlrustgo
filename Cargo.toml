@@ -9,9 +9,13 @@ members = [
     "crates/executor",
     "crates/storage",
     "crates/catalog",
+    "crates/distributed",
+    "crates/security",
     "crates/transaction",
     "crates/server",
     "crates/telemetry",
+    "crates/network",
+    "crates/agentsql",
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
@@ -43,12 +47,16 @@ sqlrustgo-optimizer = { path = "crates/optimizer" }
 sqlrustgo-executor = { path = "crates/executor" }
 sqlrustgo-storage = { path = "crates/storage" }
 sqlrustgo-catalog = { path = "crates/catalog" }
+sqlrustgo-distributed = { path = "crates/distributed" }
+sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-network = { path = "crates/network" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
+tonic = "0.12"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
@@ -72,6 +80,8 @@ hmac = "0.12"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 fnv = "1.0"
 proptest = "1.1"
+arrow = { version = "53" }
+parquet = { version = "53" }
 
 [dev-dependencies]
 criterion = "0.8"
@@ -81,6 +91,8 @@ rand = "0.8"
 clap = { version = "4.0", features = ["derive"] }
 proptest = "1.1"
 sqlrustgo-server = { path = "crates/server" }
+sqlrustgo-transaction = { path = "crates/transaction" }
+sqlrustgo-security = { path = "crates/security" }
 
 [package]
 name = "sqlrustgo"
@@ -150,6 +162,10 @@ harness = false
 
 [[bench]]
 name = "tpch_bench"
+harness = false
+
+[[bench]]
+name = "bench_columnar"
 harness = false
 
 # [[bin]]
@@ -367,9 +383,70 @@ name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
 
 [[test]]
+name = "distributed_transaction_test"
+path = "tests/integration/distributed_transaction_test.rs"
+
+[[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
 
 [[test]]
 name = "auth_rbac_test"
 path = "tests/integration/auth_rbac_test.rs"
+
+[[test]]
+name = "mysql_compatibility_test"
+path = "tests/integration/mysql_compatibility_test.rs"
+
+[[test]]
+name = "columnar_storage_test"
+path = "tests/integration/columnar_storage_test.rs"
+
+[[test]]
+name = "autoinc_test"
+path = "tests/integration/autoinc_test.rs"
+
+[[test]]
+name = "batch_insert_test"
+path = "tests/integration/batch_insert_test.rs"
+
+[[test]]
+name = "fk_actions_test"
+path = "tests/integration/fk_actions_test.rs"
+
+[[test]]
+name = "index_integration_test"
+path = "tests/integration/index_integration_test.rs"
+
+[[test]]
+name = "integration_test"
+path = "tests/integration/integration_test.rs"
+
+[[test]]
+name = "savepoint_test"
+path = "tests/integration/savepoint_test.rs"
+
+[[test]]
+name = "session_config_test"
+path = "tests/integration/session_config_test.rs"
+
+[[test]]
+name = "storage_integration_test"
+path = "tests/integration/storage_integration_test.rs"
+
+[[test]]
+name = "tpch_test"
+path = "tests/integration/tpch_test.rs"
+
+[[test]]
+name = "parquet_test"
+path = "tests/integration/parquet_test.rs"
+
+[[test]]
+name = "prometheus_test"
+path = "tests/unit/prometheus_test.rs"
+
+[[test]]
+name = "slow_query_log_test"
+path = "tests/unit/slow_query_log_test.rs"
+>>>>>>> origin/develop/v2.1.0

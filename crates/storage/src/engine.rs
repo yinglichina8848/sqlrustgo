@@ -4,6 +4,8 @@
 use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::bplus_tree::SimpleBPlusTree;
 
@@ -205,6 +207,14 @@ pub trait StorageEngine: Send + Sync {
             .collect();
         Ok(projected)
     }
+
+    fn set_cancel_flag(&mut self, _flag: Arc<AtomicBool>) {}
+
+    fn clear_cancel_flag(&mut self) {}
+
+    fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
+        None
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -218,6 +228,7 @@ pub struct MemoryStorage {
     indexes: HashMap<String, SimpleBPlusTree>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
     auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +272,7 @@ impl MemoryStorage {
             indexes: HashMap::new(),
             write_callback: None,
             auto_increment_counters: HashMap::new(),
+            cancel_flag: None,
         }
     }
 
@@ -274,7 +286,25 @@ impl MemoryStorage {
             indexes: HashMap::new(),
             write_callback: Some(callback),
             auto_increment_counters: HashMap::new(),
+            cancel_flag: None,
         }
+    }
+
+    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
+    }
+
+    pub fn clear_cancel_flag(&mut self) {
+        self.cancel_flag = None;
+    }
+
+    fn check_cancel(&self) -> SqlResult<()> {
+        if let Some(ref flag) = self.cancel_flag {
+            if flag.load(Ordering::SeqCst) {
+                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
+            }
+        }
+        Ok(())
     }
 
     pub fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
@@ -298,7 +328,7 @@ impl MemoryStorage {
         self.triggers.insert(info.name.clone(), info.clone());
         self.table_triggers
             .entry(info.table_name.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(info.name.clone());
         Ok(())
     }
@@ -378,17 +408,23 @@ impl Default for MemoryStorage {
 
 impl StorageEngine for MemoryStorage {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
-        Ok(self.tables.get(table).cloned().unwrap_or_default())
+        self.check_cancel()?;
+        let records = self.tables.get(table).cloned().unwrap_or_default();
+        self.check_cancel()?;
+        Ok(records)
     }
 
     /// Efficient batch scan - directly accesses internal table storage without full table scan
+    /// Checks cancellation before and after loading data
     fn scan_batch(
         &self,
         table: &str,
         offset: usize,
         limit: usize,
     ) -> SqlResult<(Vec<Record>, usize, bool)> {
+        self.check_cancel()?;
         let table_records = self.tables.get(table).cloned().unwrap_or_default();
+        self.check_cancel()?;
         let total = table_records.len();
         let has_more = offset + limit < total;
         let batch = table_records.into_iter().skip(offset).take(limit).collect();
@@ -623,7 +659,7 @@ impl StorageEngine for MemoryStorage {
                                 }
 
                                 // Delete the child records
-                                let deleted = self.delete_internal(
+                                let _deleted = self.delete_internal(
                                     child_table,
                                     &[Value::Integer(child_col_idx as i64), current_value.clone()],
                                 )?;
@@ -696,7 +732,7 @@ impl StorageEngine for MemoryStorage {
         #[derive(Debug)]
         struct UpdatedColumn {
             col_idx: usize,
-            col_name: String,
+            _col_name: String,
             referenced_by: Vec<(String, usize, ForeignKeyConstraint)>, // (child_table, child_col_idx, fk)
         }
 
@@ -718,7 +754,7 @@ impl StorageEngine for MemoryStorage {
                 if !referencing.is_empty() {
                     updated_columns.push(UpdatedColumn {
                         col_idx: *col_idx,
-                        col_name: col_def.name.clone(),
+                        _col_name: col_def.name.clone(),
                         referenced_by: referencing,
                     });
                 }
@@ -990,7 +1026,7 @@ impl StorageEngine for MemoryStorage {
         self.triggers.insert(info.name.clone(), info.clone());
         self.table_triggers
             .entry(info.table_name.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(info.name.clone());
         Ok(())
     }
@@ -1083,8 +1119,8 @@ impl StorageEngine for MemoryStorage {
         let counters = self
             .auto_increment_counters
             .entry(table.to_string())
-            .or_insert_with(HashMap::new);
-        let next = counters.entry(column_index).or_insert(0).clone();
+            .or_default();
+        let next = *counters.entry(column_index).or_insert(0);
         counters.insert(column_index, next + 1);
         Ok(next + 1)
     }
@@ -1097,6 +1133,18 @@ impl StorageEngine for MemoryStorage {
                     table: table.to_string(),
                 })?;
         Ok(*counters.get(&column_index).unwrap_or(&0))
+    }
+
+    fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
+    }
+
+    fn clear_cancel_flag(&mut self) {
+        self.cancel_flag = None;
+    }
+
+    fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
+        self.cancel_flag.clone()
     }
 }
 
@@ -1156,6 +1204,7 @@ impl MemoryStorage {
             })?;
 
         for row in records.iter_mut() {
+            #[allow(clippy::collapsible_if)]
             if let Some(value) = row.get(col_idx) {
                 if value == match_value {
                     if col_idx < row.len() {

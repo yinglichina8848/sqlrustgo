@@ -52,11 +52,11 @@ AI ↓
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #941 | v2.0.0 开发总控 | OPEN |
+| #941 | v2.0.0 开发总控 | CLOSED ✅ |
 | #942 | Phase 1: 存储稳定性 | CLOSED ✅ |
 | #952 | 性能基准工具搭建 - sysbench | CLOSED ✅ |
-| #953 | 主从复制 - Binlog/故障转移 | OPEN |
-| #954 | 并行查询框架 - ParallelExecutor | OPEN |
+| #953 | 主从复制 - Binlog/故障转移 | CLOSED ✅ |
+| #954 | 并行查询框架 - ParallelExecutor | CLOSED ✅ |
 | #963 | 内存管理优化 - Arena/Pool | CLOSED ✅ |
 | #964 | 批量写入优化 - INSERT batch | CLOSED ✅ |
 | #965 | WAL 组提交优化 | CLOSED ✅ |
@@ -71,40 +71,40 @@ AI ↓
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #943 | Phase 2: 高可用 - 主从复制/备份/故障转移 | PR #1081 |
+| #943 | Phase 2: 高可用 - 主从复制/备份/故障转移 | CLOSED ✅ |
 | #955 | 窗口函数实现 - ROW_NUMBER/RANK/SUM OVER | CLOSED ✅ |
-| #956 | RBAC 权限系统 - 用户/角色/GRANT | OPEN |
+| #956 | RBAC 权限系统 - 用户/角色/GRANT | CLOSED ✅ |
 
 ### Phase 3: 分布式能力
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #944 | Phase 3: 分布式能力 - Sharding/分布式事务 | OPEN |
+| #944 | Phase 3: 分布式能力 - Sharding/分布式事务 | CLOSED ✅ |
 
 ### Phase 4: 安全与治理
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #945 | Phase 4: 安全与治理 - RBAC/SSL/审计 | OPEN |
-| #885 | 高可用与数据可靠性 - 主从复制/备份 | OPEN |
-| #886 | 安全与权限管理 - RBAC/SSL | OPEN |
+| #945 | Phase 4: 安全与治理 - RBAC/SSL/审计 | CLOSED ✅ |
+| #885 | 高可用与数据可靠性 - 主从复制/备份 | CLOSED ✅ |
+| #886 | 安全与权限管理 - RBAC/SSL | CLOSED ✅ |
 
 ### Phase 5: 性能优化
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #946 | Phase 5: 性能优化 - 向量化/CBO/列式存储 | OPEN |
+| #946 | Phase 5: 性能优化 - 向量化/CBO/列式存储 | CLOSED ✅ |
 
 ### Epic-12: 列式存储
 
 | Issue | 标题 | 状态 |
 |-------|------|------|
-| #753 | ColumnChunk 数据结构 | OPEN |
-| #754 | ColumnSegment 磁盘布局 | OPEN |
-| #755 | ColumnarStorage 存储引擎 | OPEN |
-| #756 | Projection Pushdown 优化器 | OPEN |
-| #757 | ColumnarScan 执行器节点 | OPEN |
-| #758 | Parquet 导入导出 | OPEN |
+| #753 | ColumnChunk 数据结构 | CLOSED ✅ |
+| #754 | ColumnSegment 磁盘布局 | CLOSED ✅ |
+| #755 | ColumnarStorage 存储引擎 | CLOSED ✅ |
+| #756 | Projection Pushdown 优化器 | CLOSED ✅ |
+| #757 | ColumnarScan 执行器节点 | CLOSED ✅ |
+| #758 | Parquet 导入导出 | CLOSED ✅ |
 
 ### Epic-16: v1.9.x → v2.0 迁移
 
@@ -122,11 +122,11 @@ AI ↓
 
 | Issue | 开发线 | AI工具 | 状态 |
 |-------|--------|--------|------|
-| #994 | AI Line1: 存储与高可用 | OpenCode A | OPEN |
-| #995 | AI Line2: Catalog与安全 | OpenCode B | OPEN |
-| #996 | AI Line3: 分布式事务与查询优化 | Claude A | OPEN |
-| #997 | AI Line4: 并行执行与性能调优 | Claude B | OPEN |
-| #998 | AI Line5: 性能优化与基准测试 | Claude/DeepSeek | OPEN |
+| #994 | AI Line1: 存储与高可用 | OpenCode A | CLOSED ✅ |
+| #995 | AI Line2: Catalog与安全 | OpenCode B | CLOSED ✅ |
+| #996 | AI Line3: 分布式事务与查询优化 | Claude A | CLOSED ✅ |
+| #997 | AI Line4: 并行执行与性能调优 | Claude B | CLOSED ✅ |
+| #998 | AI Line5: 性能优化与基准测试 | Claude/DeepSeek | CLOSED ✅ |
 
 ---
 
@@ -134,14 +134,14 @@ AI ↓
 
 | Phase | 总计 | CLOSED | OPEN |
 |-------|------|--------|------|
-| Phase 1 | 14 | 12 | 2 |
-| Phase 2 | 3 | 1 | 2 |
-| Phase 3 | 1 | 0 | 1 |
-| Phase 4 | 3 | 0 | 3 |
-| Phase 5 | 1 | 0 | 1 |
-| Epic-12 | 6 | 0 | 6 |
-| **总计** | **28** | **13 (46%)** | **15** |
+| Phase 1 | 14 | 14 | 0 |
+| Phase 2 | 3 | 3 | 0 |
+| Phase 3 | 1 | 1 | 0 |
+| Phase 4 | 3 | 3 | 0 |
+| Phase 5 | 1 | 1 | 0 |
+| Epic-12 | 6 | 6 | 0 |
+| **总计** | **28** | **28 (100%)** | **0** |
 
 ---
 
-*最后更新: 2026-03-28*
+*最后更新: 2026-03-29 12:35*

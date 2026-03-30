@@ -86,7 +86,8 @@ impl Metrics {
     pub fn record_query(&self, query_type: &str, duration: Duration) {
         self.queries_total.fetch_add(1, Ordering::Relaxed);
         let duration_us = duration.as_micros() as u64;
-        self.queries_duration_us.fetch_add(duration_us, Ordering::Relaxed);
+        self.queries_duration_us
+            .fetch_add(duration_us, Ordering::Relaxed);
         self.record_duration_bucket(duration_us);
         let _ = query_type; // Query type stored in derived metrics if needed
     }
@@ -95,7 +96,9 @@ impl Metrics {
         // Bucket boundaries in microseconds:
         // 0: 100us, 1: 500us, 2: 1ms, 3: 5ms, 4: 10ms,
         // 5: 50ms, 6: 100ms, 7: 500ms, 8: 1s, 9: 5s
-        let thresholds = [100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000];
+        let thresholds = [
+            100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000,
+        ];
         for (i, threshold) in thresholds.iter().enumerate() {
             if duration_us <= *threshold {
                 self.duration_buckets[i].fetch_add(1, Ordering::Relaxed);
@@ -216,7 +219,10 @@ impl Metrics {
 
     /// Get duration bucket counts
     pub fn duration_buckets(&self) -> Vec<u64> {
-        self.duration_buckets.iter().map(|b| b.load(Ordering::Relaxed)).collect()
+        self.duration_buckets
+            .iter()
+            .map(|b| b.load(Ordering::Relaxed))
+            .collect()
     }
 }
 
@@ -246,6 +252,13 @@ impl<'a> MetricsTimer<'a> {
         let duration = self.start.elapsed();
         self.metrics.record_query("QUERY", duration);
         duration
+    }
+}
+
+impl<'a> Drop for MetricsTimer<'a> {
+    fn drop(&mut self) {
+        let duration = self.start.elapsed();
+        self.metrics.record_query("QUERY", duration);
     }
 }
 
@@ -355,15 +368,15 @@ mod tests {
     #[test]
     fn test_duration_buckets() {
         let metrics = Metrics::new();
-        metrics.record_query("Q", Duration::from_micros(50));    // < 100us
-        metrics.record_query("Q", Duration::from_micros(300));    // < 500us
-        metrics.record_query("Q", Duration::from_millis(2));       // < 5ms
-        metrics.record_query("Q", Duration::from_millis(100));   // < 500ms
+        metrics.record_query("Q", Duration::from_micros(50)); // < 100us
+        metrics.record_query("Q", Duration::from_micros(300)); // < 500us
+        metrics.record_query("Q", Duration::from_millis(2)); // < 5ms
+        metrics.record_query("Q", Duration::from_millis(100)); // 100ms = threshold for bucket 6
         let buckets = metrics.duration_buckets();
         assert_eq!(buckets[0], 1); // 50 < 100
         assert_eq!(buckets[1], 1); // 300 < 500
         assert_eq!(buckets[3], 1); // 2ms < 5ms
-        assert_eq!(buckets[7], 1); // 100ms < 500ms
+        assert_eq!(buckets[6], 1); // 100ms = 100ms threshold, goes into bucket 6
     }
 
     #[test]

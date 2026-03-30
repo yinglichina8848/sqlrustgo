@@ -5,6 +5,7 @@
 use crate::Metrics;
 
 /// Prometheus metric types
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum MetricType {
     Counter,
@@ -12,6 +13,7 @@ pub enum MetricType {
     Histogram,
 }
 
+#[allow(dead_code)]
 impl MetricType {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -69,10 +71,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_queries_total Total number of queries executed"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_queries_total counter"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_queries_total counter");
         let _ = writeln!(
             output,
             "sqlrustgo_queries_total {}",
@@ -85,8 +84,13 @@ impl PrometheusRenderer {
 
         // Prometheus histogram buckets (in seconds, using le = "+Inf" convention)
         // Bucket boundaries match our internal buckets (in microseconds)
-        let bucket_boundaries_us = [100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000];
-        let bucket_boundaries_s: Vec<f64> = bucket_boundaries_us.iter().map(|&u| u as f64 / 1_000_000.0).collect();
+        let bucket_boundaries_us = [
+            100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000,
+        ];
+        let bucket_boundaries_s: Vec<f64> = bucket_boundaries_us
+            .iter()
+            .map(|&u| u as f64 / 1_000_000.0)
+            .collect();
         let buckets = metrics.duration_buckets();
 
         let _ = writeln!(
@@ -119,11 +123,7 @@ impl PrometheusRenderer {
         // Sum and count for histogram
         let sum_us = metrics.queries_duration_us();
         let sum_s = sum_us as f64 / 1_000_000.0;
-        let _ = writeln!(
-            output,
-            "sqlrustgo_queries_duration_seconds_sum {}",
-            sum_s
-        );
+        let _ = writeln!(output, "sqlrustgo_queries_duration_seconds_sum {}", sum_s);
         let _ = writeln!(
             output,
             "sqlrustgo_queries_duration_seconds_count {}",
@@ -137,10 +137,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_connections_active Number of active connections"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_connections_active gauge"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_connections_active gauge");
         let _ = writeln!(
             output,
             "sqlrustgo_connections_active {}",
@@ -154,10 +151,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_connections_total Total number of connections created"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_connections_total counter"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_connections_total counter");
         let _ = writeln!(
             output,
             "sqlrustgo_connections_total {}",
@@ -171,15 +165,8 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_cache_hits Total number of cache hits"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_cache_hits counter"
-        );
-        let _ = writeln!(
-            output,
-            "sqlrustgo_cache_hits {}",
-            metrics.cache_hits()
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_cache_hits counter");
+        let _ = writeln!(output, "sqlrustgo_cache_hits {}", metrics.cache_hits());
     }
 
     fn render_cache_misses(metrics: &Metrics, output: &mut String) {
@@ -188,15 +175,8 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_cache_misses Total number of cache misses"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_cache_misses counter"
-        );
-        let _ = writeln!(
-            output,
-            "sqlrustgo_cache_misses {}",
-            metrics.cache_misses()
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_cache_misses counter");
+        let _ = writeln!(output, "sqlrustgo_cache_misses {}", metrics.cache_misses());
     }
 
     fn render_cache_hit_rate(metrics: &Metrics, output: &mut String) {
@@ -205,10 +185,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_cache_hit_rate Cache hit rate (0.0 to 1.0)"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_cache_hit_rate gauge"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_cache_hit_rate gauge");
         let _ = writeln!(
             output,
             "sqlrustgo_cache_hit_rate {}",
@@ -222,10 +199,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_storage_read_bytes Total bytes read from storage"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_storage_read_bytes counter"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_storage_read_bytes counter");
         let _ = writeln!(
             output,
             "sqlrustgo_storage_read_bytes {}",
@@ -239,10 +213,7 @@ impl PrometheusRenderer {
             output,
             "# HELP sqlrustgo_storage_write_bytes Total bytes written to storage"
         );
-        let _ = writeln!(
-            output,
-            "# TYPE sqlrustgo_storage_write_bytes counter"
-        );
+        let _ = writeln!(output, "# TYPE sqlrustgo_storage_write_bytes counter");
         let _ = writeln!(
             output,
             "sqlrustgo_storage_write_bytes {}",

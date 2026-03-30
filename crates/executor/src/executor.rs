@@ -436,9 +436,10 @@ impl AggregateVolcanoExecutor {
                 let left_val = self.evaluate_having_expr(left, group_rows);
                 let right_val = self.evaluate_having_expr(right, group_rows);
                 // For boolean results from aggregate comparisons like COUNT(*) > 1
+                #[allow(clippy::collapsible_match)]
                 match op {
-                    sqlrustgo_planner::Operator::Gt => left_val > right_val,
-                    sqlrustgo_planner::Operator::Lt => left_val < right_val,
+                    sqlrustgo_planner::Operator::Gt => left_val & !right_val,
+                    sqlrustgo_planner::Operator::Lt => !left_val & right_val,
                     sqlrustgo_planner::Operator::GtEq => left_val >= right_val,
                     sqlrustgo_planner::Operator::LtEq => left_val <= right_val,
                     sqlrustgo_planner::Operator::Eq => left_val == right_val,
@@ -448,6 +449,7 @@ impl AggregateVolcanoExecutor {
                     _ => false,
                 }
             }
+            #[allow(clippy::collapsible_match)]
             sqlrustgo_planner::Expr::Literal(val) => {
                 if let sqlrustgo_types::Value::Boolean(b) = val {
                     *b

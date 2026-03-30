@@ -972,7 +972,10 @@ mod tests {
             })
         }
 
-        fn create_trigger(&mut self, _info: sqlrustgo_storage::engine::TriggerInfo) -> SqlResult<()> {
+        fn create_trigger(
+            &mut self,
+            _info: sqlrustgo_storage::engine::TriggerInfo,
+        ) -> SqlResult<()> {
             Ok(())
         }
 
@@ -988,7 +991,11 @@ mod tests {
             Vec::new()
         }
 
-        fn get_next_auto_increment(&mut self, _table: &str, _column_index: usize) -> SqlResult<i64> {
+        fn get_next_auto_increment(
+            &mut self,
+            _table: &str,
+            _column_index: usize,
+        ) -> SqlResult<i64> {
             Ok(1)
         }
 

@@ -327,7 +327,7 @@ impl<S: StorageEngine> TriggerExecutor<S> {
                 // NEW.col * number or number * NEW.col
                 if left.starts_with("NEW.") {
                     let _col_name = left.trim_start_matches("NEW.").trim();
-                    if let Some(num) = right.trim().parse::<i64>().ok() {
+                    if let Ok(num) = right.trim().parse::<i64>() {
                         // We don't have access to the row here, so just return the number
                         // In actual implementation, this would look up NEW.col from the row
                         return Some(Value::Integer(num));

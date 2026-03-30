@@ -54,9 +54,7 @@ impl SqlNormalizer {
                     current_param.clear();
                 }
                 in_string = !in_string;
-            } else if in_string {
-                current_param.push(c);
-            } else if c.is_ascii_digit() || c == '.' {
+            } else if in_string || c.is_ascii_digit() || c == '.' {
                 current_param.push(c);
             } else {
                 if !current_param.is_empty() {
@@ -75,7 +73,7 @@ impl SqlNormalizer {
         if !current_param.is_empty() {
             if let Ok(n) = current_param.parse::<i64>() {
                 params.push(Value::Integer(n));
-            } else if let Ok(_) = current_param.parse::<f64>() {
+            } else if current_param.parse::<f64>().is_ok() {
                 // float case
             }
             normalized.push('?');

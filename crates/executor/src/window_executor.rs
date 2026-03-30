@@ -1,9 +1,7 @@
 // SQLRustGo window function executor module
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
-use sqlrustgo_planner::{
-    Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction,
-};
+use sqlrustgo_planner::{Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::collections::HashMap;
@@ -406,35 +404,29 @@ impl WindowVolcanoExecutor {
         for i in 0..values1.len() {
             let v1 = &values1[i];
             let v2 = &values2[i];
-            match (v1, v2) {
-                (Some(a), Some(b)) => {
-                    if let Some(ord) = a.partial_cmp(b) {
-                        if ord == std::cmp::Ordering::Greater {
-                            return false;
-                        }
-                        if ord == std::cmp::Ordering::Less {
-                            // Found a smaller value, check if all following are also not greater
-                            let mut all_not_greater = true;
-                            for j in (i + 1)..values1.len() {
-                                let (next_v1, next_v2) = (&values1[j], &values2[j]);
-                                match (next_v1, next_v2) {
-                                    (Some(na), Some(nb)) => {
-                                        if let Some(next_ord) = na.partial_cmp(nb) {
-                                            if next_ord == std::cmp::Ordering::Greater {
-                                                all_not_greater = false;
-                                            }
-                                        }
+            if let (Some(a), Some(b)) = (v1, v2) {
+                if let Some(ord) = a.partial_cmp(b) {
+                    if ord == std::cmp::Ordering::Greater {
+                        return false;
+                    }
+                    if ord == std::cmp::Ordering::Less {
+                        // Found a smaller value, check if all following are also not greater
+                        let mut all_not_greater = true;
+                        for j in (i + 1)..values1.len() {
+                            let (next_v1, next_v2) = (&values1[j], &values2[j]);
+                            if let (Some(na), Some(nb)) = (next_v1, next_v2) {
+                                if let Some(next_ord) = na.partial_cmp(nb) {
+                                    if next_ord == std::cmp::Ordering::Greater {
+                                        all_not_greater = false;
                                     }
-                                    _ => {}
                                 }
                             }
-                            if all_not_greater {
-                                return true;
-                            }
+                        }
+                        if all_not_greater {
+                            return true;
                         }
                     }
                 }
-                _ => {}
             }
         }
         // Actually simpler: check if ALL values are less than or equal, and at least one is less
@@ -442,18 +434,15 @@ impl WindowVolcanoExecutor {
         for i in 0..values1.len() {
             let v1 = &values1[i];
             let v2 = &values2[i];
-            match (v1, v2) {
-                (Some(a), Some(b)) => {
-                    if let Some(ord) = a.partial_cmp(b) {
-                        if ord == std::cmp::Ordering::Greater {
-                            return false;
-                        }
-                        if ord == std::cmp::Ordering::Less {
-                            any_less = true;
-                        }
+            if let (Some(a), Some(b)) = (v1, v2) {
+                if let Some(ord) = a.partial_cmp(b) {
+                    if ord == std::cmp::Ordering::Greater {
+                        return false;
+                    }
+                    if ord == std::cmp::Ordering::Less {
+                        any_less = true;
                     }
                 }
-                _ => {}
             }
         }
         any_less
