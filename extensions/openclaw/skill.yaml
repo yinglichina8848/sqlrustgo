@@ -1,0 +1,117 @@
+name: agentsql
+version: 2.1.0
+description: SQLRustGo AgentSQL Extension - AI Agent database access layer for OpenClaw
+
+author: SQLRustGo Team
+license: MIT
+
+endpoints:
+  query: POST /query
+  nl_query: POST /nl_query
+  schema: GET /schema
+  stats: GET /stats
+  memory:
+    save: POST /memory/save
+    load: POST /memory/load
+    search: POST /memory/search
+    clear: POST /memory/clear
+    stats: GET /memory/stats
+
+tools:
+  - name: agentsql_query
+    description: Execute a SQL query against the SQLRustGo database
+    input:
+      sql:
+        type: string
+        required: true
+        description: The SQL query to execute
+
+  - name: agentsql_nl_query
+    description: Convert natural language to SQL
+    input:
+      query:
+        type: string
+        required: true
+        description: Natural language query
+      context:
+        type: string
+        required: false
+        description: Optional context
+
+  - name: agentsql_schema
+    description: Get database schema
+    input:
+      table:
+        type: string
+        required: false
+        description: Optional specific table
+
+  - name: agentsql_stats
+    description: Get database statistics
+    input:
+      table:
+        type: string
+        required: false
+        description: Optional specific table
+
+  - name: agentsql_memory
+    description: Manage agent memory
+    input:
+      operation:
+        type: string
+        enum: [save, load, search, clear, stats]
+        required: true
+        description: Memory operation
+      content:
+        type: string
+        required: false
+        description: Content for save
+      query:
+        type: string
+        required: false
+        description: Query for search
+      agent_id:
+        type: string
+        required: false
+      session_id:
+        type: string
+        required: false
+      memory_type:
+        type: string
+        enum: [conversation, query, result, schema, policy, custom]
+        required: false
+      tags:
+        type: string[]
+        required: false
+      limit:
+        type: number
+        required: false
+      importance:
+        type: number
+        required: false
+      older_than:
+        type: number
+        required: false
+
+capabilities:
+  - Natural language to SQL conversion
+  - SQL query execution
+  - Schema introspection
+  - Table statistics
+  - Agent memory management
+  - Session-based context
+
+use_cases:
+  - "Show all users" -> SELECT * FROM users
+  - "Find orders where status is pending" -> SELECT * FROM orders WHERE status = 'pending'
+  - "Count total products" -> SELECT COUNT(*) FROM products
+  - Store and retrieve conversation context
+  - Search historical queries and results
+
+examples:
+  - input: "show all users"
+    output: "SELECT * FROM users;"
+  - input: "find active orders"
+    output: "SELECT * FROM orders WHERE status = 'active';"
+  - input: "what tables exist"
+    output: "{ schema: { tables: [...] } }"

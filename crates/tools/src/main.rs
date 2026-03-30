@@ -5,6 +5,7 @@
 mod backup;
 mod catalog_check;
 mod ha;
+mod upgrade;
 
 use anyhow::Result;
 use structopt::StructOpt;
@@ -18,6 +19,8 @@ enum Command {
     CatalogCheck(catalog_check::Opt),
     /// High Availability cluster management
     HA(ha::HACommand),
+    /// Upgrade database version
+    Upgrade(upgrade::UpgradeCommand),
 }
 
 fn main() -> Result<()> {
@@ -47,5 +50,6 @@ fn main() -> Result<()> {
         },
         Command::CatalogCheck(opt) => catalog_check::run_with_opt(opt),
         Command::HA(_ha_cmd) => ha::run(),
+        Command::Upgrade(upgrade_cmd) => upgrade::run_with_opt(upgrade_cmd),
     }
 }
