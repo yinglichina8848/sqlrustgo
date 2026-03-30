@@ -55,7 +55,13 @@ fn handle_client(
                 let mut eng = engine.write().unwrap();
                 match parse(query) {
                     Ok(Statement::Kill(kill)) => execute_server_kill(&kill, &security, session_id),
-                    Ok(statement) => eng.execute(statement),
+                    Ok(statement) => {
+                        if let Err(e) = security.check_session_and_reset(session_id) {
+                            Err(SqlError::ExecutionError(e))
+                        } else {
+                            eng.execute(statement)
+                        }
+                    }
                     Err(e) => Err(SqlError::ParseError(format!("{:?}", e))),
                 }
             };

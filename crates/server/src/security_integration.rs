@@ -116,6 +116,30 @@ impl SecurityIntegration {
             total_sessions: self.session_manager.get_session_count(),
         }
     }
+
+    pub fn is_session_cancelled(&self, session_id: u64) -> bool {
+        if let Some(session) = self.session_manager.get_session(session_id) {
+            session.is_query_cancelled() || session.is_connection_killed()
+        } else {
+            true
+        }
+    }
+
+    pub fn check_session_and_reset(&self, session_id: u64) -> Result<(), String> {
+        if self.is_session_cancelled(session_id) {
+            let session = self.session_manager.get_session(session_id);
+            if let Some(s) = session {
+                if s.is_connection_killed() {
+                    return Err("Connection killed".to_string());
+                }
+                if s.is_query_cancelled() {
+                    return Err("Query cancelled".to_string());
+                }
+            }
+            return Err("Session is cancelled".to_string());
+        }
+        Ok(())
+    }
 }
 
 impl Default for SecurityIntegration {
