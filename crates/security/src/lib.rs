@@ -22,7 +22,7 @@ pub use firewall::{
     create_shared_firewall, BlacklistPattern, FirewallConfig, FirewallError, FirewallStats,
     SharedFirewall, SqlFirewall, ThreatSeverity, WhitelistPattern,
 };
-pub use session::{Session, SessionManager, SessionStatus};
+pub use session::{ProcesslistRow, Session, SessionManager, SessionStatus};
 pub use tls::{CertificateManager, TlsConfig};
 
 #[cfg(test)]

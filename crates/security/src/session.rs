@@ -66,6 +66,40 @@ impl Session {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcesslistRow {
+    pub id: u64,
+    pub user: String,
+    pub host: String,
+    pub db: Option<String>,
+    pub command: String,
+    pub time: i64,
+    pub state: String,
+    pub info: Option<String>,
+}
+
+impl Session {
+    pub fn to_processlist_row(&self) -> ProcesslistRow {
+        let command = match self.status {
+            SessionStatus::Active => "Query",
+            SessionStatus::Idle => "Sleep",
+            SessionStatus::Closing => "Closing",
+            SessionStatus::Closed => "Dead",
+        };
+
+        ProcesslistRow {
+            id: self.id,
+            user: self.user.clone(),
+            host: self.ip.clone(),
+            db: self.database.clone(),
+            command: command.to_string(),
+            time: self.idle_time_seconds() as i64,
+            state: String::new(),
+            info: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<u64, Session>>>,
@@ -139,6 +173,15 @@ impl SessionManager {
             .values()
             .filter(|s| s.is_active())
             .cloned()
+            .collect()
+    }
+
+    pub fn get_processlist_rows(&self) -> Vec<ProcesslistRow> {
+        self.sessions
+            .read()
+            .unwrap()
+            .values()
+            .map(|s| s.to_processlist_row())
             .collect()
     }
 
@@ -312,5 +355,59 @@ mod tests {
 
         assert_eq!(removed, 1);
         assert_eq!(manager.get_session_count(), 1);
+    }
+
+    #[test]
+    fn test_processlist_row_from_session() {
+        let manager = SessionManager::new();
+        let session_id = manager.create_session("alice".to_string(), "192.168.1.100".to_string());
+
+        if let Some(session) = manager.get_session(session_id) {
+            let row = session.to_processlist_row();
+
+            assert_eq!(row.id, session_id);
+            assert_eq!(row.user, "alice");
+            assert_eq!(row.host, "192.168.1.100");
+            assert_eq!(row.command, "Query");
+            assert!(row.db.is_none());
+            assert_eq!(row.state, "");
+        }
+    }
+
+    #[test]
+    fn test_get_processlist_rows() {
+        let manager = SessionManager::new();
+        let id1 = manager.create_session("alice".to_string(), "127.0.0.1".to_string());
+        let id2 = manager.create_session("bob".to_string(), "127.0.0.2".to_string());
+
+        manager.close_session(id1);
+
+        let rows = manager.get_processlist_rows();
+
+        assert_eq!(rows.len(), 2);
+        let active: Vec<_> = rows.iter().filter(|r| r.command == "Query").collect();
+        let closed: Vec<_> = rows.iter().filter(|r| r.command == "Dead").collect();
+        assert_eq!(active.len(), 1);
+        assert_eq!(closed.len(), 1);
+        assert_eq!(active[0].user, "bob");
+    }
+
+    #[test]
+    fn test_kill_permission_check() {
+        let manager = SessionManager::new();
+        let id1 = manager.create_session("alice".to_string(), "127.0.0.1".to_string());
+        let id2 = manager.create_session("bob".to_string(), "127.0.0.2".to_string());
+
+        assert_ne!(id1, id2);
+
+        let alice_session = manager.get_session(id1).unwrap();
+        let bob_session = manager.get_session(id2).unwrap();
+
+        assert_eq!(alice_session.user, "alice");
+        assert_eq!(bob_session.user, "bob");
+
+        manager.close_session(id2);
+        let closed_session = manager.get_session(id2).unwrap();
+        assert_eq!(closed_session.status, SessionStatus::Closed);
     }
 }
