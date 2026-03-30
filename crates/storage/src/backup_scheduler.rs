@@ -15,17 +15,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum BackupScheduleType {
+    #[default]
     Daily,
     Weekly,
     Monthly,
-}
-
-impl Default for BackupScheduleType {
-    fn default() -> Self {
-        Self::Daily
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +51,7 @@ pub struct IncrementalBackupPoint {
 
 pub struct BackupScheduler {
     schedule: BackupSchedule,
-    storage_path: PathBuf,
+    _storage_path: PathBuf,
     backup_path: PathBuf,
     wal_path: PathBuf,
     current_lsn: Arc<Mutex<u64>>,
@@ -67,7 +62,7 @@ impl BackupScheduler {
     pub fn new(storage_path: PathBuf, backup_path: PathBuf, wal_path: PathBuf) -> Self {
         Self {
             schedule: BackupSchedule::default(),
-            storage_path,
+            _storage_path: storage_path,
             backup_path,
             wal_path,
             current_lsn: Arc::new(Mutex::new(0)),
@@ -430,7 +425,7 @@ impl WalBackupManager {
             .read_from(start_lsn)
             .map_err(|e| SqlError::IoError(e.to_string()))?;
 
-        let mut file = File::create(archive_path).map_err(|e| SqlError::IoError(e.to_string()))?;
+        let file = File::create(archive_path).map_err(|e| SqlError::IoError(e.to_string()))?;
         let mut writer = BufWriter::new(file);
         let mut bytes_written = 0u64;
 

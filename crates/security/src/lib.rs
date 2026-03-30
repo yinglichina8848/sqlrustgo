@@ -16,8 +16,8 @@ pub mod session;
 pub mod tls;
 
 pub use alert::{
-    Alert, AlertConfig, AlertError, AlertManager, AlertStats, AlertType, SharedAlertManager,
-    create_shared_alert_manager,
+    create_shared_alert_manager, Alert, AlertConfig, AlertError, AlertManager, AlertStats,
+    AlertType, SharedAlertManager,
 };
 pub use audit::{AuditConfig, AuditEvent, AuditFilter, AuditManager, AuditRecord, AuditStats};
 pub use cancel::{check_cancel, CancelGuard, CancelToken, SqlError};

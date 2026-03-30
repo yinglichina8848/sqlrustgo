@@ -2,10 +2,8 @@
 //!
 //! Monitors master health, performs leader election, and promotes slaves.
 
-use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -167,7 +165,7 @@ impl FailoverManager {
     }
 
     pub fn get_current_master(&self) -> Option<SocketAddr> {
-        self.current_master.read().unwrap().clone()
+        *self.current_master.read().unwrap()
     }
 
     pub fn is_leader(&self) -> bool {
@@ -243,7 +241,7 @@ impl FailoverManager {
         Ok(new_master)
     }
 
-    fn check_master_health(&self, master_addr: SocketAddr) -> bool {
+    fn _check_master_health(&self, master_addr: SocketAddr) -> bool {
         TcpStream::connect_timeout(&master_addr, Duration::from_secs(1)).is_ok()
     }
 
@@ -288,7 +286,7 @@ fn failover_monitor_loop(
     node_type: Arc<AtomicBool>,
 ) {
     while is_running.load(Ordering::SeqCst) {
-        let master = current_master.read().unwrap().clone();
+        let master = *current_master.read().unwrap();
 
         if let Some(master_addr) = master {
             let healthy = TcpStream::connect_timeout(&master_addr, Duration::from_secs(1)).is_ok();
@@ -297,7 +295,7 @@ fn failover_monitor_loop(
                 eprintln!("Master {} is unreachable", master_addr);
                 callback.on_node_unhealthy(master_addr);
 
-                let mut failures = this_mut(&state, |s| {
+                let failures = this_mut(&state, |s| {
                     if *s == FailoverState::Normal {
                         *s = FailoverState::MasterUnreachable;
                     }
@@ -339,8 +337,7 @@ where
 {
     let guard = arc.write().unwrap();
     let mut val = guard.clone();
-    let result = f(&mut val);
-    result
+    f(&mut val)
 }
 
 impl Clone for FailoverManager {
