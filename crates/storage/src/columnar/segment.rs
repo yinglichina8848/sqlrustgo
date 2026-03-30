@@ -287,9 +287,14 @@ impl ColumnSegment {
             serde_json::to_vec(values).map_err(|e| SegmentError::Serialization(e.to_string()))?;
 
         // Serialize bitmap
-        let bitmap_data = null_bitmap.map(|b| b.bits.clone()).unwrap_or_default();
-        let bitmap_json = serde_json::to_vec(&bitmap_data)
-            .map_err(|e| SegmentError::Serialization(e.to_string()))?;
+        let bitmap_json = match null_bitmap {
+            Some(b) => {
+                let bitmap_data = b.bits.clone();
+                Some(serde_json::to_vec(&bitmap_data)
+                    .map_err(|e| SegmentError::Serialization(e.to_string()))?)
+            }
+            None => None,
+        };
 
         // Apply compression if needed
         let (compressed_data, actual_compression) = match self.compression {
@@ -318,7 +323,7 @@ impl ColumnSegment {
             num_values: values.len() as u64,
             compression: actual_compression,
             stats: self.stats.clone(),
-            bitmap_size: bitmap_json.len() as u64,
+            bitmap_size: bitmap_json.as_ref().map(|b| b.len()).unwrap_or(0) as u64,
             data_size: values_json.len() as u64,
             compressed_size: compressed_data.len() as u64,
         };
@@ -334,9 +339,13 @@ impl ColumnSegment {
         file.write_all(&header_json)?;
 
         // Write bitmap length and data
-        let bitmap_len = bitmap_json.len() as u32;
-        file.write_all(&bitmap_len.to_le_bytes())?;
-        file.write_all(&bitmap_json)?;
+        if let Some(ref bitmap_bytes) = bitmap_json {
+            let bitmap_len = bitmap_bytes.len() as u32;
+            file.write_all(&bitmap_len.to_le_bytes())?;
+            file.write_all(bitmap_bytes)?;
+        } else {
+            file.write_all(&0u32.to_le_bytes())?;
+        };
 
         // Write data length and data
         let data_len = compressed_data.len() as u32;

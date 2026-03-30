@@ -449,28 +449,43 @@ impl AuthManager {
 
     fn has_direct_privilege(&self, user_id: u64, privilege: Privilege, object: &ObjectRef) -> bool {
         self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::User
+            (g.grantee_type == GranteeType::User
                 && g.grantee_id == user_id
                 && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
+                && self.matches_object(&g.object_type, &g.object_name, object))
+            || (g.privilege == Privilege::All
+                && g.grantee_id == user_id
+                && g.object_type == ObjectType::Database
+                && g.object_name == "*"
+                && g.privilege.implies(privilege))
         })
     }
 
     fn has_role_privilege(&self, role_id: u64, privilege: Privilege, object: &ObjectRef) -> bool {
         self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::Role
+            (g.grantee_type == GranteeType::Role
                 && g.grantee_id == role_id
                 && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
+                && self.matches_object(&g.object_type, &g.object_name, object))
+            || (g.privilege == Privilege::All
+                && g.grantee_id == role_id
+                && g.object_type == ObjectType::Database
+                && g.object_name == "*"
+                && g.privilege.implies(privilege))
         })
     }
 
     fn has_public_privilege(&self, privilege: Privilege, object: &ObjectRef) -> bool {
         self.privileges.iter().any(|g| {
-            g.grantee_type == GranteeType::Role
+            (g.grantee_type == GranteeType::Role
                 && g.grantee_id == 0
                 && g.privilege.implies(privilege)
-                && self.matches_object(&g.object_type, &g.object_name, object)
+                && self.matches_object(&g.object_type, &g.object_name, object))
+            || (g.privilege == Privilege::All
+                && g.grantee_id == 0
+                && g.object_type == ObjectType::Database
+                && g.object_name == "*"
+                && g.privilege.implies(privilege))
         })
     }
 
