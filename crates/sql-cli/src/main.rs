@@ -159,14 +159,19 @@ fn execute_sql(
     // Update session activity
     session_manager.update_activity(current_session_id);
 
-    // For now, implement simple execution for SELECT queries
     match statement {
-        Statement::Select(select) => execute_select(&select, storage),
+        Statement::Select(select) => {
+            if select.table == "information_schema.processlist" {
+                execute_information_schema_processlist(session_manager, current_session_id)
+            } else {
+                execute_select(&select, storage)
+            }
+        }
         Statement::Insert(insert) => execute_insert(&insert, storage),
         Statement::CreateTable(create) => execute_create_table(&create, storage),
         Statement::DropTable(drop) => execute_drop_table(&drop, storage),
         Statement::ShowStatus => execute_show_status(storage),
-        Statement::ShowProcesslist => execute_show_processlist(session_manager),
+        Statement::ShowProcesslist => execute_show_processlist(session_manager, current_session_id),
         Statement::Kill(kill) => execute_kill(&kill, session_manager, current_session_id),
         _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST, KILL are supported".to_string()),
     }
@@ -432,7 +437,20 @@ fn execute_show_status(storage: &dyn StorageEngine) -> Result<ExecutorResult, St
 }
 
 /// Execute SHOW PROCESSLIST statement
-fn execute_show_processlist(session_manager: &SessionManager) -> Result<ExecutorResult, String> {
+fn execute_show_processlist(
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
+
+    if !current_session.can_view_processlist() {
+        return Err(
+            "Access denied: you need PROCESS or SUPER privilege to view processlist".to_string(),
+        );
+    }
+
     let mut rows = Vec::new();
 
     // Get all active sessions from SessionManager
@@ -477,6 +495,64 @@ fn execute_show_processlist(session_manager: &SessionManager) -> Result<Executor
     Ok(ExecutorResult::new(rows, 0))
 }
 
+/// Execute SELECT * FROM information_schema.processlist
+fn execute_information_schema_processlist(
+    session_manager: &SessionManager,
+    current_session_id: u64,
+) -> Result<ExecutorResult, String> {
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
+
+    if !current_session.can_view_processlist() {
+        return Err(
+            "Access denied: you need PROCESS or SUPER privilege to view processlist".to_string(),
+        );
+    }
+
+    let mut rows = Vec::new();
+
+    let sessions = session_manager.get_active_sessions();
+
+    if sessions.is_empty() {
+        rows.push(vec![
+            Value::Text("0".to_string()),
+            Value::Text("system".to_string()),
+            Value::Text("localhost".to_string()),
+            Value::Text("".to_string()),
+            Value::Text("Daemon".to_string()),
+            Value::Text("0".to_string()),
+            Value::Text("".to_string()),
+            Value::Text("".to_string()),
+        ]);
+    } else {
+        for session in sessions {
+            let command = match session.status {
+                sqlrustgo_security::SessionStatus::Active => "Query",
+                sqlrustgo_security::SessionStatus::Idle => "Sleep",
+                sqlrustgo_security::SessionStatus::Closing => "Closing",
+                sqlrustgo_security::SessionStatus::Closed => "Dead",
+            };
+
+            let time = session.idle_time_seconds().to_string();
+            let db = session.database.clone().unwrap_or_default();
+
+            rows.push(vec![
+                Value::Text(session.id.to_string()),
+                Value::Text(session.user.clone()),
+                Value::Text(session.ip.clone()),
+                Value::Text(db),
+                Value::Text(command.to_string()),
+                Value::Text(time),
+                Value::Text("".to_string()),
+                Value::Text("".to_string()),
+            ]);
+        }
+    }
+
+    Ok(ExecutorResult::new(rows, 0))
+}
+
 /// Execute KILL statement
 fn execute_kill(
     kill: &KillStatement,
@@ -489,6 +565,11 @@ fn execute_kill(
     };
 
     let target_session_id = kill.process_id;
+
+    // Get current session for privilege check
+    let current_session = session_manager
+        .get_session(current_session_id)
+        .ok_or_else(|| "Not in a valid session".to_string())?;
 
     // Cannot kill self
     if target_session_id == current_session_id {
@@ -506,13 +587,12 @@ fn execute_kill(
 
     let target_session = target_session.unwrap();
 
-    // Permission check: can only kill own sessions without SUPER privilege
-    // In a real implementation, we would check for SUPER privilege
-    // For now, in single-user CLI mode, we allow killing only if it's our own session
-    // but the above check already prevents that
-    if target_session.user != "sqlrustgo" {
+    // Permission check: can kill if current user has SUPER privilege
+    // or if killing own session (same user)
+    let is_own_session = target_session.user == current_session.user;
+    if !is_own_session && !current_session.can_kill() {
         return Err(format!(
-            "Access denied: cannot KILL {} {} (not owner and SUPER privilege not implemented)",
+            "Access denied: cannot KILL {} {} (need SUPER privilege to kill other user's sessions)",
             kill_type_str, target_session_id
         ));
     }
@@ -522,20 +602,22 @@ fn execute_kill(
         KillType::Connection => {
             // Close the entire connection
             log::info!(
-                "KILL CONNECTION {} - closing session (user: {}, ip: {})",
+                "KILL CONNECTION {} - closing session (user: {}, ip: {}) by {}",
                 target_session_id,
                 target_session.user,
-                target_session.ip
+                target_session.ip,
+                current_session.user
             );
             session_manager.close_session(target_session_id);
         }
         KillType::Query => {
             // Just interrupt the query, keep connection alive
             log::info!(
-                "KILL QUERY {} - interrupting query in session (user: {}, ip: {})",
+                "KILL QUERY {} - interrupting query in session (user: {}, ip: {}) by {}",
                 target_session_id,
                 target_session.user,
-                target_session.ip
+                target_session.ip,
+                current_session.user
             );
             // In a real implementation, we would signal the query to interrupt
             // For now, we just log it

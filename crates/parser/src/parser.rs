@@ -328,6 +328,18 @@ pub enum Privilege {
     Read,
     Write,
     All,
+    Process,
+    Super,
+}
+
+impl Privilege {
+    pub fn can_kill(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::All)
+    }
+
+    pub fn can_view_processlist(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::Process | Privilege::All)
+    }
 }
 
 /// Join type
@@ -954,7 +966,25 @@ impl Parser {
         self.expect(Token::From)?;
 
         let table = match self.next() {
-            Some(Token::Identifier(name)) => name,
+            Some(Token::Identifier(name)) => {
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::Identifier(table_name)) => {
+                            format!("{}.{}", name, table_name)
+                        }
+                        Some(Token::Processlist) => {
+                            format!("{}.processlist", name)
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected table name after dot, got {:?}", t))
+                        }
+                        None => return Err("Expected table name after dot".to_string()),
+                    }
+                } else {
+                    name
+                }
+            }
             Some(t) => return Err(format!("Expected table name, got {:?}", t)),
             None => return Err("Expected table name".to_string()),
         };
