@@ -202,3 +202,35 @@ fn test_processlist_row_with_database() {
     let row = session.to_processlist_row();
     assert_eq!(row.db, Some("testdb".to_string()));
 }
+
+#[test]
+fn test_parse_information_schema_processlist() {
+    let result = parse("SELECT * FROM information_schema.processlist");
+    assert!(result.is_ok());
+
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "information_schema.processlist");
+            assert_eq!(s.columns.len(), 1);
+            assert_eq!(s.columns[0].name, "*");
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_information_schema_processlist_with_columns() {
+    let result = parse("SELECT ID, USER, HOST FROM information_schema.processlist");
+    assert!(result.is_ok());
+
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "information_schema.processlist");
+            assert_eq!(s.columns.len(), 3);
+            assert_eq!(s.columns[0].name, "ID");
+            assert_eq!(s.columns[1].name, "USER");
+            assert_eq!(s.columns[2].name, "HOST");
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
