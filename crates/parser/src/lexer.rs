@@ -377,6 +377,9 @@ impl<'a> Lexer<'a> {
                     "COPY" => Token::Copy,
                     "FORMAT" => Token::Format,
                     "PARQUET" => Token::Parquet,
+                    "KILL" => Token::Kill,
+                    "CONNECTION" => Token::Connection,
+                    "QUERY" => Token::Query,
                     _ => Token::Identifier(ident),
                 }
             }

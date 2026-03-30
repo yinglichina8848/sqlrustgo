@@ -15,6 +15,7 @@ members = [
     "crates/server",
     "crates/telemetry",
     "crates/network",
+    "crates/agentsql",
     "crates/bench",
     "crates/bench-cli",
     "crates/sql-cli",
@@ -88,6 +89,7 @@ clap = { version = "4.0", features = ["derive"] }
 proptest = "1.1"
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-transaction = { path = "crates/transaction" }
+sqlrustgo-security = { path = "crates/security" }
 
 [package]
 name = "sqlrustgo"
@@ -384,6 +386,10 @@ path = "tests/integration/distributed_transaction_test.rs"
 [[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
+
+[[test]]
+name = "mysql_compatibility_test"
+path = "tests/integration/mysql_compatibility_test.rs"
 
 [[test]]
 name = "columnar_storage_test"
