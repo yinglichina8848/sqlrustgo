@@ -45,6 +45,8 @@ pub enum Statement {
     Revoke(RevokeStatement),
     ShowStatus,
     ShowProcesslist,
+    /// KILL [CONNECTION | QUERY] processlist_id
+    Kill(KillStatement),
     /// PREPARE stmt FROM 'sql text'
     Prepare(PrepareStatement),
     /// EXECUTE stmt USING param1, param2, ...
@@ -77,6 +79,19 @@ pub struct ExecuteStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeallocatePrepareStatement {
     pub name: String,
+}
+
+/// KILL statement - KILL [CONNECTION | QUERY] processlist_id
+#[derive(Debug, Clone, PartialEq)]
+pub struct KillStatement {
+    pub process_id: u64,
+    pub kill_type: KillType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum KillType {
+    Connection,
+    Query,
 }
 
 /// COPY statement - COPY table FROM 'path' (FORMAT PARQUET) or COPY table TO 'path' (FORMAT PARQUET)
@@ -592,6 +607,7 @@ impl Parser {
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
+            Some(Token::Kill) => self.parse_kill(),
             Some(Token::Prepare) => self.parse_prepare(),
             Some(Token::Execute) => self.parse_execute(),
             Some(Token::Deallocate) => self.parse_deallocate(),
@@ -2837,6 +2853,39 @@ impl Parser {
         }
     }
 
+    /// Parse KILL statement: KILL [CONNECTION | QUERY] process_id
+    fn parse_kill(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Kill)?;
+
+        let kill_type = match self.current() {
+            Some(Token::Connection) => {
+                self.next();
+                KillType::Connection
+            }
+            Some(Token::Query) => {
+                self.next();
+                KillType::Query
+            }
+            _ => KillType::Connection,
+        };
+
+        let process_id = match self.current() {
+            Some(Token::NumberLiteral(id)) => {
+                let id_str = id.clone();
+                self.next();
+                id_str
+                    .parse::<u64>()
+                    .map_err(|_| format!("Invalid process ID: {}", id_str))?
+            }
+            _ => return Err("Expected process ID after KILL".to_string()),
+        };
+
+        Ok(Statement::Kill(KillStatement {
+            process_id,
+            kill_type,
+        }))
+    }
+
     /// Parse PREPARE statement: PREPARE stmt FROM 'sql text'
     fn parse_prepare(&mut self) -> Result<Statement, String> {
         self.expect(Token::Prepare)?;
@@ -4221,6 +4270,49 @@ mod tests {
         match result.unwrap() {
             Statement::ShowProcesslist => {}
             _ => panic!("Expected SHOW PROCESSLIST statement"),
+        }
+    }
+
+    // ========================================================================
+    // KILL Statement Tests (Issue #1135 - MySQL Compatibility)
+    // ========================================================================
+
+    #[test]
+    fn test_parse_kill_connection() {
+        let result = parse("KILL 12345");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Kill(k) => {
+                assert_eq!(k.process_id, 12345);
+                assert_eq!(k.kill_type, KillType::Connection);
+            }
+            _ => panic!("Expected KILL statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_kill_connection_explicit() {
+        let result = parse("KILL CONNECTION 12345");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Kill(k) => {
+                assert_eq!(k.process_id, 12345);
+                assert_eq!(k.kill_type, KillType::Connection);
+            }
+            _ => panic!("Expected KILL CONNECTION statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_kill_query() {
+        let result = parse("KILL QUERY 12345");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::Kill(k) => {
+                assert_eq!(k.process_id, 12345);
+                assert_eq!(k.kill_type, KillType::Query);
+            }
+            _ => panic!("Expected KILL QUERY statement"),
         }
     }
 
