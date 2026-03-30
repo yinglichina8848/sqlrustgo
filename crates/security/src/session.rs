@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -13,6 +14,12 @@ pub enum SessionStatus {
     Idle,
     Closing,
     Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionPrivilege {
+    Process,
+    Super,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +32,7 @@ pub struct Session {
     pub status: SessionStatus,
     pub database: Option<String>,
     pub connection_id: u64,
+    pub privileges: HashSet<SessionPrivilege>,
 }
 
 impl Session {
@@ -39,6 +47,7 @@ impl Session {
             status: SessionStatus::Active,
             database: None,
             connection_id: 0,
+            privileges: HashSet::new(),
         }
     }
 
@@ -47,6 +56,27 @@ impl Session {
         if self.status == SessionStatus::Idle {
             self.status = SessionStatus::Active;
         }
+    }
+
+    pub fn has_privilege(&self, privilege: SessionPrivilege) -> bool {
+        self.privileges.contains(&privilege)
+    }
+
+    pub fn grant_privilege(&mut self, privilege: SessionPrivilege) {
+        self.privileges.insert(privilege);
+    }
+
+    pub fn revoke_privilege(&mut self, privilege: SessionPrivilege) {
+        self.privileges.remove(&privilege);
+    }
+
+    pub fn can_kill(&self) -> bool {
+        self.privileges.contains(&SessionPrivilege::Super)
+    }
+
+    pub fn can_view_processlist(&self) -> bool {
+        self.privileges.contains(&SessionPrivilege::Super)
+            || self.privileges.contains(&SessionPrivilege::Process)
     }
 
     pub fn set_idle(&mut self) {

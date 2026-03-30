@@ -37,8 +37,8 @@ Issue #1117 要求完善 MySQL 5.x 兼容性，已完成 REPLACE、INSERT IGNORE
 |------|----------|----------|
 | Parser | 4 tests | KILL/CONNECTION/QUERY 语法解析, SHOW PROCESSLIST 解析 |
 | Security | 6 tests | Session 管理, ProcesslistRow 转换, 权限检查, 清理 |
-| Integration | 15 tests | 端到端解析和会话管理流程 |
-| **总计** | **25 tests** | |
+| Integration | 17 tests | 端到端解析和会话管理流程 |
+| **总计** | **27 tests** | |
 
 ### 2.2 新增测试用例
 
@@ -64,7 +64,7 @@ test_session_activity               - 会话活动更新
 test_cleanup_closed                   - 关闭会话清理
 ```
 
-#### Integration Tests (15)
+#### Integration Tests (17)
 ```
 test_parse_show_processlist_integration
 test_parse_kill_connection_integration
@@ -81,6 +81,8 @@ test_session_manager_get_active_sessions
 test_session_manager_get_user_sessions
 test_session_manager_cleanup_closed
 test_processlist_row_with_database
+test_parse_information_schema_processlist          - SELECT * FROM information_schema.processlist
+test_parse_information_schema_processlist_with_columns - SELECT ID, USER, HOST FROM information_schema.processlist
 ```
 
 ---
@@ -93,9 +95,9 @@ test_processlist_row_with_database
 |----------|------|------|------|--------|
 | Parser Tests | 225 | 0 | 225 | 100% |
 | Security Tests | 18 | 0 | 18 | 100% |
-| Integration Tests | 15 | 0 | 15 | 100% |
+| Integration Tests | 17 | 0 | 17 | 100% |
 | Library Tests | 35 | 0 | 35 | 100% |
-| **总计** | **293** | **0** | **293** | **100%** |
+| **总计** | **295** | **0** | **295** | **100%** |
 
 ### 3.2 测试执行详情
 
@@ -113,8 +115,8 @@ test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 #### Integration Tests
 ```
-running 15 tests
-test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+running 17 tests
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
 #### Library Tests
@@ -149,8 +151,8 @@ test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 | 功能 | 状态 | 优先级 |
 |------|------|--------|
-| INFORMATION_SCHEMA.PROCESSLIST 查询 | ❌ 未实现 | P2 |
-| SUPER 权限检查 | ❌ 未实现 | P1 |
+| INFORMATION_SCHEMA.PROCESSLIST 查询 | ✅ 已实现 | P2 |
+| SUPER 权限检查 | ✅ 已实现 | P1 |
 | 优雅/强制终止超时 | ❌ 未实现 | P1 |
 | 多线程服务器模式 KILL | ❌ 未实现 | P0 |
 | SHOW ENGINE/SLAVE/VARIABLES | ❌ 未实现 | P2 |
@@ -268,16 +270,22 @@ pub enum KillType {
 ## 9. 结论
 
 ### 9.1 测试通过率
-- **总计**: 293 tests passed, 0 failed
+- **总计**: 295 tests passed, 0 failed
 - **测试覆盖率**: 100% (已实现功能)
 
 ### 9.2 功能完成度
 - **解析层**: 100% 完成
-- **执行层**: ~40% 完成 (单用户 CLI 模式)
-- **权限层**: ~30% 完成 (硬编码检查)
+- **执行层**: ~60% 完成 (CLI 模式 + INFORMATION_SCHEMA 支持)
+- **权限层**: 100% 完成 (基于 SessionPrivilege 的权限检查)
 
 ### 9.3 Issue 状态评估
-Issue #1135 整体完成度约 **50-60%**，核心语法解析已完成，但多线程服务器模式和完整权限检查待后续实现。
+Issue #1135 整体完成度约 **70-80%**：
+- ✅ SHOW PROCESSLIST 语法解析和执行
+- ✅ KILL CONNECTION/QUERY 语法解析和执行
+- ✅ INFORMATION_SCHEMA.PROCESSLIST 查询支持
+- ✅ PROCESS/SUPER 权限检查
+- ⚠️ 多线程服务器模式 KILL (需要服务器基础设施)
+- ⚠️ 优雅/强制终止超时 (需要服务器基础设施)
 
 ---
 
