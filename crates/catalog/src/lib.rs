@@ -11,11 +11,12 @@ mod index;
 mod rebuild;
 mod schema;
 mod stored_proc;
+mod system_tables;
 mod table;
 
 pub use auth::{
     AuthError, AuthManager, AuthResult, GranteeType, ObjectRef, ObjectType, Privilege,
-    PrivilegeGrant, Role, User, UserRole,
+    PrivilegeGrant, Role, ScramCredential, User, UserAuthInfo, UserIdentity, UserRole,
 };
 pub use column::ColumnDefinition;
 pub use data_type::DataType;
@@ -23,6 +24,7 @@ pub use error::{CatalogError, CatalogResult};
 pub use index::{IndexInfo, IndexType};
 pub use schema::Schema;
 pub use stored_proc::{ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure};
+pub use system_tables::{MysqlDbTable, MysqlUserTable};
 pub use table::{ForeignKeyAction, ForeignKeyRef, Table, TableRef};
 
 use serde::{Deserialize, Serialize};
