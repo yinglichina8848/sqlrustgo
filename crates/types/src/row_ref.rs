@@ -508,9 +508,15 @@ mod tests {
 
         assert_eq!(row_ref.num_cols(), Some(5));
         assert_eq!(row_ref.get_column(0, &schema), Some(Value::Integer(1)));
-        assert_eq!(row_ref.get_column(1, &schema), Some(Value::Text("first".to_string())));
+        assert_eq!(
+            row_ref.get_column(1, &schema),
+            Some(Value::Text("first".to_string()))
+        );
         assert_eq!(row_ref.get_column(2, &schema), Some(Value::Integer(2)));
-        assert_eq!(row_ref.get_column(3, &schema), Some(Value::Text("second".to_string())));
+        assert_eq!(
+            row_ref.get_column(3, &schema),
+            Some(Value::Text("second".to_string()))
+        );
         assert_eq!(row_ref.get_column(4, &schema), Some(Value::Boolean(true)));
     }
 
@@ -523,7 +529,10 @@ mod tests {
         let encoded = encode_row(&values);
         let row_ref = RowRef::from_bytes(&encoded);
 
-        assert_eq!(row_ref.get_column(0, &schema), Some(Value::Text(large_text)));
+        assert_eq!(
+            row_ref.get_column(0, &schema),
+            Some(Value::Text(large_text))
+        );
     }
 
     #[test]
@@ -535,7 +544,10 @@ mod tests {
         let encoded = encode_row(&values);
         let row_ref = RowRef::from_bytes(&encoded);
 
-        assert_eq!(row_ref.get_column(0, &schema), Some(Value::Blob(large_blob)));
+        assert_eq!(
+            row_ref.get_column(0, &schema),
+            Some(Value::Blob(large_blob))
+        );
     }
 
     #[test]
@@ -548,7 +560,10 @@ mod tests {
         let row_ref = RowRef::from_bytes(truncated);
 
         // Should return Null due to truncated data
-        assert_eq!(row_ref.get_column(0, &vec![ColumnType::Text]), Some(Value::Null));
+        assert_eq!(
+            row_ref.get_column(0, &vec![ColumnType::Text]),
+            Some(Value::Null)
+        );
     }
 
     #[test]
@@ -582,19 +597,24 @@ mod tests {
         assert_eq!(row_ref.get_column(1, &schema), Some(Value::Boolean(true)));
         assert_eq!(row_ref.get_column(2, &schema), Some(Value::Integer(42)));
         assert_eq!(row_ref.get_column(3, &schema), Some(Value::Float(3.14)));
-        assert_eq!(row_ref.get_column(4, &schema), Some(Value::Text("hello".to_string())));
-        assert_eq!(row_ref.get_column(5, &schema), Some(Value::Blob(vec![0xDE, 0xAD])));
+        assert_eq!(
+            row_ref.get_column(4, &schema),
+            Some(Value::Text("hello".to_string()))
+        );
+        assert_eq!(
+            row_ref.get_column(5, &schema),
+            Some(Value::Blob(vec![0xDE, 0xAD]))
+        );
         assert_eq!(row_ref.get_column(6, &schema), Some(Value::Date(19780)));
-        assert_eq!(row_ref.get_column(7, &schema), Some(Value::Timestamp(1_000_000)));
+        assert_eq!(
+            row_ref.get_column(7, &schema),
+            Some(Value::Timestamp(1_000_000))
+        );
     }
 
     #[test]
     fn test_vec_column_type_impl() {
-        let schema: Vec<ColumnType> = vec![
-            ColumnType::Integer,
-            ColumnType::Text,
-            ColumnType::Null,
-        ];
+        let schema: Vec<ColumnType> = vec![ColumnType::Integer, ColumnType::Text, ColumnType::Null];
         assert_eq!(schema.num_columns(), 3);
         assert_eq!(schema.column_type(0), Some(ColumnType::Integer));
         assert_eq!(schema.column_type(1), Some(ColumnType::Text));
