@@ -272,9 +272,7 @@ pub enum ProcedureStatement {
         body: Vec<ProcedureStatement>,
     },
     /// LOOP statements END LOOP (with optional LEAVE to exit)
-    Loop {
-        body: Vec<ProcedureStatement>,
-    },
+    Loop { body: Vec<ProcedureStatement> },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
@@ -2556,67 +2554,8 @@ impl Parser {
         // Parse BEGIN...END block
         self.expect(Token::Begin)?;
 
-        let mut body = Vec::new();
-
-        // Simple body parsing: collect statements until END
-        // Note: This is a simplified implementation that stores raw SQL for now
-        while self.current().is_some()
-            && !matches!(self.current(), Some(Token::Identifier(end_str)) 
-                       if end_str.to_uppercase() == "END")
-        {
-            let stmt = match self.current() {
-                Some(Token::Select) => {
-                    // For now, just collect SELECT statements as raw SQL
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Set) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Identifier(_)) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Semicolon) => {
-                    self.next();
-                    continue;
-                }
-                Some(Token::If) => {
-                    let raw_sql = self.collect_until_end_if();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::While) => {
-                    let raw_sql = self.collect_until_end_loop();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Loop) => {
-                    let raw_sql = self.collect_until_end_loop();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Leave) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Iterate) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Signal) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                Some(Token::Return) => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-                _ => {
-                    let raw_sql = self.collect_until_semicolon();
-                    ProcedureStatement::RawSql(raw_sql)
-                }
-            };
-            body.push(stmt);
-        }
+        // Use parse_procedure_body for proper control flow parsing
+        let body = self.parse_procedure_body()?;
 
         // Expect END
         if matches!(self.current(), Some(Token::Identifier(end_str)) 
@@ -2643,11 +2582,11 @@ impl Parser {
             {
                 break;
             }
-            
+
             if self.current().is_none() {
                 break;
             }
-            
+
             match self.parse_procedure_statement() {
                 Ok(stmt) => {
                     // Skip empty statements
@@ -2705,7 +2644,7 @@ impl Parser {
     /// Parse DECLARE variable statement
     fn parse_procedure_declare(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Declare)?;
-        
+
         // Variable name
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
@@ -2731,9 +2670,11 @@ impl Parser {
         };
 
         // Optional DEFAULT value
-        let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT") {
+        let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT")
+        {
             self.next();
-            Some(self.collect_until_semicolon().trim().to_string())
+            let value = self.collect_until_semicolon().trim().to_string();
+            Some(value)
         } else {
             self.expect(Token::Semicolon)?;
             None
@@ -2799,10 +2740,7 @@ impl Parser {
         self.expect_token_case_insensitive("END")?;
         self.expect_token_case_insensitive("WHILE")?;
 
-        Ok(ProcedureStatement::While {
-            condition,
-            body,
-        })
+        Ok(ProcedureStatement::While { condition, body })
     }
 
     /// Parse LOOP ... END LOOP statement
@@ -2814,9 +2752,7 @@ impl Parser {
         self.expect_token_case_insensitive("END")?;
         self.expect_token_case_insensitive("LOOP")?;
 
-        Ok(ProcedureStatement::Loop {
-            body,
-        })
+        Ok(ProcedureStatement::Loop { body })
     }
 
     /// Parse LEAVE label statement
@@ -2876,7 +2812,8 @@ impl Parser {
         }
 
         // Optional INTO variable
-        let into_var = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "INTO") {
+        let into_var = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "INTO")
+        {
             self.next();
             match self.next() {
                 Some(Token::Identifier(name)) => Some(name),
@@ -2902,25 +2839,22 @@ impl Parser {
             Some(Token::Identifier(id)) => id,
             _ => return Err("Expected variable name".to_string()),
         };
-        
+
         // Handle = or := assignment
         if matches!(self.current(), Some(Token::Equal)) {
             self.next();
         }
-        
+
         let value = self.collect_until_semicolon();
-        
-        Ok(ProcedureStatement::Set {
-            variable,
-            value,
-        })
+
+        Ok(ProcedureStatement::Set { variable, value })
     }
 
     /// Collect tokens until one of the specified tokens is encountered
     fn collect_until_token(&mut self, tokens: &[Token]) -> String {
         let mut result = String::new();
         let mut paren_depth = 0;
-        
+
         loop {
             match self.current() {
                 None => break,
@@ -5081,7 +5015,8 @@ fn test_parse_select_with_group_by() {
 
 #[test]
 fn test_parse_select_with_having() {
-    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
+    let result =
+        parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
         Statement::Select(s) => {
