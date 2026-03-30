@@ -338,6 +338,7 @@ impl<'a> Lexer<'a> {
                     "LEAVE" => Token::Leave,
                     "ITERATE" => Token::Iterate,
                     "SIGNAL" => Token::Signal,
+                    "DECLARE" => Token::Declare,
                     "DELIMITER" => Token::Delimiter,
                     "VIEW" => Token::View,
                     "AS" => Token::As,
