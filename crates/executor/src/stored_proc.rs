@@ -60,7 +60,8 @@ impl ProcedureContext {
 
     /// Get any variable (local first, then session)
     pub fn get_var(&self, name: &str) -> Option<&Value> {
-        self.local_variables.get(name)
+        self.local_variables
+            .get(name)
             .or_else(|| self.session_variables.get(name))
     }
 
@@ -75,7 +76,11 @@ impl ProcedureContext {
 
     /// Check if a variable exists (local or session)
     pub fn has_var(&self, name: &str) -> bool {
-        let key = if name.starts_with('@') { &name[1..] } else { name };
+        let key = if name.starts_with('@') {
+            &name[1..]
+        } else {
+            name
+        };
         self.local_variables.contains_key(key) || self.session_variables.contains_key(key)
     }
 
@@ -162,7 +167,7 @@ impl StoredProcExecutor {
 
         // Execute the procedure body
         let mut ctx = ProcedureContext::new();
-        
+
         // Bind input parameters to variables
         for (i, param) in procedure.params.iter().enumerate() {
             if i < args.len() {
@@ -175,10 +180,7 @@ impl StoredProcExecutor {
 
         // Check if RETURN was called
         if let Some(value) = ctx.get_return() {
-            return Ok(ExecutorResult::new(
-                vec![vec![value]],
-                1,
-            ));
+            return Ok(ExecutorResult::new(vec![vec![value]], 1));
         }
 
         match result {
@@ -223,7 +225,11 @@ impl StoredProcExecutor {
         ctx: &mut ProcedureContext,
     ) -> Result<(), String> {
         match stmt {
-            StoredProcStatement::Declare { name, default_value, .. } => {
+            StoredProcStatement::Declare {
+                name,
+                default_value,
+                ..
+            } => {
                 // Declare variable with default value
                 let value = default_value
                     .as_ref()
@@ -250,7 +256,12 @@ impl StoredProcExecutor {
                 // SELECT INTO - would need executor access
                 Ok(())
             }
-            StoredProcStatement::If { condition, then_body, elseif_body, else_body } => {
+            StoredProcStatement::If {
+                condition,
+                then_body,
+                elseif_body,
+                else_body,
+            } => {
                 // Evaluate condition
                 if self.evaluate_condition(condition, ctx)? {
                     self.execute_body(then_body, ctx)?;
@@ -272,7 +283,10 @@ impl StoredProcExecutor {
             }
             StoredProcStatement::While { condition, body } => {
                 // While loop
-                while self.evaluate_condition(condition, ctx)? && !ctx.should_leave() && ctx.get_return().is_none() {
+                while self.evaluate_condition(condition, ctx)?
+                    && !ctx.should_leave()
+                    && ctx.get_return().is_none()
+                {
                     ctx.reset_iterate();
                     self.execute_body(body, ctx)?;
                     if ctx.should_iterate() {
@@ -312,15 +326,19 @@ impl StoredProcExecutor {
                 ctx.set_return(ret_val);
                 Ok(())
             }
-            StoredProcStatement::Call { procedure_name, args, into_var } => {
+            StoredProcStatement::Call {
+                procedure_name,
+                args,
+                into_var,
+            } => {
                 // Nested procedure call
                 let call_args: Vec<Value> = args
                     .iter()
                     .map(|a| self.evaluate_expression(a, ctx).unwrap_or(Value::Null))
                     .collect();
-                
+
                 let result = self.execute_call(procedure_name, call_args);
-                
+
                 match result {
                     Ok(exec_result) => {
                         if let Some(var_name) = into_var {
@@ -342,20 +360,20 @@ impl StoredProcExecutor {
     fn evaluate_condition(&self, condition: &str, ctx: &ProcedureContext) -> Result<bool, String> {
         // Simple condition evaluation for comparison operators
         let cond = condition.trim();
-        
+
         // Handle "variable op value" comparisons
         for &op in &["<=", ">=", "!=", "<>", "=", "<", ">"] {
             if let Some(pos) = cond.find(op) {
                 let left = cond[..pos].trim();
                 let right = cond[pos + op.len()..].trim();
-                
+
                 let left_val = self.expand_variable(left, ctx);
                 let right_val = self.evaluate_constant(right);
-                
+
                 return Ok(self.compare_values(&left_val, &right_val, op));
             }
         }
-        
+
         // Default: treat as boolean constant
         Ok(cond != "0" && cond.to_lowercase() != "false" && !cond.is_empty())
     }
@@ -363,12 +381,12 @@ impl StoredProcExecutor {
     /// Evaluate an expression and return a Value
     fn evaluate_expression(&self, expr: &str, ctx: &ProcedureContext) -> Result<Value, String> {
         let expr = expr.trim();
-        
+
         // Handle string literals
         if expr.starts_with('\'') && expr.ends_with('\'') {
-            return Ok(Value::Text(expr[1..expr.len()-1].to_string()));
+            return Ok(Value::Text(expr[1..expr.len() - 1].to_string()));
         }
-        
+
         // Handle numeric literals
         if let Ok(num) = expr.parse::<i64>() {
             return Ok(Value::Integer(num));
@@ -376,7 +394,7 @@ impl StoredProcExecutor {
         if let Ok(float) = expr.parse::<f64>() {
             return Ok(Value::Float(float));
         }
-        
+
         // Handle variables (starting with @)
         if expr.starts_with('@') {
             let var_name = &expr[1..];
@@ -384,18 +402,18 @@ impl StoredProcExecutor {
                 return Ok(val.clone());
             }
         }
-        
+
         // Handle simple arithmetic: var + value, var - value, etc.
         for &op in &["+", "-", "*", "/"] {
             if let Some(pos) = expr.find(op) {
                 if pos > 0 && pos < expr.len() - 1 {
                     let left = self.evaluate_expression(&expr[..pos], ctx)?;
-                    let right = self.evaluate_expression(&expr[pos+1..], ctx)?;
+                    let right = self.evaluate_expression(&expr[pos + 1..], ctx)?;
                     return self.arithmetic_op(&left, &right, op);
                 }
             }
         }
-        
+
         // Default: return as text
         Ok(Value::Text(expr.to_string()))
     }
@@ -403,7 +421,7 @@ impl StoredProcExecutor {
     /// Expand a variable reference to its value
     fn expand_variable(&self, name: &str, ctx: &ProcedureContext) -> Value {
         let name = name.trim();
-        
+
         // Handle @variable syntax
         if name.starts_with('@') {
             let var_name = &name[1..];
@@ -419,12 +437,12 @@ impl StoredProcExecutor {
     /// Evaluate a constant expression
     fn evaluate_constant(&self, value: &str) -> Value {
         let value = value.trim();
-        
+
         // Handle string literals
         if value.starts_with('\'') && value.ends_with('\'') {
-            return Value::Text(value[1..value.len()-1].to_string());
+            return Value::Text(value[1..value.len() - 1].to_string());
         }
-        
+
         // Handle numeric literals
         if let Ok(num) = value.parse::<i64>() {
             return Value::Integer(num);
@@ -432,12 +450,12 @@ impl StoredProcExecutor {
         if let Ok(float) = value.parse::<f64>() {
             return Value::Float(float);
         }
-        
+
         // Handle NULL
         if value.to_uppercase() == "NULL" {
             return Value::Null;
         }
-        
+
         // Handle boolean literals
         if value.to_uppercase() == "TRUE" {
             return Value::Boolean(true);
@@ -445,7 +463,7 @@ impl StoredProcExecutor {
         if value.to_uppercase() == "FALSE" {
             return Value::Boolean(false);
         }
-        
+
         Value::Text(value.to_string())
     }
 
@@ -455,9 +473,15 @@ impl StoredProcExecutor {
             "=" | "==" => left == right,
             "!=" | "<>" => left != right,
             ">" => self.partial_cmp(left, right) == Some(std::cmp::Ordering::Greater),
-            ">=" => matches!(self.partial_cmp(left, right), Some(std::cmp::Ordering::Greater) | Some(std::cmp::Ordering::Equal)),
+            ">=" => matches!(
+                self.partial_cmp(left, right),
+                Some(std::cmp::Ordering::Greater) | Some(std::cmp::Ordering::Equal)
+            ),
             "<" => self.partial_cmp(left, right) == Some(std::cmp::Ordering::Less),
-            "<=" => matches!(self.partial_cmp(left, right), Some(std::cmp::Ordering::Less) | Some(std::cmp::Ordering::Equal)),
+            "<=" => matches!(
+                self.partial_cmp(left, right),
+                Some(std::cmp::Ordering::Less) | Some(std::cmp::Ordering::Equal)
+            ),
             _ => false,
         }
     }
@@ -465,7 +489,7 @@ impl StoredProcExecutor {
     /// Compare two values (for ordering)
     fn partial_cmp(&self, left: &Value, right: &Value) -> Option<std::cmp::Ordering> {
         use std::cmp::Ordering;
-        
+
         match (left, right) {
             (Value::Null, _) | (_, Value::Null) => None,
             (Value::Integer(l), Value::Integer(r)) => Some(l.cmp(r)),
@@ -499,7 +523,10 @@ impl StoredProcExecutor {
                     Ok(Value::Float(l / r))
                 }
             }
-            _ => Err(format!("Unsupported arithmetic operation: {:?} {} {:?}", left, op, right)),
+            _ => Err(format!(
+                "Unsupported arithmetic operation: {:?} {} {:?}",
+                left, op, right
+            )),
         }
     }
 
@@ -582,7 +609,7 @@ mod tests {
         let executor = StoredProcExecutor::new(catalog);
         let mut ctx = ProcedureContext::new();
         ctx.set_var("x", Value::Integer(10));
-        
+
         // Note: This test requires the condition to reference the variable properly
         // In practice, we'd need proper variable expansion
     }
