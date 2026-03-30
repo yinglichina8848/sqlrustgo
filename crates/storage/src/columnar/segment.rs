@@ -290,8 +290,10 @@ impl ColumnSegment {
         let bitmap_json = match null_bitmap {
             Some(b) => {
                 let bitmap_data = b.bits.clone();
-                Some(serde_json::to_vec(&bitmap_data)
-                    .map_err(|e| SegmentError::Serialization(e.to_string()))?)
+                Some(
+                    serde_json::to_vec(&bitmap_data)
+                        .map_err(|e| SegmentError::Serialization(e.to_string()))?,
+                )
             }
             None => None,
         };

@@ -453,11 +453,11 @@ impl AuthManager {
                 && g.grantee_id == user_id
                 && g.privilege.implies(privilege)
                 && self.matches_object(&g.object_type, &g.object_name, object))
-            || (g.privilege == Privilege::All
-                && g.grantee_id == user_id
-                && g.object_type == ObjectType::Database
-                && g.object_name == "*"
-                && g.privilege.implies(privilege))
+                || (g.privilege == Privilege::All
+                    && g.grantee_id == user_id
+                    && g.object_type == ObjectType::Database
+                    && g.object_name == "*"
+                    && g.privilege.implies(privilege))
         })
     }
 
@@ -467,11 +467,11 @@ impl AuthManager {
                 && g.grantee_id == role_id
                 && g.privilege.implies(privilege)
                 && self.matches_object(&g.object_type, &g.object_name, object))
-            || (g.privilege == Privilege::All
-                && g.grantee_id == role_id
-                && g.object_type == ObjectType::Database
-                && g.object_name == "*"
-                && g.privilege.implies(privilege))
+                || (g.privilege == Privilege::All
+                    && g.grantee_id == role_id
+                    && g.object_type == ObjectType::Database
+                    && g.object_name == "*"
+                    && g.privilege.implies(privilege))
         })
     }
 
@@ -481,11 +481,11 @@ impl AuthManager {
                 && g.grantee_id == 0
                 && g.privilege.implies(privilege)
                 && self.matches_object(&g.object_type, &g.object_name, object))
-            || (g.privilege == Privilege::All
-                && g.grantee_id == 0
-                && g.object_type == ObjectType::Database
-                && g.object_name == "*"
-                && g.privilege.implies(privilege))
+                || (g.privilege == Privilege::All
+                    && g.grantee_id == 0
+                    && g.object_type == ObjectType::Database
+                    && g.object_name == "*"
+                    && g.privilege.implies(privilege))
         })
     }
 

@@ -296,17 +296,23 @@ mod tests {
 
     #[test]
     fn test_add_column() {
-        let table = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)])
-            .add_column(ColumnDefinition::new("name", DataType::Text))
-            .unwrap();
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .add_column(ColumnDefinition::new("name", DataType::Text))
+        .unwrap();
         assert_eq!(table.columns.len(), 2);
         assert!(table.get_column("name").is_some());
     }
 
     #[test]
     fn test_add_column_duplicate_error() {
-        let result = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)])
-            .add_column(ColumnDefinition::new("id", DataType::Text));
+        let result = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .add_column(ColumnDefinition::new("id", DataType::Text));
         assert!(matches!(result, Err(CatalogError::DuplicateColumn { .. })));
     }
 
@@ -320,8 +326,11 @@ mod tests {
             on_delete: Some(ForeignKeyAction::Cascade),
             on_update: Some(ForeignKeyAction::Cascade),
         };
-        let table = Table::new("child", vec![ColumnDefinition::new("parent_id", DataType::Integer)])
-            .add_foreign_key(fk);
+        let table = Table::new(
+            "child",
+            vec![ColumnDefinition::new("parent_id", DataType::Integer)],
+        )
+        .add_foreign_key(fk);
         assert_eq!(table.foreign_keys.len(), 1);
     }
 
@@ -335,8 +344,11 @@ mod tests {
 
     #[test]
     fn test_set_row_count() {
-        let table = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)])
-            .set_row_count(100);
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .set_row_count(100);
         assert_eq!(table.row_count, 100);
     }
 
@@ -352,7 +364,10 @@ mod tests {
 
     #[test]
     fn test_get_primary_key_columns_none() {
-        let table = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)]);
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        );
         assert!(table.get_primary_key_columns().is_none());
     }
 
@@ -366,16 +381,25 @@ mod tests {
             on_delete: None,
             on_update: None,
         };
-        let table = Table::new("child", vec![ColumnDefinition::new("parent_id", DataType::Integer)])
-            .add_foreign_key(fk);
+        let table = Table::new(
+            "child",
+            vec![ColumnDefinition::new("parent_id", DataType::Integer)],
+        )
+        .add_foreign_key(fk);
         let result = table.validate("public");
-        assert!(matches!(result, Err(CatalogError::ForeignKeyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(CatalogError::ForeignKeyViolation { .. })
+        ));
     }
 
     #[test]
     fn test_primary_key_column_not_found() {
-        let result = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)])
-            .primary_key(vec!["nonexistent".to_string()]);
+        let result = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .primary_key(vec!["nonexistent".to_string()]);
         assert!(matches!(result, Err(CatalogError::ColumnNotFound { .. })));
     }
 }
