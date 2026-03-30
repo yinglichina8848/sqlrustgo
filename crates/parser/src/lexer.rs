@@ -266,6 +266,8 @@ impl<'a> Lexer<'a> {
                     "BEGIN" => Token::Begin,
                     "COMMIT" => Token::Commit,
                     "ROLLBACK" => Token::Rollback,
+                    "SAVEPOINT" => Token::Savepoint,
+                    "RELEASE" => Token::Release,
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
                     "TO" => Token::To,
