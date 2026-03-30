@@ -15,7 +15,7 @@ mod table;
 
 pub use auth::{
     AuthError, AuthManager, AuthResult, GranteeType, ObjectRef, ObjectType, Privilege,
-    PrivilegeGrant, Role, User, UserRole,
+    PrivilegeGrant, Role, ScramCredential, User, UserIdentity, UserRole,
 };
 pub use column::ColumnDefinition;
 pub use data_type::DataType;

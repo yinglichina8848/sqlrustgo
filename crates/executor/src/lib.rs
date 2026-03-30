@@ -57,12 +57,16 @@ pub use window_executor::WindowVolcanoExecutor;
 // Trigger execution engine
 pub mod trigger;
 pub use trigger::{
-    TriggerExecutor, TriggerEvent, TriggerExecutionResult, TriggerTiming, TriggerType,
+    TriggerEvent, TriggerExecutionResult, TriggerExecutor, TriggerTiming, TriggerType,
 };
 
 // Stored procedure executor
 pub mod stored_proc;
 pub use stored_proc::StoredProcExecutor;
+
+// DDL executor for user and privilege management
+pub mod ddl_executor;
+pub use ddl_executor::DdlExecutor;
 
 // Test framework modules - publicly accessible
 pub mod harness;
