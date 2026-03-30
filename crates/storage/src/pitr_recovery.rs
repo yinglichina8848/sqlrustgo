@@ -6,11 +6,11 @@
 //! - Recovery to specific LSN
 //! - Partial table recovery
 
-use crate::{DataRestorer, StorageEngine};
+use crate::DataRestorer;
 use serde::{Deserialize, Serialize};
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_types::{SqlError, SqlResult};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -50,18 +50,18 @@ impl RecoveryPoint {
 }
 
 pub struct PITRRecovery {
-    storage_path: PathBuf,
+    _storage_path: PathBuf,
     wal_path: PathBuf,
-    backup_path: PathBuf,
+    _backup_path: PathBuf,
     current_lsn: Arc<RwLock<u64>>,
 }
 
 impl PITRRecovery {
     pub fn new(storage_path: PathBuf, wal_path: PathBuf, backup_path: PathBuf) -> Self {
         Self {
-            storage_path,
+            _storage_path: storage_path,
             wal_path,
-            backup_path,
+            _backup_path: backup_path,
             current_lsn: Arc::new(RwLock::new(0)),
         }
     }
@@ -228,18 +228,20 @@ pub enum RecoveryStatus {
 }
 
 pub struct PartialRecovery {
-    storage_path: PathBuf,
+    _storage_path: PathBuf,
 }
 
 impl PartialRecovery {
     pub fn new(storage_path: PathBuf) -> Self {
-        Self { storage_path }
+        Self {
+            _storage_path: storage_path,
+        }
     }
 
     pub fn recover_table(
         &self,
-        table_name: &str,
-        backup_path: &PathBuf,
+        _table_name: &str,
+        backup_path: &Path,
         format: crate::BackupFormat,
     ) -> SqlResult<usize> {
         let mut storage = crate::MemoryStorage::new();
@@ -293,7 +295,7 @@ impl RecoveryValidator {
         Self { storage_path }
     }
 
-    pub fn validate_backup(&self, backup_path: &PathBuf) -> SqlResult<ValidationResult> {
+    pub fn validate_backup(&self, backup_path: &Path) -> SqlResult<ValidationResult> {
         let manifest_file = backup_path.join("manifest.json");
 
         if !manifest_file.exists() {
@@ -373,7 +375,15 @@ impl RecoveryHistory {
             recoveries: Vec::new(),
         }
     }
+}
 
+impl Default for RecoveryHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RecoveryHistory {
     pub fn record(&mut self, result: &RecoveryResult) {
         self.recoveries.push(RecoveryRecord {
             timestamp: std::time::SystemTime::now()

@@ -738,9 +738,15 @@ mod tests {
         // Integer < Float
         assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
         // Float < Text
-        assert_eq!(Value::Float(0.0).cmp(&Value::Text("a".to_string())), Ordering::Less);
+        assert_eq!(
+            Value::Float(0.0).cmp(&Value::Text("a".to_string())),
+            Ordering::Less
+        );
         // Text < Blob
-        assert_eq!(Value::Text("a".to_string()).cmp(&Value::Blob(vec![])), Ordering::Less);
+        assert_eq!(
+            Value::Text("a".to_string()).cmp(&Value::Blob(vec![])),
+            Ordering::Less
+        );
         // Blob < Date
         assert_eq!(Value::Blob(vec![]).cmp(&Value::Date(0)), Ordering::Less);
         // Date < Timestamp
@@ -750,9 +756,18 @@ mod tests {
     #[test]
     fn test_value_partial_ord() {
         use std::cmp::Ordering;
-        assert_eq!(Value::Integer(1).partial_cmp(&Value::Integer(2)), Some(Ordering::Less));
-        assert_eq!(Value::Integer(2).partial_cmp(&Value::Integer(2)), Some(Ordering::Equal));
-        assert_eq!(Value::Integer(3).partial_cmp(&Value::Integer(2)), Some(Ordering::Greater));
+        assert_eq!(
+            Value::Integer(1).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            Value::Integer(2).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            Value::Integer(3).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Greater)
+        );
     }
 
     #[test]
@@ -767,7 +782,10 @@ mod tests {
         assert_eq!(zero.cmp(&nan), Ordering::Greater);
         // Float variants are compared by their variant order (3), which is greater than Integer (2)
         // So Float > Integer regardless of NaN status when cross-variant comparison
-        assert_eq!(Value::Float(f64::NAN).cmp(&Value::Integer(0)), Ordering::Greater);
+        assert_eq!(
+            Value::Float(f64::NAN).cmp(&Value::Integer(0)),
+            Ordering::Greater
+        );
     }
 
     #[test]

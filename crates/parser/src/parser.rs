@@ -2523,7 +2523,7 @@ impl Parser {
         // Simple body parsing: collect statements until END
         // Note: This is a simplified implementation that stores raw SQL for now
         while self.current().is_some()
-            && !matches!(self.current(), Some(Token::Identifier(end_str)) 
+            && !matches!(self.current(), Some(Token::Identifier(end_str))
                        if end_str.to_uppercase() == "END")
         {
             let stmt = match self.current() {
@@ -2581,7 +2581,7 @@ impl Parser {
         }
 
         // Expect END
-        if matches!(self.current(), Some(Token::Identifier(end_str)) 
+        if matches!(self.current(), Some(Token::Identifier(end_str))
                    if end_str.to_uppercase() == "END")
         {
             self.next();
@@ -4699,7 +4699,8 @@ fn test_parse_select_with_group_by() {
 
 #[test]
 fn test_parse_select_with_having() {
-    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
+    let result =
+        parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
         Statement::Select(s) => {

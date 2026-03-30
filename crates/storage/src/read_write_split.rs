@@ -206,7 +206,7 @@ impl ReadWriteRouter {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .subsec_nanos() as usize;
-        &replicas[seed % replicas.len()]
+        replicas[seed % replicas.len()]
     }
 
     pub fn add_replica(&mut self, replica: ReplicaNode) {
@@ -270,7 +270,7 @@ pub struct RouteResult {
 pub struct ConnectionPool {
     master_pool: Vec<Connection>,
     replica_pools: Vec<Vec<Connection>>,
-    config: ReadWriteSplitConfig,
+    _config: ReadWriteSplitConfig,
 }
 
 impl ConnectionPool {
@@ -278,7 +278,7 @@ impl ConnectionPool {
         Self {
             master_pool: Vec::new(),
             replica_pools: Vec::new(),
-            config,
+            _config: config,
         }
     }
 
