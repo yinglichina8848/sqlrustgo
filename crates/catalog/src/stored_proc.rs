@@ -59,9 +59,7 @@ pub enum StoredProcStatement {
         body: Vec<StoredProcStatement>,
     },
     /// LOOP statements END LOOP (with optional LEAVE to exit)
-    Loop {
-        body: Vec<StoredProcStatement>,
-    },
+    Loop { body: Vec<StoredProcStatement> },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
