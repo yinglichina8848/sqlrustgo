@@ -33,6 +33,7 @@ pub struct CacheEntry {
     pub tables: Vec<String>,
     pub created_at: Instant,
     pub size_bytes: usize,
+    pub last_access: u64,
 }
 
 impl CacheEntry {
