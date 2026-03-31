@@ -4,7 +4,7 @@
 
 use crate::ExecutorResult;
 use sqlrustgo_catalog::StoredProcStatement;
-use sqlrustgo_storage::{Record, StorageEngine};
+use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
