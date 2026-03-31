@@ -25,6 +25,7 @@ mod tests {
             tables: vec!["test_table".to_string()],
             created_at: std::time::Instant::now(),
             size_bytes: 128,
+            last_access: 0,
         }
     }
 
