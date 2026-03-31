@@ -4,7 +4,7 @@
 
 use crate::ExecutorResult;
 use sqlrustgo_catalog::StoredProcStatement;
-use sqlrustgo_storage::{Record, StorageEngine};
+use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -418,6 +418,25 @@ impl StoredProcExecutor {
                 .map_err(|e| format!("Failed to parse SQL: {}", e))?;
 
             self.execute_statement_storage(&statement, ctx)?;
+
+            // Set ROW_COUNT for MySQL/MariaDB compatibility
+            if let Some(found_rows) = ctx.get_session_var("__found_rows") {
+                ctx.set_session_var("ROW_COUNT", found_rows.clone());
+            } else if let Some(last_insert) = ctx.get_session_var("__last_insert_count") {
+                ctx.set_session_var("ROW_COUNT", last_insert.clone());
+            } else if let Some(last_update) = ctx.get_session_var("__last_update_count") {
+                ctx.set_session_var("ROW_COUNT", last_update.clone());
+            } else if let Some(last_delete) = ctx.get_session_var("__last_delete_count") {
+                ctx.set_session_var("ROW_COUNT", last_delete.clone());
+            }
+        } else if sql_upper.starts_with("CREATE")
+            || sql_upper.starts_with("DROP")
+            || sql_upper.starts_with("ALTER")
+            || sql_upper.starts_with("SHOW")
+            || sql_upper.starts_with("DESCRIBE")
+            || sql_upper.starts_with("SET")
+        {
+            ctx.set_session_var("ROW_COUNT", Value::Integer(0));
         }
 
         Ok(())
@@ -437,25 +456,337 @@ impl StoredProcExecutor {
                     .scan(table_name)
                     .map_err(|e| format!("Failed to scan table: {}", e))?;
 
+                let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
+                    records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect()
+                } else {
+                    records
+                };
+
                 ctx.set_session_var(
                     "__last_select_result",
-                    Value::Text(serde_json::to_string(&records).unwrap_or_default()),
+                    Value::Text(serde_json::to_string(&filtered).unwrap_or_default()),
+                );
+                ctx.set_session_var("__found_rows", Value::Integer(filtered.len() as i64));
+                Ok(())
+            }
+            sqlrustgo_parser::Statement::Insert(insert) => {
+                let table_name = &insert.table;
+                let mut storage = self.storage.write().unwrap();
+
+                if !storage.has_table(table_name) {
+                    return Err(format!("Table '{}' not found", table_name));
+                }
+
+                let table_info = storage.get_table_info(table_name).ok();
+                let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
+
+                for row in &insert.values {
+                    let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
+
+                    if insert.columns.is_empty() {
+                        for (col_idx, expr) in row.iter().enumerate() {
+                            if col_idx < num_columns {
+                                new_row[col_idx] = self.expression_to_value(expr, ctx);
+                            }
+                        }
+                    } else {
+                        for (value_idx, col_name) in insert.columns.iter().enumerate() {
+                            if value_idx < row.len() {
+                                if let Some(ref info) = table_info {
+                                    if let Some(target_idx) = info
+                                        .columns
+                                        .iter()
+                                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                    {
+                                        new_row[target_idx] =
+                                            self.expression_to_value(&row[value_idx], ctx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    storage
+                        .insert(table_name, vec![new_row])
+                        .map_err(|e| format!("Failed to insert: {}", e))?;
+                }
+
+                ctx.set_session_var(
+                    "__last_insert_count",
+                    Value::Integer(insert.values.len() as i64),
                 );
                 Ok(())
             }
-            sqlrustgo_parser::Statement::Insert(_insert) => {
-                ctx.set_session_var("__last_insert_pending", Value::Text("true".to_string()));
+            sqlrustgo_parser::Statement::Update(update) => {
+                let table_name = &update.table;
+                let mut storage = self.storage.write().unwrap();
+
+                if !storage.has_table(table_name) {
+                    return Err(format!("Table '{}' not found", table_name));
+                }
+
+                let table_info = storage.get_table_info(table_name).ok();
+                let mut updates: Vec<(usize, Value)> = Vec::new();
+
+                for (col_name, expr) in &update.set_clauses {
+                    if let Some(ref info) = table_info {
+                        if let Some(col_idx) = info
+                            .columns
+                            .iter()
+                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                        {
+                            updates.push((col_idx, self.expression_to_value(expr, ctx)));
+                        }
+                    }
+                }
+
+                let count = storage
+                    .update(table_name, &[], &updates)
+                    .map_err(|e| format!("Failed to update: {}", e))?;
+
+                ctx.set_session_var("__last_update_count", Value::Integer(count as i64));
                 Ok(())
             }
-            sqlrustgo_parser::Statement::Update(_update) => {
-                ctx.set_session_var("__last_update_count", Value::Integer(0));
-                Ok(())
-            }
-            sqlrustgo_parser::Statement::Delete(_delete) => {
-                ctx.set_session_var("__last_delete_count", Value::Integer(0));
+            sqlrustgo_parser::Statement::Delete(delete) => {
+                let table_name = &delete.table;
+                let mut storage = self.storage.write().unwrap();
+
+                if !storage.has_table(table_name) {
+                    return Err(format!("Table '{}' not found", table_name));
+                }
+
+                let count = storage
+                    .delete(table_name, &[])
+                    .map_err(|e| format!("Failed to delete: {}", e))?;
+
+                ctx.set_session_var("__last_delete_count", Value::Integer(count as i64));
                 Ok(())
             }
             _ => Ok(()),
+        }
+    }
+
+    /// Convert parser Expression to runtime Value
+    fn expression_to_value(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        ctx: &ProcedureContext,
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if name.starts_with('@') {
+                    ctx.get_var(&name[1..]).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Text(name.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::QualifiedColumn(table, col) => {
+                Value::Text(format!("{}.{}", table, col))
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let right_val = self.expression_to_value(right, ctx);
+                self.evaluate_binary_op(&left_val, &right_val, op)
+            }
+            sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+                self.evaluate_function(name, args, ctx)
+            }
+            _ => Value::Null,
+        }
+    }
+
+    /// Evaluate a binary operation and return a boolean Value
+    fn evaluate_binary_op(&self, left: &Value, right: &Value, op: &str) -> Value {
+        match op {
+            "=" | "==" | "IS" => Value::Boolean(left == right),
+            "!=" | "<>" => Value::Boolean(left != right),
+            ">" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Boolean(l > r)
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Boolean(l > r)
+                } else if let (Value::Text(l), Value::Text(r)) = (left, right) {
+                    Value::Boolean(l > r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            ">=" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Boolean(l >= r)
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Boolean(l >= r)
+                } else if let (Value::Text(l), Value::Text(r)) = (left, right) {
+                    Value::Boolean(l >= r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            "<" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Boolean(l < r)
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Boolean(l < r)
+                } else if let (Value::Text(l), Value::Text(r)) = (left, right) {
+                    Value::Boolean(l < r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            "<=" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Boolean(l <= r)
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Boolean(l <= r)
+                } else if let (Value::Text(l), Value::Text(r)) = (left, right) {
+                    Value::Boolean(l <= r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            "AND" | "&&" => {
+                if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                    Value::Boolean(*l && *r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            "OR" | "||" => {
+                if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                    Value::Boolean(*l || *r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            _ => Value::Null,
+        }
+    }
+
+    /// Evaluate a function call expression
+    fn evaluate_function(
+        &self,
+        name: &str,
+        args: &[sqlrustgo_parser::Expression],
+        ctx: &ProcedureContext,
+    ) -> Value {
+        let name_upper = name.to_uppercase();
+        match name_upper.as_str() {
+            "COALESCE" => {
+                for arg in args {
+                    let val = self.expression_to_value(arg, ctx);
+                    if val != Value::Null {
+                        return val;
+                    }
+                }
+                Value::Null
+            }
+            "IFNULL" | "NVL" => {
+                if args.is_empty() {
+                    return Value::Null;
+                }
+                let val = self.expression_to_value(&args[0], ctx);
+                if val == Value::Null {
+                    if args.len() > 1 {
+                        self.expression_to_value(&args[1], ctx)
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    val
+                }
+            }
+            "NULLIF" => {
+                if args.len() < 2 {
+                    return Value::Null;
+                }
+                let left = self.expression_to_value(&args[0], ctx);
+                let right = self.expression_to_value(&args[1], ctx);
+                if left == right {
+                    Value::Null
+                } else {
+                    left
+                }
+            }
+            "CONCAT" => {
+                let mut result = String::new();
+                for arg in args {
+                    let val = self.expression_to_value(arg, ctx);
+                    if !result.is_empty() {
+                        result.push_str(", ");
+                    }
+                    result.push_str(&val.to_string());
+                }
+                Value::Text(result)
+            }
+            "LENGTH" | "LEN" => {
+                if args.is_empty() {
+                    return Value::Null;
+                }
+                let val = self.expression_to_value(&args[0], ctx);
+                if let Value::Text(s) = val {
+                    Value::Integer(s.len() as i64)
+                } else {
+                    Value::Integer(0)
+                }
+            }
+            "UPPER" => {
+                if args.is_empty() {
+                    return Value::Null;
+                }
+                let val = self.expression_to_value(&args[0], ctx);
+                if let Value::Text(s) = val {
+                    Value::Text(s.to_uppercase())
+                } else {
+                    Value::Null
+                }
+            }
+            "LOWER" => {
+                if args.is_empty() {
+                    return Value::Null;
+                }
+                let val = self.expression_to_value(&args[0], ctx);
+                if let Value::Text(s) = val {
+                    Value::Text(s.to_lowercase())
+                } else {
+                    Value::Null
+                }
+            }
+            "IF" => {
+                if args.len() < 3 {
+                    return Value::Null;
+                }
+                let cond = self.expression_to_value(&args[0], ctx);
+                if cond != Value::Null && cond != Value::Boolean(false) {
+                    self.expression_to_value(&args[1], ctx)
+                } else {
+                    self.expression_to_value(&args[2], ctx)
+                }
+            }
+            _ => Value::Null,
         }
     }
 
