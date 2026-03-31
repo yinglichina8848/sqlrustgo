@@ -23,7 +23,9 @@ pub use data_type::DataType;
 pub use error::{CatalogError, CatalogResult};
 pub use index::{IndexInfo, IndexType};
 pub use schema::Schema;
-pub use stored_proc::{ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure};
+pub use stored_proc::{
+    HandlerCondition, ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure,
+};
 pub use system_tables::{MysqlDbTable, MysqlUserTable};
 pub use table::{ForeignKeyAction, ForeignKeyRef, Table, TableRef};
 
