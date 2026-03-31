@@ -74,6 +74,25 @@ pub enum StoredProcStatement {
         args: Vec<String>,
         into_var: Option<String>,
     },
+    /// SIGNAL - raise an exception
+    Signal {
+        sqlstate: Option<String>,
+        message: Option<String>,
+    },
+    /// RESIGNAL - re-raise an exception
+    Resignal {
+        sqlstate: Option<String>,
+        message: Option<String>,
+    },
+}
+
+/// SQL error codes for common conditions
+#[derive(Debug, Clone, PartialEq)]
+pub enum SqlCondition {
+    SqlException,
+    SqlWarning,
+    NotFound,
+    Custom(String),
 }
 
 impl StoredProcedure {

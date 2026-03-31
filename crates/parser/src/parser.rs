@@ -17,16 +17,6 @@ use crate::lexer::Lexer;
 use crate::token::Token;
 use serde::{Deserialize, Serialize};
 
-/// Convert a token to its string representation (not debug format)
-fn token_to_string(token: &Token) -> String {
-    match token {
-        Token::Identifier(s) => s.clone(),
-        Token::StringLiteral(s) => format!("'{}'", s),
-        Token::NumberLiteral(n) => n.clone(),
-        _ => token.to_string(),
-    }
-}
-
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -53,8 +43,6 @@ pub enum Statement {
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
-    CreateUser(CreateUserStmt),
-    DropUser(DropUserStmt),
     ShowStatus,
     ShowProcesslist,
     /// KILL [CONNECTION | QUERY] processlist_id
@@ -284,9 +272,7 @@ pub enum ProcedureStatement {
         body: Vec<ProcedureStatement>,
     },
     /// LOOP statements END LOOP (with optional LEAVE to exit)
-    Loop {
-        body: Vec<ProcedureStatement>,
-    },
+    Loop { body: Vec<ProcedureStatement> },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
@@ -352,28 +338,12 @@ pub enum TransactionCommand {
     ReleaseSavepoint { name: String },
 }
 
-/// User identity for RBAC: 'username'@'host'
-#[derive(Debug, Clone, PartialEq)]
-pub struct UserIdentity {
-    pub username: String,
-    pub host: String,
-}
-
-impl UserIdentity {
-    pub fn new(username: &str, host: &str) -> Self {
-        Self {
-            username: username.to_lowercase(),
-            host: host.to_lowercase(),
-        }
-    }
-}
-
 /// GRANT statement for permission management
 #[derive(Debug, Clone, PartialEq)]
 pub struct GrantStatement {
     pub privilege: Privilege,
     pub table: String,
-    pub to_user: UserIdentity,
+    pub to_user: String,
 }
 
 /// REVOKE statement for permission management
@@ -381,7 +351,7 @@ pub struct GrantStatement {
 pub struct RevokeStatement {
     pub privilege: Privilege,
     pub table: String,
-    pub from_user: UserIdentity,
+    pub from_user: String,
 }
 
 /// Privilege types
@@ -390,19 +360,18 @@ pub enum Privilege {
     Read,
     Write,
     All,
+    Process,
+    Super,
 }
 
-/// CREATE USER statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateUserStmt {
-    pub identities: Vec<UserIdentity>,
-    pub password: String,
-}
+impl Privilege {
+    pub fn can_kill(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::All)
+    }
 
-/// DROP USER statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct DropUserStmt {
-    pub identities: Vec<UserIdentity>,
+    pub fn can_view_processlist(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::Process | Privilege::All)
+    }
 }
 
 /// Join type
@@ -1029,7 +998,25 @@ impl Parser {
         self.expect(Token::From)?;
 
         let table = match self.next() {
-            Some(Token::Identifier(name)) => name,
+            Some(Token::Identifier(name)) => {
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::Identifier(table_name)) => {
+                            format!("{}.{}", name, table_name)
+                        }
+                        Some(Token::Processlist) => {
+                            format!("{}.processlist", name)
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected table name after dot, got {:?}", t))
+                        }
+                        None => return Err("Expected table name after dot".to_string()),
+                    }
+                } else {
+                    name
+                }
+            }
             Some(t) => return Err(format!("Expected table name, got {:?}", t)),
             None => return Err("Expected table name".to_string()),
         };
@@ -1763,9 +1750,7 @@ impl Parser {
             | Some(Token::Lag)
             | Some(Token::FirstValue)
             | Some(Token::LastValue)
-            | Some(Token::NthValue) => {
-                return self.parse_window_function();
-            }
+            | Some(Token::NthValue) => self.parse_window_function(),
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -2125,7 +2110,6 @@ impl Parser {
     fn parse_create_or_index(&mut self) -> Result<Statement, String> {
         let mut pos = self.position;
         let mut is_index = false;
-        let mut is_user = false;
         if pos < self.tokens.len() {
             pos += 1;
         }
@@ -2140,17 +2124,9 @@ impl Parser {
                 is_index = true;
             }
         }
-        if pos < self.tokens.len() {
-            if let Some(Token::User) = &self.tokens.get(pos) {
-                is_user = true;
-            }
-        }
         if is_index {
             self.next();
             self.parse_create_index()
-        } else if is_user {
-            self.next();
-            self.parse_create_user()
         } else {
             self.parse_create()
         }
@@ -2418,28 +2394,14 @@ impl Parser {
     }
 
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
-        let mut pos = self.position;
-        let mut is_user = false;
-        if pos < self.tokens.len() {
-            pos += 1;
-        }
-        if pos < self.tokens.len() {
-            if let Some(Token::User) = &self.tokens.get(pos) {
-                is_user = true;
-            }
-        }
-        if is_user {
-            self.next();
-            self.parse_drop_user()
-        } else {
-            self.expect(Token::Drop)?;
-            self.expect(Token::Table)?;
-            let name = match self.next() {
-                Some(Token::Identifier(name)) => name,
-                _ => return Err("Expected table name".to_string()),
-            };
-            Ok(Statement::DropTable(DropTableStatement { name }))
-        }
+        self.expect(Token::Drop)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        Ok(Statement::DropTable(DropTableStatement { name }))
     }
 
     fn parse_drop_trigger(&mut self) -> Result<Statement, String> {
@@ -2450,86 +2412,6 @@ impl Parser {
         };
 
         Ok(Statement::DropTrigger(DropTriggerStatement { name }))
-    }
-
-    fn parse_create_user(&mut self) -> Result<Statement, String> {
-        self.expect(Token::User)?;
-
-        let mut identities = Vec::new();
-        loop {
-            let username = match self.current() {
-                Some(Token::StringLiteral(s)) => s.clone(),
-                _ => return Err("Expected username string".to_string()),
-            };
-            self.next();
-
-            let host = if matches!(self.current(), Some(Token::At)) {
-                self.next();
-                let host_str = match self.current() {
-                    Some(Token::StringLiteral(s)) => s.clone(),
-                    _ => return Err("Expected host string after @".to_string()),
-                };
-                self.next();
-                host_str
-            } else {
-                "%".to_string()
-            };
-
-            identities.push(UserIdentity::new(&username, &host));
-
-            if !matches!(self.current(), Some(Token::Comma)) {
-                break;
-            }
-            self.next();
-        }
-
-        self.expect(Token::Identified)?;
-        self.expect(Token::By)?;
-        match self.current() {
-            Some(Token::StringLiteral(pwd)) => {
-                let password = pwd.clone();
-                self.next();
-                Ok(Statement::CreateUser(CreateUserStmt {
-                    identities,
-                    password,
-                }))
-            }
-            _ => Err("Expected password after IDENTIFIED BY".to_string()),
-        }
-    }
-
-    fn parse_drop_user(&mut self) -> Result<Statement, String> {
-        self.expect(Token::User)?;
-
-        let mut identities = Vec::new();
-        loop {
-            let username = match self.current() {
-                Some(Token::StringLiteral(s)) => s.clone(),
-                _ => return Err("Expected username string".to_string()),
-            };
-            self.next();
-
-            let host = if matches!(self.current(), Some(Token::At)) {
-                self.next();
-                let host_str = match self.current() {
-                    Some(Token::StringLiteral(s)) => s.clone(),
-                    _ => return Err("Expected host string after @".to_string()),
-                };
-                self.next();
-                host_str
-            } else {
-                "%".to_string()
-            };
-
-            identities.push(UserIdentity::new(&username, &host));
-
-            if !matches!(self.current(), Some(Token::Comma)) {
-                break;
-            }
-            self.next();
-        }
-
-        Ok(Statement::DropUser(DropUserStmt { identities }))
     }
 
     fn parse_create_trigger(&mut self) -> Result<Statement, String> {
@@ -2672,7 +2554,15 @@ impl Parser {
         // Parse BEGIN...END block
         self.expect(Token::Begin)?;
 
+        // Use parse_procedure_body for proper control flow parsing
         let body = self.parse_procedure_body()?;
+
+        // Expect END
+        if matches!(self.current(), Some(Token::Identifier(end_str)) 
+                   if end_str.to_uppercase() == "END")
+        {
+            self.next();
+        }
 
         Ok(Statement::CreateProcedure(CreateProcedureStatement {
             name,
@@ -2692,11 +2582,11 @@ impl Parser {
             {
                 break;
             }
-            
+
             if self.current().is_none() {
                 break;
             }
-            
+
             match self.parse_procedure_statement() {
                 Ok(stmt) => {
                     // Skip empty statements
@@ -2737,7 +2627,8 @@ impl Parser {
             Some(Token::Call) => self.parse_procedure_call(),
             Some(Token::Set) => self.parse_procedure_set(),
             Some(Token::Select) => {
-                self.parse_procedure_select()
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
             }
             Some(Token::Identifier(id)) if id.to_uppercase() == "CALL" => {
                 self.next(); // consume CALL
@@ -2753,162 +2644,737 @@ impl Parser {
     /// Parse DECLARE variable statement
     fn parse_procedure_declare(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Declare)?;
-        
-        Ok(ProcedureStatement::RawSql("DECLARE".to_string()))
+
+        // Variable name
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected variable name after DECLARE".to_string()),
+        };
+
+        // Data type
+        let data_type = match self.current() {
+            Some(Token::Identifier(dt)) => {
+                let dt = dt.clone();
+                self.next();
+                dt
+            }
+            Some(Token::Integer) => {
+                self.next();
+                "INTEGER".to_string()
+            }
+            Some(Token::Text) => {
+                self.next();
+                "TEXT".to_string()
+            }
+            _ => return Err("Expected data type after DECLARE".to_string()),
+        };
+
+        // Optional DEFAULT value
+        let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT")
+        {
+            self.next();
+            let value = self.collect_until_semicolon().trim().to_string();
+            Some(value)
+        } else {
+            self.expect(Token::Semicolon)?;
+            None
+        };
+
+        Ok(ProcedureStatement::Declare {
+            name,
+            data_type,
+            default_value,
+        })
     }
-    
-    /// Parse IF statement
+
+    /// Parse IF condition THEN ... END IF statement
     fn parse_procedure_if(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::If)?;
-        
-        Ok(ProcedureStatement::RawSql("IF".to_string()))
+
+        // Condition
+        let condition = self.collect_until_token(&[Token::Then]);
+
+        self.expect(Token::Then)?;
+
+        // THEN body
+        let then_body = self.parse_procedure_body()?;
+
+        // ELSEIF branches
+        let mut elseif_body = Vec::new();
+        while matches!(self.current(), Some(Token::Elsif)) {
+            self.next(); // consume ELSEIF
+            let elseif_condition = self.collect_until_token(&[Token::Then]);
+            self.expect(Token::Then)?;
+            let elseif_then_body = self.parse_procedure_body()?;
+            elseif_body.push((elseif_condition, elseif_then_body));
+        }
+
+        // ELSE body
+        let else_body = if matches!(self.current(), Some(Token::Else)) {
+            self.next(); // consume ELSE
+            self.parse_procedure_body()?
+        } else {
+            Vec::new()
+        };
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("IF")?;
+
+        Ok(ProcedureStatement::If {
+            condition,
+            then_body,
+            elseif_body,
+            else_body,
+        })
     }
-    
-    /// Parse WHILE statement
+
+    /// Parse WHILE condition DO ... END WHILE statement
     fn parse_procedure_while(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::While)?;
-        
-        Ok(ProcedureStatement::RawSql("WHILE".to_string()))
+
+        let condition = self.collect_until_token(&[Token::Do]);
+        self.expect(Token::Do)?;
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("WHILE")?;
+
+        Ok(ProcedureStatement::While { condition, body })
     }
-    
-    /// Parse LOOP statement
+
+    /// Parse LOOP ... END LOOP statement
     fn parse_procedure_loop(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Loop)?;
-        
-        Ok(ProcedureStatement::RawSql("LOOP".to_string()))
+
+        let body = self.parse_procedure_body()?;
+
+        self.expect_token_case_insensitive("END")?;
+        self.expect_token_case_insensitive("LOOP")?;
+
+        Ok(ProcedureStatement::Loop { body })
     }
-    
-    /// Parse LEAVE statement
+
+    /// Parse LEAVE label statement
     fn parse_procedure_leave(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Leave)?;
-        
-        Ok(ProcedureStatement::RawSql("LEAVE".to_string()))
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after LEAVE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Leave { label })
     }
-    
-    /// Parse ITERATE statement
+
+    /// Parse ITERATE label statement
     fn parse_procedure_iterate(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Iterate)?;
-        
-        Ok(ProcedureStatement::RawSql("ITERATE".to_string()))
+        let label = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected label after ITERATE".to_string()),
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(ProcedureStatement::Iterate { label })
     }
-    
-    /// Parse RETURN statement
+
+    /// Parse RETURN expression statement
     fn parse_procedure_return(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Return)?;
-        
-        Ok(ProcedureStatement::RawSql("RETURN".to_string()))
+        let value = self.collect_until_semicolon();
+        Ok(ProcedureStatement::Return { value })
     }
-    
-    /// Parse CALL statement inside procedure
+
+    /// Parse CALL statement for stored procedure invocation
     fn parse_procedure_call(&mut self) -> Result<ProcedureStatement, String> {
-        self.expect(Token::Call)?;
-        
-        Ok(ProcedureStatement::RawSql("CALL".to_string()))
+        // Procedure name
+        let procedure_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected procedure name".to_string()),
+        };
+
+        // Arguments
+        let mut args = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next(); // consume (
+            while !matches!(self.current(), Some(Token::RParen) | None) {
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::Identifier(id)) => {
+                        args.push(id.clone());
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        // Optional INTO variable
+        let into_var = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "INTO")
+        {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => Some(name),
+                _ => return Err("Expected variable name after INTO".to_string()),
+            }
+        } else {
+            None
+        };
+
+        self.expect(Token::Semicolon)?;
+
+        Ok(ProcedureStatement::Call {
+            procedure_name,
+            args,
+            into_var,
+        })
     }
-    
-    /// Parse SET statement inside procedure
+
+    /// Parse SET variable = value statement
     fn parse_procedure_set(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Set)?;
-        
-        Ok(ProcedureStatement::RawSql("SET".to_string()))
+        let variable = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            _ => return Err("Expected variable name".to_string()),
+        };
+
+        // Handle = or := assignment
+        if matches!(self.current(), Some(Token::Equal)) {
+            self.next();
+        }
+
+        let value = self.collect_until_semicolon();
+
+        Ok(ProcedureStatement::Set { variable, value })
     }
-    
-    /// Parse SELECT statement inside procedure
-    fn parse_procedure_select(&mut self) -> Result<ProcedureStatement, String> {
-        // Parse the SELECT statement
-        let select_stmt = self.parse_select()?;
-        
-        Ok(ProcedureStatement::Select(Box::new(select_stmt)))
+
+    /// Collect tokens until one of the specified tokens is encountered
+    fn collect_until_token(&mut self, tokens: &[Token]) -> String {
+        let mut result = String::new();
+        let mut paren_depth = 0;
+
+        loop {
+            match self.current() {
+                None => break,
+                Some(t) if tokens.contains(&t) && paren_depth == 0 => break,
+                Some(Token::LParen) => {
+                    paren_depth += 1;
+                    result.push('(');
+                    self.next();
+                }
+                Some(Token::RParen) if paren_depth > 0 => {
+                    paren_depth -= 1;
+                    result.push(')');
+                    self.next();
+                }
+                Some(tok) => {
+                    if !result.is_empty() && !result.ends_with('(') {
+                        result.push(' ');
+                    }
+                    result.push_str(&tok.to_string());
+                    self.next();
+                }
+            }
+        }
+        result.trim().to_string()
     }
-    
-    /// Collect tokens until semicolon
+
+    /// Expect a token case-insensitively for identifiers or keywords
+    fn expect_token_case_insensitive(&mut self, expected: &str) -> Result<(), String> {
+        match self.current() {
+            // Handle Token::Identifier
+            Some(Token::Identifier(id)) if id.to_uppercase() == expected.to_uppercase() => {
+                self.next();
+                Ok(())
+            }
+            // Handle keyword tokens that match the expected string
+            Some(Token::While) if "WHILE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Loop) if "LOOP".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::If) | Some(Token::EndIf) if "IF".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            Some(Token::Else) if "ELSE".eq_ignore_ascii_case(expected) => {
+                self.next();
+                Ok(())
+            }
+            _ => Err(format!("Expected '{}'", expected)),
+        }
+    }
+
+    /// Collect tokens until semicolon (exclusive)
     fn collect_until_semicolon(&mut self) -> String {
         let mut sql = String::new();
-        while !matches!(self.current(), Some(Token::Semicolon) | None) {
-            if let Some(token) = self.current() {
-                sql.push_str(&token.to_string());
-                sql.push(' ');
-            }
-            self.next();
-        }
-        if matches!(self.current(), Some(Token::Semicolon)) {
-            self.next(); // consume ';'
-        }
-        sql.trim().to_string()
-    }
-    
-    /// Collect tokens until END IF
-    fn collect_until_end_if(&mut self) -> String {
-        let mut depth = 1;
-        let mut sql = String::new();
-        while depth > 0 {
-            if let Some(Token::Identifier(id)) = self.current() {
-                match id.to_uppercase().as_str() {
-                    "IF" => depth += 1,
-                    "END" => {
-                        // Check if followed by IF
-                        // In real impl, would need to look ahead
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    _ => {}
+        loop {
+            match self.current() {
+                Some(Token::Semicolon) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::Eof) => break,
+                None => break,
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
                 }
             }
-            if let Some(token) = self.current() {
-                sql.push_str(&token.to_string());
-                sql.push(' ');
-            }
-            self.next();
-        }
-        // Consume END and optionally IF
-        if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "IF") {
-            sql.push_str("IF ");
-            self.next();
-        }
-        // Consume semicolon
-        if matches!(self.current(), Some(Token::Semicolon)) {
-            self.next();
-        }
-        sql.trim().to_string()
-    }
-    
-    /// Collect tokens until END LOOP or END
-    fn collect_until_end_loop(&mut self) -> String {
-        let mut depth = 1;
-        let mut sql = String::new();
-        while depth > 0 {
-            if let Some(Token::Identifier(id)) = self.current() {
-                match id.to_uppercase().as_str() {
-                    "LOOP" => depth += 1,
-                    "END" => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            if let Some(token) = self.current() {
-                sql.push_str(&token.to_string());
-                sql.push(' ');
-            }
-            self.next();
-        }
-        // Consume END and optionally LOOP
-        if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "LOOP") {
-            sql.push_str("LOOP ");
-            self.next();
-        }
-        // Consume semicolon
-        if matches!(self.current(), Some(Token::Semicolon)) {
-            self.next();
         }
         sql.trim().to_string()
     }
 
+    /// Collect tokens until END IF
+    fn collect_until_end_if(&mut self) -> String {
+        let mut sql = String::new();
+        let mut end_if_depth = 0;
+        loop {
+            match self.current() {
+                Some(Token::Eof) | None => break,
+                Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                    sql.push_str("END");
+                    sql.push(' ');
+                    self.next();
+                    if matches!(self.current(), Some(Token::If)) {
+                        if end_if_depth > 0 {
+                            end_if_depth -= 1;
+                            sql.push_str("IF ");
+                            self.next();
+                        } else {
+                            sql.push_str("IF");
+                            self.next();
+                            break;
+                        }
+                    }
+                }
+                Some(Token::If) => {
+                    end_if_depth += 1;
+                    sql.push_str("IF ");
+                    self.next();
+                }
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
+                }
+            }
+        }
+        sql.trim().to_string()
+    }
+
+    /// Collect tokens until END LOOP
+    fn collect_until_end_loop(&mut self) -> String {
+        let mut sql = String::new();
+        let mut end_loop_depth = 0;
+        loop {
+            match self.current() {
+                Some(Token::Eof) | None => break,
+                Some(Token::Identifier(id)) if id.to_uppercase() == "END" => {
+                    sql.push_str("END");
+                    sql.push(' ');
+                    self.next();
+                    if matches!(self.current(), Some(Token::Loop)) {
+                        if end_loop_depth > 0 {
+                            end_loop_depth -= 1;
+                            sql.push_str("LOOP ");
+                            self.next();
+                        } else {
+                            sql.push_str("LOOP");
+                            self.next();
+                            break;
+                        }
+                    }
+                }
+                Some(Token::Loop) => {
+                    end_loop_depth += 1;
+                    sql.push_str("LOOP ");
+                    self.next();
+                }
+                Some(tok) => {
+                    sql.push_str(&tok.to_string());
+                    sql.push(' ');
+                    self.next();
+                }
+            }
+        }
+        sql.trim().to_string()
+    }
+
+    fn parse_create_view(&mut self) -> Result<Statement, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected view name".to_string()),
+        };
+
+        self.expect(Token::As)?;
+
+        let mut query_parts = Vec::new();
+        while let Some(token) = self.current() {
+            match token {
+                Token::Semicolon => {
+                    break;
+                }
+                _ => {
+                    query_parts.push(token.to_string());
+                    self.next();
+                }
+            }
+        }
+
+        let query = query_parts.join(" ");
+        Ok(Statement::CreateView(CreateViewStatement { name, query }))
+    }
+
+    fn parse_analyze(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Analyze)?;
+
+        let table_name = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let n = name.clone();
+                self.next();
+                Some(n)
+            }
+            Some(Token::Semicolon) | None => None,
+            _ => return Err("Expected table name or semicolon".to_string()),
+        };
+
+        Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+    }
+
+    fn parse_explain(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Explain)?;
+
+        let analyze = match self.current() {
+            Some(Token::Analyze) => {
+                self.next();
+                true
+            }
+            _ => false,
+        };
+
+        let query = match self.current() {
+            Some(Token::Select) => Box::new(self.parse_select()?),
+            _ => return Err("EXPLAIN must be followed by a SELECT statement".to_string()),
+        };
+
+        Ok(Statement::Explain(ExplainStatement { query, analyze }))
+    }
+
+    fn parse_grant(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Grant)?;
+
+        let privilege = match self.current() {
+            Some(Token::Select) => {
+                self.next();
+                Privilege::Read
+            }
+            Some(Token::Insert) | Some(Token::Update) | Some(Token::Delete) => {
+                self.next();
+                Privilege::Write
+            }
+            Some(Token::All) => {
+                self.next();
+                Privilege::All
+            }
+            Some(Token::Identifier(s)) => {
+                let upper = s.to_uppercase();
+                self.next();
+                match upper.as_str() {
+                    "READ" => Privilege::Read,
+                    "WRITE" => Privilege::Write,
+                    "ALL" => Privilege::All,
+                    _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+                }
+            }
+            _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+        };
+
+        self.expect(Token::On)?;
+
+        let table = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let t = name.clone();
+                self.next();
+                t
+            }
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::To)?;
+
+        let to_user = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let u = name.clone();
+                self.next();
+                u
+            }
+            _ => return Err("Expected user name".to_string()),
+        };
+
+        Ok(Statement::Grant(GrantStatement {
+            privilege,
+            table,
+            to_user,
+        }))
+    }
+
+    fn parse_revoke(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Revoke)?;
+
+        let privilege = match self.current() {
+            Some(Token::Select) => {
+                self.next();
+                Privilege::Read
+            }
+            Some(Token::Insert) | Some(Token::Update) | Some(Token::Delete) => {
+                self.next();
+                Privilege::Write
+            }
+            Some(Token::All) => {
+                self.next();
+                Privilege::All
+            }
+            Some(Token::Identifier(s)) => {
+                let upper = s.to_uppercase();
+                self.next();
+                match upper.as_str() {
+                    "READ" => Privilege::Read,
+                    "WRITE" => Privilege::Write,
+                    "ALL" => Privilege::All,
+                    _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+                }
+            }
+            _ => return Err("Expected privilege (READ, WRITE, or ALL)".to_string()),
+        };
+
+        self.expect(Token::On)?;
+
+        let table = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let t = name.clone();
+                self.next();
+                t
+            }
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::From)?;
+
+        let from_user = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let u = name.clone();
+                self.next();
+                u
+            }
+            _ => return Err("Expected user name".to_string()),
+        };
+
+        Ok(Statement::Revoke(RevokeStatement {
+            privilege,
+            table,
+            from_user,
+        }))
+    }
+
+    fn parse_show(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Show)?;
+
+        match self.current() {
+            Some(Token::Status) => {
+                self.next();
+                Ok(Statement::ShowStatus)
+            }
+            Some(Token::Processlist) => {
+                self.next();
+                Ok(Statement::ShowProcesslist)
+            }
+            _ => Err("Expected STATUS or PROCESSLIST after SHOW".to_string()),
+        }
+    }
+
+    /// Parse KILL statement: KILL [CONNECTION | QUERY] process_id
+    fn parse_kill(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Kill)?;
+
+        let kill_type = match self.current() {
+            Some(Token::Connection) => {
+                self.next();
+                KillType::Connection
+            }
+            Some(Token::Query) => {
+                self.next();
+                KillType::Query
+            }
+            _ => KillType::Connection,
+        };
+
+        let process_id = match self.current() {
+            Some(Token::NumberLiteral(id)) => {
+                let id_str = id.clone();
+                self.next();
+                id_str
+                    .parse::<u64>()
+                    .map_err(|_| format!("Invalid process ID: {}", id_str))?
+            }
+            _ => return Err("Expected process ID after KILL".to_string()),
+        };
+
+        Ok(Statement::Kill(KillStatement {
+            process_id,
+            kill_type,
+        }))
+    }
+
+    /// Parse PREPARE statement: PREPARE stmt FROM 'sql text'
+    fn parse_prepare(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Prepare)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after PREPARE".to_string()),
+        };
+
+        self.expect(Token::From)?;
+
+        // Get SQL string literal
+        let sql = match self.current() {
+            Some(Token::StringLiteral(s)) => {
+                let sql = s.clone();
+                self.next();
+                sql
+            }
+            _ => return Err("Expected SQL string literal after FROM".to_string()),
+        };
+
+        Ok(Statement::Prepare(PrepareStatement { name, sql }))
+    }
+
+    /// Parse EXECUTE statement: EXECUTE stmt USING param1, param2, ...
+    fn parse_execute(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Execute)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after EXECUTE".to_string()),
+        };
+
+        // Parse optional USING clause
+        let mut params = Vec::new();
+        if let Some(Token::Using) = self.current() {
+            self.next();
+            // Parse parameter list
+            loop {
+                params.push(self.parse_expression()?);
+                match self.current() {
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+
+        Ok(Statement::Execute(ExecuteStatement { name, params }))
+    }
+
+    /// Parse DEALLOCATE PREPARE statement: DEALLOCATE PREPARE stmt
+    fn parse_deallocate(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Deallocate)?;
+        self.expect(Token::Prepare)?;
+
+        // Get statement name
+        let name = match self.current() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected statement name after DEALLOCATE PREPARE".to_string()),
+        };
+
+        Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement {
+            name,
+        }))
+    }
+
+    /// Parse COPY statement
+    /// COPY table_name FROM 'path' (FORMAT PARQUET)
+    /// COPY table_name TO 'path' (FORMAT PARQUET)
+    fn parse_copy(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Copy)?;
+
+        // Get table name
+        let table_name = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let name = name.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected table name after COPY".to_string()),
+        };
+
+        // Get direction (FROM or TO)
+        let from = match self.current() {
+            Some(Token::From) => {
+                self.next();
+                true
+            }
+            Some(Token::To) => {
+                self.next();
+                false
+            }
+            _ => return Err("Expected FROM or TO after table name".to_string()),
+        };
+
+        // Get file path
+        let path = match self.current() {
+            Some(Token::StringLiteral(s)) => {
+                let path = s.clone();
+                self.next();
+                path
+            }
+            _ => return Err("Expected file path string after FROM/TO".to_string()),
+        };
+
+        // Parse optional format clause: (FORMAT PARQUET)
+        let format = if matches!(self.current(), Some(Token::LParen)) {
+            self.next()
+                .ok_or_else(|| "Unexpected end of input".to_string())?;
+            self.expect(Token::Format)?;
+            self.expect(Token::Parquet)?;
+            self.expect(Token::RParen)?;
+            "PARQUET".to_string()
+        } else {
+            "PARQUET".to_string() // Default format
+        };
+
+        Ok(Statement::Copy(CopyStatement {
+            table_name,
+            from,
+            path,
+            format,
+        }))
+    }
+
+    fn parse_call(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Call)?;
 
         // Get procedure name
         let procedure_name = match self.next() {
@@ -3429,7 +3895,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
+                assert_eq!(g.to_user, "alice");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3443,7 +3909,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "orders");
-                assert_eq!(g.to_user, UserIdentity::new("bob", "%"));
+                assert_eq!(g.to_user, "bob");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3457,7 +3923,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::All);
                 assert_eq!(g.table, "products");
-                assert_eq!(g.to_user, UserIdentity::new("admin", "%"));
+                assert_eq!(g.to_user, "admin");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3471,7 +3937,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("guest", "%"));
+                assert_eq!(g.to_user, "guest");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3485,7 +3951,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("writer", "%"));
+                assert_eq!(g.to_user, "writer");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3499,7 +3965,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("updater", "%"));
+                assert_eq!(g.to_user, "updater");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3513,7 +3979,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("deleter", "%"));
+                assert_eq!(g.to_user, "deleter");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3527,7 +3993,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
+                assert_eq!(g.to_user, "alice");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3541,7 +4007,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "Users");
-                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
+                assert_eq!(g.to_user, "Alice");
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3573,7 +4039,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
+                assert_eq!(r.from_user, "alice");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3587,7 +4053,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "orders");
-                assert_eq!(r.from_user, UserIdentity::new("bob", "%"));
+                assert_eq!(r.from_user, "bob");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3601,7 +4067,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::All);
                 assert_eq!(r.table, "products");
-                assert_eq!(r.from_user, UserIdentity::new("admin", "%"));
+                assert_eq!(r.from_user, "admin");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3615,7 +4081,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("guest", "%"));
+                assert_eq!(r.from_user, "guest");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3629,7 +4095,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("writer", "%"));
+                assert_eq!(r.from_user, "writer");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3643,7 +4109,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("updater", "%"));
+                assert_eq!(r.from_user, "updater");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3657,7 +4123,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("deleter", "%"));
+                assert_eq!(r.from_user, "deleter");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3671,7 +4137,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
+                assert_eq!(r.from_user, "alice");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3685,7 +4151,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "Users");
-                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
+                assert_eq!(r.from_user, "Alice");
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -3721,7 +4187,7 @@ mod tests {
         let grant = GrantStatement {
             privilege: Privilege::Read,
             table: "users".to_string(),
-            to_user: UserIdentity::new("alice", "%"),
+            to_user: "alice".to_string(),
         };
         let cloned = grant.clone();
         assert_eq!(grant.privilege, cloned.privilege);
@@ -3734,7 +4200,7 @@ mod tests {
         let revoke = RevokeStatement {
             privilege: Privilege::Write,
             table: "orders".to_string(),
-            from_user: UserIdentity::new("bob", "%"),
+            from_user: "bob".to_string(),
         };
         let cloned = revoke.clone();
         assert_eq!(revoke.privilege, cloned.privilege);
@@ -3747,7 +4213,7 @@ mod tests {
         let grant = GrantStatement {
             privilege: Privilege::Read,
             table: "users".to_string(),
-            to_user: UserIdentity::new("alice", "%"),
+            to_user: "alice".to_string(),
         };
         let debug = format!("{:?}", grant);
         assert!(debug.contains("GrantStatement"));
@@ -3761,7 +4227,7 @@ mod tests {
         let revoke = RevokeStatement {
             privilege: Privilege::Write,
             table: "orders".to_string(),
-            from_user: UserIdentity::new("bob", "%"),
+            from_user: "bob".to_string(),
         };
         let debug = format!("{:?}", revoke);
         assert!(debug.contains("RevokeStatement"));
@@ -3793,82 +4259,6 @@ mod tests {
         for sql in revokes {
             let result = parse(sql);
             assert!(result.is_ok(), "Failed to parse: {}", sql);
-        }
-    }
-
-    #[test]
-    fn test_parse_create_user() {
-        let result = parse("CREATE USER 'alice'@'localhost' IDENTIFIED BY 'password123'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::CreateUser(c) => {
-                assert_eq!(c.identities.len(), 1);
-                assert_eq!(c.identities[0].username, "alice");
-                assert_eq!(c.identities[0].host, "localhost");
-                assert_eq!(c.password, "password123");
-            }
-            _ => panic!("Expected CREATE USER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_user_multiple() {
-        let result = parse("CREATE USER 'alice'@'localhost', 'bob'@'%' IDENTIFIED BY 'password'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::CreateUser(c) => {
-                assert_eq!(c.identities.len(), 2);
-                assert_eq!(c.identities[0].username, "alice");
-                assert_eq!(c.identities[0].host, "localhost");
-                assert_eq!(c.identities[1].username, "bob");
-                assert_eq!(c.identities[1].host, "%");
-                assert_eq!(c.password, "password");
-            }
-            _ => panic!("Expected CREATE USER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_user_default_host() {
-        let result = parse("CREATE USER 'alice' IDENTIFIED BY 'password'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::CreateUser(c) => {
-                assert_eq!(c.identities.len(), 1);
-                assert_eq!(c.identities[0].username, "alice");
-                assert_eq!(c.identities[0].host, "%");
-            }
-            _ => panic!("Expected CREATE USER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_drop_user() {
-        let result = parse("DROP USER 'alice'@'localhost'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::DropUser(d) => {
-                assert_eq!(d.identities.len(), 1);
-                assert_eq!(d.identities[0].username, "alice");
-                assert_eq!(d.identities[0].host, "localhost");
-            }
-            _ => panic!("Expected DROP USER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_drop_user_multiple() {
-        let result = parse("DROP USER 'alice'@'localhost', 'bob'@'%'");
-        assert!(result.is_ok(), "Error: {:?}", result.err());
-        match result.unwrap() {
-            Statement::DropUser(d) => {
-                assert_eq!(d.identities.len(), 2);
-                assert_eq!(d.identities[0].username, "alice");
-                assert_eq!(d.identities[0].host, "localhost");
-                assert_eq!(d.identities[1].username, "bob");
-                assert_eq!(d.identities[1].host, "%");
-            }
-            _ => panic!("Expected DROP USER statement"),
         }
     }
 
@@ -4625,7 +5015,8 @@ fn test_parse_select_with_group_by() {
 
 #[test]
 fn test_parse_select_with_having() {
-    let result = parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
+    let result =
+        parse("SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5");
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
         Statement::Select(s) => {
@@ -4745,28 +5136,6 @@ fn test_parse_procedure_return() {
     match result.unwrap() {
         Statement::CreateProcedure(proc) => {
             assert!(matches!(proc.body[0], ProcedureStatement::Return { .. }));
-        }
-        _ => panic!("Expected CreateProcedure statement"),
-    }
-}
-
-#[test]
-fn test_parse_procedure_select_into() {
-    let sql = "CREATE PROCEDURE test_select_into() BEGIN SELECT id, name INTO @uid, @uname FROM users WHERE id = 1; END";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::CreateProcedure(proc) => {
-            match &proc.body[0] {
-                ProcedureStatement::SelectInto { columns, into_vars, table, .. } => {
-                    assert_eq!(columns.len(), 2);
-                    assert_eq!(into_vars.len(), 2);
-                    assert_eq!(into_vars[0].trim(), "uid");
-                    assert_eq!(into_vars[1].trim(), "uname");
-                    assert_eq!(table.trim(), "users");
-                }
-                _ => panic!("Expected SelectInto statement"),
-            }
         }
         _ => panic!("Expected CreateProcedure statement"),
     }
