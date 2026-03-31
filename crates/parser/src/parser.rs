@@ -1781,9 +1781,7 @@ impl Parser {
             | Some(Token::Lag)
             | Some(Token::FirstValue)
             | Some(Token::LastValue)
-            | Some(Token::NthValue) => {
-                return self.parse_window_function();
-            }
+            | Some(Token::NthValue) => self.parse_window_function(),
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -2694,9 +2692,9 @@ impl Parser {
 
         // Simple body parsing: collect statements until END
         // Note: This is a simplified implementation that stores raw SQL for now
-        while !matches!(self.current(), Some(Token::Identifier(end_str)) 
+        while !matches!(self.current(), Some(Token::Identifier(end_str))
                        if end_str.to_uppercase() == "END")
-            && !matches!(self.current(), None)
+            && self.current().is_some()
         {
             let stmt = match self.current() {
                 Some(Token::Select) => {
@@ -2753,7 +2751,7 @@ impl Parser {
         }
 
         // Expect END
-        if matches!(self.current(), Some(Token::Identifier(end_str)) 
+        if matches!(self.current(), Some(Token::Identifier(end_str))
                    if end_str.to_uppercase() == "END")
         {
             self.next();
@@ -2772,7 +2770,7 @@ impl Parser {
 
         loop {
             // Check for END before parsing statement
-            if matches!(self.current(), Some(Token::Identifier(end_str)) 
+            if matches!(self.current(), Some(Token::Identifier(end_str))
                        if end_str.to_uppercase() == "END")
             {
                 break;
@@ -3053,7 +3051,7 @@ impl Parser {
         loop {
             match self.current() {
                 None => break,
-                Some(t) if tokens.contains(&t) && paren_depth == 0 => break,
+                Some(t) if tokens.contains(t) && paren_depth == 0 => break,
                 Some(Token::LParen) => {
                     paren_depth += 1;
                     result.push('(');
