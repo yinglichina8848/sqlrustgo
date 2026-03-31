@@ -17,16 +17,6 @@ use crate::lexer::Lexer;
 use crate::token::Token;
 use serde::{Deserialize, Serialize};
 
-/// Convert a token to its string representation (not debug format)
-fn token_to_string(token: &Token) -> String {
-    match token {
-        Token::Identifier(s) => s.clone(),
-        Token::StringLiteral(s) => format!("'{}'", s),
-        Token::NumberLiteral(n) => n.clone(),
-        _ => token.to_string(),
-    }
-}
-
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -53,6 +43,8 @@ pub enum Statement {
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
+    CreateUser(CreateUserStmt),
+    DropUser(DropUserStmt),
     ShowStatus,
     ShowProcesslist,
     /// KILL [CONNECTION | QUERY] processlist_id
@@ -348,12 +340,28 @@ pub enum TransactionCommand {
     ReleaseSavepoint { name: String },
 }
 
+/// User identity for RBAC: 'username'@'host'
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserIdentity {
+    pub username: String,
+    pub host: String,
+}
+
+impl UserIdentity {
+    pub fn new(username: &str, host: &str) -> Self {
+        Self {
+            username: username.to_lowercase(),
+            host: host.to_lowercase(),
+        }
+    }
+}
+
 /// GRANT statement for permission management
 #[derive(Debug, Clone, PartialEq)]
 pub struct GrantStatement {
     pub privilege: Privilege,
     pub table: String,
-    pub to_user: String,
+    pub to_user: UserIdentity,
 }
 
 /// REVOKE statement for permission management
@@ -361,7 +369,7 @@ pub struct GrantStatement {
 pub struct RevokeStatement {
     pub privilege: Privilege,
     pub table: String,
-    pub from_user: String,
+    pub from_user: UserIdentity,
 }
 
 /// Privilege types
@@ -370,6 +378,31 @@ pub enum Privilege {
     Read,
     Write,
     All,
+    Process,
+    Super,
+}
+
+impl Privilege {
+    pub fn can_kill(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::All)
+    }
+
+    pub fn can_view_processlist(&self) -> bool {
+        matches!(self, Privilege::Super | Privilege::Process | Privilege::All)
+    }
+}
+
+/// CREATE USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateUserStmt {
+    pub identities: Vec<UserIdentity>,
+    pub password: String,
+}
+
+/// DROP USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropUserStmt {
+    pub identities: Vec<UserIdentity>,
 }
 
 /// Join type
@@ -653,7 +686,7 @@ impl Parser {
             Some(Token::Prepare) => self.parse_prepare(),
             Some(Token::Execute) => self.parse_execute(),
             Some(Token::Deallocate) => self.parse_deallocate(),
-            Some(Token::Copy) => self.parse_copy(),
+            Some(Token::Copy) => self.parse_call(),
             Some(Token::Merge) => self.parse_merge(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
@@ -996,7 +1029,25 @@ impl Parser {
         self.expect(Token::From)?;
 
         let table = match self.next() {
-            Some(Token::Identifier(name)) => name,
+            Some(Token::Identifier(name)) => {
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::Identifier(table_name)) => {
+                            format!("{}.{}", name, table_name)
+                        }
+                        Some(Token::Processlist) => {
+                            format!("{}.processlist", name)
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected table name after dot, got {:?}", t))
+                        }
+                        None => return Err("Expected table name after dot".to_string()),
+                    }
+                } else {
+                    name
+                }
+            }
             Some(t) => return Err(format!("Expected table name, got {:?}", t)),
             None => return Err("Expected table name".to_string()),
         };
@@ -1730,7 +1781,9 @@ impl Parser {
             | Some(Token::Lag)
             | Some(Token::FirstValue)
             | Some(Token::LastValue)
-            | Some(Token::NthValue) => self.parse_window_function(),
+            | Some(Token::NthValue) => {
+                return self.parse_window_function();
+            }
             Some(Token::LParen) => {
                 self.next(); // consume '('
 
@@ -2090,6 +2143,7 @@ impl Parser {
     fn parse_create_or_index(&mut self) -> Result<Statement, String> {
         let mut pos = self.position;
         let mut is_index = false;
+        let mut is_user = false;
         if pos < self.tokens.len() {
             pos += 1;
         }
@@ -2104,9 +2158,17 @@ impl Parser {
                 is_index = true;
             }
         }
+        if pos < self.tokens.len() {
+            if let Some(Token::User) = &self.tokens.get(pos) {
+                is_user = true;
+            }
+        }
         if is_index {
             self.next();
             self.parse_create_index()
+        } else if is_user {
+            self.next();
+            self.parse_create_user()
         } else {
             self.parse_create()
         }
@@ -2374,14 +2436,28 @@ impl Parser {
     }
 
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Drop)?;
-        self.expect(Token::Table)?;
-        let name = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            _ => return Err("Expected table name".to_string()),
-        };
-
-        Ok(Statement::DropTable(DropTableStatement { name }))
+        let mut pos = self.position;
+        let mut is_user = false;
+        if pos < self.tokens.len() {
+            pos += 1;
+        }
+        if pos < self.tokens.len() {
+            if let Some(Token::User) = &self.tokens.get(pos) {
+                is_user = true;
+            }
+        }
+        if is_user {
+            self.next();
+            self.parse_drop_user()
+        } else {
+            self.expect(Token::Drop)?;
+            self.expect(Token::Table)?;
+            let name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                _ => return Err("Expected table name".to_string()),
+            };
+            Ok(Statement::DropTable(DropTableStatement { name }))
+        }
     }
 
     fn parse_drop_trigger(&mut self) -> Result<Statement, String> {
@@ -2392,6 +2468,86 @@ impl Parser {
         };
 
         Ok(Statement::DropTrigger(DropTriggerStatement { name }))
+    }
+
+    fn parse_create_user(&mut self) -> Result<Statement, String> {
+        self.expect(Token::User)?;
+
+        let mut identities = Vec::new();
+        loop {
+            let username = match self.current() {
+                Some(Token::StringLiteral(s)) => s.clone(),
+                _ => return Err("Expected username string".to_string()),
+            };
+            self.next();
+
+            let host = if matches!(self.current(), Some(Token::At)) {
+                self.next();
+                let host_str = match self.current() {
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    _ => return Err("Expected host string after @".to_string()),
+                };
+                self.next();
+                host_str
+            } else {
+                "%".to_string()
+            };
+
+            identities.push(UserIdentity::new(&username, &host));
+
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        self.expect(Token::Identified)?;
+        self.expect(Token::By)?;
+        match self.current() {
+            Some(Token::StringLiteral(pwd)) => {
+                let password = pwd.clone();
+                self.next();
+                Ok(Statement::CreateUser(CreateUserStmt {
+                    identities,
+                    password,
+                }))
+            }
+            _ => Err("Expected password after IDENTIFIED BY".to_string()),
+        }
+    }
+
+    fn parse_drop_user(&mut self) -> Result<Statement, String> {
+        self.expect(Token::User)?;
+
+        let mut identities = Vec::new();
+        loop {
+            let username = match self.current() {
+                Some(Token::StringLiteral(s)) => s.clone(),
+                _ => return Err("Expected username string".to_string()),
+            };
+            self.next();
+
+            let host = if matches!(self.current(), Some(Token::At)) {
+                self.next();
+                let host_str = match self.current() {
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    _ => return Err("Expected host string after @".to_string()),
+                };
+                self.next();
+                host_str
+            } else {
+                "%".to_string()
+            };
+
+            identities.push(UserIdentity::new(&username, &host));
+
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        Ok(Statement::DropUser(DropUserStmt { identities }))
     }
 
     fn parse_create_trigger(&mut self) -> Result<Statement, String> {
@@ -2534,7 +2690,74 @@ impl Parser {
         // Parse BEGIN...END block
         self.expect(Token::Begin)?;
 
-        let body = self.parse_procedure_body()?;
+        let mut body = Vec::new();
+
+        // Simple body parsing: collect statements until END
+        // Note: This is a simplified implementation that stores raw SQL for now
+        while !matches!(self.current(), Some(Token::Identifier(end_str)) 
+                       if end_str.to_uppercase() == "END")
+            && !matches!(self.current(), None)
+        {
+            let stmt = match self.current() {
+                Some(Token::Select) => {
+                    // For now, just collect SELECT statements as raw SQL
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Set) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Identifier(_)) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Semicolon) => {
+                    self.next();
+                    continue;
+                }
+                Some(Token::If) => {
+                    let raw_sql = self.collect_until_end_if();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::While) => {
+                    let raw_sql = self.collect_until_end_loop();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Loop) => {
+                    let raw_sql = self.collect_until_end_loop();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Leave) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Iterate) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Signal) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                Some(Token::Return) => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+                _ => {
+                    let raw_sql = self.collect_until_semicolon();
+                    ProcedureStatement::RawSql(raw_sql)
+                }
+            };
+            body.push(stmt);
+        }
+
+        // Expect END
+        if matches!(self.current(), Some(Token::Identifier(end_str)) 
+                   if end_str.to_uppercase() == "END")
+        {
+            self.next();
+        }
 
         Ok(Statement::CreateProcedure(CreateProcedureStatement {
             name,
@@ -2549,7 +2772,7 @@ impl Parser {
 
         loop {
             // Check for END before parsing statement
-            if matches!(self.current(), Some(Token::Identifier(end_str))
+            if matches!(self.current(), Some(Token::Identifier(end_str)) 
                        if end_str.to_uppercase() == "END")
             {
                 break;
@@ -2598,7 +2821,10 @@ impl Parser {
             Some(Token::Return) => self.parse_procedure_return(),
             Some(Token::Call) => self.parse_procedure_call(),
             Some(Token::Set) => self.parse_procedure_set(),
-            Some(Token::Select) => self.parse_procedure_select(),
+            Some(Token::Select) => {
+                let sql = self.collect_until_semicolon();
+                Ok(ProcedureStatement::RawSql(sql))
+            }
             Some(Token::Identifier(id)) if id.to_uppercase() == "CALL" => {
                 self.next(); // consume CALL
                 self.parse_procedure_call()
@@ -2642,7 +2868,8 @@ impl Parser {
         let default_value = if matches!(self.current(), Some(Token::Identifier(id)) if id.to_uppercase() == "DEFAULT")
         {
             self.next();
-            Some(self.collect_until_semicolon().trim().to_string())
+            let value = self.collect_until_semicolon().trim().to_string();
+            Some(value)
         } else {
             self.expect(Token::Semicolon)?;
             None
@@ -2800,80 +3027,6 @@ impl Parser {
         })
     }
 
-    /// Parse SELECT ... INTO for stored procedures
-    fn parse_procedure_select(&mut self) -> Result<ProcedureStatement, String> {
-        // Look ahead to see if this is SELECT ... INTO var1, var2 FROM table
-        let sql = self.collect_until_semicolon();
-        let sql_upper = sql.to_uppercase();
-
-        if sql_upper.contains(" INTO ") {
-            // Parse SELECT ... INTO
-            return self.parse_select_into(&sql);
-        }
-
-        // Regular SELECT - treat as raw SQL
-        Ok(ProcedureStatement::RawSql(sql))
-    }
-
-    /// Parse SELECT INTO statement
-    fn parse_select_into(&mut self, sql: &str) -> Result<ProcedureStatement, String> {
-        // Simple parser for SELECT col1, col2 INTO @var1, @var2 FROM table [WHERE ...]
-        let sql_upper = sql.to_uppercase();
-
-        // Extract INTO clause
-        let into_pos = sql_upper.find(" INTO ").ok_or("Missing INTO clause")?;
-        let from_pos = sql_upper.find(" FROM ");
-
-        // Parse columns
-        let select_part = sql[..into_pos].replace("SELECT", "").trim().to_string();
-        let columns: Vec<String> = select_part
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        // Parse INTO variables
-        let into_part = if let Some(from_idx) = from_pos {
-            sql[into_pos + 6..from_idx].trim().to_string()
-        } else {
-            sql[into_pos + 6..].trim().to_string()
-        };
-
-        // Extract variable names (remove @ prefix if present)
-        let into_vars: Vec<String> = into_part
-            .split(',')
-            .map(|s| {
-                let var = s.trim();
-                if let Some(stripped) = var.strip_prefix('@') {
-                    stripped.to_string()
-                } else {
-                    var.to_string()
-                }
-            })
-            .collect();
-
-        // Parse table name
-        let (table, where_clause) = if let Some(from_idx) = from_pos {
-            let from_part = sql[from_idx + 6..].trim();
-            if let Some(where_pos) = from_part.to_uppercase().find(" WHERE ") {
-                let table = from_part[..where_pos].trim().to_string();
-                let where_cond = from_part[where_pos + 8..].trim().to_string();
-                (table, Some(where_cond))
-            } else {
-                (from_part.to_string(), None)
-            }
-        } else {
-            return Err("Missing FROM clause in SELECT INTO".to_string());
-        };
-
-        Ok(ProcedureStatement::SelectInto {
-            columns,
-            into_vars,
-            table,
-            where_clause,
-        })
-    }
-
     /// Parse SET variable = value statement
     fn parse_procedure_set(&mut self) -> Result<ProcedureStatement, String> {
         self.expect(Token::Set)?;
@@ -2900,7 +3053,7 @@ impl Parser {
         loop {
             match self.current() {
                 None => break,
-                Some(t) if tokens.contains(t) && paren_depth == 0 => break,
+                Some(t) if tokens.contains(&t) && paren_depth == 0 => break,
                 Some(Token::LParen) => {
                     paren_depth += 1;
                     result.push('(');
@@ -2964,7 +3117,7 @@ impl Parser {
                 Some(Token::Eof) => break,
                 None => break,
                 Some(tok) => {
-                    sql.push_str(&token_to_string(tok));
+                    sql.push_str(&tok.to_string());
                     sql.push(' ');
                     self.next();
                 }
@@ -3155,7 +3308,7 @@ impl Parser {
             Some(Token::Identifier(name)) => {
                 let u = name.clone();
                 self.next();
-                u
+                UserIdentity::new(&u, "%")
             }
             _ => return Err("Expected user name".to_string()),
         };
@@ -3213,7 +3366,7 @@ impl Parser {
             Some(Token::Identifier(name)) => {
                 let u = name.clone();
                 self.next();
-                u
+                UserIdentity::new(&u, "%")
             }
             _ => return Err("Expected user name".to_string()),
         };
@@ -3353,65 +3506,6 @@ impl Parser {
 
         Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement {
             name,
-        }))
-    }
-
-    /// Parse COPY statement
-    /// COPY table_name FROM 'path' (FORMAT PARQUET)
-    /// COPY table_name TO 'path' (FORMAT PARQUET)
-    fn parse_copy(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Copy)?;
-
-        // Get table name
-        let table_name = match self.current() {
-            Some(Token::Identifier(name)) => {
-                let name = name.clone();
-                self.next();
-                name
-            }
-            _ => return Err("Expected table name after COPY".to_string()),
-        };
-
-        // Get direction (FROM or TO)
-        let from = match self.current() {
-            Some(Token::From) => {
-                self.next();
-                true
-            }
-            Some(Token::To) => {
-                self.next();
-                false
-            }
-            _ => return Err("Expected FROM or TO after table name".to_string()),
-        };
-
-        // Get file path
-        let path = match self.current() {
-            Some(Token::StringLiteral(s)) => {
-                let path = s.clone();
-                self.next();
-                path
-            }
-            _ => return Err("Expected file path string after FROM/TO".to_string()),
-        };
-
-        // Parse optional format clause: (FORMAT PARQUET)
-        let format = if matches!(self.current(), Some(Token::LParen)) {
-            self.next()
-                .ok_or_else(|| "Unexpected end of input".to_string())?;
-            self.expect(Token::Format)?;
-            self.expect(Token::Parquet)?;
-            self.expect(Token::RParen)?;
-            "PARQUET".to_string()
-        } else {
-            "PARQUET".to_string() // Default format
-        };
-
-        Ok(Statement::Copy(CopyStatement {
-            table_name,
-            from,
-            path,
-            format,
         }))
     }
 
@@ -3937,7 +4031,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "alice");
+                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3951,7 +4045,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "orders");
-                assert_eq!(g.to_user, "bob");
+                assert_eq!(g.to_user, UserIdentity::new("bob", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3965,7 +4059,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::All);
                 assert_eq!(g.table, "products");
-                assert_eq!(g.to_user, "admin");
+                assert_eq!(g.to_user, UserIdentity::new("admin", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3979,7 +4073,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "guest");
+                assert_eq!(g.to_user, UserIdentity::new("guest", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -3993,7 +4087,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "writer");
+                assert_eq!(g.to_user, UserIdentity::new("writer", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -4007,7 +4101,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "updater");
+                assert_eq!(g.to_user, UserIdentity::new("updater", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -4021,7 +4115,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Write);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "deleter");
+                assert_eq!(g.to_user, UserIdentity::new("deleter", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -4035,7 +4129,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "users");
-                assert_eq!(g.to_user, "alice");
+                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -4049,7 +4143,7 @@ mod tests {
             Statement::Grant(g) => {
                 assert_eq!(g.privilege, Privilege::Read);
                 assert_eq!(g.table, "Users");
-                assert_eq!(g.to_user, "Alice");
+                assert_eq!(g.to_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected GRANT statement"),
         }
@@ -4081,7 +4175,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "alice");
+                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4095,7 +4189,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "orders");
-                assert_eq!(r.from_user, "bob");
+                assert_eq!(r.from_user, UserIdentity::new("bob", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4109,7 +4203,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::All);
                 assert_eq!(r.table, "products");
-                assert_eq!(r.from_user, "admin");
+                assert_eq!(r.from_user, UserIdentity::new("admin", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4123,7 +4217,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "guest");
+                assert_eq!(r.from_user, UserIdentity::new("guest", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4137,7 +4231,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "writer");
+                assert_eq!(r.from_user, UserIdentity::new("writer", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4151,7 +4245,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "updater");
+                assert_eq!(r.from_user, UserIdentity::new("updater", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4165,7 +4259,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Write);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "deleter");
+                assert_eq!(r.from_user, UserIdentity::new("deleter", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4179,7 +4273,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "users");
-                assert_eq!(r.from_user, "alice");
+                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4193,7 +4287,7 @@ mod tests {
             Statement::Revoke(r) => {
                 assert_eq!(r.privilege, Privilege::Read);
                 assert_eq!(r.table, "Users");
-                assert_eq!(r.from_user, "Alice");
+                assert_eq!(r.from_user, UserIdentity::new("alice", "%"));
             }
             _ => panic!("Expected REVOKE statement"),
         }
@@ -4229,7 +4323,7 @@ mod tests {
         let grant = GrantStatement {
             privilege: Privilege::Read,
             table: "users".to_string(),
-            to_user: "alice".to_string(),
+            to_user: UserIdentity::new("alice", "%"),
         };
         let cloned = grant.clone();
         assert_eq!(grant.privilege, cloned.privilege);
@@ -4242,7 +4336,7 @@ mod tests {
         let revoke = RevokeStatement {
             privilege: Privilege::Write,
             table: "orders".to_string(),
-            from_user: "bob".to_string(),
+            from_user: UserIdentity::new("bob", "%"),
         };
         let cloned = revoke.clone();
         assert_eq!(revoke.privilege, cloned.privilege);
@@ -4255,7 +4349,7 @@ mod tests {
         let grant = GrantStatement {
             privilege: Privilege::Read,
             table: "users".to_string(),
-            to_user: "alice".to_string(),
+            to_user: UserIdentity::new("alice", "%"),
         };
         let debug = format!("{:?}", grant);
         assert!(debug.contains("GrantStatement"));
@@ -4269,7 +4363,7 @@ mod tests {
         let revoke = RevokeStatement {
             privilege: Privilege::Write,
             table: "orders".to_string(),
-            from_user: "bob".to_string(),
+            from_user: UserIdentity::new("bob", "%"),
         };
         let debug = format!("{:?}", revoke);
         assert!(debug.contains("RevokeStatement"));
@@ -4301,6 +4395,82 @@ mod tests {
         for sql in revokes {
             let result = parse(sql);
             assert!(result.is_ok(), "Failed to parse: {}", sql);
+        }
+    }
+
+    #[test]
+    fn test_parse_create_user() {
+        let result = parse("CREATE USER 'alice'@'localhost' IDENTIFIED BY 'password123'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateUser(c) => {
+                assert_eq!(c.identities.len(), 1);
+                assert_eq!(c.identities[0].username, "alice");
+                assert_eq!(c.identities[0].host, "localhost");
+                assert_eq!(c.password, "password123");
+            }
+            _ => panic!("Expected CREATE USER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_user_multiple() {
+        let result = parse("CREATE USER 'alice'@'localhost', 'bob'@'%' IDENTIFIED BY 'password'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateUser(c) => {
+                assert_eq!(c.identities.len(), 2);
+                assert_eq!(c.identities[0].username, "alice");
+                assert_eq!(c.identities[0].host, "localhost");
+                assert_eq!(c.identities[1].username, "bob");
+                assert_eq!(c.identities[1].host, "%");
+                assert_eq!(c.password, "password");
+            }
+            _ => panic!("Expected CREATE USER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_user_default_host() {
+        let result = parse("CREATE USER 'alice' IDENTIFIED BY 'password'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::CreateUser(c) => {
+                assert_eq!(c.identities.len(), 1);
+                assert_eq!(c.identities[0].username, "alice");
+                assert_eq!(c.identities[0].host, "%");
+            }
+            _ => panic!("Expected CREATE USER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_user() {
+        let result = parse("DROP USER 'alice'@'localhost'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::DropUser(d) => {
+                assert_eq!(d.identities.len(), 1);
+                assert_eq!(d.identities[0].username, "alice");
+                assert_eq!(d.identities[0].host, "localhost");
+            }
+            _ => panic!("Expected DROP USER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_user_multiple() {
+        let result = parse("DROP USER 'alice'@'localhost', 'bob'@'%'");
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        match result.unwrap() {
+            Statement::DropUser(d) => {
+                assert_eq!(d.identities.len(), 2);
+                assert_eq!(d.identities[0].username, "alice");
+                assert_eq!(d.identities[0].host, "localhost");
+                assert_eq!(d.identities[1].username, "bob");
+                assert_eq!(d.identities[1].host, "%");
+            }
+            _ => panic!("Expected DROP USER statement"),
         }
     }
 
@@ -5179,31 +5349,6 @@ fn test_parse_procedure_return() {
         Statement::CreateProcedure(proc) => {
             assert!(matches!(proc.body[0], ProcedureStatement::Return { .. }));
         }
-        _ => panic!("Expected CreateProcedure statement"),
-    }
-}
-
-#[test]
-fn test_parse_procedure_select_into() {
-    let sql = "CREATE PROCEDURE test_select_into() BEGIN SELECT id, name INTO @uid, @uname FROM users WHERE id = 1; END";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::CreateProcedure(proc) => match &proc.body[0] {
-            ProcedureStatement::SelectInto {
-                columns,
-                into_vars,
-                table,
-                ..
-            } => {
-                assert_eq!(columns.len(), 2);
-                assert_eq!(into_vars.len(), 2);
-                assert_eq!(into_vars[0].trim(), "uid");
-                assert_eq!(into_vars[1].trim(), "uname");
-                assert_eq!(table.trim(), "users");
-            }
-            _ => panic!("Expected SelectInto statement"),
-        },
         _ => panic!("Expected CreateProcedure statement"),
     }
 }
