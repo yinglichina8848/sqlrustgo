@@ -13,6 +13,7 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "ERROR" => LogLevel::Error,
@@ -102,14 +103,14 @@ impl RollingLogger {
                 .filter(|e| {
                     e.path()
                         .extension()
-                        .map_or(false, |ext| ext == "log" || ext == "gz")
+                        .is_some_and(|ext| ext == "log" || ext == "gz")
                 })
                 .collect();
 
             log_files.sort_by_key(|e| e.path());
 
             while log_files.len() >= self.max_files {
-                if let Some(oldest) = log_files.first().take() {
+                if let Some(oldest) = log_files.first() {
                     let _ = fs::remove_file(oldest.path());
                     log_files.remove(0);
                 }
@@ -142,7 +143,7 @@ impl RollingLogger {
                 LogFormat::Json => self.format_json(record),
             };
 
-            if let Ok(_) = writer.write_all(log_line.as_bytes()) {
+            if writer.write_all(log_line.as_bytes()).is_ok() {
                 let _ = writer.flush();
                 *self.file_size.lock().unwrap() += log_line.len() as u64;
             }
