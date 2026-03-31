@@ -93,6 +93,8 @@ proptest = "1.1"
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-security = { path = "crates/security" }
+sqlrustgo-telemetry = { path = "crates/telemetry" }
+query-stats = { path = "crates/query-stats" }
 
 [package]
 name = "sqlrustgo"
@@ -389,6 +391,14 @@ path = "tests/integration/distributed_transaction_test.rs"
 [[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
+
+[[test]]
+name = "prometheus_test"
+path = "tests/unit/prometheus_test.rs"
+
+[[test]]
+name = "slow_query_log_test"
+path = "tests/unit/slow_query_log_test.rs"
 
 [[test]]
 name = "auth_rbac_test"
