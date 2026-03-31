@@ -3,9 +3,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 use crate::error::AgentSqlError;
 use crate::memory::{
@@ -85,7 +85,11 @@ pub async fn handle_nl_query(
     let result = state.nl2sql_service.natural_language_to_sql(&req.query);
     Json(NlQueryResponseDto {
         success: result.error.is_none(),
-        sql: if result.error.is_none() { Some(result.sql) } else { None },
+        sql: if result.error.is_none() {
+            Some(result.sql)
+        } else {
+            None
+        },
         confidence: Some(result.confidence),
         table_hint: result.table_hint,
         where_conditions: Some(result.where_conditions),
