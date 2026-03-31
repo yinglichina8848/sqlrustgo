@@ -152,6 +152,7 @@ impl<'a> LocalExecutor<'a> {
                     tables,
                     created_at: Instant::now(),
                     size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                    last_access: 0,
                 };
                 self.cache.write().put(cache_key, entry, vec![]);
             }
