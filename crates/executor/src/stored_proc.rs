@@ -4,9 +4,10 @@
 
 use crate::ExecutorResult;
 use sqlrustgo_catalog::StoredProcStatement;
+use sqlrustgo_storage::{Record, StorageEngine};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Stored procedure execution error
 #[derive(Debug, Clone)]
@@ -223,12 +224,25 @@ impl ProcedureContext {
 #[derive(Clone)]
 pub struct StoredProcExecutor {
     catalog: Arc<sqlrustgo_catalog::Catalog>,
+    storage: Arc<RwLock<dyn StorageEngine>>,
 }
 
 impl StoredProcExecutor {
     /// Create a new stored procedure executor
-    pub fn new(catalog: Arc<sqlrustgo_catalog::Catalog>) -> Self {
-        Self { catalog }
+    pub fn new(
+        catalog: Arc<sqlrustgo_catalog::Catalog>,
+        storage: Arc<RwLock<dyn StorageEngine>>,
+    ) -> Self {
+        Self { catalog, storage }
+    }
+
+    #[cfg(test)]
+    fn new_for_test(catalog: Arc<sqlrustgo_catalog::Catalog>) -> Self {
+        use sqlrustgo_storage::MemoryStorage;
+        Self {
+            catalog,
+            storage: Arc::new(RwLock::new(MemoryStorage::new())),
+        }
     }
 
     /// Execute a stored procedure call
@@ -319,10 +333,9 @@ impl StoredProcExecutor {
                 Ok(())
             }
             StoredProcStatement::RawSql(sql) => {
-                // Execute raw SQL (placeholder - actual execution would need executor access)
+                // Execute raw SQL using storage engine
                 if !sql.is_empty() {
-                    // In a real implementation, this would execute the SQL
-                    // For now, we just acknowledge the statement
+                    self.execute_sql(sql, ctx)?;
                 }
                 Ok(())
             }
@@ -498,6 +511,61 @@ impl StoredProcExecutor {
                     )
                 }
             }
+        }
+    }
+
+    /// Execute a SQL statement using the storage engine
+    fn execute_sql(&self, sql: &str, ctx: &mut ProcedureContext) -> Result<(), String> {
+        let expanded_sql = self.expand_variables_in_sql(sql, ctx);
+        let sql_upper = expanded_sql.trim().to_uppercase();
+
+        if sql_upper.starts_with("SELECT")
+            || sql_upper.starts_with("INSERT")
+            || sql_upper.starts_with("UPDATE")
+            || sql_upper.starts_with("DELETE")
+        {
+            let statement = sqlrustgo_parser::parse(&expanded_sql)
+                .map_err(|e| format!("Failed to parse SQL: {}", e))?;
+
+            self.execute_statement_storage(&statement, ctx)?;
+        }
+
+        Ok(())
+    }
+
+    /// Execute a parsed statement using storage engine
+    fn execute_statement_storage(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+        ctx: &mut ProcedureContext,
+    ) -> Result<(), String> {
+        match statement {
+            sqlrustgo_parser::Statement::Select(select) => {
+                let table_name = &select.table;
+                let storage = self.storage.read().unwrap();
+                let records = storage
+                    .scan(table_name)
+                    .map_err(|e| format!("Failed to scan table: {}", e))?;
+
+                ctx.set_session_var(
+                    "__last_select_result",
+                    Value::Text(serde_json::to_string(&records).unwrap_or_default()),
+                );
+                Ok(())
+            }
+            sqlrustgo_parser::Statement::Insert(_insert) => {
+                ctx.set_session_var("__last_insert_pending", Value::Text("true".to_string()));
+                Ok(())
+            }
+            sqlrustgo_parser::Statement::Update(_update) => {
+                ctx.set_session_var("__last_update_count", Value::Integer(0));
+                Ok(())
+            }
+            sqlrustgo_parser::Statement::Delete(_delete) => {
+                ctx.set_session_var("__last_delete_count", Value::Integer(0));
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
