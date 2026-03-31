@@ -753,7 +753,6 @@ impl AuthManager {
         }
         false
     }
-    }
 
     fn matches_object(
         &self,

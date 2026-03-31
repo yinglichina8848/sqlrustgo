@@ -134,7 +134,8 @@ impl ProcedureContext {
 
     /// Get any variable (local first, then session)
     pub fn get_var(&self, name: &str) -> Option<&Value> {
-        self.local_variables.get(name)
+        self.local_variables
+            .get(name)
             .or_else(|| self.session_variables.get(name))
     }
 
@@ -149,7 +150,11 @@ impl ProcedureContext {
 
     /// Check if a variable exists (local or session)
     pub fn has_var(&self, name: &str) -> bool {
-        let key = if name.starts_with('@') { &name[1..] } else { name };
+        let key = if name.starts_with('@') {
+            &name[1..]
+        } else {
+            name
+        };
         self.local_variables.contains_key(key) || self.session_variables.contains_key(key)
     }
 
@@ -236,7 +241,7 @@ impl StoredProcExecutor {
 
         // Execute the procedure body
         let mut ctx = ProcedureContext::new();
-        
+
         // Bind input parameters to variables
         for (i, param) in procedure.params.iter().enumerate() {
             if i < args.len() {
@@ -249,10 +254,7 @@ impl StoredProcExecutor {
 
         // Check if RETURN was called
         if let Some(value) = ctx.get_return() {
-            return Ok(ExecutorResult::new(
-                vec![vec![value]],
-                1,
-            ));
+            return Ok(ExecutorResult::new(vec![vec![value]], 1));
         }
 
         match result {
@@ -297,7 +299,11 @@ impl StoredProcExecutor {
         ctx: &mut ProcedureContext,
     ) -> Result<(), String> {
         match stmt {
-            StoredProcStatement::Declare { name, default_value, .. } => {
+            StoredProcStatement::Declare {
+                name,
+                default_value,
+                ..
+            } => {
                 // Declare variable with default value
                 let value = default_value
                     .as_ref()
@@ -320,18 +326,27 @@ impl StoredProcExecutor {
                 }
                 Ok(())
             }
-            StoredProcStatement::SelectInto { columns, into_vars, table, where_clause } => {
+            StoredProcStatement::SelectInto {
+                columns,
+                into_vars,
+                table,
+                where_clause,
+            } => {
                 // SELECT INTO - execute SELECT and store results into variables
                 // Build WHERE clause string
                 let where_str = where_clause
                     .as_ref()
                     .map(|w| format!(" WHERE {}", self.expand_variables_in_sql(w, ctx)))
                     .unwrap_or_default();
-                
+
                 // Build the SELECT query
-                let cols = if columns.is_empty() { "*".to_string() } else { columns.join(", ") };
+                let cols = if columns.is_empty() {
+                    "*".to_string()
+                } else {
+                    columns.join(", ")
+                };
                 let _query = format!("SELECT {} FROM {}{}", cols, table, where_str);
-                
+
                 // For now, execute a simple query through the catalog
                 // In a full implementation, this would use the query planner/executor
                 // We evaluate expressions in the INTO variables
@@ -346,15 +361,20 @@ impl StoredProcExecutor {
                         ctx.set_var(var, Value::Null);
                     }
                 }
-                
+
                 // Note: In a complete implementation, this would:
                 // 1. Parse the query using the SQL parser
                 // 2. Execute through the query planner
                 // 3. Fetch results and assign to variables
-                
+
                 Ok(())
             }
-            StoredProcStatement::If { condition, then_body, elseif_body, else_body } => {
+            StoredProcStatement::If {
+                condition,
+                then_body,
+                elseif_body,
+                else_body,
+            } => {
                 // Evaluate condition
                 if self.evaluate_condition(condition, ctx)? {
                     self.execute_body(then_body, ctx)?;
@@ -376,7 +396,10 @@ impl StoredProcExecutor {
             }
             StoredProcStatement::While { condition, body } => {
                 // While loop - always has implicit label for LEAVE/ITERATE
-                while self.evaluate_condition(condition, ctx)? && !ctx.should_leave() && ctx.get_return().is_none() {
+                while self.evaluate_condition(condition, ctx)?
+                    && !ctx.should_leave()
+                    && ctx.get_return().is_none()
+                {
                     ctx.reset_iterate();
                     self.execute_body(body, ctx)?;
                     if ctx.should_iterate() {
@@ -418,15 +441,19 @@ impl StoredProcExecutor {
                 ctx.set_return(ret_val);
                 Ok(())
             }
-            StoredProcStatement::Call { procedure_name, args, into_var } => {
+            StoredProcStatement::Call {
+                procedure_name,
+                args,
+                into_var,
+            } => {
                 // Nested procedure call
                 let call_args: Vec<Value> = args
                     .iter()
                     .map(|a| self.evaluate_expression(a, ctx).unwrap_or(Value::Null))
                     .collect();
-                
+
                 let result = self.execute_call(procedure_name, call_args);
-                
+
                 match result {
                     Ok(exec_result) => {
                         if let Some(var_name) = into_var {
@@ -443,8 +470,12 @@ impl StoredProcExecutor {
             }
             StoredProcStatement::Signal { sqlstate, message } => {
                 // SIGNAL - raise an exception
-                let state = sqlstate.clone().unwrap_or_else(|| SQLSTATE_SQL_EXCEPTION.to_string());
-                let msg = message.clone().unwrap_or_else(|| "User-defined exception".to_string());
+                let state = sqlstate
+                    .clone()
+                    .unwrap_or_else(|| SQLSTATE_SQL_EXCEPTION.to_string());
+                let msg = message
+                    .clone()
+                    .unwrap_or_else(|| "User-defined exception".to_string());
                 ctx.set_exception(state.clone(), msg.clone());
                 Err(format!("SQLSTATE {}: {}", state, msg))
             }
@@ -461,7 +492,10 @@ impl StoredProcExecutor {
                     ctx.set_exception(state.clone(), msg.clone());
                     Err(format!("SQLSTATE {}: {}", state, msg))
                 } else {
-                    Err("RESIGNAL requires an active exception or explicit SQLSTATE and MESSAGE".to_string())
+                    Err(
+                        "RESIGNAL requires an active exception or explicit SQLSTATE and MESSAGE"
+                            .to_string(),
+                    )
                 }
             }
         }
@@ -471,20 +505,20 @@ impl StoredProcExecutor {
     fn evaluate_condition(&self, condition: &str, ctx: &ProcedureContext) -> Result<bool, String> {
         // Simple condition evaluation for comparison operators
         let cond = condition.trim();
-        
+
         // Handle "variable op value" comparisons
         for &op in &["<=", ">=", "!=", "<>", "=", "<", ">"] {
             if let Some(pos) = cond.find(op) {
                 let left = cond[..pos].trim();
                 let right = cond[pos + op.len()..].trim();
-                
+
                 let left_val = self.expand_variable(left, ctx);
                 let right_val = self.evaluate_constant(right);
-                
+
                 return Ok(self.compare_values(&left_val, &right_val, op));
             }
         }
-        
+
         // Default: treat as boolean constant
         Ok(cond != "0" && cond.to_lowercase() != "false" && !cond.is_empty())
     }
@@ -492,12 +526,12 @@ impl StoredProcExecutor {
     /// Evaluate an expression and return a Value
     fn evaluate_expression(&self, expr: &str, ctx: &ProcedureContext) -> Result<Value, String> {
         let expr = expr.trim();
-        
+
         // Handle string literals
         if expr.starts_with('\'') && expr.ends_with('\'') {
-            return Ok(Value::Text(expr[1..expr.len()-1].to_string()));
+            return Ok(Value::Text(expr[1..expr.len() - 1].to_string()));
         }
-        
+
         // Handle numeric literals
         if let Ok(num) = expr.parse::<i64>() {
             return Ok(Value::Integer(num));
@@ -505,7 +539,7 @@ impl StoredProcExecutor {
         if let Ok(float) = expr.parse::<f64>() {
             return Ok(Value::Float(float));
         }
-        
+
         // Handle variables (starting with @)
         if expr.starts_with('@') {
             let var_name = &expr[1..];
@@ -513,18 +547,18 @@ impl StoredProcExecutor {
                 return Ok(val.clone());
             }
         }
-        
+
         // Handle simple arithmetic: var + value, var - value, etc.
         for &op in &["+", "-", "*", "/"] {
             if let Some(pos) = expr.find(op) {
                 if pos > 0 && pos < expr.len() - 1 {
                     let left = self.evaluate_expression(&expr[..pos], ctx)?;
-                    let right = self.evaluate_expression(&expr[pos+1..], ctx)?;
+                    let right = self.evaluate_expression(&expr[pos + 1..], ctx)?;
                     return self.arithmetic_op(&left, &right, op);
                 }
             }
         }
-        
+
         // Default: return as text
         Ok(Value::Text(expr.to_string()))
     }
@@ -532,7 +566,7 @@ impl StoredProcExecutor {
     /// Expand a variable reference to its value
     fn expand_variable(&self, name: &str, ctx: &ProcedureContext) -> Value {
         let name = name.trim();
-        
+
         // Handle @variable syntax
         if name.starts_with('@') {
             let var_name = &name[1..];
@@ -550,7 +584,7 @@ impl StoredProcExecutor {
         let chars: Vec<char> = sql.chars().collect();
         let mut result = String::new();
         let mut i = 0;
-        
+
         while i < chars.len() {
             if chars[i] == '@' {
                 // Find end of variable name
@@ -559,8 +593,9 @@ impl StoredProcExecutor {
                 while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                     i += 1;
                 }
-                let var_name: String = chars[start+1..i].iter().collect();
-                let value = ctx.get_var(&var_name)
+                let var_name: String = chars[start + 1..i].iter().collect();
+                let value = ctx
+                    .get_var(&var_name)
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| "NULL".to_string());
                 result.push_str(&value);
@@ -569,19 +604,19 @@ impl StoredProcExecutor {
                 i += 1;
             }
         }
-        
+
         result
     }
 
     /// Evaluate a constant expression
     fn evaluate_constant(&self, value: &str) -> Value {
         let value = value.trim();
-        
+
         // Handle string literals
         if value.starts_with('\'') && value.ends_with('\'') {
-            return Value::Text(value[1..value.len()-1].to_string());
+            return Value::Text(value[1..value.len() - 1].to_string());
         }
-        
+
         // Handle numeric literals
         if let Ok(num) = value.parse::<i64>() {
             return Value::Integer(num);
@@ -589,12 +624,12 @@ impl StoredProcExecutor {
         if let Ok(float) = value.parse::<f64>() {
             return Value::Float(float);
         }
-        
+
         // Handle NULL
         if value.to_uppercase() == "NULL" {
             return Value::Null;
         }
-        
+
         // Handle boolean literals
         if value.to_uppercase() == "TRUE" {
             return Value::Boolean(true);
@@ -602,7 +637,7 @@ impl StoredProcExecutor {
         if value.to_uppercase() == "FALSE" {
             return Value::Boolean(false);
         }
-        
+
         Value::Text(value.to_string())
     }
 
@@ -612,9 +647,15 @@ impl StoredProcExecutor {
             "=" | "==" => left == right,
             "!=" | "<>" => left != right,
             ">" => self.partial_cmp(left, right) == Some(std::cmp::Ordering::Greater),
-            ">=" => matches!(self.partial_cmp(left, right), Some(std::cmp::Ordering::Greater) | Some(std::cmp::Ordering::Equal)),
+            ">=" => matches!(
+                self.partial_cmp(left, right),
+                Some(std::cmp::Ordering::Greater) | Some(std::cmp::Ordering::Equal)
+            ),
             "<" => self.partial_cmp(left, right) == Some(std::cmp::Ordering::Less),
-            "<=" => matches!(self.partial_cmp(left, right), Some(std::cmp::Ordering::Less) | Some(std::cmp::Ordering::Equal)),
+            "<=" => matches!(
+                self.partial_cmp(left, right),
+                Some(std::cmp::Ordering::Less) | Some(std::cmp::Ordering::Equal)
+            ),
             _ => false,
         }
     }
@@ -622,7 +663,7 @@ impl StoredProcExecutor {
     /// Compare two values (for ordering)
     fn partial_cmp(&self, left: &Value, right: &Value) -> Option<std::cmp::Ordering> {
         use std::cmp::Ordering;
-        
+
         match (left, right) {
             (Value::Null, _) | (_, Value::Null) => None,
             (Value::Integer(l), Value::Integer(r)) => Some(l.cmp(r)),
@@ -656,7 +697,10 @@ impl StoredProcExecutor {
                     Ok(Value::Float(l / r))
                 }
             }
-            _ => Err(format!("Unsupported arithmetic operation: {:?} {} {:?}", left, op, right)),
+            _ => Err(format!(
+                "Unsupported arithmetic operation: {:?} {} {:?}",
+                left, op, right
+            )),
         }
     }
 
@@ -739,7 +783,7 @@ mod tests {
         let executor = StoredProcExecutor::new(catalog);
         let mut ctx = ProcedureContext::new();
         ctx.set_var("x", Value::Integer(10));
-        
+
         // Note: This test requires the condition to reference the variable properly
         // In practice, we'd need proper variable expansion
     }
@@ -747,26 +791,26 @@ mod tests {
     #[test]
     fn test_procedure_context_label_stack() {
         let mut ctx = ProcedureContext::new();
-        
+
         // Initially no labels
         assert!(!ctx.has_label("loop1"));
-        
+
         // Enter a label
         ctx.enter_label("loop1".to_string());
         assert!(ctx.has_label("loop1"));
         assert_eq!(ctx.get_label(), Some(&"loop1".to_string()));
-        
+
         // Enter nested label
         ctx.enter_label("loop2".to_string());
         assert!(ctx.has_label("loop1"));
         assert!(ctx.has_label("loop2"));
         assert_eq!(ctx.get_label(), Some(&"loop2".to_string()));
-        
+
         // Exit nested label
         let popped = ctx.exit_label();
         assert_eq!(popped, Some("loop2".to_string()));
         assert_eq!(ctx.get_label(), Some(&"loop1".to_string()));
-        
+
         // Exit outer label
         let popped = ctx.exit_label();
         assert_eq!(popped, Some("loop1".to_string()));
@@ -777,22 +821,22 @@ mod tests {
     #[test]
     fn test_label_validation_leave_iterate() {
         let mut ctx = ProcedureContext::new();
-        
+
         // Empty label with no current label should fail
         let result = ctx.validate_label("");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("requires an active loop"));
-        
+
         // Valid label should pass
         ctx.enter_label("myloop".to_string());
         let result = ctx.validate_label("myloop");
         assert!(result.is_ok());
-        
+
         // Invalid label should fail
         let result = ctx.validate_label("nonexistent");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
-        
+
         // Empty label with current label should pass
         ctx.reset_leave();
         let result = ctx.validate_label("");
@@ -802,16 +846,16 @@ mod tests {
     #[test]
     fn test_signal_exception() {
         let mut ctx = ProcedureContext::new();
-        
+
         // Set an exception via SIGNAL
         ctx.set_exception("45000".to_string(), "Custom error".to_string());
-        
+
         let exc = ctx.get_exception();
         assert!(exc.is_some());
         let exc = exc.unwrap();
         assert_eq!(exc.sqlstate, "45000");
         assert_eq!(exc.message, "Custom error");
-        
+
         // Clear exception
         ctx.clear_exception();
         assert!(ctx.get_exception().is_none());
@@ -820,17 +864,17 @@ mod tests {
     #[test]
     fn test_resignal_with_active_exception() {
         let mut ctx = ProcedureContext::new();
-        
+
         // Set an initial exception
         ctx.set_exception("22012".to_string(), "Division error".to_string());
-        
+
         // RESIGNAL should preserve the exception
         let exc = ctx.get_exception().unwrap();
         assert_eq!(exc.sqlstate, "22012");
-        
+
         // Clear for next test
         ctx.clear_exception();
-        
+
         // RESIGNAL without active exception should fail
         let result = ctx.validate_label("");
         assert!(result.is_err());
@@ -841,17 +885,19 @@ mod tests {
         let catalog = Arc::new(Catalog::new());
         let executor = StoredProcExecutor::new(catalog);
         let mut ctx = ProcedureContext::new();
-        
+
         // Set session variable
         ctx.set_var("@user_id", Value::Integer(42));
-        
+
         // Test variable expansion in SQL
-        let expanded = executor.expand_variables_in_sql("SELECT * FROM users WHERE id = @user_id", &ctx);
+        let expanded =
+            executor.expand_variables_in_sql("SELECT * FROM users WHERE id = @user_id", &ctx);
         assert!(expanded.contains("42"));
         assert!(!expanded.contains("@user_id"));
-        
+
         // Test with undefined variable
-        let expanded = executor.expand_variables_in_sql("SELECT * FROM users WHERE name = @unknown", &ctx);
+        let expanded =
+            executor.expand_variables_in_sql("SELECT * FROM users WHERE name = @unknown", &ctx);
         assert!(expanded.contains("NULL"));
     }
 
