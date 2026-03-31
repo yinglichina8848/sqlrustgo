@@ -403,3 +403,7 @@ path = "tests/unit/slow_query_log_test.rs"
 [[test]]
 name = "auth_rbac_test"
 path = "tests/integration/auth_rbac_test.rs"
+
+[[test]]
+name = "logging_test"
+path = "tests/integration/logging_test.rs"
