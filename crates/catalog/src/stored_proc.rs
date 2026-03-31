@@ -59,9 +59,7 @@ pub enum StoredProcStatement {
         body: Vec<StoredProcStatement>,
     },
     /// LOOP statements END LOOP (with optional LEAVE to exit)
-    Loop {
-        body: Vec<StoredProcStatement>,
-    },
+    Loop { body: Vec<StoredProcStatement> },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
@@ -87,6 +85,7 @@ pub enum StoredProcStatement {
 }
 
 /// SQL error codes for common conditions
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum SqlCondition {
     SqlException,

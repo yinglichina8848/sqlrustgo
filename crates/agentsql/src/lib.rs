@@ -67,7 +67,7 @@ mod tests {
         let schema = std::sync::Arc::new(schema::SchemaService::new());
         let nl2sql = nl2sql::Nl2SqlService::new(schema);
         let result = nl2sql.natural_language_to_sql("show all users");
-        
+
         assert!(result.sql.contains("SELECT"));
         assert!(result.sql.contains("FROM users"));
         assert!(result.confidence > 0.5);
@@ -78,7 +78,7 @@ mod tests {
         let schema = std::sync::Arc::new(schema::SchemaService::new());
         let nl2sql = nl2sql::Nl2SqlService::new(schema);
         let result = nl2sql.natural_language_to_sql("show top 10 users");
-        
+
         assert!(result.sql.contains("LIMIT 10"));
     }
 
@@ -87,7 +87,7 @@ mod tests {
         let schema = std::sync::Arc::new(schema::SchemaService::new());
         let nl2sql = nl2sql::Nl2SqlService::new(schema);
         let result = nl2sql.natural_language_to_sql("show users where active");
-        
+
         assert!(result.sql.contains("WHERE"));
         assert!(!result.where_conditions.is_empty());
     }
@@ -96,7 +96,7 @@ mod tests {
     fn test_memory_save_and_load() {
         let service = memory::MemoryService::new();
         let mut service = service;
-        
+
         let save_response = service.save_memory(memory::SaveMemoryRequest {
             content: "Test memory content".to_string(),
             memory_type: Some(memory::MemoryType::Conversation),
@@ -106,9 +106,9 @@ mod tests {
             importance: Some(0.8),
             metadata: None,
         });
-        
+
         assert!(save_response.success);
-        
+
         let load_response = service.load_memory(memory::LoadMemoryRequest {
             agent_id: Some("agent1".to_string()),
             session_id: None,
@@ -117,7 +117,7 @@ mod tests {
             limit: None,
             since: None,
         });
-        
+
         assert_eq!(load_response.total, 1);
         assert_eq!(load_response.memories[0].content, "Test memory content");
     }
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn test_memory_search() {
         let mut service = memory::MemoryService::new();
-        
+
         service.save_memory(memory::SaveMemoryRequest {
             content: "How to query users table".to_string(),
             memory_type: Some(memory::MemoryType::Query),
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn test_memory_stats() {
         let mut service = memory::MemoryService::new();
-        
+
         service.save_memory(memory::SaveMemoryRequest {
             content: "Memory 1".to_string(),
             memory_type: Some(memory::MemoryType::Conversation),
