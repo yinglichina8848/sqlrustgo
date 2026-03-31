@@ -5,9 +5,11 @@
 mod backup;
 mod catalog_check;
 mod ha;
+mod mysqldump;
 mod upgrade;
 
 use anyhow::Result;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -21,6 +23,8 @@ enum Command {
     HA(ha::HACommand),
     /// Upgrade database version
     Upgrade(upgrade::UpgradeCommand),
+    /// Import mysqldump format SQL files
+    Import(mysqldump::ImportCommand),
 }
 
 fn main() -> Result<()> {
@@ -51,5 +55,6 @@ fn main() -> Result<()> {
         Command::CatalogCheck(opt) => catalog_check::run_with_opt(opt),
         Command::HA(_ha_cmd) => ha::run(),
         Command::Upgrade(upgrade_cmd) => upgrade::run_with_opt(upgrade_cmd),
+        Command::Import(import_cmd) => mysqldump::run_import(import_cmd),
     }
 }
