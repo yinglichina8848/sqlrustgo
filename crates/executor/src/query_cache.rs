@@ -111,7 +111,7 @@ impl QueryCache {
 
     fn remove(&mut self, key: &CacheKey) {
         if let Some(entry) = self.cache.remove(key) {
-            self.current_memory_bytes -= entry.size_bytes;
+            self.current_memory_bytes = self.current_memory_bytes.saturating_sub(entry.size_bytes);
         }
         self.lru_order.retain(|k| k != key);
 

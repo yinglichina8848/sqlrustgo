@@ -407,3 +407,7 @@ path = "tests/integration/auth_rbac_test.rs"
 [[test]]
 name = "logging_test"
 path = "tests/integration/logging_test.rs"
+
+[[test]]
+name = "query_cache_benchmark"
+path = "tests/anomaly/query_cache_benchmark.rs"
