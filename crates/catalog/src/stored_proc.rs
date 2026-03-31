@@ -82,6 +82,42 @@ pub enum StoredProcStatement {
         sqlstate: Option<String>,
         message: Option<String>,
     },
+    /// BEGIN...END block (with optional label)
+    Block {
+        label: Option<String>,
+        body: Vec<StoredProcStatement>,
+    },
+    /// DECLARE HANDLER for exception conditions
+    DeclareHandler {
+        condition_type: HandlerCondition,
+        body: Vec<StoredProcStatement>,
+    },
+    /// DECLARE cursor
+    DeclareCursor { name: String, query: String },
+    /// OPEN cursor
+    OpenCursor { name: String },
+    /// FETCH from cursor
+    Fetch {
+        name: String,
+        into_vars: Vec<String>,
+    },
+    /// CLOSE cursor
+    CloseCursor { name: String },
+}
+
+/// Handler condition types
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum HandlerCondition {
+    /// SQLEXCEPTION - any error
+    SqlException,
+    /// SQLWARNING - any warning
+    SqlWarning,
+    /// NOT FOUND - no rows found
+    NotFound,
+    /// Specific SQLSTATE
+    SqlState(String),
+    /// Custom error name
+    Custom(String),
 }
 
 /// SQL error codes for common conditions
