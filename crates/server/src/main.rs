@@ -3,9 +3,11 @@
 //! A simple TCP server that accepts SQL queries and returns results.
 
 use sqlrustgo::{parse, ExecutionEngine, SqlError};
+use sqlrustgo_common::logging::{init_logging, LogFormat, LogLevel};
 use sqlrustgo_parser::{KillStatement, KillType, Statement};
 use sqlrustgo_server::SecurityIntegration;
 use sqlrustgo_storage::MemoryStorage;
+use std::env;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
@@ -183,7 +185,32 @@ fn is_ddl(query: &str) -> bool {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let log_dir = env::var("SQLRUSTGO_LOG_DIR").unwrap_or_else(|_| "./logs".to_string());
+    let log_level = env::var("SQLRUSTGO_LOG_LEVEL")
+        .map(|v| LogLevel::from_str(&v))
+        .unwrap_or(LogLevel::Info);
+    let log_format = if env::var("SQLRUSTGO_LOG_JSON").is_ok() {
+        LogFormat::Json
+    } else {
+        LogFormat::Text
+    };
+    let max_file_size: u64 = env::var("SQLRUSTGO_LOG_MAX_SIZE")
+        .unwrap_or_else(|_| "10485760".to_string())
+        .parse()
+        .unwrap_or(10 * 1024 * 1024);
+    let max_files: usize = env::var("SQLRUSTGO_LOG_MAX_FILES")
+        .unwrap_or_else(|_| "5".to_string())
+        .parse()
+        .unwrap_or(5);
+
+    if let Err(e) = init_logging(&log_dir, log_level, log_format, max_file_size, max_files) {
+        eprintln!("Failed to initialize logging: {}", e);
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    }
+
+    log::info!("SQLRustGo TCP Server v1.6.1 starting...");
+    log::info!("Log directory: {}", log_dir);
+    log::info!("Log level: {:?}", log_level);
 
     let addr = "127.0.0.1:4000";
     println!("SQLRustGo TCP Server v1.6.1");
