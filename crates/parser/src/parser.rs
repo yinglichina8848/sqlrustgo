@@ -405,19 +405,6 @@ pub struct DropUserStmt {
     pub identities: Vec<UserIdentity>,
 }
 
-/// CREATE USER statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateUserStmt {
-    pub identities: Vec<UserIdentity>,
-    pub password: String,
-}
-
-/// DROP USER statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct DropUserStmt {
-    pub identities: Vec<UserIdentity>,
-}
-
 /// Join type
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinType {
