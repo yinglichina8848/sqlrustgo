@@ -415,6 +415,7 @@ pub struct AuthManager {
     roles_by_name: HashMap<String, u64>,
     user_roles: Vec<UserRole>,
     privileges: HashMap<UserIdentity, Vec<PrivilegeGrant>>,
+    #[allow(dead_code)]
     next_user_id: u64,
     next_role_id: u64,
     next_grant_id: u64,
@@ -483,7 +484,7 @@ impl AuthManager {
 
     fn verify_and_return(
         &self,
-        identity: &UserIdentity,
+        _identity: &UserIdentity,
         password: &str,
         user: &UserAuthInfo,
     ) -> AuthResult<u64> {
@@ -635,7 +636,7 @@ impl AuthManager {
 
         self.privileges
             .entry(identity.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(grant);
 
         Ok(id)
@@ -668,7 +669,7 @@ impl AuthManager {
         let public_identity = UserIdentity::new("%", "%");
         self.privileges
             .entry(public_identity)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(grant);
 
         Ok(id)
@@ -725,6 +726,7 @@ impl AuthManager {
         })
     }
 
+    #[allow(dead_code)]
     fn has_direct_privilege(
         &self,
         identity: &UserIdentity,
@@ -741,6 +743,7 @@ impl AuthManager {
         false
     }
 
+    #[allow(dead_code)]
     fn has_public_privilege(&self, privilege: Privilege, object: &ObjectRef) -> bool {
         let public_identity = UserIdentity::new("%", "%");
         if let Some(grants) = self.privileges.get(&public_identity) {
@@ -754,6 +757,7 @@ impl AuthManager {
         false
     }
 
+    #[allow(dead_code)]
     fn matches_object(
         &self,
         grant_obj_type: &ObjectType,
