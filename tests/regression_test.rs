@@ -196,15 +196,32 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["physical_backup_test"],
             description: "物理备份、mysqldump 等工具集成测试",
         },
+        // Executor 内部测试
+        TestCategory {
+            name: "执行器测试 (Executor)",
+            test_files: vec!["PKG:sqlrustgo-executor:test_stored_proc"],
+            description: "executor crate 内部测试: 存储过程 (36 tests)",
+        },
     ]
 }
 
 /// 运行单个测试文件
 fn run_test_file(test_file: &str) -> TestResult {
     let start = Instant::now();
-    let output = Command::new("cargo")
-        .args(&["test", "--test", test_file, "--", "--nocapture"])
-        .output();
+
+    // 处理 crate 内部测试
+    let output = if test_file.starts_with("PKG:") {
+        let parts: Vec<&str> = test_file.split(':').collect();
+        let pkg = parts[1];
+        let test_path = parts.get(2).unwrap_or(&"");
+        Command::new("cargo")
+            .args(&["test", "-p", pkg, "--test", test_path, "--", "--nocapture"])
+            .output()
+    } else {
+        Command::new("cargo")
+            .args(&["test", "--test", test_file, "--", "--nocapture"])
+            .output()
+    };
 
     let duration = start.elapsed();
 
