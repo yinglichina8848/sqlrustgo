@@ -608,6 +608,11 @@ pub enum Expression {
         expr: Box<Expression>,
         values: Vec<Expression>,
     },
+    /// CASE WHEN expression: CASE WHEN cond THEN val ELSE default END
+    CaseWhen {
+        conditions: Vec<(Expression, Expression)>,
+        else_result: Option<Box<Expression>>,
+    },
 }
 
 /// Window frame info parsed from SQL
@@ -1798,6 +1803,10 @@ impl Parser {
                     Err("Expected number after -".to_string())
                 }
             }
+            Some(Token::Case) => {
+                self.next();
+                self.parse_case_when_expression()
+            }
             Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
             | Some(Token::Max) => {
                 // Parse aggregate function call for HAVING clause
@@ -1863,6 +1872,37 @@ impl Parser {
             }
             _ => Err("Expected expression".to_string()),
         }
+    }
+
+    fn parse_case_when_expression(&mut self) -> Result<Expression, String> {
+        let mut conditions = Vec::new();
+        loop {
+            self.expect(Token::When)?;
+            let condition = self.parse_expression()?;
+            self.expect(Token::Then)?;
+            let then_result = self.parse_expression()?;
+            conditions.push((condition, then_result));
+            match self.current() {
+                Some(Token::When) => continue,
+                Some(Token::Else) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::End) | None => break,
+                _ => return Err("Expected WHEN, ELSE, or END".to_string()),
+            }
+        }
+        let else_result = if matches!(self.current(), Some(Token::Else)) {
+            self.next();
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+        self.expect(Token::End)?;
+        Ok(Expression::CaseWhen {
+            conditions,
+            else_result,
+        })
     }
 
     /// Parse a window function: ROW_NUMBER() OVER (...)

@@ -133,6 +133,8 @@ pub enum Token {
     NoOthers,
     Between,
     In,
+    Case,
+    End,
 
     // CTE (Common Table Expression) - SQL-99
     With,
@@ -334,11 +336,15 @@ impl fmt::Display for Token {
             Token::NoOthers => write!(f, "NO OTHERS"),
             Token::Between => write!(f, "BETWEEN"),
             Token::In => write!(f, "IN"),
+            Token::Case => write!(f, "CASE"),
+            Token::End => write!(f, "END"),
+            Token::When => write!(f, "WHEN"),
+            Token::Then => write!(f, "THEN"),
+            Token::Else => write!(f, "ELSE"),
             Token::With => write!(f, "WITH"),
             Token::Recursive => write!(f, "RECURSIVE"),
             Token::Merge => write!(f, "MERGE"),
             Token::Truncate => write!(f, "TRUNCATE"),
-            Token::When => write!(f, "WHEN"),
             Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
@@ -479,6 +485,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "NO OTHERS"
             | "BETWEEN"
             | "IN"
+            | "CASE"
+            | "WHEN"
+            | "THEN"
+            | "ELSE"
             | "PREPARE"
             | "EXECUTE"
             | "DEALLOCATE"
@@ -557,6 +567,11 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "NO OTHERS" => Some(Token::NoOthers),
         "BETWEEN" => Some(Token::Between),
         "IN" => Some(Token::In),
+        "CASE" => Some(Token::Case),
+        "END" => Some(Token::End),
+        "WHEN" => Some(Token::When),
+        "THEN" => Some(Token::Then),
+        "ELSE" => Some(Token::Else),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
