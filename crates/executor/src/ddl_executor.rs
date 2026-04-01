@@ -141,7 +141,9 @@ mod tests {
         let result = executor.execute_grant(&grantee, Privilege::Read, &object, 0);
 
         assert!(result.is_ok());
-        assert!(auth_manager.check_privilege(&grantee, Privilege::Read, &object));
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Read)
+            .is_ok());
     }
 
     #[test]
@@ -160,7 +162,9 @@ mod tests {
                 .unwrap();
         }
 
-        assert!(auth_manager.check_privilege(&grantee, Privilege::Read, &object));
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Read)
+            .is_ok());
 
         {
             let mut executor = DdlExecutor::new(&mut auth_manager);
@@ -169,7 +173,9 @@ mod tests {
                 .unwrap();
         }
 
-        assert!(!auth_manager.check_privilege(&grantee, Privilege::Read, &object));
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Read)
+            .is_err());
     }
 
     #[test]
@@ -186,8 +192,12 @@ mod tests {
         let result = executor.execute_grant(&grantee, Privilege::All, &object, 0);
 
         assert!(result.is_ok());
-        assert!(auth_manager.check_privilege(&grantee, Privilege::Read, &object));
-        assert!(auth_manager.check_privilege(&grantee, Privilege::Insert, &object));
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Read)
+            .is_ok());
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Insert)
+            .is_ok());
     }
 
     #[test]
@@ -204,7 +214,9 @@ mod tests {
         let result = executor.execute_grant(&grantee, Privilege::Update, &object, 0);
 
         assert!(result.is_ok());
-        assert!(auth_manager.check_privilege(&grantee, Privilege::Update, &object));
+        assert!(auth_manager
+            .check_privilege(&grantee, &object, Privilege::Update)
+            .is_ok());
     }
 
     #[test]
