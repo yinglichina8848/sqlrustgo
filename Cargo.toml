@@ -1,3 +1,5 @@
+# SQLRustGo v1.6.1
+
 [workspace]
 members = [
     "crates/common",
@@ -7,12 +9,30 @@ members = [
     "crates/executor",
     "crates/storage",
     "crates/catalog",
+    "crates/distributed",
+    "crates/security",
     "crates/transaction",
     "crates/server",
+    "crates/telemetry",
+    "crates/network",
+    "crates/agentsql",
+    "crates/bench",
+    "crates/bench-cli",
+    "crates/sql-cli",
+    "crates/tools",
+    "crates/sqlancer",
+    "crates/transaction-stress",
+    "crates/information-schema",
+    "crates/query-stats",
+    "crates/test-registry",
+    "crates/test-runner",
+    "crates/test-results",
+    "crates/test-reporter",
+    "test/sql92",
 ]
 
 [workspace.package]
-version = "1.5.0"
+version = "1.6.1"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -27,11 +47,16 @@ sqlrustgo-optimizer = { path = "crates/optimizer" }
 sqlrustgo-executor = { path = "crates/executor" }
 sqlrustgo-storage = { path = "crates/storage" }
 sqlrustgo-catalog = { path = "crates/catalog" }
+sqlrustgo-distributed = { path = "crates/distributed" }
+sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-server = { path = "crates/server" }
+sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-network = { path = "crates/network" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
+tonic = "0.12"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
@@ -45,14 +70,33 @@ lru-cache = "0.1.2"
 ctrlc = "3.5.2"
 parking_lot = "0.12"
 serde_json = "1.0"
+num_cpus = "1.17"
 tempfile = "3.25.0"
-criterion = "0.5"
+criterion = "0.8"
 miniz_oxide = "0.7"
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+fnv = "1.0"
+proptest = "1.1"
+arrow = { version = "53" }
+parquet = { version = "53" }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 tempfile = "3.25.0"
 serde_yaml = "0.9"
+rand = "0.8"
+clap = { version = "4.0", features = ["derive"] }
+proptest = "1.1"
+sqlrustgo-server = { path = "crates/server" }
+sqlrustgo-transaction = { path = "crates/transaction" }
+sqlrustgo-security = { path = "crates/security" }
+sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-agentsql = { path = "crates/agentsql" }
+query-stats = { path = "crates/query-stats" }
+sqlrustgo-tools = { path = "crates/tools" }
 
 [package]
 name = "sqlrustgo"
@@ -71,7 +115,6 @@ sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 sqlrustgo-transaction.workspace = true
-sqlrustgo-server.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
@@ -87,7 +130,7 @@ serde_json.workspace = true
 
 [[test]]
 name = "ci_test"
-path = "tests/ci_test.rs"
+path = "tests/ci/ci_test.rs"
 
 [[bench]]
 name = "sql_operations"
@@ -121,28 +164,59 @@ harness = false
 name = "bench_cbo"
 harness = false
 
+[[bench]]
+name = "tpch_bench"
+harness = false
+
+[[bench]]
+name = "bench_columnar"
+harness = false
+
+# [[bin]]
+# name = "tpch_benchmark"
+# path = "benches/tpch_comprehensive_main.rs"
+
+[[example]]
+name = "tpch_data_gen"
+path = "crates/bench/examples/tpch_data_gen.rs"
+
+[dependencies.rusqlite]
+version = "0.32"
+features = ["bundled"]
+
+[dev-dependencies.mysql]
+version = "25"
+
 [[test]]
 name = "optimizer_rules_test"
-path = "tests/optimizer_rules_test.rs"
+path = "tests/unit/optimizer_rules_test.rs"
 
 
 [[test]]
 name = "buffer_pool_test"
-path = "tests/buffer_pool_test.rs"
+path = "tests/ci/buffer_pool_test.rs"
 
 
 [[test]]
 name = "page_test"
-path = "tests/page_test.rs"
+path = "tests/integration/page_test.rs"
 
 
 [[test]]
 name = "executor_test"
-path = "tests/executor_test.rs"
+path = "tests/integration/executor_test.rs"
+
+[[test]]
+name = "foreign_key_test"
+path = "tests/integration/foreign_key_test.rs"
+
+[[test]]
+name = "mysql_compatibility_test"
+path = "tests/integration/mysql_compatibility_test.rs"
 
 [[test]]
 name = "planner_test"
-path = "tests/planner_test.rs"
+path = "tests/integration/planner_test.rs"
 
 
 [[test]]
@@ -151,4 +225,259 @@ path = "tests/binary_format_test.rs"
 
 [[test]]
 name = "optimizer_stats_test"
-path = "tests/optimizer_stats_test.rs"
+path = "tests/integration/optimizer_stats_test.rs"
+
+[[test]]
+name = "types_value_test"
+path = "tests/unit/types_value_test.rs"
+
+[[test]]
+name = "query_cache_config_test"
+path = "tests/unit/query_cache_config_test.rs"
+
+[[test]]
+name = "server_health_test"
+path = "tests/unit/server_health_test.rs"
+
+[[test]]
+name = "bplus_tree_test"
+path = "tests/unit/bplus_tree_test.rs"
+
+[[test]]
+name = "optimizer_cost_test"
+path = "tests/unit/optimizer_cost_test.rs"
+
+[[test]]
+name = "local_executor_test"
+path = "tests/unit/local_executor_test.rs"
+
+[[test]]
+name = "query_cache_test"
+path = "tests/unit/query_cache_test.rs"
+
+[[test]]
+name = "vectorization_test"
+path = "tests/unit/vectorization_test.rs"
+
+[[test]]
+name = "file_storage_test"
+path = "tests/unit/file_storage_test.rs"
+
+[[test]]
+name = "crash_recovery_test"
+path = "tests/stress/crash_recovery_test.rs"
+
+[[test]]
+name = "wal_deterministic_test"
+path = "tests/stress/wal_deterministic_test.rs"
+
+[[test]]
+name = "wal_fuzz_test"
+path = "tests/stress/wal_fuzz_test.rs"
+
+[[test]]
+name = "stress_test"
+path = "tests/stress/stress_test.rs"
+
+[[test]]
+name = "concurrency_stress_test"
+path = "tests/stress/concurrency_stress_test.rs"
+
+[[test]]
+name = "chaos_test"
+path = "tests/stress/chaos_test.rs"
+
+[[test]]
+name = "production_scenario_test"
+path = "tests/stress/production_scenario_test.rs"
+
+[[test]]
+name = "teaching_scenario_test"
+path = "tests/integration/teaching_scenario_test.rs"
+
+[[test]]
+name = "performance_test"
+path = "tests/integration/performance_test.rs"
+
+[[test]]
+name = "mysql_tpch_test"
+path = "tests/integration/mysql_tpch_test.rs"
+
+[[test]]
+name = "tpch_test"
+path = "tests/integration/tpch_test.rs"
+
+[[test]]
+name = "tpch_benchmark"
+path = "tests/integration/tpch_benchmark.rs"
+
+[[test]]
+name = "tpch_full_test"
+path = "tests/integration/tpch_full_test.rs"
+
+[[test]]
+name = "mvcc_concurrency_test"
+path = "tests/anomaly/mvcc_concurrency_test.rs"
+
+[[test]]
+name = "snapshot_isolation_test"
+path = "tests/anomaly/snapshot_isolation_test.rs"
+
+[[test]]
+name = "checksum_corruption_test"
+path = "tests/integration/checksum_corruption_test.rs"
+
+[[test]]
+name = "crash_injection_test"
+path = "tests/anomaly/crash_injection_test.rs"
+
+[[test]]
+name = "catalog_consistency_test"
+path = "tests/anomaly/catalog_consistency_test.rs"
+
+[[test]]
+name = "long_run_stability_test"
+path = "tests/anomaly/long_run_stability_test.rs"
+
+[[test]]
+name = "qps_benchmark_test"
+path = "tests/anomaly/qps_benchmark_test.rs"
+
+[[test]]
+name = "transaction_isolation_test"
+path = "tests/anomaly/transaction_isolation_test.rs"
+
+[[test]]
+name = "join_test"
+path = "tests/anomaly/join_test.rs"
+
+[[test]]
+name = "fk_constraint_test"
+path = "tests/anomaly/fk_constraint_test.rs"
+
+[[test]]
+name = "server_integration_test"
+path = "tests/integration/server_integration_test.rs"
+
+[[test]]
+name = "set_operations_test"
+path = "tests/anomaly/set_operations_test.rs"
+
+[[test]]
+name = "view_test"
+path = "tests/anomaly/view_test.rs"
+
+[[test]]
+name = "transaction_timeout_test"
+path = "tests/anomaly/transaction_timeout_test.rs"
+
+[[test]]
+name = "datetime_type_test"
+path = "tests/anomaly/datetime_type_test.rs"
+
+[[test]]
+name = "boundary_test"
+path = "tests/anomaly/boundary_test.rs"
+
+[[test]]
+name = "error_handling_test"
+path = "tests/anomaly/error_handling_test.rs"
+
+[[test]]
+name = "aggregate_type_test"
+path = "tests/anomaly/aggregate_type_test.rs"
+
+[[test]]
+name = "null_handling_test"
+path = "tests/anomaly/null_handling_test.rs"
+[[test]]
+name = "window_function_test"
+path = "tests/integration/window_function_test.rs"
+
+[[test]]
+name = "upsert_test"
+path = "tests/integration/upsert_test.rs"
+
+[[test]]
+name = "teaching_scenario_client_server_test"
+path = "tests/integration/teaching_scenario_client_server_test.rs"
+
+[[test]]
+name = "distributed_transaction_test"
+path = "tests/integration/distributed_transaction_test.rs"
+
+[[test]]
+name = "regression_test"
+path = "tests/regression_test.rs"
+
+[[test]]
+name = "prometheus_test"
+path = "tests/unit/prometheus_test.rs"
+
+[[test]]
+name = "slow_query_log_test"
+path = "tests/unit/slow_query_log_test.rs"
+
+[[test]]
+name = "mysqldump_test"
+path = "tests/unit/mysqldump_test.rs"
+
+[[test]]
+name = "backup_test"
+path = "tests/unit/backup_test.rs"
+
+[[test]]
+name = "auth_rbac_test"
+path = "tests/integration/auth_rbac_test.rs"
+
+[[test]]
+name = "logging_test"
+path = "tests/integration/logging_test.rs"
+
+[[test]]
+name = "query_cache_benchmark"
+path = "tests/anomaly/query_cache_benchmark.rs"
+
+[[test]]
+name = "parquet_test"
+path = "tests/integration/parquet_test.rs"
+
+[[test]]
+name = "columnar_storage_test"
+path = "tests/integration/columnar_storage_test.rs"
+
+[[test]]
+name = "autoinc_test"
+path = "tests/integration/autoinc_test.rs"
+
+[[test]]
+name = "batch_insert_test"
+path = "tests/integration/batch_insert_test.rs"
+
+[[test]]
+name = "fk_actions_test"
+path = "tests/integration/fk_actions_test.rs"
+
+[[test]]
+name = "index_integration_test"
+path = "tests/integration/index_integration_test.rs"
+
+[[test]]
+name = "savepoint_test"
+path = "tests/integration/savepoint_test.rs"
+
+[[test]]
+name = "session_config_test"
+path = "tests/integration/session_config_test.rs"
+
+[[test]]
+name = "storage_integration_test"
+path = "tests/integration/storage_integration_test.rs"
+
+[[test]]
+name = "sql_cli_test"
+path = "tests/integration/sql_cli_test.rs"
+
+[[test]]
+name = "agentsql_test"
+path = "tests/integration/agentsql_test.rs"

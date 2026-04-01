@@ -11,7 +11,7 @@ use sqlrustgo_server::connection_pool::ConnectionPool;
 use sqlrustgo_transaction::lock::{LockManager, LockMode};
 use sqlrustgo_transaction::mvcc::TxId;
 use sqlrustgo_transaction::TransactionManager;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::sync::RwLock;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -455,7 +455,7 @@ mod network_stress {
         let conn_count = 100;
 
         let handles: Vec<_> = (0..conn_count)
-            .map(|i| {
+            .map(|_i| {
                 let metrics = metrics.clone();
                 thread::spawn(move || {
                     if let Ok(stream) =
@@ -657,8 +657,8 @@ mod network_stress {
 #[cfg(test)]
 mod wal_stress {
     use super::*;
-    use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager};
-    use std::fs;
+    use sqlrustgo_storage::wal::WalManager;
+
     use std::path::PathBuf;
 
     fn create_test_wal() -> (tempfile::TempDir, PathBuf) {
@@ -821,7 +821,7 @@ mod wal_stress {
 mod stability_stress {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_sustained_load_30s() {
@@ -949,11 +949,11 @@ mod crud_correctness {
     use super::*;
     use sqlrustgo::ExecutionEngine;
     use sqlrustgo::MemoryStorage;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_crud_basic_correctness() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1014,7 +1014,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_duplicate_check() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1042,7 +1042,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_transaction_atomicity() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1075,7 +1075,7 @@ mod crud_correctness {
 
     #[test]
     fn test_crud_query_accuracy() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
 
         engine
@@ -1117,7 +1117,6 @@ mod crud_correctness {
     #[test]
     fn test_wal_recovery_correctness() {
         use sqlrustgo_storage::wal::WalManager;
-        use std::path::PathBuf;
 
         let dir = tempfile::tempdir().unwrap();
         let wal_path = dir.path().join("recovery_test.wal");
@@ -1152,7 +1151,7 @@ mod crud_correctness {
 
     #[test]
     fn test_concurrent_crud_correctness() {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 
         let handles: Vec<_> = (0..10)
             .map(|tid| {
