@@ -11,7 +11,14 @@ use tempfile::TempDir;
 #[test]
 fn test_physical_backup_help() {
     let output = Command::new("cargo")
-        .args(&["run", "-p", "sqlrustgo-tools", "--", "physical-backup", "--help"])
+        .args(&[
+            "run",
+            "-p",
+            "sqlrustgo-tools",
+            "--",
+            "physical-backup",
+            "--help",
+        ])
         .output()
         .expect("Failed to execute command");
 
@@ -113,7 +120,9 @@ fn test_physical_backup_list_empty_directory() {
 
     // 空目录应该显示相应消息
     assert!(
-        stdout.contains("No backups found") || stdout.is_empty() || !stdout.contains("Physical Backup"),
+        stdout.contains("No backups found")
+            || stdout.is_empty()
+            || !stdout.contains("Physical Backup"),
         "Empty directory should not show backups"
     );
 }
@@ -209,13 +218,7 @@ fn test_physical_backup_unit_tests() {
 fn test_physical_backup_all_unit_tests() {
     // 运行 sqlrustgo-tools 的所有单元测试
     let output = Command::new("cargo")
-        .args(&[
-            "test",
-            "-p",
-            "sqlrustgo-tools",
-            "--",
-            "--nocapture",
-        ])
+        .args(&["test", "-p", "sqlrustgo-tools", "--", "--nocapture"])
         .output()
         .expect("Failed to execute command");
 
@@ -406,5 +409,9 @@ fn test_physical_backup_prune_dry_run() {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .collect();
-    assert_eq!(remaining.len(), 5, "All backups should still exist after dry run");
+    assert_eq!(
+        remaining.len(),
+        5,
+        "All backups should still exist after dry run"
+    );
 }
