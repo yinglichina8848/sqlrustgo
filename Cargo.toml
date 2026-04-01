@@ -436,3 +436,39 @@ path = "tests/integration/logging_test.rs"
 [[test]]
 name = "query_cache_benchmark"
 path = "tests/anomaly/query_cache_benchmark.rs"
+
+[[test]]
+name = "parquet_test"
+path = "tests/integration/parquet_test.rs"
+
+[[test]]
+name = "columnar_storage_test"
+path = "tests/integration/columnar_storage_test.rs"
+
+[[test]]
+name = "autoinc_test"
+path = "tests/integration/autoinc_test.rs"
+
+[[test]]
+name = "batch_insert_test"
+path = "tests/integration/batch_insert_test.rs"
+
+[[test]]
+name = "fk_actions_test"
+path = "tests/integration/fk_actions_test.rs"
+
+[[test]]
+name = "index_integration_test"
+path = "tests/integration/index_integration_test.rs"
+
+[[test]]
+name = "savepoint_test"
+path = "tests/integration/savepoint_test.rs"
+
+[[test]]
+name = "session_config_test"
+path = "tests/integration/session_config_test.rs"
+
+[[test]]
+name = "storage_integration_test"
+path = "tests/integration/storage_integration_test.rs"

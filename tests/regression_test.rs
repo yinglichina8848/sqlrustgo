@@ -53,11 +53,14 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "集成测试 - SQL功能 (SQL Functionality)",
             test_files: vec![
                 "foreign_key_test",
+                "fk_actions_test",
                 "server_integration_test",
                 "upsert_test",
                 "mysql_compatibility_test",
+                "savepoint_test",
+                "session_config_test",
             ],
-            description: "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)",
+            description: "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)、保存点",
         },
         // 集成测试 - 存储
         TestCategory {
@@ -66,8 +69,11 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "query_cache_test",
                 "optimizer_stats_test",
                 "checksum_corruption_test",
+                "columnar_storage_test",
+                "parquet_test",
+                "storage_integration_test",
             ],
-            description: "测试查询缓存、优化器统计、校验和完整性",
+            description: "测试查询缓存、优化器统计、校验和完整性、列式存储、Parquet",
         },
         // 教学场景测试
         TestCategory {
@@ -83,8 +89,11 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "tpch_test",
                 "tpch_benchmark",
                 "tpch_full_test",
+                "batch_insert_test",
+                "autoinc_test",
+                "index_integration_test",
             ],
-            description: "22 性能测试：批量插入、索引扫描、JOIN、缓存、向量化、TPC-H Q1-Q22",
+            description: "性能测试：批量插入、索引扫描、JOIN、缓存、向量化、TPC-H Q1-Q22",
         },
         // 异常测试 - 并发
         TestCategory {
