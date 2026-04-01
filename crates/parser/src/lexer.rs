@@ -381,6 +381,9 @@ impl<'a> Lexer<'a> {
                             Token::Timestamp
                         }
                     }
+                    "YEAR" => Token::Year,
+                    "MONTH" => Token::Month,
+                    "DAY" => Token::Day,
                     "LENGTH" => Token::Length,
                     "UPPER" => Token::Upper,
                     "LOWER" => Token::Lower,
@@ -392,6 +395,7 @@ impl<'a> Lexer<'a> {
                     "CURTIME" => Token::Curtime,
                     "DATE_ADD" => Token::DateAdd,
                     "DATE_FORMAT" => Token::DateFormat,
+                    "EXTRACT" => Token::Extract,
                     "COUNT" => Token::Count,
                     "SUM" => Token::Sum,
                     "AVG" => Token::Avg,
