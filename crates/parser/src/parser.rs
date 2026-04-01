@@ -2874,6 +2874,7 @@ impl Parser {
         // Note: This is a simplified implementation that stores raw SQL for now
         while !matches!(self.current(), Some(Token::Identifier(end_str))
                        if end_str.to_uppercase() == "END")
+            && !matches!(self.current(), Some(Token::Eof))
             && self.current().is_some()
         {
             let stmt = match self.current() {
