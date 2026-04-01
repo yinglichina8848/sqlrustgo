@@ -208,6 +208,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["physical_backup_test"],
             description: "物理备份、mysqldump 等工具集成测试",
         },
+        // AI Extension 测试
+        TestCategory {
+            name: "AI Extension 测试 (AI Extension)",
+            test_files: vec!["agentsql_test", "sql_cli_test"],
+            description: "AgentSQL: NL2SQL, Memory, Policy, Explain; sql-cli: UPDATE/DELETE",
+        },
     ]
 }
 
