@@ -266,6 +266,16 @@ cargo test --test logging_test
 cargo test --test sql_cli_test
 ```
 
+### 4.5 AI Extension 测试
+
+```bash
+# AgentSQL 集成测试
+cargo test --test agentsql_test
+
+# AgentSQL 单元测试 (56 tests)
+cargo test -p sqlrustgo-agentsql --lib
+```
+
 ---
 
 ## 五、TPC-H 测试

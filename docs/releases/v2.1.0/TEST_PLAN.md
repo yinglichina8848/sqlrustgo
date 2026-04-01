@@ -244,6 +244,7 @@ cargo test --test regression_test -- --nocapture --test-threads=1 <category>
 | 安全测试 | 2 | RBAC、日志 |
 | 教学场景测试 | 2 | 客户端/服务器 |
 | SQL CLI 测试 | 1 | UPDATE/DELETE |
+| AI Extension 测试 | 2 | AgentSQL, sql-cli |
 | 工具测试 | 1 | 物理备份 |
 
 ---
