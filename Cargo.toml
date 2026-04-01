@@ -476,3 +476,7 @@ path = "tests/integration/storage_integration_test.rs"
 [[test]]
 name = "sql_cli_test"
 path = "tests/integration/sql_cli_test.rs"
+
+[[test]]
+name = "agentsql_test"
+path = "tests/integration/agentsql_test.rs"
