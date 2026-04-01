@@ -377,6 +377,27 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&ts.to_le_bytes());
             bytes
         }
+        Value::Uuid(u) => {
+            let mut bytes = vec![0x09];
+            bytes.extend_from_slice(&u.to_le_bytes());
+            bytes
+        }
+        Value::Array(arr) => {
+            let mut bytes = vec![0x0a];
+            bytes.extend_from_slice(&(arr.len() as u32).to_le_bytes());
+            for item in arr {
+                bytes.extend_from_slice(&value_to_bytes(item));
+            }
+            bytes
+        }
+        Value::Enum(idx, name) => {
+            let mut bytes = vec![0x0b];
+            bytes.extend_from_slice(&idx.to_le_bytes());
+            let name_bytes = name.as_bytes();
+            bytes.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(name_bytes);
+            bytes
+        }
     }
 }
 
@@ -429,6 +450,41 @@ pub fn bytes_to_value(data: &[u8]) -> Option<Value> {
                 data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
             ]);
             Some(Value::Timestamp(ts))
+        }
+        0x09 if data.len() >= 17 => {
+            let u = u128::from_le_bytes([
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+                data[9], data[10], data[11], data[12], data[13], data[14], data[15], data[16],
+            ]);
+            Some(Value::Uuid(u))
+        }
+        0x0a if data.len() >= 5 => {
+            let arr_len = u32::from_le_bytes([data[1], data[2], data[3], data[4]]) as usize;
+            let mut offset = 5;
+            let mut arr = Vec::new();
+            for _ in 0..arr_len {
+                if offset >= data.len() {
+                    return None;
+                }
+                let item_bytes = &data[offset..];
+                if let Some(item) = bytes_to_value(item_bytes) {
+                    offset += value_to_bytes(&item).len();
+                    arr.push(item);
+                } else {
+                    return None;
+                }
+            }
+            Some(Value::Array(arr))
+        }
+        0x0b if data.len() >= 9 => {
+            let idx = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+            let name_len = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
+            if data.len() >= 9 + name_len {
+                let name = String::from_utf8_lossy(&data[9..9 + name_len]).to_string();
+                Some(Value::Enum(idx, name))
+            } else {
+                None
+            }
         }
         _ => None,
     }

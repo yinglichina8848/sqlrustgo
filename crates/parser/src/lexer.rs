@@ -50,14 +50,38 @@ impl<'a> Lexer<'a> {
         ch
     }
 
-    /// Skip whitespace characters
+    /// Skip whitespace and comments
     fn skip_whitespace(&mut self) {
         while !self.is_eof() {
             let ch = self.peek_char();
-            if !ch.is_whitespace() {
-                break;
+
+            // Skip whitespace
+            if ch.is_whitespace() {
+                self.position += 1;
+                continue;
             }
-            self.position += 1;
+
+            // Skip single-line comments: --
+            if ch == '-' && self.input[self.position..].starts_with("--") {
+                while !self.is_eof() && self.peek_char() != '\n' {
+                    self.position += 1;
+                }
+                continue;
+            }
+
+            // Skip block comments: /* ... */
+            if ch == '/' && self.input[self.position..].starts_with("/*") {
+                self.position += 2; // skip /*
+                while !self.is_eof() && !self.input[self.position..].starts_with("*/") {
+                    self.position += 1;
+                }
+                if !self.is_eof() {
+                    self.position += 2; // skip */
+                }
+                continue;
+            }
+
+            break;
         }
     }
 
@@ -172,7 +196,15 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Token::Colon
             }
+            '@' => {
+                self.position += 1;
+                Token::At
+            }
             '\'' => Token::StringLiteral(self.read_string()),
+            '?' => {
+                self.position += 1;
+                Token::QuestionMark
+            }
             '=' => {
                 self.position += 1;
                 Token::Equal
@@ -210,6 +242,9 @@ impl<'a> Lexer<'a> {
             _ if ch.is_alphabetic() || ch == '_' => {
                 let ident = self.read_identifier();
                 match ident.to_uppercase().as_str() {
+                    "ADD" => Token::Add,
+                    "MODIFY" => Token::Modify,
+                    "COLUMN" => Token::Column,
                     "SELECT" => Token::Select,
                     "FROM" => Token::From,
                     "WHERE" => Token::Where,
@@ -217,30 +252,147 @@ impl<'a> Lexer<'a> {
                     "INTO" => Token::Into,
                     "VALUES" => Token::Values,
                     "UPDATE" => Token::Update,
+                    "USING" => Token::Using,
                     "SET" => Token::Set,
                     "DELETE" => Token::Delete,
                     "CREATE" => Token::Create,
                     "TABLE" => Token::Table,
                     "DROP" => Token::Drop,
                     "ALTER" => Token::Alter,
+                    "UNIQUE" => Token::Unique,
                     "INDEX" => Token::Index,
                     "ON" => Token::On,
                     "PRIMARY" => Token::Primary,
                     "KEY" => Token::Key,
+                    "DUPLICATE" => Token::Duplicate,
+                    "REPLACE" => Token::Replace,
+                    "IGNORE" => Token::Ignore,
                     "BEGIN" => Token::Begin,
                     "COMMIT" => Token::Commit,
                     "ROLLBACK" => Token::Rollback,
+                    "SAVEPOINT" => Token::Savepoint,
+                    "RELEASE" => Token::Release,
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
+                    "TO" => Token::To,
+                    "GROUP" => Token::Group,
+                    "BY" => Token::By,
+                    "HAVING" => Token::Having,
+                    "USER" => Token::User,
+                    "IDENTIFIED" => Token::Identified,
+                    "ORDER" => Token::Order,
+                    "ASC" => Token::Asc,
+                    "DESC" => Token::Desc,
+                    "NULLS" => Token::Nulls,
+                    "FIRST" => Token::First,
+                    "LAST" => Token::Last,
+                    "ROW_NUMBER" => Token::RowNumber,
+                    "RANK" => Token::Rank,
+                    "DENSE_RANK" => Token::DenseRank,
+                    "LEAD" => Token::Lead,
+                    "LAG" => Token::Lag,
+                    "FIRST_VALUE" => Token::FirstValue,
+                    "LAST_VALUE" => Token::LastValue,
+                    "NTH_VALUE" => Token::NthValue,
+                    "OVER" => Token::Over,
+                    "PARTITION" => Token::Partition,
+                    "WITHIN" => Token::Within,
+                    "ROWS" => Token::Rows,
+                    "RANGE" => Token::Range,
+                    "GROUPS" => Token::Groups,
+                    "UNBOUNDED" => Token::Unbounded,
+                    "PRECEDING" => Token::Preceding,
+                    "FOLLOWING" => Token::Following,
+                    "EXCLUDE" => Token::Exclude,
+                    "CURRENT" => Token::Current,
+                    "TIES" => Token::Ties,
+                    "NO" => Token::NoOthers,
+                    "BETWEEN" => Token::Between,
+                    "IN" => Token::In,
+                    "WITH" => Token::With,
+                    "RECURSIVE" => Token::Recursive,
+                    "MERGE" => Token::Merge,
+                    "TRUNCATE" => Token::Truncate,
+                    "WHEN" => Token::When,
+                    "MATCHED" => Token::Matched,
+                    "ALL" => Token::All,
                     "ANALYZE" => Token::Analyze,
+                    "EXPLAIN" => Token::Explain,
+                    "UNION" => Token::Union,
+                    "INTERSECT" => Token::Intersect,
+                    "EXCEPT" => Token::Except,
+                    "TRIGGER" => Token::Trigger,
+                    "DO" => Token::Do,
+                    "BEFORE" => Token::Before,
+                    "AFTER" => Token::After,
+                    "FOR" => Token::For,
+                    "EACH" => Token::Each,
+                    "ROW" => Token::Row,
+                    "NEW" => Token::New,
+                    "OLD" => Token::Old,
+                    "REFERENCING" => Token::Referencing,
+                    "PROCEDURE" => Token::Procedure,
+                    "CALL" => Token::Call,
+                    "RETURN" => Token::Return,
+                    "IF" => Token::If,
+                    "THEN" => Token::Then,
+                    "ELSE" => Token::Else,
+                    "ELSIF" => Token::Elsif,
+                    "END IF" => Token::EndIf,
+                    "WHILE" => Token::While,
+                    "LOOP" => Token::Loop,
+                    "END LOOP" => Token::EndLoop,
+                    "LEAVE" => Token::Leave,
+                    "ITERATE" => Token::Iterate,
+                    "SIGNAL" => Token::Signal,
+                    "DECLARE" => Token::Declare,
+                    "DELIMITER" => Token::Delimiter,
+                    "VIEW" => Token::View,
+                    "AS" => Token::As,
+                    "SHOW" => Token::Show,
+                    "STATUS" => Token::Status,
+                    "PROCESSLIST" => Token::Processlist,
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
                     "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
+                    "DECIMAL" | "NUMERIC" => Token::Decimal,
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
-                    "NULL" => Token::Null,
-                    "DATE" => Token::Date,
-                    "TIMESTAMP" => Token::Timestamp,
+                    "JSON" => Token::Json,
+                    "DATE" => {
+                        let pos_before_date = self.position;
+                        self.skip_whitespace();
+                        if !self.is_eof() && self.peek_char() == '\'' {
+                            Token::DateLiteral(self.read_string())
+                        } else {
+                            self.position = pos_before_date;
+                            Token::Date
+                        }
+                    }
+                    "TIMESTAMP" => {
+                        let pos_before_ts = self.position;
+                        self.skip_whitespace();
+                        if !self.is_eof() && self.peek_char() == '\'' {
+                            Token::TimestampLiteral(self.read_string())
+                        } else {
+                            self.position = pos_before_ts;
+                            Token::Timestamp
+                        }
+                    }
+                    "UUID" => Token::Uuid,
+                    "ARRAY" => Token::Array,
+                    "ENUM" => Token::Enum,
+                    "LENGTH" => Token::Length,
+                    "UPPER" => Token::Upper,
+                    "LOWER" => Token::Lower,
+                    "SUBSTR" => Token::Substr,
+                    "SUBSTRING" => Token::Substring,
+                    "TRIM" => Token::Trim,
+                    "NOW" => Token::Now,
+                    "CURDATE" => Token::Curdate,
+                    "CURTIME" => Token::Curtime,
+                    "DATE_ADD" => Token::DateAdd,
+                    "DATE_FORMAT" => Token::DateFormat,
                     "COUNT" => Token::Count,
                     "SUM" => Token::Sum,
                     "AVG" => Token::Avg,
@@ -251,6 +403,14 @@ impl<'a> Lexer<'a> {
                     "AND" => Token::And,
                     "OR" => Token::Or,
                     "NOT" => Token::Not,
+                    "AUTO_INCREMENT" | "AUTOINCREMENT" => Token::AutoIncrement,
+                    "REFERENCES" => Token::References,
+                    "COPY" => Token::Copy,
+                    "FORMAT" => Token::Format,
+                    "PARQUET" => Token::Parquet,
+                    "KILL" => Token::Kill,
+                    "CONNECTION" => Token::Connection,
+                    "QUERY" => Token::Query,
                     _ => Token::Identifier(ident),
                 }
             }
@@ -538,12 +698,6 @@ mod tests {
     }
 
     #[test]
-    fn test_lexer_null() {
-        let tokens = tokenize("NULL");
-        assert!(matches!(tokens[0], Token::Null));
-    }
-
-    #[test]
     fn test_lexer_and() {
         let tokens = tokenize("AND");
         assert!(matches!(tokens[0], Token::And));
@@ -792,7 +946,7 @@ mod tests {
     #[test]
     fn test_lexer_unknown_char() {
         let tokens = tokenize("@");
-        assert!(matches!(&tokens[0], Token::Identifier(s) if s == "@"));
+        assert!(matches!(&tokens[0], Token::At));
     }
 
     #[test]
@@ -831,5 +985,19 @@ mod tests {
             "TIMESTAMP not found in tokens: {:?}",
             tokens
         );
+    }
+
+    #[test]
+    fn test_lexer_date_literal() {
+        let tokens = tokenize("DATE '2024-01-01'");
+        assert!(matches!(&tokens[0], Token::DateLiteral(s) if s == "2024-01-01"));
+        assert!(matches!(&tokens[1], Token::Eof));
+    }
+
+    #[test]
+    fn test_lexer_timestamp_literal() {
+        let tokens = tokenize("TIMESTAMP '2024-01-01 10:30:00'");
+        assert!(matches!(&tokens[0], Token::TimestampLiteral(s) if s == "2024-01-01 10:30:00"));
+        assert!(matches!(&tokens[1], Token::Eof));
     }
 }

@@ -40,6 +40,7 @@ pub enum LogicalPlan {
         input: Box<LogicalPlan>,
         group_expr: Vec<Expr>,
         aggregate_expr: Vec<Expr>,
+        having_expr: Option<Expr>,
         schema: Schema,
     },
     /// Join operation
@@ -70,6 +71,14 @@ pub enum LogicalPlan {
         op_type: SetOperationType,
         left: Box<LogicalPlan>,
         right: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    /// Window function
+    Window {
+        input: Box<LogicalPlan>,
+        window_expr: Vec<Expr>,
+        partition_by: Vec<Expr>,
+        order_by: Vec<crate::SortExpr>,
         schema: Schema,
     },
     /// Empty relation
@@ -126,6 +135,7 @@ impl LogicalPlan {
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
             LogicalPlan::View { schema, .. } => schema.clone(),
+            LogicalPlan::Window { schema, .. } => schema.clone(),
         }
     }
 }
@@ -269,6 +279,7 @@ mod tests {
             input: Box::new(input),
             group_expr: vec![],
             aggregate_expr: vec![],
+            having_expr: None,
             schema: schema.clone(),
         };
         assert_eq!(plan.schema(), schema);
