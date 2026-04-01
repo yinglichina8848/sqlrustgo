@@ -420,6 +420,9 @@ impl ExplainExecutor {
             Value::Blob(b) => format!("blob[{}]", b.len()),
             Value::Date(_) => "date".to_string(),
             Value::Timestamp(_) => "timestamp".to_string(),
+            Value::Uuid(u) => format!("'{:036x}'", u),
+            Value::Array(_) => "array".to_string(),
+            Value::Enum(_, name) => format!("'{}'", name),
         }
     }
 }

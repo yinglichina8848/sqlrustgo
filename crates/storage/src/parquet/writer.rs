@@ -120,6 +120,18 @@ fn infer_schema(records: &[Record], column_names: &[String]) -> SqlResult<Schema
                         data_type = DataType::Int64;
                         break;
                     }
+                    Value::Uuid(_) => {
+                        data_type = DataType::FixedSizeBinary(16);
+                        break;
+                    }
+                    Value::Array(_) => {
+                        data_type = DataType::Utf8;
+                        break;
+                    }
+                    Value::Enum(_, _) => {
+                        data_type = DataType::Utf8;
+                        break;
+                    }
                 }
             }
         }

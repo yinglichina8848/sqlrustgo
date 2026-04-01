@@ -99,6 +99,11 @@ fn value_to_string(value: &Value) -> String {
         Value::Blob(b) => hex::encode(b),
         Value::Date(d) => d.to_string(),
         Value::Timestamp(ts) => ts.to_string(),
+        Value::Uuid(u) => format!("{:036x}", u),
+        Value::Array(arr) => {
+            format!("[{}]", arr.iter().map(value_to_string).collect::<Vec<_>>().join(","))
+        }
+        Value::Enum(_, name) => name.clone(),
     }
 }
 
