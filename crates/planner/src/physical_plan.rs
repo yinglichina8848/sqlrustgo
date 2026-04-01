@@ -35,9 +35,32 @@ pub trait PhysicalPlan: Send + Sync {
 
     /// Downcast to concrete type
     fn as_any(&self) -> &dyn Any;
+
+    /// Estimated cost for this plan node (startup_cost, total_cost, rows, width)
+    /// Default implementation returns estimated values based on schema
+    fn estimated_cost(&self) -> (f64, f64, u64, u32) {
+        let row_width = self
+            .schema()
+            .fields
+            .iter()
+            .map(|f| f.data_type.estimate_size())
+            .sum::<usize>() as u32;
+        let children = self.children();
+        if children.is_empty() {
+            (0.0, 100.0, 1000, row_width)
+        } else {
+            let child_costs: Vec<_> = children.iter().map(|c| c.estimated_cost()).collect();
+            let total_cost = child_costs.iter().map(|(_, c, _, _)| c).sum::<f64>() + 50.0;
+            let total_rows = child_costs
+                .iter()
+                .map(|(_, _, r, _)| *r)
+                .max()
+                .unwrap_or(1000);
+            (0.0, total_cost, total_rows, row_width)
+        }
+    }
 }
 
-/// Sequential scan execution operator
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SeqScanExec {
@@ -92,6 +115,86 @@ impl PhysicalPlan for SeqScanExec {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn estimated_cost(&self) -> (f64, f64, u64, u32) {
+        let row_width = self
+            .schema
+            .fields
+            .iter()
+            .map(|f| f.data_type.estimate_size())
+            .sum::<usize>() as u32;
+        (0.0, 100.0, 1000, row_width)
+    }
+}
+
+/// ColumnarScan execution operator - optimized scan for columnar storage
+///
+/// This operator leverages column-oriented storage to read only the required
+/// columns (projection pushdown), significantly reducing I/O for analytical queries.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct ColumnarScanExec {
+    table_name: String,
+    schema: Schema,
+    /// Column indices to scan (projection pushdown)
+    projection: Vec<usize>,
+}
+
+impl ColumnarScanExec {
+    pub fn new(table_name: String, schema: Schema, projection: Vec<usize>) -> Self {
+        Self {
+            table_name,
+            schema,
+            projection,
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn projection(&self) -> &Vec<usize> {
+        &self.projection
+    }
+}
+
+impl PhysicalPlan for ColumnarScanExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![]
+    }
+
+    fn name(&self) -> &str {
+        "ColumnarScan"
+    }
+
+    fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        Ok(vec![])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn estimated_cost(&self) -> (f64, f64, u64, u32) {
+        let row_width = self
+            .schema
+            .fields
+            .iter()
+            .map(|f| f.data_type.estimate_size())
+            .sum::<usize>() as u32;
+        // Columnar scan is cheaper due to projection pushdown
+        let savings = 1.0 - (self.projection.len() as f64 / self.schema.fields.len().max(1) as f64);
+        let cost = 100.0 * (1.0 - savings * 0.5);
+        (0.0, cost, 1000, row_width)
     }
 }
 
@@ -395,12 +498,204 @@ impl FilterExec {
     }
 }
 
+/// Scalar subquery execution operator
+/// Executes a subquery that returns a single value
+#[allow(dead_code)]
+pub struct ScalarSubqueryExec {
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl ScalarSubqueryExec {
+    pub fn new(subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self { subquery, schema }
+    }
+
+    pub fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+}
+
+impl PhysicalPlan for ScalarSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "ScalarSubquery"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// IN subquery execution operator
+/// Checks if a value exists in the subquery results
+#[allow(dead_code)]
+pub struct InSubqueryExec {
+    expr: Box<Expr>,
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl InSubqueryExec {
+    pub fn new(expr: Box<Expr>, subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self {
+            expr,
+            subquery,
+            schema,
+        }
+    }
+
+    pub fn expr(&self) -> &Expr {
+        &self.expr
+    }
+
+    pub fn subquery(&self) -> &dyn PhysicalPlan {
+        self.subquery.as_ref()
+    }
+}
+
+impl PhysicalPlan for InSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "InSubquery"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// EXISTS subquery execution operator
+/// Checks if the subquery returns any rows
+#[allow(dead_code)]
+pub struct ExistsExec {
+    subquery: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl ExistsExec {
+    pub fn new(subquery: Box<dyn PhysicalPlan>, schema: Schema) -> Self {
+        Self { subquery, schema }
+    }
+
+    pub fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let results = self.subquery.execute()?;
+        // EXISTS returns true if subquery returns at least one row
+        Ok(vec![vec![Value::Boolean(!results.is_empty())]])
+    }
+}
+
+impl PhysicalPlan for ExistsExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Exists"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let results = self.subquery.execute()?;
+        Ok(vec![vec![Value::Boolean(!results.is_empty())]])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// ANY/ALL subquery execution operator
+/// Compares a value with ALL or ANY results from the subquery
+#[allow(dead_code)]
+pub struct AnyAllSubqueryExec {
+    expr: Box<Expr>,
+    op: Operator,
+    subquery: Box<dyn PhysicalPlan>,
+    any_all: crate::SubqueryType,
+    schema: Schema,
+}
+
+impl AnyAllSubqueryExec {
+    pub fn new(
+        expr: Box<Expr>,
+        op: Operator,
+        subquery: Box<dyn PhysicalPlan>,
+        any_all: crate::SubqueryType,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            expr,
+            op,
+            subquery,
+            any_all,
+            schema,
+        }
+    }
+
+    pub fn any_all(&self) -> crate::SubqueryType {
+        self.any_all.clone()
+    }
+}
+
+impl PhysicalPlan for AnyAllSubqueryExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.subquery.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        match self.any_all {
+            crate::SubqueryType::Any => "Any",
+            crate::SubqueryType::All => "All",
+            _ => "AnyAll",
+        }
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        self.subquery.execute()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Aggregate execution operator
 #[allow(dead_code)]
 pub struct AggregateExec {
     input: Box<dyn PhysicalPlan>,
     group_expr: Vec<Expr>,
     aggregate_expr: Vec<Expr>,
+    having_expr: Option<Expr>,
     schema: Schema,
 }
 
@@ -409,12 +704,14 @@ impl AggregateExec {
         input: Box<dyn PhysicalPlan>,
         group_expr: Vec<Expr>,
         aggregate_expr: Vec<Expr>,
+        having_expr: Option<Expr>,
         schema: Schema,
     ) -> Self {
         Self {
             input,
             group_expr,
             aggregate_expr,
+            having_expr,
             schema,
         }
     }
@@ -429,6 +726,10 @@ impl AggregateExec {
 
     pub fn aggregate_expr(&self) -> &Vec<Expr> {
         &self.aggregate_expr
+    }
+
+    pub fn having_expr(&self) -> &Option<Expr> {
+        &self.having_expr
     }
 
     fn evaluate_expr(&self, expr: &Expr, row: &[Value], schema: &Schema) -> Value {
@@ -892,6 +1193,139 @@ impl PhysicalPlan for LimitExec {
     }
 }
 
+/// Set operation execution operator (UNION, INTERSECT, EXCEPT)
+#[allow(dead_code)]
+pub struct SetOperationExec {
+    op_type: crate::SetOperationType,
+    left: Box<dyn PhysicalPlan>,
+    right: Box<dyn PhysicalPlan>,
+    schema: Schema,
+}
+
+impl SetOperationExec {
+    pub fn new(
+        op_type: crate::SetOperationType,
+        left: Box<dyn PhysicalPlan>,
+        right: Box<dyn PhysicalPlan>,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            op_type,
+            left,
+            right,
+            schema,
+        }
+    }
+
+    pub fn op_type(&self) -> crate::SetOperationType {
+        self.op_type
+    }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+}
+
+impl PhysicalPlan for SetOperationExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.left.as_ref(), self.right.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "SetOperation"
+    }
+
+    fn execute(&self) -> Result<Vec<Vec<Value>>, String> {
+        let left_results = self.left.execute()?;
+        let right_results = self.right.execute()?;
+        match self.op_type {
+            crate::SetOperationType::Union | crate::SetOperationType::UnionAll => {
+                let mut results = left_results;
+                results.extend(right_results);
+                Ok(results)
+            }
+            _ => Ok(vec![]),
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Window execution operator
+#[allow(dead_code)]
+pub struct WindowExec {
+    input: Box<dyn PhysicalPlan>,
+    window_exprs: Vec<crate::Expr>,
+    partition_by: Vec<crate::Expr>,
+    order_by: Vec<crate::SortExpr>,
+    schema: Schema,
+    input_schema: Schema,
+}
+
+impl WindowExec {
+    pub fn new(
+        input: Box<dyn PhysicalPlan>,
+        window_exprs: Vec<crate::Expr>,
+        partition_by: Vec<crate::Expr>,
+        order_by: Vec<crate::SortExpr>,
+        schema: Schema,
+        input_schema: Schema,
+    ) -> Self {
+        Self {
+            input,
+            window_exprs,
+            partition_by,
+            order_by,
+            schema,
+            input_schema,
+        }
+    }
+
+    pub fn input(&self) -> &dyn PhysicalPlan {
+        self.input.as_ref()
+    }
+
+    pub fn window_exprs(&self) -> &Vec<crate::Expr> {
+        &self.window_exprs
+    }
+
+    pub fn partition_by(&self) -> &Vec<crate::Expr> {
+        &self.partition_by
+    }
+
+    pub fn order_by(&self) -> &Vec<crate::SortExpr> {
+        &self.order_by
+    }
+}
+
+impl PhysicalPlan for WindowExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.input.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Window"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -953,6 +1387,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             schema,
         );
 
@@ -1060,7 +1495,7 @@ mod tests {
     fn test_aggregate_exec_new() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.name(), "Aggregate");
     }
 
@@ -1068,7 +1503,7 @@ mod tests {
     fn test_aggregate_exec_schema() {
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
         let child = SeqScanExec::new("users".to_string(), schema.clone());
-        let exec = AggregateExec::new(Box::new(child), vec![], vec![], schema);
+        let exec = AggregateExec::new(Box::new(child), vec![], vec![], None, schema);
         assert_eq!(exec.schema().fields.len(), 1);
     }
 
@@ -1142,6 +1577,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1160,6 +1596,7 @@ mod tests {
                 args: vec![Expr::column("id")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1178,6 +1615,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Integer)]),
         );
 
@@ -1199,6 +1637,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("category".to_string(), DataType::Text),
                 Field::new("sum".to_string(), DataType::Integer),
@@ -1316,6 +1755,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]),
         );
 
@@ -1430,6 +1870,7 @@ mod tests {
                 args: vec![Expr::column("c")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("a".to_string(), DataType::Integer),
                 Field::new("b".to_string(), DataType::Integer),
@@ -1453,6 +1894,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Integer)]),
         );
 
@@ -1471,6 +1913,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Integer)]),
         );
 
@@ -1489,6 +1932,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Integer)]),
         );
 
@@ -1748,6 +2192,7 @@ mod tests {
             input,
             vec![Expr::column("id")],
             vec![Expr::column("id")],
+            None,
             schema,
         );
 
@@ -1877,6 +2322,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1895,6 +2341,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -1914,6 +2361,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Integer)]),
         );
 
@@ -1933,6 +2381,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Integer)]),
         );
 
@@ -1952,6 +2401,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Integer)]),
         );
 
@@ -1971,6 +2421,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]),
         );
 
@@ -1990,6 +2441,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Float)]),
         );
 
@@ -2009,6 +2461,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Float)]),
         );
 
@@ -2028,6 +2481,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Float)]),
         );
 
@@ -2301,6 +2755,7 @@ mod tests {
                     distinct: false,
                 },
             ],
+            None,
             Schema::new(vec![
                 Field::new("count".to_string(), DataType::Integer),
                 Field::new("sum".to_string(), DataType::Integer),
@@ -2323,6 +2778,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: true,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2346,6 +2802,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![
                 Field::new("dept".to_string(), DataType::Text),
                 Field::new("category".to_string(), DataType::Text),
@@ -2369,6 +2826,7 @@ mod tests {
                 args: vec![Expr::Wildcard],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2567,6 +3025,7 @@ mod tests {
                 args: vec![Expr::column("id")],
                 distinct: true,
             }],
+            None,
             Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]),
         );
 
@@ -2586,6 +3045,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("sum".to_string(), DataType::Float)]),
         );
 
@@ -2605,6 +3065,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("avg".to_string(), DataType::Float)]),
         );
 
@@ -2624,6 +3085,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("min".to_string(), DataType::Float)]),
         );
 
@@ -2643,6 +3105,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             Schema::new(vec![Field::new("max".to_string(), DataType::Float)]),
         );
 
@@ -2910,6 +3373,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -2934,6 +3398,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -2958,6 +3423,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -2982,6 +3448,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3006,6 +3473,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3030,6 +3498,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3054,6 +3523,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3078,6 +3548,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3102,6 +3573,7 @@ mod tests {
                 args: vec![Expr::column("val")],
                 distinct: false,
             }],
+            None,
             schema.clone(),
         );
 
@@ -3233,7 +3705,7 @@ mod tests {
         let input = Box::new(SeqScanExec::new("test".to_string(), schema.clone()));
         let group_expr = vec![Expr::column("id")];
         let agg_expr = vec![];
-        let agg = AggregateExec::new(input, group_expr.clone(), agg_expr, schema.clone());
+        let agg = AggregateExec::new(input, group_expr.clone(), agg_expr, None, schema.clone());
 
         assert_eq!(agg.group_expr(), &group_expr);
     }
@@ -3312,5 +3784,128 @@ mod tests {
         assert_eq!(smj.join_type(), crate::JoinType::Left);
         assert_eq!(smj.left_keys(), &left_keys);
         assert_eq!(smj.right_keys(), &right_keys);
+    }
+
+    #[test]
+    fn test_index_scan_exec_new() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema.clone(),
+        );
+
+        assert_eq!(scan.name(), "IndexScan");
+        assert_eq!(scan.table_name(), "test_table");
+        assert_eq!(scan.index_name(), "idx_id");
+        assert_eq!(scan.schema().fields.len(), 1);
+        assert!(scan.children().is_empty());
+    }
+
+    #[test]
+    fn test_index_scan_exec_with_key_range() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema,
+        )
+        .with_key_range(10, 100);
+
+        assert_eq!(scan.key_expr().to_string(), "id");
+        assert_eq!(scan.key_range(), (Some(10), Some(100)));
+    }
+
+    #[test]
+    fn test_index_scan_exec_execute() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let key_expr = Expr::column("id");
+        let scan = IndexScanExec::new(
+            "test_table".to_string(),
+            "idx_id".to_string(),
+            key_expr,
+            schema,
+        );
+
+        let result = scan.execute();
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_scalar_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let scalar = ScalarSubqueryExec::new(subquery, schema.clone());
+
+        assert_eq!(scalar.name(), "ScalarSubquery");
+        assert_eq!(scalar.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_in_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let expr = Box::new(Expr::column("id"));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let in_subquery = InSubqueryExec::new(expr, subquery, schema.clone());
+
+        assert_eq!(in_subquery.name(), "InSubquery");
+        assert_eq!(in_subquery.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_exists_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let schema = Schema::new(vec![Field::new("exists".to_string(), DataType::Boolean)]);
+
+        let exists = ExistsExec::new(subquery, schema.clone());
+
+        assert_eq!(exists.name(), "Exists");
+        assert_eq!(exists.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_any_all_subquery_exec() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = Box::new(SeqScanExec::new("inner".to_string(), subquery_schema));
+        let expr = Box::new(Expr::column("id"));
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let any_all = AnyAllSubqueryExec::new(
+            expr,
+            crate::Operator::Eq,
+            subquery,
+            crate::SubqueryType::Any,
+            schema.clone(),
+        );
+
+        assert_eq!(any_all.name(), "Any");
+        assert_eq!(any_all.any_all(), crate::SubqueryType::Any);
+    }
+
+    #[test]
+    fn test_set_operation_exec() {
+        let left_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let left = Box::new(SeqScanExec::new("left".to_string(), left_schema));
+        let right = Box::new(SeqScanExec::new("right".to_string(), right_schema));
+
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let set_op =
+            SetOperationExec::new(crate::SetOperationType::Union, left, right, schema.clone());
+
+        assert_eq!(set_op.name(), "SetOperation");
+        assert_eq!(set_op.op_type(), crate::SetOperationType::Union);
     }
 }

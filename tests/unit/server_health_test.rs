@@ -55,7 +55,11 @@ fn test_health_checker_check_ready() {
     let report = checker.check_ready();
     assert_eq!(report.version, "1.0.0");
     // Components may be empty or not depending on implementation
-    assert!(report.status != HealthStatus::Unhealthy || !report.components.is_empty() || report.components.is_empty());
+    assert!(
+        report.status != HealthStatus::Unhealthy
+            || !report.components.is_empty()
+            || report.components.is_empty()
+    );
 }
 
 #[test]

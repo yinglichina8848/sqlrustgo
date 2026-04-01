@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Represents profiling data for a single operator
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,18 +191,13 @@ impl QueryProfile {
     }
 
     /// Generate profiling report
+    #[allow(clippy::useless_format)]
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
 
-        report.push_str(&format!(
-            "╔══════════════════════════════════════════════════════════════════╗\n"
-        ));
-        report.push_str(&format!(
-            "║          SQLRustGo 2.0 - Query Performance Profile               ║\n"
-        ));
-        report.push_str(&format!(
-            "╠══════════════════════════════════════════════════════════════════╣\n"
-        ));
+        report.push_str("╔══════════════════════════════════════════════════════════════════╗\n");
+        report.push_str("║          SQLRustGo 2.0 - Query Performance Profile               ║\n");
+        report.push_str("╠══════════════════════════════════════════════════════════════════╣\n");
         report.push_str(&format!(
             "║ Query ID: {}                                          ║\n",
             self.query_id
@@ -219,9 +214,7 @@ impl QueryProfile {
             "║ Status: {}                                                     ║\n",
             if self.success { "SUCCESS" } else { "FAILED" }
         ));
-        report.push_str(&format!(
-            "╚══════════════════════════════════════════════════════════════════╝\n\n"
-        ));
+        report.push_str("╚══════════════════════════════════════════════════════════════════╝\n\n");
 
         report.push_str("Operator Breakdown:\n");
         report.push_str(
@@ -380,7 +373,8 @@ impl Default for AtomicProfile {
     }
 }
 
-/// Scope guard for timing operator execution
+/// Scope guard for timing operator execution (requires mutable reference)
+/// Use Profiler::start_timer() for thread-safe profiling with GLOBAL_PROFILER
 pub struct ProfileTimer<'a> {
     start: Instant,
     profile: &'a mut OperatorProfile,
@@ -404,6 +398,45 @@ impl<'a> Drop for ProfileTimer<'a> {
         let duration = self.start.elapsed();
         self.profile
             .record_execution(duration.as_nanos() as u64, self.rows, self.batches);
+    }
+}
+
+/// RAII timer guard for profiling with GLOBAL_PROFILER (thread-safe)
+/// Use this with Profiler::start_timer() for automatic timing collection
+pub struct GlobalProfileTimer {
+    start: Instant,
+    profiler: Arc<RwLock<HashMap<String, OperatorProfile>>>,
+    name: String,
+    rows: usize,
+    batches: usize,
+}
+
+impl GlobalProfileTimer {
+    /// Create a new global profile timer
+    pub fn new(
+        profiler: Arc<RwLock<HashMap<String, OperatorProfile>>>,
+        name: String,
+        rows: usize,
+        batches: usize,
+    ) -> Self {
+        Self {
+            start: Instant::now(),
+            profiler,
+            name,
+            rows,
+            batches,
+        }
+    }
+}
+
+impl Drop for GlobalProfileTimer {
+    fn drop(&mut self) {
+        let duration = self.start.elapsed();
+        if let Ok(mut profiles) = self.profiler.write() {
+            if let Some(profile) = profiles.get_mut(&self.name) {
+                profile.record_execution(duration.as_nanos() as u64, self.rows, self.batches);
+            }
+        }
     }
 }
 
@@ -450,6 +483,27 @@ impl Profiler {
                 .or_insert_with(|| OperatorProfile::new(name, operator_type));
             profile.record_execution(duration_ns, rows, batches);
         }
+    }
+
+    /// Start a timer for profiling an operator execution (RAII pattern)
+    /// Returns a GlobalProfileTimer that automatically records execution when dropped
+    ///
+    /// # Example
+    /// ```ignore
+    /// {
+    ///     let _timer = profiler.start_timer("SeqScan", 1000, 10);
+    ///     // ... perform operation ...
+    /// } // execution time automatically recorded
+    /// ```
+    pub fn start_timer(&self, name: &str, rows: usize, batches: usize) -> GlobalProfileTimer {
+        // Ensure the profile entry exists before timing starts
+        if let Ok(mut profiles) = self.profiles.write() {
+            profiles
+                .entry(name.to_string())
+                .or_insert_with(|| OperatorProfile::new(name, ""));
+        }
+
+        GlobalProfileTimer::new(self.profiles.clone(), name.to_string(), rows, batches)
     }
 
     /// Record a query profile
@@ -509,15 +563,9 @@ impl Profiler {
 
         let mut report = String::new();
 
-        report.push_str(&format!(
-            "╔════════════════════════════════════════════════════════════════════╗\n"
-        ));
-        report.push_str(&format!(
-            "║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n"
-        ));
-        report.push_str(&format!(
-            "╠════════════════════════════════════════════════════════════════════╣\n"
-        ));
+        report.push_str("╔════════════════════════════════════════════════════════════════════╗\n");
+        report.push_str("║          SQLRustGo 2.0 - Aggregate Profiling Report                ║\n");
+        report.push_str("╠════════════════════════════════════════════════════════════════════╣\n");
 
         let total_queries = self.query_profiles.read().map(|p| p.len()).unwrap_or(0);
         report.push_str(&format!(
@@ -537,9 +585,8 @@ impl Profiler {
             format_duration(total_time)
         ));
 
-        report.push_str(&format!(
-            "╚════════════════════════════════════════════════════════════════════╝\n\n"
-        ));
+        report
+            .push_str("╚════════════════════════════════════════════════════════════════════╝\n\n");
 
         if !profiles.is_empty() {
             report.push_str("Top Operators by Execution Time:\n");
@@ -579,8 +626,8 @@ impl Profiler {
     }
 }
 
-/// Global profiler instance
 lazy_static::lazy_static! {
+    #[allow(unused_doc_comments)]
     pub static ref GLOBAL_PROFILER: Profiler = Profiler::new();
 }
 
@@ -724,5 +771,44 @@ mod tests {
 
         assert_eq!(profile.execution_count, 1);
         assert!(profile.total_time_ns > 0);
+    }
+
+    #[test]
+    fn test_global_profile_timer() {
+        let profiler = Profiler::new();
+
+        // Ensure profile exists (without recording an execution)
+        let _ = profiler.get_operator_profile("TestOp", "test");
+
+        {
+            let _timer = profiler.start_timer("TestOp", 100, 5);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        let profiles = profiler.get_all_profiles();
+        let test_op = profiles
+            .iter()
+            .find(|p| p.operator_name == "TestOp")
+            .unwrap();
+        assert_eq!(test_op.execution_count, 1);
+        assert!(test_op.total_time_ns > 0);
+    }
+
+    #[test]
+    fn test_start_timer_creates_profile() {
+        let profiler = Profiler::new();
+
+        // start_timer should create profile if it doesn't exist
+        {
+            let _timer = profiler.start_timer("NewOp", 50, 2);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        let profiles = profiler.get_all_profiles();
+        let new_op = profiles
+            .iter()
+            .find(|p| p.operator_name == "NewOp")
+            .unwrap();
+        assert_eq!(new_op.execution_count, 1);
     }
 }

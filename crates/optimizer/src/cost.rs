@@ -7,11 +7,11 @@ use super::*;
 #[allow(dead_code)]
 pub struct SimpleCostModel {
     /// CPU cost per row
-    cpu_cost_per_row: f64,
+    pub cpu_cost_per_row: f64,
     /// I/O cost per page
-    io_cost_per_page: f64,
+    pub io_cost_per_page: f64,
     /// Network cost per byte
-    network_cost_per_byte: f64,
+    pub network_cost_per_byte: f64,
 }
 
 impl SimpleCostModel {
@@ -264,5 +264,75 @@ mod tests {
 
         let cost = model.estimate_join_with_stats(&left_stats, &right_stats, "hash_join");
         assert!(cost > 0.0);
+    }
+}
+
+pub struct CboOptimizer {
+    cost_model: SimpleCostModel,
+    stats_provider: Option<Box<dyn super::stats::StatisticsProvider>>,
+}
+
+impl CboOptimizer {
+    pub fn new() -> Self {
+        Self {
+            cost_model: SimpleCostModel::default_model(),
+            stats_provider: None,
+        }
+    }
+
+    pub fn with_stats_provider(
+        mut self,
+        provider: Box<dyn super::stats::StatisticsProvider>,
+    ) -> Self {
+        self.stats_provider = Some(provider);
+        self
+    }
+
+    pub fn estimate_scan_cost(&self, table: &str) -> f64 {
+        if let Some(ref provider) = self.stats_provider {
+            if let Some(stats) = provider.table_stats(table) {
+                return self.cost_model.estimate_with_stats(&stats);
+            }
+        }
+        self.cost_model.seq_scan_cost(1000, 10)
+    }
+
+    pub fn estimate_index_scan_cost(&self, table: &str, column: &str) -> f64 {
+        if let Some(ref provider) = self.stats_provider {
+            if let Some(stats) = provider.table_stats(table) {
+                return self
+                    .cost_model
+                    .estimate_index_scan_with_stats(&stats, column);
+            }
+        }
+        self.cost_model.index_scan_cost(100, 1, 10)
+    }
+
+    pub fn select_access_method(
+        &self,
+        table: &str,
+        column: &str,
+        selectivity_threshold: f64,
+    ) -> &str {
+        let seq_scan_cost = self.estimate_scan_cost(table);
+        let index_scan_cost = self.estimate_index_scan_cost(table, column);
+
+        let selectivity = if let Some(ref provider) = self.stats_provider {
+            provider.selectivity(table, column)
+        } else {
+            0.1
+        };
+
+        if selectivity < selectivity_threshold && index_scan_cost < seq_scan_cost {
+            "index_scan"
+        } else {
+            "seq_scan"
+        }
+    }
+}
+
+impl Default for CboOptimizer {
+    fn default() -> Self {
+        Self::new()
     }
 }
