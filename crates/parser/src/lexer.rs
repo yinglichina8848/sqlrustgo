@@ -307,6 +307,7 @@ impl<'a> Lexer<'a> {
                     "CURRENT" => Token::Current,
                     "TIES" => Token::Ties,
                     "NO" => Token::NoOthers,
+                    "DISTINCT" => Token::Distinct,
                     "BETWEEN" => Token::Between,
                     "IN" => Token::In,
                     "LIKE" => Token::Like,

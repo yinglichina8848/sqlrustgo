@@ -954,6 +954,48 @@ impl Parser {
                     self.next();
                     continue;
                 }
+                Some(Token::Extract) | Some(Token::Substring) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                    });
+                    continue;
+                }
+                Some(Token::NumberLiteral(_)) | Some(Token::Minus) | Some(Token::LParen) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                    });
+                    continue;
+                }
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
                     let func = match self.current() {
@@ -997,12 +1039,71 @@ impl Parser {
 
                     self.expect(Token::RParen)?;
 
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => return Err("Expected alias name after AS".to_string()),
+                        }
+                    } else {
+                        None
+                    };
+
                     let agg = AggregateCall {
-                        func,
+                        func: func.clone(),
                         args,
                         distinct,
                     };
-                    aggregates.push(agg);
+                    aggregates.push(agg.clone());
+
+                    let column_expr = Expression::FunctionCall(
+                        format!("{:?}", func),
+                        vec![Expression::Identifier(format!("{:?}", agg))],
+                    );
+
+                    let mut expr = column_expr;
+                    while matches!(
+                        self.current(),
+                        Some(Token::Slash)
+                            | Some(Token::Star)
+                            | Some(Token::Plus)
+                            | Some(Token::Minus)
+                    ) {
+                        let op = match self.current() {
+                            Some(Token::Slash) => "/",
+                            Some(Token::Star) => "*",
+                            Some(Token::Plus) => "+",
+                            Some(Token::Minus) => "-",
+                            _ => break,
+                        };
+                        self.next();
+                        let right = self.parse_expression()?;
+                        expr =
+                            Expression::BinaryOp(Box::new(expr), op.to_string(), Box::new(right));
+                    }
+
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let a = Some(name.clone());
+                                self.next();
+                                a
+                            }
+                            _ => return Err("Expected alias name after AS".to_string()),
+                        }
+                    } else {
+                        None
+                    };
+
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                    });
                     continue;
                 }
                 Some(Token::RowNumber)
@@ -1928,6 +2029,7 @@ impl Parser {
 
     fn parse_case_when_expression(&mut self) -> Result<Expression, String> {
         let mut conditions = Vec::new();
+        let mut has_else = false;
         loop {
             self.expect(Token::When)?;
             let condition = self.parse_expression()?;
@@ -1937,15 +2039,15 @@ impl Parser {
             match self.current() {
                 Some(Token::When) => continue,
                 Some(Token::Else) => {
-                    self.next();
+                    has_else = true;
                     break;
                 }
                 Some(Token::End) | None => break,
                 _ => return Err("Expected WHEN, ELSE, or END".to_string()),
             }
         }
-        let else_result = if matches!(self.current(), Some(Token::Else)) {
-            self.next();
+        let else_result = if has_else {
+            self.next(); // consume ELSE
             Some(Box::new(self.parse_expression()?))
         } else {
             None

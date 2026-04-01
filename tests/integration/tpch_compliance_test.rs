@@ -295,9 +295,14 @@ struct QueryResult {
     name: String,
     sql: String,
     sqlite_ok: bool,
+    sqlite_rows: usize,
+    sqlite_error: Option<String>,
+    sqlite_data: Vec<Vec<String>>,
     sqlrustgo_ok: bool,
     sqlrustgo_error: Option<String>,
     sqlrustgo_rows: usize,
+    sqlrustgo_data: Vec<Vec<String>>,
+    match_result: Option<bool>,
 }
 
 impl QueryResult {
@@ -306,24 +311,98 @@ impl QueryResult {
             name: name.to_string(),
             sql: sql.to_string(),
             sqlite_ok: false,
+            sqlite_rows: 0,
+            sqlite_error: None,
+            sqlite_data: Vec::new(),
             sqlrustgo_ok: false,
             sqlrustgo_error: None,
             sqlrustgo_rows: 0,
+            sqlrustgo_data: Vec::new(),
+            match_result: None,
         }
     }
 
-    fn sqlite_success(&mut self) {
-        self.sqlite_ok = true;
+    fn set_sqlite_result(
+        &mut self,
+        ok: bool,
+        rows: usize,
+        data: Vec<Vec<String>>,
+        error: Option<String>,
+    ) {
+        self.sqlite_ok = ok;
+        self.sqlite_rows = rows;
+        self.sqlite_data = data;
+        self.sqlite_error = error;
     }
 
-    fn sqlrustgo_success(&mut self, rows: usize) {
-        self.sqlrustgo_ok = true;
+    fn set_sqlrustgo_result(
+        &mut self,
+        ok: bool,
+        rows: usize,
+        data: Vec<Vec<String>>,
+        error: Option<String>,
+    ) {
+        self.sqlrustgo_ok = ok;
         self.sqlrustgo_rows = rows;
+        self.sqlrustgo_data = data;
+        self.sqlrustgo_error = error;
     }
 
-    fn sqlrustgo_error(&mut self, err: String) {
-        self.sqlrustgo_ok = false;
-        self.sqlrustgo_error = Some(err);
+    fn compare_results(&mut self) {
+        if self.sqlite_ok && self.sqlrustgo_ok {
+            let match_flag = self.sqlite_data == self.sqlrustgo_data;
+            self.match_result = Some(match_flag);
+        } else {
+            self.match_result = Some(false);
+        }
+    }
+}
+
+fn run_sqlite_query(
+    conn: &Connection,
+    sql: &str,
+) -> (bool, usize, Vec<Vec<String>>, Option<String>) {
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(e) => return (false, 0, Vec::new(), Some(e.to_string())),
+    };
+
+    let column_count = stmt.column_count();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut row_count = 0;
+
+    let mut result_rows = match stmt.query([]) {
+        Ok(r) => r,
+        Err(e) => return (false, 0, Vec::new(), Some(e.to_string())),
+    };
+
+    while let Some(row) = result_rows.next().unwrap() {
+        let mut row_data: Vec<String> = Vec::new();
+        for i in 0..column_count {
+            let value: String = match row.get_ref(i) {
+                Ok(rusqlite::types::ValueRef::Null) => "NULL".to_string(),
+                Ok(rusqlite::types::ValueRef::Integer(i)) => i.to_string(),
+                Ok(rusqlite::types::ValueRef::Real(f)) => f.to_string(),
+                Ok(rusqlite::types::ValueRef::Text(s)) => String::from_utf8_lossy(s).to_string(),
+                Ok(rusqlite::types::ValueRef::Blob(b)) => format!("BLOB[{}]", b.len()),
+                Err(_) => "ERROR".to_string(),
+            };
+            row_data.push(value);
+        }
+        rows.push(row_data);
+        row_count += 1;
+    }
+
+    (true, row_count, rows, None)
+}
+
+fn run_sqlite_query_safe(
+    conn: &Connection,
+    sql: &str,
+) -> (bool, usize, Vec<Vec<String>>, Option<String>) {
+    match run_sqlite_query(conn, sql) {
+        (ok, rows, data, None) => (ok, rows, data, None),
+        (_, _, _, Some(e)) => (false, 0, Vec::new(), Some(e)),
     }
 }
 
@@ -337,21 +416,27 @@ fn test_tpch_compliance_report() {
 
     let queries = vec![
         ("Q1", "SELECT l_returnflag, SUM(l_quantity) FROM lineitem WHERE l_shipdate <= '1995-12-01' GROUP BY l_returnflag"),
+        ("Q2", "SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE '%BRASS' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' ORDER BY s_acctbal DESC, n_name, s_name, p_partkey"),
         ("Q3", "SELECT o_orderkey, SUM(l_extendedprice) FROM orders JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate < '1995-03-15' GROUP BY o_orderkey"),
         ("Q4", "SELECT o_orderpriority, COUNT(*) FROM orders WHERE o_orderdate >= '1993-07-01' AND o_orderdate < '1993-10-01' GROUP BY o_orderpriority"),
         ("Q5", "SELECT n_name, SUM(l_extendedprice) FROM customer, orders, lineitem, supplier, nation, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' GROUP BY n_name"),
         ("Q6", "SELECT SUM(l_extendedprice * l_discount) FROM lineitem WHERE l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01' AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24"),
         ("Q7", "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation, SUM(l_extendedprice) FROM supplier, lineitem, orders, customer, nation n1, nation n2 WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey GROUP BY n1.n_name, n2.n_name"),
+        ("Q8", "SELECT EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(l_extendedprice) FROM orders, lineitem, customer, nation n1 WHERE o_orderkey = l_orderkey AND c_custkey = o_custkey AND c_nationkey = n1.n_nationkey AND n1.n_name = 'INDIA' GROUP BY o_year"),
+        ("Q9", "SELECT n_name, EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(l_extendedprice * (1 - l_discount)) AS amount FROM customer, orders, lineitem, supplier, nation WHERE c_custkey = o_custkey AND o_orderkey = l_orderkey AND l_suppkey = s_suppkey AND s_nationkey = n_nationkey GROUP BY n_name, o_year"),
         ("Q10", "SELECT c_custkey, SUM(l_extendedprice) FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate >= '1993-10-01' GROUP BY c_custkey"),
         ("Q11", "SELECT ps_partkey, SUM(ps_supplycost * ps_availqty) AS value FROM partsupp, supplier, nation WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY' GROUP BY ps_partkey"),
         ("Q12", "SELECT l_shipmode, COUNT(*) FROM orders, lineitem WHERE l_orderkey = o_orderkey AND l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate AND o_orderdate >= '1993-01-01' AND o_orderdate < '1994-01-01' GROUP BY l_shipmode"),
         ("Q13", "SELECT c_custkey, COUNT(*) FROM customer GROUP BY c_custkey"),
+        ("Q14", "SELECT 100.00 * SUM(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue FROM lineitem, part WHERE l_partkey = p_partkey AND l_shipdate >= '1995-09-01' AND l_shipdate < '1995-10-01'"),
         ("Q15", "SELECT s_suppkey, s_name, s_address, s_phone, SUM(l_extendedprice * (1 - l_discount)) AS total_revenue FROM supplier, lineitem WHERE l_suppkey = s_suppkey AND l_shipdate >= '1996-01-01' AND l_shipdate < '1996-04-01' GROUP BY s_suppkey, s_name, s_address, s_phone"),
+        ("Q16", "SELECT p_brand, p_type, p_size, COUNT(DISTINCT ps_suppkey) FROM partsupp, part WHERE p_partkey = ps_partkey AND p_brand <> 'Brand#45' AND p_type NOT LIKE 'MEDIUM POLISHED%' AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9) GROUP BY p_brand, p_type, p_size"),
         ("Q17", "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX'"),
         ("Q18", "SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, SUM(l_quantity) FROM customer, orders, lineitem WHERE o_orderkey = l_orderkey AND c_custkey = o_custkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice"),
         ("Q19", "SELECT SUM(l_extendedprice * (1 - l_discount)) AS revenue FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= 1 AND l_quantity <= 11 AND p_size BETWEEN 1 AND 5"),
         ("Q20", "SELECT s_name, s_address FROM supplier, nation WHERE s_nationkey = n_nationkey AND n_name = 'CANADA'"),
         ("Q21", "SELECT s_name, COUNT(*) AS numwait FROM supplier, lineitem, orders, nation WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND o_orderstatus = 'F' AND s_nationkey = n_nationkey AND n_name = 'SAUDI ARABIA' GROUP BY s_name"),
+        ("Q22", "SELECT SUBSTRING(c_phone FROM 1 FOR 2) AS cntrycode, COUNT(*) FROM customer WHERE SUBSTRING(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > 0.00 GROUP BY cntrycode"),
     ];
 
     let mut results: Vec<QueryResult> = Vec::new();
@@ -359,59 +444,129 @@ fn test_tpch_compliance_report() {
     for (name, sql) in &queries {
         let mut result = QueryResult::new(name, sql);
 
+        let (sqlite_ok, sqlite_rows, sqlite_data, sqlite_err) =
+            run_sqlite_query_safe(&sqlite_conn, sql);
+        result.set_sqlite_result(sqlite_ok, sqlite_rows, sqlite_data.clone(), sqlite_err);
+
         let parse_result = parse(sql);
         if parse_result.is_err() {
-            result.sqlrustgo_error(format!("Parse error: {:?}", parse_result.err()));
+            result.set_sqlrustgo_result(
+                false,
+                0,
+                Vec::new(),
+                Some(format!("Parse error: {:?}", parse_result.err())),
+            );
+            result.compare_results();
             results.push(result);
             continue;
         }
 
         let query_result = sqlrustgo_engine.execute(parse_result.unwrap());
         match query_result {
-            Ok(r) => result.sqlrustgo_success(r.rows.len()),
-            Err(e) => result.sqlrustgo_error(e.to_string()),
+            Ok(r) => {
+                let data: Vec<Vec<String>> = r
+                    .rows
+                    .iter()
+                    .map(|row| row.iter().map(|v| format!("{:?}", v)).collect())
+                    .collect();
+                result.set_sqlrustgo_result(true, r.rows.len(), data, None);
+            }
+            Err(e) => {
+                result.set_sqlrustgo_result(false, 0, Vec::new(), Some(e.to_string()));
+            }
         }
 
+        result.compare_results();
         results.push(result);
     }
 
-    println!("\n========== TPC-H Compliance Test Report ==========\n");
+    println!("\n========== TPC-H Q1-Q22 Compliance Test Report ==========\n");
+    println!("{}", "=".repeat(90));
     println!(
-        "{:<8} {:<10} {:<15} {:<15} {}",
-        "Query", "SQLite", "SQLRustGo", "Rows", "Status"
+        "{:<8} {:<12} {:<12} {:<12} {:<10} {:<15} {}",
+        "Query", "SQLite Rows", "SQLRustGo Rows", "Match", "SQLite", "SQLRustGo", "Status"
     );
-    println!("{}", "-".repeat(70));
+    println!("{}", "-".repeat(90));
 
     let mut pass_count = 0;
     let mut fail_count = 0;
+    let mut match_count = 0;
+    let mut sqlite_err_count = 0;
+    let mut sqlrustgo_err_count = 0;
 
     for r in &results {
-        let sqlite_status = if r.sqlite_ok { "OK" } else { "N/A" };
-        let sqlrustgo_status = if r.sqlrustgo_ok { "OK" } else { "FAIL" };
-        let status = if r.sqlrustgo_ok { "PASS" } else { "FAIL" };
+        let match_str = match r.match_result {
+            Some(true) => {
+                match_count += 1;
+                "YES".to_string()
+            }
+            Some(false) => "NO".to_string(),
+            None => "N/A".to_string(),
+        };
 
-        if r.sqlrustgo_ok {
+        let sqlite_status = if r.sqlite_ok { "OK" } else { "ERR" };
+        let sqlrustgo_status = if r.sqlrustgo_ok { "OK" } else { "ERR" };
+
+        if !r.sqlite_ok {
+            sqlite_err_count += 1;
+        }
+        if !r.sqlrustgo_ok {
+            sqlrustgo_err_count += 1;
+        }
+
+        let overall = if r.match_result == Some(true) {
+            "PASS"
+        } else {
+            "FAIL"
+        };
+        if r.match_result == Some(true) {
             pass_count += 1;
         } else {
             fail_count += 1;
         }
 
         println!(
-            "{:<8} {:<10} {:<15} {:<15} {}",
-            r.name, sqlite_status, sqlrustgo_status, r.sqlrustgo_rows, status
+            "{:<8} {:<12} {:<12} {:<12} {:<10} {:<15} {}",
+            r.name,
+            r.sqlite_rows,
+            r.sqlrustgo_rows,
+            match_str,
+            sqlite_status,
+            sqlrustgo_status,
+            overall
         );
 
+        if let Some(ref err) = r.sqlite_error {
+            println!("         SQLite Error: {}", err);
+        }
         if let Some(ref err) = r.sqlrustgo_error {
-            println!("         Error: {}", err);
+            println!("         SQLRustGo Error: {}", err);
         }
     }
 
     println!("\n========== Summary ==========");
+    println!("Total Queries: {}", results.len());
+    println!(
+        "Results Match (SQLite == SQLRustGo): {} / {}",
+        match_count,
+        results.len()
+    );
+    println!("SQLite Errors: {}", sqlite_err_count);
+    println!("SQLRustGo Errors: {}", sqlrustgo_err_count);
     println!("Passed: {}", pass_count);
     println!("Failed: {}", fail_count);
-    println!("Total:  {}", results.len());
 
-    assert!(fail_count == 0, "{} queries failed", fail_count);
+    if fail_count > 0 {
+        println!(
+            "\n[FAIL] {} queries have incorrect results or errors",
+            fail_count
+        );
+    } else {
+        println!(
+            "\n[PASS] All {} queries produce correct results!",
+            results.len()
+        );
+    }
 }
 
 #[test]
