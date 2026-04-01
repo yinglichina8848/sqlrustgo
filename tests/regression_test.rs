@@ -76,8 +76,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 性能测试
         TestCategory {
             name: "性能测试 (Performance)",
-            test_files: vec!["performance_test", "tpch_test", "tpch_benchmark"],
-            description: "22 性能测试：批量插入、索引扫描、JOIN、缓存、向量化、TPC-H",
+            test_files: vec![
+                "performance_test",
+                "tpch_test",
+                "tpch_benchmark",
+                "tpch_full_test",
+            ],
+            description: "22 性能测试：批量插入、索引扫描、JOIN、缓存、向量化、TPC-H Q1-Q22",
         },
         // 异常测试 - 并发
         TestCategory {
