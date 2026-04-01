@@ -74,6 +74,7 @@ pub enum Token {
     All,
     Limit,
     Offset,
+    Distinct,
 
     // SHOW keywords (运维监控)
     Show,
@@ -133,6 +134,8 @@ pub enum Token {
     NoOthers,
     Between,
     In,
+    Case,
+    End,
 
     // CTE (Common Table Expression) - SQL-99
     With,
@@ -335,13 +338,16 @@ impl fmt::Display for Token {
             Token::Current => write!(f, "CURRENT"),
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
+            Token::Distinct => write!(f, "DISTINCT"),
             Token::Between => write!(f, "BETWEEN"),
             Token::In => write!(f, "IN"),
+            Token::Case => write!(f, "CASE"),
+            Token::End => write!(f, "END"),
+            Token::When => write!(f, "WHEN"),
             Token::With => write!(f, "WITH"),
             Token::Recursive => write!(f, "RECURSIVE"),
             Token::Merge => write!(f, "MERGE"),
             Token::Truncate => write!(f, "TRUNCATE"),
-            Token::When => write!(f, "WHEN"),
             Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
@@ -488,6 +494,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "NO OTHERS"
             | "BETWEEN"
             | "IN"
+            | "CASE"
+            | "WHEN"
+            | "THEN"
+            | "ELSE"
             | "PREPARE"
             | "EXECUTE"
             | "DEALLOCATE"
@@ -567,8 +577,14 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "CURRENT ROW" => Some(Token::Current),
         "TIES" => Some(Token::Ties),
         "NO OTHERS" => Some(Token::NoOthers),
+        "DISTINCT" => Some(Token::Distinct),
         "BETWEEN" => Some(Token::Between),
         "IN" => Some(Token::In),
+        "CASE" => Some(Token::Case),
+        "END" => Some(Token::End),
+        "WHEN" => Some(Token::When),
+        "THEN" => Some(Token::Then),
+        "ELSE" => Some(Token::Else),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
