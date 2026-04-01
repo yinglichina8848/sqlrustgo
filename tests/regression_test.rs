@@ -49,8 +49,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 集成测试 - SQL功能
         TestCategory {
             name: "集成测试 - SQL功能 (SQL Functionality)",
-            test_files: vec!["foreign_key_test", "server_integration_test", "upsert_test"],
-            description: "测试外键、服务器、UPSERT",
+            test_files: vec![
+                "foreign_key_test",
+                "server_integration_test",
+                "upsert_test",
+                "mysql_compatibility_test",
+            ],
+            description: "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)",
         },
         // 集成测试 - 存储
         TestCategory {
