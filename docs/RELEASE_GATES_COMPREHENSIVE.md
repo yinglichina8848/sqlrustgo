@@ -42,7 +42,7 @@
 | 窗口函数 | ✅ | 21 个测试通过 | `cargo test --test window_function_test` |
 | RBAC 权限 | ✅ | 23 个测试通过 | `cargo test --test auth_rbac_test` |
 | WAL 集成 | ✅ | 16 个测试通过 | `cargo test --test wal_integration_test` |
-| 功能矩阵文档 | ✅ | `docs/v2.1.0-TEST-MATRIX.md` 已更新 | 文档审查 |
+| 功能矩阵文档 | ✅ | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` 已更新 | 文档审查 |
 
 ### 2.2 功能完整性门禁
 | 检查项 | 状态 | 验收标准 | 测试方法 |
