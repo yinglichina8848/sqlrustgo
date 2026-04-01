@@ -45,6 +45,23 @@ fn bench_execute_insert(c: &mut Criterion) {
     });
 }
 
+fn bench_execute_insert_batch(c: &mut Criterion) {
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    engine
+        .execute(parse("CREATE TABLE bench_batch (id INTEGER)").unwrap())
+        .unwrap();
+
+    c.bench_function("execute_insert_batch_100", |b| {
+        let mut counter = 0;
+        b.iter(|| {
+            counter += 1;
+            let values: Vec<String> = (0..100).map(|i| format!("{}", counter * 100 + i)).collect();
+            let sql = format!("INSERT INTO bench_batch VALUES {}", values.join(", "));
+            engine.execute(parse(&sql).unwrap()).unwrap()
+        });
+    });
+}
+
 fn bench_execute_aggregate(c: &mut Criterion) {
     let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
@@ -70,6 +87,7 @@ criterion_group!(
     bench_parse_select,
     bench_execute_select,
     bench_execute_insert,
+    bench_execute_insert_batch,
     bench_execute_aggregate
 );
 criterion_main!(benches);

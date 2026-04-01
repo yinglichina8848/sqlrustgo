@@ -51,6 +51,12 @@ impl SqliteDB {
 
 #[async_trait]
 impl Database for SqliteDB {
+    async fn execute(&self, sql: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(sql, [])?;
+        Ok(())
+    }
+
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.query_row("SELECT * FROM accounts WHERE id = ?1", [key], |_row| Ok(()))?;

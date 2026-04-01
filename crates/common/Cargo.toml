@@ -13,3 +13,6 @@ log.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 num_cpus = "1.17"
+chrono = "0.4"
+flate2 = "1.0"
+tempfile.workspace = true

@@ -3,7 +3,7 @@ use crate::metrics::LatencyCollector;
 use crate::reporter::BenchmarkResult;
 use sqlrustgo::{parse, ExecutionEngine};
 use sqlrustgo_storage::MemoryStorage;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 pub fn run(args: OltpArgs) -> BenchmarkResult {
@@ -23,7 +23,7 @@ pub fn run(args: OltpArgs) -> BenchmarkResult {
     let start = Instant::now();
     while start.elapsed().as_secs() < args.duration {
         let iteration_start = Instant::now();
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage);
         let _ = engine.execute(parse(sql).unwrap());
         collector.record(iteration_start.elapsed().as_nanos() as u64);
