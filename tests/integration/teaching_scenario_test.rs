@@ -229,6 +229,7 @@ fn test_query_cache_basic() {
         tables: vec!["users".to_string()],
         created_at: Instant::now(),
         size_bytes: 100,
+        last_access: 0,
     };
 
     cache.put(key.clone(), entry.clone(), vec!["users".to_string()]);
