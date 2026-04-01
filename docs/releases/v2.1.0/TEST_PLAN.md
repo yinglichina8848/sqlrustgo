@@ -243,6 +243,7 @@ cargo test --test regression_test -- --nocapture --test-threads=1 <category>
 | 其他测试 | 3 | 二进制、WAL、分布式 |
 | 安全测试 | 2 | RBAC、日志 |
 | 教学场景测试 | 2 | 客户端/服务器 |
+| SQL CLI 测试 | 1 | UPDATE/DELETE |
 | 工具测试 | 1 | 物理备份 |
 
 ---
