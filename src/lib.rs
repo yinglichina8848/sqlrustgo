@@ -363,6 +363,24 @@ fn evaluate_where_clause(
             }
             false
         }
+        sqlrustgo_parser::Expression::CaseWhen {
+            conditions,
+            else_result,
+        } => {
+            for (condition, then_result) in conditions {
+                let cond_val = evaluate_expr(condition, row, columns);
+                if let Value::Boolean(true) = cond_val {
+                    let then_val = evaluate_expr(then_result, row, columns);
+                    return then_val.to_bool();
+                }
+            }
+            if let Some(else_expr) = else_result {
+                let else_val = evaluate_expr(else_expr, row, columns);
+                else_val.to_bool()
+            } else {
+                false
+            }
+        }
     }
 }
 
@@ -463,6 +481,22 @@ fn evaluate_expr(
                 }
             }
             Value::Boolean(false)
+        }
+        sqlrustgo_parser::Expression::CaseWhen {
+            conditions,
+            else_result,
+        } => {
+            for (condition, then_result) in conditions {
+                let cond_val = evaluate_expr(condition, row, columns);
+                if let Value::Boolean(true) = cond_val {
+                    return evaluate_expr(then_result, row, columns);
+                }
+            }
+            if let Some(else_expr) = else_result {
+                evaluate_expr(else_expr, row, columns)
+            } else {
+                Value::Null
+            }
         }
     }
 }
