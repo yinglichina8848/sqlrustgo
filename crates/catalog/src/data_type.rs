@@ -76,7 +76,11 @@ impl DataType {
     pub fn is_valid_for_primary_key(&self) -> bool {
         matches!(
             self,
-            DataType::Integer | DataType::Text | DataType::Boolean | DataType::Date | DataType::Uuid
+            DataType::Integer
+                | DataType::Text
+                | DataType::Boolean
+                | DataType::Date
+                | DataType::Uuid
         )
     }
 
@@ -141,5 +145,130 @@ mod tests {
     fn test_display() {
         assert_eq!(format!("{}", DataType::Integer), "INTEGER");
         assert_eq!(format!("{}", DataType::Text), "TEXT");
+    }
+
+    #[test]
+    fn test_data_type_sql_name_all() {
+        assert_eq!(DataType::Null.sql_name(), "NULL");
+        assert_eq!(DataType::Boolean.sql_name(), "BOOLEAN");
+        assert_eq!(DataType::Integer.sql_name(), "INTEGER");
+        assert_eq!(DataType::Float.sql_name(), "FLOAT");
+        assert_eq!(DataType::Text.sql_name(), "TEXT");
+        assert_eq!(DataType::Blob.sql_name(), "BLOB");
+        assert_eq!(DataType::Date.sql_name(), "DATE");
+        assert_eq!(DataType::Timestamp.sql_name(), "TIMESTAMP");
+        assert_eq!(DataType::Uuid.sql_name(), "UUID");
+        assert_eq!(DataType::Array.sql_name(), "ARRAY");
+        assert_eq!(DataType::Enum.sql_name(), "ENUM");
+    }
+
+    #[test]
+    fn test_parse_sql_name_all() {
+        assert_eq!(DataType::parse_sql_name("NULL"), Some(DataType::Null));
+        assert_eq!(DataType::parse_sql_name("BOOLEAN"), Some(DataType::Boolean));
+        assert_eq!(DataType::parse_sql_name("BOOL"), Some(DataType::Boolean));
+        assert_eq!(DataType::parse_sql_name("INT64"), Some(DataType::Integer));
+        assert_eq!(DataType::parse_sql_name("BIGINT"), Some(DataType::Integer));
+        assert_eq!(DataType::parse_sql_name("DOUBLE"), Some(DataType::Float));
+        assert_eq!(DataType::parse_sql_name("REAL"), Some(DataType::Float));
+        assert_eq!(DataType::parse_sql_name("CHAR"), Some(DataType::Text));
+        assert_eq!(DataType::parse_sql_name("STRING"), Some(DataType::Text));
+        assert_eq!(DataType::parse_sql_name("BINARY"), Some(DataType::Blob));
+        assert_eq!(DataType::parse_sql_name("VARBINARY"), Some(DataType::Blob));
+        assert_eq!(
+            DataType::parse_sql_name("DATETIME"),
+            Some(DataType::Timestamp)
+        );
+        assert_eq!(DataType::parse_sql_name("UUID"), Some(DataType::Uuid));
+        assert_eq!(DataType::parse_sql_name("ARRAY"), Some(DataType::Array));
+        assert_eq!(DataType::parse_sql_name("ENUM"), Some(DataType::Enum));
+        assert_eq!(DataType::parse_sql_name("INVALID"), None);
+    }
+
+    #[test]
+    fn test_valid_for_primary_key_all() {
+        assert!(DataType::Boolean.is_valid_for_primary_key());
+        assert!(DataType::Date.is_valid_for_primary_key());
+        assert!(DataType::Uuid.is_valid_for_primary_key());
+        assert!(!DataType::Float.is_valid_for_primary_key());
+        assert!(!DataType::Timestamp.is_valid_for_primary_key());
+        assert!(!DataType::Array.is_valid_for_primary_key());
+        assert!(!DataType::Enum.is_valid_for_primary_key());
+    }
+
+    #[test]
+    fn test_is_orderable_all() {
+        assert!(DataType::Null.is_orderable());
+        assert!(DataType::Boolean.is_orderable());
+        assert!(DataType::Integer.is_orderable());
+        assert!(DataType::Float.is_orderable());
+        assert!(DataType::Text.is_orderable());
+        assert!(DataType::Date.is_orderable());
+        assert!(DataType::Timestamp.is_orderable());
+        assert!(DataType::Uuid.is_orderable());
+        assert!(!DataType::Blob.is_orderable());
+        assert!(!DataType::Array.is_orderable());
+        assert!(!DataType::Enum.is_orderable());
+    }
+
+    #[test]
+    fn test_is_equatable_all() {
+        for dt in [
+            DataType::Null,
+            DataType::Boolean,
+            DataType::Integer,
+            DataType::Float,
+            DataType::Text,
+            DataType::Blob,
+            DataType::Date,
+            DataType::Timestamp,
+            DataType::Uuid,
+            DataType::Array,
+            DataType::Enum,
+        ] {
+            assert!(dt.is_equatable(), "DataType {:?} should be equatable", dt);
+        }
+    }
+
+    #[test]
+    fn test_data_type_clone() {
+        let dt = DataType::Integer;
+        let cloned = dt;
+        assert_eq!(dt, cloned);
+    }
+
+    #[test]
+    fn test_data_type_copy() {
+        let dt = DataType::Text;
+        let copied = dt;
+        assert_eq!(dt, copied);
+    }
+
+    #[test]
+    fn test_data_type_debug() {
+        let dt = DataType::Integer;
+        let debug = format!("{:?}", dt);
+        assert!(debug.contains("Integer"));
+    }
+
+    #[test]
+    fn test_data_type_partial_eq_all() {
+        let types = [
+            DataType::Null,
+            DataType::Boolean,
+            DataType::Integer,
+            DataType::Float,
+            DataType::Text,
+            DataType::Blob,
+            DataType::Date,
+            DataType::Timestamp,
+            DataType::Uuid,
+            DataType::Array,
+            DataType::Enum,
+        ];
+        for dt in &types {
+            assert_eq!(*dt, *dt);
+        }
+        assert_ne!(DataType::Integer, DataType::Float);
     }
 }
