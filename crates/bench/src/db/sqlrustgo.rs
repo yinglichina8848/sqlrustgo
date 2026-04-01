@@ -36,6 +36,10 @@ impl SqlRustGoDB {
 
 #[async_trait]
 impl Database for SqlRustGoDB {
+    async fn execute(&self, sql: &str) -> anyhow::Result<()> {
+        self.execute_query(sql).await
+    }
+
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         self.execute_query(&format!("SELECT * FROM accounts WHERE id = {}", key))
             .await

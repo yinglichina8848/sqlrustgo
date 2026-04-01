@@ -928,7 +928,7 @@ mod tests {
         }
 
         fn create_table_index(
-            &self,
+            &mut self,
             _table: &str,
             _column: &str,
             _column_index: usize,
@@ -936,7 +936,7 @@ mod tests {
             Ok(())
         }
 
-        fn drop_table_index(&self, _table: &str, _column: &str) -> SqlResult<()> {
+        fn drop_table_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
             Ok(())
         }
 
@@ -946,6 +946,61 @@ mod tests {
 
         fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
             Vec::new()
+        }
+
+        fn create_view(&mut self, _info: sqlrustgo_storage::engine::ViewInfo) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn get_view(&self, _name: &str) -> Option<sqlrustgo_storage::engine::ViewInfo> {
+            None
+        }
+
+        fn list_views(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn has_view(&self, _name: &str) -> bool {
+            false
+        }
+
+        fn analyze_table(&self, _table: &str) -> SqlResult<sqlrustgo_storage::engine::TableStats> {
+            Ok(sqlrustgo_storage::engine::TableStats {
+                table_name: _table.to_string(),
+                row_count: 0,
+                column_stats: vec![],
+            })
+        }
+
+        fn create_trigger(
+            &mut self,
+            _info: sqlrustgo_storage::engine::TriggerInfo,
+        ) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn drop_trigger(&mut self, _name: &str) -> SqlResult<()> {
+            Ok(())
+        }
+
+        fn get_trigger(&self, _name: &str) -> Option<sqlrustgo_storage::engine::TriggerInfo> {
+            None
+        }
+
+        fn list_triggers(&self, _table: &str) -> Vec<sqlrustgo_storage::engine::TriggerInfo> {
+            Vec::new()
+        }
+
+        fn get_next_auto_increment(
+            &mut self,
+            _table: &str,
+            _column_index: usize,
+        ) -> SqlResult<i64> {
+            Ok(1)
+        }
+
+        fn get_auto_increment_counter(&self, _table: &str, _column_index: usize) -> SqlResult<i64> {
+            Ok(0)
         }
     }
 
@@ -962,12 +1017,18 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: true,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
@@ -996,6 +1057,9 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            is_primary_key: false,
+            auto_increment: false,
+            references: None,
         }];
         let storage = MockStorage::new().with_data("orders", records, columns);
 
@@ -1020,6 +1084,9 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            is_primary_key: false,
+            auto_increment: false,
+            references: None,
         }];
         let storage = MockStorage::new().with_data("users", records, columns);
 
@@ -1049,6 +1116,9 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             is_unique: false,
+            is_primary_key: false,
+            auto_increment: false,
+            references: None,
         }];
         let storage: Box<dyn StorageEngine> =
             Box::new(MockStorage::new().with_data("t", records, columns));

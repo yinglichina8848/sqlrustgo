@@ -14,17 +14,17 @@
 //! ```
 
 mod analysis;
+mod benchmark_runner;
 mod cli;
 mod db;
 mod memory;
 mod metrics;
-mod runner;
 mod workload;
 
 use anyhow::Result;
+use benchmark_runner::run_benchmark;
 use clap::Parser;
 use cli::BenchArgs;
-use runner::run_benchmark;
 
 #[tokio::main]
 async fn main() -> Result<()> {
