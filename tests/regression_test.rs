@@ -46,6 +46,18 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["test_stored_proc"],
             description: "测试存储过程执行引擎：变量、流程控制、异常处理、光标",
         },
+        // 触发器测试
+        TestCategory {
+            name: "触发器测试 (Trigger)",
+            test_files: vec!["test_trigger"],
+            description: "测试触发器执行引擎：BEFORE/AFTER INSERT/UPDATE/DELETE",
+        },
+        // 性能基准测试
+        TestCategory {
+            name: "性能基准测试 (Benchmark)",
+            test_files: vec!["test_benchmark"],
+            description: "测试存储过程和触发器执行性能",
+        },
         // 集成测试 - 核心
         TestCategory {
             name: "集成测试 - 核心 (Core Integration)",

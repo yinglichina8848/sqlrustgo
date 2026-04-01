@@ -699,6 +699,84 @@ fn test_param_mode() {
 }
 
 #[test]
+fn test_stored_proc_with_in_params() {
+    let proc = StoredProcedure::new(
+        "add_numbers".to_string(),
+        vec![
+            StoredProcParam {
+                name: "a".to_string(),
+                mode: ParamMode::In,
+                data_type: "INTEGER".to_string(),
+            },
+            StoredProcParam {
+                name: "b".to_string(),
+                mode: ParamMode::In,
+                data_type: "INTEGER".to_string(),
+            },
+        ],
+        vec![
+            StoredProcStatement::Declare {
+                name: "result".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("@a + @b".to_string()),
+            },
+            StoredProcStatement::Return {
+                value: "@result".to_string(),
+            },
+        ],
+    );
+    let executor = create_executor_with_proc(proc);
+    let result = executor.execute_call("add_numbers", vec![Value::Integer(10), Value::Integer(20)]);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_stored_proc_param_count_mismatch() {
+    let proc = StoredProcedure::new(
+        "two_params".to_string(),
+        vec![
+            StoredProcParam {
+                name: "a".to_string(),
+                mode: ParamMode::In,
+                data_type: "INTEGER".to_string(),
+            },
+            StoredProcParam {
+                name: "b".to_string(),
+                mode: ParamMode::In,
+                data_type: "INTEGER".to_string(),
+            },
+        ],
+        vec![StoredProcStatement::Return {
+            value: "@a".to_string(),
+        }],
+    );
+    let executor = create_executor_with_proc(proc);
+    // Only provide 1 argument when 2 are expected
+    let result = executor.execute_call("two_params", vec![Value::Integer(10)]);
+    // Should still work - second param will be unset
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_stored_proc_extra_args() {
+    let proc = StoredProcedure::new(
+        "one_param".to_string(),
+        vec![StoredProcParam {
+            name: "a".to_string(),
+            mode: ParamMode::In,
+            data_type: "INTEGER".to_string(),
+        }],
+        vec![StoredProcStatement::Return {
+            value: "@a".to_string(),
+        }],
+    );
+    let executor = create_executor_with_proc(proc);
+    // Provide extra arguments - should ignore them
+    let result = executor.execute_call("one_param", vec![Value::Integer(42), Value::Integer(100)]);
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_catalog_stored_procedures() {
     let mut catalog = Catalog::new();
     let proc = StoredProcedure::new(
