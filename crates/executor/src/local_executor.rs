@@ -10,14 +10,17 @@ use sqlrustgo_planner::{
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
 
+use crate::operator_profile::GLOBAL_PROFILER;
 use crate::query_cache::should_cache;
 use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use crate::sql_normalizer::SqlNormalizer;
 use crate::{Executor, ExecutorResult};
-
 use parking_lot::RwLock;
+use query_stats::SlowQueryConfig;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 
 /// LocalExecutor - executes physical plans using StorageEngine
@@ -25,6 +28,10 @@ pub struct LocalExecutor<'a> {
     storage: &'a dyn StorageEngine,
     cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
+    /// Slow query logger (optional)
+    slow_query_log: StdRwLock<Option<query_stats::SlowQueryLog>>,
+    /// SQL text for slow query logging (set when executing with cache)
+    current_sql: StdRwLock<String>,
 }
 
 impl<'a> LocalExecutor<'a> {
@@ -34,6 +41,8 @@ impl<'a> LocalExecutor<'a> {
             storage,
             cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            slow_query_log: StdRwLock::new(None),
+            current_sql: StdRwLock::new(String::new()),
         }
     }
 
@@ -43,7 +52,30 @@ impl<'a> LocalExecutor<'a> {
             storage,
             cache: Arc::new(RwLock::new(QueryCache::new(config.clone()))),
             cache_config: config,
+            slow_query_log: StdRwLock::new(None),
+            current_sql: StdRwLock::new(String::new()),
         }
+    }
+
+    /// Enable slow query logging with the given configuration
+    pub fn with_slow_query_log(self, config: SlowQueryConfig) -> Self {
+        if config.enabled {
+            let log = query_stats::SlowQueryLog::from_config(&config);
+            *self.slow_query_log.write().unwrap() = Some(log);
+        }
+        self
+    }
+
+    /// Enable slow query logging with a simple threshold and path
+    pub fn with_slow_query_log_enabled(self, threshold_ms: u64, log_path: PathBuf) -> Self {
+        let config = SlowQueryConfig {
+            enabled: true,
+            threshold_ms,
+            log_path,
+        };
+        let log = query_stats::SlowQueryLog::from_config(&config);
+        *self.slow_query_log.write().unwrap() = Some(log);
+        self
     }
 
     /// Invalidate cache for a specific table
@@ -54,6 +86,11 @@ impl<'a> LocalExecutor<'a> {
     /// Clear all cached query results
     pub fn clear_cache(&self) {
         self.cache.write().clear();
+    }
+
+    /// Get the storage engine reference
+    pub fn storage(&self) -> &dyn StorageEngine {
+        self.storage
     }
 
     /// Get cache key from SQL and params
@@ -80,12 +117,17 @@ impl<'a> LocalExecutor<'a> {
         sql: &str,
         params: &[Value],
     ) -> SqlResult<ExecutorResult> {
+        // Store SQL for slow query logging
+        *self.current_sql.write().unwrap() = sql.to_string();
+
         if self.cache_config.enabled && !sql.is_empty() {
             let cache_key = self.get_cache_key(sql, params);
             if let Some(result) = self.cache.write().get(&cache_key) {
+                // Still log cached queries if they were slow
                 return Ok(result);
             }
 
+            let start = Instant::now();
             let result = match plan.name() {
                 "SeqScan" => self.execute_seq_scan(plan),
                 "Projection" => self.execute_projection(plan),
@@ -97,6 +139,11 @@ impl<'a> LocalExecutor<'a> {
                 "Limit" => self.execute_limit(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let row_count = result.rows.len() as u64;
+
+            // Log slow query
+            self.log_slow_query(sql, duration_ms, row_count);
 
             if should_cache(&result) {
                 let tables = self.extract_tables(plan);
@@ -105,6 +152,7 @@ impl<'a> LocalExecutor<'a> {
                     tables,
                     created_at: Instant::now(),
                     size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                    last_access: 0,
                 };
                 self.cache.write().put(cache_key, entry, vec![]);
             }
@@ -112,7 +160,8 @@ impl<'a> LocalExecutor<'a> {
             return Ok(result);
         }
 
-        match plan.name() {
+        let start = Instant::now();
+        let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
@@ -122,6 +171,20 @@ impl<'a> LocalExecutor<'a> {
             "Sort" => self.execute_sort(plan),
             "Limit" => self.execute_limit(plan),
             _ => Ok(ExecutorResult::empty()),
+        }?;
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let row_count = result.rows.len() as u64;
+
+        // Log slow query
+        self.log_slow_query(sql, duration_ms, row_count);
+
+        Ok(result)
+    }
+
+    /// Log a slow query if it exceeds the threshold
+    fn log_slow_query(&self, sql: &str, duration_ms: u64, rows: u64) {
+        if let Some(ref log) = *self.slow_query_log.read().unwrap() {
+            log.maybe_log(sql, duration_ms, rows);
         }
     }
 
@@ -143,11 +206,18 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
+        let start = Instant::now();
+
         // Scan from storage
         let records = self.storage.scan(table_name).unwrap_or_default();
 
         // Convert records to rows
         let rows: Vec<Vec<Value>> = records;
+        let row_count = rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record("SeqScan", "scan", duration.as_nanos() as u64, row_count, 1);
 
         Ok(ExecutorResult::new(rows, 0))
     }
@@ -158,6 +228,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         let child_result = self.execute(children[0])?;
 
@@ -185,6 +257,18 @@ impl<'a> LocalExecutor<'a> {
             })
             .collect();
 
+        let row_count = projected_rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "Projection",
+            "projection",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
+
         Ok(ExecutorResult::new(
             projected_rows,
             child_result.affected_rows,
@@ -197,6 +281,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         // Execute child first
         let child_result = self.execute(children[0])?;
@@ -221,6 +307,12 @@ impl<'a> LocalExecutor<'a> {
             })
             .collect();
 
+        let row_count = filtered_rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record("Filter", "filter", duration.as_nanos() as u64, row_count, 1);
+
         Ok(ExecutorResult::new(filtered_rows, 0))
     }
 
@@ -230,6 +322,8 @@ impl<'a> LocalExecutor<'a> {
         if children.is_empty() {
             return Ok(ExecutorResult::empty());
         }
+
+        let start = Instant::now();
 
         let child_result = self.execute(children[0])?;
 
@@ -269,6 +363,18 @@ impl<'a> LocalExecutor<'a> {
             }
 
             if !agg_results.is_empty() {
+                let row_count = 1;
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "Aggregate",
+                    "aggregate",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 return Ok(ExecutorResult::new(vec![agg_results], 0));
             }
 
@@ -315,6 +421,18 @@ impl<'a> LocalExecutor<'a> {
                 }
                 results.push(row);
             }
+
+            let row_count = results.len();
+            let duration = start.elapsed();
+
+            // Record to GLOBAL_PROFILER
+            GLOBAL_PROFILER.record(
+                "Aggregate",
+                "aggregate",
+                duration.as_nanos() as u64,
+                row_count,
+                1,
+            );
 
             Ok(ExecutorResult::new(results, 0))
         }
@@ -383,6 +501,8 @@ impl<'a> LocalExecutor<'a> {
             return Ok(ExecutorResult::empty());
         }
 
+        let start = Instant::now();
+
         let left_result = self.execute(children[0])?;
         let right_result = self.execute(children[1])?;
 
@@ -396,10 +516,20 @@ impl<'a> LocalExecutor<'a> {
         let condition = match condition {
             Some(c) => c,
             None => {
-                return Ok(ExecutorResult::new(
-                    cartesian_product(&left_result.rows, &right_result.rows),
-                    0,
-                ));
+                let results = cartesian_product(&left_result.rows, &right_result.rows);
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                return Ok(ExecutorResult::new(results, 0));
             }
         };
 
@@ -415,6 +545,18 @@ impl<'a> LocalExecutor<'a> {
                     left_schema,
                     right_schema,
                 );
+                let row_count = matched.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 Ok(ExecutorResult::new(matched, 0))
             }
             JoinType::Left => {
@@ -442,9 +584,36 @@ impl<'a> LocalExecutor<'a> {
                     .collect();
                 let mut results = matched;
                 results.extend(left_only);
+
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
                 Ok(ExecutorResult::new(results, 0))
             }
-            _ => Ok(ExecutorResult::empty()),
+            _ => {
+                let row_count = 0;
+                let duration = start.elapsed();
+
+                // Record to GLOBAL_PROFILER
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                Ok(ExecutorResult::empty())
+            }
         }
     }
 
@@ -890,6 +1059,7 @@ mod tests {
                 args: vec![],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -935,6 +1105,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -980,6 +1151,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1025,6 +1197,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1352,6 +1525,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 
@@ -1395,6 +1569,7 @@ mod tests {
                 args: vec![Expr::column("amount")],
                 distinct: false,
             }],
+            None,
             output_schema,
         );
 

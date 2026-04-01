@@ -355,6 +355,8 @@ impl OptimizerRule for ConstantFolding {
 /// Default optimizer with standard optimization rules
 pub struct DefaultOptimizer {
     rules: Vec<Box<dyn OptimizerRule>>,
+    use_cost_based: bool,
+    enable_index_scan: bool,
 }
 
 impl DefaultOptimizer {
@@ -364,11 +366,33 @@ impl DefaultOptimizer {
             Box::new(PredicatePushdown),
             Box::new(ProjectionPruning),
         ];
-        Self { rules }
+        Self {
+            rules,
+            use_cost_based: false,
+            enable_index_scan: false,
+        }
     }
 
     pub fn with_rules(rules: Vec<Box<dyn OptimizerRule>>) -> Self {
-        Self { rules }
+        Self {
+            rules,
+            use_cost_based: false,
+            enable_index_scan: false,
+        }
+    }
+
+    pub fn enable_cost_based(mut self) -> Self {
+        self.use_cost_based = true;
+        self
+    }
+
+    pub fn enable_index_scan(mut self) -> Self {
+        self.enable_index_scan = true;
+        self
+    }
+
+    pub fn is_index_scan_enabled(&self) -> bool {
+        self.enable_index_scan
     }
 }
 
@@ -942,6 +966,7 @@ mod tests {
         let plan = LogicalPlan::Aggregate {
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![Expr::column("id")],
+            having_expr: None,
             input: Box::new(LogicalPlan::TableScan {
                 table_name: "users".to_string(),
                 schema: schema.clone(),
@@ -1215,6 +1240,7 @@ mod tests {
             }),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema,
         };
 
@@ -1327,6 +1353,7 @@ mod tests {
             }),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema,
         };
 

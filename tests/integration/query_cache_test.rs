@@ -21,6 +21,7 @@ fn test_cache_basic_get_put() {
         tables: vec!["t".to_string()],
         created_at: Instant::now(),
         size_bytes: 100,
+        last_access: 0,
     };
 
     cache.put(key.clone(), entry.clone(), vec!["t".to_string()]);
@@ -123,5 +124,6 @@ fn make_dummy_entry() -> CacheEntry {
         tables: vec![],
         created_at: Instant::now(),
         size_bytes: 16,
+        last_access: 0,
     }
 }

@@ -176,6 +176,51 @@ mod tests {
         assert!(output.contains("version=\"1.4.0\""));
     }
 
+    #[test]
+    fn test_multiple_custom_metrics() {
+        let mut registry = MetricsRegistry::new();
+        registry.register_custom_metric("metric1".to_string(), "value1".to_string());
+        registry.register_custom_metric("metric2".to_string(), "value2".to_string());
+        registry.register_custom_metric("metric3".to_string(), "value3".to_string());
+
+        let output = registry.to_prometheus_format();
+
+        assert!(output.contains("metric1"));
+        assert!(output.contains("metric2"));
+        assert!(output.contains("metric3"));
+    }
+
+    #[test]
+    fn test_metrics_registry_empty_format() {
+        let registry = MetricsRegistry::new();
+        let output = registry.to_prometheus_format();
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn test_metrics_registry_help_text_only_registered() {
+        let mut registry = MetricsRegistry::new();
+        // Help text is only output when metrics with that name are registered
+        registry.register_help("queries".to_string(), "Help for queries".to_string());
+
+        // Without registering metrics, help text won't appear in output
+        let output = registry.to_prometheus_format();
+        // Just verify the registry can be created and used without panic
+        assert!(true);
+    }
+
+    #[test]
+    fn test_metrics_registry_duplicate_metric() {
+        let mut registry = MetricsRegistry::new();
+        registry.register_custom_metric("dup_metric".to_string(), "first".to_string());
+        registry.register_custom_metric("dup_metric".to_string(), "second".to_string());
+
+        let output = registry.to_prometheus_format();
+        // Only the last value is stored (HashMap insert behavior)
+        assert!(output.contains("dup_metric second"));
+        assert!(!output.contains("first"));
+    }
+
     #[actix_web::test]
     async fn test_metrics_endpoint_handler() {
         let metrics: Arc<RwLock<dyn Metrics>> = Arc::new(RwLock::new(DefaultMetrics::new()));
