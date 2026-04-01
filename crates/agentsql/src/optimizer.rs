@@ -243,10 +243,12 @@ impl OptimizerService {
 
     fn check_join_order(sql: &str) -> Option<OptimizationSuggestion> {
         let sql_lower = sql.to_lowercase();
-        if sql_lower.contains("join") && sql_lower.contains("from") {
-            let from_idx = sql_lower.find("from").unwrap_or(0);
+        if sql_lower.contains("from") {
             let join_count = sql_lower.matches("join").count();
-            if join_count > 1 {
+            let has_implicit_join = sql_lower.contains(",")
+                && sql_lower.contains("where")
+                && !sql_lower.contains("join");
+            if join_count > 1 || has_implicit_join {
                 return Some(OptimizationSuggestion {
                     id: "optimize_join_order".to_string(),
                     category: SuggestionCategory::Join,
