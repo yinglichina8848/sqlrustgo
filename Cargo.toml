@@ -113,6 +113,7 @@ sqlrustgo-optimizer.workspace = true
 sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
+sqlrustgo-security.workspace = true
 sqlrustgo-transaction.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
