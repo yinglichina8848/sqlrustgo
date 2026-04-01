@@ -941,6 +941,7 @@ impl Parser {
                             name: "(subquery)".to_string(),
                             alias,
                         });
+                        continue;
                     } else {
                         return Err("Expected SELECT in subquery".to_string());
                     }
@@ -951,6 +952,7 @@ impl Parser {
                         alias: None,
                     });
                     self.next();
+                    continue;
                 }
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
@@ -1017,6 +1019,7 @@ impl Parser {
                         name: format!("{:?}", window_expr),
                         alias: None,
                     });
+                    continue;
                 }
                 Some(Token::Identifier(_)) => {
                     let first_name = match self.current() {
@@ -1059,6 +1062,7 @@ impl Parser {
                         name: col_name,
                         alias,
                     });
+                    continue;
                 }
                 Some(Token::Comma) => {
                     self.next();
