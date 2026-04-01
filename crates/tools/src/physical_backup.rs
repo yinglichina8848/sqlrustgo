@@ -138,6 +138,29 @@ pub enum PhysicalBackupCommand {
         #[structopt(short = "w", long = "wal-target")]
         wal_target: Option<PathBuf>,
     },
+
+    /// Prune old physical backups based on retention policy
+    Prune {
+        /// Backup directory to prune
+        #[structopt(short = "d", long = "dir")]
+        dir: PathBuf,
+
+        /// Keep N most recent backups
+        #[structopt(short = "k", long = "keep")]
+        keep: Option<usize>,
+
+        /// Keep backups from last N days
+        #[structopt(short = "D", long = "keep-days")]
+        keep_days: Option<usize>,
+
+        /// Preview changes without actually deleting
+        #[structopt(short = "n", long = "dry-run")]
+        dry_run: bool,
+
+        /// Skip confirmation prompt
+        #[structopt(short = "f", long = "force")]
+        force: bool,
+    },
 }
 
 /// Create a physical backup
@@ -602,6 +625,253 @@ pub fn restore_physical_backup(dir: &Path, target: &Path, wal_target: Option<&Pa
     Ok(())
 }
 
+/// Prune physical backups based on retention policy
+pub fn prune_physical_backups(
+    dir: &Path,
+    keep: Option<usize>,
+    keep_days: Option<usize>,
+    dry_run: bool,
+    force: bool,
+) -> Result<()> {
+    if !dir.exists() {
+        bail!("Backup directory not found: {}", dir.display());
+    }
+
+    // Validate retention policy
+    let (retain_by_count, retain_by_days) = match (keep, keep_days) {
+        (Some(k), None) => (Some(k), None),
+        (None, Some(d)) => (None, Some(d)),
+        (Some(k), Some(d)) => (Some(k), Some(d)),
+        (None, None) => {
+            bail!("Must specify either --keep or --keep-days retention policy");
+        }
+    };
+
+    println!("Physical backup retention policy:");
+    println!("{}", "=".repeat(70));
+    if let Some(k) = retain_by_count {
+        println!("  Keep: {} most recent backup(s)", k);
+    }
+    if let Some(d) = retain_by_days {
+        println!("  Keep: backups from last {} day(s)", d);
+    }
+    println!("  Mode: {}", if dry_run { "DRY RUN (no changes)" } else { "LIVE" });
+
+    // Collect all backups
+    let mut backups = Vec::new();
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            let manifest_file = path.join("manifest.json");
+            if manifest_file.exists() {
+                let content = fs::read_to_string(&manifest_file)?;
+                if let Ok(manifest) = serde_json::from_str::<PhysicalBackupManifest>(&content) {
+                    let size = calculate_backup_size(&path)?;
+                    backups.push(BackupToPrune {
+                        path,
+                        manifest,
+                        size,
+                    });
+                }
+            }
+        }
+    }
+
+    if backups.is_empty() {
+        println!("\nNo physical backups found to prune");
+        return Ok(());
+    }
+
+    // Sort by timestamp (newest first)
+    backups.sort_by(|a, b| b.manifest.timestamp.cmp(&a.manifest.timestamp));
+
+    // Determine which backups to delete
+    let mut to_delete = Vec::new();
+    let mut kept = Vec::new();
+
+    // Apply count-based retention
+    if let Some(max_keep) = retain_by_count {
+        for (i, backup) in backups.iter().enumerate() {
+            if i >= max_keep {
+                to_delete.push(backup.clone());
+            } else {
+                kept.push(backup.clone());
+            }
+        }
+    } else {
+        // Keep all if no count-based retention
+        kept.extend(backups.iter().cloned());
+    }
+
+    // Apply days-based retention on top
+    if let Some(days) = retain_by_days {
+        let cutoff = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - (days as u64 * 86400);
+
+        let before = to_delete.len();
+        to_delete.retain(|b| {
+            let backup_time = parse_timestamp_to_epoch(&b.manifest.timestamp);
+            backup_time < cutoff
+        });
+        kept.retain(|b| {
+            let backup_time = parse_timestamp_to_epoch(&b.manifest.timestamp);
+            backup_time >= cutoff
+        });
+
+        if to_delete.len() > before {
+            println!("  [Days filter] {} backup(s) older than {} days", to_delete.len() - before, days);
+        }
+    }
+
+    if to_delete.is_empty() {
+        println!("\n✅ No backups to prune based on retention policy");
+        println!("   Total backups: {}", backups.len());
+        println!("   Would keep: {}", kept.len());
+        return Ok(());
+    }
+
+    // Print what would be deleted
+    println!();
+    println!("Backup(s) to delete ({} total, {} bytes):", to_delete.len(), to_delete.iter().map(|b| b.size).sum::<u64>());
+    for backup in &to_delete {
+        println!(
+            "  ❌ {} - {} ({} bytes)",
+            backup.path.file_name().unwrap().to_string_lossy(),
+            backup.manifest.timestamp,
+            backup.size
+        );
+    }
+
+    println!();
+    println!("Backup(s) to keep ({} total):", kept.len());
+    for backup in &kept {
+        println!(
+            "  ✅ {} - {} ({} bytes)",
+            backup.path.file_name().unwrap().to_string_lossy(),
+            backup.manifest.timestamp,
+            backup.size
+        );
+    }
+
+    if dry_run {
+        println!();
+        println!("🔍 DRY RUN: No backups were deleted");
+        return Ok(());
+    }
+
+    // Confirm deletion unless force is set
+    if !force {
+        print!("\n⚠️  Delete {} backup(s)? [y/N] ", to_delete.len());
+        io::stdout().flush()?;
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input)? == 0 {
+            println!("Aborted.");
+            return Ok(());
+        }
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Delete backups
+    let mut deleted_count = 0u64;
+    let mut deleted_size = 0u64;
+
+    for backup in &to_delete {
+        match fs::remove_dir_all(&backup.path) {
+            Ok(_) => {
+                deleted_count += 1;
+                deleted_size += backup.size;
+                println!("  Deleted: {}", backup.path.display());
+            }
+            Err(e) => {
+                eprintln!("  Failed to delete {}: {}", backup.path.display(), e);
+            }
+        }
+    }
+
+    println!();
+    println!("✅ Prune complete!");
+    println!("   Deleted: {} backup(s), {} bytes", deleted_count, deleted_size);
+    println!("   Kept: {} backup(s)", kept.len());
+
+    Ok(())
+}
+
+/// Internal struct for tracking backups to prune
+#[derive(Debug, Clone)]
+struct BackupToPrune {
+    path: PathBuf,
+    manifest: PhysicalBackupManifest,
+    size: u64,
+}
+
+/// Calculate total size of a backup directory
+fn calculate_backup_size(path: &Path) -> Result<u64> {
+    let mut total = 0u64;
+
+    if path.is_dir() {
+        for entry in walkdir(path)? {
+            total += entry.metadata()?.len();
+        }
+    }
+
+    Ok(total)
+}
+
+/// Parse timestamp string to epoch seconds
+fn parse_timestamp_to_epoch(timestamp: &str) -> u64 {
+    // Format: "YYYY-MM-DD_HH:MM:SS"
+    let parts: Vec<&str> = timestamp.split(['-', '_', ':']).collect();
+    if parts.len() < 6 {
+        return 0;
+    }
+
+    let year: u64 = parts[0].parse().unwrap_or(1970);
+    let month: u64 = parts[1].parse().unwrap_or(1);
+    let day: u64 = parts[2].parse().unwrap_or(1);
+    let hour: u64 = parts[3].parse().unwrap_or(0);
+    let minute: u64 = parts[4].parse().unwrap_or(0);
+    let second: u64 = parts[5].parse().unwrap_or(0);
+
+    // Calculate days since epoch (simplified leap year handling)
+    let days = days_since_epoch(year, month, day);
+    days * 86400 + hour * 3600 + minute * 60 + second
+}
+
+/// Calculate days since epoch for a given date
+fn days_since_epoch(year: u64, month: u64, day: u64) -> u64 {
+    let mut total_days = 0u64;
+
+    // Add days for complete years
+    for y in 1970..year {
+        total_days += if is_leap_year(y) { 366 } else { 365 };
+    }
+
+    // Add days for months in current year
+    let days_per_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let is_leap = is_leap_year(year);
+    for m in 1..month {
+        total_days += if is_leap && m == 2 { 29 } else { days_per_month[(m - 1) as usize] };
+    }
+
+    // Add days
+    total_days += day - 1;
+
+    total_days
+}
+
+/// Check if a year is a leap year
+fn is_leap_year(year: u64) -> bool {
+    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
+}
+
 // ============================================================================
 // Helper functions
 // ============================================================================
@@ -874,5 +1144,103 @@ mod tests {
         assert_eq!(parsed.archive_id, 1);
         assert_eq!(parsed.entry_count, 100);
         assert_eq!(parsed.compressed_size, 5000);
+    }
+
+    #[test]
+    fn test_is_leap_year() {
+        // Regular years
+        assert!(!is_leap_year(2023));
+        assert!(!is_leap_year(2025));
+
+        // Leap years
+        assert!(is_leap_year(2024));
+        assert!(is_leap_year(2020));
+        assert!(is_leap_year(2016));
+
+        // Century years
+        assert!(!is_leap_year(1900));
+        assert!(!is_leap_year(2100));
+        assert!(is_leap_year(2000)); // Divisible by 400
+    }
+
+    #[test]
+    fn test_days_since_epoch() {
+        // Jan 1, 1970 = 0 days
+        assert_eq!(days_since_epoch(1970, 1, 1), 0);
+
+        // Jan 1, 1971 = 365 days (1970 was not a leap year)
+        assert_eq!(days_since_epoch(1971, 1, 1), 365);
+
+        // Jan 1, 1972 = 730 days (1971 was not a leap year)
+        assert_eq!(days_since_epoch(1972, 1, 1), 730);
+
+        // Jan 1, 1973 = 1096 days (1972 was a leap year, 366 days)
+        assert_eq!(days_since_epoch(1973, 1, 1), 1096);
+
+        // Test Feb 29 in leap year
+        let feb29_leap = days_since_epoch(2024, 2, 29);
+        let feb28_leap = days_since_epoch(2024, 2, 28);
+        assert_eq!(feb29_leap - feb28_leap, 1);
+    }
+
+    #[test]
+    fn test_parse_timestamp_to_epoch() {
+        // 2024-01-01_00:00:00 should be around 1704067200
+        let epoch = parse_timestamp_to_epoch("2024-01-01_00:00:00");
+        assert!(epoch > 0);
+
+        // Same day should have same day component
+        let epoch2 = parse_timestamp_to_epoch("2024-01-02_00:00:00");
+        let diff = epoch2 - epoch;
+        assert_eq!(diff, 86400); // 1 day = 86400 seconds
+    }
+
+    #[test]
+    fn test_calculate_backup_size() {
+        let dir = tempdir().unwrap();
+        let file1 = dir.path().join("file1.txt");
+        let file2 = dir.path().join("file2.txt");
+        std::fs::write(&file1, "content1").unwrap();
+        std::fs::write(&file2, "longer content here").unwrap();
+
+        let size = calculate_backup_size(dir.path()).unwrap();
+        // "content1" = 8 bytes, "longer content here" = 19 bytes, total = 27
+        assert_eq!(size, 27);
+    }
+
+    #[test]
+    fn test_calculate_backup_size_empty_dir() {
+        let dir = tempdir().unwrap();
+        let size = calculate_backup_size(dir.path()).unwrap();
+        assert_eq!(size, 0);
+    }
+
+    #[test]
+    fn test_physical_backup_command_prune_variants() {
+        // Test that Prune command can be parsed (structopt will handle this)
+        use std::process::Command;
+
+        // Just verify the command help works
+        let output = Command::new("cargo")
+            .args(&[
+                "run",
+                "-p",
+                "sqlrustgo-tools",
+                "--",
+                "physical-backup",
+                "prune",
+                "--help",
+            ])
+            .output()
+            .expect("Failed to execute command");
+
+        assert!(
+            output.status.success(),
+            "Prune command should be valid: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("prune") || stdout.contains("keep"));
     }
 }
