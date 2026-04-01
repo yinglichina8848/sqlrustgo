@@ -23,6 +23,7 @@ fn get_test_categories() -> Vec<TestCategory> {
         TestCategory {
             name: "单元测试 (Unit Tests)",
             test_files: vec![
+                "backup_test",
                 "bplus_tree_test",
                 "buffer_pool_test",
                 "file_storage_test",

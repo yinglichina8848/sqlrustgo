@@ -406,6 +406,10 @@ name = "mysqldump_test"
 path = "tests/unit/mysqldump_test.rs"
 
 [[test]]
+name = "backup_test"
+path = "tests/unit/backup_test.rs"
+
+[[test]]
 name = "auth_rbac_test"
 path = "tests/integration/auth_rbac_test.rs"
 
