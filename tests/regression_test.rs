@@ -202,6 +202,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["PKG:sqlrustgo-executor:test_stored_proc"],
             description: "executor crate 内部测试: 存储过程 (36 tests)",
         },
+        // 工具测试
+        TestCategory {
+            name: "工具测试 (Tools)",
+            test_files: vec!["physical_backup_test"],
+            description: "物理备份、mysqldump 等工具集成测试",
+        },
     ]
 }
 
