@@ -454,7 +454,145 @@ sqlrustgo-tools physical-backup verify \
 
 ---
 
-## 十、配置参考
+## 十、AgentSQL Extension
+
+### 10.1 概述
+
+AgentSQL 是 SQLRustGo 的 AI Agent 数据库接口，支持自然语言查询、Schema introspection、Agent 记忆等功能。
+
+### 10.2 模块列表
+
+| 模块 | 功能 |
+|------|------|
+| `schema` | Schema introspection API |
+| `stats` | 表统计信息 API |
+| `nl2sql` | 自然语言转 SQL |
+| `memory` | Agent 上下文记忆 |
+| `policy_engine` | RBAC 策略引擎 |
+| `column_masking` | 列级数据脱敏 |
+| `explain` | 执行计划解释 |
+| `optimizer` | SQL 优化建议 |
+
+### 10.3 REST API
+
+```bash
+# Schema introspection
+GET /agentsql/schema
+
+# SQL 执行
+POST /agentsql/query
+
+# 表统计
+GET /agentsql/stats
+
+# 自然语言查询
+POST /agentsql/nl_query
+
+# 保存记忆
+POST /agentsql/memory/save
+
+# 加载记忆
+GET /agentsql/memory/load
+
+# 搜索记忆
+POST /agentsql/memory/search
+
+# 查询计划解释
+POST /agentsql/explain
+
+# SQL 优化建议
+POST /agentsql/optimize
+
+# 权限检查
+POST /agentsql/policy/check
+```
+
+### 10.4 NL2SQL 使用
+
+```rust
+use sqlrustgo_agentsql::nl2sql::Nl2SqlService;
+use sqlrustgo_agentsql::schema::SchemaService;
+
+let schema = Arc::new(SchemaService::new());
+let nl2sql = Nl2SqlService::new(schema);
+
+let result = nl2sql.natural_language_to_sql("show all users where active");
+println!("SQL: {}", result.sql);
+println!("Confidence: {}", result.confidence);
+```
+
+### 10.5 Memory 服务
+
+```rust
+use sqlrustgo_agentsql::memory::{MemoryService, SaveMemoryRequest};
+
+let service = MemoryService::new();
+let mut service = service;
+
+// 保存记忆
+service.save_memory(SaveMemoryRequest {
+    content: "User prefers dark mode".to_string(),
+    memory_type: Some(MemoryType::Conversation),
+    tags: Some(vec!["preference".to_string()]),
+    agent_id: Some("agent1".to_string()),
+    importance: Some(0.8),
+    ..Default::default()
+});
+
+// 加载记忆
+let response = service.load_memory(LoadMemoryRequest {
+    agent_id: Some("agent1".to_string()),
+    ..Default::default()
+});
+```
+
+### 10.6 Policy Engine
+
+```rust
+use sqlrustgo_agentsql::policy_engine::{PolicyEngine, PolicyCheckRequest};
+
+let engine = PolicyEngine::new();
+let request = PolicyCheckRequest {
+    user_id: "user1".to_string(),
+    resource: "table:orders".to_string(),
+    action: "SELECT".to_string(),
+    context: None,
+};
+
+let response = engine.check(&request);
+if !response.allowed {
+    println!("Access denied: {}", response.denial_reason);
+}
+```
+
+### 10.7 Column Masking
+
+```rust
+use sqlrustgo_agentsql::column_masking::{ColumnMasker, MaskingType};
+
+let masker = ColumnMasker::new();
+
+// 邮箱脱敏
+let masked_email = masker.mask_value("email", &serde_json::json!("user@example.com"));
+assert!(masked_email.as_str().unwrap().contains('*'));
+
+// SSN 脱敏
+let masked_ssn = masker.mask_value("ssn", &serde_json::json!("123-45-6789"));
+```
+
+### 10.8 测试
+
+```bash
+# 运行 AgentSQL 单元测试
+cargo test -p sqlrustgo-agentsql --lib
+
+# 运行所有 AgentSQL 测试
+cargo test agentsql
+```
+
+---
+
+## 十一、配置参考
 
 ### 10.1 配置文件位置
 
