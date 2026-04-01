@@ -1350,7 +1350,7 @@ mod tests {
     #[test]
     fn test_stored_proc_executor_not_found() {
         let catalog = Arc::new(Catalog::new());
-        let executor = StoredProcExecutor::new(catalog);
+        let executor = StoredProcExecutor::new_for_test(catalog);
 
         let result = executor.execute_call("non_existent", vec![]);
         assert!(result.is_err());
@@ -1360,7 +1360,7 @@ mod tests {
     #[test]
     fn test_stored_proc_executor_list_empty() {
         let catalog = Arc::new(Catalog::new());
-        let executor = StoredProcExecutor::new(catalog);
+        let executor = StoredProcExecutor::new_for_test(catalog);
 
         assert!(executor.list_procedures().is_empty());
         assert!(!executor.has_procedure("test"));
@@ -1407,7 +1407,7 @@ mod tests {
     #[test]
     fn test_evaluate_condition() {
         let catalog = Arc::new(Catalog::new());
-        let executor = StoredProcExecutor::new(catalog);
+        let executor = StoredProcExecutor::new_for_test(catalog);
         let mut ctx = ProcedureContext::new();
         ctx.set_var("x", Value::Integer(10));
 

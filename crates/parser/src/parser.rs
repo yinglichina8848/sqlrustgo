@@ -697,7 +697,7 @@ impl Parser {
             Some(Token::Prepare) => self.parse_prepare(),
             Some(Token::Execute) => self.parse_execute(),
             Some(Token::Deallocate) => self.parse_deallocate(),
-            Some(Token::Copy) => self.parse_call(),
+            Some(Token::Copy) => self.parse_copy(),
             Some(Token::Merge) => self.parse_merge(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
@@ -3565,6 +3565,72 @@ impl Parser {
 
         Ok(Statement::DeallocatePrepare(DeallocatePrepareStatement {
             name,
+        }))
+    }
+
+    /// Parse COPY statement: COPY table FROM 'path' (FORMAT PARQUET) or COPY table TO 'path' (FORMAT PARQUET)
+    fn parse_copy(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Copy)?;
+
+        // Get table name
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        // Parse direction: FROM or TO
+        let from = match self.current() {
+            Some(Token::From) => {
+                self.next();
+                true
+            }
+            Some(Token::To) => {
+                self.next();
+                false
+            }
+            _ => return Err("Expected FROM or TO".to_string()),
+        };
+
+        // Get file path
+        let path = match self.next() {
+            Some(Token::StringLiteral(s)) => s,
+            _ => return Err("Expected file path".to_string()),
+        };
+
+        // Parse optional format clause: (FORMAT PARQUET)
+        let format = if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            // Expect FORMAT
+            match self.current() {
+                Some(Token::Format) => {
+                    self.next();
+                }
+                Some(Token::Identifier(id)) if id.to_uppercase() == "FORMAT" => {
+                    self.next();
+                }
+                _ => return Err("Expected FORMAT".to_string()),
+            }
+            // Expect PARQUET
+            match self.current() {
+                Some(Token::Parquet) => {
+                    self.next();
+                }
+                Some(Token::Identifier(id)) if id.to_uppercase() == "PARQUET" => {
+                    self.next();
+                }
+                _ => return Err("Expected PARQUET".to_string()),
+            }
+            self.expect(Token::RParen)?;
+            "PARQUET".to_string()
+        } else {
+            "PARQUET".to_string()
+        };
+
+        Ok(Statement::Copy(CopyStatement {
+            table_name,
+            from,
+            path,
+            format,
         }))
     }
 
