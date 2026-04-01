@@ -92,7 +92,13 @@ impl BackupExporter {
             Value::Timestamp(t) => t.to_string(),
             Value::Uuid(u) => format!("{:036x}", u),
             Value::Array(arr) => {
-                format!("[{}]", arr.iter().map(|v| Self::csv_escape(v)).collect::<Vec<_>>().join(";"))
+                format!(
+                    "[{}]",
+                    arr.iter()
+                        .map(|v| Self::csv_escape(v))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                )
             }
             Value::Enum(_, name) => name.clone(),
         }
@@ -154,7 +160,13 @@ impl BackupExporter {
             Value::Timestamp(t) => format!("\"{}\"", t),
             Value::Uuid(u) => format!("\"{:036x}\"", u),
             Value::Array(arr) => {
-                format!("[{}]", arr.iter().map(|v| Self::json_value(v)).collect::<Vec<_>>().join(","))
+                format!(
+                    "[{}]",
+                    arr.iter()
+                        .map(|v| Self::json_value(v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
             }
             Value::Enum(_, name) => format!("\"{}\"", name),
         }
@@ -204,7 +216,13 @@ impl BackupExporter {
             Value::Timestamp(t) => format!("'{}'", t),
             Value::Uuid(u) => format!("'{:036x}'", u),
             Value::Array(arr) => {
-                format!("'{}'", arr.iter().map(|v| Self::sql_value(v)).collect::<Vec<_>>().join(","))
+                format!(
+                    "'{}'",
+                    arr.iter()
+                        .map(|v| Self::sql_value(v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
             }
             Value::Enum(_, name) => format!("'{}'", name),
         }
