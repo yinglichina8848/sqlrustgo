@@ -613,6 +613,17 @@ pub enum Expression {
         conditions: Vec<(Expression, Expression)>,
         else_result: Option<Box<Expression>>,
     },
+    /// EXTRACT expression: EXTRACT(field FROM date)
+    Extract {
+        field: String,
+        expr: Box<Expression>,
+    },
+    /// SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    Substring {
+        expr: Box<Expression>,
+        start: Box<Expression>,
+        len: Option<Box<Expression>>,
+    },
 }
 
 /// Window frame info parsed from SQL
@@ -1815,6 +1826,14 @@ impl Parser {
                 self.next();
                 self.parse_case_when_expression()
             }
+            Some(Token::Extract) => {
+                self.next();
+                self.parse_extract_expression()
+            }
+            Some(Token::Substring) => {
+                self.next();
+                self.parse_substring_expression()
+            }
             Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
             | Some(Token::Max) => {
                 // Parse aggregate function call for HAVING clause
@@ -1913,6 +1932,38 @@ impl Parser {
         })
     }
 
+    /// Parse EXTRACT expression: EXTRACT(field FROM date)
+    fn parse_extract_expression(&mut self) -> Result<Expression, String> {
+        self.expect(Token::LParen)?;
+        let field = match self.current() {
+            Some(Token::Identifier(name)) => name.to_uppercase(),
+            Some(Token::Year) => "YEAR".to_string(),
+            Some(Token::Month) => "MONTH".to_string(),
+            Some(Token::Day) => "DAY".to_string(),
+            _ => return Err("Expected field name in EXTRACT".to_string()),
+        };
+        self.next();
+        self.expect(Token::From)?;
+        let expr = Box::new(self.parse_expression()?);
+        self.expect(Token::RParen)?;
+        Ok(Expression::Extract { field, expr })
+    }
+
+    /// Parse SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    fn parse_substring_expression(&mut self) -> Result<Expression, String> {
+        self.expect(Token::LParen)?;
+        let expr = Box::new(self.parse_expression()?);
+        self.expect(Token::From)?;
+        let start = Box::new(self.parse_expression()?);
+        let len = if matches!(self.current(), Some(Token::For)) {
+            self.next();
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+        self.expect(Token::RParen)?;
+        Ok(Expression::Substring { expr, start, len })
+    }
     /// Parse a window function: ROW_NUMBER() OVER (...)
     fn parse_window_function(&mut self) -> Result<Expression, String> {
         // Parse function name

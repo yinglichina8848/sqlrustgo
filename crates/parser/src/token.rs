@@ -159,6 +159,7 @@ pub enum Token {
     Curtime,
     DateAdd,
     DateFormat,
+    Extract,
     Count,
     Sum,
     Avg,
@@ -179,6 +180,9 @@ pub enum Token {
     Uuid,
     Array,
     Enum,
+    Year,
+    Month,
+    Day,
 
     // Operators
     Equal,
@@ -362,6 +366,9 @@ impl fmt::Display for Token {
             Token::Uuid => write!(f, "UUID"),
             Token::Array => write!(f, "ARRAY"),
             Token::Enum => write!(f, "ENUM"),
+            Token::Year => write!(f, "YEAR"),
+            Token::Month => write!(f, "MONTH"),
+            Token::Day => write!(f, "DAY"),
             // Aggregate Functions
             Token::Length => write!(f, "LENGTH"),
             Token::Upper => write!(f, "UPPER"),
@@ -374,6 +381,7 @@ impl fmt::Display for Token {
             Token::Curtime => write!(f, "CURTIME"),
             Token::DateAdd => write!(f, "DATE_ADD"),
             Token::DateFormat => write!(f, "DATE_FORMAT"),
+            Token::Extract => write!(f, "EXTRACT"),
             Token::Count => write!(f, "COUNT"),
             Token::Sum => write!(f, "SUM"),
             Token::Avg => write!(f, "AVG"),
