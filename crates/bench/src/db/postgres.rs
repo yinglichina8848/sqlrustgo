@@ -52,6 +52,12 @@ impl PostgresDB {
 
 #[async_trait]
 impl Database for PostgresDB {
+    async fn execute(&self, sql: &str) -> anyhow::Result<()> {
+        let client = self.client.lock().await;
+        client.execute(sql, &[]).await?;
+        Ok(())
+    }
+
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         let client = self.client.lock().await;
         client

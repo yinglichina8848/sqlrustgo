@@ -262,6 +262,9 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -287,12 +290,18 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
                 },
             ],
         };
@@ -334,6 +343,9 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 is_unique: false,
+                is_primary_key: false,
+                references: None,
+                auto_increment: false,
             }],
         };
         storage.create_table(&info).unwrap();

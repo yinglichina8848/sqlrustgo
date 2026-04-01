@@ -233,15 +233,9 @@ impl QueryTrace {
     pub fn visualize_pipeline(&self) -> String {
         let mut output = String::new();
 
-        output.push_str(&format!(
-            "╔══════════════════════════════════════════════════════════════════╗\n"
-        ));
-        output.push_str(&format!(
-            "║          SQLRustGo 2.0 - Query Pipeline Visualization          ║\n"
-        ));
-        output.push_str(&format!(
-            "╠══════════════════════════════════════════════════════════════════╣\n"
-        ));
+        output.push_str("╔══════════════════════════════════════════════════════════════════╗\n");
+        output.push_str("║          SQLRustGo 2.0 - Query Pipeline Visualization          ║\n");
+        output.push_str("╠══════════════════════════════════════════════════════════════════╣\n");
         output.push_str(&format!(
             "║ Query ID: {}                                        ║\n",
             self.query_id
@@ -259,9 +253,7 @@ impl QueryTrace {
             "║ Total Rows: {}                                                 ║\n",
             self.total_rows
         ));
-        output.push_str(&format!(
-            "╚══════════════════════════════════════════════════════════════════╝\n\n"
-        ));
+        output.push_str("╚══════════════════════════════════════════════════════════════════╝\n\n");
 
         output.push_str("Execution Pipeline:\n");
         output.push_str(&self.root_trace.to_tree_string());
@@ -338,8 +330,8 @@ impl TraceCollector {
     }
 }
 
-/// Global trace collector instance
 lazy_static::lazy_static! {
+    #[allow(unused_doc_comments)]
     pub static ref GLOBAL_TRACE_COLLECTOR: TraceCollector = TraceCollector::new(1000);
 }
 

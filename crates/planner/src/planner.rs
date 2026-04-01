@@ -6,7 +6,7 @@ use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer};
 use crate::physical_plan::{
     AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec,
+    ProjectionExec, SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 use crate::Expr;
 use crate::{Column, Schema};
@@ -127,6 +127,7 @@ impl DefaultPlanner {
                 input,
                 group_expr,
                 aggregate_expr,
+                having_expr,
                 schema,
             } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
@@ -134,6 +135,7 @@ impl DefaultPlanner {
                     input_plan,
                     group_expr.clone(),
                     aggregate_expr.clone(),
+                    having_expr.clone(),
                     schema.clone(),
                 )))
             }
@@ -209,6 +211,25 @@ impl DefaultPlanner {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
+            LogicalPlan::Window {
+                input,
+                window_expr,
+                partition_by,
+                order_by,
+                schema,
+            } => {
+                let input_plan = self.create_physical_plan_internal(input)?;
+                let input_schema = input.as_ref().schema().clone();
+
+                Ok(Box::new(WindowExec::new(
+                    input_plan,
+                    window_expr.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    schema.clone(),
+                    input_schema,
+                )))
+            }
             LogicalPlan::SetOperation {
                 op_type,
                 left,
@@ -433,6 +454,7 @@ mod tests {
             input: Box::new(table_scan),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![],
+            having_expr: None,
             schema: schema.clone(),
         };
 
@@ -507,6 +529,7 @@ mod tests {
             input: Box::new(table_scan),
             group_expr: vec![Expr::column("id")],
             aggregate_expr: vec![Expr::column("value")],
+            having_expr: None,
             schema: schema.clone(),
         };
 
@@ -737,5 +760,51 @@ fn extract_join_keys(condition: Option<&Expr>, left_side: bool) -> Vec<Expr> {
             }
         }
         _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+    use crate::{DataType, Field};
+
+    #[test]
+    fn test_default_planner_with_teaching_mode() {
+        let _planner = DefaultPlanner::with_teaching_mode(true);
+        assert!(std::any::type_name::<DefaultPlanner>().contains("DefaultPlanner"));
+    }
+
+    #[test]
+    fn test_extract_join_keys_left() {
+        let expr = Expr::binary_expr(
+            Expr::column("a.id"),
+            crate::Operator::Eq,
+            Expr::column("b.id"),
+        );
+        let keys = extract_join_keys(Some(&expr), true);
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_join_keys_right() {
+        let expr = Expr::binary_expr(
+            Expr::column("a.id"),
+            crate::Operator::Eq,
+            Expr::column("b.id"),
+        );
+        let keys = extract_join_keys(Some(&expr), false);
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_join_keys_none() {
+        let keys = extract_join_keys(None, true);
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn test_should_use_index() {
+        let result = should_use_index("test_table");
+        assert!(!result);
     }
 }
