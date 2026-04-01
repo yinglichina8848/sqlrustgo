@@ -19,8 +19,11 @@ use serde::{Deserialize, Serialize};
 use sqlrustgo::{parse, ExecutionEngine};
 use sqlrustgo_storage::MemoryStorage;
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
+
+use mysql::prelude::Queryable;
+use sqlrustgo_bench::mysql_config::MySqlConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LatencyStats {
@@ -102,6 +105,7 @@ pub struct ComparisonResult {
     pub sqlrustgo: SystemResult,
     pub postgresql: Option<SystemResult>,
     pub sqlite: Option<SystemResult>,
+    pub mysql: Option<SystemResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +144,7 @@ impl ComparisonResult {
             sqlrustgo: SystemResult::new("sqlrustgo".to_string()),
             postgresql: None,
             sqlite: None,
+            mysql: None,
         }
     }
 
@@ -158,6 +163,10 @@ impl ComparisonResult {
 
         if let Some(ref sq) = self.sqlite {
             self.print_system_results("SQLite", sq);
+        }
+
+        if let Some(ref mysql) = self.mysql {
+            self.print_system_results("MySQL", mysql);
         }
     }
 
@@ -306,6 +315,10 @@ fn main() {
     println!("Running SQLite benchmarks...");
     result.sqlite = run_sqlite_benchmarks();
 
+    // Run MySQL benchmarks (if available)
+    println!("Running MySQL benchmarks...");
+    result.mysql = run_mysql_benchmarks();
+
     // Print summary
     result.print_summary();
 
@@ -338,7 +351,7 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
         let mut latencies = LatencyStats::new();
 
         for _ in 0..ITERATIONS {
-            let storage = Arc::new(MemoryStorage::new());
+            let storage = Arc::new(RwLock::new(MemoryStorage::new()));
             let mut engine = ExecutionEngine::new(storage);
 
             // Create and populate tables
@@ -388,6 +401,54 @@ fn run_sqlite_benchmarks() -> Option<SystemResult> {
             p99_ms: 0,
             min_ms: None,
             max_ms: None,
+            iterations: ITERATIONS,
+        });
+    }
+
+    Some(system_result)
+}
+
+fn run_mysql_benchmarks() -> Option<SystemResult> {
+    let config = MySqlConfig::docker();
+    let conn_str = config.connection_string();
+
+    // Try to connect, return None if MySQL not available
+    let pool = match mysql::Pool::new(conn_str.as_str()) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  [Note] MySQL not available: {}", e);
+            return None;
+        }
+    };
+
+    let queries = vec![
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) as sum_qty FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
+        ("Q3", "SELECT o_orderkey, o_orderdate, o_totalprice FROM orders WHERE o_orderdate > 88000"),
+        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) as revenue FROM lineitem WHERE l_quantity > 20"),
+    ];
+
+    let mut system_result = SystemResult::new("MySQL".to_string());
+
+    for (name, sql) in queries {
+        let mut latencies = LatencyStats::new();
+
+        for _ in 0..ITERATIONS {
+            let start = Instant::now();
+            // Get a connection from the pool and execute query
+            if let Ok(mut conn) = pool.get_conn() {
+                let _ = conn.query_drop(sql);
+            }
+            latencies.record(start.elapsed().as_micros() as u64);
+        }
+
+        system_result.queries.push(QueryResult {
+            name: name.to_string(),
+            avg_latency_ms: latencies.avg() / 1000.0,
+            p50_ms: latencies.p50() / 1000,
+            p95_ms: latencies.p95() / 1000,
+            p99_ms: latencies.p99() / 1000,
+            min_ms: latencies.min().map(|v| v / 1000),
+            max_ms: latencies.max().map(|v| v / 1000),
             iterations: ITERATIONS,
         });
     }

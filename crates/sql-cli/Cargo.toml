@@ -16,6 +16,7 @@ sqlrustgo-executor = { path = "../executor" }
 sqlrustgo-storage = { path = "../storage" }
 sqlrustgo-catalog = { path = "../catalog" }
 sqlrustgo-transaction = { path = "../transaction" }
+sqlrustgo-security = { path = "../security" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }

@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package sqlrustgo.dtc;
+
+service DistributedTransactionService {
+    rpc Prepare(PrepareRequest) returns (VoteResponse);
+    rpc Commit(CommitRequest) returns (ExecutionResponse);
+    rpc Rollback(RollbackRequest) returns (ExecutionResponse);
+    rpc Notify(Notification) returns (Empty);
+    rpc Ping(NodePing) returns (NodePong);
+}
+
+message PrepareRequest {
+    string gid = 1;
+    string coordinator_node_id = 2;
+    repeated Change changes = 3;
+}
+
+message VoteResponse {
+    string gid = 1;
+    string node_id = 2;
+    VoteType vote = 3;
+    string reason = 4;
+}
+
+enum VoteType {
+    VOTE_COMMIT = 0;
+    VOTE_ABORT = 1;
+}
+
+message CommitRequest {
+    string gid = 1;
+}
+
+message RollbackRequest {
+    string gid = 1;
+    string reason = 2;
+}
+
+message ExecutionResponse {
+    string gid = 1;
+    string node_id = 2;
+    bool success = 3;
+    uint64 affected_rows = 4;
+    string error = 5;
+}
+
+message Change {
+    string table = 1;
+    ChangeOperation operation = 2;
+    bytes key = 3;
+    bytes value = 4;
+}
+
+enum ChangeOperation {
+    INSERT = 0;
+    UPDATE = 1;
+    DELETE = 2;
+}
+
+message Notification {
+    string gid = 1;
+    string node_id = 2;
+    NotificationType type = 3;
+    string details = 4;
+}
+
+enum NotificationType {
+    PARTICIPANT_DOWN = 0;
+    RECOVERY_COMPLETE = 1;
+    LOCK_TIMEOUT = 2;
+}
+
+message NodePing {
+    string node_id = 1;
+}
+
+message NodePong {
+    string node_id = 1;
+    bool healthy = 2;
+}
+
+message Empty {}
