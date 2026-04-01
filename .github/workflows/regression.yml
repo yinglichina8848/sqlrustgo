@@ -171,6 +171,8 @@ jobs:
 
       - name: Run Integration Tests
         run: |
+          # Limit virtual memory to 8GB
+          ulimit -v 8388608
           cargo test --test page_test
           cargo test --test executor_test
           cargo test --test planner_test
@@ -255,6 +257,8 @@ jobs:
 
       - name: Run Stress Tests
         run: |
+          # Limit virtual memory to 8GB
+          ulimit -v 8388608
           cargo test --test crash_recovery_test
           cargo test --test stress_test
           cargo test --test concurrency_stress_test
@@ -276,7 +280,10 @@ jobs:
           rustup component add rustfmt
 
       - name: Build SQLancer
-        run: cargo build --release -p sqlancer
+        run: |
+          # Limit virtual memory to 8GB
+          ulimit -v 8388608
+          cargo build --release -p sqlancer
 
       - name: Run SQL Fuzz
         run: |

@@ -222,22 +222,22 @@ cargo test --test tpch_benchmark
 | 编译 | `cargo build --release` | 成功 | |
 | 单元测试 | `cargo test --lib` | 100% 通过 | |
 | 集成测试 | `cargo test --test integration_test` | 100% 通过 | |
-| 回归测试 | `cargo test --test regression_test` | 全部通过 | `v2.1.0-TEST-MATRIX.md` |
-| 覆盖率 | `cargo tarpaulin --fail-under 80` | ≥ 80% | `v2.1.0-TEST-MATRIX.md` |
-| 功能矩阵文档 | `docs/v2.1.0-TEST-MATRIX.md` | 已更新 | |
+| 回归测试 | `cargo test --test regression_test` | 全部通过 | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 覆盖率 | `cargo tarpaulin --fail-under 80` | ≥ 80% | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 功能矩阵文档 | `docs/docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` | 已更新 | |
 
 ### 5.2 建议通过 (发布前) - v2.1.0
 
 | 检查项 | 命令 | 标准 | 相关文档 |
 |--------|------|------|----------|
-| TPC-H 基准 | `cargo test --test tpch_benchmark` | 11 tests | `v2.1.0-TEST-MATRIX.md` |
-| TPC-H 完整 | `cargo test --test tpch_full_test` | 28 tests | `v2.1.0-TEST-MATRIX.md` |
-| 向量化测试 | `cargo test --test vectorization_test` | 10 tests | `v2.1.0-TEST-MATRIX.md` |
-| 列式存储测试 | `cargo test --test columnar_storage_test` | 12 tests | `v2.1.0-TEST-MATRIX.md` |
-| 分布式事务 | `cargo test --test distributed_transaction_test` | 31 tests | `v2.1.0-TEST-MATRIX.md` |
-| 窗口函数测试 | `cargo test --test window_function_test` | 21 tests | `v2.1.0-TEST-MATRIX.md` |
-| RBAC 权限测试 | `cargo test --test auth_rbac_test` | 23 tests | `v2.1.0-TEST-MATRIX.md` |
-| WAL 集成测试 | `cargo test --test wal_integration_test` | 16 tests | `v2.1.0-TEST-MATRIX.md` |
+| TPC-H 基准 | `cargo test --test tpch_benchmark` | 11 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| TPC-H 完整 | `cargo test --test tpch_full_test` | 28 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 向量化测试 | `cargo test --test vectorization_test` | 10 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 列式存储测试 | `cargo test --test columnar_storage_test` | 12 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 分布式事务 | `cargo test --test distributed_transaction_test` | 31 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| 窗口函数测试 | `cargo test --test window_function_test` | 21 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| RBAC 权限测试 | `cargo test --test auth_rbac_test` | 23 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | 16 tests | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` |
 | 性能基准 | `cargo bench` | 无回归 | `v2.1.0-tpch-benchmark-report.md` |
 
 ### 5.3 v2.1.0 新功能验证
@@ -257,7 +257,7 @@ cargo test --test tpch_benchmark
 
 | 文档 | 描述 |
 |------|------|
-| `v2.1.0-TEST-MATRIX.md` | 功能矩阵和测试详情 (综合测试报告) |
+| `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` | 功能矩阵和测试详情 (综合测试报告) |
 | `v2.1.0-test-report-summary.md` | 测试报告汇总 |
 | `v2.1.0-tpch-benchmark-report.md` | TPC-H 基准测试报告 |
 | `releases/v2.1.0/TEST_PLAN.md` | 测试计划文档 |
