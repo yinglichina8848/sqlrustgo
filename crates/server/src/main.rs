@@ -4,7 +4,6 @@
 
 use sqlrustgo::{parse, ExecutionEngine, SqlError};
 use sqlrustgo_common::logging::{init_logging, LogFormat, LogLevel};
-use sqlrustgo_parser::{KillStatement, KillType, Statement};
 use sqlrustgo_server::SecurityIntegration;
 use sqlrustgo_storage::MemoryStorage;
 use std::env;
@@ -15,7 +14,7 @@ use std::sync::{Arc, RwLock};
 /// Handle a single client connection
 fn handle_client(
     mut stream: TcpStream,
-    engine: Arc<RwLock<ExecutionEngine>>,
+    storage: Arc<RwLock<MemoryStorage>>,
     security: Arc<SecurityIntegration>,
 ) -> std::io::Result<()> {
     let peer_addr = stream
@@ -25,6 +24,9 @@ fn handle_client(
     let user = "anonymous".to_string();
 
     let session_id = security.create_secure_session(user.clone(), ip.clone());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage.clone(), security.sessions().clone(), session_id);
 
     let mut buffer = [0u8; 4096];
 
@@ -54,18 +56,16 @@ fn handle_client(
             let start = std::time::Instant::now();
 
             let result = {
-                let mut eng = engine.write().unwrap();
                 match parse(query) {
-                    Ok(Statement::Kill(kill)) => execute_server_kill(&kill, &security, session_id),
                     Ok(statement) => {
                         security.reset_session_query_state(session_id);
                         if let Some(flag) = security.get_session_cancel_flag(session_id) {
-                            eng.storage.write().unwrap().set_cancel_flag(flag);
+                            engine.storage.write().unwrap().set_cancel_flag(flag);
                         }
                         if let Err(e) = security.check_session_and_reset(session_id) {
                             Err(SqlError::ExecutionError(e))
                         } else {
-                            eng.execute(statement)
+                            engine.execute(statement)
                         }
                     }
                     Err(e) => Err(SqlError::ParseError(format!("{:?}", e))),
@@ -112,70 +112,6 @@ fn handle_client(
     }
 }
 
-fn execute_server_kill(
-    kill: &KillStatement,
-    security: &Arc<SecurityIntegration>,
-    session_id: u64,
-) -> Result<sqlrustgo::ExecutorResult, SqlError> {
-    let target_session_id = kill.process_id;
-
-    let current_session = security
-        .sessions()
-        .get_session(session_id)
-        .ok_or_else(|| SqlError::ExecutionError("Not in a valid session".to_string()))?;
-
-    if target_session_id == session_id {
-        return Err(SqlError::ExecutionError(
-            "Cannot kill self session".to_string(),
-        ));
-    }
-
-    let target_session = security.sessions().get_session(target_session_id);
-    if target_session.is_none() {
-        return Err(SqlError::ExecutionError(format!(
-            "Unknown thread id: {}",
-            target_session_id
-        )));
-    }
-
-    let target_session = target_session.unwrap();
-    let is_own_session = target_session.user == current_session.user;
-    if !is_own_session && !current_session.can_kill() {
-        return Err(SqlError::ExecutionError(
-            "Access denied: need SUPER privilege to kill other user's sessions".to_string(),
-        ));
-    }
-
-    match kill.kill_type {
-        KillType::Connection => {
-            security
-                .sessions()
-                .kill_session(target_session_id)
-                .map_err(|e| SqlError::ExecutionError(e))?;
-            Ok(sqlrustgo::ExecutorResult::new(
-                vec![vec![sqlrustgo::Value::Text(format!(
-                    "CONNECTION {} executed",
-                    target_session_id
-                ))]],
-                0,
-            ))
-        }
-        KillType::Query => {
-            security
-                .sessions()
-                .kill_query(target_session_id)
-                .map_err(|e| SqlError::ExecutionError(e))?;
-            Ok(sqlrustgo::ExecutorResult::new(
-                vec![vec![sqlrustgo::Value::Text(format!(
-                    "QUERY {} executed",
-                    target_session_id
-                ))]],
-                0,
-            ))
-        }
-    }
-}
-
 fn is_ddl(query: &str) -> bool {
     let upper = query.to_uppercase();
     upper.starts_with("CREATE")
@@ -217,7 +153,6 @@ fn main() {
     println!("Listening on {}", addr);
 
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    let engine = Arc::new(RwLock::new(ExecutionEngine::new(storage)));
     let security = Arc::new(SecurityIntegration::new());
 
     println!("Security: audit logging enabled");
@@ -240,10 +175,10 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let engine = engine.clone();
+                let storage = storage.clone();
                 let security = security.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = handle_client(stream, engine, security) {
+                    if let Err(e) = handle_client(stream, storage, security) {
                         eprintln!("Client handler error: {}", e);
                     }
                 });

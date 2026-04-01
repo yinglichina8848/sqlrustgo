@@ -215,6 +215,15 @@ pub trait StorageEngine: Send + Sync {
     fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
         None
     }
+
+    fn check_cancelled(&self) -> SqlResult<()> {
+        if let Some(ref flag) = self.cancel_flag() {
+            if flag.load(Ordering::SeqCst) {
+                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -408,23 +417,21 @@ impl Default for MemoryStorage {
 
 impl StorageEngine for MemoryStorage {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancel()?;
+        self.check_cancelled()?;
         Ok(records)
     }
 
-    /// Efficient batch scan - directly accesses internal table storage without full table scan
-    /// Checks cancellation before and after loading data
     fn scan_batch(
         &self,
         table: &str,
         offset: usize,
         limit: usize,
     ) -> SqlResult<(Vec<Record>, usize, bool)> {
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let table_records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let total = table_records.len();
         let has_more = offset + limit < total;
         let batch = table_records.into_iter().skip(offset).take(limit).collect();
@@ -1145,6 +1152,15 @@ impl StorageEngine for MemoryStorage {
 
     fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
         self.cancel_flag.clone()
+    }
+
+    fn check_cancelled(&self) -> SqlResult<()> {
+        if let Some(ref flag) = self.cancel_flag {
+            if flag.load(Ordering::SeqCst) {
+                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
+            }
+        }
+        Ok(())
     }
 }
 
