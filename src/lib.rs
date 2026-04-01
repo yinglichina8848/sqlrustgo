@@ -7,8 +7,8 @@ pub use sqlrustgo_executor::{Executor, ExecutorResult, GLOBAL_PROFILER};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{
-    parse, Expression, GrantStatement, Lexer, Privilege, RevokeStatement, SetOperation, Statement,
-    Token, TransactionCommand,
+    parse, Expression, GrantStatement, KillStatement, KillType, Lexer, Privilege, RevokeStatement,
+    SetOperation, Statement, Token, TransactionCommand,
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::{
@@ -762,11 +762,33 @@ fn compute_aggregate(
 
 pub struct ExecutionEngine {
     pub storage: Arc<RwLock<dyn StorageEngine>>,
+    session_manager: Option<Arc<sqlrustgo_security::SessionManager>>,
+    current_session_id: Option<u64>,
 }
 
 impl ExecutionEngine {
     pub fn new(storage: Arc<RwLock<dyn StorageEngine>>) -> Self {
-        Self { storage }
+        Self {
+            storage,
+            session_manager: None,
+            current_session_id: None,
+        }
+    }
+
+    pub fn new_with_session(
+        storage: Arc<RwLock<dyn StorageEngine>>,
+        session_manager: Arc<sqlrustgo_security::SessionManager>,
+        session_id: u64,
+    ) -> Self {
+        Self {
+            storage,
+            session_manager: Some(session_manager),
+            current_session_id: Some(session_id),
+        }
+    }
+
+    pub fn session_id(&self) -> Option<u64> {
+        self.current_session_id
     }
 
     pub fn execute(&mut self, statement: Statement) -> Result<ExecutorResult, SqlError> {
@@ -1699,7 +1721,74 @@ impl ExecutionEngine {
                     ))
                 }
             }
+            Statement::Kill(kill) => self.execute_kill(&kill),
             _ => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    fn execute_kill(&mut self, kill: &KillStatement) -> Result<ExecutorResult, SqlError> {
+        let session_manager = self
+            .session_manager
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("Session manager not available".to_string()))?;
+
+        let current_session_id = self
+            .current_session_id
+            .ok_or_else(|| SqlError::ExecutionError("Not in a valid session".to_string()))?;
+
+        let target_session_id = kill.process_id;
+
+        if target_session_id == current_session_id {
+            return Err(SqlError::ExecutionError(
+                "Cannot kill self session".to_string(),
+            ));
+        }
+
+        let target_session = session_manager.get_session(target_session_id);
+        if target_session.is_none() {
+            return Err(SqlError::ExecutionError(format!(
+                "Unknown thread id: {}",
+                target_session_id
+            )));
+        }
+
+        let target_session = target_session.unwrap();
+        let current_session = session_manager
+            .get_session(current_session_id)
+            .ok_or_else(|| SqlError::ExecutionError("Current session not found".to_string()))?;
+
+        let is_own_session = target_session.user == current_session.user;
+        if !is_own_session && !current_session.can_kill() {
+            return Err(SqlError::ExecutionError(
+                "Access denied: need SUPER privilege to kill other user's sessions".to_string(),
+            ));
+        }
+
+        match kill.kill_type {
+            KillType::Connection => {
+                session_manager
+                    .kill_session(target_session_id)
+                    .map_err(|e| SqlError::ExecutionError(e))?;
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Text(format!(
+                        "CONNECTION {} executed",
+                        target_session_id
+                    ))]],
+                    0,
+                ))
+            }
+            KillType::Query => {
+                session_manager
+                    .kill_query(target_session_id)
+                    .map_err(|e| SqlError::ExecutionError(e))?;
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Text(format!(
+                        "QUERY {} executed",
+                        target_session_id
+                    ))]],
+                    0,
+                ))
+            }
         }
     }
 
@@ -1858,6 +1947,8 @@ impl Default for ExecutionEngine {
     fn default() -> Self {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            session_manager: None,
+            current_session_id: None,
         }
     }
 }
