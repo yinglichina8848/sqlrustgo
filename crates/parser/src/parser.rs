@@ -1768,7 +1768,7 @@ impl Parser {
         let op = match self.current() {
             Some(Token::Plus) => "+",
             Some(Token::Minus) => "-",
-            Some(Token::Asterisk) => "*",
+            Some(Token::Star) => "*",
             Some(Token::Slash) => "/",
             _ => return Ok(left), // No operator, return simple expression
         };
