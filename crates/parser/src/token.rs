@@ -181,9 +181,6 @@ pub enum Token {
     Uuid,
     Array,
     Enum,
-    Year,
-    Month,
-    Day,
 
     // Operators
     Equal,
@@ -368,9 +365,6 @@ impl fmt::Display for Token {
             Token::Uuid => write!(f, "UUID"),
             Token::Array => write!(f, "ARRAY"),
             Token::Enum => write!(f, "ENUM"),
-            Token::Year => write!(f, "YEAR"),
-            Token::Month => write!(f, "MONTH"),
-            Token::Day => write!(f, "DAY"),
             // Aggregate Functions
             Token::Length => write!(f, "LENGTH"),
             Token::Upper => write!(f, "UPPER"),
