@@ -213,27 +213,43 @@ cargo test --test tpch_benchmark
 
 ## 五、门禁检查
 
-### 5.1 必须通过 (PR 合并前)
+### 5.1 必须通过 (PR 合并前) - v2.1.0
 
-| 检查项 | 命令 | 标准 |
-|--------|------|------|
-| 代码格式 | `cargo fmt --check` | 无错误 |
-| Clippy | `cargo clippy` | 无警告 |
-| 编译 | `cargo build --release` | 成功 |
-| 单元测试 | `cargo test --lib` | 100% 通过 |
-| 集成测试 | `cargo test --test integration_test` | 100% 通过 |
-| 回归测试 | `cargo test --test regression_test` | 1 test (全部通过) |
+| 检查项 | 命令 | 标准 | 相关文档 |
+|--------|------|------|----------|
+| 代码格式 | `cargo fmt --check` | 无错误 | |
+| Clippy | `cargo clippy -- -D warnings` | 无警告 | |
+| 编译 | `cargo build --release` | 成功 | |
+| 单元测试 | `cargo test --lib` | 100% 通过 | |
+| 集成测试 | `cargo test --test integration_test` | 100% 通过 | |
+| 回归测试 | `cargo test --test regression_test` | 全部通过 | `v2.1.0-TEST-MATRIX.md` |
+| 覆盖率 | `cargo tarpaulin --fail-under 80` | ≥ 80% | `v2.1.0-TEST-MATRIX.md` |
+| 功能矩阵文档 | `docs/v2.1.0-TEST-MATRIX.md` | 已更新 | |
 
-### 5.2 建议通过 (发布前)
+### 5.2 建议通过 (发布前) - v2.1.0
 
-| 检查项 | 命令 | 标准 |
-|--------|------|------|
-| TPC-H 基准 | `cargo test --test tpch_benchmark` | 11 tests |
-| TPC-H 完整 | `cargo test --test tpch_full_test` | 28 tests |
-| 向量化测试 | `cargo test --test vectorization_test` | 10 tests |
-| 列式存储测试 | `cargo test --test columnar_storage_test` | 12 tests |
-| 分布式事务 | `cargo test --test distributed_transaction_test` | 31 tests |
-| 性能基准 | `cargo bench` | 无回归 |
+| 检查项 | 命令 | 标准 | 相关文档 |
+|--------|------|------|----------|
+| TPC-H 基准 | `cargo test --test tpch_benchmark` | 11 tests | `v2.1.0-TEST-MATRIX.md` |
+| TPC-H 完整 | `cargo test --test tpch_full_test` | 28 tests | `v2.1.0-TEST-MATRIX.md` |
+| 向量化测试 | `cargo test --test vectorization_test` | 10 tests | `v2.1.0-TEST-MATRIX.md` |
+| 列式存储测试 | `cargo test --test columnar_storage_test` | 12 tests | `v2.1.0-TEST-MATRIX.md` |
+| 分布式事务 | `cargo test --test distributed_transaction_test` | 31 tests | `v2.1.0-TEST-MATRIX.md` |
+| 窗口函数测试 | `cargo test --test window_function_test` | 21 tests | `v2.1.0-TEST-MATRIX.md` |
+| RBAC 权限测试 | `cargo test --test auth_rbac_test` | 23 tests | `v2.1.0-TEST-MATRIX.md` |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | 16 tests | `v2.1.0-TEST-MATRIX.md` |
+| 性能基准 | `cargo bench` | 无回归 | `v2.1.0-tpch-benchmark-report.md` |
+
+### 5.3 v2.1.0 新功能验证
+
+| 功能模块 | 测试命令 | 测试数 | 状态 |
+|----------|----------|--------|------|
+| AgentSQL Extension | `cargo test -p sqlrustgo-agentsql` | 32 | ✅ |
+| KILL/PROCESSLIST | `cargo test mysql_compatibility_test` | 23 | ✅ |
+| Health Endpoints | `cargo test server_health_test` | 10 | ✅ |
+| Backup & PITR | `cargo test -p sqlrustgo-tools` | 40+ | ✅ |
+| HA Cluster | `cargo test -p sqlrustgo-storage` | 24+ | ✅ |
+| 存储过程控制流 | `cargo test stored_proc` | 45 | ✅ |
 
 ---
 
@@ -241,11 +257,23 @@ cargo test --test tpch_benchmark
 
 | 文档 | 描述 |
 |------|------|
+| `v2.1.0-TEST-MATRIX.md` | 功能矩阵和测试详情 (综合测试报告) |
 | `v2.1.0-test-report-summary.md` | 测试报告汇总 |
 | `v2.1.0-tpch-benchmark-report.md` | TPC-H 基准测试报告 |
-| `v2.0/BENCHMARK_FRAMEWORK.md` | 性能测试框架设计 |
+| `releases/v2.1.0/TEST_PLAN.md` | 测试计划文档 |
 | `RELEASE_GATES_COMPREHENSIVE.md` | 门禁检查清单 |
 
 ---
 
-*最后更新: 2026-04-01*
+## 七、v2.1.0 版本亮点
+
+| 指标 | v1.9.0 | v2.1.0 | 提升 |
+|------|--------|--------|------|
+| 测试文件数 | 50+ | 70+ | +40% |
+| 覆盖率 | 65% | 80% | +15% |
+| TPC-H Q1-Q22 | 部分 | 完整 | +22 queries |
+| 新功能测试 | 基础 | 完整 | +174 tests |
+
+---
+
+*最后更新: 2026-04-02*
