@@ -39,6 +39,7 @@ fn test_query_cache_put_and_get() {
         tables: vec!["test".to_string()],
         created_at: Instant::now(),
         size_bytes: 0,
+        last_access: 0,
     };
 
     cache.put(key.clone(), entry, vec!["test".to_string()]);
@@ -61,6 +62,7 @@ fn test_query_cache_invalidate_table() {
         tables: vec!["test".to_string()],
         created_at: Instant::now(),
         size_bytes: 0,
+        last_access: 0,
     };
 
     cache.put(key.clone(), entry, vec!["test".to_string()]);
@@ -85,6 +87,7 @@ fn test_query_cache_clear() {
         tables: vec!["test".to_string()],
         created_at: Instant::now(),
         size_bytes: 0,
+        last_access: 0,
     };
 
     cache.put(key, entry, vec!["test".to_string()]);
@@ -115,9 +118,10 @@ fn test_query_cache_stats() {
 fn test_cache_entry_is_expired() {
     let entry = CacheEntry {
         result: ExecutorResult::new(vec![], 0),
-        tables: vec![],
+        tables: vec!["test".to_string()],
         created_at: Instant::now(),
         size_bytes: 0,
+        last_access: 0,
     };
 
     // Entry created just now shouldn't be expired
@@ -137,6 +141,7 @@ fn test_cache_entry_estimate_size() {
         tables: vec![],
         created_at: Instant::now(),
         size_bytes: 0,
+        last_access: 0,
     };
 
     let size = entry.estimate_size();

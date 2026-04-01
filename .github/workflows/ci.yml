@@ -53,4 +53,7 @@ jobs:
         run: cargo build --all
 
       - name: Test
-        run: cargo test --all
+        run: |
+          # Limit virtual memory to 8GB to prevent excessive memory usage
+          ulimit -v 8388608
+          cargo test --all

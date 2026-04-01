@@ -11,7 +11,7 @@ pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 
-pub use cost::SimpleCostModel;
+pub use cost::{CboOptimizer, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use projection_pushdown::{
@@ -87,6 +87,47 @@ impl RuleSet {
 }
 
 impl Default for RuleSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct DefaultOptimizer {
+    rule_set: RuleSet,
+    use_cbo: bool,
+    cbo_optimizer: Option<CboOptimizer>,
+}
+
+impl DefaultOptimizer {
+    pub fn new() -> Self {
+        let rule_set = RuleSet::new();
+
+        Self {
+            rule_set,
+            use_cbo: false,
+            cbo_optimizer: None,
+        }
+    }
+
+    pub fn with_cbo(mut self, cbo: CboOptimizer) -> Self {
+        self.use_cbo = true;
+        self.cbo_optimizer = Some(cbo);
+        self
+    }
+
+    pub fn enable_rule(&mut self, _rule_name: &str) {}
+
+    pub fn disable_rule(&mut self, _rule_name: &str) {}
+}
+
+impl Optimizer for DefaultOptimizer {
+    fn optimize(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
+        self.rule_set.apply(plan);
+        Ok(())
+    }
+}
+
+impl Default for DefaultOptimizer {
     fn default() -> Self {
         Self::new()
     }
@@ -220,5 +261,36 @@ mod tests {
     fn test_ruleset_default() {
         let ruleset = RuleSet::default();
         assert_eq!(ruleset.rules.len(), 0);
+    }
+
+    #[test]
+    fn test_default_optimizer_new() {
+        let mut optimizer = DefaultOptimizer::new();
+        let mut plan = String::from("test");
+        let result = optimizer.optimize(&mut plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_default_optimizer_with_cbo() {
+        let cbo = CboOptimizer::new();
+        let mut optimizer = DefaultOptimizer::new().with_cbo(cbo);
+        let mut plan = String::from("test");
+        let result = optimizer.optimize(&mut plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cbo_optimizer_new() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_scan_cost("test_table");
+        assert!(cost >= 0.0);
+    }
+
+    #[test]
+    fn test_cbo_optimizer_select_access_method() {
+        let cbo = CboOptimizer::new();
+        let method = cbo.select_access_method("test_table", "id", 0.1);
+        assert!(method == "seq_scan" || method == "index_scan");
     }
 }

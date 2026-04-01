@@ -31,6 +31,8 @@ pub enum WalEntryType {
     Rollback = 6,
     /// Checkpoint
     Checkpoint = 7,
+    /// Prepare for 2PC commit (distributed transaction)
+    Prepare = 8,
 }
 
 impl WalEntryType {
@@ -43,6 +45,7 @@ impl WalEntryType {
             5 => Some(WalEntryType::Commit),
             6 => Some(WalEntryType::Rollback),
             7 => Some(WalEntryType::Checkpoint),
+            8 => Some(WalEntryType::Prepare),
             _ => None,
         }
     }
@@ -199,6 +202,12 @@ impl WalEntry {
 pub struct WalWriter {
     writer: BufWriter<File>,
     lsn: u64,
+    /// Batch mode - only flush when explicitly requested (INSERT 性能优化)
+    batch_mode: bool,
+    /// Records since last flush
+    records_since_flush: usize,
+    /// Flush threshold
+    flush_threshold: usize,
 }
 
 impl WalWriter {
@@ -208,7 +217,23 @@ impl WalWriter {
 
         let writer = BufWriter::new(file);
 
-        Ok(Self { writer, lsn: 0 })
+        Ok(Self {
+            writer,
+            lsn: 0,
+            batch_mode: false, // Default: sync mode for safety
+            records_since_flush: 0,
+            flush_threshold: 100,
+        })
+    }
+
+    /// Enable batch mode for better performance (use for bulk inserts)
+    pub fn enable_batch_mode(&mut self, enable: bool) {
+        self.batch_mode = enable;
+        if !enable {
+            // When disabling, flush pending writes
+            let _ = self.writer.flush();
+            self.records_since_flush = 0;
+        }
     }
 
     /// Append an entry to the WAL
@@ -220,11 +245,28 @@ impl WalWriter {
         self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
         // Write entry data
         self.writer.write_all(&bytes)?;
-        // Flush to ensure durability
-        self.writer.flush()?;
+
+        // 批量模式优化：只在达到阈值或显式调用时 flush
+        if self.batch_mode {
+            self.records_since_flush += 1;
+            if self.records_since_flush >= self.flush_threshold {
+                self.writer.flush()?;
+                self.records_since_flush = 0;
+            }
+        } else {
+            // 默认模式：每次都 flush，保证持久性
+            self.writer.flush()?;
+        }
 
         self.lsn += 1;
         Ok(lsn)
+    }
+
+    /// Force flush pending writes (call after batch insert)
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()?;
+        self.records_since_flush = 0;
+        Ok(())
     }
 
     /// Get current LSN
@@ -464,6 +506,26 @@ impl WalManager {
 
         writer.append(&entry)
     }
+
+    /// Log prepare for 2PC distributed transaction
+    pub fn log_prepare(&self, tx_id: u64) -> std::io::Result<u64> {
+        let mut writer = self.get_writer()?;
+
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Prepare,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: writer.current_lsn(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+
+        writer.append(&entry)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -637,7 +699,7 @@ impl WalArchiveManager {
 
         let wal_files: Vec<_> = std::fs::read_dir(&self.wal_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "wal"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "wal"))
             .filter(|e| {
                 if let Ok(metadata) = e.metadata() {
                     if let Ok(modified) = metadata.modified() {
@@ -685,6 +747,7 @@ impl WalArchiveManager {
             std::fs::remove_file(&original_path)?;
         }
 
+        #[allow(clippy::collapsible_if)]
         let archived_size = if self.enable_compression {
             std::fs::read_dir(&self.archive_dir)?
                 .filter_map(|e| e.ok())
@@ -1310,8 +1373,9 @@ mod tests {
         assert_eq!(WalEntryType::from_u8(5), Some(WalEntryType::Commit));
         assert_eq!(WalEntryType::from_u8(6), Some(WalEntryType::Rollback));
         assert_eq!(WalEntryType::from_u8(7), Some(WalEntryType::Checkpoint));
+        assert_eq!(WalEntryType::from_u8(8), Some(WalEntryType::Prepare));
         assert_eq!(WalEntryType::from_u8(0), None);
-        assert_eq!(WalEntryType::from_u8(8), None);
+        assert_eq!(WalEntryType::from_u8(9), None);
     }
 
     #[test]
