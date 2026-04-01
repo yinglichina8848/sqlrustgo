@@ -233,10 +233,22 @@ mod tests {
     }
 
     #[test]
-    fn test_error_debug() {
-        let err = SqlError::ParseError("debug test".to_string());
-        let debug_str = format!("{:?}", err);
-        assert!(debug_str.contains("ParseError"));
+    fn test_error_equality() {
+        let err1 = SqlError::TableNotFound {
+            table: "t1".to_string(),
+        };
+        let err2 = SqlError::TableNotFound {
+            table: "t1".to_string(),
+        };
+        // Cannot use assert_eq because SqlError doesn't implement PartialEq
+        assert!(err1.to_string() == err2.to_string());
+        assert!(
+            err1.to_string()
+                != SqlError::TableNotFound {
+                    table: "t2".to_string()
+                }
+                .to_string()
+        );
     }
 
     #[test]
@@ -369,5 +381,123 @@ mod tests {
             .sqlstate(),
             SqlState::NoSuchTable
         );
+    }
+
+    #[test]
+    fn test_all_error_types_sqlstate() {
+        assert_eq!(
+            SqlError::ExecutionError("test".to_string()).sqlstate(),
+            SqlState::Unknown
+        );
+        assert_eq!(
+            SqlError::TypeMismatch("test".to_string()).sqlstate(),
+            SqlState::DataException
+        );
+        assert_eq!(
+            SqlError::NullValueError("test".to_string()).sqlstate(),
+            SqlState::DataException
+        );
+        assert_eq!(
+            SqlError::ConstraintViolation("test".to_string()).sqlstate(),
+            SqlState::IntegrityConstraintViolation
+        );
+        assert_eq!(
+            SqlError::IoError("test".to_string()).sqlstate(),
+            SqlState::Unknown
+        );
+        assert_eq!(
+            SqlError::ProtocolError("test".to_string()).sqlstate(),
+            SqlState::Unknown
+        );
+    }
+
+    #[test]
+    fn test_all_error_types_error_number() {
+        assert_eq!(
+            SqlError::ExecutionError("test".to_string()).error_number(),
+            1105
+        );
+        assert_eq!(
+            SqlError::TypeMismatch("test".to_string()).error_number(),
+            1110
+        );
+        assert_eq!(SqlError::DivisionByZero.error_number(), 1365);
+        assert_eq!(
+            SqlError::NullValueError("test".to_string()).error_number(),
+            1048
+        );
+        assert_eq!(
+            SqlError::ConstraintViolation("test".to_string()).error_number(),
+            1216
+        );
+        assert_eq!(SqlError::IoError("test".to_string()).error_number(), 1025);
+        assert_eq!(
+            SqlError::ProtocolError("test".to_string()).error_number(),
+            1100
+        );
+    }
+
+    #[test]
+    fn test_sqlstate_variants() {
+        use std::mem::size_of;
+        assert_eq!(size_of::<SqlState>(), 1); // Should be small enum
+    }
+
+    #[test]
+    fn test_sqlstate_clone() {
+        let state = SqlState::SyntaxError;
+        let cloned = state;
+        assert_eq!(state, cloned);
+    }
+
+    #[test]
+    fn test_sqlstate_debug() {
+        let state = SqlState::NoSuchTable;
+        let debug = format!("{:?}", state);
+        assert!(debug.contains("NoSuchTable"));
+    }
+
+    #[test]
+    fn test_sql_result_ok() {
+        let result: SqlResult<i32> = Ok(100);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 100);
+    }
+
+    #[test]
+    fn test_sql_result_err() {
+        let result: SqlResult<i32> = Err(SqlError::ParseError("test".to_string()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Parse error"));
+    }
+
+    #[test]
+    fn test_mysql_format_all_errors() {
+        for err in [
+            SqlError::ParseError("test".to_string()),
+            SqlError::ExecutionError("test".to_string()),
+            SqlError::TypeMismatch("test".to_string()),
+            SqlError::DivisionByZero,
+            SqlError::NullValueError("test".to_string()),
+            SqlError::ConstraintViolation("test".to_string()),
+            SqlError::TableNotFound {
+                table: "test".to_string(),
+            },
+            SqlError::ColumnNotFound {
+                column: "col".to_string(),
+                location: "loc".to_string(),
+            },
+            SqlError::DuplicateKey {
+                value: "v".to_string(),
+                key: "k".to_string(),
+            },
+            SqlError::IoError("test".to_string()),
+            SqlError::ProtocolError("test".to_string()),
+        ] {
+            let mysql_err = err.to_mysql_format();
+            assert!(mysql_err.starts_with("ERROR "), "Error: {}", mysql_err);
+            assert!(mysql_err.contains("("), "Error: {}", mysql_err);
+            assert!(mysql_err.contains("):"), "Error: {}", mysql_err);
+        }
     }
 }
