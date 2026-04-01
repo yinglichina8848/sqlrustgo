@@ -7,6 +7,7 @@ pub mod optimizer;
 pub mod physical_plan;
 #[allow(clippy::module_inception)]
 pub mod planner;
+pub mod prepared;
 
 // TODO: Add these modules after migration
 // pub mod analyzer;
@@ -16,10 +17,12 @@ pub mod planner;
 pub use logical_plan::{LogicalPlan, SetOperationType};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, OperatorMetrics,
-    PhysicalPlan, ProjectionExec, SeqScanExec, SetOperationExec, SortMergeJoinExec,
+    AggregateExec, AnyAllSubqueryExec, ColumnarScanExec, ExistsExec, FilterExec, HashJoinExec,
+    InSubqueryExec, IndexScanExec, LimitExec, PhysicalPlan, ProjectionExec, ScalarSubqueryExec,
+    SeqScanExec, SetOperationExec, SortExec, SortMergeJoinExec, WindowExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
+pub use prepared::{PreparedStatement, PreparedStatementManager};
 
 use sqlrustgo_types::Value;
 use std::fmt;
@@ -44,6 +47,77 @@ pub enum AggregateFunction {
     Avg,
     Min,
     Max,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFunction {
+    RowNumber,
+    Rank,
+    DenseRank,
+    Lead,
+    Lag,
+    FirstValue,
+    LastValue,
+    NthValue,
+    // Aggregate window functions
+    Sum,
+    Avg,
+    Count,
+    Min,
+    Max,
+}
+
+/// Window frame type for window functions
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFrame {
+    /// ROWS mode - physical row offset
+    Rows {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+    /// RANGE mode - logical range based on ORDER BY values
+    Range {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+    /// GROUPS mode - peer groups based on ORDER BY
+    Groups {
+        start: FrameBound,
+        end: FrameBound,
+        exclude: ExcludeMode,
+    },
+}
+
+/// Frame bound for window frame start/end
+#[derive(Debug, Clone, PartialEq)]
+pub enum FrameBound {
+    /// UNBOUNDED PRECEDING
+    UnboundedPreceding,
+    /// PRECEDING(n) - n rows/groups before current
+    Preceding(i64),
+    /// CURRENT ROW
+    CurrentRow,
+    /// FOLLOWING(n) - n rows/groups after current
+    Following(i64),
+    /// UNBOUNDED FOLLOWING
+    UnboundedFollowing,
+}
+
+/// EXCLUDE mode for window frame
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExcludeMode {
+    /// No exclusion (default)
+    None,
+    /// EXCLUDE CURRENT ROW
+    CurrentRow,
+    /// EXCLUDE GROUP
+    Group,
+    /// EXCLUDE TIES
+    Ties,
+    /// EXCLUDE NO OTHERS
+    NoOthers,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +178,29 @@ impl fmt::Display for Column {
     }
 }
 
+/// Subquery type for classification
+#[derive(Debug, Clone, PartialEq)]
+pub enum SubqueryType {
+    /// Scalar subquery - returns single value
+    Scalar,
+    /// IN subquery - checks if value is in subquery results
+    In,
+    /// EXISTS subquery - checks if subquery returns any rows
+    Exists,
+    /// ANY subquery - compares with any result (synonym for SOME)
+    Any,
+    /// ALL subquery - compares with all results
+    All,
+}
+
+/// Subquery expression with its type and associated expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subquery {
+    pub subquery_type: SubqueryType,
+    pub expr: Box<Expr>,
+    pub plan: Box<LogicalPlan>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Column(Column),
@@ -122,6 +219,13 @@ pub enum Expr {
         args: Vec<Expr>,
         distinct: bool,
     },
+    WindowFunction {
+        func: WindowFunction,
+        args: Vec<Expr>,
+        partition_by: Vec<Expr>,
+        order_by: Vec<SortExpr>,
+        frame: Option<WindowFrame>,
+    },
     Alias {
         expr: Box<Expr>,
         name: String,
@@ -129,6 +233,37 @@ pub enum Expr {
     Wildcard,
     QualifiedWildcard {
         qualifier: String,
+    },
+    /// Scalar subquery returning single value
+    ScalarSubquery(Box<LogicalPlan>),
+    /// IN subquery: expr IN (SELECT ...)
+    InSubquery {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    /// EXISTS subquery: EXISTS (SELECT ...)
+    Exists(Box<LogicalPlan>),
+    /// ANY/ALL subquery: expr OP ANY/ALL (SELECT ...)
+    AnyAll {
+        expr: Box<Expr>,
+        op: Operator,
+        subquery: Box<LogicalPlan>,
+        any_all: SubqueryType,
+    },
+    /// Parameter placeholder for prepared statements (e.g., ? or $1)
+    Parameter {
+        index: usize,
+    },
+    /// BETWEEN expression: expr BETWEEN low AND high
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+    },
+    /// IN value list: expr IN (value1, value2, ...)
+    InList {
+        expr: Box<Expr>,
+        values: Vec<Expr>,
     },
 }
 
@@ -166,9 +301,40 @@ impl Expr {
                 evaluate_unary_op(&v, op)
             }
             Expr::AggregateFunction { .. } => None,
+            Expr::WindowFunction { .. } => None,
             Expr::Alias { expr, .. } => expr.evaluate(row, schema),
             Expr::Wildcard => None,
             Expr::QualifiedWildcard { .. } => None,
+            // Subquery expressions cannot be evaluated row-by-row
+            Expr::ScalarSubquery(_) => None,
+            Expr::InSubquery { .. } => None,
+            Expr::Exists(_) => None,
+            Expr::AnyAll { .. } => None,
+            // Parameter placeholder - cannot be evaluated without bound values
+            Expr::Parameter { .. } => None,
+            // BETWEEN: expr >= low AND expr <= high
+            Expr::Between { expr, low, high } => {
+                let expr_val = expr.evaluate(row, schema)?;
+                let low_val = low.evaluate(row, schema)?;
+                let high_val = high.evaluate(row, schema)?;
+                let ge_result = evaluate_binary_op(&expr_val, &Operator::GtEq, &low_val)?;
+                let le_result = evaluate_binary_op(&expr_val, &Operator::LtEq, &high_val)?;
+                match (ge_result, le_result) {
+                    (Value::Boolean(ge), Value::Boolean(le)) => Some(Value::Boolean(ge && le)),
+                    _ => None,
+                }
+            }
+            // IN list: expr IN (value1, value2, ...)
+            Expr::InList { expr, values } => {
+                let expr_val = expr.evaluate(row, schema)?;
+                for value_expr in values {
+                    let value = value_expr.evaluate(row, schema)?;
+                    if value == expr_val {
+                        return Some(Value::Boolean(true));
+                    }
+                }
+                Some(Value::Boolean(false))
+            }
         }
     }
 
@@ -248,9 +414,75 @@ impl fmt::Display for Expr {
                 let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
                 write!(f, "{}({}{})", func_name, distinct_str, args_str.join(", "))
             }
+            Expr::WindowFunction {
+                func,
+                args,
+                partition_by,
+                order_by,
+                frame,
+            } => {
+                let func_name = match func {
+                    WindowFunction::RowNumber => "ROW_NUMBER",
+                    WindowFunction::Rank => "RANK",
+                    WindowFunction::DenseRank => "DENSE_RANK",
+                    WindowFunction::Lead => "LEAD",
+                    WindowFunction::Lag => "LAG",
+                    WindowFunction::FirstValue => "FIRST_VALUE",
+                    WindowFunction::LastValue => "LAST_VALUE",
+                    WindowFunction::NthValue => "NTH_VALUE",
+                    WindowFunction::Sum => "SUM",
+                    WindowFunction::Avg => "AVG",
+                    WindowFunction::Count => "COUNT",
+                    WindowFunction::Min => "MIN",
+                    WindowFunction::Max => "MAX",
+                };
+                let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                write!(f, "{}({})", func_name, args_str.join(", "))?;
+
+                // Add PARTITION BY clause
+                if !partition_by.is_empty() {
+                    let partition_str: Vec<String> =
+                        partition_by.iter().map(|p| p.to_string()).collect();
+                    write!(f, " PARTITION BY {}", partition_str.join(", "))?;
+                }
+
+                // Add ORDER BY clause
+                if !order_by.is_empty() {
+                    let order_str: Vec<String> = order_by.iter().map(|o| o.to_string()).collect();
+                    write!(f, " ORDER BY {}", order_str.join(", "))?;
+                }
+
+                // Add window frame specification
+                if let Some(fr) = frame {
+                    write!(f, " {}", fr)?;
+                }
+
+                Ok(())
+            }
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
             Expr::QualifiedWildcard { qualifier } => write!(f, "{}.*", qualifier),
+            Expr::ScalarSubquery(_) => write!(f, "(SELECT ...)"),
+            Expr::InSubquery { expr, .. } => write!(f, "{} IN (SELECT ...)", expr),
+            Expr::Exists(_) => write!(f, "EXISTS (SELECT ...)"),
+            Expr::AnyAll {
+                expr, op, any_all, ..
+            } => {
+                let any_all_str = match any_all {
+                    SubqueryType::Any => "ANY",
+                    SubqueryType::All => "ALL",
+                    _ => "UNKNOWN",
+                };
+                write!(f, "{} {} {} (SELECT ...)", expr, op, any_all_str)
+            }
+            Expr::Parameter { index } => write!(f, "?{}", index),
+            Expr::Between { expr, low, high } => {
+                write!(f, "{} BETWEEN {} AND {}", expr, low, high)
+            }
+            Expr::InList { expr, values } => {
+                let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                write!(f, "{} IN ({})", expr, values_str.join(", "))
+            }
         }
     }
 }
@@ -274,6 +506,76 @@ impl fmt::Display for Operator {
             Operator::Not => write!(f, "NOT"),
             Operator::Like => write!(f, "LIKE"),
             Operator::Concatenate => write!(f, "||"),
+        }
+    }
+}
+
+impl fmt::Display for SortExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.expr, if self.asc { "ASC" } else { "DESC" })
+    }
+}
+
+impl fmt::Display for WindowFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowFrame::Rows {
+                start,
+                end,
+                exclude,
+            } => {
+                write!(f, "ROWS {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+            WindowFrame::Range {
+                start,
+                end,
+                exclude,
+            } => {
+                write!(f, "RANGE {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+            WindowFrame::Groups {
+                start,
+                end,
+                exclude,
+            } => {
+                write!(f, "GROUPS {} {}", start, end)?;
+                if *exclude != ExcludeMode::None {
+                    write!(f, " {}", exclude)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl fmt::Display for FrameBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FrameBound::UnboundedPreceding => write!(f, "UNBOUNDED PRECEDING"),
+            FrameBound::Preceding(n) => write!(f, "PRECEDING({})", n),
+            FrameBound::CurrentRow => write!(f, "CURRENT ROW"),
+            FrameBound::Following(n) => write!(f, "FOLLOWING({})", n),
+            FrameBound::UnboundedFollowing => write!(f, "UNBOUNDED FOLLOWING"),
+        }
+    }
+}
+
+impl fmt::Display for ExcludeMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExcludeMode::None => write!(f, "EXCLUDE NO OTHERS"),
+            ExcludeMode::CurrentRow => write!(f, "EXCLUDE CURRENT ROW"),
+            ExcludeMode::Group => write!(f, "EXCLUDE GROUP"),
+            ExcludeMode::Ties => write!(f, "EXCLUDE TIES"),
+            ExcludeMode::NoOthers => write!(f, "EXCLUDE NO OTHERS"),
         }
     }
 }
@@ -349,6 +651,19 @@ impl DataType {
             "BLOB" | "BINARY" => DataType::Blob,
             "BOOLEAN" | "BOOL" => DataType::Boolean,
             _ => DataType::Null,
+        }
+    }
+
+    pub fn estimate_size(&self) -> usize {
+        match self {
+            DataType::Boolean => 1,
+            DataType::Integer => 8,
+            DataType::Float => 8,
+            DataType::Decimal => 16,
+            DataType::Text => 64,
+            DataType::Json => 128,
+            DataType::Blob => 256,
+            DataType::Null => 0,
         }
     }
 }
@@ -1043,5 +1358,292 @@ mod tests {
 
         let result = evaluate_binary_op(&Integer(10), &Operator::Divide, &Integer(0));
         assert!(result.is_none());
+    }
+
+    // === Tests for subquery expressions ===
+
+    #[test]
+    fn test_subquery_type_variants() {
+        use crate::SubqueryType;
+        assert!(matches!(SubqueryType::Scalar, SubqueryType::Scalar));
+        assert!(matches!(SubqueryType::In, SubqueryType::In));
+        assert!(matches!(SubqueryType::Exists, SubqueryType::Exists));
+        assert!(matches!(SubqueryType::Any, SubqueryType::Any));
+        assert!(matches!(SubqueryType::All, SubqueryType::All));
+    }
+
+    #[test]
+    fn test_expr_display_scalar_subquery() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::ScalarSubquery(Box::new(inner));
+        assert!(expr.to_string().contains("SELECT"));
+    }
+
+    #[test]
+    fn test_expr_display_in_subquery() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::InSubquery {
+            expr: Box::new(Expr::column("id")),
+            subquery: Box::new(inner),
+        };
+        let display = expr.to_string();
+        assert!(display.contains("IN"));
+    }
+
+    #[test]
+    fn test_expr_display_exists() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let expr = Expr::Exists(Box::new(inner));
+        assert!(expr.to_string().contains("EXISTS"));
+    }
+
+    #[test]
+    fn test_expr_display_any_all() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let any_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("id")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::Any,
+        };
+        assert!(any_expr.to_string().contains("ANY"));
+
+        let all_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("id")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::All,
+        };
+        assert!(all_expr.to_string().contains("ALL"));
+    }
+
+    #[test]
+    fn test_expr_evaluate_subquery_returns_none() {
+        // Subquery expressions cannot be evaluated row-by-row
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let schema = Schema::new(vec![Field::new("x".to_string(), DataType::Integer)]);
+        let row = vec![Value::Integer(1)];
+
+        let scalar_expr = Expr::ScalarSubquery(Box::new(LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        }));
+        assert!(scalar_expr.evaluate(&row, &schema).is_none());
+
+        let in_expr = Expr::InSubquery {
+            expr: Box::new(Expr::column("x")),
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+        };
+        assert!(in_expr.evaluate(&row, &schema).is_none());
+
+        let exists_expr = Expr::Exists(Box::new(LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        }));
+        assert!(exists_expr.evaluate(&row, &schema).is_none());
+
+        let any_all_expr = Expr::AnyAll {
+            expr: Box::new(Expr::column("x")),
+            op: Operator::Gt,
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            any_all: SubqueryType::Any,
+        };
+        assert!(any_all_expr.evaluate(&row, &schema).is_none());
+    }
+
+    #[test]
+    fn test_scalar_subquery_physical_plan() {
+        let planner = DefaultPlanner::new();
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Subquery {
+            subquery: Box::new(inner),
+            alias: "sub".to_string(),
+        };
+        let result = planner.create_physical_plan(&plan);
+        assert!(result.is_ok());
+    }
+
+    // === Tests for WindowFrame, FrameBound, ExcludeMode ===
+
+    #[test]
+    fn test_window_frame_variants() {
+        // Test all WindowFrame variants are constructible
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Rows { .. }));
+
+        let frame = WindowFrame::Range {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::UnboundedFollowing,
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Range { .. }));
+
+        let frame = WindowFrame::Groups {
+            start: FrameBound::Preceding(1),
+            end: FrameBound::Following(1),
+            exclude: ExcludeMode::None,
+        };
+        assert!(matches!(frame, WindowFrame::Groups { .. }));
+    }
+
+    #[test]
+    fn test_frame_bound_variants() {
+        assert!(matches!(
+            FrameBound::UnboundedPreceding,
+            FrameBound::UnboundedPreceding
+        ));
+        assert!(matches!(FrameBound::Preceding(5), FrameBound::Preceding(5)));
+        assert!(matches!(FrameBound::CurrentRow, FrameBound::CurrentRow));
+        assert!(matches!(FrameBound::Following(3), FrameBound::Following(3)));
+        assert!(matches!(
+            FrameBound::UnboundedFollowing,
+            FrameBound::UnboundedFollowing
+        ));
+    }
+
+    #[test]
+    fn test_exclude_mode_variants() {
+        assert!(matches!(ExcludeMode::None, ExcludeMode::None));
+        assert!(matches!(ExcludeMode::CurrentRow, ExcludeMode::CurrentRow));
+        assert!(matches!(ExcludeMode::Group, ExcludeMode::Group));
+        assert!(matches!(ExcludeMode::Ties, ExcludeMode::Ties));
+        assert!(matches!(ExcludeMode::NoOthers, ExcludeMode::NoOthers));
+    }
+
+    #[test]
+    fn test_window_frame_display_rows() {
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        assert_eq!(frame.to_string(), "ROWS UNBOUNDED PRECEDING CURRENT ROW");
+
+        let frame_with_exclude = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::CurrentRow,
+        };
+        assert_eq!(
+            frame_with_exclude.to_string(),
+            "ROWS UNBOUNDED PRECEDING CURRENT ROW EXCLUDE CURRENT ROW"
+        );
+    }
+
+    #[test]
+    fn test_window_frame_display_range() {
+        let frame = WindowFrame::Range {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::UnboundedFollowing,
+            exclude: ExcludeMode::None,
+        };
+        assert_eq!(
+            frame.to_string(),
+            "RANGE UNBOUNDED PRECEDING UNBOUNDED FOLLOWING"
+        );
+    }
+
+    #[test]
+    fn test_window_frame_display_groups() {
+        let frame = WindowFrame::Groups {
+            start: FrameBound::Preceding(1),
+            end: FrameBound::Following(1),
+            exclude: ExcludeMode::Ties,
+        };
+        assert_eq!(
+            frame.to_string(),
+            "GROUPS PRECEDING(1) FOLLOWING(1) EXCLUDE TIES"
+        );
+    }
+
+    #[test]
+    fn test_frame_bound_display() {
+        assert_eq!(
+            FrameBound::UnboundedPreceding.to_string(),
+            "UNBOUNDED PRECEDING"
+        );
+        assert_eq!(FrameBound::Preceding(5).to_string(), "PRECEDING(5)");
+        assert_eq!(FrameBound::CurrentRow.to_string(), "CURRENT ROW");
+        assert_eq!(FrameBound::Following(3).to_string(), "FOLLOWING(3)");
+        assert_eq!(
+            FrameBound::UnboundedFollowing.to_string(),
+            "UNBOUNDED FOLLOWING"
+        );
+    }
+
+    #[test]
+    fn test_exclude_mode_display() {
+        assert_eq!(ExcludeMode::None.to_string(), "EXCLUDE NO OTHERS");
+        assert_eq!(ExcludeMode::CurrentRow.to_string(), "EXCLUDE CURRENT ROW");
+        assert_eq!(ExcludeMode::Group.to_string(), "EXCLUDE GROUP");
+        assert_eq!(ExcludeMode::Ties.to_string(), "EXCLUDE TIES");
+        assert_eq!(ExcludeMode::NoOthers.to_string(), "EXCLUDE NO OTHERS");
+    }
+
+    #[test]
+    fn test_window_frame_clone() {
+        let frame = WindowFrame::Rows {
+            start: FrameBound::UnboundedPreceding,
+            end: FrameBound::CurrentRow,
+            exclude: ExcludeMode::None,
+        };
+        let cloned = frame.clone();
+        assert_eq!(frame, cloned);
+    }
+
+    #[test]
+    fn test_frame_bound_clone() {
+        let bound = FrameBound::Preceding(5);
+        let cloned = bound.clone();
+        assert_eq!(bound, cloned);
+    }
+
+    #[test]
+    fn test_exclude_mode_clone() {
+        let exclude = ExcludeMode::CurrentRow;
+        let cloned = exclude.clone();
+        assert_eq!(exclude, cloned);
     }
 }

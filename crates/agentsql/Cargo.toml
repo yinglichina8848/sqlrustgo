@@ -1,0 +1,26 @@
+[package]
+name = "sqlrustgo-agentsql"
+version = "1.6.1"
+edition = "2021"
+description = "AgentSQL Extension for AI Agent database access"
+
+[dependencies]
+sqlrustgo-parser = { path = "../parser" }
+sqlrustgo-planner = { path = "../planner" }
+sqlrustgo-executor = { path = "../executor" }
+sqlrustgo-catalog = { path = "../catalog" }
+sqlrustgo-storage = { path = "../storage" }
+sqlrustgo-types = { path = "../types" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+parking_lot = "0.12"
+regex-lite = "0.1"
+hashbrown = "0.14"
+
+[dev-dependencies]
+tokio-test = "0.4"

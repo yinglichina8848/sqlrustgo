@@ -37,6 +37,24 @@ impl HttpServer {
         self
     }
 
+    /// Get server version
+    pub fn get_version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// Bind to an available port
+    pub fn bind_to_available_port(&self) -> u16 {
+        if self.port == 0 {
+            // Bind to port 0 to get an available port
+            if let Ok(listener) = TcpListener::bind(format!("{}:0", self.host)) {
+                if let Ok(addr) = listener.local_addr() {
+                    return addr.port();
+                }
+            }
+        }
+        self.port
+    }
+
     /// Start the HTTP server
     pub fn start(&self) -> Result<(), std::io::Error> {
         let addr = format!("{}:{}", self.host, self.port);
@@ -112,14 +130,14 @@ fn handle_request<T: Read + Write>(
             let path = parts[1];
 
             match path {
-                "/health/live" => {
+                "/health" | "/health/live" => {
                     let body = serde_json::json!({
                         "status": "healthy",
                     })
                     .to_string();
                     ("HTTP/1.1 200 OK", "application/json", body)
                 }
-                "/health/ready" => {
+                "/ready" | "/health/ready" => {
                     let body = serde_json::json!({
                         "status": "ready",
                         "version": version,
@@ -270,6 +288,37 @@ mod tests {
     #[test]
     fn test_handle_request_health_ready() {
         let request = "GET /health/ready HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("application/json"));
+        assert!(response.contains("ready"));
+        assert!(response.contains("1.4.0"));
+    }
+
+    #[test]
+    fn test_handle_request_health_short_path() {
+        let request = "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = MockTcpStream::new(request);
+        let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
+
+        let result = handle_request::<MockTcpStream>(&mut stream, "1.4.0", &registry);
+
+        assert!(result.is_ok());
+        let response = String::from_utf8(stream.write_buffer.clone()).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("application/json"));
+        assert!(response.contains("healthy"));
+    }
+
+    #[test]
+    fn test_handle_request_ready_short_path() {
+        let request = "GET /ready HTTP/1.1\r\nHost: localhost\r\n\r\n";
         let mut stream = MockTcpStream::new(request);
         let registry = Arc::new(RwLock::new(MetricsRegistry::new()));
 

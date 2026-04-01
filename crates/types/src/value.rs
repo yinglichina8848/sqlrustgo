@@ -36,6 +36,12 @@ pub enum Value {
     Date(i32),
     /// Timestamp value (microseconds since UNIX epoch)
     Timestamp(i64),
+    /// UUID value (128-bit unique identifier)
+    Uuid(u128),
+    /// Array value (variable-length array of values)
+    Array(Vec<Value>),
+    /// Enum value (index + string representation)
+    Enum(i32, String),
 }
 
 impl Hash for Value {
@@ -55,6 +61,9 @@ impl Hash for Value {
             Value::Blob(b) => b.hash(state),
             Value::Date(d) => d.hash(state),
             Value::Timestamp(ts) => ts.hash(state),
+            Value::Uuid(u) => u.hash(state),
+            Value::Array(arr) => arr.hash(state),
+            Value::Enum(idx, name) => (idx, name).hash(state),
         }
     }
 }
@@ -70,6 +79,9 @@ impl PartialEq for Value {
             (Value::Blob(a), Value::Blob(b)) => a == b,
             (Value::Date(a), Value::Date(b)) => a == b,
             (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => a_idx == b_idx && a_name == b_name,
             _ => false,
         }
     }
@@ -77,11 +89,81 @@ impl PartialEq for Value {
 
 impl Eq for Value {}
 
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Value {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Define variant ordering for consistent comparisons
+        fn variant_order(v: &Value) -> u8 {
+            match v {
+                Value::Null => 0,
+                Value::Boolean(_) => 1,
+                Value::Integer(_) => 2,
+                Value::Float(_) => 3,
+                Value::Text(_) => 4,
+                Value::Blob(_) => 5,
+                Value::Date(_) => 6,
+                Value::Timestamp(_) => 7,
+                Value::Uuid(_) => 8,
+                Value::Array(_) => 9,
+                Value::Enum(_, _) => 10,
+            }
+        }
+
+        let self_order = variant_order(self);
+        let other_order = variant_order(other);
+
+        if self_order != other_order {
+            return self_order.cmp(&other_order);
+        }
+
+        match (self, other) {
+            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+            (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
+            (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => {
+                // Handle NaN: NaN is considered the smallest value
+                if a.is_nan() && b.is_nan() {
+                    std::cmp::Ordering::Equal
+                } else if a.is_nan() {
+                    std::cmp::Ordering::Less
+                } else if b.is_nan() {
+                    std::cmp::Ordering::Greater
+                } else {
+                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                }
+            }
+            (Value::Text(a), Value::Text(b)) => a.cmp(b),
+            (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
+            (Value::Date(a), Value::Date(b)) => a.cmp(b),
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            (Value::Uuid(a), Value::Uuid(b)) => a.cmp(b),
+            (Value::Array(a), Value::Array(b)) => a.cmp(b),
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => {
+                a_idx.cmp(b_idx).then(a_name.cmp(b_name))
+            }
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
 impl Value {
     /// Get integer value if this is an Integer
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Value::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    /// Get float value if this is a Float
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Value::Float(f) => Some(*f),
             _ => None,
         }
     }
@@ -107,6 +189,15 @@ impl Value {
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
             Value::Date(d) => d.to_string(),
             Value::Timestamp(ts) => ts.to_string(),
+            Value::Uuid(u) => format!("{:036x}", u),
+            Value::Array(arr) => format!(
+                "[{}]",
+                arr.iter()
+                    .map(|v| v.to_sql_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Enum(_, name) => name.clone(),
         }
     }
 
@@ -121,6 +212,9 @@ impl Value {
             Value::Blob(_) => "BLOB",
             Value::Date(_) => "DATE",
             Value::Timestamp(_) => "TIMESTAMP",
+            Value::Uuid(_) => "UUID",
+            Value::Array(_) => "ARRAY",
+            Value::Enum(_, _) => "ENUM",
         }
     }
 
@@ -150,6 +244,9 @@ impl Value {
             Value::Blob(b) => b.capacity(),
             Value::Date(_) => 4,
             Value::Timestamp(_) => 8,
+            Value::Uuid(_) => 16,
+            Value::Array(arr) => arr.iter().map(|v| v.estimate_memory_size()).sum(),
+            Value::Enum(_, name) => name.capacity() + 4,
         }
     }
 
@@ -574,5 +671,190 @@ mod tests {
         assert!(is_leap_year(2000));
         assert!(!is_leap_year(2019));
         assert!(!is_leap_year(2100));
+    }
+
+    #[test]
+    fn test_value_type_name_new() {
+        assert_eq!(Value::Null.type_name(), "NULL");
+        assert_eq!(Value::Boolean(true).type_name(), "BOOLEAN");
+        assert_eq!(Value::Integer(1).type_name(), "INTEGER");
+        assert_eq!(Value::Float(1.0).type_name(), "FLOAT");
+        assert_eq!(Value::Text("test".to_string()).type_name(), "TEXT");
+        assert_eq!(Value::Blob(vec![1, 2]).type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_to_index_key_new() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+        assert!(Value::Text("hello".to_string()).to_index_key().is_some());
+        assert_eq!(Value::Float(1.5).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_sql_string_new() {
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Integer(42).to_sql_string(), "42");
+    }
+
+    // Missing tests - coverage gap analysis
+    #[test]
+    fn test_value_estimate_memory_size() {
+        assert_eq!(Value::Null.estimate_memory_size(), 0);
+        assert_eq!(Value::Boolean(true).estimate_memory_size(), 1);
+        assert_eq!(Value::Integer(42).estimate_memory_size(), 8);
+        assert_eq!(Value::Float(3.14).estimate_memory_size(), 8);
+        assert_eq!(Value::Text("hello".to_string()).estimate_memory_size(), 5);
+        assert_eq!(Value::Blob(vec![1, 2, 3]).estimate_memory_size(), 3);
+        assert_eq!(Value::Date(0).estimate_memory_size(), 4);
+        assert_eq!(Value::Timestamp(0).estimate_memory_size(), 8);
+    }
+
+    #[test]
+    fn test_value_to_bool() {
+        assert_eq!(Value::Boolean(true).to_bool(), true);
+        assert_eq!(Value::Boolean(false).to_bool(), false);
+        assert_eq!(Value::Integer(0).to_bool(), false);
+        assert_eq!(Value::Integer(1).to_bool(), true);
+        assert_eq!(Value::Integer(-1).to_bool(), true);
+        assert_eq!(Value::Null.to_bool(), false);
+        assert_eq!(Value::Text("hello".to_string()).to_bool(), false);
+        assert_eq!(Value::Float(3.14).to_bool(), false);
+    }
+
+    #[test]
+    fn test_value_as_float() {
+        assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(Value::Integer(42).as_float(), None);
+        assert_eq!(Value::Null.as_float(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_float(), None);
+    }
+
+    #[test]
+    fn test_days_to_month_day() {
+        // January
+        assert_eq!(days_to_month_day(0, false), (1, 1));
+        assert_eq!(days_to_month_day(30, false), (1, 31));
+        // February (non-leap)
+        assert_eq!(days_to_month_day(31, false), (2, 1));
+        assert_eq!(days_to_month_day(58, false), (2, 28));
+        // March
+        assert_eq!(days_to_month_day(59, false), (3, 1));
+        // December
+        assert_eq!(days_to_month_day(334, false), (12, 1));
+        assert_eq!(days_to_month_day(364, false), (12, 31));
+
+        // Leap year tests
+        assert_eq!(days_to_month_day(31, true), (2, 1));
+        assert_eq!(days_to_month_day(60, true), (3, 1)); // Feb 29 in leap year
+    }
+
+    #[test]
+    fn test_value_timestamp_none_for_non_timestamp() {
+        assert_eq!(Value::Integer(42).as_timestamp(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_timestamp(), None);
+        assert_eq!(Value::Null.as_timestamp(), None);
+    }
+
+    #[test]
+    fn test_value_timestamp_to_string_none() {
+        assert_eq!(Value::Integer(42).timestamp_to_string(), None);
+        assert_eq!(Value::Text("hello".to_string()).timestamp_to_string(), None);
+        assert_eq!(Value::Null.timestamp_to_string(), None);
+    }
+
+    #[test]
+    fn test_value_ordering() {
+        use std::cmp::Ordering;
+        // Null is smallest
+        assert_eq!(Value::Null.cmp(&Value::Integer(0)), Ordering::Less);
+        // Boolean < Integer
+        assert_eq!(Value::Boolean(true).cmp(&Value::Integer(0)), Ordering::Less);
+        // Integer < Float
+        assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
+        // Float < Text
+        assert_eq!(
+            Value::Float(0.0).cmp(&Value::Text("a".to_string())),
+            Ordering::Less
+        );
+        // Text < Blob
+        assert_eq!(
+            Value::Text("a".to_string()).cmp(&Value::Blob(vec![])),
+            Ordering::Less
+        );
+        // Blob < Date
+        assert_eq!(Value::Blob(vec![]).cmp(&Value::Date(0)), Ordering::Less);
+        // Date < Timestamp
+        assert_eq!(Value::Date(0).cmp(&Value::Timestamp(0)), Ordering::Less);
+    }
+
+    #[test]
+    fn test_value_partial_ord() {
+        use std::cmp::Ordering;
+        assert_eq!(
+            Value::Integer(1).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            Value::Integer(2).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            Value::Integer(3).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Greater)
+        );
+    }
+
+    #[test]
+    fn test_value_float_nan_ordering() {
+        use std::cmp::Ordering;
+        let nan = Value::Float(f64::NAN);
+        let zero = Value::Float(0.0);
+        // When comparing Float NaN with Float NaN, they are Equal
+        assert_eq!(nan.cmp(&nan), Ordering::Equal);
+        // When comparing Float 0.0 with Float NaN, 0.0 is Greater than NaN
+        // (implementation treats NaN as largest value, opposite of comment)
+        assert_eq!(zero.cmp(&nan), Ordering::Greater);
+        // Float variants are compared by their variant order (3), which is greater than Integer (2)
+        // So Float > Integer regardless of NaN status when cross-variant comparison
+        assert_eq!(
+            Value::Float(f64::NAN).cmp(&Value::Integer(0)),
+            Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn test_value_as_integer_or_zero() {
+        // Value doesn't have as_integer_or_zero, but testing as_integer
+        assert_eq!(Value::Integer(0).as_integer(), Some(0));
+        assert_eq!(Value::Integer(i64::MAX).as_integer(), Some(i64::MAX));
+        assert_eq!(Value::Integer(i64::MIN).as_integer(), Some(i64::MIN));
+    }
+
+    #[test]
+    fn test_value_float_edge_cases() {
+        let zero = Value::Float(0.0);
+        let neg_zero = Value::Float(-0.0);
+        assert_eq!(zero.as_float(), Some(0.0));
+        assert_eq!(neg_zero.as_float(), Some(-0.0));
+
+        let max = Value::Float(f64::MAX);
+        let min = Value::Float(f64::MIN);
+        assert_eq!(max.as_float(), Some(f64::MAX));
+        assert_eq!(min.as_float(), Some(f64::MIN));
+    }
+
+    #[test]
+    fn test_value_text_unicode() {
+        let text = Value::Text("你好".to_string());
+        assert_eq!(text.to_sql_string(), "你好");
+        assert_eq!(text.type_name(), "TEXT");
+    }
+
+    #[test]
+    fn test_value_blob_empty() {
+        let blob = Value::Blob(vec![]);
+        assert_eq!(blob.type_name(), "BLOB");
+        assert_eq!(blob.to_sql_string(), "X''");
     }
 }
