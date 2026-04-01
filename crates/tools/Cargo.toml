@@ -5,6 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "sqlrustgo_tools"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sqlrustgo-tools"
+path = "src/main.rs"
+
 [dependencies]
 sqlrustgo-catalog.workspace = true
 sqlrustgo-storage.workspace = true
@@ -16,3 +24,8 @@ serde.workspace = true
 serde_json.workspace = true
 structopt = "0.3"
 regex = "1.0"
+flate2 = "1.0"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3.0"
