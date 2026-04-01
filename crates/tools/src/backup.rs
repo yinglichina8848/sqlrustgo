@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use structopt::StructOpt;
 
 /// Global LSN counter for tracking changes

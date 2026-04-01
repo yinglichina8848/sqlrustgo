@@ -716,9 +716,6 @@ fn chrono_lite_timestamp() -> String {
 }
 
 fn calculate_dir_checksum(dir: &Path) -> Result<String> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
     let mut hasher = DefaultHasher::new();
 
     if !dir.exists() {
