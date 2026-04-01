@@ -508,6 +508,7 @@ impl DumpImporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn test_parse_create_table() {
@@ -544,6 +545,160 @@ mod tests {
         assert_eq!(stats.tables_created, 0);
         assert_eq!(stats.rows_inserted, 0);
         assert_eq!(stats.errors, 0);
+    }
+
+    #[test]
+    fn test_parse_multi_row_values() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values_str = "(1, 'Alice'), (2, 'Bob'), (3, 'Charlie')";
+        let rows = importer.parse_multi_row_values(values_str).unwrap();
+        assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_single_quoted_string_with_comma() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer.parse_row_values("1, 2, 3").unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], "1");
+        assert_eq!(values[1], "2");
+        assert_eq!(values[2], "3");
+    }
+
+    #[test]
+    fn test_parse_escaped_quotes() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer
+            .parse_row_values(r#"1, 'It''s a test', 3"#)
+            .unwrap();
+        assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_set_statement() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let mut importer = importer;
+        importer.parse_set("SET FOREIGN_KEY_CHECKS = 0").unwrap();
+        let set_stmt = &importer.statements[0];
+        if let SqlStatement::Set { key, value } = set_stmt {
+            assert_eq!(key, "");
+            assert_eq!(value, "FOREIGN_KEY_CHECKS = 0");
+        } else {
+            panic!("Expected Set statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_table() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let mut importer = importer;
+        importer.parse_drop_table("DROP TABLE users").unwrap();
+        assert_eq!(importer.stats.tables_dropped, 1);
+    }
+
+    #[test]
+    fn test_parse_drop_table_if_exists() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let mut importer = importer;
+        importer
+            .parse_drop_table("DROP TABLE IF EXISTS users")
+            .unwrap();
+        assert_eq!(importer.stats.tables_dropped, 1);
+    }
+
+    #[test]
+    fn test_import_reader_single_insert() {
+        let sql = "CREATE TABLE users (id INT);\nINSERT INTO users VALUES (1);";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+        assert_eq!(importer.stats.queries_executed, 2);
+    }
+
+    #[test]
+    fn test_import_reader_multi_row_insert() {
+        let sql = "CREATE TABLE users (id INT, name VARCHAR(255));\nINSERT INTO users VALUES (1, 'Alice'), (2, 'Bob');";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+        assert_eq!(importer.stats.rows_inserted, 2);
+    }
+
+    #[test]
+    fn test_import_reader_with_comments() {
+        let sql = "-- comment\nCREATE TABLE t (id INT); -- end\nINSERT INTO t VALUES (1);";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+    }
+
+    #[test]
+    fn test_import_reader_lock_unlock() {
+        let sql = "LOCK TABLES t WRITE;\nUNLOCK TABLES;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 2);
+    }
+
+    #[test]
+    fn test_import_reader_begin_commit() {
+        let sql = "BEGIN;\nINSERT INTO t VALUES (1);\nCOMMIT;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 3);
+    }
+
+    #[test]
+    fn test_import_stats_accumulation() {
+        let sql =
+            "CREATE TABLE t (id INT);\nINSERT INTO t VALUES (1);\nINSERT INTO t VALUES (2), (3);";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+        assert_eq!(importer.stats.rows_inserted, 3);
+        assert_eq!(importer.stats.queries_executed, 3);
+    }
+
+    #[test]
+    fn test_mysqldump_format_comments_stripped() {
+        let sql = "/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;\nCREATE TABLE t (id INT);";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+    }
+
+    #[test]
+    fn test_null_values_in_insert() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer.parse_row_values("1, NULL, 'test'").unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], "1");
+        assert_eq!(values[1], "NULL");
+    }
+
+    #[test]
+    fn test_empty_string_value() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer.parse_row_values("1, 2, 3").unwrap();
+        assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_various_data_types() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let columns = importer
+            .parse_column_definitions(
+                "id INT, name VARCHAR(255), price DECIMAL(10,2), active BOOLEAN",
+            )
+            .unwrap();
+        assert!(!columns.is_empty());
     }
 }
 
