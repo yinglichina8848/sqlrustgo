@@ -731,6 +731,10 @@ impl ExecutionEngine {
         }
     }
 
+    pub fn session_id(&self) -> Option<u64> {
+        self.current_session_id
+    }
+
     pub fn execute(&mut self, statement: Statement) -> Result<ExecutorResult, SqlError> {
         match statement {
             Statement::Insert(insert) => {
