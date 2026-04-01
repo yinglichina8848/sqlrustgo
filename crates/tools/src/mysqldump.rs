@@ -116,6 +116,18 @@ impl DumpImporter {
         }
     }
 
+    pub fn stats(&self) -> &ImportStats {
+        &self.stats
+    }
+
+    pub fn statements(&self) -> &[SqlStatement] {
+        &self.statements
+    }
+
+    pub fn current_database(&self) -> &Option<String> {
+        &self.current_database
+    }
+
     pub fn import_file(&mut self, path: &Path) -> Result<ImportStats> {
         let file = File::open(path).context(format!("Failed to open file: {}", path.display()))?;
         let reader = BufReader::new(file);
@@ -154,7 +166,7 @@ impl DumpImporter {
             }
 
             if current_statement.ends_with(';') && !in_string {
-                let stmt = current_statement.trim();
+                let stmt = current_statement.trim().trim_end_matches(';');
                 if !stmt.is_empty() {
                     if let Err(e) = self.execute_statement(stmt) {
                         self.stats.errors += 1;
@@ -362,7 +374,9 @@ impl DumpImporter {
                 }
                 ')' if !in_string => {
                     paren_depth -= 1;
-                    current_row.push(c);
+                    if paren_depth > 0 {
+                        current_row.push(c);
+                    }
                     if paren_depth == 0 {
                         let row = self.parse_row_values(&current_row)?;
                         if !row.is_empty() {
@@ -392,34 +406,27 @@ impl DumpImporter {
         let mut chars = row.chars().peekable();
 
         while let Some(c) = chars.next() {
-            match c {
-                '\'' | '"' => {
-                    if in_string {
-                        if c == string_char {
-                            let next = chars.peek();
-                            if next == Some(&string_char) {
-                                current.push(string_char);
-                                chars.next();
-                            } else {
-                                in_string = false;
-                            }
-                        } else {
-                            current.push(c);
-                        }
-                    } else {
-                        in_string = true;
-                        string_char = c;
-                        current.push(c);
-                    }
+            if !in_string && (c == '\'' || c == '"') {
+                in_string = true;
+                string_char = c;
+                current.push(c);
+            } else if in_string && c == string_char {
+                let next = chars.peek();
+                if next == Some(&string_char) {
+                    current.push(string_char);
+                    chars.next();
+                } else {
+                    in_string = false;
+                    current.push(c);
                 }
-                ',' if !in_string => {
-                    let val = current.trim().to_string();
-                    if !val.is_empty() {
-                        values.push(val);
-                    }
-                    current.clear();
+            } else if !in_string && c == ',' {
+                let val = current.trim().to_string();
+                if !val.is_empty() {
+                    values.push(val);
                 }
-                _ => current.push(c),
+                current.clear();
+            } else {
+                current.push(c);
             }
         }
 
@@ -493,12 +500,21 @@ impl DumpImporter {
     }
 
     fn parse_lock_tables(&mut self, stmt: &str) -> Result<()> {
-        let tables: Vec<String> = stmt
-            .split_whitespace()
-            .skip(2)
-            .map(|s| s.trim_matches(',').trim_matches(';').to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let lock_type_keywords = ["READ", "WRITE", "LOCAL"];
+        let words: Vec<&str> = stmt.split_whitespace().collect();
+        let mut tables = Vec::new();
+
+        let mut i = 2;
+        while i < words.len() {
+            let word = words[i].trim_matches(',').trim_matches(';').to_uppercase();
+            if lock_type_keywords.contains(&word.as_str()) {
+                break;
+            }
+            if !word.is_empty() {
+                tables.push(words[i].trim_matches(',').trim_matches(';').to_string());
+            }
+            i += 1;
+        }
 
         self.statements.push(SqlStatement::LockTables { tables });
         Ok(())
@@ -699,6 +715,226 @@ mod tests {
             )
             .unwrap();
         assert!(!columns.is_empty());
+    }
+
+    #[test]
+    fn test_parse_column_definitions_all_types() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let columns = importer
+            .parse_column_definitions(
+                "id INT PRIMARY KEY AUTO_INCREMENT,
+                 name VARCHAR(255) NOT NULL,
+                 age INT UNIQUE,
+                 email VARCHAR(100) UNIQUE NOT NULL,
+                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                 balance DECIMAL(10,2) DEFAULT 0.00,
+                 active BOOLEAN DEFAULT TRUE,
+                 bio TEXT,
+                 data BLOB",
+            )
+            .unwrap();
+        assert!(!columns.is_empty());
+    }
+
+    #[test]
+    fn test_parse_multi_row_values_single_row() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values_str = "(1, 'Alice')";
+        let rows = importer.parse_multi_row_values(values_str).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].len(), 2);
+    }
+
+    #[test]
+    fn test_parse_multi_row_values_empty() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values_str = "";
+        let rows = importer.parse_multi_row_values(values_str).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_parse_row_values_with_quotes() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer
+            .parse_row_values(r#"'hello', 'world', 123"#)
+            .unwrap();
+        assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_row_values_mixed_types() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer
+            .parse_row_values(r#"1, 'string', 3.14, NULL, 'another string'"#)
+            .unwrap();
+        assert_eq!(values.len(), 5);
+    }
+
+    #[test]
+    fn test_parse_row_values_numeric_only() {
+        let importer = DumpImporter::new(ImportMode::Full, false);
+        let values = importer.parse_row_values("1, 2, 3, 4, 5").unwrap();
+        assert_eq!(values.len(), 5);
+    }
+
+    #[test]
+    fn test_import_reader_transactions() {
+        let sql = "BEGIN;\nINSERT INTO t VALUES (1);\nCOMMIT;\nBEGIN;\nINSERT INTO t VALUES (2);\nROLLBACK;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 6);
+    }
+
+    #[test]
+    fn test_import_reader_multiple_drops() {
+        let sql = "DROP TABLE IF EXISTS t1;\nDROP TABLE t2;\nDROP TABLE IF EXISTS t3;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_dropped, 3);
+    }
+
+    #[test]
+    fn test_import_reader_multiple_uses() {
+        let sql = "USE db1;\nUSE db2;\nUSE db3;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.current_database, Some("db3".to_string()));
+    }
+
+    #[test]
+    fn test_import_reader_set_variables() {
+        let sql = "SET FOREIGN_KEY_CHECKS = 0;\nSET UNIQUE_CHECKS = 0;\nSET SESSION sql_mode = 'STRICT_TRANS_TABLES';";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 3);
+    }
+
+    #[test]
+    fn test_import_stats_update() {
+        let sql = "CREATE TABLE t1 (id INT);\nCREATE TABLE t2 (id INT);\nDROP TABLE t1;\nINSERT INTO t2 VALUES (1), (2), (3);";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+
+        assert_eq!(importer.stats.tables_created, 2);
+        assert_eq!(importer.stats.tables_dropped, 1);
+        assert_eq!(importer.stats.rows_inserted, 3);
+        assert_eq!(importer.stats.queries_executed, 4);
+        assert_eq!(importer.stats.errors, 0);
+    }
+
+    #[test]
+    fn test_parse_lock_tables_write() {
+        let sql = "LOCK TABLES t1 WRITE, t2 READ;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 1);
+    }
+
+    #[test]
+    fn test_skip_empty_lines() {
+        let sql = "\n\nCREATE TABLE t (id INT);\n\n\nINSERT INTO t VALUES (1);\n\n";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.tables_created, 1);
+        assert_eq!(importer.stats.rows_inserted, 1);
+    }
+
+    #[test]
+    fn test_sql_statement_begin() {
+        let sql = "BEGIN;\n";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert!(matches!(importer.statements[0], SqlStatement::Begin));
+    }
+
+    #[test]
+    fn test_sql_statement_commit() {
+        let sql = "COMMIT;\n";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert!(matches!(importer.statements[0], SqlStatement::Commit));
+    }
+
+    #[test]
+    fn test_sql_statement_rollback() {
+        let sql = "ROLLBACK;\n";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert!(matches!(importer.statements[0], SqlStatement::Rollback));
+    }
+
+    #[test]
+    fn test_sql_statement_unlock() {
+        let sql = "UNLOCK TABLES;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert!(matches!(importer.statements[0], SqlStatement::UnlockTables));
+    }
+
+    #[test]
+    fn test_sql_statement_lock_tables() {
+        let sql = "LOCK TABLES t READ;\n";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        match &importer.statements[0] {
+            SqlStatement::LockTables { tables } => {
+                assert_eq!(tables.len(), 1);
+                assert_eq!(tables[0], "t");
+            }
+            _ => panic!("Expected LockTables statement"),
+        }
+    }
+
+    #[test]
+    fn test_create_table_statistics_realistic() {
+        let sql = r#"
+            CREATE TABLE orders (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                customer_id INT NOT NULL,
+                product_id INT NOT NULL,
+                quantity INT DEFAULT 1,
+                price DECIMAL(10,2) NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );
+            
+            INSERT INTO orders (customer_id, product_id, quantity, price, status) VALUES
+                (1, 101, 2, 29.99, 'completed'),
+                (1, 102, 1, 49.99, 'completed'),
+                (2, 101, 5, 29.99, 'pending'),
+                (3, 103, 1, 99.99, 'shipped');
+        "#;
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+
+        assert_eq!(importer.stats.tables_created, 1);
+        assert_eq!(importer.stats.rows_inserted, 4);
+        assert_eq!(importer.stats.queries_executed, 2);
+    }
+
+    #[test]
+    fn test_import_reader_unknown_statement() {
+        let sql = "SHOW TABLES;";
+        let reader = Cursor::new(sql);
+        let mut importer = DumpImporter::new(ImportMode::Full, false);
+        importer.import_reader(reader).unwrap();
+        assert_eq!(importer.stats.queries_executed, 1);
+        assert!(matches!(importer.statements[0], SqlStatement::Unknown(_)));
     }
 }
 
