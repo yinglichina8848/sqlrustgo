@@ -23,7 +23,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build bench-cli
-        run: cargo build --release -p sqlrustgo-bench-cli
+        run: |
+          # Limit virtual memory to 8GB
+          ulimit -v 8388608
+          cargo build --release -p sqlrustgo-bench-cli
 
       - name: Create sample SQL file for custom benchmark
         run: |

@@ -132,6 +132,7 @@ pub enum Token {
     Ties,
     NoOthers,
     Between,
+    In,
 
     // CTE (Common Table Expression) - SQL-99
     With,
@@ -332,6 +333,7 @@ impl fmt::Display for Token {
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
             Token::Between => write!(f, "BETWEEN"),
+            Token::In => write!(f, "IN"),
             Token::With => write!(f, "WITH"),
             Token::Recursive => write!(f, "RECURSIVE"),
             Token::Merge => write!(f, "MERGE"),
@@ -476,6 +478,7 @@ pub fn is_keyword(s: &str) -> bool {
             | "TIES"
             | "NO OTHERS"
             | "BETWEEN"
+            | "IN"
             | "PREPARE"
             | "EXECUTE"
             | "DEALLOCATE"
@@ -553,6 +556,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "TIES" => Some(Token::Ties),
         "NO OTHERS" => Some(Token::NoOthers),
         "BETWEEN" => Some(Token::Between),
+        "IN" => Some(Token::In),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),
