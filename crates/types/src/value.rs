@@ -36,6 +36,12 @@ pub enum Value {
     Date(i32),
     /// Timestamp value (microseconds since UNIX epoch)
     Timestamp(i64),
+    /// UUID value (128-bit unique identifier)
+    Uuid(u128),
+    /// Array value (variable-length array of values)
+    Array(Vec<Value>),
+    /// Enum value (index + string representation)
+    Enum(i32, String),
 }
 
 impl Hash for Value {
@@ -55,6 +61,9 @@ impl Hash for Value {
             Value::Blob(b) => b.hash(state),
             Value::Date(d) => d.hash(state),
             Value::Timestamp(ts) => ts.hash(state),
+            Value::Uuid(u) => u.hash(state),
+            Value::Array(arr) => arr.hash(state),
+            Value::Enum(idx, name) => (idx, name).hash(state),
         }
     }
 }
@@ -70,6 +79,9 @@ impl PartialEq for Value {
             (Value::Blob(a), Value::Blob(b)) => a == b,
             (Value::Date(a), Value::Date(b)) => a == b,
             (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => a_idx == b_idx && a_name == b_name,
             _ => false,
         }
     }
@@ -96,6 +108,9 @@ impl Ord for Value {
                 Value::Blob(_) => 5,
                 Value::Date(_) => 6,
                 Value::Timestamp(_) => 7,
+                Value::Uuid(_) => 8,
+                Value::Array(_) => 9,
+                Value::Enum(_, _) => 10,
             }
         }
 
@@ -126,6 +141,11 @@ impl Ord for Value {
             (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
             (Value::Date(a), Value::Date(b)) => a.cmp(b),
             (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            (Value::Uuid(a), Value::Uuid(b)) => a.cmp(b),
+            (Value::Array(a), Value::Array(b)) => a.cmp(b),
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => {
+                a_idx.cmp(b_idx).then(a_name.cmp(b_name))
+            }
             _ => std::cmp::Ordering::Equal,
         }
     }
@@ -169,6 +189,15 @@ impl Value {
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
             Value::Date(d) => d.to_string(),
             Value::Timestamp(ts) => ts.to_string(),
+            Value::Uuid(u) => format!("{:036x}", u),
+            Value::Array(arr) => format!(
+                "[{}]",
+                arr.iter()
+                    .map(|v| v.to_sql_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Enum(_, name) => name.clone(),
         }
     }
 
@@ -183,6 +212,9 @@ impl Value {
             Value::Blob(_) => "BLOB",
             Value::Date(_) => "DATE",
             Value::Timestamp(_) => "TIMESTAMP",
+            Value::Uuid(_) => "UUID",
+            Value::Array(_) => "ARRAY",
+            Value::Enum(_, _) => "ENUM",
         }
     }
 
@@ -212,6 +244,9 @@ impl Value {
             Value::Blob(b) => b.capacity(),
             Value::Date(_) => 4,
             Value::Timestamp(_) => 8,
+            Value::Uuid(_) => 16,
+            Value::Array(arr) => arr.iter().map(|v| v.estimate_memory_size()).sum(),
+            Value::Enum(_, name) => name.capacity() + 4,
         }
     }
 
