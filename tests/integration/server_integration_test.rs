@@ -28,7 +28,6 @@ fn test_http_server_bind_to_available_port() {
 }
 
 #[test]
-#[ignore]
 fn test_http_endpoint_health_live() {
     let server = HttpServer::new("127.0.0.1", 0).with_version("1.9.0");
     let port = server.bind_to_available_port();
@@ -57,7 +56,6 @@ fn test_http_endpoint_health_live() {
 }
 
 #[test]
-#[ignore]
 fn test_http_endpoint_health_ready() {
     let server = HttpServer::new("127.0.0.1", 0).with_version("1.9.0");
     let port = server.bind_to_available_port();
@@ -86,7 +84,6 @@ fn test_http_endpoint_health_ready() {
 }
 
 #[test]
-#[ignore]
 fn test_http_endpoint_metrics() {
     let server = HttpServer::new("127.0.0.1", 0);
     let port = server.bind_to_available_port();
@@ -114,7 +111,6 @@ fn test_http_endpoint_metrics() {
 }
 
 #[test]
-#[ignore]
 fn test_http_endpoint_not_found() {
     let server = HttpServer::new("127.0.0.1", 0);
     let port = server.bind_to_available_port();
