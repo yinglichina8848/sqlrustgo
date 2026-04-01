@@ -310,6 +310,10 @@ name = "tpch_benchmark"
 path = "tests/integration/tpch_benchmark.rs"
 
 [[test]]
+name = "tpch_full_test"
+path = "tests/integration/tpch_full_test.rs"
+
+[[test]]
 name = "mvcc_concurrency_test"
 path = "tests/anomaly/mvcc_concurrency_test.rs"
 
