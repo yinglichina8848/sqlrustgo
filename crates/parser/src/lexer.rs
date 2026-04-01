@@ -309,6 +309,7 @@ impl<'a> Lexer<'a> {
                     "NO" => Token::NoOthers,
                     "BETWEEN" => Token::Between,
                     "IN" => Token::In,
+                    "LIKE" => Token::Like,
                     "CASE" => Token::Case,
                     "END" => Token::End,
                     "WHEN" => Token::When,
