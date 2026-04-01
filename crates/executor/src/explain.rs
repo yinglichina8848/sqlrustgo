@@ -364,6 +364,21 @@ impl ExplainExecutor {
             Expr::WindowFunction { func, .. } => format!("{:?}", func),
             Expr::Alias { expr, name } => format!("{} AS {}", self.format_expr(expr), name),
             Expr::Parameter { index } => format!("?{}", index),
+            Expr::Between { expr, low, high } => {
+                format!(
+                    "{} BETWEEN {} AND {}",
+                    self.format_expr(expr),
+                    self.format_expr(low),
+                    self.format_expr(high)
+                )
+            }
+            Expr::InList { expr, values } => {
+                format!(
+                    "{} IN ({})",
+                    self.format_expr(expr),
+                    self.format_exprs(values)
+                )
+            }
         }
     }
 

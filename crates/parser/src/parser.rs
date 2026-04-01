@@ -597,6 +597,17 @@ pub enum Expression {
     },
     /// Parameter placeholder for prepared statements (?)
     Placeholder,
+    /// BETWEEN expression: expr BETWEEN low AND high
+    Between {
+        expr: Box<Expression>,
+        low: Box<Expression>,
+        high: Box<Expression>,
+    },
+    /// IN value list expression: expr IN (value1, value2, ...)
+    InList {
+        expr: Box<Expression>,
+        values: Vec<Expression>,
+    },
 }
 
 /// Window frame info parsed from SQL
@@ -1644,7 +1655,7 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse comparison expression (=, !=, >, <, >=, <=)
+    /// Parse comparison expression (=, !=, >, <, >=, <=, BETWEEN)
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_arithmetic_expression()?;
 
@@ -1656,7 +1667,46 @@ impl Parser {
             Some(Token::Less) => "<",
             Some(Token::GreaterEqual) => ">=",
             Some(Token::LessEqual) => "<=",
-            _ => return Ok(left), // No operator, return simple expression
+            _ => {
+                // Check for BETWEEN: a BETWEEN low AND high -> a >= low AND a <= high
+                if matches!(self.current(), Some(Token::Between)) {
+                    self.next(); // consume BETWEEN
+                    let low = self.parse_arithmetic_expression()?;
+                    self.expect(Token::And)?;
+                    let high = self.parse_arithmetic_expression()?;
+                    return Ok(Expression::Between {
+                        expr: Box::new(left),
+                        low: Box::new(low),
+                        high: Box::new(high),
+                    });
+                }
+                // Check for IN: expr IN (value1, value2, ...)
+                if matches!(self.current(), Some(Token::In)) {
+                    self.next(); // consume IN
+                    self.expect(Token::LParen)?;
+                    let mut values = Vec::new();
+                    loop {
+                        values.push(self.parse_arithmetic_expression()?);
+                        match self.current() {
+                            Some(Token::Comma) => {
+                                self.next(); // consume comma
+                            }
+                            Some(Token::RParen) => {
+                                self.next(); // consume RParen
+                                break;
+                            }
+                            _ => {
+                                return Err("Expected ',' or ')' after value in IN list".to_string())
+                            }
+                        }
+                    }
+                    return Ok(Expression::InList {
+                        expr: Box::new(left),
+                        values,
+                    });
+                }
+                return Ok(left); // No operator, return simple expression
+            }
         };
         self.next(); // consume operator
 
@@ -1724,6 +1774,16 @@ impl Parser {
                 Ok(expr)
             }
             Some(Token::StringLiteral(s)) => {
+                let expr = Expression::Literal(s.to_string());
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::DateLiteral(s)) => {
+                let expr = Expression::Literal(s.to_string());
+                self.next();
+                Ok(expr)
+            }
+            Some(Token::TimestampLiteral(s)) => {
                 let expr = Expression::Literal(s.to_string());
                 self.next();
                 Ok(expr)

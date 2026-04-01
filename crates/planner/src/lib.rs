@@ -254,6 +254,17 @@ pub enum Expr {
     Parameter {
         index: usize,
     },
+    /// BETWEEN expression: expr BETWEEN low AND high
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+    },
+    /// IN value list: expr IN (value1, value2, ...)
+    InList {
+        expr: Box<Expr>,
+        values: Vec<Expr>,
+    },
 }
 
 impl Expr {
@@ -301,6 +312,29 @@ impl Expr {
             Expr::AnyAll { .. } => None,
             // Parameter placeholder - cannot be evaluated without bound values
             Expr::Parameter { .. } => None,
+            // BETWEEN: expr >= low AND expr <= high
+            Expr::Between { expr, low, high } => {
+                let expr_val = expr.evaluate(row, schema)?;
+                let low_val = low.evaluate(row, schema)?;
+                let high_val = high.evaluate(row, schema)?;
+                let ge_result = evaluate_binary_op(&expr_val, &Operator::GtEq, &low_val)?;
+                let le_result = evaluate_binary_op(&expr_val, &Operator::LtEq, &high_val)?;
+                match (ge_result, le_result) {
+                    (Value::Boolean(ge), Value::Boolean(le)) => Some(Value::Boolean(ge && le)),
+                    _ => None,
+                }
+            }
+            // IN list: expr IN (value1, value2, ...)
+            Expr::InList { expr, values } => {
+                let expr_val = expr.evaluate(row, schema)?;
+                for value_expr in values {
+                    let value = value_expr.evaluate(row, schema)?;
+                    if value == expr_val {
+                        return Some(Value::Boolean(true));
+                    }
+                }
+                Some(Value::Boolean(false))
+            }
         }
     }
 
@@ -442,6 +476,13 @@ impl fmt::Display for Expr {
                 write!(f, "{} {} {} (SELECT ...)", expr, op, any_all_str)
             }
             Expr::Parameter { index } => write!(f, "?{}", index),
+            Expr::Between { expr, low, high } => {
+                write!(f, "{} BETWEEN {} AND {}", expr, low, high)
+            }
+            Expr::InList { expr, values } => {
+                let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                write!(f, "{} IN ({})", expr, values_str.join(", "))
+            }
         }
     }
 }
