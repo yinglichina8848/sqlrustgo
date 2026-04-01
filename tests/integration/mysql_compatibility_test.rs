@@ -5,6 +5,8 @@
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::{KillStatement, KillType, Statement};
 use sqlrustgo_security::{Session, SessionManager, SessionStatus};
+use sqlrustgo_storage::{MemoryStorage, StorageEngine};
+use std::sync::Arc;
 
 #[test]
 fn test_parse_show_processlist_integration() {
@@ -233,4 +235,239 @@ fn test_parse_information_schema_processlist_with_columns() {
         }
         _ => panic!("Expected SELECT statement"),
     }
+}
+
+#[test]
+fn test_memory_storage_cancel_flag() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let mut storage = MemoryStorage::new();
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+
+    storage.set_cancel_flag(cancel_flag.clone());
+
+    assert!(storage.cancel_flag().is_some());
+
+    let result = storage.check_cancelled();
+    assert!(result.is_ok());
+
+    cancel_flag.store(true, Ordering::SeqCst);
+
+    let result = storage.check_cancelled();
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Query cancelled"));
+}
+
+#[test]
+fn test_memory_storage_scan_with_cancel() {
+    use sqlrustgo_types::Value;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let mut storage = MemoryStorage::new();
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+
+    storage.set_cancel_flag(cancel_flag.clone());
+
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
+            }],
+        })
+        .unwrap();
+
+    let records = vec![vec![Value::Integer(1)], vec![Value::Integer(2)]];
+    storage.insert("test_table", records).unwrap();
+
+    let result = storage.scan("test_table");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 2);
+
+    cancel_flag.store(true, Ordering::SeqCst);
+
+    let result = storage.scan("test_table");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Query cancelled"));
+}
+
+#[test]
+fn test_memory_storage_scan_batch_with_cancel() {
+    use sqlrustgo_types::Value;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let mut storage = MemoryStorage::new();
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+
+    storage.set_cancel_flag(cancel_flag.clone());
+
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
+            }],
+        })
+        .unwrap();
+
+    let records: Vec<Vec<Value>> = (0..100).map(|i| vec![Value::Integer(i)]).collect();
+    storage.insert("test_table", records).unwrap();
+
+    cancel_flag.store(true, Ordering::SeqCst);
+
+    let result = storage.scan_batch("test_table", 0, 10);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Query cancelled"));
+}
+
+#[test]
+fn test_execution_engine_with_session_manager() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id =
+        session_manager.create_session("testuser".to_string(), "127.0.0.1".to_string());
+
+    let engine = ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
+
+    assert!(engine.session_id().is_some());
+    assert_eq!(engine.session_id().unwrap(), session_id);
+}
+
+#[test]
+fn test_execution_engine_kill_query_via_session() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id1 = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+    let session_id2 = session_manager.create_session("user1".to_string(), "127.0.0.2".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id1);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id2,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_execution_engine_kill_self_prevention() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Cannot kill self"));
+}
+
+#[test]
+fn test_execution_engine_kill_nonexistent_session() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: 99999,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Unknown thread id"));
+}
+
+#[test]
+fn test_execution_engine_kill_different_user_without_privilege() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id1 = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+    let session_id2 = session_manager.create_session("user2".to_string(), "127.0.0.2".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id1);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id2,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Access denied"));
+}
+
+#[test]
+fn test_execution_engine_kill_connection() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id1 = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+    let session_id2 = session_manager.create_session("user1".to_string(), "127.0.0.2".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id1);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id2,
+        kill_type: KillType::Connection,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_ok());
+
+    let target_session = session_manager.get_session(session_id2);
+    assert!(target_session.is_some());
+    assert_eq!(target_session.unwrap().status, SessionStatus::Closed);
 }
