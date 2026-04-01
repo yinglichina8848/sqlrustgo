@@ -298,9 +298,10 @@ impl ProcedureContext {
 
     /// Get any variable (local first, then session)
     pub fn get_var(&self, name: &str) -> Option<&Value> {
+        let key = name.strip_prefix('@').unwrap_or(name);
         self.local_variables
-            .get(name)
-            .or_else(|| self.session_variables.get(name))
+            .get(key)
+            .or_else(|| self.session_variables.get(key))
     }
 
     /// Set any variable (local or session based on @ prefix)
