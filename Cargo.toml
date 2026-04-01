@@ -478,5 +478,9 @@ name = "sql_cli_test"
 path = "tests/integration/sql_cli_test.rs"
 
 [[test]]
+name = "tpch_compliance_test"
+path = "tests/integration/tpch_compliance_test.rs"
+
+[[test]]
 name = "agentsql_test"
 path = "tests/integration/agentsql_test.rs"

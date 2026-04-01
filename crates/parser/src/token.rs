@@ -134,6 +134,7 @@ pub enum Token {
     NoOthers,
     Between,
     In,
+    Like,
     Case,
     End,
 
@@ -345,6 +346,7 @@ impl fmt::Display for Token {
             Token::Distinct => write!(f, "DISTINCT"),
             Token::Between => write!(f, "BETWEEN"),
             Token::In => write!(f, "IN"),
+            Token::Like => write!(f, "LIKE"),
             Token::Case => write!(f, "CASE"),
             Token::End => write!(f, "END"),
             Token::When => write!(f, "WHEN"),
@@ -588,6 +590,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DISTINCT" => Some(Token::Distinct),
         "BETWEEN" => Some(Token::Between),
         "IN" => Some(Token::In),
+        "LIKE" => Some(Token::Like),
         "CASE" => Some(Token::Case),
         "END" => Some(Token::End),
         "WHEN" => Some(Token::When),
