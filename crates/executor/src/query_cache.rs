@@ -185,7 +185,7 @@ mod tests {
 
     fn make_entry(id: i64) -> CacheEntry {
         CacheEntry {
-            result: sqlrustgo_executor::ExecutorResult::new(vec![vec![Value::Integer(id)]], 1),
+            result: crate::ExecutorResult::new(vec![vec![Value::Integer(id)]], 1),
             tables: vec![],
             created_at: std::time::Instant::now(),
             size_bytes: 64,
