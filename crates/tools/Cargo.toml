@@ -14,6 +14,7 @@ log.workspace = true
 env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+hex.workspace = true
 structopt = "0.3"
 regex = "1.0"
 flate2 = "1.0"
