@@ -95,6 +95,7 @@ sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
 query-stats = { path = "crates/query-stats" }
+sqlrustgo-tools = { path = "crates/tools" }
 
 [package]
 name = "sqlrustgo"
@@ -415,6 +416,14 @@ path = "tests/unit/prometheus_test.rs"
 [[test]]
 name = "slow_query_log_test"
 path = "tests/unit/slow_query_log_test.rs"
+
+[[test]]
+name = "mysqldump_test"
+path = "tests/unit/mysqldump_test.rs"
+
+[[test]]
+name = "backup_test"
+path = "tests/unit/backup_test.rs"
 
 [[test]]
 name = "auth_rbac_test"

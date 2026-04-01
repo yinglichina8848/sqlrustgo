@@ -23,10 +23,12 @@ fn get_test_categories() -> Vec<TestCategory> {
         TestCategory {
             name: "单元测试 (Unit Tests)",
             test_files: vec![
+                "backup_test",
                 "bplus_tree_test",
                 "buffer_pool_test",
                 "file_storage_test",
                 "local_executor_test",
+                "mysqldump_test",
                 "optimizer_cost_test",
                 "optimizer_rules_test",
                 "parser_token_test",
@@ -160,6 +162,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "其他测试 (Other)",
             test_files: vec!["binary_format_test", "wal_integration_test"],
             description: "二进制格式、WAL集成测试",
+        },
+        // 工具测试
+        TestCategory {
+            name: "工具测试 (Tools)",
+            test_files: vec!["physical_backup_test"],
+            description: "物理备份、mysqldump 等工具集成测试",
         },
     ]
 }
