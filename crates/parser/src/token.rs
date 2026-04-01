@@ -74,6 +74,7 @@ pub enum Token {
     All,
     Limit,
     Offset,
+    Distinct,
 
     // SHOW keywords (运维监控)
     Show,
@@ -133,6 +134,8 @@ pub enum Token {
     NoOthers,
     Between,
     In,
+    Case,
+    End,
 
     // CTE (Common Table Expression) - SQL-99
     With,
@@ -156,6 +159,7 @@ pub enum Token {
     Curtime,
     DateAdd,
     DateFormat,
+    Extract,
     Count,
     Sum,
     Avg,
@@ -176,6 +180,9 @@ pub enum Token {
     Uuid,
     Array,
     Enum,
+    Year,
+    Month,
+    Day,
 
     // Operators
     Equal,
@@ -335,13 +342,16 @@ impl fmt::Display for Token {
             Token::Current => write!(f, "CURRENT"),
             Token::Ties => write!(f, "TIES"),
             Token::NoOthers => write!(f, "NO OTHERS"),
+            Token::Distinct => write!(f, "DISTINCT"),
             Token::Between => write!(f, "BETWEEN"),
             Token::In => write!(f, "IN"),
+            Token::Case => write!(f, "CASE"),
+            Token::End => write!(f, "END"),
+            Token::When => write!(f, "WHEN"),
             Token::With => write!(f, "WITH"),
             Token::Recursive => write!(f, "RECURSIVE"),
             Token::Merge => write!(f, "MERGE"),
             Token::Truncate => write!(f, "TRUNCATE"),
-            Token::When => write!(f, "WHEN"),
             Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
@@ -356,6 +366,9 @@ impl fmt::Display for Token {
             Token::Uuid => write!(f, "UUID"),
             Token::Array => write!(f, "ARRAY"),
             Token::Enum => write!(f, "ENUM"),
+            Token::Year => write!(f, "YEAR"),
+            Token::Month => write!(f, "MONTH"),
+            Token::Day => write!(f, "DAY"),
             // Aggregate Functions
             Token::Length => write!(f, "LENGTH"),
             Token::Upper => write!(f, "UPPER"),
@@ -368,6 +381,7 @@ impl fmt::Display for Token {
             Token::Curtime => write!(f, "CURTIME"),
             Token::DateAdd => write!(f, "DATE_ADD"),
             Token::DateFormat => write!(f, "DATE_FORMAT"),
+            Token::Extract => write!(f, "EXTRACT"),
             Token::Count => write!(f, "COUNT"),
             Token::Sum => write!(f, "SUM"),
             Token::Avg => write!(f, "AVG"),
@@ -488,6 +502,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "NO OTHERS"
             | "BETWEEN"
             | "IN"
+            | "CASE"
+            | "WHEN"
+            | "THEN"
+            | "ELSE"
             | "PREPARE"
             | "EXECUTE"
             | "DEALLOCATE"
@@ -567,8 +585,14 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "CURRENT ROW" => Some(Token::Current),
         "TIES" => Some(Token::Ties),
         "NO OTHERS" => Some(Token::NoOthers),
+        "DISTINCT" => Some(Token::Distinct),
         "BETWEEN" => Some(Token::Between),
         "IN" => Some(Token::In),
+        "CASE" => Some(Token::Case),
+        "END" => Some(Token::End),
+        "WHEN" => Some(Token::When),
+        "THEN" => Some(Token::Then),
+        "ELSE" => Some(Token::Else),
         "VIEW" => Some(Token::View),
         "AS" => Some(Token::As),
         "EXPLAIN" => Some(Token::Explain),

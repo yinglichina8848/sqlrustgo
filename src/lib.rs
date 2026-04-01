@@ -363,6 +363,26 @@ fn evaluate_where_clause(
             }
             false
         }
+        sqlrustgo_parser::Expression::CaseWhen {
+            conditions,
+            else_result,
+        } => {
+            for (condition, then_result) in conditions {
+                let cond_val = evaluate_expr(condition, row, columns);
+                if let Value::Boolean(true) = cond_val {
+                    let then_val = evaluate_expr(then_result, row, columns);
+                    return then_val.to_bool();
+                }
+            }
+            if let Some(else_expr) = else_result {
+                let else_val = evaluate_expr(else_expr, row, columns);
+                else_val.to_bool()
+            } else {
+                false
+            }
+        }
+        sqlrustgo_parser::Expression::Extract { .. } => false,
+        sqlrustgo_parser::Expression::Substring { .. } => false,
     }
 }
 
@@ -463,6 +483,76 @@ fn evaluate_expr(
                 }
             }
             Value::Boolean(false)
+        }
+        sqlrustgo_parser::Expression::CaseWhen {
+            conditions,
+            else_result,
+        } => {
+            for (condition, then_result) in conditions {
+                let cond_val = evaluate_expr(condition, row, columns);
+                if let Value::Boolean(true) = cond_val {
+                    return evaluate_expr(then_result, row, columns);
+                }
+            }
+            if let Some(else_expr) = else_result {
+                evaluate_expr(else_expr, row, columns)
+            } else {
+                Value::Null
+            }
+        }
+        sqlrustgo_parser::Expression::Extract { field, expr } => {
+            let val = evaluate_expr(expr, row, columns);
+            if let Value::Text(s) = val {
+                let parts: Vec<&str> = s.split('-').collect();
+                if parts.len() == 3 {
+                    match field.as_str() {
+                        "YEAR" => {
+                            if let Ok(y) = parts[0].parse::<i64>() {
+                                return Value::Integer(y);
+                            }
+                        }
+                        "MONTH" => {
+                            if let Ok(m) = parts[1].parse::<i64>() {
+                                return Value::Integer(m);
+                            }
+                        }
+                        "DAY" => {
+                            if let Ok(d) = parts[2].parse::<i64>() {
+                                return Value::Integer(d);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Value::Null
+        }
+        sqlrustgo_parser::Expression::Substring { expr, start, len } => {
+            let val = evaluate_expr(expr, row, columns);
+            let start_val = evaluate_expr(start, row, columns);
+            let result = match (&val, &start_val) {
+                (Value::Text(s), Value::Integer(i)) => {
+                    let start_idx = (*i as isize - 1).max(0) as usize;
+                    if let Some(len_expr) = len {
+                        let len_val = evaluate_expr(len_expr, row, columns);
+                        if let Value::Integer(len_int) = len_val {
+                            let len_usize = (len_int as usize).min(1000000);
+                            Some(
+                                s.chars()
+                                    .skip(start_idx)
+                                    .take(len_usize)
+                                    .collect::<String>(),
+                            )
+                        } else {
+                            None
+                        }
+                    } else {
+                        Some(s.chars().skip(start_idx).collect::<String>())
+                    }
+                }
+                _ => None,
+            };
+            result.map_or(Value::Null, Value::Text)
         }
     }
 }
