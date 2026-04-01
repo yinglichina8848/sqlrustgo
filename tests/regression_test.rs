@@ -141,11 +141,12 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "chaos_test",
                 "crash_recovery_test",
                 "stress_test",
+                "kill_stress_test",
                 "production_scenario_test",
                 "wal_deterministic_test",
                 "wal_fuzz_test",
             ],
-            description: "混沌工程、崩溃恢复、压力测试、WAL确定性测试",
+            description: "混沌工程、崩溃恢复、压力测试、KILL并发测试、WAL确定性测试",
         },
         // 异常测试 - 稳定性
         TestCategory {
