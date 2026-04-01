@@ -371,3 +371,103 @@ fn test_execution_engine_kill_query_via_session() {
     let result = engine.execute(kill_stmt);
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_execution_engine_kill_self_prevention() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Cannot kill self"));
+}
+
+#[test]
+fn test_execution_engine_kill_nonexistent_session() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: 99999,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Unknown thread id"));
+}
+
+#[test]
+fn test_execution_engine_kill_different_user_without_privilege() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id1 = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+    let session_id2 = session_manager.create_session("user2".to_string(), "127.0.0.2".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id1);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id2,
+        kill_type: KillType::Query,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Access denied"));
+}
+
+#[test]
+fn test_execution_engine_kill_connection() {
+    use sqlrustgo::{ExecutionEngine, MemoryStorage};
+    use std::sync::{Arc, RwLock};
+
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let session_manager = Arc::new(SessionManager::new());
+
+    let session_id1 = session_manager.create_session("user1".to_string(), "127.0.0.1".to_string());
+    let session_id2 = session_manager.create_session("user1".to_string(), "127.0.0.2".to_string());
+
+    let mut engine =
+        ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id1);
+
+    let kill_stmt = Statement::Kill(KillStatement {
+        process_id: session_id2,
+        kill_type: KillType::Connection,
+    });
+
+    let result = engine.execute(kill_stmt);
+    assert!(result.is_ok());
+
+    let target_session = session_manager.get_session(session_id2);
+    assert!(target_session.is_some());
+    assert_eq!(target_session.unwrap().status, SessionStatus::Closed);
+}
