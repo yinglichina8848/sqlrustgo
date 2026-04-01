@@ -143,7 +143,7 @@ impl ColumnMasker {
     }
 
     fn mask_full(&self, value: &serde_json::Value) -> serde_json::Value {
-        if let Some(s) = value.as_str() {
+        if let Some(_s) = value.as_str() {
             serde_json::json!("****")
         } else if value.is_number() {
             serde_json::json!(0)
