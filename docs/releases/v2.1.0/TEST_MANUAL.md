@@ -259,6 +259,13 @@ cargo test --test auth_rbac_test
 cargo test --test logging_test
 ```
 
+### 4.4 SQL CLI 测试
+
+```bash
+# SQL CLI UPDATE/DELETE 测试
+cargo test --test sql_cli_test
+```
+
 ---
 
 ## 五、TPC-H 测试
