@@ -17,7 +17,6 @@ use std::time::{Duration, Instant};
 
 const NUM_SESSIONS: usize = 100;
 const OPERATIONS_PER_SESSION: usize = 10;
-const KILL_PROBABILITY: f32 = 0.1;
 
 #[test]
 fn test_concurrent_kill_stress() {
@@ -51,32 +50,28 @@ fn test_concurrent_kill_stress() {
                     ExecutionEngine::new_with_session(storage, session_manager.clone(), session_id);
 
                 for op in 0..OPERATIONS_PER_SESSION {
-                    let use_kill = rand_kill_decision();
+                    let target_idx = (session_id as usize + op + 1) % session_ids.len();
+                    let target_id = session_ids[target_idx];
 
-                    if use_kill && op > 0 {
-                        let target_idx = (session_id as usize + op) % session_ids.len();
-                        let target_id = session_ids[target_idx];
+                    if target_id != session_id && op % 3 == 0 {
+                        kill_count.fetch_add(1, Ordering::SeqCst);
 
-                        if target_id != session_id {
-                            kill_count.fetch_add(1, Ordering::SeqCst);
+                        let kill_stmt = Statement::Kill(KillStatement {
+                            process_id: target_id,
+                            kill_type: if op % 2 == 0 {
+                                KillType::Connection
+                            } else {
+                                KillType::Query
+                            },
+                        });
 
-                            let kill_stmt = Statement::Kill(KillStatement {
-                                process_id: target_id,
-                                kill_type: if op % 2 == 0 {
-                                    KillType::Connection
-                                } else {
-                                    KillType::Query
-                                },
-                            });
-
-                            match engine.execute(kill_stmt) {
-                                Ok(_) => {
-                                    success_count.fetch_add(1, Ordering::SeqCst);
-                                }
-                                Err(e) => {
-                                    error_count.fetch_add(1, Ordering::SeqCst);
-                                    let _ = e;
-                                }
+                        match engine.execute(kill_stmt) {
+                            Ok(_) => {
+                                success_count.fetch_add(1, Ordering::SeqCst);
+                            }
+                            Err(e) => {
+                                error_count.fetch_add(1, Ordering::SeqCst);
+                                let _ = e;
                             }
                         }
                     } else {
@@ -118,15 +113,6 @@ fn test_concurrent_kill_stress() {
         total_kills > 0,
         "Should have attempted at least some KILL operations"
     );
-}
-
-fn rand_kill_decision() -> bool {
-    use std::time::SystemTime;
-    let nanos = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (nanos as f32 / u32::MAX as f32) < KILL_PROBABILITY
 }
 
 #[test]
