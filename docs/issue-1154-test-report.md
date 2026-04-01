@@ -1,13 +1,13 @@
 # Issue #1154 测试报告 - KILL 实现
 
 **日期**: 2026-04-02
-**状态**: Phase 2, 3, 4 完成
+**状态**: Phase 2, 3, 4 全部完成 ✅
 
 ---
 
 ## 1. 概述
 
-本报告记录 Issue #1154 多线程服务器模式 KILL 实现的测试结果，包括 Phase 2、3、4。
+本报告记录 Issue #1154 多线程服务器模式 KILL 实现的完整测试结果。
 
 ## 2. 实现内容
 
@@ -35,10 +35,11 @@
 | handle_client() | 使用 new_with_session() 创建 per-session Engine | ✅ |
 | SecurityIntegration::sessions() | 返回 Arc<SessionManager> | ✅ |
 | execute_server_kill() | 删除（逻辑已移至 Engine） | ✅ |
+| **T4.4 压力测试** | 100 并发连接 + 随机 KILL | ✅ |
 
 ## 3. 测试结果
 
-### 3.1 MySQL 兼容性测试 (mysql_compatibility_test)
+### 3.1 MySQL 兼容性测试 (mysql_compatibility_test) - 26 tests
 
 ```
 running 26 tests
@@ -69,19 +70,37 @@ test test_session_manager_get_active_sessions ... ok
 test test_session_manager_get_user_sessions ... ok
 test test_session_manager_processlist_rows ... ok
 
-test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+test result: ok. 26 passed; 0 failed
 ```
 
-### 3.2 集成测试
+### 3.2 KILL 压力测试 (kill_stress_test) - 8 tests
+
+```
+running 8 tests
+test test_cancel_flag_propagation ... ok
+test test_concurrent_kill_same_target ... ok
+test test_concurrent_kill_stress ... ok
+test test_kill_different_user_requires_privilege ... ok
+test test_kill_own_sessions_allowed ... ok
+test test_no_deadlock_under_concurrent_kill ... ok
+test test_session_state_after_kill_connection ... ok
+test test_session_state_after_kill_query ... ok
+
+test result: ok. 8 passed; 0 failed
+```
+
+### 3.3 集成测试
 
 | 测试套件 | 结果 |
 |----------|------|
-| sql_cli_test (7 tests) | ✅ 全部通过 |
-| teaching_scenario_test (35 tests) | ✅ 全部通过 |
-| local_executor_test (4 tests) | ✅ 全部通过 |
-| server_integration_test (27 tests) | ✅ 全部通过 |
+| mysql_compatibility_test (26 tests) | ✅ |
+| kill_stress_test (8 tests) | ✅ |
+| sql_cli_test (7 tests) | ✅ |
+| teaching_scenario_test (35 tests) | ✅ |
+| local_executor_test (4 tests) | ✅ |
+| server_integration_test (27 tests) | ✅ |
 
-### 3.3 新增测试覆盖
+### 3.4 新增测试覆盖
 
 | 测试名称 | 描述 | 验证点 |
 |----------|------|--------|
@@ -94,6 +113,10 @@ test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 | `test_execution_engine_kill_nonexistent_session` | 不存在会话处理 | KILL 不存在的会话返回错误 |
 | `test_execution_engine_kill_different_user_without_privilege` | 权限检查 | 不同用户无权限时无法 KILL |
 | `test_execution_engine_kill_connection` | KILL CONNECTION | KILL CONNECTION 正确关闭目标会话 |
+| `test_concurrent_kill_stress` | 100 并发 KILL 压力测试 | 100 sessions × 10 ops, 无死锁 |
+| `test_concurrent_kill_same_target` | 多线程同时 KILL 同一目标 | 至少一个成功 |
+| `test_no_deadlock_under_concurrent_kill` | 50 并发无死锁检测 | 30 秒超时保护 |
+| `test_cancel_flag_propagation` | 取消标志传播 | AtomicBool 正确设置后 check_cancelled() 返回错误 |
 
 ## 4. 架构验证
 
@@ -120,7 +143,6 @@ StorageEngine.scan() → check_cancelled() → 返回 "Query cancelled"
 ### 4.2 权限检查
 
 ```rust
-// execute_kill() 中的权限检查逻辑
 let is_own_session = target_session.user == current_session.user;
 if !is_own_session && !current_session.can_kill() {
     return Err("Access denied: need SUPER privilege..."));
@@ -138,34 +160,46 @@ if !is_own_session && !current_session.can_kill() {
 ### 5.1 修改的文件
 
 | 文件 | 变更类型 | 描述 |
-|------|----------|------|
+|------|----------|-------|
 | `Cargo.toml` | 修改 | 添加 sqlrustgo-security 依赖 |
 | `src/lib.rs` | 修改 | ExecutionEngine 增强，添加 KILL 处理 |
 | `crates/storage/src/engine.rs` | 修改 | StorageEngine trait 添加 check_cancelled() |
 | `crates/server/src/main.rs` | 修改 | 服务器使用 per-session Engine |
 | `crates/server/src/security_integration.rs` | 修改 | sessions() 返回 Arc |
 | `tests/integration/mysql_compatibility_test.rs` | 修改 | 添加 9 个新测试 |
+| `tests/stress/kill_stress_test.rs` | 新增 | KILL 压力测试 (8 tests) |
+| `tests/regression_test.rs` | 修改 | 添加 kill_stress_test 到回归测试 |
 
 ### 5.2 新增代码
 
-- `ExecutionEngine::new_with_session()` - 2 Phase
-- `ExecutionEngine::session_id()` - 2 Phase
-- `ExecutionEngine::execute_kill()` - 2 Phase
-- `StorageEngine::check_cancelled()` - 3 Phase
-- 9 个新测试用例 - 2, 3, 4 Phase
+- `ExecutionEngine::new_with_session()` - Phase 2
+- `ExecutionEngine::session_id()` - Phase 2
+- `ExecutionEngine::execute_kill()` - Phase 2
+- `StorageEngine::check_cancelled()` - Phase 3
+- 17 个新测试用例 - Phase 2, 3, 4
 
 ## 6. 回归测试
 
-所有现有测试套件在修改后仍然通过：
+所有测试套件在修改后仍然通过：
 
 ```
-mysql_compatibility_test: 26 passed (新增 9 个)
+mysql_compatibility_test: 26 passed
+kill_stress_test: 8 passed (新增)
 sql_cli_test: 7 passed
 teaching_scenario_test: 35 passed
 local_executor_test: 4 passed
 server_integration_test: 27 passed
+Total: 107 tests passing
 ```
 
 ---
 
-**结论**: Phase 2, 3, 4 实现完成，所有测试通过。代码已准备好进行代码审查。
+## 结论
+
+**Issue #1154 所有 Phase 实现完成**，包括 T4.4 压力测试：
+- Phase 1: Session 状态追踪 ✅
+- Phase 2: ExecutionEngine KILL 集成 ✅
+- Phase 3: 查询取消传播 ✅
+- Phase 4: 服务器集成 + 压力测试 ✅
+
+**代码已准备好进行代码审查并关闭 Issue。**
