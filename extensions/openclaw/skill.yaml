@@ -8,6 +8,9 @@ license: MIT
 endpoints:
   query: POST /query
   nl_query: POST /nl_query
+  explain: POST /explain
+  explain_new: POST /explain/new
+  optimize: POST /optimize
   schema: GET /schema
   stats: GET /stats
   memory:
@@ -16,6 +19,9 @@ endpoints:
     search: POST /memory/search
     clear: POST /memory/clear
     stats: GET /memory/stats
+  policy:
+    check: POST /policy/check
+  mask: POST /mask
 
 tools:
   - name: agentsql_query
@@ -53,6 +59,50 @@ tools:
         type: string
         required: false
         description: Optional specific table
+
+  - name: agentsql_explain
+    description: Get SQL query execution plan
+    input:
+      sql:
+        type: string
+        required: true
+        description: SQL query to explain
+
+  - name: agentsql_optimize
+    description: Get SQL optimization suggestions
+    input:
+      sql:
+        type: string
+        required: true
+        description: SQL query to optimize
+
+  - name: agentsql_policy_check
+    description: Check policy permissions
+    input:
+      user_id:
+        type: string
+        required: true
+        description: User ID
+      resource:
+        type: string
+        required: true
+        description: Resource to check
+      action:
+        type: string
+        required: true
+        description: Action to perform
+
+  - name: agentsql_mask
+    description: Mask sensitive column values
+    input:
+      column:
+        type: string
+        required: true
+        description: Column name
+      value:
+        type: any
+        required: true
+        description: Value to mask
 
   - name: agentsql_memory
     description: Manage agent memory
@@ -100,6 +150,10 @@ capabilities:
   - Table statistics
   - Agent memory management
   - Session-based context
+  - SQL execution plan explanation
+  - SQL optimization suggestions
+  - Policy-based access control
+  - Column-level data masking
 
 use_cases:
   - "Show all users" -> SELECT * FROM users
@@ -107,6 +161,10 @@ use_cases:
   - "Count total products" -> SELECT COUNT(*) FROM products
   - Store and retrieve conversation context
   - Search historical queries and results
+  - Explain query execution plan
+  - Optimize slow SQL queries
+  - Check user permissions for resources
+  - Mask sensitive data like emails and phone numbers
 
 examples:
   - input: "show all users"
@@ -115,3 +173,7 @@ examples:
     output: "SELECT * FROM orders WHERE status = 'active';"
   - input: "what tables exist"
     output: "{ schema: { tables: [...] } }"
+  - input: "explain SELECT * FROM users WHERE id = 1"
+    output: "{ plan: { node_type: 'Select', cost: 10.5, rows: 100 } }"
+  - input: "optimize SELECT * FROM users"
+    output: "{ optimized_sql: 'SELECT * FROM users LIMIT 100', suggestions: [...] }"

@@ -7,12 +7,16 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::column_masking::ColumnMasker;
 use crate::error::AgentSqlError;
+use crate::explain::ExplainService;
 use crate::memory::{
     ClearMemoryRequest, ClearMemoryResponse, LoadMemoryRequest, LoadMemoryResponse, MemoryService,
     SaveMemoryRequest, SaveMemoryResponse,
 };
 use crate::nl2sql::SqlExplanation;
+use crate::optimizer::OptimizerService;
+use crate::policy_engine::PolicyEngine;
 use crate::schema::SchemaService;
 use crate::stats::StatsService;
 
@@ -22,6 +26,10 @@ pub struct AppState {
     pub stats_service: Arc<StatsService>,
     pub nl2sql_service: Arc<crate::nl2sql::Nl2SqlService>,
     pub memory_service: Arc<RwLock<MemoryService>>,
+    pub policy_engine: Arc<PolicyEngine>,
+    pub column_masker: Arc<ColumnMasker>,
+    pub explain_service: Arc<ExplainService>,
+    pub optimizer_service: Arc<OptimizerService>,
 }
 
 #[derive(Serialize)]
@@ -154,12 +162,96 @@ pub async fn handle_memory_stats(
     Json(stats)
 }
 
+#[derive(Deserialize)]
+pub struct PolicyCheckRequestDto {
+    pub user_id: String,
+    pub resource: String,
+    pub action: String,
+}
+
+pub async fn handle_policy_check(
+    State(state): State<AppState>,
+    Json(req): Json<PolicyCheckRequestDto>,
+) -> Json<crate::policy_engine::PolicyCheckResponse> {
+    let request = crate::policy_engine::PolicyCheckRequest {
+        user_id: req.user_id,
+        resource: req.resource,
+        action: req.action,
+        context: None,
+    };
+    let response = state.policy_engine.check(&request);
+    Json(response)
+}
+
+#[derive(Deserialize)]
+pub struct MaskRequestDto {
+    pub column: String,
+    pub value: serde_json::Value,
+}
+
+pub async fn handle_mask_value(
+    State(state): State<AppState>,
+    Json(req): Json<MaskRequestDto>,
+) -> Json<serde_json::Value> {
+    let masked = state.column_masker.mask_value(&req.column, &req.value);
+    Json(masked)
+}
+
+#[derive(Serialize)]
+pub struct ExplainResponseDto {
+    pub plan: serde_json::Value,
+    pub warnings: Vec<String>,
+    pub estimated_cost: f64,
+    pub estimated_rows: u64,
+}
+
+pub async fn handle_explain_new(
+    State(state): State<AppState>,
+    Json(req): Json<ExplainRequest>,
+) -> Json<ExplainResponseDto> {
+    let result = state.explain_service.explain(&req.sql);
+    Json(ExplainResponseDto {
+        plan: serde_json::to_value(&result.plan).unwrap_or(serde_json::Value::Null),
+        warnings: result.warnings,
+        estimated_cost: result.estimated_cost,
+        estimated_rows: result.estimated_rows,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct OptimizeRequestDto {
+    pub sql: String,
+}
+
+#[derive(Serialize)]
+pub struct OptimizeResponseDto {
+    pub original_sql: String,
+    pub optimized_sql: String,
+    pub suggestions: Vec<serde_json::Value>,
+    pub estimated_improvement: serde_json::Value,
+}
+
+pub async fn handle_optimize(
+    State(state): State<AppState>,
+    Json(req): Json<OptimizeRequestDto>,
+) -> Json<OptimizeResponseDto> {
+    let result = state.optimizer_service.optimize(&req.sql);
+    Json(OptimizeResponseDto {
+        original_sql: result.original_sql,
+        optimized_sql: result.optimized_sql,
+        suggestions: result.suggestions.into_iter().map(serde_json::to_value).filter_map(|v| v.ok()).collect(),
+        estimated_improvement: serde_json::to_value(&result.estimated_improvement).unwrap_or(serde_json::Value::Null),
+    })
+}
+
 pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/query", post(handle_query))
         .route("/nl_query", post(handle_nl_query))
         .route("/explain", post(handle_explain))
+        .route("/explain/new", post(handle_explain_new))
+        .route("/optimize", post(handle_optimize))
         .route("/schema", get(get_schema))
         .route("/schema/:table", get(get_table_schema))
         .route("/stats", get(get_stats))
@@ -170,6 +262,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/memory/search", post(handle_search_memory))
         .route("/memory/clear", post(handle_clear_memory))
         .route("/memory/stats", get(handle_memory_stats))
+        .route("/policy/check", post(handle_policy_check))
+        .route("/mask", post(handle_mask_value))
         .with_state(state)
 }
 
@@ -219,12 +313,20 @@ pub async fn start_server(port: u16) -> Result<(), AgentSqlError> {
     let stats_service = Arc::new(StatsService::new());
     let nl2sql_service = Arc::new(crate::nl2sql::Nl2SqlService::new(schema_service.clone()));
     let memory_service = Arc::new(RwLock::new(MemoryService::new()));
+    let policy_engine = Arc::new(PolicyEngine::new());
+    let column_masker = Arc::new(ColumnMasker::new());
+    let explain_service = Arc::new(ExplainService::new());
+    let optimizer_service = Arc::new(OptimizerService::new());
 
     let state = AppState {
         schema_service,
         stats_service,
         nl2sql_service,
         memory_service,
+        policy_engine,
+        column_masker,
+        explain_service,
+        optimizer_service,
     };
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
