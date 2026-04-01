@@ -70,7 +70,6 @@ pub use ddl_executor::DdlExecutor;
 
 // Test framework modules - publicly accessible
 pub mod harness;
-pub mod mock_storage;
 pub mod test_data;
 
 #[cfg(test)]

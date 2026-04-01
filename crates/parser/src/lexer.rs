@@ -308,6 +308,7 @@ impl<'a> Lexer<'a> {
                     "TIES" => Token::Ties,
                     "NO" => Token::NoOthers,
                     "BETWEEN" => Token::Between,
+                    "IN" => Token::In,
                     "WITH" => Token::With,
                     "RECURSIVE" => Token::Recursive,
                     "MERGE" => Token::Merge,
@@ -358,8 +359,29 @@ impl<'a> Lexer<'a> {
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "JSON" => Token::Json,
-                    "DATE" => Token::Date,
-                    "TIMESTAMP" => Token::Timestamp,
+                    "DATE" => {
+                        let pos_before_date = self.position;
+                        self.skip_whitespace();
+                        if !self.is_eof() && self.peek_char() == '\'' {
+                            Token::DateLiteral(self.read_string())
+                        } else {
+                            self.position = pos_before_date;
+                            Token::Date
+                        }
+                    }
+                    "TIMESTAMP" => {
+                        let pos_before_ts = self.position;
+                        self.skip_whitespace();
+                        if !self.is_eof() && self.peek_char() == '\'' {
+                            Token::TimestampLiteral(self.read_string())
+                        } else {
+                            self.position = pos_before_ts;
+                            Token::Timestamp
+                        }
+                    }
+                    "UUID" => Token::Uuid,
+                    "ARRAY" => Token::Array,
+                    "ENUM" => Token::Enum,
                     "LENGTH" => Token::Length,
                     "UPPER" => Token::Upper,
                     "LOWER" => Token::Lower,
@@ -963,5 +985,19 @@ mod tests {
             "TIMESTAMP not found in tokens: {:?}",
             tokens
         );
+    }
+
+    #[test]
+    fn test_lexer_date_literal() {
+        let tokens = tokenize("DATE '2024-01-01'");
+        assert!(matches!(&tokens[0], Token::DateLiteral(s) if s == "2024-01-01"));
+        assert!(matches!(&tokens[1], Token::Eof));
+    }
+
+    #[test]
+    fn test_lexer_timestamp_literal() {
+        let tokens = tokenize("TIMESTAMP '2024-01-01 10:30:00'");
+        assert!(matches!(&tokens[0], Token::TimestampLiteral(s) if s == "2024-01-01 10:30:00"));
+        assert!(matches!(&tokens[1], Token::Eof));
     }
 }
