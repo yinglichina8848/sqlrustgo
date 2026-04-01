@@ -1,3 +1,7 @@
+//! Session Configuration Tests
+//!
+//! Tests for SessionConfig including benchmark mode settings.
+
 use sqlrustgo_executor::session_config::SessionConfig;
 
 #[test]

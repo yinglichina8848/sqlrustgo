@@ -1,8 +1,9 @@
 //! Volcano Executor trait - 统一的查询执行接口
 
 use crate::filter::FilterVolcanoExecutor;
+use crate::window_executor::WindowVolcanoExecutor;
 use sqlrustgo_planner::{PhysicalPlan, Schema};
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_types::{encode_row, RowRef, SqlError, SqlResult, Value};
 use std::any::Any;
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,14 @@ pub trait VolcanoExecutor: Send + Sync {
     fn name(&self) -> &str;
     fn is_initialized(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
+
+    /// Get next row as RowRef (zero-copy access to encoded bytes)
+    ///
+    /// Default implementation returns Ok(None) - executors with efficient
+    /// storage (like SeqScan) should override this.
+    fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
+        Ok(None)
+    }
 }
 
 pub type VolIterator = Box<dyn VolcanoExecutor>;
@@ -60,19 +69,52 @@ pub struct SeqScanVolcanoExecutor {
     storage: std::sync::Arc<dyn Storage>,
     initialized: bool,
     current_idx: usize,
-    rows: Vec<Vec<Value>>,
+    /// Encoded row bytes for zero-copy access
+    row_bytes: Vec<Vec<u8>>,
+    /// Schema for decoding RowRef columns (same as self.schema but separate for RowRef trait)
+    column_types: Vec<sqlrustgo_types::ColumnType>,
 }
 
 impl SeqScanVolcanoExecutor {
     pub fn new(table_name: String, schema: Schema, storage: std::sync::Arc<dyn Storage>) -> Self {
         Self {
             table_name,
-            schema,
+            schema: schema.clone(),
             storage,
             initialized: false,
             current_idx: 0,
-            rows: Vec::new(),
+            row_bytes: Vec::new(),
+            column_types: schema
+                .fields
+                .iter()
+                .map(|f| match f.data_type {
+                    sqlrustgo_planner::DataType::Integer => sqlrustgo_types::ColumnType::Integer,
+                    sqlrustgo_planner::DataType::Float => sqlrustgo_types::ColumnType::Float,
+                    sqlrustgo_planner::DataType::Decimal => sqlrustgo_types::ColumnType::Float,
+                    sqlrustgo_planner::DataType::Text => sqlrustgo_types::ColumnType::Text,
+                    sqlrustgo_planner::DataType::Boolean => sqlrustgo_types::ColumnType::Boolean,
+                    sqlrustgo_planner::DataType::Null => sqlrustgo_types::ColumnType::Null,
+                    sqlrustgo_planner::DataType::Blob => sqlrustgo_types::ColumnType::Blob,
+                    sqlrustgo_planner::DataType::Json => sqlrustgo_types::ColumnType::Text,
+                })
+                .collect(),
         }
+    }
+
+    /// Get next row as RowRef (zero-copy access to encoded bytes)
+    ///
+    /// Returns a reference to the encoded row bytes without cloning.
+    /// The caller can use RowRef::get_column() to access individual columns.
+    pub fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
+        if !self.initialized {
+            return Err(SqlError::ExecutionError("Not initialized".to_string()));
+        }
+        if self.current_idx >= self.row_bytes.len() {
+            return Ok(None);
+        }
+        let row_ref = RowRef::from_bytes(&self.row_bytes[self.current_idx]);
+        self.current_idx += 1;
+        Ok(Some(row_ref))
     }
 }
 
@@ -81,7 +123,9 @@ impl VolcanoExecutor for SeqScanVolcanoExecutor {
         if self.initialized {
             return Ok(());
         }
-        self.rows = self.storage.scan(&self.table_name).unwrap_or_default();
+        // Scan from storage and encode to bytes for zero-copy access
+        let rows = self.storage.scan(&self.table_name).unwrap_or_default();
+        self.row_bytes = rows.iter().map(|r| encode_row(r)).collect();
         self.current_idx = 0;
         self.initialized = true;
         Ok(())
@@ -91,16 +135,17 @@ impl VolcanoExecutor for SeqScanVolcanoExecutor {
         if !self.initialized {
             return Err(SqlError::ExecutionError("Not initialized".to_string()));
         }
-        if self.current_idx >= self.rows.len() {
+        if self.current_idx >= self.row_bytes.len() {
             return Ok(None);
         }
-        let row = self.rows[self.current_idx].clone();
+        // Decode from encoded bytes to Vec<Value>
+        let row_ref = RowRef::from_bytes(&self.row_bytes[self.current_idx]);
         self.current_idx += 1;
-        Ok(Some(row))
+        Ok(Some(row_ref.to_owned_row(&self.column_types)))
     }
 
     fn close(&mut self) -> SqlResult<()> {
-        self.rows.clear();
+        self.row_bytes.clear();
         self.current_idx = 0;
         self.initialized = false;
         Ok(())
@@ -188,6 +233,7 @@ pub struct AggregateVolcanoExecutor {
     child: Box<dyn VolcanoExecutor>,
     group_expr: Vec<sqlrustgo_planner::Expr>,
     aggregate_expr: Vec<sqlrustgo_planner::Expr>,
+    having_expr: Option<sqlrustgo_planner::Expr>,
     schema: Schema,
     input_schema: Schema,
     initialized: bool,
@@ -201,6 +247,7 @@ impl AggregateVolcanoExecutor {
         child: Box<dyn VolcanoExecutor>,
         group_expr: Vec<sqlrustgo_planner::Expr>,
         aggregate_expr: Vec<sqlrustgo_planner::Expr>,
+        having_expr: Option<sqlrustgo_planner::Expr>,
         schema: Schema,
         input_schema: Schema,
     ) -> Self {
@@ -208,6 +255,7 @@ impl AggregateVolcanoExecutor {
             child,
             group_expr,
             aggregate_expr,
+            having_expr,
             schema,
             input_schema,
             initialized: false,
@@ -296,6 +344,122 @@ impl AggregateVolcanoExecutor {
         }
         results
     }
+
+    /// Evaluate a HAVING expression that may contain aggregate functions.
+    /// Returns true if the row passes the HAVING condition, false otherwise.
+    fn evaluate_having_expr(
+        &self,
+        expr: &sqlrustgo_planner::Expr,
+        group_rows: &[Vec<Value>],
+    ) -> bool {
+        match expr {
+            sqlrustgo_planner::Expr::AggregateFunction { func, args, .. } => {
+                // Compute the aggregate value for this group
+                let agg_values: Vec<Value> = group_rows
+                    .iter()
+                    .flat_map(|row| {
+                        if args.is_empty() {
+                            vec![Value::Integer(group_rows.len() as i64)]
+                        } else {
+                            args.iter()
+                                .map(|arg| {
+                                    arg.evaluate(row, &self.input_schema).unwrap_or(Value::Null)
+                                })
+                                .collect()
+                        }
+                    })
+                    .collect();
+
+                let result = match func {
+                    sqlrustgo_planner::AggregateFunction::Count => {
+                        Value::Integer(agg_values.len() as i64)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Sum => {
+                        let mut sum: i64 = 0;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                sum += n;
+                            }
+                        }
+                        Value::Integer(sum)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Avg => {
+                        let mut sum: i64 = 0;
+                        let mut count = 0;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                sum += n;
+                                count += 1;
+                            }
+                        }
+                        if count > 0 {
+                            Value::Integer(sum / count as i64)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    sqlrustgo_planner::AggregateFunction::Min => {
+                        let mut min_val: Option<i64> = None;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                match min_val {
+                                    Some(m) if *n < m => min_val = Some(*n),
+                                    None => min_val = Some(*n),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        min_val.map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                    sqlrustgo_planner::AggregateFunction::Max => {
+                        let mut max_val: Option<i64> = None;
+                        for v in &agg_values {
+                            if let Value::Integer(n) = v {
+                                match max_val {
+                                    Some(m) if *n > m => max_val = Some(*n),
+                                    None => max_val = Some(*n),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        max_val.map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                };
+
+                if let Value::Boolean(b) = result {
+                    b
+                } else {
+                    false
+                }
+            }
+            sqlrustgo_planner::Expr::BinaryExpr { left, op, right } => {
+                let left_val = self.evaluate_having_expr(left, group_rows);
+                let right_val = self.evaluate_having_expr(right, group_rows);
+                // For boolean results from aggregate comparisons like COUNT(*) > 1
+                #[allow(clippy::collapsible_match)]
+                match op {
+                    sqlrustgo_planner::Operator::Gt => left_val & !right_val,
+                    sqlrustgo_planner::Operator::Lt => !left_val & right_val,
+                    sqlrustgo_planner::Operator::GtEq => left_val >= right_val,
+                    sqlrustgo_planner::Operator::LtEq => left_val <= right_val,
+                    sqlrustgo_planner::Operator::Eq => left_val == right_val,
+                    sqlrustgo_planner::Operator::NotEq => left_val != right_val,
+                    sqlrustgo_planner::Operator::And => left_val && right_val,
+                    sqlrustgo_planner::Operator::Or => left_val || right_val,
+                    _ => false,
+                }
+            }
+            #[allow(clippy::collapsible_match)]
+            sqlrustgo_planner::Expr::Literal(val) => {
+                if let sqlrustgo_types::Value::Boolean(b) = val {
+                    *b
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
 }
 
 impl VolcanoExecutor for AggregateVolcanoExecutor {
@@ -338,6 +502,22 @@ impl VolcanoExecutor for AggregateVolcanoExecutor {
             }
             a.len().cmp(&b.len())
         });
+
+        // Apply HAVING filter if present
+        if let Some(ref having_expr) = self.having_expr {
+            let mut keys_to_remove = Vec::new();
+            for key in &self.group_keys {
+                let group_rows = &self.groups[key];
+                if !self.evaluate_having_expr(having_expr, group_rows) {
+                    keys_to_remove.push(key.clone());
+                }
+            }
+            for key in keys_to_remove {
+                self.groups.remove(&key);
+            }
+            self.group_keys.retain(|k| self.groups.contains_key(k));
+        }
+
         self.current_group_idx = 0;
         self.initialized = true;
         Ok(())
@@ -1426,6 +1606,7 @@ impl VolExecutorBuilder {
             "HashJoin" => self.build_hash_join(plan),
             "Sort" => self.build_sort(plan),
             "Limit" => self.build_limit(plan),
+            "Window" => self.build_window(plan),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported plan type: {}",
                 plan.name()
@@ -1550,6 +1731,7 @@ impl VolExecutorBuilder {
             child,
             aggregate.group_expr().clone(),
             aggregate.aggregate_expr().clone(),
+            aggregate.having_expr().clone(),
             plan.schema().clone(),
             children[0].schema().clone(),
         )))
@@ -1592,6 +1774,29 @@ impl VolExecutorBuilder {
             limit,
             offset,
             plan.schema().clone(),
+        )))
+    }
+
+    fn build_window(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
+        let children = plan.children();
+        if children.is_empty() {
+            return Err(SqlError::ExecutionError(
+                "Window has no children".to_string(),
+            ));
+        }
+        let child = self.build(children[0])?;
+        let window_exec = plan
+            .as_any()
+            .downcast_ref::<sqlrustgo_planner::WindowExec>()
+            .ok_or_else(|| SqlError::ExecutionError("Failed to cast to WindowExec".to_string()))?;
+
+        Ok(Box::new(WindowVolcanoExecutor::new(
+            child,
+            window_exec.window_exprs().clone(),
+            plan.schema().clone(),
+            window_exec.input().schema().clone(),
+            window_exec.partition_by().clone(),
+            window_exec.order_by().clone(),
         )))
     }
 }
@@ -2087,8 +2292,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2123,8 +2334,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2145,8 +2362,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let row = exec.next().unwrap();
@@ -2159,7 +2382,7 @@ mod tests {
         let input_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let schema = Schema::new(vec![Field::new("count".to_string(), DataType::Integer)]);
 
-        let exec = AggregateVolcanoExecutor::new(child, vec![], vec![], schema, input_schema);
+        let exec = AggregateVolcanoExecutor::new(child, vec![], vec![], None, schema, input_schema);
         assert_eq!(exec.name(), "Aggregate");
     }
 
@@ -2529,8 +2752,14 @@ mod tests {
             distinct: false,
         }];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();
@@ -2575,8 +2804,14 @@ mod tests {
             },
         ];
 
-        let mut exec =
-            AggregateVolcanoExecutor::new(child, group_expr, aggregate_expr, schema, input_schema);
+        let mut exec = AggregateVolcanoExecutor::new(
+            child,
+            group_expr,
+            aggregate_expr,
+            None,
+            schema,
+            input_schema,
+        );
         exec.init().unwrap();
 
         let rows: Vec<_> = std::iter::from_fn(|| exec.next().unwrap()).collect();

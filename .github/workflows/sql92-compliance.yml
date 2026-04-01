@@ -1,0 +1,62 @@
+name: SQL-92 Compliance Test Suite
+
+on:
+  push:
+    branches: [main, develop/v*]
+  pull_request:
+    branches: [main, develop/v*]
+
+jobs:
+  sql92-compliance:
+    name: SQL-92 Compliance Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-target-
+
+      - name: Build SQLRustGo
+        run: cargo build --all-features --workspace
+
+      - name: Run SQL-92 Compliance Tests
+        run: |
+          cd test/sql92
+          cargo run -- --cases-dir cases --verbose
+
+      - name: Upload compliance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql92-compliance-report
+          path: test/sql92/sql92-compliance-report.md
+          retention-days: 30
+
+      - name: Show test summary
+        run: |
+          echo "## SQL-92 Compliance Test Results" >> $GITHUB_STEP_SUMMARY
+          cat test/sql92/sql92-compliance-report.md >> $GITHUB_STEP_SUMMARY
