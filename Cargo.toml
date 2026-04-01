@@ -114,6 +114,7 @@ sqlrustgo-optimizer.workspace = true
 sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
+sqlrustgo-security.workspace = true
 sqlrustgo-transaction.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
@@ -283,6 +284,10 @@ path = "tests/stress/stress_test.rs"
 [[test]]
 name = "concurrency_stress_test"
 path = "tests/stress/concurrency_stress_test.rs"
+
+[[test]]
+name = "kill_stress_test"
+path = "tests/stress/kill_stress_test.rs"
 
 [[test]]
 name = "chaos_test"
@@ -478,6 +483,10 @@ path = "tests/integration/storage_integration_test.rs"
 [[test]]
 name = "sql_cli_test"
 path = "tests/integration/sql_cli_test.rs"
+
+[[test]]
+name = "tpch_compliance_test"
+path = "tests/integration/tpch_compliance_test.rs"
 
 [[test]]
 name = "agentsql_test"
