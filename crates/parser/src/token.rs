@@ -173,6 +173,9 @@ pub enum Token {
     Json,
     Date,
     Timestamp,
+    Uuid,
+    Array,
+    Enum,
 
     // Operators
     Equal,
@@ -350,6 +353,9 @@ impl fmt::Display for Token {
             Token::Json => write!(f, "JSON"),
             Token::Date => write!(f, "DATE"),
             Token::Timestamp => write!(f, "TIMESTAMP"),
+            Token::Uuid => write!(f, "UUID"),
+            Token::Array => write!(f, "ARRAY"),
+            Token::Enum => write!(f, "ENUM"),
             // Aggregate Functions
             Token::Length => write!(f, "LENGTH"),
             Token::Upper => write!(f, "UPPER"),
@@ -455,6 +461,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "NULL"
             | "DATE"
             | "TIMESTAMP"
+            | "UUID"
+            | "ARRAY"
+            | "ENUM"
             | "TRUE"
             | "FALSE"
             | "AND"
@@ -531,6 +540,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "BLOB" => Some(Token::Blob),
         "DATE" => Some(Token::Date),
         "TIMESTAMP" => Some(Token::Timestamp),
+        "UUID" => Some(Token::Uuid),
+        "ARRAY" => Some(Token::Array),
+        "ENUM" => Some(Token::Enum),
         "AUTO_INCREMENT" | "AUTOINCREMENT" => Some(Token::AutoIncrement),
         "REFERENCES" => Some(Token::References),
         "TRUE" => Some(Token::BooleanLiteral(true)),

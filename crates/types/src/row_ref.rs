@@ -331,6 +331,24 @@ fn binary_encode_value(value: &Value) -> Vec<u8> {
         }
         Value::Date(d) => d.to_le_bytes().to_vec(),
         Value::Timestamp(ts) => ts.to_le_bytes().to_vec(),
+        Value::Uuid(u) => u.to_le_bytes().to_vec(),
+        Value::Array(arr) => {
+            let mut result = Vec::new();
+            result.extend_from_slice(&(arr.len() as u64).to_le_bytes());
+            for item in arr {
+                let item_bytes = binary_encode_value(item);
+                result.extend_from_slice(&(item_bytes.len() as u64).to_le_bytes());
+                result.extend_from_slice(&item_bytes);
+            }
+            result
+        }
+        Value::Enum(idx, name) => {
+            let mut result = Vec::with_capacity(4 + name.len());
+            result.extend_from_slice(&idx.to_le_bytes());
+            result.extend_from_slice(&(name.len() as u64).to_le_bytes());
+            result.extend_from_slice(name.as_bytes());
+            result
+        }
     }
 }
 

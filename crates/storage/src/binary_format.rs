@@ -189,6 +189,27 @@ impl BinaryFormat for Value {
                 result.extend_from_slice(&helpers::write_i64(*ts));
                 result
             }
+            Value::Uuid(u) => {
+                let mut result = vec![8u8]; // type indicator
+                result.extend_from_slice(&u.to_le_bytes());
+                result
+            }
+            Value::Array(arr) => {
+                let mut result = vec![9u8]; // type indicator
+                result.extend_from_slice(&helpers::write_u64(arr.len() as u64));
+                for item in arr {
+                    let item_bytes = item.to_bytes();
+                    result.extend_from_slice(&helpers::write_u64(item_bytes.len() as u64));
+                    result.extend_from_slice(&item_bytes);
+                }
+                result
+            }
+            Value::Enum(idx, name) => {
+                let mut result = vec![10u8]; // type indicator
+                result.extend_from_slice(&helpers::write_i32(*idx));
+                result.extend_from_slice(&helpers::write_string(name));
+                result
+            }
         }
     }
 
@@ -213,6 +234,43 @@ impl BinaryFormat for Value {
             }
             6 => Ok(Value::Date(helpers::read_i32(&data[1..])?)),
             7 => Ok(Value::Timestamp(helpers::read_i64(&data[1..])?)),
+            8 => {
+                // Read UUID: 16 bytes
+                if data.len() < 1 + 16 {
+                    return Err(BinaryFormatError::InsufficientData);
+                }
+                let u = u128::from_le_bytes([
+                    data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+                    data[9], data[10], data[11], data[12], data[13], data[14], data[15], data[16],
+                ]);
+                Ok(Value::Uuid(u))
+            }
+            9 => {
+                // Read Array: length (u64) + elements
+                let arr_len = helpers::read_u64(&data[1..])? as usize;
+                let mut offset = 9;
+                let mut arr = Vec::new();
+                for _ in 0..arr_len {
+                    if offset >= data.len() {
+                        return Err(BinaryFormatError::InsufficientData);
+                    }
+                    let item_len = helpers::read_u64(&data[offset..])? as usize;
+                    offset += 8;
+                    if offset + item_len > data.len() {
+                        return Err(BinaryFormatError::InsufficientData);
+                    }
+                    let item_bytes = &data[offset..offset + item_len];
+                    arr.push(Value::from_bytes(item_bytes)?);
+                    offset += item_len;
+                }
+                Ok(Value::Array(arr))
+            }
+            10 => {
+                // Read Enum: index (i32) + name
+                let idx = helpers::read_i32(&data[1..])?;
+                let name = helpers::read_string(&data[5..])?;
+                Ok(Value::Enum(idx, name))
+            }
             _ => Err(BinaryFormatError::InvalidFormat(format!(
                 "Unknown type indicator: {}",
                 data[0]
