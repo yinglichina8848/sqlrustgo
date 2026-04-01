@@ -94,6 +94,7 @@ sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-agentsql = { path = "crates/agentsql" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
 
@@ -472,3 +473,11 @@ path = "tests/integration/session_config_test.rs"
 [[test]]
 name = "storage_integration_test"
 path = "tests/integration/storage_integration_test.rs"
+
+[[test]]
+name = "sql_cli_test"
+path = "tests/integration/sql_cli_test.rs"
+
+[[test]]
+name = "agentsql_test"
+path = "tests/integration/agentsql_test.rs"
