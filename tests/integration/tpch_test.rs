@@ -117,28 +117,28 @@ mod tests {
     }
 
     /// Test Q6: Filter (similar to Q6 predicate)
-    /// Note: FilterExec has known limitations in current implementation
+    /// Note: FilterExec works correctly with matching schema/data
     #[test]
-    #[ignore] // Ignored due to FilterExec evaluation issues
     fn test_tpch_q6_filter() {
         let storage = MockStorage::with_data("orders", TestDataSet::simple_orders());
         let harness = TestHarness::<MockStorage>::new(storage);
 
+        // Schema must match data layout: [order_id, amount, user_id]
         let schema = create_schema(vec![
             ("order_id", DataType::Integer),
-            ("user_id", DataType::Integer),
             ("amount", DataType::Integer),
+            ("user_id", DataType::Integer),
         ]);
 
         let scan = Box::new(SeqScanExec::new("orders".to_string(), schema.clone()));
 
-        // Filter: amount > 50 (matching some rows in test data)
+        // Filter: amount > 250 (matching rows: 300, 400, 500)
         let filter = Box::new(FilterExec::new(
             scan,
             sqlrustgo_planner::Expr::binary_expr(
                 sqlrustgo_planner::Expr::column("amount"),
                 sqlrustgo_planner::Operator::Gt,
-                sqlrustgo_planner::Expr::literal(Value::Integer(50)),
+                sqlrustgo_planner::Expr::literal(Value::Integer(250)),
             ),
         ));
 
@@ -158,7 +158,8 @@ mod tests {
             result.rows.len()
         );
 
-        assert!(!result.rows.is_empty());
+        // Should return 3 rows: order_id 3 (amount=300), 4 (amount=400), 5 (amount=500)
+        assert_eq!(result.rows.len(), 3);
         assert!(elapsed.as_secs_f64() < 1.0);
     }
 
