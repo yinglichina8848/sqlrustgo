@@ -151,6 +151,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["binary_format_test", "wal_integration_test"],
             description: "二进制格式、WAL集成测试",
         },
+        // 工具测试
+        TestCategory {
+            name: "工具测试 (Tools)",
+            test_files: vec!["physical_backup_test"],
+            description: "物理备份、mysqldump 等工具集成测试",
+        },
     ]
 }
 
