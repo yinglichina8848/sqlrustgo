@@ -546,6 +546,7 @@ fn test_cache_hit_performance() {
         tables: vec!["test".to_string()],
         created_at: Instant::now(),
         size_bytes: 100,
+        last_access: 0,
     };
 
     cache.put(key.clone(), entry, vec!["test".to_string()]);
