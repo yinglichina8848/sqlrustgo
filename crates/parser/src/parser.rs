@@ -613,6 +613,17 @@ pub enum Expression {
         conditions: Vec<(Expression, Expression)>,
         else_result: Option<Box<Expression>>,
     },
+    /// EXTRACT expression: EXTRACT(field FROM date)
+    Extract {
+        field: String,
+        expr: Box<Expression>,
+    },
+    /// SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    Substring {
+        expr: Box<Expression>,
+        start: Box<Expression>,
+        len: Option<Box<Expression>>,
+    },
 }
 
 /// Window frame info parsed from SQL
@@ -930,6 +941,7 @@ impl Parser {
                             name: "(subquery)".to_string(),
                             alias,
                         });
+                        continue;
                     } else {
                         return Err("Expected SELECT in subquery".to_string());
                     }
@@ -940,6 +952,7 @@ impl Parser {
                         alias: None,
                     });
                     self.next();
+                    continue;
                 }
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
@@ -968,11 +981,18 @@ impl Parser {
                             args.push(Expression::Wildcard);
                             self.next();
                         }
-                        Some(Token::Identifier(name)) => {
-                            args.push(Expression::Identifier(name.to_string()));
-                            self.next();
+                        Some(Token::Identifier(_))
+                        | Some(Token::Minus)
+                        | Some(Token::LParen)
+                        | Some(Token::Case) => {
+                            let expr = self.parse_expression()?;
+                            args.push(expr);
                         }
-                        _ => return Err("Expected * or column name in aggregate".to_string()),
+                        _ => {
+                            return Err(
+                                "Expected *, column name, or expression in aggregate".to_string()
+                            );
+                        }
                     }
 
                     self.expect(Token::RParen)?;
@@ -983,6 +1003,7 @@ impl Parser {
                         distinct,
                     };
                     aggregates.push(agg);
+                    continue;
                 }
                 Some(Token::RowNumber)
                 | Some(Token::Rank)
@@ -998,6 +1019,7 @@ impl Parser {
                         name: format!("{:?}", window_expr),
                         alias: None,
                     });
+                    continue;
                 }
                 Some(Token::Identifier(_)) => {
                     let first_name = match self.current() {
@@ -1040,6 +1062,7 @@ impl Parser {
                         name: col_name,
                         alias,
                     });
+                    continue;
                 }
                 Some(Token::Comma) => {
                     self.next();
@@ -1718,6 +1741,16 @@ impl Parser {
                         values,
                     });
                 }
+                // Check for LIKE: expr LIKE pattern
+                if matches!(self.current(), Some(Token::Like)) {
+                    self.next(); // consume LIKE
+                    let pattern = self.parse_arithmetic_expression()?;
+                    return Ok(Expression::BinaryOp(
+                        Box::new(left),
+                        "LIKE".to_string(),
+                        Box::new(pattern),
+                    ));
+                }
                 return Ok(left); // No operator, return simple expression
             }
         };
@@ -1740,7 +1773,7 @@ impl Parser {
         let op = match self.current() {
             Some(Token::Plus) => "+",
             Some(Token::Minus) => "-",
-            Some(Token::Asterisk) => "*",
+            Some(Token::Star) => "*",
             Some(Token::Slash) => "/",
             _ => return Ok(left), // No operator, return simple expression
         };
@@ -1815,6 +1848,14 @@ impl Parser {
                 self.next();
                 self.parse_case_when_expression()
             }
+            Some(Token::Extract) => {
+                self.next();
+                self.parse_extract_expression()
+            }
+            Some(Token::Substring) => {
+                self.next();
+                self.parse_substring_expression()
+            }
             Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
             | Some(Token::Max) => {
                 // Parse aggregate function call for HAVING clause
@@ -1836,15 +1877,18 @@ impl Parser {
                         args.push(Expression::Wildcard);
                         self.next();
                     }
-                    Some(Token::Identifier(name)) => {
-                        args.push(Expression::Identifier(name.to_string()));
-                        self.next();
+                    Some(Token::Identifier(_))
+                    | Some(Token::Minus)
+                    | Some(Token::LParen)
+                    | Some(Token::Case) => {
+                        let expr = self.parse_expression()?;
+                        args.push(expr);
                     }
-                    Some(Token::NumberLiteral(n)) => {
-                        args.push(Expression::Literal(n.clone()));
-                        self.next();
+                    _ => {
+                        return Err(
+                            "Expected *, column name, or expression in aggregate".to_string()
+                        );
                     }
-                    _ => return Err("Expected *, column name, or number in aggregate".to_string()),
                 }
 
                 self.expect(Token::RParen)?;
@@ -1913,6 +1957,38 @@ impl Parser {
         })
     }
 
+    /// Parse EXTRACT expression: EXTRACT(field FROM date)
+    fn parse_extract_expression(&mut self) -> Result<Expression, String> {
+        self.expect(Token::LParen)?;
+        let field = match self.current() {
+            Some(Token::Identifier(name)) => name.to_uppercase(),
+            Some(Token::Year) => "YEAR".to_string(),
+            Some(Token::Month) => "MONTH".to_string(),
+            Some(Token::Day) => "DAY".to_string(),
+            _ => return Err("Expected field name in EXTRACT".to_string()),
+        };
+        self.next();
+        self.expect(Token::From)?;
+        let expr = Box::new(self.parse_expression()?);
+        self.expect(Token::RParen)?;
+        Ok(Expression::Extract { field, expr })
+    }
+
+    /// Parse SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    fn parse_substring_expression(&mut self) -> Result<Expression, String> {
+        self.expect(Token::LParen)?;
+        let expr = Box::new(self.parse_expression()?);
+        self.expect(Token::From)?;
+        let start = Box::new(self.parse_expression()?);
+        let len = if matches!(self.current(), Some(Token::For)) {
+            self.next();
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+        self.expect(Token::RParen)?;
+        Ok(Expression::Substring { expr, start, len })
+    }
     /// Parse a window function: ROW_NUMBER() OVER (...)
     fn parse_window_function(&mut self) -> Result<Expression, String> {
         // Parse function name
@@ -2802,6 +2878,7 @@ impl Parser {
         // Note: This is a simplified implementation that stores raw SQL for now
         while !matches!(self.current(), Some(Token::Identifier(end_str))
                        if end_str.to_uppercase() == "END")
+            && !matches!(self.current(), Some(Token::Eof))
             && self.current().is_some()
         {
             let stmt = match self.current() {
