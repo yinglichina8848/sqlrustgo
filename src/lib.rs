@@ -347,6 +347,22 @@ fn evaluate_where_clause(
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::WindowFunction { .. } => false,
         sqlrustgo_parser::Expression::Placeholder => false,
+        sqlrustgo_parser::Expression::Between { expr, low, high } => {
+            let expr_val = evaluate_expr(expr, row, columns);
+            let low_val = evaluate_expr(low, row, columns);
+            let high_val = evaluate_expr(high, row, columns);
+            compare_values(&expr_val, ">=", &low_val) && compare_values(&expr_val, "<=", &high_val)
+        }
+        sqlrustgo_parser::Expression::InList { expr, values } => {
+            let expr_val = evaluate_expr(expr, row, columns);
+            for value_expr in values {
+                let value = evaluate_expr(value_expr, row, columns);
+                if value == expr_val {
+                    return true;
+                }
+            }
+            false
+        }
     }
 }
 
@@ -426,6 +442,28 @@ fn evaluate_expr(
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
         sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
         sqlrustgo_parser::Expression::Placeholder => Value::Null,
+        sqlrustgo_parser::Expression::Between { expr, low, high } => {
+            let expr_val = evaluate_expr(expr, row, columns);
+            let low_val = evaluate_expr(low, row, columns);
+            let high_val = evaluate_expr(high, row, columns);
+            if compare_values(&expr_val, ">=", &low_val)
+                && compare_values(&expr_val, "<=", &high_val)
+            {
+                Value::Boolean(true)
+            } else {
+                Value::Boolean(false)
+            }
+        }
+        sqlrustgo_parser::Expression::InList { expr, values } => {
+            let expr_val = evaluate_expr(expr, row, columns);
+            for value_expr in values {
+                let value = evaluate_expr(value_expr, row, columns);
+                if value == expr_val {
+                    return Value::Boolean(true);
+                }
+            }
+            Value::Boolean(false)
+        }
     }
 }
 
