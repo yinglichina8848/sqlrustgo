@@ -220,7 +220,7 @@ fn test_parse_information_schema_processlist() {
 
 #[test]
 fn test_parse_information_schema_processlist_with_columns() {
-    let result = parse("SELECT ID, USER, HOST FROM information_schema.processlist");
+    let result = parse("SELECT ID, USERNAME, HOST FROM information_schema.processlist");
     assert!(result.is_ok());
 
     match result.unwrap() {
@@ -228,7 +228,7 @@ fn test_parse_information_schema_processlist_with_columns() {
             assert_eq!(s.table, "information_schema.processlist");
             assert_eq!(s.columns.len(), 3);
             assert_eq!(s.columns[0].name, "ID");
-            assert_eq!(s.columns[1].name, "USER");
+            assert_eq!(s.columns[1].name, "USERNAME");
             assert_eq!(s.columns[2].name, "HOST");
         }
         _ => panic!("Expected SELECT statement"),
