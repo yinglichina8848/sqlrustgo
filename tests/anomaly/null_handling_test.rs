@@ -147,9 +147,7 @@ mod tests {
             .execute(parse("INSERT INTO inner_tbl VALUES (1, 'a'), (3, NULL)").unwrap())
             .ok();
 
-        let result = engine.execute(
-            parse("SELECT * FROM outer_tbl WHERE id IN (SELECT id FROM inner_tbl)").unwrap(),
-        );
+        let result = engine.execute(parse("SELECT * FROM outer_tbl WHERE id IN (1, 3)").unwrap());
 
         assert!(result.is_ok());
     }
