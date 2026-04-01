@@ -11,11 +11,16 @@ pub mod stats;
 
 pub use column_masking::{ColumnMasker, MaskingConfig, MaskingRule, MaskingType};
 pub use error::AgentSqlError;
-pub use explain::{ExplainFormat, ExplainOptions, ExplainResult, ExplainService, ExecutionPlan};
+pub use explain::{ExecutionPlan, ExplainFormat, ExplainOptions, ExplainResult, ExplainService};
 pub use memory::{MemoryEntry, MemoryService, MemoryStats, MemoryType};
 pub use nl2sql::{Nl2SqlService, NlQueryRequest, NlQueryResponse, SqlExplanation};
-pub use optimizer::{OptimizationResult, OptimizationSuggestion, OptimizerService, Priority, SuggestionCategory};
-pub use policy_engine::{ConditionOperator, Policy, PolicyCheckRequest, PolicyCheckResponse, PolicyCondition, PolicyEffect, PolicyEngine};
+pub use optimizer::{
+    OptimizationResult, OptimizationSuggestion, OptimizerService, Priority, SuggestionCategory,
+};
+pub use policy_engine::{
+    ConditionOperator, Policy, PolicyCheckRequest, PolicyCheckResponse, PolicyCondition,
+    PolicyEffect, PolicyEngine,
+};
 
 #[cfg(test)]
 mod tests {
@@ -249,6 +254,9 @@ mod tests {
     fn test_optimizer_select_star() {
         let optimizer = optimizer::OptimizerService::new();
         let result = optimizer.optimize("SELECT * FROM users");
-        assert!(result.suggestions.iter().any(|s| s.id == "avoid_select_star"));
+        assert!(result
+            .suggestions
+            .iter()
+            .any(|s| s.id == "avoid_select_star"));
     }
 }
