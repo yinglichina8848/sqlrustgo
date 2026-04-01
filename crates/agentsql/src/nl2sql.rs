@@ -388,7 +388,7 @@ impl Nl2SqlService {
     pub fn explain_sql(&self, sql: &str) -> SqlExplanation {
         let sql_upper = sql.to_uppercase();
         let mut tables_used = Vec::new();
-        let mut columns_used = Vec::new();
+        let columns_used = Vec::new();
         let mut operations = Vec::new();
 
         let tables = self.schema_service.list_tables();
