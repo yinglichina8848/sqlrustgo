@@ -379,6 +379,9 @@ impl<'a> Lexer<'a> {
                             Token::Timestamp
                         }
                     }
+                    "UUID" => Token::Uuid,
+                    "ARRAY" => Token::Array,
+                    "ENUM" => Token::Enum,
                     "LENGTH" => Token::Length,
                     "UPPER" => Token::Upper,
                     "LOWER" => Token::Lower,

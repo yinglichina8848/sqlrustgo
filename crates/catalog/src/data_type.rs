@@ -27,6 +27,12 @@ pub enum DataType {
     Date,
     /// Timestamp type (microseconds since epoch)
     Timestamp,
+    /// UUID type (128-bit unique identifier)
+    Uuid,
+    /// Array type (variable-length array of elements)
+    Array,
+    /// Enum type (enumeration with allowed values)
+    Enum,
 }
 
 impl DataType {
@@ -41,10 +47,14 @@ impl DataType {
             DataType::Blob => "BLOB",
             DataType::Date => "DATE",
             DataType::Timestamp => "TIMESTAMP",
+            DataType::Uuid => "UUID",
+            DataType::Array => "ARRAY",
+            DataType::Enum => "ENUM",
         }
     }
 
     /// Parse a SQL type name into a DataType
+    /// Note: ARRAY<T> and ENUM(...) are handled specially in the parser
     pub fn parse_sql_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
             "NULL" => Some(DataType::Null),
@@ -55,6 +65,9 @@ impl DataType {
             "BLOB" | "BINARY" | "VARBINARY" => Some(DataType::Blob),
             "DATE" => Some(DataType::Date),
             "TIMESTAMP" | "DATETIME" => Some(DataType::Timestamp),
+            "UUID" => Some(DataType::Uuid),
+            "ARRAY" => Some(DataType::Array),
+            "ENUM" => Some(DataType::Enum),
             _ => None,
         }
     }
@@ -63,13 +76,13 @@ impl DataType {
     pub fn is_valid_for_primary_key(&self) -> bool {
         matches!(
             self,
-            DataType::Integer | DataType::Text | DataType::Boolean | DataType::Date
+            DataType::Integer | DataType::Text | DataType::Boolean | DataType::Date | DataType::Uuid
         )
     }
 
     /// Check if this type supports ordering comparisons
     pub fn is_orderable(&self) -> bool {
-        !matches!(self, DataType::Blob)
+        !matches!(self, DataType::Blob | DataType::Array | DataType::Enum)
     }
 
     /// Check if this type supports equality comparisons

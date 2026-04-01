@@ -869,6 +869,9 @@ fn value_to_json(value: Value) -> serde_json::Value {
         Value::Date(d) => serde_json::json!(d),
         Value::Timestamp(ts) => serde_json::json!(ts),
         Value::Blob(b) => serde_json::json!(base64_encode(&b)),
+        Value::Uuid(u) => serde_json::json!(format!("{:036x}", u)),
+        Value::Array(arr) => serde_json::json!(arr.into_iter().map(value_to_json).collect::<Vec<_>>()),
+        Value::Enum(_, name) => serde_json::json!(name),
     }
 }
 
