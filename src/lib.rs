@@ -1794,12 +1794,30 @@ impl ExecutionEngine {
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
-                let projected_rows: Vec<Vec<Value>> = if is_select_star {
+
+                // IMPORTANT: ORDER BY must happen BEFORE projection
+                // because ORDER BY columns may not be in the SELECT list
+                let rows_for_order = if is_select_star {
                     filtered_rows
                 } else if select.columns.is_empty() {
                     filtered_rows
                 } else {
+                    // Keep full rows for now, projection happens after ORDER BY
                     filtered_rows
+                };
+
+                // Apply ORDER BY before projection
+                let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(rows_for_order, order_by, &columns)
+                } else {
+                    rows_for_order
+                };
+
+                // Apply column projection AFTER sorting
+                let result_rows: Vec<Vec<Value>> = if is_select_star || select.columns.is_empty() {
+                    ordered_rows
+                } else {
+                    ordered_rows
                         .into_iter()
                         .map(|row| {
                             select
@@ -1814,12 +1832,6 @@ impl ExecutionEngine {
                                 .collect()
                         })
                         .collect()
-                };
-
-                let result_rows = if let Some(ref order_by) = select.order_by {
-                    sort_rows_by_order_by(projected_rows, order_by, &columns)
-                } else {
-                    projected_rows
                 };
 
                 Ok(ExecutorResult::new(result_rows, 0))
