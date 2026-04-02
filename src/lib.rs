@@ -1794,9 +1794,7 @@ impl ExecutionEngine {
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
-                let projected_rows: Vec<Vec<Value>> = if is_select_star {
-                    filtered_rows
-                } else if select.columns.is_empty() {
+                let projected_rows: Vec<Vec<Value>> = if is_select_star || select.columns.is_empty() {
                     filtered_rows
                 } else {
                     filtered_rows

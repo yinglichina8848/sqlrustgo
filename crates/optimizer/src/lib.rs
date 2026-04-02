@@ -149,10 +149,8 @@ impl Optimizer for DefaultOptimizer {
                 changed = false;
                 iterations += 1;
                 for rule in &self.rules {
-                    if !self.disabled_rules.contains(rule.name()) {
-                        if rule.apply(plan) {
-                            changed = true;
-                        }
+                    if !self.disabled_rules.contains(rule.name()) && rule.apply(plan) {
+                        changed = true;
                     }
                 }
             }

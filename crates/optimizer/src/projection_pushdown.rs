@@ -4,7 +4,7 @@
 //! reducing I/O and memory usage by reading only required columns.
 
 use crate::Rule;
-use crate::{Expr, Plan, Value};
+use crate::{Expr, Plan};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
