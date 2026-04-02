@@ -16,6 +16,9 @@ pub use sqlrustgo_storage::{
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
+// GMP Document Retrieval Extension
+pub use sqlrustgo_gmp::*;
+
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
