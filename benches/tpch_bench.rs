@@ -4,9 +4,9 @@
 //! It includes data generation and sample TPC-H queries.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
 use sqlrustgo_server::{ConnectionPool, PoolConfig};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 struct LatencyCollector {
@@ -196,7 +196,7 @@ impl TpchDataGenerator {
 
 /// Benchmark TPC-H Q1: Pricing Summary Report Query
 fn bench_tpch_q1(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
     // Create tables
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL, l_returnflag INTEGER, l_shipmode TEXT)").unwrap()).unwrap();
@@ -249,7 +249,7 @@ fn bench_tpch_q1(c: &mut Criterion) {
 
 /// Benchmark TPC-H Q3: Shipping Priority Query
 fn bench_tpch_q3(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
     // Create tables
     engine.execute(parse("CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, o_orderstatus INTEGER, o_orderpriority TEXT, o_totalprice INTEGER, o_orderdate INTEGER)").unwrap()).unwrap();
@@ -304,7 +304,7 @@ fn bench_tpch_q3(c: &mut Criterion) {
 
 /// Benchmark TPC-H Q6: Revenue Growth Query
 fn bench_tpch_q6(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
     // Create table
     engine.execute(parse("CREATE TABLE lineitem (l_orderkey INTEGER, l_partkey INTEGER, l_suppkey REAL, l_quantity REAL, l_extendedprice REAL, l_discount REAL, l_tax REAL)").unwrap()).unwrap();
@@ -347,7 +347,7 @@ fn bench_tpch_q6(c: &mut Criterion) {
 
 /// Benchmark: Simple Aggregation
 fn bench_simple_aggregation(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
     engine
         .execute(parse("CREATE TABLE sales (id INTEGER, amount REAL, category TEXT)").unwrap())
@@ -398,7 +398,7 @@ fn bench_simple_aggregation(c: &mut Criterion) {
 
 /// Benchmark: Simple Join
 fn bench_simple_join(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new(Arc::new(sqlrustgo::MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
     engine
         .execute(parse("CREATE TABLE customers (id INTEGER, name TEXT)").unwrap())
