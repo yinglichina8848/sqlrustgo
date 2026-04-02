@@ -111,6 +111,15 @@ pub trait StorageEngine: Send + Sync {
     /// Insert rows into a table
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
 
+    /// Bulk load from a TPC-H .tbl file (pipe-delimited)
+    /// Returns the number of rows loaded
+    /// Default implementation returns unsupported error
+    fn bulk_load_tbl_file(&mut self, _table_name: &str, _filepath: &str) -> SqlResult<usize> {
+        Err(SqlError::ExecutionError(
+            "bulk_load_tbl_file not supported by this storage backend".to_string(),
+        ))
+    }
+
     /// Delete rows matching a filter
     fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
 
@@ -1232,6 +1241,59 @@ impl MemoryStorage {
 
         self.on_write_complete(table);
         Ok(())
+    }
+
+    pub fn bulk_load_tbl_file(&mut self, table_name: &str, filepath: &str) -> SqlResult<usize> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
+        let file = File::open(filepath).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to open file {}: {}", filepath, e))
+        })?;
+
+        let reader = BufReader::new(file);
+        let mut records: Vec<Record> = Vec::new();
+
+        for line in reader.lines() {
+            let line =
+                line.map_err(|e| SqlError::ExecutionError(format!("Failed to read line: {}", e)))?;
+
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let mut line = line.to_string();
+            if line.ends_with('|') {
+                line.pop();
+            }
+
+            let fields: Vec<Value> = line
+                .split('|')
+                .map(|field| {
+                    let field = field.trim();
+                    if field.is_empty() {
+                        Value::Null
+                    } else if let Ok(i) = field.parse::<i64>() {
+                        Value::Integer(i)
+                    } else if let Ok(f) = field.parse::<f64>() {
+                        Value::Float(f)
+                    } else {
+                        Value::Text(field.to_string())
+                    }
+                })
+                .collect();
+
+            records.push(fields);
+        }
+
+        let count = records.len();
+        self.tables
+            .entry(table_name.to_string())
+            .or_default()
+            .append(&mut records);
+
+        Ok(count)
     }
 }
 
