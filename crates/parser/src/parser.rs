@@ -2531,6 +2531,18 @@ impl Parser {
                                 self.next();
                                 "TEXT".to_string()
                             }
+                            Some(Token::Float) => {
+                                self.next();
+                                "REAL".to_string()
+                            }
+                            Some(Token::Decimal) => {
+                                self.next();
+                                "DECIMAL".to_string()
+                            }
+                            Some(Token::Boolean) => {
+                                self.next();
+                                "BOOLEAN".to_string()
+                            }
                             _ => "INTEGER".to_string(), // default
                         };
 
