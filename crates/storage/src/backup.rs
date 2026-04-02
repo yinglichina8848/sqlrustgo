@@ -95,7 +95,7 @@ impl BackupExporter {
                 format!(
                     "[{}]",
                     arr.iter()
-                        .map(|v| Self::csv_escape(v))
+                        .map(Self::csv_escape)
                         .collect::<Vec<_>>()
                         .join(";")
                 )
@@ -163,7 +163,7 @@ impl BackupExporter {
                 format!(
                     "[{}]",
                     arr.iter()
-                        .map(|v| Self::json_value(v))
+                        .map(Self::json_value)
                         .collect::<Vec<_>>()
                         .join(",")
                 )
@@ -219,7 +219,7 @@ impl BackupExporter {
                 format!(
                     "'{}'",
                     arr.iter()
-                        .map(|v| Self::sql_value(v))
+                        .map(Self::sql_value)
                         .collect::<Vec<_>>()
                         .join(",")
                 )

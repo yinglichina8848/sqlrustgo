@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Display;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -44,6 +45,12 @@ pub struct VersionInfo {
     pub patch: u32,
 }
 
+impl Display for VersionInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
 impl VersionInfo {
     pub fn parse(version: &str) -> Result<Self> {
         let parts: Vec<&str> = version.trim_start_matches('v').split('.').collect();
@@ -55,10 +62,6 @@ impl VersionInfo {
             minor: parts[1].parse().context("Invalid minor version")?,
             patch: parts[2].parse().context("Invalid patch version")?,
         })
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
     }
 
     pub fn can_upgrade_to(&self, target: &VersionInfo) -> bool {
@@ -190,11 +193,7 @@ pub fn check_upgrade(from: &str, to: &str, data_dir: &Path) -> Result<()> {
     let from_ver = VersionInfo::parse(from)?;
     let to_ver = VersionInfo::parse(to)?;
 
-    println!(
-        "Checking upgrade: v{} -> v{}",
-        from_ver.to_string(),
-        to_ver.to_string()
-    );
+    println!("Checking upgrade: v{} -> v{}", from_ver, to_ver);
     println!("Data directory: {}", data_dir.display());
     println!();
 
@@ -222,11 +221,7 @@ pub fn check_upgrade(from: &str, to: &str, data_dir: &Path) -> Result<()> {
 
     println!();
     for step in &plan.migration_steps {
-        let status = if step.executed {
-            "[pending]"
-        } else {
-            "[pending]"
-        };
+        let status = if step.executed { "[x]" } else { "[ ]" };
         println!("  {} {}: {}", status, step.id, step.description);
     }
 
@@ -255,11 +250,7 @@ pub fn execute_upgrade(
     let from_ver = VersionInfo::parse(from)?;
     let to_ver = VersionInfo::parse(to)?;
 
-    println!(
-        "Upgrading: v{} -> v{}",
-        from_ver.to_string(),
-        to_ver.to_string()
-    );
+    println!("Upgrading: v{} -> v{}", from_ver, to_ver);
     println!("Backup directory: {}", backup_dir.display());
     println!("Data directory: {}", data_dir.display());
     println!();
@@ -315,8 +306,8 @@ pub fn execute_upgrade(
     println!();
     println!("✅ UPGRADE COMPLETED SUCCESSFULLY");
     println!();
-    println!("From version: v{}", from_ver.to_string());
-    println!("To version: v{}", to_ver.to_string());
+    println!("From version: v{}", from_ver);
+    println!("To version: v{}", to_ver);
     println!("Backup location: {}", backup_dir.display());
 
     if !skip_backup {
@@ -338,7 +329,7 @@ pub fn execute_rollback(backup_dir: &Path, target: &str, data_dir: &Path) -> Res
 
     let target_ver = VersionInfo::parse(target)?;
 
-    println!("Rolling back to: v{}", target_ver.to_string());
+    println!("Rolling back to: v{}", target_ver);
     println!("Backup directory: {}", backup_dir.display());
     println!("Data directory: {}", data_dir.display());
     println!();
@@ -365,7 +356,7 @@ pub fn execute_rollback(backup_dir: &Path, target: &str, data_dir: &Path) -> Res
     println!();
     println!("✅ ROLLBACK COMPLETED SUCCESSFULLY");
     println!();
-    println!("Rolled back to version: v{}", target_ver.to_string());
+    println!("Rolled back to version: v{}", target_ver);
 
     Ok(())
 }
@@ -568,11 +559,7 @@ fn run_migrations(migration_dir: &Path, from: &VersionInfo, to: &VersionInfo) ->
 
 fn generate_migration_sql(from: &VersionInfo, to: &VersionInfo) -> String {
     let mut sql = String::new();
-    sql.push_str(&format!(
-        "-- SQLRustGo Migration: v{} -> v{}\n",
-        from.to_string(),
-        to.to_string()
-    ));
+    sql.push_str(&format!("-- SQLRustGo Migration: v{} -> v{}\n", from, to));
     sql.push_str(&format!("-- Generated at: {}\n\n", chrono_lite_timestamp()));
 
     if from.minor < to.minor {
@@ -592,7 +579,7 @@ fn generate_migration_sql(from: &VersionInfo, to: &VersionInfo) -> String {
 fn update_metadata(data_dir: &Path, version: &VersionInfo) -> Result<()> {
     let version_file = data_dir.join(".version");
     fs::write(&version_file, version.to_string())?;
-    println!("  Version updated to: v{}", version.to_string());
+    println!("  Version updated to: v{}", version);
     Ok(())
 }
 
@@ -621,7 +608,7 @@ fn validate_backup(backup_dir: &Path) -> Result<()> {
 }
 
 fn restore_from_backup(backup_dir: &Path, data_dir: &Path) -> Result<()> {
-    let data_subdir = backup_dir.join("data_*");
+    let _data_subdir = backup_dir.join("data_*");
     let entries: Vec<_> = fs::read_dir(backup_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| e.path().to_string_lossy().starts_with("data_"))

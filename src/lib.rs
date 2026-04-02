@@ -1768,7 +1768,7 @@ impl ExecutionEngine {
             KillType::Connection => {
                 session_manager
                     .kill_session(target_session_id)
-                    .map_err(|e| SqlError::ExecutionError(e))?;
+                    .map_err(SqlError::ExecutionError)?;
                 Ok(ExecutorResult::new(
                     vec![vec![Value::Text(format!(
                         "CONNECTION {} executed",
@@ -1780,7 +1780,7 @@ impl ExecutionEngine {
             KillType::Query => {
                 session_manager
                     .kill_query(target_session_id)
-                    .map_err(|e| SqlError::ExecutionError(e))?;
+                    .map_err(SqlError::ExecutionError)?;
                 Ok(ExecutorResult::new(
                     vec![vec![Value::Text(format!(
                         "QUERY {} executed",
