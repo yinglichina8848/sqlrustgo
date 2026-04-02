@@ -664,18 +664,24 @@ fn compute_aggregate(
 ) -> Value {
     use sqlrustgo_parser::parser::AggregateFunction;
 
-    // Get the column index for the aggregate argument
+    // Get the column index for simple column references, or None for complex expressions
     let col_idx: Option<usize> = if agg.args.is_empty() {
-        // COUNT(*) has no arguments
         None
     } else {
         match &agg.args[0] {
             sqlrustgo_parser::Expression::Identifier(name) => columns
                 .iter()
                 .position(|c| c.name.eq_ignore_ascii_case(name)),
-            sqlrustgo_parser::Expression::Wildcard => Some(0), // Will be ignored for COUNT
+            sqlrustgo_parser::Expression::Wildcard => Some(0),
             _ => None,
         }
+    };
+
+    // For complex expressions, we need to evaluate them per row
+    let arg_expr = if agg.args.is_empty() {
+        None
+    } else {
+        Some(&agg.args[0])
     };
 
     match agg.func {
@@ -686,17 +692,20 @@ fn compute_aggregate(
                     Some(sqlrustgo_parser::Expression::Wildcard)
                 )
             {
-                // COUNT(*) - count all rows
                 Value::Integer(rows.len() as i64)
             } else {
-                // COUNT(column) - count non-null values
                 let mut count = 0i64;
                 for row in rows {
-                    if let Some(idx) = col_idx {
-                        if let Some(val) = row.get(idx) {
-                            if *val != Value::Null {
-                                count += 1;
-                            }
+                    let val = if let Some(idx) = col_idx {
+                        row.get(idx).cloned()
+                    } else if let Some(expr) = arg_expr {
+                        Some(evaluate_expr(expr, row, columns))
+                    } else {
+                        None
+                    };
+                    if let Some(val) = val {
+                        if val != Value::Null {
+                            count += 1;
                         }
                     }
                 }
@@ -706,13 +715,18 @@ fn compute_aggregate(
         AggregateFunction::Sum => {
             let mut sum = 0i64;
             for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if let Value::Integer(n) = val {
-                            sum += n;
-                        } else if let Value::Float(n) = val {
-                            sum += *n as i64;
-                        }
+                let val = if let Some(idx) = col_idx {
+                    row.get(idx).cloned()
+                } else if let Some(expr) = arg_expr {
+                    Some(evaluate_expr(expr, row, columns))
+                } else {
+                    None
+                };
+                if let Some(val) = val {
+                    if let Value::Integer(n) = val {
+                        sum += n;
+                    } else if let Value::Float(n) = val {
+                        sum += n as i64;
                     }
                 }
             }
@@ -722,15 +736,20 @@ fn compute_aggregate(
             let mut sum = 0.0f64;
             let mut count = 0i64;
             for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if let Value::Integer(n) = val {
-                            sum += *n as f64;
-                            count += 1;
-                        } else if let Value::Float(n) = val {
-                            sum += *n;
-                            count += 1;
-                        }
+                let val = if let Some(idx) = col_idx {
+                    row.get(idx).cloned()
+                } else if let Some(expr) = arg_expr {
+                    Some(evaluate_expr(expr, row, columns))
+                } else {
+                    None
+                };
+                if let Some(val) = val {
+                    if let Value::Integer(n) = val {
+                        sum += n as f64;
+                        count += 1;
+                    } else if let Value::Float(n) = val {
+                        sum += n;
+                        count += 1;
                     }
                 }
             }
@@ -743,15 +762,20 @@ fn compute_aggregate(
         AggregateFunction::Min => {
             let mut min: Option<Value> = None;
             for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if *val != Value::Null {
-                            match &min {
-                                None => min = Some(val.clone()),
-                                Some(m) => {
-                                    if val < m {
-                                        min = Some(val.clone());
-                                    }
+                let val = if let Some(idx) = col_idx {
+                    row.get(idx).cloned()
+                } else if let Some(expr) = arg_expr {
+                    Some(evaluate_expr(expr, row, columns))
+                } else {
+                    None
+                };
+                if let Some(val) = val {
+                    if val != Value::Null {
+                        match &min {
+                            None => min = Some(val.clone()),
+                            Some(m) => {
+                                if val < *m {
+                                    min = Some(val.clone());
                                 }
                             }
                         }
@@ -763,15 +787,20 @@ fn compute_aggregate(
         AggregateFunction::Max => {
             let mut max: Option<Value> = None;
             for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if *val != Value::Null {
-                            match &max {
-                                None => max = Some(val.clone()),
-                                Some(m) => {
-                                    if val > m {
-                                        max = Some(val.clone());
-                                    }
+                let val = if let Some(idx) = col_idx {
+                    row.get(idx).cloned()
+                } else if let Some(expr) = arg_expr {
+                    Some(evaluate_expr(expr, row, columns))
+                } else {
+                    None
+                };
+                if let Some(val) = val {
+                    if val != Value::Null {
+                        match &max {
+                            None => max = Some(val.clone()),
+                            Some(m) => {
+                                if val > *m {
+                                    max = Some(val.clone());
                                 }
                             }
                         }
