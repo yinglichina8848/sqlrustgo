@@ -156,6 +156,9 @@ fn setup_sqlite_data(conn: &Connection) {
         "3, 2, 2, 1, 25, 25000.00, 0.03, 2.0, 'A', 'F', '1995-02-10', '1995-02-08', '1995-02-15', 'NONE', 'AIR', 'comment5'",
         "4, 3, 3, 1, 10, 10000.00, 0.06, 0.8, 'N', 'O', '1995-02-20', '1995-02-18', '1995-02-25', 'NONE', 'SHIP', 'comment6'",
         "5, 1, 1, 1, 12, 12000.00, 0.04, 0.96, 'R', 'F', '1995-03-05', '1995-03-03', '1995-03-10', 'NONE', 'AIR', 'comment7'",
+        "6, 2, 1, 1, 30, 30000.00, 0.05, 1.5, 'N', 'O', '1995-09-15', '1995-09-01', '1995-09-20', 'NONE', 'AIR', 'comment8'",
+        "7, 2, 2, 1, 25, 25000.00, 0.10, 1.25, 'N', 'O', '1995-09-10', '1995-09-05', '1995-09-15', 'NONE', 'TRUCK', 'comment9'",
+        "8, 1, 1, 1, 10, 10000.00, 0.03, 0.3, 'N', 'O', '1995-09-20', '1995-09-10', '1995-09-25', 'NONE', 'SHIP', 'comment10'",
     ];
 
     for data in lineitem_data {
@@ -281,6 +284,10 @@ fn insert_sqlrustgo_data(engine: &mut ExecutionEngine) {
     engine.execute(parse("INSERT INTO lineitem VALUES (3, 2, 2, 1, 25, 25000.00, 0.03, 2.0, 'A', 'F', '1995-02-10', '1995-02-08', '1995-02-15', 'NONE', 'AIR', 'comment5')").unwrap()).unwrap();
     engine.execute(parse("INSERT INTO lineitem VALUES (4, 3, 3, 1, 10, 10000.00, 0.06, 0.8, 'N', 'O', '1995-02-20', '1995-02-18', '1995-02-25', 'NONE', 'SHIP', 'comment6')").unwrap()).unwrap();
     engine.execute(parse("INSERT INTO lineitem VALUES (5, 1, 1, 1, 12, 12000.00, 0.04, 0.96, 'R', 'F', '1995-03-05', '1995-03-03', '1995-03-10', 'NONE', 'AIR', 'comment7')").unwrap()).unwrap();
+    // Q14 test data - 9月份数据用于测试 CASE WHEN
+    engine.execute(parse("INSERT INTO lineitem VALUES (6, 2, 1, 1, 30, 30000.00, 0.05, 1.5, 'N', 'O', '1995-09-15', '1995-09-01', '1995-09-20', 'NONE', 'AIR', 'comment8')").unwrap()).unwrap();
+    engine.execute(parse("INSERT INTO lineitem VALUES (7, 2, 2, 1, 25, 25000.00, 0.10, 1.25, 'N', 'O', '1995-09-10', '1995-09-05', '1995-09-15', 'NONE', 'TRUCK', 'comment9')").unwrap()).unwrap();
+    engine.execute(parse("INSERT INTO lineitem VALUES (8, 1, 1, 1, 10, 10000.00, 0.03, 0.3, 'N', 'O', '1995-09-20', '1995-09-10', '1995-09-25', 'NONE', 'SHIP', 'comment10')").unwrap()).unwrap();
 }
 
 fn setup_sqlrustgo_engine() -> ExecutionEngine {
