@@ -1615,26 +1615,59 @@ impl ExecutionEngine {
             }
             Statement::Select(select) => {
                 let storage = self.storage.read().unwrap();
-                if !storage.has_table(&select.table) {
-                    return Err(SqlError::ExecutionError(format!(
-                        "Table '{}' not found",
-                        select.table
-                    )));
-                }
-                let table_info = storage.get_table_info(&select.table).ok();
-                let columns = table_info
-                    .map(|info| info.columns.clone())
-                    .unwrap_or_default();
-                let rows = storage.scan(&select.table).unwrap_or_default();
 
-                // Apply WHERE clause filter if present
+                let tables = if select.tables.is_empty() {
+                    vec![select.table.clone()]
+                } else {
+                    select.tables.clone()
+                };
+
+                for table_name in &tables {
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+                }
+
+                let mut all_columns: Vec<sqlrustgo_storage::ColumnDefinition> = Vec::new();
+                let mut all_rows: Vec<Vec<Value>> = vec![vec![]];
+
+                for table_name in &tables {
+                    let table_info = storage.get_table_info(table_name).ok();
+                    if let Some(info) = table_info {
+                        for col in &info.columns {
+                            all_columns.push(col.clone());
+                        }
+                    }
+                    let rows = storage.scan(table_name).unwrap_or_default();
+
+                    let new_all_rows: Vec<Vec<Value>> = all_rows
+                        .iter()
+                        .flat_map(|existing_row| {
+                            rows.iter()
+                                .map(|row| {
+                                    let mut combined = existing_row.clone();
+                                    combined.extend(row.clone());
+                                    combined
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+                    all_rows = new_all_rows;
+                }
+
+                let columns = all_columns.clone();
+
                 let filtered_rows: Vec<Vec<Value>> =
                     if let Some(ref where_clause) = select.where_clause {
-                        rows.into_iter()
+                        all_rows
+                            .into_iter()
                             .filter(|row| evaluate_where_clause(where_clause, row, &columns))
                             .collect()
                     } else {
-                        rows
+                        all_rows
                     };
 
                 // Handle aggregates if present

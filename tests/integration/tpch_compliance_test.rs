@@ -466,7 +466,25 @@ fn test_tpch_compliance_report() {
                 let data: Vec<Vec<String>> = r
                     .rows
                     .iter()
-                    .map(|row| row.iter().map(|v| format!("{:?}", v)).collect())
+                    .map(|row| {
+                        row.iter()
+                            .map(|v| match v {
+                                sqlrustgo_types::Value::Null => "NULL".to_string(),
+                                sqlrustgo_types::Value::Integer(i) => i.to_string(),
+                                sqlrustgo_types::Value::Float(f) => f.to_string(),
+                                sqlrustgo_types::Value::Text(s) => s.clone(),
+                                sqlrustgo_types::Value::Boolean(b) => b.to_string(),
+                                sqlrustgo_types::Value::Blob(b) => format!("BLOB[{}]", b.len()),
+                                sqlrustgo_types::Value::Timestamp(ts) => ts.to_string(),
+                                sqlrustgo_types::Value::Uuid(u) => u.to_string(),
+                                sqlrustgo_types::Value::Array(arr) => format!("{:?}", arr),
+                                sqlrustgo_types::Value::Enum(idx, name) => {
+                                    format!("{}:{}", idx, name)
+                                }
+                                sqlrustgo_types::Value::Date(d) => d.to_string(),
+                            })
+                            .collect()
+                    })
                     .collect();
                 result.set_sqlrustgo_result(true, r.rows.len(), data, None);
             }
