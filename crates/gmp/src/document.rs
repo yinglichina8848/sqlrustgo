@@ -3,9 +3,8 @@
 //! Defines document tables and management functions for the GMP extension.
 //! Documents are versioned, typed, and can have multiple sections and keywords.
 
-use sqlrustgo_types::{SqlError, SqlResult, Value};
+use sqlrustgo_types::{SqlResult, Value};
 use sqlrustgo_storage::{StorageEngine, ColumnDefinition};
-use std::sync::{Arc, RwLock};
 
 /// Document status enum
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +25,7 @@ impl DocStatus {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "DRAFT" => Some(DocStatus::Draft),
@@ -363,21 +363,26 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
     Ok(())
 }
 
+/// Builder struct for inserting a new document
+pub struct NewDocument<'a> {
+    pub title: &'a str,
+    pub doc_type: &'a str,
+    pub version: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub effective_date: i32,
+    pub status: DocStatus,
+}
+
 /// Insert a document into the storage engine
 pub fn insert_document(
     storage: &mut dyn StorageEngine,
-    title: &str,
-    doc_type: &str,
-    version: i32,
-    created_at: i64,
-    updated_at: i64,
-    effective_date: i32,
-    status: DocStatus,
+    doc: NewDocument,
 ) -> SqlResult<i64> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
-        .unwrap_or(updated_at);
+        .unwrap_or(doc.updated_at);
 
     // Get the next auto-increment id BEFORE inserting
     let rows = storage.scan(TABLE_DOCUMENTS)?;
@@ -392,13 +397,13 @@ pub fn insert_document(
 
     let row = vec![
         Value::Integer(next_id),
-        Value::Text(title.to_string()),
-        Value::Text(doc_type.to_string()),
-        Value::Integer(version as i64),
-        Value::Integer(created_at.max(now)),
-        Value::Integer(updated_at.max(now)),
-        Value::Integer(effective_date as i64),
-        Value::Text(status.as_str().to_string()),
+        Value::Text(doc.title.to_string()),
+        Value::Text(doc.doc_type.to_string()),
+        Value::Integer(doc.version as i64),
+        Value::Integer(doc.created_at.max(now)),
+        Value::Integer(doc.updated_at.max(now)),
+        Value::Integer(doc.effective_date as i64),
+        Value::Text(doc.status.as_str().to_string()),
     ];
 
     storage.insert(TABLE_DOCUMENTS, vec![row])?;
@@ -578,13 +583,15 @@ mod tests {
 
         let doc_id = insert_document(
             &mut storage,
-            "Employee Handbook",
-            "HANDBOOK",
-            1,
-            now,
-            now,
-            19000,
-            DocStatus::Active,
+            NewDocument {
+                title: "Employee Handbook",
+                doc_type: "HANDBOOK",
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: 19000,
+                status: DocStatus::Active,
+            },
         )
         .unwrap();
 

@@ -114,7 +114,7 @@ impl EmbeddingModel for HashEmbeddingModel {
         for (i, val) in embedding.iter_mut().enumerate() {
             // Use multiple hash functions for each dimension
             let h1 = self.hash_string(&format!("{}_{}", i, "x"));
-            let h2 = self.hash_string(&format!("{}_{}", i, "y"));
+            let _h2 = self.hash_string(&format!("{}_{}", i, "y"));
 
             let mut combined_hash: u64 = 0;
             for token in &tokens {
@@ -179,7 +179,7 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
 
 /// Global default embedding model instance
 pub static DEFAULT_MODEL: std::sync::LazyLock<HashEmbeddingModel> =
-    std::sync::LazyLock::new(|| HashEmbeddingModel::default());
+    std::sync::LazyLock::new(HashEmbeddingModel::default);
 
 /// Generate embedding using the default model
 pub fn generate_embedding(text: &str) -> Vec<f32> {

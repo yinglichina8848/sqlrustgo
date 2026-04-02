@@ -4,7 +4,7 @@
 //! Searches document embeddings using cosine similarity.
 
 use crate::embedding::{
-    cosine_similarity, generate_embedding, DocumentEmbedding, EmbeddingModel,
+    cosine_similarity, DocumentEmbedding, EmbeddingModel,
     HashEmbeddingModel, TABLE_EMBEDDINGS,
 };
 use crate::document::{TABLE_DOCUMENTS, Document};
@@ -286,7 +286,8 @@ pub fn hybrid_search(
 mod tests {
     use super::*;
     use sqlrustgo_storage::MemoryStorage;
-    use crate::document::{create_gmp_tables, insert_document, DocStatus};
+    use crate::document::{create_gmp_tables, insert_document, DocStatus, NewDocument};
+    use crate::embedding::generate_embedding;
 
     #[test]
     fn test_vector_search() {
@@ -301,20 +302,44 @@ mod tests {
 
         // Insert some documents
         let doc1_id = insert_document(
-            &mut storage, "Rust Programming Guide",
-            "GUIDE", 1, now, now, 19000, DocStatus::Active,
+            &mut storage,
+            NewDocument {
+                title: "Rust Programming Guide",
+                doc_type: "GUIDE",
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: 19000,
+                status: DocStatus::Active,
+            },
         )
         .unwrap();
 
         let doc2_id = insert_document(
-            &mut storage, "Python Tutorial",
-            "TUTORIAL", 1, now, now, 19000, DocStatus::Active,
+            &mut storage,
+            NewDocument {
+                title: "Python Tutorial",
+                doc_type: "TUTORIAL",
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: 19000,
+                status: DocStatus::Active,
+            },
         )
         .unwrap();
 
         let doc3_id = insert_document(
-            &mut storage, "Database Design Patterns",
-            "BOOK", 1, now, now, 19000, DocStatus::Active,
+            &mut storage,
+            NewDocument {
+                title: "Database Design Patterns",
+                doc_type: "BOOK",
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: 19000,
+                status: DocStatus::Active,
+            },
         )
         .unwrap();
 
@@ -346,8 +371,16 @@ mod tests {
             .as_secs() as i64;
 
         let doc_id = insert_document(
-            &mut storage, "Rust Programming Guide",
-            "GUIDE", 1, now, now, 19000, DocStatus::Active,
+            &mut storage,
+            NewDocument {
+                title: "Rust Programming Guide",
+                doc_type: "GUIDE",
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: 19000,
+                status: DocStatus::Active,
+            },
         )
         .unwrap();
 
