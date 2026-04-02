@@ -28,6 +28,7 @@ members = [
     "crates/test-runner",
     "crates/test-results",
     "crates/test-reporter",
+    "crates/gmp",
     "test/sql92",
 ]
 
@@ -53,6 +54,7 @@ sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
 sqlrustgo-network = { path = "crates/network" }
+sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
 
 # External dependencies
@@ -95,6 +97,7 @@ sqlrustgo-server = { path = "crates/server" }
 sqlrustgo-transaction = { path = "crates/transaction" }
 sqlrustgo-security = { path = "crates/security" }
 sqlrustgo-telemetry = { path = "crates/telemetry" }
+sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
 
