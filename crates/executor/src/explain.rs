@@ -379,6 +379,24 @@ impl ExplainExecutor {
                     self.format_exprs(values)
                 )
             }
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                let mut s = "CASE ".to_string();
+                for (cond, result) in conditions {
+                    s.push_str(&format!(
+                        "WHEN {} THEN {} ",
+                        self.format_expr(cond),
+                        self.format_expr(result)
+                    ));
+                }
+                if let Some(else_expr) = else_result {
+                    s.push_str(&format!("ELSE {} ", self.format_expr(else_expr)));
+                }
+                s.push_str("END");
+                s
+            }
         }
     }
 
