@@ -760,6 +760,94 @@ fn compute_aggregate(
     }
 }
 
+/// Evaluate a GROUP BY key expression to a Value
+fn evaluate_group_by_expr(
+    expr: &sqlrustgo_parser::Expression,
+    row: &[Value],
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<Value> {
+    match expr {
+        sqlrustgo_parser::Expression::Identifier(name) => columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(name))
+            .and_then(|idx| row.get(idx).cloned()),
+        sqlrustgo_parser::Expression::QualifiedColumn(table_name, col_name) => {
+            // Find the column position for qualified column
+            columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                .and_then(|idx| row.get(idx).cloned())
+        }
+        sqlrustgo_parser::Expression::Literal(s) => {
+            if let Ok(n) = s.parse::<i64>() {
+                Some(Value::Integer(n))
+            } else if let Ok(n) = s.parse::<f64>() {
+                Some(Value::Float(n))
+            } else {
+                Some(Value::Text(s.clone()))
+            }
+        }
+        sqlrustgo_parser::Expression::Wildcard => Some(Value::Text("*".to_string())),
+        sqlrustgo_parser::Expression::Extract { field, expr } => {
+            let expr_val = evaluate_group_by_expr(expr, row, columns)?;
+            if let Value::Text(s) = expr_val {
+                let date_part = match field.to_uppercase().as_str() {
+                    "YEAR" => s.chars().take(4).collect::<String>(),
+                    "MONTH" => s.chars().skip(5).take(2).collect::<String>(),
+                    "DAY" => s.chars().skip(8).take(2).collect::<String>(),
+                    _ => s,
+                };
+                date_part.parse::<i64>().ok().map(Value::Integer)
+            } else {
+                None
+            }
+        }
+        sqlrustgo_parser::Expression::Substring { expr, start, len } => {
+            let expr_val = evaluate_group_by_expr(expr, row, columns)?;
+            let start_val = evaluate_group_by_expr(start, row, columns)?;
+            let len_val = len
+                .as_ref()
+                .and_then(|l| evaluate_group_by_expr(l, row, columns));
+
+            if let Value::Text(s) = expr_val {
+                let start_idx = if let Value::Integer(n) = start_val {
+                    n as usize
+                } else {
+                    1
+                };
+                let len_usize = if let Some(Value::Integer(n)) = len_val {
+                    n as usize
+                } else {
+                    s.len()
+                };
+                Some(Value::Text(
+                    s.chars().skip(start_idx - 1).take(len_usize).collect(),
+                ))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Evaluate GROUP BY key (combination of all GROUP BY columns) from a row
+fn evaluate_group_by_key(
+    group_by: &sqlrustgo_parser::parser::GroupByClause,
+    row: &[Value],
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<Vec<Value>> {
+    let mut key = Vec::new();
+    for expr in &group_by.columns {
+        if let Some(val) = evaluate_group_by_expr(expr, row, columns) {
+            key.push(val);
+        } else {
+            return None;
+        }
+    }
+    Some(key)
+}
+
 pub struct ExecutionEngine {
     pub storage: Arc<RwLock<dyn StorageEngine>>,
     session_manager: Option<Arc<sqlrustgo_security::SessionManager>>,
@@ -874,6 +962,7 @@ impl ExecutionEngine {
                                                     } else if upper == "FLOAT"
                                                         || upper == "DOUBLE"
                                                         || upper == "DECIMAL"
+                                                        || upper == "REAL"
                                                     {
                                                         if let Ok(n) = value.parse::<f64>() {
                                                             Value::Float(n)
@@ -934,6 +1023,7 @@ impl ExecutionEngine {
                                                         } else if upper == "FLOAT"
                                                             || upper == "DOUBLE"
                                                             || upper == "DECIMAL"
+                                                            || upper == "REAL"
                                                         {
                                                             if let Ok(n) = value.parse::<f64>() {
                                                                 Value::Float(n)
@@ -1525,36 +1615,101 @@ impl ExecutionEngine {
             }
             Statement::Select(select) => {
                 let storage = self.storage.read().unwrap();
-                if !storage.has_table(&select.table) {
-                    return Err(SqlError::ExecutionError(format!(
-                        "Table '{}' not found",
-                        select.table
-                    )));
-                }
-                let table_info = storage.get_table_info(&select.table).ok();
-                let columns = table_info
-                    .map(|info| info.columns.clone())
-                    .unwrap_or_default();
-                let rows = storage.scan(&select.table).unwrap_or_default();
 
-                // Apply WHERE clause filter if present
+                let tables = if select.tables.is_empty() {
+                    vec![select.table.clone()]
+                } else {
+                    select.tables.clone()
+                };
+
+                for table_name in &tables {
+                    if !storage.has_table(table_name) {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Table '{}' not found",
+                            table_name
+                        )));
+                    }
+                }
+
+                let mut all_columns: Vec<sqlrustgo_storage::ColumnDefinition> = Vec::new();
+                let mut all_rows: Vec<Vec<Value>> = vec![vec![]];
+
+                for table_name in &tables {
+                    let table_info = storage.get_table_info(table_name).ok();
+                    if let Some(info) = table_info {
+                        for col in &info.columns {
+                            all_columns.push(col.clone());
+                        }
+                    }
+                    let rows = storage.scan(table_name).unwrap_or_default();
+
+                    let new_all_rows: Vec<Vec<Value>> = all_rows
+                        .iter()
+                        .flat_map(|existing_row| {
+                            rows.iter()
+                                .map(|row| {
+                                    let mut combined = existing_row.clone();
+                                    combined.extend(row.clone());
+                                    combined
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+                    all_rows = new_all_rows;
+                }
+
+                let columns = all_columns.clone();
+
                 let filtered_rows: Vec<Vec<Value>> =
                     if let Some(ref where_clause) = select.where_clause {
-                        rows.into_iter()
+                        all_rows
+                            .into_iter()
                             .filter(|row| evaluate_where_clause(where_clause, row, &columns))
                             .collect()
                     } else {
-                        rows
+                        all_rows
                     };
 
                 // Handle aggregates if present
                 if !select.aggregates.is_empty() {
-                    let result_row: Vec<Value> = select
-                        .aggregates
-                        .iter()
-                        .map(|agg| compute_aggregate(agg, &filtered_rows, &columns))
-                        .collect();
-                    return Ok(ExecutorResult::new(vec![result_row], 0));
+                    // Check if there's a GROUP BY clause
+                    if let Some(ref group_by) = select.group_by {
+                        // GROUP BY: group rows and compute aggregates per group
+                        use std::collections::HashMap;
+                        let mut grouped: HashMap<Vec<Value>, Vec<&Vec<Value>>> = HashMap::new();
+
+                        // Group rows by GROUP BY key
+                        for row in &filtered_rows {
+                            if let Some(group_key) = evaluate_group_by_key(group_by, row, &columns)
+                            {
+                                grouped.entry(group_key).or_insert_with(Vec::new).push(row);
+                            }
+                        }
+
+                        // For each group, compute aggregates and build result rows
+                        let mut result_rows: Vec<Vec<Value>> = Vec::new();
+                        for (group_key, group_rows) in grouped {
+                            let mut result_row = group_key;
+                            for agg in &select.aggregates {
+                                // Convert &[&Vec<Value>] to Vec<Vec<Value>>
+                                let rows_owned: Vec<Vec<Value>> =
+                                    group_rows.iter().map(|r| (*r).clone()).collect();
+                                let agg_result = compute_aggregate(agg, &rows_owned, &columns);
+                                result_row.push(agg_result);
+                            }
+                            result_rows.push(result_row);
+                        }
+
+                        return Ok(ExecutorResult::new(result_rows, 0));
+                    } else {
+                        // No GROUP BY: compute aggregates over all rows (original behavior)
+                        let result_row: Vec<Value> = select
+                            .aggregates
+                            .iter()
+                            .map(|agg| compute_aggregate(agg, &filtered_rows, &columns))
+                            .collect();
+                        return Ok(ExecutorResult::new(vec![result_row], 0));
+                    }
                 }
 
                 // Apply column projection if specified (not SELECT *)
