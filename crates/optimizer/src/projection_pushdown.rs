@@ -386,6 +386,7 @@ impl Default for ProjectionPushdownOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
 
     #[test]
     fn test_projection_pushdown_rule_name() {
