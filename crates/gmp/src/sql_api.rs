@@ -5,9 +5,9 @@
 
 use crate::document::{
     create_gmp_tables, insert_document, insert_document_content, insert_document_keyword,
-    DocStatus, TABLE_DOCUMENTS, TABLE_DOCUMENT_CONTENTS, TABLE_DOCUMENT_KEYWORDS,
+    DocStatus, NewDocument, TABLE_DOCUMENTS, TABLE_DOCUMENT_CONTENTS,
 };
-use crate::embedding::{generate_embedding, DocumentEmbedding};
+use crate::embedding::generate_embedding;
 use crate::vector_search::{
     create_embeddings_table, hybrid_search, upsert_embedding, vector_search, SearchResult,
 };
@@ -60,13 +60,15 @@ impl GmpExecutor {
         // Insert document
         let doc_id = insert_document(
             &mut *storage,
-            title,
-            doc_type,
-            1,
-            now,
-            now,
-            (now / 86400) as i32, // Convert timestamp to days
-            DocStatus::Active,
+            NewDocument {
+                title,
+                doc_type,
+                version: 1,
+                created_at: now,
+                updated_at: now,
+                effective_date: (now / 86400) as i32,
+                status: DocStatus::Active,
+            },
         )?;
 
         // Insert content as a single section
