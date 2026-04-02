@@ -224,6 +224,14 @@ pub trait StorageEngine: Send + Sync {
         }
         Ok(())
     }
+
+    /// Bulk load records from a TPC-H .tbl file (pipe-delimited format)
+    /// Returns the number of records loaded
+    fn bulk_load_tbl_file(&mut self, _table: &str, _filepath: &str) -> SqlResult<usize> {
+        Err(SqlError::ExecutionError(
+            "bulk_load_tbl_file not supported by this storage engine".to_string(),
+        ))
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -1162,6 +1170,72 @@ impl StorageEngine for MemoryStorage {
         }
         Ok(())
     }
+
+    fn bulk_load_tbl_file(&mut self, table: &str, filepath: &str) -> SqlResult<usize> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::path::Path;
+
+        let path = Path::new(filepath);
+        if !path.exists() {
+            return Err(SqlError::ExecutionError(format!(
+                "File not found: {}",
+                filepath
+            )));
+        }
+
+        let file = File::open(path)
+            .map_err(|e| SqlError::ExecutionError(format!("Failed to open file: {}", e)))?;
+
+        let reader = BufReader::new(file);
+        let table_info = self
+            .table_infos
+            .get(table)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+
+        let mut records: Vec<Record> = Vec::new();
+        let mut line_number = 0;
+
+        for line in reader.lines() {
+            line_number += 1;
+            let line = line.map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to read line {}: {}", line_number, e))
+            })?;
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let fields: Vec<&str> = line.trim().split('|').collect();
+            if fields.is_empty() || (fields.len() == 1 && fields[0].is_empty()) {
+                continue;
+            }
+
+            let mut record: Record = Vec::new();
+            for (col_idx, field) in fields.iter().enumerate() {
+                let field_str = field.trim();
+                if field_str.is_empty() {
+                    record.push(Value::Null);
+                    continue;
+                }
+
+                if let Some(col_def) = table_info.columns.get(col_idx) {
+                    let value = parse_value(field_str, &col_def.data_type);
+                    record.push(value);
+                } else {
+                    record.push(Value::Text(field_str.to_string()));
+                }
+            }
+
+            records.push(record);
+        }
+
+        if !records.is_empty() {
+            self.insert(table, records.clone())?;
+        }
+
+        Ok(records.len())
+    }
 }
 
 /// Helper methods for MemoryStorage (not part of StorageEngine trait)
@@ -1928,4 +2002,35 @@ fn test_column_definition_with_foreign_key() {
         references: Some(fk),
     };
     assert!(col.references.is_some());
+}
+
+/// Parse a string value into a Value based on the column data type
+fn parse_value(s: &str, data_type: &str) -> Value {
+    let upper = data_type.to_uppercase();
+    if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
+        if let Ok(n) = s.parse::<i64>() {
+            Value::Integer(n)
+        } else {
+            Value::Text(s.to_string())
+        }
+    } else if upper == "FLOAT"
+        || upper == "DOUBLE"
+        || upper == "DECIMAL"
+        || upper == "REAL"
+        || upper == "NUMERIC"
+    {
+        if let Ok(n) = s.parse::<f64>() {
+            Value::Float(n)
+        } else {
+            Value::Text(s.to_string())
+        }
+    } else if upper == "BOOLEAN" || upper == "BOOL" {
+        match s.to_uppercase().as_str() {
+            "TRUE" | "T" | "1" | "YES" | "Y" => Value::Boolean(true),
+            "FALSE" | "F" | "0" | "NO" | "N" => Value::Boolean(false),
+            _ => Value::Text(s.to_string()),
+        }
+    } else {
+        Value::Text(s.to_string())
+    }
 }
