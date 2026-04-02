@@ -466,6 +466,7 @@ pub struct OrderByItem {
 pub struct SelectStatement {
     pub columns: Vec<SelectColumn>,
     pub table: String,
+    pub tables: Vec<String>,
     pub where_clause: Option<Expression>,
     pub join_clause: Option<JoinClause>,
     pub aggregates: Vec<AggregateCall>,
@@ -1176,29 +1177,45 @@ impl Parser {
 
         self.expect(Token::From)?;
 
-        let table = match self.next() {
-            Some(Token::Identifier(name)) => {
-                if matches!(self.current(), Some(Token::Dot)) {
-                    self.next();
-                    match self.next() {
-                        Some(Token::Identifier(table_name)) => {
-                            format!("{}.{}", name, table_name)
+        let mut tables = Vec::new();
+        loop {
+            let table_name = match self.current() {
+                Some(Token::Identifier(name)) => {
+                    let name = name.clone();
+                    self.next(); // consume identifier
+
+                    if matches!(self.current(), Some(Token::Dot)) {
+                        self.next(); // consume dot
+                        match self.next() {
+                            Some(Token::Identifier(table_name)) => {
+                                format!("{}.{}", name, table_name)
+                            }
+                            Some(Token::Processlist) => {
+                                format!("{}.processlist", name)
+                            }
+                            Some(t) => {
+                                return Err(format!("Expected table name after dot, got {:?}", t))
+                            }
+                            None => return Err("Expected table name after dot".to_string()),
                         }
-                        Some(Token::Processlist) => {
-                            format!("{}.processlist", name)
-                        }
-                        Some(t) => {
-                            return Err(format!("Expected table name after dot, got {:?}", t))
-                        }
-                        None => return Err("Expected table name after dot".to_string()),
+                    } else {
+                        name
                     }
-                } else {
-                    name
                 }
+                Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+                None => return Err("Expected table name".to_string()),
+            };
+            tables.push(table_name);
+
+            // Check for comma (more tables) or continue
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next(); // consume comma
+                continue;
             }
-            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
-            None => return Err("Expected table name".to_string()),
-        };
+            break;
+        }
+
+        let table = tables.first().cloned().unwrap_or_default();
 
         // Parse WHERE clause (optional)
         let where_clause = if matches!(self.current(), Some(Token::Where)) {
@@ -1303,7 +1320,8 @@ impl Parser {
 
         let base_select = SelectStatement {
             columns,
-            table,
+            table: table.clone(),
+            tables,
             where_clause,
             join_clause: None,
             aggregates,
@@ -2530,6 +2548,18 @@ impl Parser {
                             Some(Token::Text) => {
                                 self.next();
                                 "TEXT".to_string()
+                            }
+                            Some(Token::Float) => {
+                                self.next();
+                                "REAL".to_string()
+                            }
+                            Some(Token::Decimal) => {
+                                self.next();
+                                "DECIMAL".to_string()
+                            }
+                            Some(Token::Boolean) => {
+                                self.next();
+                                "BOOLEAN".to_string()
                             }
                             _ => "INTEGER".to_string(), // default
                         };
