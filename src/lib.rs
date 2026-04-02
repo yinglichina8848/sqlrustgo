@@ -317,9 +317,23 @@ fn evaluate_where_clause(
 ) -> bool {
     match expr {
         sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            if op_upper == "AND" {
+                let left_bool = evaluate_where_clause(left, row, columns);
+                if !left_bool {
+                    return false;
+                }
+                return evaluate_where_clause(right, row, columns);
+            } else if op_upper == "OR" {
+                let left_bool = evaluate_where_clause(left, row, columns);
+                if left_bool {
+                    return true;
+                }
+                return evaluate_where_clause(right, row, columns);
+            }
             let left_val = evaluate_expr(left, row, columns);
             let right_val = evaluate_expr(right, row, columns);
-            compare_values(&left_val, op, &right_val)
+            compare_values(&left_val, &op_upper, &right_val)
         }
         sqlrustgo_parser::Expression::Identifier(name) => {
             // Single identifier in WHERE - treat as boolean (for EXISTS subqueries, etc)
@@ -459,7 +473,16 @@ fn evaluate_expr(
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
         sqlrustgo_parser::Expression::Subquery(_) => Value::Null,
-        sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
+        sqlrustgo_parser::Expression::QualifiedColumn(_table_name, col_name) => {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(col_name))
+            {
+                row.get(idx).cloned().unwrap_or(Value::Null)
+            } else {
+                Value::Null
+            }
+        }
         sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
         sqlrustgo_parser::Expression::Placeholder => Value::Null,
         sqlrustgo_parser::Expression::Between { expr, low, high } => {
@@ -846,6 +869,59 @@ fn evaluate_group_by_key(
         }
     }
     Some(key)
+}
+
+fn compare_values_for_sort(left: &Value, right: &Value) -> std::cmp::Ordering {
+    match (left, right) {
+        (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+        (Value::Null, _) => std::cmp::Ordering::Less,
+        (_, Value::Null) => std::cmp::Ordering::Greater,
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r),
+        (Value::Float(l), Value::Float(r)) => l.partial_cmp(r).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Text(l), Value::Text(r)) => l.cmp(r),
+        (Value::Boolean(l), Value::Boolean(r)) => l.cmp(r),
+        (Value::Integer(l), Value::Float(r)) => (*l as f64)
+            .partial_cmp(r)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(l), Value::Integer(r)) => l
+            .partial_cmp(&(*r as f64))
+            .unwrap_or(std::cmp::Ordering::Equal),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+fn sort_rows_by_order_by(
+    rows: Vec<Vec<Value>>,
+    order_by: &sqlrustgo_parser::parser::OrderByClause,
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Vec<Vec<Value>> {
+    let mut rows_with_keys: Vec<(Vec<Value>, Vec<Value>)> = rows
+        .into_iter()
+        .map(|row| {
+            let sort_keys: Vec<Value> = order_by
+                .items
+                .iter()
+                .filter_map(|item| evaluate_group_by_expr(&item.expr, &row, columns))
+                .collect();
+            (row, sort_keys)
+        })
+        .collect();
+
+    rows_with_keys.sort_by(|(_, keys1), (_, keys2)| {
+        for (key1, key2) in keys1.iter().zip(keys2.iter()) {
+            let cmp = compare_values_for_sort(key1, key2);
+            if cmp != std::cmp::Ordering::Equal {
+                let item_idx = keys1.iter().position(|k| k == key1).unwrap_or(0);
+                if !order_by.items[item_idx].asc {
+                    return cmp.reverse();
+                }
+                return cmp;
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    rows_with_keys.into_iter().map(|(row, _)| row).collect()
 }
 
 pub struct ExecutionEngine {
@@ -1716,13 +1792,10 @@ impl ExecutionEngine {
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
                 let projected_rows: Vec<Vec<Value>> = if is_select_star {
-                    // SELECT * - return all columns
                     filtered_rows
                 } else if select.columns.is_empty() {
-                    // No columns specified (edge case) - return all columns
                     filtered_rows
                 } else {
-                    // Project only the selected columns
                     filtered_rows
                         .into_iter()
                         .map(|row| {
@@ -1740,7 +1813,13 @@ impl ExecutionEngine {
                         .collect()
                 };
 
-                Ok(ExecutorResult::new(projected_rows, 0))
+                let result_rows = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(projected_rows, order_by, &columns)
+                } else {
+                    projected_rows
+                };
+
+                Ok(ExecutorResult::new(result_rows, 0))
             }
             Statement::Explain(explain) => {
                 let start = std::time::Instant::now();
