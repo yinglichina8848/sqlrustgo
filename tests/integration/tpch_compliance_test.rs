@@ -8,7 +8,6 @@
 
 use rusqlite::{params, Connection};
 use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 fn create_sqlrustgo_engine() -> ExecutionEngine {
@@ -205,20 +204,20 @@ fn setup_sqlrustgo_schema(engine: &mut ExecutionEngine) {
 
 fn insert_sqlrustgo_data(engine: &mut ExecutionEngine) {
     engine
-        .execute(parse("INSERT INTO region VALUES (0, 'AFRICA', 0, 'Africa region')").unwrap())
+        .execute(parse("INSERT INTO region VALUES (0, 'AFRICA', 'Africa region')").unwrap())
         .unwrap();
     engine
-        .execute(parse("INSERT INTO region VALUES (1, 'AMERICA', 1, 'America region')").unwrap())
+        .execute(parse("INSERT INTO region VALUES (1, 'AMERICA', 'America region')").unwrap())
         .unwrap();
     engine
-        .execute(parse("INSERT INTO region VALUES (2, 'ASIA', 2, 'Asia region')").unwrap())
+        .execute(parse("INSERT INTO region VALUES (2, 'ASIA', 'Asia region')").unwrap())
         .unwrap();
     engine
-        .execute(parse("INSERT INTO region VALUES (3, 'EUROPE', 3, 'Europe region')").unwrap())
+        .execute(parse("INSERT INTO region VALUES (3, 'EUROPE', 'Europe region')").unwrap())
         .unwrap();
     engine
         .execute(
-            parse("INSERT INTO region VALUES (4, 'MIDDLE EAST', 4, 'Middle East region')").unwrap(),
+            parse("INSERT INTO region VALUES (4, 'MIDDLE EAST', 'Middle East region')").unwrap(),
         )
         .unwrap();
 
