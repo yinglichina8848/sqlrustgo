@@ -93,20 +93,31 @@ impl Default for RuleSet {
 }
 
 pub struct DefaultOptimizer {
-    rule_set: RuleSet,
+    rules: Vec<Box<dyn Rule<Plan>>>,
+    disabled_rules: std::collections::HashSet<String>,
     use_cbo: bool,
     cbo_optimizer: Option<CboOptimizer>,
 }
 
 impl DefaultOptimizer {
     pub fn new() -> Self {
-        let rule_set = RuleSet::new();
-
-        Self {
-            rule_set,
+        let mut optimizer = Self {
+            rules: Vec::new(),
+            disabled_rules: std::collections::HashSet::new(),
             use_cbo: false,
             cbo_optimizer: None,
-        }
+        };
+        optimizer.add_default_rules();
+        optimizer
+    }
+
+    fn add_default_rules(&mut self) {
+        self.rules.push(Box::new(ConstantFolding::new()));
+        self.rules.push(Box::new(PredicatePushdown::new()));
+        self.rules.push(Box::new(ProjectionPruning::new()));
+        self.rules.push(Box::new(ExpressionSimplification::new()));
+        self.rules.push(Box::new(IndexSelect::new()));
+        self.rules.push(Box::new(JoinReordering::new()));
     }
 
     pub fn with_cbo(mut self, cbo: CboOptimizer) -> Self {
@@ -115,14 +126,37 @@ impl DefaultOptimizer {
         self
     }
 
-    pub fn enable_rule(&mut self, _rule_name: &str) {}
+    pub fn enable_rule(&mut self, rule_name: &str) {
+        self.disabled_rules.remove(rule_name);
+    }
 
-    pub fn disable_rule(&mut self, _rule_name: &str) {}
+    pub fn disable_rule(&mut self, rule_name: &str) {
+        self.disabled_rules.insert(rule_name.to_string());
+    }
+
+    pub fn add_rule(&mut self, rule: Box<dyn Rule<Plan>>) {
+        self.rules.push(rule);
+    }
 }
 
 impl Optimizer for DefaultOptimizer {
     fn optimize(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
-        self.rule_set.apply(plan);
+        if let Some(plan) = plan.downcast_mut::<Plan>() {
+            let mut changed = true;
+            let mut iterations = 0;
+            const MAX_ITERATIONS: usize = 100;
+            while changed && iterations < MAX_ITERATIONS {
+                changed = false;
+                iterations += 1;
+                for rule in &self.rules {
+                    if !self.disabled_rules.contains(rule.name()) {
+                        if rule.apply(plan) {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
