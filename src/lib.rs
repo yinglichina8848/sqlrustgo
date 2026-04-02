@@ -641,12 +641,19 @@ fn like_match(text: &str, pattern: &str) -> bool {
 
     fn do_match(pi: usize, ti: usize, pc: &[char], tc: &[char]) -> bool {
         if pi == pc.len() {
+            // Pattern exhausted - match if text exhausted, otherwise fail
             ti == tc.len()
         } else if pc[pi] == '%' {
-            // % matches any sequence - try matching remaining pattern at each position
-            // or skip the % and continue
-            (ti < tc.len() && do_match(pi + 1, ti, pc, tc))
-                || (ti < tc.len() && do_match(pi, ti + 1, pc, tc))
+            // % matches zero or more characters
+            // Try matching remaining pattern at current text position
+            if do_match(pi + 1, ti, pc, tc) {
+                true
+            } else if ti < tc.len() {
+                // Try matching % with next character
+                do_match(pi, ti + 1, pc, tc)
+            } else {
+                false
+            }
         } else if pc[pi] == '_' {
             ti < tc.len() && do_match(pi + 1, ti + 1, pc, tc)
         } else if ti < tc.len() && pc[pi] == tc[ti] {
