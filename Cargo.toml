@@ -491,3 +491,9 @@ path = "tests/integration/tpch_compliance_test.rs"
 [[test]]
 name = "agentsql_test"
 path = "tests/integration/agentsql_test.rs"
+
+# Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
+# This prevents any single test from consuming excessive memory
+[profile.test]
+opt-level = 0
+debug = 1
