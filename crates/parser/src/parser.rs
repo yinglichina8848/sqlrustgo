@@ -976,7 +976,7 @@ impl Parser {
                     });
                     continue;
                 }
-                Some(Token::NumberLiteral(_)) | Some(Token::Minus) | Some(Token::LParen) => {
+                Some(Token::NumberLiteral(_)) | Some(Token::Minus) => {
                     let expr = self.parse_expression()?;
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
@@ -1040,7 +1040,7 @@ impl Parser {
 
                     self.expect(Token::RParen)?;
 
-                    let alias = if matches!(self.current(), Some(Token::As)) {
+                    let _alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
                         match self.current() {
                             Some(Token::Identifier(name)) => {

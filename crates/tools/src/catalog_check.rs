@@ -14,6 +14,7 @@ use structopt::StructOpt;
 pub struct Opt {
     /// Storage file path (for file-based storage)
     #[structopt(short = "d", long = "data-dir", default_value = "./data")]
+    #[allow(dead_code)]
     pub data_dir: PathBuf,
 
     /// Use memory storage instead of file storage
@@ -34,6 +35,7 @@ fn open_storage(opt: &Opt) -> Result<Box<dyn StorageEngine>> {
     }
 }
 
+#[allow(dead_code)]
 pub fn run() -> Result<()> {
     // Initialize logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();

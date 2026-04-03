@@ -13,10 +13,10 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use structopt::StructOpt;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImportStats {
     pub tables_created: usize,
     pub tables_dropped: usize,
@@ -26,20 +26,8 @@ pub struct ImportStats {
     pub warnings: Vec<String>,
 }
 
-impl Default for ImportStats {
-    fn default() -> Self {
-        Self {
-            tables_created: 0,
-            tables_dropped: 0,
-            rows_inserted: 0,
-            queries_executed: 0,
-            errors: 0,
-            warnings: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum SqlStatement {
     CreateTable {
         name: String,
@@ -72,6 +60,7 @@ pub enum SqlStatement {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ColumnDef {
     pub name: String,
     pub data_type: String,
@@ -84,12 +73,14 @@ pub struct ColumnDef {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ForeignKeyRef {
     pub table: String,
     pub column: String,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum ImportMode {
     Full,
     SchemaOnly,
@@ -105,6 +96,7 @@ pub struct DumpImporter {
     verbose: bool,
 }
 
+#[allow(dead_code)]
 impl DumpImporter {
     pub fn new(mode: ImportMode, verbose: bool) -> Self {
         Self {
@@ -940,6 +932,7 @@ mod tests {
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "import", about = "Import mysqldump format SQL files")]
+#[allow(dead_code)]
 pub enum ImportCommand {
     File {
         #[structopt(short = "f", long = "file")]

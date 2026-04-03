@@ -4,7 +4,7 @@
 //! reducing I/O and memory usage by reading only required columns.
 
 use crate::Rule;
-use crate::{Expr, Plan, Value};
+use crate::{Expr, Plan};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -386,6 +386,7 @@ impl Default for ProjectionPushdownOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
 
     #[test]
     fn test_projection_pushdown_rule_name() {

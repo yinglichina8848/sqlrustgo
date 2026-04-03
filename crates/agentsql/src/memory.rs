@@ -135,21 +135,21 @@ impl MemoryService {
         if let Some(ref agent_id) = request.agent_id {
             self.agent_memories
                 .entry(agent_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id.clone());
         }
 
         if let Some(ref session_id) = request.session_id {
             self.session_memories
                 .entry(session_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id.clone());
         }
 
         for tag in &tags {
             self.tag_memories
                 .entry(tag.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id.clone());
         }
 

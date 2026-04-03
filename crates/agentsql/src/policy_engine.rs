@@ -148,8 +148,7 @@ impl PolicyEngine {
             return true;
         }
 
-        if policy_resource.ends_with(":*") {
-            let prefix = &policy_resource[..policy_resource.len() - 2];
+        if let Some(prefix) = policy_resource.strip_suffix(":*") {
             return request_resource.starts_with(prefix);
         }
 
