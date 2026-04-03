@@ -34,8 +34,8 @@ impl SecurityIntegration {
         &self.audit_manager
     }
 
-    pub fn sessions(&self) -> &SessionManager {
-        &self.session_manager
+    pub fn sessions(&self) -> Arc<SessionManager> {
+        self.session_manager.clone()
     }
 
     pub fn create_secure_session(&self, user: String, ip: String) -> u64 {

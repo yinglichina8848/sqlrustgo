@@ -111,6 +111,15 @@ pub trait StorageEngine: Send + Sync {
     /// Insert rows into a table
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
 
+    /// Bulk load from a TPC-H .tbl file (pipe-delimited)
+    /// Returns the number of rows loaded
+    /// Default implementation returns unsupported error
+    fn bulk_load_tbl_file(&mut self, _table_name: &str, _filepath: &str) -> SqlResult<usize> {
+        Err(SqlError::ExecutionError(
+            "bulk_load_tbl_file not supported by this storage backend".to_string(),
+        ))
+    }
+
     /// Delete rows matching a filter
     fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
 
@@ -215,6 +224,23 @@ pub trait StorageEngine: Send + Sync {
     fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
         None
     }
+
+    fn check_cancelled(&self) -> SqlResult<()> {
+        if let Some(ref flag) = self.cancel_flag() {
+            if flag.load(Ordering::SeqCst) {
+                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Bulk load records from a TPC-H .tbl file (pipe-delimited format)
+    /// Returns the number of records loaded
+    fn bulk_load_tbl_file(&mut self, _table: &str, _filepath: &str) -> SqlResult<usize> {
+        Err(SqlError::ExecutionError(
+            "bulk_load_tbl_file not supported by this storage engine".to_string(),
+        ))
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -296,15 +322,6 @@ impl MemoryStorage {
 
     pub fn clear_cancel_flag(&mut self) {
         self.cancel_flag = None;
-    }
-
-    fn check_cancel(&self) -> SqlResult<()> {
-        if let Some(ref flag) = self.cancel_flag {
-            if flag.load(Ordering::SeqCst) {
-                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
-            }
-        }
-        Ok(())
     }
 
     pub fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
@@ -408,23 +425,21 @@ impl Default for MemoryStorage {
 
 impl StorageEngine for MemoryStorage {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancel()?;
+        self.check_cancelled()?;
         Ok(records)
     }
 
-    /// Efficient batch scan - directly accesses internal table storage without full table scan
-    /// Checks cancellation before and after loading data
     fn scan_batch(
         &self,
         table: &str,
         offset: usize,
         limit: usize,
     ) -> SqlResult<(Vec<Record>, usize, bool)> {
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let table_records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancel()?;
+        self.check_cancelled()?;
         let total = table_records.len();
         let has_more = offset + limit < total;
         let batch = table_records.into_iter().skip(offset).take(limit).collect();
@@ -1146,6 +1161,81 @@ impl StorageEngine for MemoryStorage {
     fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
         self.cancel_flag.clone()
     }
+
+    fn check_cancelled(&self) -> SqlResult<()> {
+        if let Some(ref flag) = self.cancel_flag {
+            if flag.load(Ordering::SeqCst) {
+                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn bulk_load_tbl_file(&mut self, table: &str, filepath: &str) -> SqlResult<usize> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::path::Path;
+
+        let path = Path::new(filepath);
+        if !path.exists() {
+            return Err(SqlError::ExecutionError(format!(
+                "File not found: {}",
+                filepath
+            )));
+        }
+
+        let file = File::open(path)
+            .map_err(|e| SqlError::ExecutionError(format!("Failed to open file: {}", e)))?;
+
+        let reader = BufReader::new(file);
+        let table_info = self
+            .table_infos
+            .get(table)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+
+        let mut records: Vec<Record> = Vec::new();
+        let mut line_number = 0;
+
+        for line in reader.lines() {
+            line_number += 1;
+            let line = line.map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to read line {}: {}", line_number, e))
+            })?;
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let fields: Vec<&str> = line.trim().split('|').collect();
+            if fields.is_empty() || (fields.len() == 1 && fields[0].is_empty()) {
+                continue;
+            }
+
+            let mut record: Record = Vec::new();
+            for (col_idx, field) in fields.iter().enumerate() {
+                let field_str = field.trim();
+                if field_str.is_empty() {
+                    record.push(Value::Null);
+                    continue;
+                }
+
+                if let Some(col_def) = table_info.columns.get(col_idx) {
+                    let value = parse_value(field_str, &col_def.data_type);
+                    record.push(value);
+                } else {
+                    record.push(Value::Text(field_str.to_string()));
+                }
+            }
+
+            records.push(record);
+        }
+
+        if !records.is_empty() {
+            self.insert(table, records.clone())?;
+        }
+
+        Ok(records.len())
+    }
 }
 
 /// Helper methods for MemoryStorage (not part of StorageEngine trait)
@@ -1216,6 +1306,59 @@ impl MemoryStorage {
 
         self.on_write_complete(table);
         Ok(())
+    }
+
+    pub fn bulk_load_tbl_file(&mut self, table_name: &str, filepath: &str) -> SqlResult<usize> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
+        let file = File::open(filepath).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to open file {}: {}", filepath, e))
+        })?;
+
+        let reader = BufReader::new(file);
+        let mut records: Vec<Record> = Vec::new();
+
+        for line in reader.lines() {
+            let line =
+                line.map_err(|e| SqlError::ExecutionError(format!("Failed to read line: {}", e)))?;
+
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let mut line = line.to_string();
+            if line.ends_with('|') {
+                line.pop();
+            }
+
+            let fields: Vec<Value> = line
+                .split('|')
+                .map(|field| {
+                    let field = field.trim();
+                    if field.is_empty() {
+                        Value::Null
+                    } else if let Ok(i) = field.parse::<i64>() {
+                        Value::Integer(i)
+                    } else if let Ok(f) = field.parse::<f64>() {
+                        Value::Float(f)
+                    } else {
+                        Value::Text(field.to_string())
+                    }
+                })
+                .collect();
+
+            records.push(fields);
+        }
+
+        let count = records.len();
+        self.tables
+            .entry(table_name.to_string())
+            .or_default()
+            .append(&mut records);
+
+        Ok(count)
     }
 }
 
@@ -1912,4 +2055,35 @@ fn test_column_definition_with_foreign_key() {
         references: Some(fk),
     };
     assert!(col.references.is_some());
+}
+
+/// Parse a string value into a Value based on the column data type
+fn parse_value(s: &str, data_type: &str) -> Value {
+    let upper = data_type.to_uppercase();
+    if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
+        if let Ok(n) = s.parse::<i64>() {
+            Value::Integer(n)
+        } else {
+            Value::Text(s.to_string())
+        }
+    } else if upper == "FLOAT"
+        || upper == "DOUBLE"
+        || upper == "DECIMAL"
+        || upper == "REAL"
+        || upper == "NUMERIC"
+    {
+        if let Ok(n) = s.parse::<f64>() {
+            Value::Float(n)
+        } else {
+            Value::Text(s.to_string())
+        }
+    } else if upper == "BOOLEAN" || upper == "BOOL" {
+        match s.to_uppercase().as_str() {
+            "TRUE" | "T" | "1" | "YES" | "Y" => Value::Boolean(true),
+            "FALSE" | "F" | "0" | "NO" | "N" => Value::Boolean(false),
+            _ => Value::Text(s.to_string()),
+        }
+    } else {
+        Value::Text(s.to_string())
+    }
 }

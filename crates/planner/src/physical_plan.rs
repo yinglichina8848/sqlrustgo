@@ -896,7 +896,12 @@ impl PhysicalPlan for AggregateExec {
             let mut agg_results = vec![];
 
             for agg_expr in &self.aggregate_expr {
-                if let Expr::AggregateFunction { func, args, .. } = agg_expr {
+                if let Expr::AggregateFunction {
+                    func,
+                    args,
+                    distinct,
+                } = agg_expr
+                {
                     let values: Vec<Value> = if args.is_empty() {
                         input_rows.iter().map(|_| Value::Null).collect()
                     } else {
@@ -910,6 +915,14 @@ impl PhysicalPlan for AggregateExec {
                                 )
                             })
                             .collect()
+                    };
+                    let values = if *distinct {
+                        let mut unique_values = values.clone();
+                        unique_values.sort();
+                        unique_values.dedup();
+                        unique_values
+                    } else {
+                        values
                     };
                     let result = self.compute_aggregate(func, args, &values);
                     agg_results.push(result);
@@ -937,7 +950,12 @@ impl PhysicalPlan for AggregateExec {
             for (key, group_rows) in groups {
                 let mut row = key;
                 for agg_expr in &self.aggregate_expr {
-                    if let Expr::AggregateFunction { func, args, .. } = agg_expr {
+                    if let Expr::AggregateFunction {
+                        func,
+                        args,
+                        distinct,
+                    } = agg_expr
+                    {
                         let values: Vec<Value> = if args.is_empty() {
                             group_rows.iter().map(|_| Value::Null).collect()
                         } else {
@@ -951,6 +969,14 @@ impl PhysicalPlan for AggregateExec {
                                     )
                                 })
                                 .collect()
+                        };
+                        let values = if *distinct {
+                            let mut unique_values = values.clone();
+                            unique_values.sort();
+                            unique_values.dedup();
+                            unique_values
+                        } else {
+                            values
                         };
                         let result = self.compute_aggregate(func, args, &values);
                         row.push(result);

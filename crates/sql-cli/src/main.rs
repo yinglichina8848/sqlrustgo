@@ -4,17 +4,19 @@
 
 use rustyline::history::FileHistory;
 use rustyline::Editor;
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     CreateTableStatement, DropTableStatement, Expression, InsertStatement, KillStatement, KillType,
     SelectStatement,
 };
-use sqlrustgo_parser::{parse, Statement};
+use sqlrustgo_parser::Statement;
 use sqlrustgo_security::SessionManager;
-use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::env;
-use std::sync::Arc;
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
 
 /// Check if teaching mode is enabled via environment variable
 fn is_teaching_mode() -> bool {
@@ -38,8 +40,9 @@ fn main() {
         // Command line mode - execute single SQL and exit
         let sql = args[1..].join(" ");
 
-        // Initialize storage engine
-        let mut storage = MemoryStorage::new();
+        // Initialize execution engine
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
 
         // Initialize session manager for CLI
         let session_manager = Arc::new(SessionManager::new());
@@ -47,7 +50,7 @@ fn main() {
             session_manager.create_session("sqlrustgo".to_string(), "localhost".to_string());
 
         // Execute the SQL
-        match execute_sql(&sql, &mut storage, &session_manager, cli_session_id) {
+        match execute_sql(&sql, &mut engine, &session_manager, cli_session_id) {
             Ok(result) => {
                 print_result(result);
             }
@@ -62,8 +65,9 @@ fn main() {
     println!("SQLRustGo Interactive SQL Shell");
     println!("Type '.help' for available commands, '.exit' to quit\n");
 
-    // Initialize storage engine
-    let mut storage = MemoryStorage::new();
+    // Initialize execution engine
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(storage.clone());
 
     // Initialize session manager and create CLI session
     let session_manager = Arc::new(SessionManager::new());
@@ -72,7 +76,7 @@ fn main() {
     log::info!("CLI session started: id={}", cli_session_id);
 
     // Pre-populate with some sample data for testing
-    setup_sample_data(&mut storage);
+    setup_sample_data(&mut engine);
 
     // Create REPL editor
     let mut rl = Editor::<(), FileHistory>::new().expect("Failed to create editor");
@@ -92,7 +96,8 @@ fn main() {
 
                 // Handle meta-commands (starting with dot)
                 if trimmed.starts_with('.') {
-                    match execute_command(&trimmed, &storage) {
+                    let storage_ref: &dyn StorageEngine = &*storage.read().unwrap();
+                    match execute_command(&trimmed, storage_ref) {
                         CommandResult::Ok(output) => {
                             if !output.is_empty() {
                                 println!("{}", output);
@@ -105,21 +110,13 @@ fn main() {
                             println!("Goodbye!");
                             break;
                         }
-                        CommandResult::Sql(result) => {
-                            // This was actually a SQL query, not a command
-                            match result {
-                                Ok(rows) => {
-                                    print_result(rows);
-                                }
-                                Err(e) => {
-                                    println!("Error: {}", e);
-                                }
-                            }
+                        CommandResult::Sql(_) => {
+                            unreachable!("execute_command should not return Sql variant");
                         }
                     }
                 } else {
                     // Execute SQL query
-                    match execute_sql(&trimmed, &mut storage, &session_manager, cli_session_id) {
+                    match execute_sql(&trimmed, &mut engine, &session_manager, cli_session_id) {
                         Ok(result) => {
                             print_result(result);
                         }
@@ -149,32 +146,14 @@ fn main() {
 /// Execute SQL query
 fn execute_sql(
     sql: &str,
-    storage: &mut dyn StorageEngine,
-    session_manager: &SessionManager,
-    current_session_id: u64,
+    engine: &mut ExecutionEngine,
+    _session_manager: &SessionManager,
+    _current_session_id: u64,
 ) -> Result<ExecutorResult, String> {
-    // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
-
-    // Update session activity
-    session_manager.update_activity(current_session_id);
-
-    match statement {
-        Statement::Select(select) => {
-            if select.table == "information_schema.processlist" {
-                execute_information_schema_processlist(session_manager, current_session_id)
-            } else {
-                execute_select(&select, storage)
-            }
-        }
-        Statement::Insert(insert) => execute_insert(&insert, storage),
-        Statement::CreateTable(create) => execute_create_table(&create, storage),
-        Statement::DropTable(drop) => execute_drop_table(&drop, storage),
-        Statement::ShowStatus => execute_show_status(storage),
-        Statement::ShowProcesslist => execute_show_processlist(session_manager, current_session_id),
-        Statement::Kill(kill) => execute_kill(&kill, session_manager, current_session_id),
-        _ => Err("Only SELECT, INSERT, CREATE TABLE, DROP TABLE, SHOW STATUS, SHOW PROCESSLIST, KILL are supported".to_string()),
-    }
+    engine
+        .execute(statement)
+        .map_err(|e: sqlrustgo_types::SqlError| e.to_string())
 }
 
 /// Execute SELECT query
@@ -634,104 +613,22 @@ fn execute_kill(
 }
 
 /// Setup sample data for testing CLI commands
-fn setup_sample_data(storage: &mut dyn StorageEngine) {
-    // Create users table
-    let users_info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![
-            ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-            ColumnDefinition {
-                name: "name".to_string(),
-                data_type: "TEXT".to_string(),
-                nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-            ColumnDefinition {
-                name: "email".to_string(),
-                data_type: "TEXT".to_string(),
-                nullable: true,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-        ],
-    };
-
-    // Create table (ignore error if already exists)
-    let _ = storage.create_table(&users_info);
-
-    // Insert sample data
-    let user_records = vec![
-        vec![
-            Value::Integer(1),
-            Value::Text("Alice".to_string()),
-            Value::Text("alice@example.com".to_string()),
-        ],
-        vec![
-            Value::Integer(2),
-            Value::Text("Bob".to_string()),
-            Value::Text("bob@example.com".to_string()),
-        ],
-        vec![
-            Value::Integer(3),
-            Value::Text("Charlie".to_string()),
-            Value::Null,
-        ],
+fn setup_sample_data(engine: &mut ExecutionEngine) {
+    let sample_sqls = vec![
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, email TEXT)",
+        "INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+        "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+        "INSERT INTO users VALUES (3, 'Charlie', NULL)",
+        "CREATE TABLE IF NOT EXISTS orders (id INTEGER, user_id INTEGER, amount REAL)",
+        "INSERT INTO orders VALUES (1, 1, 100.5)",
+        "INSERT INTO orders VALUES (2, 1, 250.0)",
+        "INSERT INTO orders VALUES (3, 2, 75.25)",
     ];
-    let _ = storage.insert("users", user_records);
 
-    // Create orders table
-    let orders_info = TableInfo {
-        name: "orders".to_string(),
-        columns: vec![
-            ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-            ColumnDefinition {
-                name: "user_id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-            ColumnDefinition {
-                name: "amount".to_string(),
-                data_type: "REAL".to_string(),
-                nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-            },
-        ],
-    };
-
-    let _ = storage.create_table(&orders_info);
-
-    let order_records = vec![
-        vec![Value::Integer(1), Value::Integer(1), Value::Float(100.5)],
-        vec![Value::Integer(2), Value::Integer(1), Value::Float(250.0)],
-        vec![Value::Integer(3), Value::Integer(2), Value::Float(75.25)],
-    ];
-    let _ = storage.insert("orders", order_records);
+    for sql in sample_sqls {
+        let stmt = parse(sql);
+        if let Ok(stmt) = stmt {
+            let _ = engine.execute(stmt);
+        }
+    }
 }
