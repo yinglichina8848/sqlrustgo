@@ -4,7 +4,7 @@
 //! reducing I/O and memory usage by reading only required columns.
 
 use crate::Rule;
-use crate::{Expr, Plan};
+use crate::{Expr, Plan, Value};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -486,7 +486,7 @@ mod tests {
                 predicate: Expr::BinaryExpr {
                     left: Box::new(Expr::Column("id".to_string())),
                     op: crate::Operator::Gt,
-                    right: Box::new(Expr::Literal(Value::Integer(10))),
+                    right: Box::new(Expr::Literal(sqlrustgo_types::Value::Integer(10))),
                 },
                 input: Box::new(Plan::TableScan {
                     table_name: "users".to_string(),
