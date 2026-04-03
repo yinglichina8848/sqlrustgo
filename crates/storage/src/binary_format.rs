@@ -161,6 +161,11 @@ impl BinaryFormat for Value {
                 result.extend_from_slice(&helpers::write_f64(*f));
                 result
             }
+            Value::Decimal(d) => {
+                let mut result = vec![11u8]; // type indicator
+                result.extend_from_slice(&helpers::write_string(&d.to_string()));
+                result
+            }
             Value::Text(s) => {
                 let mut result = vec![3u8]; // type indicator
                 result.extend_from_slice(&helpers::write_string(s));

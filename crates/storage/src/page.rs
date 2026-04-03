@@ -352,6 +352,14 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&f.to_le_bytes());
             bytes
         }
+        Value::Decimal(d) => {
+            let mut bytes = vec![0x09];
+            let s = d.to_string();
+            let len = (s.len() as u32).to_le_bytes();
+            bytes.extend_from_slice(&len);
+            bytes.extend_from_slice(s.as_bytes());
+            bytes
+        }
         Value::Text(s) => {
             let mut bytes = vec![0x03];
             let len = (s.len() as u32).to_le_bytes();

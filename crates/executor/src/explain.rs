@@ -414,6 +414,7 @@ impl ExplainExecutor {
         match val {
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("'{}'", s),
             Value::Boolean(b) => b.to_string(),
             Value::Null => "NULL".to_string(),
