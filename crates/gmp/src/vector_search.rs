@@ -3,13 +3,12 @@
 //! Provides vector-based document search functionality.
 //! Searches document embeddings using cosine similarity.
 
+use crate::document::{Document, TABLE_DOCUMENTS};
 use crate::embedding::{
-    cosine_similarity, DocumentEmbedding, EmbeddingModel,
-    HashEmbeddingModel, TABLE_EMBEDDINGS,
+    cosine_similarity, DocumentEmbedding, EmbeddingModel, HashEmbeddingModel, TABLE_EMBEDDINGS,
 };
-use crate::document::{TABLE_DOCUMENTS, Document};
-use sqlrustgo_types::{SqlResult, Value};
 use sqlrustgo_storage::StorageEngine;
+use sqlrustgo_types::{SqlResult, Value};
 
 /// Search result with document ID and similarity score
 #[derive(Debug, Clone)]
@@ -76,9 +75,9 @@ pub fn upsert_embedding(
 
     // Check if embedding already exists
     let rows = storage.scan(TABLE_EMBEDDINGS)?;
-    let existing = rows.iter().any(|row| {
-        matches!(&row[0], Value::Integer(id) if *id == doc_id)
-    });
+    let existing = rows
+        .iter()
+        .any(|row| matches!(&row[0], Value::Integer(id) if *id == doc_id));
 
     if existing {
         // Delete old and insert new
@@ -160,9 +159,10 @@ pub fn vector_search(
 
     for (doc_id, similarity) in top_results {
         // Find document by id
-        if let Some(row) = all_doc_rows.iter().find(|row| {
-            matches!(&row[0], Value::Integer(id) if *id == doc_id)
-        }) {
+        if let Some(row) = all_doc_rows
+            .iter()
+            .find(|row| matches!(&row[0], Value::Integer(id) if *id == doc_id))
+        {
             let title = row
                 .get(1)
                 .and_then(|v| match v {
@@ -243,8 +243,7 @@ pub fn hybrid_search(
         let text_match = query_lower
             .split_whitespace()
             .filter(|word| {
-                word.len() > 2
-                    && (title_lower.contains(word) || doc_type_lower.contains(word))
+                word.len() > 2 && (title_lower.contains(word) || doc_type_lower.contains(word))
             })
             .count();
 
@@ -285,9 +284,9 @@ pub fn hybrid_search(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_storage::MemoryStorage;
     use crate::document::{create_gmp_tables, insert_document, DocStatus, NewDocument};
     use crate::embedding::generate_embedding;
+    use sqlrustgo_storage::MemoryStorage;
 
     #[test]
     fn test_vector_search() {
