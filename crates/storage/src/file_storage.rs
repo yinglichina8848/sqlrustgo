@@ -1300,13 +1300,13 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
+    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Vec<u32> {
         // FileStorage doesn't support indexes yet
         Vec::new()
     }
 
-    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
-        self.range_index(table, column, start, end)
+    fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
+        Vec::new()
     }
 
     fn create_view(&mut self, _info: crate::engine::ViewInfo) -> SqlResult<()> {
