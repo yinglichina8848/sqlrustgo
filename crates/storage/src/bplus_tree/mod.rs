@@ -35,7 +35,7 @@ impl SimpleBPlusTree {
     }
 
     pub fn insert(&mut self, key: i64, value: u32) {
-        self.map.entry(key).or_insert_with(Vec::new).push(value);
+        self.map.entry(key).or_default().push(value);
     }
 
     pub fn search(&self, key: i64) -> Option<u32> {
