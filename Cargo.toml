@@ -503,6 +503,18 @@ name = "tpch_sf1_test"
 path = "tests/integration/tpch_sf1_test.rs"
 
 [[test]]
+name = "tpch_index_test"
+path = "tests/integration/tpch_index_test.rs"
+
+[[test]]
+name = "tpch_comparison_test"
+path = "tests/integration/tpch_comparison_test.rs"
+
+[[test]]
+name = "tpch_text_index_test"
+path = "tests/integration/tpch_text_index_test.rs"
+
+[[test]]
 name = "agentsql_test"
 path = "tests/integration/agentsql_test.rs"
 

@@ -314,6 +314,114 @@ fn handle_foreign_key_update(
     Ok((total_cascade_updates, total_set_null_updates))
 }
 
+/// Extract index usage info from a WHERE clause
+/// Returns (column_name, op, value) if the WHERE can use an index
+/// For TEXT columns, value is the hash of the string
+fn extract_index_predicate(
+    where_clause: &sqlrustgo_parser::Expression,
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<(String, String, i64)> {
+    match where_clause {
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            
+            // Only handle simple comparison operators
+            if !["<", ">", "=", "<=", ">="].contains(&op_upper.as_str()) {
+                return None;
+            }
+            
+            // Check if left side is a column and right side is a value
+            let (col_name, value_str) = match (&**left, &**right) {
+                (sqlrustgo_parser::Expression::Identifier(name), sqlrustgo_parser::Expression::Literal(val)) => {
+                    (name.clone(), val.clone())
+                }
+                (sqlrustgo_parser::Expression::QualifiedColumn(_, col), sqlrustgo_parser::Expression::Literal(val)) => {
+                    (col.clone(), val.clone())
+                }
+                _ => return None,
+            };
+            
+            // Check if column exists
+            let col_def = columns.iter().find(|c| &c.name == &col_name)?;
+            let upper = col_def.data_type.to_uppercase();
+            
+            // For TEXT columns, we need to hash the string value
+            // Hash must match the hash function used in to_index_key()
+            use std::hash::{Hash, Hasher};
+            use std::collections::hash_map::DefaultHasher;
+            
+            let value_i64 = if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
+                // Integer column: parse the value as i64
+                value_str.parse::<i64>().ok()?
+            } else {
+                // TEXT column: hash the string
+                // NOTE: For TEXT, only "=" operator works correctly with hash index
+                // Range operators (<, >) will not work correctly with hash
+                if op_upper != "=" {
+                    return None; // Hash doesn't support range queries
+                }
+                let mut hasher = DefaultHasher::new();
+                value_str.hash(&mut hasher);
+                hasher.finish() as i64
+            };
+            
+            Some((col_name, op_upper, value_i64))
+        }
+        _ => None,
+    }
+}
+
+/// Use index to filter rows for a single table
+/// Returns Some(filtered_rows) if index was used, None if full scan needed
+fn filter_using_index(
+    storage: &std::sync::RwLockReadGuard<'_, dyn sqlrustgo_storage::StorageEngine>,
+    table_name: &str,
+    column_name: &str,
+    op: &str,
+    value: i64,
+    _columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<Vec<Vec<Value>>> {
+    match op {
+        "=" => {
+            // Exact match - use search_index and get_row (O(log n) instead of O(n))
+            let row_ids = storage.search_index(table_name, column_name, value);
+            if row_ids.is_empty() {
+                return Some(vec![]);
+            }
+            let filtered: Vec<Vec<Value>> = row_ids
+                .into_iter()
+                .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
+                .collect();
+            return Some(filtered);
+        }
+        "<" | "<=" | ">" | ">=" => {
+            // Range query - use index WITHOUT scanning all rows first
+            let (start, end) = match op {
+                "<" => (i64::MIN, value),
+                "<=" => (i64::MIN, value + 1),
+                ">" => (value + 1, i64::MAX),
+                ">=" => (value, i64::MAX),
+                _ => return None,
+            };
+            
+            // Get row IDs from index (this is O(log n) instead of O(n))
+            let row_ids = storage.range_index(table_name, column_name, start, end);
+            
+            if row_ids.is_empty() {
+                return Some(vec![]);
+            }
+            
+            // Now fetch only the specific rows we need using get_row
+            let filtered: Vec<Vec<Value>> = row_ids
+                .into_iter()
+                .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
+                .collect();
+            return Some(filtered);
+        }
+        _ => None,
+    }
+}
+
 /// Evaluate a WHERE clause expression against a row
 fn evaluate_where_clause(
     expr: &sqlrustgo_parser::Expression,
@@ -1712,6 +1820,27 @@ impl ExecutionEngine {
                 storage.create_view(view_info)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
+            Statement::CreateIndex(create) => {
+                let mut storage = self.storage.write().unwrap();
+                if create.columns.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "CREATE INDEX requires at least one column".to_string(),
+                    ));
+                }
+                let table_info = storage.get_table_info(&create.table)?;
+                let column_index = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name == create.columns[0])
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError(format!(
+                            "Column '{}' not found in table '{}'",
+                            create.columns[0], create.table
+                        ))
+                    })?;
+                storage.create_table_index(&create.table, &create.columns[0], column_index)?;
+                Ok(ExecutorResult::new(vec![], 0))
+            }
             Statement::Analyze(analyze) => {
                 let table_name = analyze.table_name.ok_or_else(|| {
                     SqlError::ExecutionError("ANALYZE requires a table name".to_string())
@@ -2021,7 +2150,21 @@ impl ExecutionEngine {
                             all_columns.push(col.clone());
                         }
                     }
-                    let rows = storage.scan(table_name).unwrap_or_default();
+                    
+                    // Try to use index for single-table SELECT with WHERE on indexed column
+                    let rows = if tables.len() == 1 && select.where_clause.is_some() {
+                        if let Some((col_name, op, value)) = extract_index_predicate(select.where_clause.as_ref().unwrap(), &all_columns) {
+                            if let Some(indexed_rows) = filter_using_index(&storage, table_name, &col_name, &op, value, &all_columns) {
+                                indexed_rows
+                            } else {
+                                storage.scan(table_name).unwrap_or_default()
+                            }
+                        } else {
+                            storage.scan(table_name).unwrap_or_default()
+                        }
+                    } else {
+                        storage.scan(table_name).unwrap_or_default()
+                    };
 
                     let new_all_rows: Vec<Vec<Value>> = all_rows
                         .iter()
@@ -2042,10 +2185,22 @@ impl ExecutionEngine {
 
                 let filtered_rows: Vec<Vec<Value>> =
                     if let Some(ref where_clause) = select.where_clause {
-                        all_rows
-                            .into_iter()
-                            .filter(|row| evaluate_where_clause(where_clause, row, &columns))
-                            .collect()
+                        // If we already used index to filter, no need to filter again
+                        if tables.len() == 1 {
+                            if let Some((ref col_name, ref op, ref value)) = extract_index_predicate(where_clause, &columns) {
+                                let index_results = storage.search_index(&tables[0], col_name, *value);
+                                if !index_results.is_empty() {
+                                    // Already filtered by index, skip evaluation
+                                    all_rows
+                                } else {
+                                    all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                                }
+                            } else {
+                                all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                            }
+                        } else {
+                            all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                        }
                     } else {
                         all_rows
                     };
@@ -2105,7 +2260,7 @@ impl ExecutionEngine {
 
                 // Sort rows by ORDER BY clause BEFORE projection
                 // This is necessary because ORDER BY can reference columns not in SELECT list
-                let sorted_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
+                let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
                     sort_rows_by_order_by(filtered_rows, order_by, &columns)
                 } else {
                     filtered_rows
@@ -2114,14 +2269,6 @@ impl ExecutionEngine {
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
-// IMPORTANT: ORDER BY must happen BEFORE projection
-                // because ORDER BY columns may not be in the SELECT list
-                // Keep full rows for ORDER BY processing (projection happens after sort)
-                let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
-                    sort_rows_by_order_by(filtered_rows, order_by, &columns)
-                } else {
-                    filtered_rows
-                };
 
                 // Apply column projection AFTER sorting
                 let result_rows: Vec<Vec<Value>> = if is_select_star || select.columns.is_empty() {
@@ -2449,11 +2596,52 @@ impl ExecutionEngine {
                 let left_rows = left_result.rows;
                 let right_rows = right_result.rows;
 
-                // Build hash map from right rows using first column as key
+                // Extract join key columns from condition
+                let left_key_col = if let Some(ref cond) = join_plan.condition() {
+                    if let sqlrustgo_planner::Expr::BinaryExpr { left, .. } = cond {
+                        if let sqlrustgo_planner::Expr::Column(col) = &**left {
+                            Some(col.name.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let right_key_col = if let Some(ref cond) = join_plan.condition() {
+                    if let sqlrustgo_planner::Expr::BinaryExpr { right, .. } = cond {
+                        if let sqlrustgo_planner::Expr::Column(col) = &**right {
+                            Some(col.name.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Build hash map from right rows
                 use std::collections::HashMap;
                 let mut right_hash: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
                 for rrow in &right_rows {
-                    let key = if !rrow.is_empty() {
+                    let key = if let Some(ref col_name) = right_key_col {
+                        if let Some(idx) = right.schema().fields.iter().position(|f| &f.name == col_name) {
+                            if idx < rrow.len() {
+                                vec![rrow[idx].clone()]
+                            } else {
+                                vec![Value::Null]
+                            }
+                        } else if !rrow.is_empty() {
+                            vec![rrow[0].clone()]
+                        } else {
+                            vec![Value::Null]
+                        }
+                    } else if !rrow.is_empty() {
                         vec![rrow[0].clone()]
                     } else {
                         vec![Value::Null]
@@ -2466,7 +2654,19 @@ impl ExecutionEngine {
 
                 // Probe with left rows
                 for (lidx, lrow) in left_rows.iter().enumerate() {
-                    let key = if !lrow.is_empty() {
+                    let key = if let Some(ref col_name) = left_key_col {
+                        if let Some(idx) = left.schema().fields.iter().position(|f| &f.name == col_name) {
+                            if idx < lrow.len() {
+                                vec![lrow[idx].clone()]
+                            } else {
+                                vec![Value::Null]
+                            }
+                        } else if !lrow.is_empty() {
+                            vec![lrow[0].clone()]
+                        } else {
+                            vec![Value::Null]
+                        }
+                    } else if !lrow.is_empty() {
                         vec![lrow[0].clone()]
                     } else {
                         vec![Value::Null]
