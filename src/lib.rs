@@ -2597,11 +2597,52 @@ impl ExecutionEngine {
                 let left_rows = left_result.rows;
                 let right_rows = right_result.rows;
 
-                // Build hash map from right rows using first column as key
+                // Extract join key columns from condition
+                let left_key_col = if let Some(ref cond) = join_plan.condition() {
+                    if let sqlrustgo_planner::Expr::BinaryExpr { left, .. } = cond {
+                        if let sqlrustgo_planner::Expr::Column(col) = &**left {
+                            Some(col.name.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let right_key_col = if let Some(ref cond) = join_plan.condition() {
+                    if let sqlrustgo_planner::Expr::BinaryExpr { right, .. } = cond {
+                        if let sqlrustgo_planner::Expr::Column(col) = &**right {
+                            Some(col.name.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Build hash map from right rows
                 use std::collections::HashMap;
                 let mut right_hash: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
                 for rrow in &right_rows {
-                    let key = if !rrow.is_empty() {
+                    let key = if let Some(ref col_name) = right_key_col {
+                        if let Some(idx) = right.schema().fields.iter().position(|f| &f.name == col_name) {
+                            if idx < rrow.len() {
+                                vec![rrow[idx].clone()]
+                            } else {
+                                vec![Value::Null]
+                            }
+                        } else if !rrow.is_empty() {
+                            vec![rrow[0].clone()]
+                        } else {
+                            vec![Value::Null]
+                        }
+                    } else if !rrow.is_empty() {
                         vec![rrow[0].clone()]
                     } else {
                         vec![Value::Null]
@@ -2614,7 +2655,19 @@ impl ExecutionEngine {
 
                 // Probe with left rows
                 for (lidx, lrow) in left_rows.iter().enumerate() {
-                    let key = if !lrow.is_empty() {
+                    let key = if let Some(ref col_name) = left_key_col {
+                        if let Some(idx) = left.schema().fields.iter().position(|f| &f.name == col_name) {
+                            if idx < lrow.len() {
+                                vec![lrow[idx].clone()]
+                            } else {
+                                vec![Value::Null]
+                            }
+                        } else if !lrow.is_empty() {
+                            vec![lrow[0].clone()]
+                        } else {
+                            vec![Value::Null]
+                        }
+                    } else if !lrow.is_empty() {
                         vec![lrow[0].clone()]
                     } else {
                         vec![Value::Null]
