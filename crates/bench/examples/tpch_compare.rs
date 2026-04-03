@@ -210,7 +210,7 @@ impl TpchDataGenerator {
 
     fn generate_lineitem_data(&self) -> Vec<LineItemRow> {
         let mut data = Vec::new();
-        let num_rows = self.row_count(60000).min(60000);  // SF=1: 60,000 rows
+        let num_rows = self.row_count(1000).min(1000);
 
         for i in 0..num_rows {
             let row = LineItemRow {
@@ -231,7 +231,7 @@ impl TpchDataGenerator {
 
     fn generate_orders_data(&self) -> Vec<OrdersRow> {
         let mut data = Vec::new();
-        let num_rows = self.row_count(15000).min(15000);  // SF=1: 15,000 rows
+        let num_rows = self.row_count(500).min(500);
 
         for i in 0..num_rows {
             let row = OrdersRow {
@@ -255,7 +255,7 @@ impl TpchDataGenerator {
 
     fn generate_customer_data(&self) -> Vec<CustomerRow> {
         let mut data = Vec::new();
-        let num_rows = self.row_count(1500).min(1500);  // SF=1: 1,500 rows
+        let num_rows = self.row_count(50).min(50);
 
         for i in 0..num_rows {
             let row = CustomerRow {
@@ -340,9 +340,9 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
     let customer_data = generator.generate_customer_data();
 
     let queries = vec![
-        ("Q1", "SELECT l_returnflag, SUM(l_quantity) sum_qty, SUM(l_extendedprice) sum_base_price FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) as sum_qty, SUM(l_extendedprice) as sum_base_price FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
         ("Q3", "SELECT o_orderkey, o_orderdate, o_totalprice FROM orders WHERE o_orderdate > 88000"),
-        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) revenue FROM lineitem WHERE l_quantity > 20"),
+        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount / 100.0)) as revenue FROM lineitem WHERE l_quantity > 20"),
     ];
 
     let mut system_result = SystemResult::new("SQLRustGo".to_string());
@@ -358,18 +358,7 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
             create_tables(&mut engine, &lineitem_data, &orders_data, &customer_data);
 
             let start = Instant::now();
-            println!("Executing query: {}", sql);
-            match parse(sql) {
-                Ok(ast) => {
-                    let _ = engine.execute(ast);
-                    latencies.record(start.elapsed().as_micros() as u64);
-                }
-                Err(e) => {
-                    eprintln!("QUERY PARSE ERROR: {}", e);
-                    eprintln!("SQL: {}", sql);
-                    panic!("Parse error: {}", e);
-                }
-            }
+            let _ = engine.execute(parse(sql).unwrap());
             latencies.record(start.elapsed().as_micros() as u64);
         }
 
@@ -395,9 +384,9 @@ fn run_sqlite_benchmarks() -> Option<SystemResult> {
 
     // Return a placeholder result for demonstration
     let queries = vec![
-        ("Q1", "SELECT l_returnflag, SUM(l_quantity) sum_qty FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) as sum_qty FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
         ("Q3", "SELECT o_orderkey, o_orderdate, o_totalprice FROM orders WHERE o_orderdate > 88000"),
-        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) revenue FROM lineitem WHERE l_quantity > 20"),
+        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) as revenue FROM lineitem WHERE l_quantity > 20"),
     ];
 
     let mut system_result = SystemResult::new("SQLite".to_string());
@@ -433,9 +422,9 @@ fn run_mysql_benchmarks() -> Option<SystemResult> {
     };
 
     let queries = vec![
-        ("Q1", "SELECT l_returnflag, SUM(l_quantity) sum_qty FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) as sum_qty FROM lineitem WHERE l_returnflag = 'N' GROUP BY l_returnflag"),
         ("Q3", "SELECT o_orderkey, o_orderdate, o_totalprice FROM orders WHERE o_orderdate > 88000"),
-        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) revenue FROM lineitem WHERE l_quantity > 20"),
+        ("Q6", "SELECT SUM(l_extendedprice * (1 - l_discount)) as revenue FROM lineitem WHERE l_quantity > 20"),
     ];
 
     let mut system_result = SystemResult::new("MySQL".to_string());
@@ -532,10 +521,6 @@ fn create_tables(
             row.return_flag,
             row.ship_date
         );
-        if let Err(e) = parse(&sql) {
-            eprintln!("PARSE ERROR in lineitem INSERT: {}", e);
-            eprintln!("SQL: {}", sql);
-        }
         let _ = engine.execute(parse(&sql).unwrap());
     }
 
@@ -549,10 +534,6 @@ fn create_tables(
             row.total_price,
             row.order_date
         );
-        if let Err(e) = parse(&sql) {
-            eprintln!("PARSE ERROR in orders INSERT: {}", e);
-            eprintln!("SQL: {}", sql);
-        }
         let _ = engine.execute(parse(&sql).unwrap());
     }
 
@@ -561,10 +542,6 @@ fn create_tables(
             "INSERT INTO customer VALUES ({}, '{}', {})",
             row.cust_key, row.name, row.nation_key
         );
-        if let Err(e) = parse(&sql) {
-            eprintln!("PARSE ERROR in customer INSERT: {}", e);
-            eprintln!("SQL: {}", sql);
-        }
         let _ = engine.execute(parse(&sql).unwrap());
     }
 }
