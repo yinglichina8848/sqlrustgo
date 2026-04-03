@@ -117,6 +117,27 @@ impl BTreeNode {
         self.keys.binary_search(&key).ok()
     }
 
+    /// Find all values for a given key (handles duplicate keys)
+    pub fn find_all_values(&self, key: i64) -> Vec<u32> {
+        let mut results = Vec::new();
+        // Binary search to find first occurrence
+        if let Ok(first_idx) = self.keys.binary_search(&key) {
+            // Walk backwards to find all duplicates
+            let mut idx = first_idx;
+            while idx > 0 && self.keys[idx - 1] == key {
+                idx -= 1;
+            }
+            // Collect all matching values
+            while idx < self.keys.len() && self.keys[idx] == key {
+                if let Some(v) = self.values.get(idx) {
+                    results.push(*v);
+                }
+                idx += 1;
+            }
+        }
+        results
+    }
+
     pub fn insert_key_value(&mut self, key: i64, value: u32) -> Option<(i64, BTreeNode)> {
         let pos = self.keys.len();
         for (i, k) in self.keys.iter().enumerate() {
@@ -316,6 +337,15 @@ impl BTreeIndex {
         }
     }
 
+    /// Search for all values matching a key (handles duplicate keys)
+    pub fn search_all(&self, key: i64) -> Vec<u32> {
+        if let Some(root_id) = self.metadata.root_page_id {
+            self.search_node_all(root_id, key)
+        } else {
+            Vec::new()
+        }
+    }
+
     fn search_node(&self, node_id: u32, key: i64) -> Option<u32> {
         if let Some(ref node) = self.nodes[node_id as usize] {
             if node.is_leaf {
@@ -336,6 +366,25 @@ impl BTreeIndex {
             }
         } else {
             None
+        }
+    }
+
+    fn search_node_all(&self, node_id: u32, key: i64) -> Vec<u32> {
+        if let Some(ref node) = self.nodes[node_id as usize] {
+            if node.is_leaf {
+                // Use find_all_values for leaf nodes
+                node.find_all_values(key)
+            } else {
+                let child_idx = node.find_child_index(key);
+                if child_idx < node.children.len() {
+                    let child_id = node.children[child_idx];
+                    self.search_node_all(child_id, key)
+                } else {
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
         }
     }
 

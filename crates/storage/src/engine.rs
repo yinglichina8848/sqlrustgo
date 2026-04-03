@@ -93,6 +93,10 @@ pub trait StorageEngine: Send + Sync {
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
+    /// Get a single row by its index in the table
+    /// Returns None if the index is out of bounds
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>>;
+
     /// Scan rows in batches for streaming (memory-efficient)
     /// Returns (records, total_count, has_more)
     fn scan_batch(
@@ -158,7 +162,7 @@ pub trait StorageEngine: Send + Sync {
     fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
     /// Search using index - returns row IDs matching the key
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32>;
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32>;
 
     /// Range query using index - returns row IDs in range [start, end)
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
@@ -431,6 +435,16 @@ impl StorageEngine for MemoryStorage {
         let records = self.tables.get(table).cloned().unwrap_or_default();
         self.check_cancelled()?;
         Ok(records)
+    }
+
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
+        self.check_cancelled()?;
+        let records = self.tables.get(table);
+        if let Some(records) = records {
+            Ok(records.get(row_index).cloned())
+        } else {
+            Ok(None)
+        }
     }
 
     fn scan_batch(
@@ -1007,11 +1021,12 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
         let index_name = format!("{}_{}", table, column);
         self.indexes
             .get(&index_name)
-            .and_then(|tree| tree.search(key))
+            .map(|tree| tree.search_all(key))
+            .unwrap_or_default()
     }
 
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
@@ -1172,6 +1187,91 @@ impl StorageEngine for MemoryStorage {
         }
         Ok(())
     }
+
+    #[allow(dead_code)]
+    fn bulk_load_tbl_file(&mut self, table: &str, filepath: &str) -> SqlResult<usize> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::path::Path;
+
+        let path = Path::new(filepath);
+        if !path.exists() {
+            return Err(SqlError::ExecutionError(format!(
+                "File not found: {}",
+                filepath
+            )));
+        }
+
+        let file = File::open(path)
+            .map_err(|e| SqlError::ExecutionError(format!("Failed to open file: {}", e)))?;
+
+        let reader = BufReader::new(file);
+        let table_info = self
+            .table_infos
+            .get(table)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))?;
+
+        let mut records: Vec<Record> = Vec::new();
+
+        for (line_number, line) in reader.lines().enumerate() {
+            let line = line.map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to read line {}: {}", line_number + 1, e))
+            })?;
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let fields: Vec<&str> = line.trim().split('|').collect();
+            if fields.is_empty() || (fields.len() == 1 && fields[0].is_empty()) {
+                continue;
+            }
+
+            let mut record: Record = Vec::new();
+            for (col_idx, field) in fields.iter().enumerate() {
+                let field_str = field.trim();
+                if field_str.is_empty() {
+                    record.push(Value::Null);
+                    continue;
+                }
+
+                if let Some(col_def) = table_info.columns.get(col_idx) {
+                    let value = parse_value(field_str, &col_def.data_type);
+                    record.push(value);
+                } else {
+                    record.push(Value::Text(field_str.to_string()));
+                }
+            }
+
+            records.push(record);
+        }
+
+        if !records.is_empty() {
+            self.insert(table, records.clone())?;
+            
+            // Auto-create indexes for integer columns after bulk load
+            if let Some(table_info) = self.table_infos.get(table) {
+                for (col_idx, col_def) in table_info.columns.iter().enumerate() {
+                    let upper = col_def.data_type.to_uppercase();
+                    // Auto-create index for all columns (supports INTEGER, TEXT via hash)
+                    let index_name = format!("{}_{}", table, col_def.name);
+                    let mut tree = SimpleBPlusTree::new();
+                    if let Some(all_records) = self.tables.get(table) {
+                        for (row_id, record) in all_records.iter().enumerate() {
+                            if let Some(value) = record.get(col_idx) {
+                                if let Some(key) = value.to_index_key() {
+                                    tree.insert(key, row_id as u32);
+                                }
+                            }
+                        }
+                    }
+                    self.indexes.insert(index_name, tree);
+                }
+            }
+        }
+
+        Ok(records.len())
+    }
 }
 
 /// Helper methods for MemoryStorage (not part of StorageEngine trait)
@@ -1242,71 +1342,6 @@ impl MemoryStorage {
 
         self.on_write_complete(table);
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn bulk_load_tbl_file(&mut self, table: &str, filepath: &str) -> SqlResult<usize> {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
-        use std::path::Path;
-
-        let path = Path::new(filepath);
-        if !path.exists() {
-            return Err(SqlError::ExecutionError(format!(
-                "File not found: {}",
-                filepath
-            )));
-        }
-
-        let file = File::open(path)
-            .map_err(|e| SqlError::ExecutionError(format!("Failed to open file: {}", e)))?;
-
-        let reader = BufReader::new(file);
-        let table_info = self
-            .table_infos
-            .get(table)
-            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))?;
-
-        let mut records: Vec<Record> = Vec::new();
-
-        for (line_number, line) in reader.lines().enumerate() {
-            let line = line.map_err(|e| {
-                SqlError::ExecutionError(format!("Failed to read line {}: {}", line_number + 1, e))
-            })?;
-
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let fields: Vec<&str> = line.trim().split('|').collect();
-            if fields.is_empty() || (fields.len() == 1 && fields[0].is_empty()) {
-                continue;
-            }
-
-            let mut record: Record = Vec::new();
-            for (col_idx, field) in fields.iter().enumerate() {
-                let field_str = field.trim();
-                if field_str.is_empty() {
-                    record.push(Value::Null);
-                    continue;
-                }
-
-                if let Some(col_def) = table_info.columns.get(col_idx) {
-                    let value = parse_value(field_str, &col_def.data_type);
-                    record.push(value);
-                } else {
-                    record.push(Value::Text(field_str.to_string()));
-                }
-            }
-
-            records.push(record);
-        }
-
-        if !records.is_empty() {
-            self.insert(table, records.clone())?;
-        }
-
-        Ok(records.len())
     }
 }
 

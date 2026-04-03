@@ -328,6 +328,13 @@ impl StorageEngine for ColumnarStorage {
         Ok(records)
     }
 
+    fn get_row(&self, table: &str, row_index: usize) -> crate::engine::SqlResult<Option<Vec<Value>>> {
+        let store = self.tables.get(table).ok_or_else(|| {
+            crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
+        })?;
+        Ok(store.get_row(row_index))
+    }
+
     fn insert(&mut self, table: &str, records: Vec<Vec<Value>>) -> crate::engine::SqlResult<()> {
         // Load table if not in memory
         if !self.is_table_loaded(table) {
@@ -445,8 +452,8 @@ impl StorageEngine for ColumnarStorage {
         ))
     }
 
-    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Option<u32> {
-        None
+    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Vec<u32> {
+        Vec::new()
     }
 
     fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
