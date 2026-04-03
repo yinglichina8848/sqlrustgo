@@ -509,7 +509,7 @@ mod tests {
             let (host, user, password, database) = config;
 
             let output = Command::new("mysql")
-                .args(&[
+.args(&[
                     "-h", &host, "-u", &user, "-p", &password, &database, "-e", sql,
                 ])
                 .output()
