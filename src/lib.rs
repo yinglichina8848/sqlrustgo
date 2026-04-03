@@ -342,7 +342,7 @@ fn extract_index_predicate(
             };
             
             // Check if column exists
-            let col_def = columns.iter().find(|c| &c.name == &col_name)?;
+            let col_def = columns.iter().find(|c| c.name == col_name)?;
             let upper = col_def.data_type.to_uppercase();
             
             // For TEXT columns, we need to hash the string value
@@ -392,7 +392,7 @@ fn filter_using_index(
                 .into_iter()
                 .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
                 .collect();
-            return Some(filtered);
+            Some(filtered)
         }
         "<" | "<=" | ">" | ">=" => {
             // Range query - use index WITHOUT scanning all rows first
@@ -416,7 +416,7 @@ fn filter_using_index(
                 .into_iter()
                 .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
                 .collect();
-            return Some(filtered);
+            Some(filtered)
         }
         _ => None,
     }
@@ -934,7 +934,7 @@ fn compute_aggregate(
                         has_float = true;
                     }
                     Value::Decimal(n) => {
-                        decimal_sum = decimal_sum + *n;
+                        decimal_sum += *n;
                         has_decimal = true;
                     }
                     _ => {}
@@ -1118,7 +1118,7 @@ fn evaluate_having_expr(
 fn evaluate_having_value(
     expr: &sqlrustgo_parser::Expression,
     group_rows: &[Vec<Value>],
-    aggregates: &[sqlrustgo_parser::parser::AggregateCall],
+    _aggregates: &[sqlrustgo_parser::parser::AggregateCall],
     columns: &[sqlrustgo_storage::ColumnDefinition],
 ) -> Value {
     match expr {
@@ -2175,6 +2175,7 @@ impl ExecutionEngine {
                     }
                     
                     // Try to use index for single-table SELECT with WHERE on indexed column
+                    #[allow(clippy::unnecessary_unwrap)]
                     let rows = if tables.len() == 1 && select.where_clause.is_some() {
                         if let Some((col_name, op, value)) = extract_index_predicate(select.where_clause.as_ref().unwrap(), &all_columns) {
                             if let Some(indexed_rows) = filter_using_index(&storage, table_name, &col_name, &op, value, &all_columns) {
@@ -2210,7 +2211,7 @@ impl ExecutionEngine {
                     if let Some(ref where_clause) = select.where_clause {
                         // If we already used index to filter, no need to filter again
                         if tables.len() == 1 {
-                            if let Some((ref col_name, ref op, ref value)) = extract_index_predicate(where_clause, &columns) {
+                            if let Some((ref col_name, ref _op, ref value)) = extract_index_predicate(where_clause, &columns) {
                                 let index_results = storage.search_index(&tables[0], col_name, *value);
                                 if !index_results.is_empty() {
                                     // Already filtered by index, skip evaluation
@@ -2619,6 +2620,7 @@ impl ExecutionEngine {
                 let right_rows = right_result.rows;
 
                 // Extract join key columns from condition
+                #[allow(clippy::collapsible_match)]
                 let left_key_col = if let Some(ref cond) = join_plan.condition() {
                     if let sqlrustgo_planner::Expr::BinaryExpr { left, .. } = cond {
                         if let sqlrustgo_planner::Expr::Column(col) = &**left {
@@ -2633,6 +2635,7 @@ impl ExecutionEngine {
                     None
                 };
 
+                #[allow(clippy::collapsible_match)]
                 let right_key_col = if let Some(ref cond) = join_plan.condition() {
                     if let sqlrustgo_planner::Expr::BinaryExpr { right, .. } = cond {
                         if let sqlrustgo_planner::Expr::Column(col) = &**right {
