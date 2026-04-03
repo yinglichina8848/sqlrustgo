@@ -820,6 +820,222 @@ fn compute_aggregate(
     }
 }
 
+/// Convert a string to AggregateFunction, returning None if not a valid aggregate
+fn str_to_aggregate_function(name: &str) -> Option<sqlrustgo_parser::parser::AggregateFunction> {
+    match name.to_uppercase().as_str() {
+        "COUNT" => Some(sqlrustgo_parser::parser::AggregateFunction::Count),
+        "SUM" => Some(sqlrustgo_parser::parser::AggregateFunction::Sum),
+        "AVG" => Some(sqlrustgo_parser::parser::AggregateFunction::Avg),
+        "MIN" => Some(sqlrustgo_parser::parser::AggregateFunction::Min),
+        "MAX" => Some(sqlrustgo_parser::parser::AggregateFunction::Max),
+        _ => None,
+    }
+}
+
+/// Evaluate a HAVING clause expression against a group's rows.
+/// Returns true if the row passes the HAVING condition.
+/// This function handles aggregate functions like SUM(col) > value.
+fn evaluate_having_expr(
+    having: &sqlrustgo_parser::Expression,
+    group_rows: &[Vec<Value>],
+    aggregates: &[sqlrustgo_parser::parser::AggregateCall],
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> bool {
+    match having {
+        // Handle binary comparison: SUM(amount) > 150
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            if ["=", "==", "EQ", "!=", "<>", "NE", ">", "GT", "<", "LT", ">=", "GE", "<=", "LE"]
+                .contains(&op_upper.as_str())
+            {
+                // Try to evaluate left as aggregate
+                if let Some(left_val) =
+                    evaluate_aggregate_in_expr(left, group_rows, aggregates, columns)
+                {
+                    let right_val = evaluate_having_value(right, group_rows, aggregates, columns);
+                    match op_upper.as_str() {
+                        "=" | "==" | "EQ" => left_val == right_val,
+                        "!=" | "<>" | "NE" => left_val != right_val,
+                        ">" | "GT" => left_val > right_val,
+                        "<" | "LT" => left_val < right_val,
+                        ">=" | "GE" => left_val >= right_val,
+                        "<=" | "LE" => left_val <= right_val,
+                        _ => false,
+                    }
+                } else if let Some(right_val) =
+                    evaluate_aggregate_in_expr(right, group_rows, aggregates, columns)
+                {
+                    let left_val = evaluate_having_value(left, group_rows, aggregates, columns);
+                    match op_upper.as_str() {
+                        "=" | "==" | "EQ" => left_val == right_val,
+                        "!=" | "<>" | "NE" => left_val != right_val,
+                        ">" | "GT" => left_val > right_val,
+                        "<" | "LT" => left_val < right_val,
+                        ">=" | "GE" => left_val >= right_val,
+                        "<=" | "LE" => left_val <= right_val,
+                        _ => false,
+                    }
+                } else {
+                    // Fallback to regular evaluation
+                    let left_val = evaluate_having_value(left, group_rows, aggregates, columns);
+                    let right_val = evaluate_having_value(right, group_rows, aggregates, columns);
+                    match op_upper.as_str() {
+                        "=" | "==" | "EQ" => left_val == right_val,
+                        "!=" | "<>" | "NE" => left_val != right_val,
+                        ">" | "GT" => left_val > right_val,
+                        "<" | "LT" => left_val < right_val,
+                        ">=" | "GE" => left_val >= right_val,
+                        "<=" | "LE" => left_val <= right_val,
+                        _ => false,
+                    }
+                }
+            } else if op_upper == "AND" {
+                evaluate_having_expr(left, group_rows, aggregates, columns)
+                    && evaluate_having_expr(right, group_rows, aggregates, columns)
+            } else if op_upper == "OR" {
+                evaluate_having_expr(left, group_rows, aggregates, columns)
+                    || evaluate_having_expr(right, group_rows, aggregates, columns)
+            } else {
+                false
+            }
+        }
+        // Handle function calls in HAVING like COUNT(*) > 1
+        sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+            let func_name = name.to_uppercase();
+            if let Some(agg_func) = str_to_aggregate_function(&func_name) {
+                let rows_owned: Vec<Vec<Value>> =
+                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let agg_call = sqlrustgo_parser::parser::AggregateCall {
+                    func: agg_func,
+                    args: args.clone(),
+                    distinct: false,
+                };
+                let result = compute_aggregate(&agg_call, &rows_owned, columns);
+                result.to_bool()
+            } else {
+                false
+            }
+        }
+        // Handle simple identifier (boolean check)
+        sqlrustgo_parser::Expression::Identifier(name) => {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(name))
+            {
+                if let Some(val) = group_rows.first().and_then(|r| r.get(idx)) {
+                    return val.to_bool();
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Helper to evaluate a value in HAVING context, handling aggregate functions
+fn evaluate_having_value(
+    expr: &sqlrustgo_parser::Expression,
+    group_rows: &[Vec<Value>],
+    aggregates: &[sqlrustgo_parser::parser::AggregateCall],
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Value {
+    match expr {
+        sqlrustgo_parser::Expression::Literal(s) => {
+            if let Ok(n) = s.parse::<i64>() {
+                Value::Integer(n)
+            } else if let Ok(n) = s.parse::<f64>() {
+                Value::Float(n)
+            } else if s.eq_ignore_ascii_case("true") {
+                Value::Boolean(true)
+            } else if s.eq_ignore_ascii_case("false") {
+                Value::Boolean(false)
+            } else {
+                Value::Text(s.clone())
+            }
+        }
+        sqlrustgo_parser::Expression::Identifier(name) => {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(name))
+            {
+                if let Some(val) = group_rows.first().and_then(|r| r.get(idx).cloned()) {
+                    return val;
+                }
+            }
+            Value::Null
+        }
+        sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+            let func_name = name.to_uppercase();
+            if let Some(agg_func) = str_to_aggregate_function(&func_name) {
+                let rows_owned: Vec<Vec<Value>> =
+                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let agg_call = sqlrustgo_parser::parser::AggregateCall {
+                    func: agg_func,
+                    args: args.clone(),
+                    distinct: false,
+                };
+                compute_aggregate(&agg_call, &rows_owned, columns)
+            } else {
+                Value::Null
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Helper to check if an expression contains an aggregate function and evaluate it
+fn evaluate_aggregate_in_expr(
+    expr: &sqlrustgo_parser::Expression,
+    group_rows: &[Vec<Value>],
+    aggregates: &[sqlrustgo_parser::parser::AggregateCall],
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<Value> {
+    match expr {
+        sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+            let func_name = name.to_uppercase();
+            if let Some(agg_func) = str_to_aggregate_function(&func_name) {
+                // Find if this aggregate matches any in the SELECT clause
+                for agg in aggregates {
+                    if agg.func == agg_func && agg.args.len() == args.len() {
+                        let mut matches = true;
+                        for (arg, select_arg) in args.iter().zip(agg.args.iter()) {
+                            if let (
+                                sqlrustgo_parser::Expression::Identifier(arg_name),
+                                sqlrustgo_parser::Expression::Identifier(select_arg_name),
+                            ) = (arg, select_arg)
+                            {
+                                if !arg_name.eq_ignore_ascii_case(select_arg_name) {
+                                    matches = false;
+                                    break;
+                                }
+                            } else {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        if matches {
+                            let rows_owned: Vec<Vec<Value>> =
+                                group_rows.iter().map(|r| (*r).clone()).collect();
+                            return Some(compute_aggregate(agg, &rows_owned, columns));
+                        }
+                    }
+                }
+                // If no exact match, try by function name alone
+                let rows_owned: Vec<Vec<Value>> =
+                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let agg_call = sqlrustgo_parser::parser::AggregateCall {
+                    func: agg_func,
+                    args: args.clone(),
+                    distinct: false,
+                };
+                return Some(compute_aggregate(&agg_call, &rows_owned, columns));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 /// Evaluate a GROUP BY key expression to a Value
 fn evaluate_group_by_expr(
     expr: &sqlrustgo_parser::Expression,
@@ -1810,6 +2026,17 @@ impl ExecutionEngine {
                                 let agg_result = compute_aggregate(agg, &rows_owned, &columns);
                                 result_row.push(agg_result);
                             }
+
+                            // Apply HAVING filter if present
+                            if let Some(ref having) = select.having {
+                                let rows_owned: Vec<Vec<Value>> =
+                                    group_rows.iter().map(|r| (*r).clone()).collect();
+                                if !evaluate_having_expr(having, &rows_owned, &select.aggregates, &columns)
+                                {
+                                    continue; // Skip this group
+                                }
+                            }
+
                             result_rows.push(result_row);
                         }
 
@@ -1825,15 +2052,23 @@ impl ExecutionEngine {
                     }
                 }
 
+                // Sort rows by ORDER BY clause BEFORE projection
+                // This is necessary because ORDER BY can reference columns not in SELECT list
+                let sorted_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(filtered_rows, order_by, &columns)
+                } else {
+                    filtered_rows
+                };
+
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
-                let projected_rows: Vec<Vec<Value>> = if is_select_star {
-                    filtered_rows
+                let result_rows: Vec<Vec<Value>> = if is_select_star {
+                    sorted_rows
                 } else if select.columns.is_empty() {
-                    filtered_rows
+                    sorted_rows
                 } else {
-                    filtered_rows
+                    sorted_rows
                         .into_iter()
                         .map(|row| {
                             select
@@ -1848,12 +2083,6 @@ impl ExecutionEngine {
                                 .collect()
                         })
                         .collect()
-                };
-
-                let result_rows = if let Some(ref order_by) = select.order_by {
-                    sort_rows_by_order_by(projected_rows, order_by, &columns)
-                } else {
-                    projected_rows
                 };
 
                 Ok(ExecutorResult::new(result_rows, 0))
