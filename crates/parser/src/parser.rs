@@ -1938,6 +1938,22 @@ impl Parser {
                         values,
                     });
                 }
+                // Check for NOT LIKE: expr NOT LIKE pattern
+                if matches!(self.current(), Some(Token::Not)) {
+                    self.next(); // consume NOT
+                    if matches!(self.current(), Some(Token::Like)) {
+                        self.next(); // consume LIKE
+                        let pattern = self.parse_arithmetic_expression()?;
+                        return Ok(Expression::BinaryOp(
+                            Box::new(left),
+                            "NOT LIKE".to_string(),
+                            Box::new(pattern),
+                        ));
+                    }
+                    // NOT not followed by LIKE - put NOT back would be complex,
+                    // so treat as unary negation for now (this shouldn't happen in practice)
+                    return Err("Expected LIKE after NOT".to_string());
+                }
                 // Check for LIKE: expr LIKE pattern
                 if matches!(self.current(), Some(Token::Like)) {
                     self.next(); // consume LIKE

@@ -510,6 +510,12 @@ fn evaluate_expr(
                     }
                     _ => Value::Null,
                 },
+                "NOT LIKE" | "not like" => match (&left_val, &right_val) {
+                    (Value::Text(text), Value::Text(pattern)) => {
+                        Value::Boolean(!like_match(text, pattern))
+                    }
+                    _ => Value::Null,
+                },
                 _ => Value::Null,
             }
         }
