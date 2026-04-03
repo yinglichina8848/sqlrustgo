@@ -44,30 +44,25 @@
 
 pub mod document;
 pub mod embedding;
-pub mod vector_search;
 pub mod sql_api;
+pub mod vector_search;
 
 // Re-export commonly used types
 pub use document::{
-    create_gmp_tables, insert_document, insert_document_content, insert_document_keyword,
-    query_by_effective_date, query_by_status, query_by_type, get_content, get_keywords,
-    Document, DocumentContent, DocumentKeyword, DocStatus,
-    TABLE_DOCUMENTS, TABLE_DOCUMENT_CONTENTS, TABLE_DOCUMENT_KEYWORDS,
+    create_gmp_tables, get_content, get_keywords, insert_document, insert_document_content,
+    insert_document_keyword, query_by_effective_date, query_by_status, query_by_type, DocStatus,
+    Document, DocumentContent, DocumentKeyword, TABLE_DOCUMENTS, TABLE_DOCUMENT_CONTENTS,
+    TABLE_DOCUMENT_KEYWORDS,
 };
 
 pub use embedding::{
-    cosine_similarity, euclidean_distance, generate_embedding,
-    DocumentEmbedding, EmbeddingModel, HashEmbeddingModel,
-    DEFAULT_MODEL, EMBEDDING_DIM,
-    TABLE_EMBEDDINGS, CREATE_EMBEDDINGS_TABLE,
+    cosine_similarity, euclidean_distance, generate_embedding, DocumentEmbedding, EmbeddingModel,
+    HashEmbeddingModel, CREATE_EMBEDDINGS_TABLE, DEFAULT_MODEL, EMBEDDING_DIM, TABLE_EMBEDDINGS,
 };
 
 pub use vector_search::{
-    create_embeddings_table, upsert_embedding, get_all_embeddings,
-    vector_search, vector_search_active, hybrid_search,
-    SearchResult,
+    create_embeddings_table, get_all_embeddings, hybrid_search, upsert_embedding, vector_search,
+    vector_search_active, SearchResult,
 };
 
-pub use sql_api::{
-    GmpExecutor, sql,
-};
+pub use sql_api::{sql, GmpExecutor};
