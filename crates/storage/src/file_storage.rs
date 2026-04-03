@@ -1171,6 +1171,12 @@ impl StorageEngine for FileStorage {
             .unwrap_or_default())
     }
 
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
+        Ok(self
+            .get_table(table)
+            .and_then(|data| data.rows.get(row_index).cloned()))
+    }
+
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
         if records.is_empty() {
             return Ok(());
