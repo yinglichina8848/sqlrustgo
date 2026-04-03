@@ -158,6 +158,7 @@ fn value_to_sql(value: &Value) -> String {
             arr.iter().map(value_to_sql).collect::<Vec<_>>().join(",")
         ),
         Value::Enum(_, name) => format!("'{}'", name),
+        Value::Decimal(d) => d.to_string(),
     }
 }
 

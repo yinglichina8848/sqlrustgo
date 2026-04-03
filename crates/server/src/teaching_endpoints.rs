@@ -874,6 +874,7 @@ fn value_to_json(value: Value) -> serde_json::Value {
             serde_json::json!(arr.into_iter().map(value_to_json).collect::<Vec<_>>())
         }
         Value::Enum(_, name) => serde_json::json!(name),
+        Value::Decimal(d) => serde_json::json!(d.to_string()),
     }
 }
 
