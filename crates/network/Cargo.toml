@@ -12,4 +12,4 @@ serde = { version = "1", features = ["derive"] }
 anyhow = "1"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
