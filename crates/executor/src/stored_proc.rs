@@ -56,7 +56,7 @@ pub struct ProcedureContext {
 
 /// Exception handler registered by DECLARE HANDLER
 #[derive(Debug, Clone)]
-struct ExceptionHandler {
+pub struct ExceptionHandler {
     condition: HandlerCondition,
     body: Vec<StoredProcStatement>,
 }
@@ -64,6 +64,7 @@ struct ExceptionHandler {
 /// Cursor state for stored procedure cursors
 #[derive(Debug, Clone)]
 struct Cursor {
+    #[allow(dead_code)]
     name: String,
     query: String,
     records: Vec<Vec<Value>>,
@@ -493,9 +494,7 @@ impl StoredProcExecutor {
                         ctx.clear_exception();
                         ctx.set_exception_handling(false);
 
-                        if handler_result.is_err() {
-                            return handler_result;
-                        }
+                        handler_result.as_ref()?;
                         continue;
                     }
                 }
@@ -725,14 +724,14 @@ impl StoredProcExecutor {
                     let records = storage
                         .scan(&select.table)
                         .map_err(|e| format!("Failed to scan table: {}", e))?;
-                    ctx.set_cursor_records(&name, records);
-                    ctx.open_cursor(&name)?;
+                    ctx.set_cursor_records(name, records);
+                    ctx.open_cursor(name)?;
                 }
                 Ok(())
             }
             StoredProcStatement::Fetch { name, into_vars } => {
                 // Fetch from cursor
-                let has_rows = ctx.fetch_cursor(name, &into_vars)?;
+                let has_rows = ctx.fetch_cursor(name, into_vars)?;
                 ctx.set_session_var("__found", Value::Boolean(has_rows));
                 if !has_rows {
                     ctx.set_session_var("__found_rows", Value::Integer(0));
@@ -741,7 +740,7 @@ impl StoredProcExecutor {
             }
             StoredProcStatement::CloseCursor { name } => {
                 // Close cursor
-                ctx.close_cursor(&name)?;
+                ctx.close_cursor(name)?;
                 Ok(())
             }
         }
@@ -941,8 +940,8 @@ impl StoredProcExecutor {
                 }
             }
             sqlrustgo_parser::Expression::Identifier(name) => {
-                if name.starts_with('@') {
-                    ctx.get_var(&name[1..]).cloned().unwrap_or(Value::Null)
+                if let Some(stripped) = name.strip_prefix('@') {
+                    ctx.get_var(stripped).cloned().unwrap_or(Value::Null)
                 } else {
                     Value::Text(name.to_string())
                 }

@@ -22,9 +22,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use structopt::StructOpt;
 
 /// Global LSN counter for tracking changes
+#[allow(dead_code)]
 static LSN_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Generate next LSN
+#[allow(dead_code)]
 fn next_lsn() -> String {
     let lsn = LSN_COUNTER.fetch_add(1, Ordering::SeqCst);
     format!("{:016x}", lsn)
@@ -32,6 +34,7 @@ fn next_lsn() -> String {
 
 /// Change record for incremental backup
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ChangeRecord {
     pub table: String,
     pub operation: ChangeOperation,
@@ -42,6 +45,7 @@ pub struct ChangeRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub enum ChangeOperation {
     Insert,
     Update,
@@ -50,12 +54,14 @@ pub enum ChangeOperation {
 
 /// ChangeSet - collection of changes since last backup
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct ChangeSet {
     pub changes: Vec<ChangeRecord>,
     pub start_lsn: String,
     pub end_lsn: String,
 }
 
+#[allow(dead_code)]
 impl ChangeSet {
     pub fn new(start_lsn: &str) -> Self {
         Self {
@@ -90,7 +96,7 @@ impl ChangeSet {
             match change.operation {
                 ChangeOperation::Insert => {
                     if let Some(ref data) = change.row_data {
-                        let values: Vec<String> = data.iter().map(|v| value_to_sql(v)).collect();
+                        let values: Vec<String> = data.iter().map(value_to_sql).collect();
                         sql.push_str(&format!(
                             "INSERT INTO {} VALUES ({});\n",
                             change.table,
@@ -100,7 +106,7 @@ impl ChangeSet {
                 }
                 ChangeOperation::Update => {
                     if let Some(ref data) = change.row_data {
-                        let values: Vec<String> = data.iter().map(|v| value_to_sql(v)).collect();
+                        let values: Vec<String> = data.iter().map(value_to_sql).collect();
                         let key_conditions: Vec<String> = change
                             .key_values
                             .iter()
@@ -119,7 +125,7 @@ impl ChangeSet {
                     let key_conditions: Vec<String> = change
                         .key_values
                         .iter()
-                        .map(|v| value_to_sql(v))
+                        .map(value_to_sql)
                         .enumerate()
                         .map(|(i, val)| format!("col{} = {}", i, val))
                         .collect();
@@ -149,21 +155,20 @@ fn value_to_sql(value: &Value) -> String {
         Value::Uuid(u) => format!("'{:036x}'", u),
         Value::Array(arr) => format!(
             "'{}'",
-            arr.iter()
-                .map(|v| value_to_sql(v))
-                .collect::<Vec<_>>()
-                .join(",")
+            arr.iter().map(value_to_sql).collect::<Vec<_>>().join(",")
         ),
         Value::Enum(_, name) => format!("'{}'", name),
     }
 }
 
 /// Incremental backup context - tracks changes for a session
+#[allow(dead_code)]
 pub struct IncrementalBackupContext {
     changes: HashMap<String, ChangeSet>,
     current_start_lsn: String,
 }
 
+#[allow(dead_code)]
 impl IncrementalBackupContext {
     pub fn new() -> Self {
         Self {
@@ -352,6 +357,7 @@ pub enum BackupCommand {
 }
 
 /// Backup tool entry point
+#[allow(dead_code)]
 pub fn run() -> Result<()> {
     let cmd = BackupCommand::from_args();
     match cmd {
@@ -373,7 +379,7 @@ pub fn run() -> Result<()> {
 }
 
 /// Create a full backup
-pub fn create_full_backup(dir: &Path, format: &str, data_dir: &Path) -> Result<()> {
+pub fn create_full_backup(dir: &Path, format: &str, _data_dir: &Path) -> Result<()> {
     let format =
         BackupFormat::from_str(format).context("Invalid format. Use: sql, csv, or json")?;
 
@@ -475,7 +481,7 @@ pub fn create_incremental_backup(
     parent: &Path,
     dir: &Path,
     format: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<()> {
     let format =
         BackupFormat::from_str(format).context("Invalid format. Use: sql, csv, or json")?;
@@ -578,6 +584,7 @@ pub fn create_incremental_backup(
 }
 
 /// Create an incremental backup using ChangeSet (only changed data)
+#[allow(dead_code)]
 pub fn create_incremental_backup_with_changeset(
     parent: &Path,
     dir: &Path,
@@ -660,6 +667,7 @@ pub fn create_incremental_backup_with_changeset(
 }
 
 /// Restore from incremental backup chain (point-in-time recovery)
+#[allow(dead_code)]
 pub fn restore_incremental_chain(
     base_backup: &Path,
     incremental_backups: &[PathBuf],
@@ -771,6 +779,7 @@ pub fn restore_incremental_chain(
 }
 
 /// Apply retention policy to backup directory
+#[allow(dead_code)]
 pub fn apply_retention_policy(
     backup_dir: &Path,
     keep_full: usize,

@@ -482,7 +482,7 @@ fn run_parallel_benchmark(queries: Vec<(&str, &str)>) -> BenchmarkReport {
     }
 
     for handle in handles {
-        if let Ok((name, latency)) = handle.join() {
+        if let Ok((_name, latency)) = handle.join() {
             collector.record(latency);
         }
     }

@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 pub struct Nl2SqlService {
     schema_service: Arc<crate::schema::SchemaService>,
+    #[allow(dead_code)]
     keyword_mappings: HashMap<String, String>,
+    #[allow(dead_code)]
     table_column_hints: HashMap<String, HashMap<String, Vec<String>>>,
 }
 
@@ -339,8 +341,8 @@ impl Nl2SqlService {
     }
 
     fn find_column_hints(&self, token: &str) -> Option<Vec<String>> {
-        for (_, columns) in &self.table_column_hints {
-            for (_, hints) in columns {
+        for columns in self.table_column_hints.values() {
+            for hints in columns.values() {
                 for hint in hints {
                     if hint.contains(token) || token.contains(hint) {
                         return Some(hints.clone());

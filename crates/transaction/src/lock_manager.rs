@@ -101,6 +101,7 @@ impl Default for DistributedLockManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NodeId;
 
     #[tokio::test]
     async fn test_lock_acquire_release() {

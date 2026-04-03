@@ -779,10 +779,8 @@ fn compute_aggregate(
     for row in rows {
         let val = if let Some(idx) = col_idx {
             row.get(idx).cloned()
-        } else if let Some(expr) = arg_expr {
-            Some(evaluate_expr(expr, row, columns))
         } else {
-            None
+            arg_expr.map(|expr| evaluate_expr(expr, row, columns))
         };
         all_values.push(val.unwrap_or(Value::Null));
     }
@@ -1100,7 +1098,7 @@ fn evaluate_group_by_expr(
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(name))
             .and_then(|idx| row.get(idx).cloned()),
-        sqlrustgo_parser::Expression::QualifiedColumn(table_name, col_name) => {
+        sqlrustgo_parser::Expression::QualifiedColumn(_table_name, col_name) => {
             // Find the column position for qualified column
             columns
                 .iter()
@@ -2064,7 +2062,7 @@ impl ExecutionEngine {
                         for row in &filtered_rows {
                             if let Some(group_key) = evaluate_group_by_key(group_by, row, &columns)
                             {
-                                grouped.entry(group_key).or_insert_with(Vec::new).push(row);
+                                grouped.entry(group_key).or_default().push(row);
                             }
                         }
 
@@ -2116,12 +2114,20 @@ impl ExecutionEngine {
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
-                let result_rows: Vec<Vec<Value>> = if is_select_star {
-                    sorted_rows
-                } else if select.columns.is_empty() {
-                    sorted_rows
+// IMPORTANT: ORDER BY must happen BEFORE projection
+                // because ORDER BY columns may not be in the SELECT list
+                // Keep full rows for ORDER BY processing (projection happens after sort)
+                let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(filtered_rows, order_by, &columns)
                 } else {
-                    sorted_rows
+                    filtered_rows
+                };
+
+                // Apply column projection AFTER sorting
+                let result_rows: Vec<Vec<Value>> = if is_select_star || select.columns.is_empty() {
+                    ordered_rows
+                } else {
+                    ordered_rows
                         .into_iter()
                         .map(|row| {
                             select
@@ -2321,7 +2327,7 @@ impl ExecutionEngine {
             KillType::Connection => {
                 session_manager
                     .kill_session(target_session_id)
-                    .map_err(|e| SqlError::ExecutionError(e))?;
+                    .map_err(SqlError::ExecutionError)?;
                 Ok(ExecutorResult::new(
                     vec![vec![Value::Text(format!(
                         "CONNECTION {} executed",
@@ -2333,7 +2339,7 @@ impl ExecutionEngine {
             KillType::Query => {
                 session_manager
                     .kill_query(target_session_id)
-                    .map_err(|e| SqlError::ExecutionError(e))?;
+                    .map_err(SqlError::ExecutionError)?;
                 Ok(ExecutorResult::new(
                     vec![vec![Value::Text(format!(
                         "QUERY {} executed",

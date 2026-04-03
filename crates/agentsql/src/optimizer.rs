@@ -50,8 +50,11 @@ pub struct OptimizerService {
 }
 
 struct OptimizationRule {
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     category: SuggestionCategory,
+    #[allow(dead_code)]
     priority: Priority,
     check: fn(&str) -> Option<OptimizationSuggestion>,
     apply: fn(&str) -> String,
@@ -219,19 +222,17 @@ impl OptimizerService {
     fn check_missing_index(sql: &str) -> Option<OptimizationSuggestion> {
         let sql_lower = sql.to_lowercase();
 
-        if sql_lower.contains("where") && !sql_lower.contains("index") {
-            if sql_lower.contains("=") {
-                return Some(OptimizationSuggestion {
-                    id: "use_index".to_string(),
-                    category: SuggestionCategory::Index,
-                    priority: Priority::High,
-                    title: "Consider adding index".to_string(),
-                    description: "WHERE clause on non-indexed column may cause full table scan"
-                        .to_string(),
-                    estimated_savings: Some("70-95%".to_string()),
-                    sql_hint: Some("CREATE INDEX idx ON table(column)".to_string()),
-                });
-            }
+        if sql_lower.contains("where") && !sql_lower.contains("index") && sql_lower.contains("=") {
+            return Some(OptimizationSuggestion {
+                id: "use_index".to_string(),
+                category: SuggestionCategory::Index,
+                priority: Priority::High,
+                title: "Consider adding index".to_string(),
+                description: "WHERE clause on non-indexed column may cause full table scan"
+                    .to_string(),
+                estimated_savings: Some("70-95%".to_string()),
+                sql_hint: Some("CREATE INDEX idx ON table(column)".to_string()),
+            });
         }
         None
     }
@@ -270,20 +271,22 @@ impl OptimizerService {
 
     fn check_implicit_join(sql: &str) -> Option<OptimizationSuggestion> {
         let sql_lower = sql.to_lowercase();
-        if sql_lower.contains("from") && sql_lower.contains("where") && sql_lower.contains(",") {
-            if !sql_lower.contains("join") {
-                return Some(OptimizationSuggestion {
-                    id: "use_explicit_join".to_string(),
-                    category: SuggestionCategory::Join,
-                    priority: Priority::Low,
-                    title: "Use explicit JOIN syntax".to_string(),
-                    description:
-                        "Implicit joins (comma-separated tables) are harder to maintain and debug"
-                            .to_string(),
-                    estimated_savings: Some("5-10%".to_string()),
-                    sql_hint: Some("Use INNER JOIN / LEFT JOIN syntax instead".to_string()),
-                });
-            }
+        if sql_lower.contains("from")
+            && sql_lower.contains("where")
+            && sql_lower.contains(",")
+            && !sql_lower.contains("join")
+        {
+            return Some(OptimizationSuggestion {
+                id: "use_explicit_join".to_string(),
+                category: SuggestionCategory::Join,
+                priority: Priority::Low,
+                title: "Use explicit JOIN syntax".to_string(),
+                description:
+                    "Implicit joins (comma-separated tables) are harder to maintain and debug"
+                        .to_string(),
+                estimated_savings: Some("5-10%".to_string()),
+                sql_hint: Some("Use INNER JOIN / LEFT JOIN syntax instead".to_string()),
+            });
         }
         None
     }
