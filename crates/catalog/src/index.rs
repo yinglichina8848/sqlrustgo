@@ -94,4 +94,57 @@ mod tests {
         assert!(idx.is_unique);
         assert!(!idx.is_primary_key);
     }
+
+    #[test]
+    fn test_index_type_btree() {
+        let idx = IndexInfo::new("idx", "t", vec!["c".to_string()]).with_type(IndexType::BTree);
+        assert_eq!(idx.index_type, IndexType::BTree);
+    }
+
+    #[test]
+    fn test_index_type_hash() {
+        let idx = IndexInfo::new("idx", "t", vec!["c".to_string()]).with_type(IndexType::Hash);
+        assert_eq!(idx.index_type, IndexType::Hash);
+    }
+
+    #[test]
+    fn test_index_type_fulltext() {
+        let idx = IndexInfo::new("idx", "t", vec!["c".to_string()]).with_type(IndexType::FullText);
+        assert_eq!(idx.index_type, IndexType::FullText);
+    }
+
+    #[test]
+    fn test_index_with_multiple_columns() {
+        let idx = IndexInfo::new(
+            "idx",
+            "users",
+            vec!["last_name".to_string(), "first_name".to_string()],
+        );
+        assert_eq!(idx.columns.len(), 2);
+        assert_eq!(idx.columns[0], "last_name");
+        assert_eq!(idx.columns[1], "first_name");
+    }
+
+    #[test]
+    fn test_index_type_enum() {
+        assert_eq!(format!("{:?}", IndexType::BTree), "BTree");
+        assert_eq!(format!("{:?}", IndexType::Hash), "Hash");
+        assert_eq!(format!("{:?}", IndexType::FullText), "FullText");
+    }
+
+    #[test]
+    fn test_index_clone() {
+        let idx1 = IndexInfo::new("idx", "t", vec!["c".to_string()]);
+        let idx2 = idx1.clone();
+        assert_eq!(idx1.name, idx2.name);
+        assert_eq!(idx1.table_name, idx2.table_name);
+    }
+
+    #[test]
+    fn test_index_debug() {
+        let idx = IndexInfo::new("idx", "t", vec!["c".to_string()]);
+        let debug = format!("{:?}", idx);
+        assert!(debug.contains("idx"));
+        assert!(debug.contains("t"));
+    }
 }

@@ -95,13 +95,20 @@ fn value_to_string(value: &Value) -> String {
         Value::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
+        Value::Decimal(d) => d.to_string(),
         Value::Text(s) => s.clone(),
         Value::Blob(b) => hex::encode(b),
         Value::Date(d) => d.to_string(),
         Value::Timestamp(ts) => ts.to_string(),
         Value::Uuid(u) => format!("{:036x}", u),
         Value::Array(arr) => {
-            format!("[{}]", arr.iter().map(value_to_string).collect::<Vec<_>>().join(","))
+            format!(
+                "[{}]",
+                arr.iter()
+                    .map(value_to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
         }
         Value::Enum(_, name) => name.clone(),
     }

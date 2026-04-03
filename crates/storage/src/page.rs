@@ -377,13 +377,21 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&ts.to_le_bytes());
             bytes
         }
-        Value::Uuid(u) => {
+        Value::Decimal(d) => {
             let mut bytes = vec![0x09];
+            let s = d.to_string();
+            let len = (s.len() as u32).to_le_bytes();
+            bytes.extend_from_slice(&len);
+            bytes.extend_from_slice(s.as_bytes());
+            bytes
+        }
+        Value::Uuid(u) => {
+            let mut bytes = vec![0x0a];
             bytes.extend_from_slice(&u.to_le_bytes());
             bytes
         }
         Value::Array(arr) => {
-            let mut bytes = vec![0x0a];
+            let mut bytes = vec![0x0b];
             bytes.extend_from_slice(&(arr.len() as u32).to_le_bytes());
             for item in arr {
                 bytes.extend_from_slice(&value_to_bytes(item));
@@ -391,7 +399,7 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes
         }
         Value::Enum(idx, name) => {
-            let mut bytes = vec![0x0b];
+            let mut bytes = vec![0x0c];
             bytes.extend_from_slice(&idx.to_le_bytes());
             let name_bytes = name.as_bytes();
             bytes.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
@@ -453,8 +461,8 @@ pub fn bytes_to_value(data: &[u8]) -> Option<Value> {
         }
         0x09 if data.len() >= 17 => {
             let u = u128::from_le_bytes([
-                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-                data[9], data[10], data[11], data[12], data[13], data[14], data[15], data[16],
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
+                data[10], data[11], data[12], data[13], data[14], data[15], data[16],
             ]);
             Some(Value::Uuid(u))
         }

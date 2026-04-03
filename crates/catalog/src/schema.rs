@@ -135,4 +135,77 @@ mod tests {
         assert!(removed.is_some());
         assert_eq!(schema.table_count(), 0);
     }
+
+    #[test]
+    fn test_schema_new() {
+        let schema = Schema::new("my_schema");
+        assert_eq!(schema.name, "my_schema");
+        assert_eq!(schema.table_count(), 0);
+        assert!(schema.table_names().is_empty());
+    }
+
+    #[test]
+    fn test_has_table() {
+        let schema = create_test_schema();
+        assert!(schema.has_table("users"));
+        assert!(!schema.has_table("orders"));
+    }
+
+    #[test]
+    fn test_tables_returns_arc() {
+        let schema = create_test_schema();
+        let tables = schema.tables();
+        assert_eq!(tables.len(), 1);
+        // Tables should be wrapped in Arc
+        assert!(Arc::strong_count(&tables[0]) >= 1);
+    }
+
+    #[test]
+    fn test_get_table_returns_arc() {
+        let schema = create_test_schema();
+        let table = schema.get_table("users").unwrap();
+        // Should be wrapped in Arc
+        assert!(Arc::strong_count(&table) >= 1);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_table() {
+        let mut schema = create_test_schema();
+        let removed = schema.remove_table("nonexistent");
+        assert!(removed.is_none());
+        assert_eq!(schema.table_count(), 1);
+    }
+
+    #[test]
+    fn test_schema_debug() {
+        let schema = create_test_schema();
+        let debug = format!("{:?}", schema);
+        assert!(debug.contains("test_schema"));
+    }
+
+    #[test]
+    fn test_schema_clone() {
+        let schema1 = create_test_schema();
+        let schema2 = schema1.clone();
+        assert_eq!(schema1.name, schema2.name);
+        assert_eq!(schema1.table_count(), schema2.table_count());
+    }
+
+    #[test]
+    fn test_multiple_tables() {
+        let schema = Schema::new("test")
+            .add_table(Table::new(
+                "t1",
+                vec![ColumnDefinition::new("c1", DataType::Integer)],
+            ))
+            .unwrap()
+            .add_table(Table::new(
+                "t2",
+                vec![ColumnDefinition::new("c2", DataType::Text)],
+            ))
+            .unwrap();
+        assert_eq!(schema.table_count(), 2);
+        assert!(schema.has_table("t1"));
+        assert!(schema.has_table("t2"));
+    }
 }

@@ -79,6 +79,7 @@ impl BackupExporter {
             Value::Null => "".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => {
                 if s.contains(',') || s.contains('"') || s.contains('\n') {
                     format!("\"{}\"", s.replace('"', "\"\""))
@@ -92,7 +93,13 @@ impl BackupExporter {
             Value::Timestamp(t) => t.to_string(),
             Value::Uuid(u) => format!("{:036x}", u),
             Value::Array(arr) => {
-                format!("[{}]", arr.iter().map(|v| Self::csv_escape(v)).collect::<Vec<_>>().join(";"))
+                format!(
+                    "[{}]",
+                    arr.iter()
+                        .map(|v| Self::csv_escape(v))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                )
             }
             Value::Enum(_, name) => name.clone(),
         }
@@ -147,6 +154,7 @@ impl BackupExporter {
             Value::Null => "null".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("\"[BLOB: {} bytes]\"", b.len()),
@@ -154,7 +162,13 @@ impl BackupExporter {
             Value::Timestamp(t) => format!("\"{}\"", t),
             Value::Uuid(u) => format!("\"{:036x}\"", u),
             Value::Array(arr) => {
-                format!("[{}]", arr.iter().map(|v| Self::json_value(v)).collect::<Vec<_>>().join(","))
+                format!(
+                    "[{}]",
+                    arr.iter()
+                        .map(|v| Self::json_value(v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
             }
             Value::Enum(_, name) => format!("\"{}\"", name),
         }
@@ -191,6 +205,7 @@ impl BackupExporter {
             Value::Null => "NULL".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
             Value::Boolean(b) => {
                 if *b {
@@ -204,7 +219,13 @@ impl BackupExporter {
             Value::Timestamp(t) => format!("'{}'", t),
             Value::Uuid(u) => format!("'{:036x}'", u),
             Value::Array(arr) => {
-                format!("'{}'", arr.iter().map(|v| Self::sql_value(v)).collect::<Vec<_>>().join(","))
+                format!(
+                    "'{}'",
+                    arr.iter()
+                        .map(|v| Self::sql_value(v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
             }
             Value::Enum(_, name) => format!("'{}'", name),
         }

@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use structopt::StructOpt;
 
 /// Global LSN counter for tracking changes
@@ -142,20 +141,21 @@ fn value_to_sql(value: &Value) -> String {
         Value::Null => "NULL".to_string(),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
+        Value::Decimal(d) => d.to_string(),
         Value::Text(s) => format!("'{}'", s.replace("'", "''")),
         Value::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
         Value::Blob(bytes) => format!("X'{}'", hex::encode(bytes)),
         Value::Date(days) => format!("DATE '{}'", days),
         Value::Timestamp(us) => format!("TIMESTAMP '{}'", us),
-        Value::Uuid(uuid) => format!("'{}'", uuid),
+        Value::Uuid(u) => format!("'{:036x}'", u),
         Value::Array(arr) => format!(
-            "ARRAY[{}]",
+            "'{}'",
             arr.iter()
                 .map(|v| value_to_sql(v))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(",")
         ),
-        Value::Enum(name, val) => format!("'{}.{}'", name, val),
+        Value::Enum(_, name) => format!("'{}'", name),
     }
 }
 

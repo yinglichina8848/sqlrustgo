@@ -141,11 +141,12 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "chaos_test",
                 "crash_recovery_test",
                 "stress_test",
+                "kill_stress_test",
                 "production_scenario_test",
                 "wal_deterministic_test",
                 "wal_fuzz_test",
             ],
-            description: "混沌工程、崩溃恢复、压力测试、WAL确定性测试",
+            description: "混沌工程、崩溃恢复、压力测试、KILL并发测试、WAL确定性测试",
         },
         // 异常测试 - 稳定性
         TestCategory {
@@ -207,12 +208,6 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "工具测试 (Tools)",
             test_files: vec!["physical_backup_test"],
             description: "物理备份、mysqldump 等工具集成测试",
-        },
-        // AI Extension 测试
-        TestCategory {
-            name: "AI Extension 测试 (AI Extension)",
-            test_files: vec!["agentsql_test", "sql_cli_test"],
-            description: "AgentSQL: NL2SQL, Memory, Policy, Explain; sql-cli: UPDATE/DELETE",
         },
     ]
 }

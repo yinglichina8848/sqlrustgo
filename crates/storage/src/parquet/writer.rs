@@ -124,6 +124,10 @@ fn infer_schema(records: &[Record], column_names: &[String]) -> SqlResult<Schema
                         data_type = DataType::FixedSizeBinary(16);
                         break;
                     }
+                    Value::Decimal(_) => {
+                        data_type = DataType::Float64;
+                        break;
+                    }
                     Value::Array(_) => {
                         data_type = DataType::Utf8;
                         break;
