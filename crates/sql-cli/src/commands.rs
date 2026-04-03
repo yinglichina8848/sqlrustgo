@@ -217,8 +217,7 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
         sqlrustgo_types::Value::Date(d) => d.to_string(),
         sqlrustgo_types::Value::Timestamp(t) => t.to_string(),
         sqlrustgo_types::Value::Uuid(u) => u.to_string(),
-<<<<<<< HEAD
-        sqlrustgo_types::Value::Array(arr) => format!("[ARRAY: {} elements]", arr.len()),
+sqlrustgo_types::Value::Array(arr) => format!("[ARRAY: {} elements]", arr.len()),
         sqlrustgo_types::Value::Enum(idx, s) => format!("{}({})", s, idx),
     }
 }
