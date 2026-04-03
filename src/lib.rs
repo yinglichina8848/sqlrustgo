@@ -821,8 +821,14 @@ fn compute_aggregate(
             }
         }
         AggregateFunction::Sum => {
+            if all_values.is_empty() {
+                return Value::Null;
+            }
+
             let mut int_sum = 0i64;
             let mut float_sum = 0.0f64;
+            let mut decimal_sum = Decimal::ZERO;
+            let mut has_decimal = false;
             let mut has_float = false;
 
             for val in &all_values {
@@ -832,11 +838,17 @@ fn compute_aggregate(
                         float_sum += *n;
                         has_float = true;
                     }
+                    Value::Decimal(n) => {
+                        decimal_sum = decimal_sum + *n;
+                        has_decimal = true;
+                    }
                     _ => {}
                 }
             }
 
-            if has_float {
+            if has_decimal {
+                Value::Decimal(decimal_sum)
+            } else if has_float {
                 Value::Float(int_sum as f64 + float_sum)
             } else {
                 Value::Integer(int_sum)

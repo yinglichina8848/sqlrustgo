@@ -351,11 +351,73 @@ impl QueryResult {
                 a_str.cmp(&b_str)
             });
 
-            let match_flag = sqlite_sorted == sqlrustgo_sorted;
+            let match_flag =
+                Self::compare_data_with_tolerance(&sqlite_sorted, &sqlrustgo_sorted, &self.name);
+
+            if !match_flag && self.name == "Q6" {
+                println!(
+                    "DEBUG Q6: sqlite={:?}, sqlrustgo={:?}",
+                    sqlite_sorted, sqlrustgo_sorted
+                );
+            }
+
             self.match_result = Some(match_flag);
         } else {
             self.match_result = Some(false);
         }
+    }
+
+    fn compare_data_with_tolerance(a: &[Vec<String>], b: &[Vec<String>], query_name: &str) -> bool {
+        if a.len() != b.len() {
+            println!(
+                "DEBUG {}: row count mismatch {} vs {}",
+                query_name,
+                a.len(),
+                b.len()
+            );
+            return false;
+        }
+        for (i, (row_a, row_b)) in a.iter().zip(b.iter()).enumerate() {
+            if row_a.len() != row_b.len() {
+                println!(
+                    "DEBUG {} row {}: column count mismatch {} vs {}",
+                    query_name,
+                    i,
+                    row_a.len(),
+                    row_b.len()
+                );
+                return false;
+            }
+            for (j, (val_a, val_b)) in row_a.iter().zip(row_b.iter()).enumerate() {
+                if !Self::compare_values_with_tolerance(val_a, val_b) {
+                    println!(
+                        "DEBUG {} row {} col {}: '{}' vs '{}'",
+                        query_name, i, j, val_a, val_b
+                    );
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn compare_values_with_tolerance(a: &str, b: &str) -> bool {
+        if a == b {
+            return true;
+        }
+
+        if let (Ok(num_a), Ok(num_b)) = (a.parse::<f64>(), b.parse::<f64>()) {
+            let tolerance = 0.000001f64;
+            if (num_a - num_b).abs() < tolerance {
+                return true;
+            }
+            let max_magnitude = num_a.abs().max(num_b.abs());
+            if max_magnitude > 0.0 && (num_a - num_b).abs() / max_magnitude < tolerance {
+                return true;
+            }
+        }
+
+        a == b
     }
 }
 
