@@ -39,6 +39,7 @@ mod tests {
         let _token = Token::Select;
         let _stmt = Statement::Select(crate::parser::SelectStatement {
             table: "users".to_string(),
+            tables: vec!["users".to_string()],
             columns: vec![],
             where_clause: None,
             join_clause: None,

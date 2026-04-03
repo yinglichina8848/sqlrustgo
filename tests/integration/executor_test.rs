@@ -308,10 +308,11 @@ fn test_auto_increment_with_explicit_value() {
     let result = engine
         .execute(parse("SELECT * FROM products ORDER BY id").unwrap())
         .unwrap();
-    // Auto-increment counter was not used for explicit value, so starts from 1
-    // Note: current implementation increments counter even for explicit values
+    // With ids 100 (explicit) and 2 (auto-generated), ASC order gives [2, 100]
+    // So result.rows[0] is the auto-generated row with id=2
+    // Note: counter increments even for explicit values (counter: 0 -> 1 -> 2)
     assert_eq!(
-        result.rows[1][0],
+        result.rows[0][0],
         Value::Integer(2),
         "auto-increment should be 2 (counter incremented on explicit insert)"
     );
