@@ -1178,7 +1178,54 @@ impl Parser {
         self.expect(Token::From)?;
 
         let mut tables = Vec::new();
+        let mut join_conditions: Vec<(String, Expression)> = Vec::new();
         loop {
+            // Check for keywords that end FROM clause - do this first!
+            match self.current() {
+                Some(Token::Where)
+                | Some(Token::Group)
+                | Some(Token::Order)
+                | Some(Token::Limit)
+                | Some(Token::Having)
+                | Some(Token::Semicolon) => {
+                    break;
+                }
+                _ => {}
+            }
+
+            // Check for JOIN (which is tokenized as Identifier in our lexer)
+            if let Some(Token::Identifier(name)) = self.current() {
+                if name.to_uppercase() == "JOIN" {
+                    // Parse JOIN ... ON
+                    self.next(); // consume JOIN
+
+                    // Parse the table to join
+                    let join_table = match self.current() {
+                        Some(Token::Identifier(name)) => {
+                            let n = name.clone();
+                            self.next();
+                            n
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected table name after JOIN, got {:?}", t))
+                        }
+                        None => return Err("Expected table name after JOIN".to_string()),
+                    };
+                    tables.push(join_table.clone());
+
+                    // Expect ON
+                    if !matches!(self.current(), Some(Token::On)) {
+                        return Err("Expected ON after JOIN".to_string());
+                    }
+                    self.next(); // consume ON
+
+                    // Parse join condition
+                    let condition = self.parse_expression()?;
+                    join_conditions.push((join_table, condition));
+                    continue;
+                }
+            }
+
             let table_name = match self.current() {
                 Some(Token::Identifier(name)) => {
                     let name = name.clone();
@@ -1207,22 +1254,53 @@ impl Parser {
             };
             tables.push(table_name);
 
-            // Check for comma (more tables) or continue
             if matches!(self.current(), Some(Token::Comma)) {
                 self.next(); // consume comma
                 continue;
+            } else if let Some(Token::Identifier(name)) = self.current() {
+                if name.to_uppercase() == "JOIN" {
+                    // Continue to JOIN parsing
+                } else {
+                    break;
+                }
+            } else {
+                break;
             }
-            break;
         }
 
         let table = tables.first().cloned().unwrap_or_default();
 
+        // Combine join conditions with WHERE clause
+        let mut combined_where: Option<Expression> = None;
+
+        // Add join conditions to WHERE
+        for (_, condition) in &join_conditions {
+            combined_where = Some(if let Some(ref existing) = combined_where {
+                Expression::BinaryOp(
+                    Box::new(existing.clone()),
+                    "AND".to_string(),
+                    Box::new(condition.clone()),
+                )
+            } else {
+                condition.clone()
+            });
+        }
+
         // Parse WHERE clause (optional)
         let where_clause = if matches!(self.current(), Some(Token::Where)) {
             self.next(); // consume WHERE
-            Some(self.parse_expression()?)
+            let expr = self.parse_expression()?;
+            Some(if let Some(ref existing) = combined_where {
+                Expression::BinaryOp(
+                    Box::new(existing.clone()),
+                    "AND".to_string(),
+                    Box::new(expr),
+                )
+            } else {
+                expr
+            })
         } else {
-            None
+            combined_where
         };
 
         // Parse GROUP BY clause (optional)
