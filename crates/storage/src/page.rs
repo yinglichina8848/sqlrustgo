@@ -377,13 +377,21 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&ts.to_le_bytes());
             bytes
         }
-        Value::Uuid(u) => {
+        Value::Decimal(d) => {
             let mut bytes = vec![0x09];
+            let s = d.to_string();
+            let len = (s.len() as u32).to_le_bytes();
+            bytes.extend_from_slice(&len);
+            bytes.extend_from_slice(s.as_bytes());
+            bytes
+        }
+        Value::Uuid(u) => {
+            let mut bytes = vec![0x0a];
             bytes.extend_from_slice(&u.to_le_bytes());
             bytes
         }
         Value::Array(arr) => {
-            let mut bytes = vec![0x0a];
+            let mut bytes = vec![0x0b];
             bytes.extend_from_slice(&(arr.len() as u32).to_le_bytes());
             for item in arr {
                 bytes.extend_from_slice(&value_to_bytes(item));
@@ -391,7 +399,7 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes
         }
         Value::Enum(idx, name) => {
-            let mut bytes = vec![0x0b];
+            let mut bytes = vec![0x0c];
             bytes.extend_from_slice(&idx.to_le_bytes());
             let name_bytes = name.as_bytes();
             bytes.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());

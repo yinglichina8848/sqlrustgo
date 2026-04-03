@@ -865,6 +865,7 @@ fn value_to_json(value: Value) -> serde_json::Value {
         Value::Boolean(b) => serde_json::json!(b),
         Value::Integer(i) => serde_json::json!(i),
         Value::Float(f) => serde_json::json!(f),
+        Value::Decimal(d) => serde_json::json!(d.to_string()),
         Value::Text(s) => serde_json::json!(s),
         Value::Date(d) => serde_json::json!(d),
         Value::Timestamp(ts) => serde_json::json!(ts),
