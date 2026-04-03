@@ -253,6 +253,7 @@ pub fn global_execution_log() -> &'static ExecutionLog {
 mod tests {
     use super::*;
     use std::env::temp_dir;
+    use std::fs;
 
     #[test]
     fn test_log_level_from_str() {

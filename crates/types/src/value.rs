@@ -13,6 +13,7 @@
 //! | TEXT     | String    | UTF-8 string |
 //! | BLOB     | `Vec<u8>` | Binary data |
 
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -28,6 +29,8 @@ pub enum Value {
     Integer(i64),
     /// 64-bit floating point
     Float(f64),
+    /// Exact decimal numeric (SQL DECIMAL type)
+    Decimal(Decimal),
     /// Text string
     Text(String),
     /// Binary large object
@@ -57,6 +60,7 @@ impl Hash for Value {
                     f.to_bits().hash(state);
                 }
             }
+            Value::Decimal(d) => d.serialize().hash(state),
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
             Value::Date(d) => d.hash(state),
@@ -75,13 +79,16 @@ impl PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Decimal(a), Value::Decimal(b)) => a == b,
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
             (Value::Date(a), Value::Date(b)) => a == b,
             (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => a == b,
-            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => a_idx == b_idx && a_name == b_name,
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => {
+                a_idx == b_idx && a_name == b_name
+            }
             _ => false,
         }
     }
@@ -104,13 +111,14 @@ impl Ord for Value {
                 Value::Boolean(_) => 1,
                 Value::Integer(_) => 2,
                 Value::Float(_) => 3,
-                Value::Text(_) => 4,
-                Value::Blob(_) => 5,
-                Value::Date(_) => 6,
-                Value::Timestamp(_) => 7,
-                Value::Uuid(_) => 8,
-                Value::Array(_) => 9,
-                Value::Enum(_, _) => 10,
+                Value::Decimal(_) => 4,
+                Value::Text(_) => 5,
+                Value::Blob(_) => 6,
+                Value::Date(_) => 7,
+                Value::Timestamp(_) => 8,
+                Value::Uuid(_) => 9,
+                Value::Array(_) => 10,
+                Value::Enum(_, _) => 11,
             }
         }
 
@@ -126,7 +134,6 @@ impl Ord for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
             (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
             (Value::Float(a), Value::Float(b)) => {
-                // Handle NaN: NaN is considered the smallest value
                 if a.is_nan() && b.is_nan() {
                     std::cmp::Ordering::Equal
                 } else if a.is_nan() {
@@ -137,6 +144,7 @@ impl Ord for Value {
                     a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                 }
             }
+            (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
             (Value::Text(a), Value::Text(b)) => a.cmp(b),
             (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
             (Value::Date(a), Value::Date(b)) => a.cmp(b),
@@ -168,11 +176,20 @@ impl Value {
         }
     }
 
+    /// Get decimal value if this is a Decimal
+    pub fn as_decimal(&self) -> Option<Decimal> {
+        match self {
+            Value::Decimal(d) => Some(*d),
+            _ => None,
+        }
+    }
+
     /// Convert to boolean for predicate evaluation
     pub fn to_bool(&self) -> bool {
         match self {
             Value::Boolean(b) => *b,
             Value::Integer(i) => *i != 0,
+            Value::Decimal(d) => !d.is_zero(),
             Value::Null => false,
             _ => false,
         }
@@ -185,6 +202,7 @@ impl Value {
             Value::Boolean(b) => b.to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
             Value::Date(d) => d.to_string(),
@@ -208,6 +226,7 @@ impl Value {
             Value::Boolean(_) => "BOOLEAN",
             Value::Integer(_) => "INTEGER",
             Value::Float(_) => "FLOAT",
+            Value::Decimal(_) => "DECIMAL",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
             Value::Date(_) => "DATE",
@@ -240,6 +259,7 @@ impl Value {
             Value::Boolean(_) => 1,
             Value::Integer(_) => 8,
             Value::Float(_) => 8,
+            Value::Decimal(_) => 16,
             Value::Text(s) => s.capacity(),
             Value::Blob(b) => b.capacity(),
             Value::Date(_) => 4,
@@ -856,5 +876,210 @@ mod tests {
         let blob = Value::Blob(vec![]);
         assert_eq!(blob.type_name(), "BLOB");
         assert_eq!(blob.to_sql_string(), "X''");
+    }
+
+    // UUID type tests
+    #[test]
+    fn test_value_uuid_basic() {
+        let uuid = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        assert_eq!(uuid.type_name(), "UUID");
+    }
+
+    #[test]
+    fn test_value_uuid_to_sql_string() {
+        let uuid = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let s = uuid.to_sql_string();
+        assert_eq!(s, "0000550e8400e29b41d4a716446655440000");
+    }
+
+    #[test]
+    fn test_value_uuid_equality() {
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u3 = Value::Uuid(0x660e8400e29b41d4a716446655440000);
+        assert_eq!(u1, u2);
+        assert_ne!(u1, u3);
+    }
+
+    #[test]
+    fn test_value_uuid_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        u1.hash(&mut h1);
+        u2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_uuid_estimate_memory_size() {
+        assert_eq!(Value::Uuid(0).estimate_memory_size(), 16);
+    }
+
+    #[test]
+    fn test_value_uuid_ordering() {
+        use std::cmp::Ordering;
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x660e8400e29b41d4a716446655440000);
+        assert_eq!(u1.cmp(&u2), Ordering::Less);
+        assert_eq!(u2.cmp(&u1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_value_uuid_partial_eq() {
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        assert_eq!(u1, u2);
+        assert!(u1 == u2);
+    }
+
+    // ARRAY type tests
+    #[test]
+    fn test_value_array_basic() {
+        let arr = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        assert_eq!(arr.type_name(), "ARRAY");
+    }
+
+    #[test]
+    fn test_value_array_to_sql_string() {
+        let arr = Value::Array(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let s = arr.to_sql_string();
+        assert_eq!(s, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn test_value_array_empty() {
+        let arr = Value::Array(vec![]);
+        assert_eq!(arr.to_sql_string(), "[]");
+    }
+
+    #[test]
+    fn test_value_array_equality() {
+        let a1 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a2 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a3 = Value::Array(vec![Value::Integer(1), Value::Integer(3)]);
+        assert_eq!(a1, a2);
+        assert_ne!(a1, a3);
+    }
+
+    #[test]
+    fn test_value_array_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let a1 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a2 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        a1.hash(&mut h1);
+        a2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_array_estimate_memory_size() {
+        let arr = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        assert_eq!(arr.estimate_memory_size(), 16); // 8 + 8
+    }
+
+    #[test]
+    fn test_value_array_nested() {
+        let nested = Value::Array(vec![
+            Value::Array(vec![Value::Integer(1)]),
+            Value::Integer(2),
+        ]);
+        let s = nested.to_sql_string();
+        assert_eq!(s, "[[1], 2]");
+    }
+
+    // ENUM type tests
+    #[test]
+    fn test_value_enum_basic() {
+        let e = Value::Enum(0, "red".to_string());
+        assert_eq!(e.type_name(), "ENUM");
+    }
+
+    #[test]
+    fn test_value_enum_to_sql_string() {
+        let e = Value::Enum(1, "green".to_string());
+        assert_eq!(e.to_sql_string(), "green");
+    }
+
+    #[test]
+    fn test_value_enum_equality() {
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "red".to_string());
+        let e3 = Value::Enum(1, "red".to_string());
+        let e4 = Value::Enum(0, "blue".to_string());
+        assert_eq!(e1, e2);
+        assert_ne!(e1, e3);
+        assert_ne!(e1, e4);
+    }
+
+    #[test]
+    fn test_value_enum_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "red".to_string());
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        e1.hash(&mut h1);
+        e2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_enum_estimate_memory_size() {
+        let e = Value::Enum(0, "red".to_string());
+        // 3 chars + 4 bytes for i32
+        assert_eq!(e.estimate_memory_size(), 7);
+    }
+
+    #[test]
+    fn test_value_enum_ordering() {
+        use std::cmp::Ordering;
+        let e1 = Value::Enum(0, "apple".to_string());
+        let e2 = Value::Enum(1, "banana".to_string());
+        assert_eq!(e1.cmp(&e2), Ordering::Less);
+        assert_eq!(e2.cmp(&e1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_value_enum_same_index_different_name() {
+        // ENUMs with same index but different names should be not equal
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "blue".to_string());
+        assert_ne!(e1, e2);
+    }
+
+    #[test]
+    fn test_value_array_with_enum() {
+        let arr = Value::Array(vec![
+            Value::Enum(0, "red".to_string()),
+            Value::Enum(1, "blue".to_string()),
+        ]);
+        assert_eq!(arr.type_name(), "ARRAY");
+        let s = arr.to_sql_string();
+        assert_eq!(s, "[red, blue]");
+    }
+
+    #[test]
+    fn test_value_uuid_zero() {
+        let uuid = Value::Uuid(0);
+        assert_eq!(uuid.to_sql_string(), "000000000000000000000000000000000000");
+    }
+
+    #[test]
+    fn test_value_uuid_max() {
+        let uuid = Value::Uuid(u128::MAX);
+        let s = uuid.to_sql_string();
+        assert_eq!(s, "0000ffffffffffffffffffffffffffffffff");
     }
 }

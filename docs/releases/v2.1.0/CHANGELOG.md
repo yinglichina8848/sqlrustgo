@@ -1,6 +1,32 @@
 # SQLRustGo v2.1.0 Changelog
 
-## [v2.1.0] - 2026-04-02
+## [v2.1.0-rc] - 2026-04-03
+
+### RC 阶段变更
+
+#### 合并更新
+- **develop/v2.1.0** 完全合并到 **rc/v2.1.0**
+- 解决多文件合并冲突 (tpch_compliance_test.rs, commands.rs)
+- 添加 TPC-H 合规测试基础设施
+
+#### 已知问题
+- 4 个预存测试失败 (不阻塞 RC)
+  - test_batch_insert_mixed_columns
+  - test_auto_increment_with_explicit_value
+  - test_teaching_having
+  - test_regression_suite
+
+### RC 后续任务
+- [ ] 覆盖率提升至 ≥80%
+- [ ] 修复 4 个预存测试失败
+- [ ] 完成 TPC-H SF=0.1 完整测试
+- [ ] 完成性能基准测试
+
+---
+
+## [v2.1.0-beta] - 2026-04-01
+
+### Beta 阶段完成
 
 ### Added
 

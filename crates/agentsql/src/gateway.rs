@@ -239,8 +239,14 @@ pub async fn handle_optimize(
     Json(OptimizeResponseDto {
         original_sql: result.original_sql,
         optimized_sql: result.optimized_sql,
-        suggestions: result.suggestions.into_iter().map(serde_json::to_value).filter_map(|v| v.ok()).collect(),
-        estimated_improvement: serde_json::to_value(&result.estimated_improvement).unwrap_or(serde_json::Value::Null),
+        suggestions: result
+            .suggestions
+            .into_iter()
+            .map(serde_json::to_value)
+            .filter_map(|v| v.ok())
+            .collect(),
+        estimated_improvement: serde_json::to_value(&result.estimated_improvement)
+            .unwrap_or(serde_json::Value::Null),
     })
 }
 

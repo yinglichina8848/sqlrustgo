@@ -655,7 +655,14 @@ pub fn prune_physical_backups(
     if let Some(d) = retain_by_days {
         println!("  Keep: backups from last {} day(s)", d);
     }
-    println!("  Mode: {}", if dry_run { "DRY RUN (no changes)" } else { "LIVE" });
+    println!(
+        "  Mode: {}",
+        if dry_run {
+            "DRY RUN (no changes)"
+        } else {
+            "LIVE"
+        }
+    );
 
     // Collect all backups
     let mut backups = Vec::new();
@@ -724,7 +731,11 @@ pub fn prune_physical_backups(
         });
 
         if to_delete.len() > before {
-            println!("  [Days filter] {} backup(s) older than {} days", to_delete.len() - before, days);
+            println!(
+                "  [Days filter] {} backup(s) older than {} days",
+                to_delete.len() - before,
+                days
+            );
         }
     }
 
@@ -737,7 +748,11 @@ pub fn prune_physical_backups(
 
     // Print what would be deleted
     println!();
-    println!("Backup(s) to delete ({} total, {} bytes):", to_delete.len(), to_delete.iter().map(|b| b.size).sum::<u64>());
+    println!(
+        "Backup(s) to delete ({} total, {} bytes):",
+        to_delete.len(),
+        to_delete.iter().map(|b| b.size).sum::<u64>()
+    );
     for backup in &to_delete {
         println!(
             "  ❌ {} - {} ({} bytes)",
@@ -798,7 +813,10 @@ pub fn prune_physical_backups(
 
     println!();
     println!("✅ Prune complete!");
-    println!("   Deleted: {} backup(s), {} bytes", deleted_count, deleted_size);
+    println!(
+        "   Deleted: {} backup(s), {} bytes",
+        deleted_count, deleted_size
+    );
     println!("   Kept: {} backup(s)", kept.len());
 
     Ok(())
@@ -858,7 +876,11 @@ fn days_since_epoch(year: u64, month: u64, day: u64) -> u64 {
     let days_per_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let is_leap = is_leap_year(year);
     for m in 1..month {
-        total_days += if is_leap && m == 2 { 29 } else { days_per_month[(m - 1) as usize] };
+        total_days += if is_leap && m == 2 {
+            29
+        } else {
+            days_per_month[(m - 1) as usize]
+        };
     }
 
     // Add days
