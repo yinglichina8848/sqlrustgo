@@ -3,8 +3,8 @@
 //! Defines document tables and management functions for the GMP extension.
 //! Documents are versioned, typed, and can have multiple sections and keywords.
 
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine};
 use sqlrustgo_types::{SqlResult, Value};
-use sqlrustgo_storage::{StorageEngine, ColumnDefinition};
 
 /// Document status enum
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +138,11 @@ impl DocumentContent {
             Value::Text(s) => s.clone(),
             _ => return None,
         };
-        Some(DocumentContent { doc_id, section, content })
+        Some(DocumentContent {
+            doc_id,
+            section,
+            content,
+        })
     }
 
     pub fn to_row(&self) -> Vec<Value> {
@@ -171,7 +175,10 @@ impl DocumentKeyword {
     }
 
     pub fn to_row(&self) -> Vec<Value> {
-        vec![Value::Integer(self.doc_id), Value::Text(self.keyword.clone())]
+        vec![
+            Value::Integer(self.doc_id),
+            Value::Text(self.keyword.clone()),
+        ]
     }
 }
 
@@ -375,10 +382,7 @@ pub struct NewDocument<'a> {
 }
 
 /// Insert a document into the storage engine
-pub fn insert_document(
-    storage: &mut dyn StorageEngine,
-    doc: NewDocument,
-) -> SqlResult<i64> {
+pub fn insert_document(storage: &mut dyn StorageEngine, doc: NewDocument) -> SqlResult<i64> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -393,7 +397,8 @@ pub fn insert_document(
             _ => None,
         })
         .max()
-        .unwrap_or(0) + 1;
+        .unwrap_or(0)
+        + 1;
 
     let row = vec![
         Value::Integer(next_id),
@@ -595,8 +600,7 @@ mod tests {
         )
         .unwrap();
 
-        insert_document_content(&mut storage, doc_id, "intro", "Welcome to the company")
-            .unwrap();
+        insert_document_content(&mut storage, doc_id, "intro", "Welcome to the company").unwrap();
         insert_document_keyword(&mut storage, doc_id, "HR").unwrap();
         insert_document_keyword(&mut storage, doc_id, "onboarding").unwrap();
 

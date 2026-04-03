@@ -509,7 +509,9 @@ mod tests {
             let (host, user, password, database) = config;
 
             let output = Command::new("mysql")
-                .args(&["-h", &host, "-u", &user, "-p", &password, &database, "-e", sql])
+                .args(&[
+                    "-h", &host, "-u", &user, "-p", &password, &database, "-e", sql,
+                ])
                 .output()
                 .map_err(|e| format!("MySQL command failed: {}", e))?;
 
