@@ -13,7 +13,6 @@
 //! | TEXT     | String    | UTF-8 string |
 //! | BLOB     | `Vec<u8>` | Binary data |
 
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -29,8 +28,6 @@ pub enum Value {
     Integer(i64),
     /// 64-bit floating point
     Float(f64),
-    /// Exact decimal numeric (SQL DECIMAL type)
-    Decimal(Decimal),
     /// Text string
     Text(String),
     /// Binary large object
@@ -60,7 +57,6 @@ impl Hash for Value {
                     f.to_bits().hash(state);
                 }
             }
-            Value::Decimal(d) => d.serialize().hash(state),
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
             Value::Date(d) => d.hash(state),
@@ -79,7 +75,6 @@ impl PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::Decimal(a), Value::Decimal(b)) => a == b,
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
             (Value::Date(a), Value::Date(b)) => a == b,
@@ -111,14 +106,13 @@ impl Ord for Value {
                 Value::Boolean(_) => 1,
                 Value::Integer(_) => 2,
                 Value::Float(_) => 3,
-                Value::Decimal(_) => 4,
-                Value::Text(_) => 5,
-                Value::Blob(_) => 6,
-                Value::Date(_) => 7,
-                Value::Timestamp(_) => 8,
-                Value::Uuid(_) => 9,
-                Value::Array(_) => 10,
-                Value::Enum(_, _) => 11,
+                Value::Text(_) => 4,
+                Value::Blob(_) => 5,
+                Value::Date(_) => 6,
+                Value::Timestamp(_) => 7,
+                Value::Uuid(_) => 8,
+                Value::Array(_) => 9,
+                Value::Enum(_, _) => 10,
             }
         }
 
@@ -134,6 +128,7 @@ impl Ord for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
             (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
             (Value::Float(a), Value::Float(b)) => {
+                // Handle NaN: NaN is considered the smallest value
                 if a.is_nan() && b.is_nan() {
                     std::cmp::Ordering::Equal
                 } else if a.is_nan() {
@@ -144,7 +139,6 @@ impl Ord for Value {
                     a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                 }
             }
-            (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
             (Value::Text(a), Value::Text(b)) => a.cmp(b),
             (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
             (Value::Date(a), Value::Date(b)) => a.cmp(b),
@@ -176,20 +170,11 @@ impl Value {
         }
     }
 
-    /// Get decimal value if this is a Decimal
-    pub fn as_decimal(&self) -> Option<Decimal> {
-        match self {
-            Value::Decimal(d) => Some(*d),
-            _ => None,
-        }
-    }
-
     /// Convert to boolean for predicate evaluation
     pub fn to_bool(&self) -> bool {
         match self {
             Value::Boolean(b) => *b,
             Value::Integer(i) => *i != 0,
-            Value::Decimal(d) => !d.is_zero(),
             Value::Null => false,
             _ => false,
         }
@@ -202,7 +187,6 @@ impl Value {
             Value::Boolean(b) => b.to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
             Value::Date(d) => d.to_string(),
@@ -226,7 +210,6 @@ impl Value {
             Value::Boolean(_) => "BOOLEAN",
             Value::Integer(_) => "INTEGER",
             Value::Float(_) => "FLOAT",
-            Value::Decimal(_) => "DECIMAL",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
             Value::Date(_) => "DATE",
@@ -259,7 +242,6 @@ impl Value {
             Value::Boolean(_) => 1,
             Value::Integer(_) => 8,
             Value::Float(_) => 8,
-            Value::Decimal(_) => 16,
             Value::Text(s) => s.capacity(),
             Value::Blob(b) => b.capacity(),
             Value::Date(_) => 4,

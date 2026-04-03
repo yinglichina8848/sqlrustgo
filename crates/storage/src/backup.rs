@@ -79,7 +79,6 @@ impl BackupExporter {
             Value::Null => "".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => {
                 if s.contains(',') || s.contains('"') || s.contains('\n') {
                     format!("\"{}\"", s.replace('"', "\"\""))
@@ -154,7 +153,6 @@ impl BackupExporter {
             Value::Null => "null".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("\"[BLOB: {} bytes]\"", b.len()),
@@ -205,7 +203,6 @@ impl BackupExporter {
             Value::Null => "NULL".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
             Value::Boolean(b) => {
                 if *b {

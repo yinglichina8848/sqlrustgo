@@ -504,18 +504,6 @@ fn evaluate_expr(
                     (Value::Text(l), Value::Text(r)) => Value::Boolean(l <= r),
                     _ => Value::Boolean(false),
                 },
-                "LIKE" | "like" => match (&left_val, &right_val) {
-                    (Value::Text(text), Value::Text(pattern)) => {
-                        Value::Boolean(like_match(text, pattern))
-                    }
-                    _ => Value::Null,
-                },
-                "NOT LIKE" | "not like" => match (&left_val, &right_val) {
-                    (Value::Text(text), Value::Text(pattern)) => {
-                        Value::Boolean(!like_match(text, pattern))
-                    }
-                    _ => Value::Null,
-                },
                 _ => Value::Null,
             }
         }
@@ -689,8 +677,9 @@ fn like_match(text: &str, pattern: &str) -> bool {
         if pi == pc.len() {
             ti == tc.len()
         } else if pc[pi] == '%' {
-            (pi + 1 < pc.len() && ti < tc.len() && do_match(pi + 1, ti, pc, tc))
-                || (pi + 1 == pc.len() && ti == tc.len())
+            // % matches any sequence - try matching remaining pattern at each position
+            // or skip the % and continue
+            (ti < tc.len() && do_match(pi + 1, ti, pc, tc))
                 || (ti < tc.len() && do_match(pi, ti + 1, pc, tc))
         } else if pc[pi] == '_' {
             ti < tc.len() && do_match(pi + 1, ti + 1, pc, tc)
@@ -768,26 +757,15 @@ fn compute_aggregate(
             }
         }
         AggregateFunction::Sum => {
-            let mut int_sum = 0i64;
-            let mut float_sum = 0.0f64;
-            let mut has_float = false;
-
+            let mut sum = 0i64;
             for val in &all_values {
-                match val {
-                    Value::Integer(n) => int_sum += *n,
-                    Value::Float(n) => {
-                        float_sum += *n;
-                        has_float = true;
-                    }
-                    _ => {}
+                if let Value::Integer(n) = val {
+                    sum += *n;
+                } else if let Value::Float(n) = val {
+                    sum += *n as i64;
                 }
             }
-
-            if has_float {
-                Value::Float(int_sum as f64 + float_sum)
-            } else {
-                Value::Integer(int_sum)
-            }
+            Value::Integer(sum)
         }
         AggregateFunction::Avg => {
             let mut sum = 0.0f64;
