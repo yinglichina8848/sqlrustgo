@@ -1252,7 +1252,6 @@ impl StorageEngine for MemoryStorage {
             // Auto-create indexes for integer columns after bulk load
             if let Some(table_info) = self.table_infos.get(table) {
                 for (col_idx, col_def) in table_info.columns.iter().enumerate() {
-                    let upper = col_def.data_type.to_uppercase();
                     // Auto-create index for all columns (supports INTEGER, TEXT via hash)
                     let index_name = format!("{}_{}", table, col_def.name);
                     let mut tree = SimpleBPlusTree::new();
