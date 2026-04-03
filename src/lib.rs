@@ -3,6 +3,8 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 //! This crate re-exports functionality from the modular crates/ workspace.
 
+use rust_decimal::Decimal;
+
 pub use sqlrustgo_executor::{Executor, ExecutorResult, GLOBAL_PROFILER};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
@@ -411,11 +413,18 @@ fn evaluate_expr(
 ) -> Value {
     match expr {
         sqlrustgo_parser::Expression::Literal(s) => {
-            // Try to parse as number first
             if let Ok(n) = s.parse::<i64>() {
                 Value::Integer(n)
-            } else if let Ok(n) = s.parse::<f64>() {
-                Value::Float(n)
+            } else if s.contains('.') {
+                if let Ok(d) = s.parse::<Decimal>() {
+                    Value::Decimal(d)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else {
+                    Value::Text(s.clone())
+                }
+            } else if let Ok(f) = s.parse::<f64>() {
+                Value::Float(f)
             } else if s.eq_ignore_ascii_case("true") {
                 Value::Boolean(true)
             } else if s.eq_ignore_ascii_case("false") {
@@ -445,6 +454,15 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
                     (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 + r),
                     (Value::Float(l), Value::Integer(r)) => Value::Float(l + *r as f64),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Decimal(l + r),
+                    (Value::Integer(l), Value::Decimal(r)) => Value::Decimal(Decimal::from(*l) + r),
+                    (Value::Decimal(l), Value::Integer(r)) => Value::Decimal(l + Decimal::from(*r)),
+                    (Value::Float(l), Value::Decimal(r)) => {
+                        Value::Decimal(Decimal::from_f64_retain(*l).unwrap_or_default() + r)
+                    }
+                    (Value::Decimal(l), Value::Float(r)) => {
+                        Value::Decimal(l + Decimal::from_f64_retain(*r).unwrap_or_default())
+                    }
                     _ => Value::Null,
                 },
                 "-" => match (&left_val, &right_val) {
@@ -452,6 +470,15 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
                     (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 - r),
                     (Value::Float(l), Value::Integer(r)) => Value::Float(l - *r as f64),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Decimal(l - r),
+                    (Value::Integer(l), Value::Decimal(r)) => Value::Decimal(Decimal::from(*l) - r),
+                    (Value::Decimal(l), Value::Integer(r)) => Value::Decimal(l - Decimal::from(*r)),
+                    (Value::Float(l), Value::Decimal(r)) => {
+                        Value::Decimal(Decimal::from_f64_retain(*l).unwrap_or_default() - r)
+                    }
+                    (Value::Decimal(l), Value::Float(r)) => {
+                        Value::Decimal(l - Decimal::from_f64_retain(*r).unwrap_or_default())
+                    }
                     _ => Value::Null,
                 },
                 "*" => match (&left_val, &right_val) {
@@ -459,6 +486,15 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
                     (Value::Integer(l), Value::Float(r)) => Value::Float(*l as f64 * r),
                     (Value::Float(l), Value::Integer(r)) => Value::Float(l * *r as f64),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Decimal(l * r),
+                    (Value::Integer(l), Value::Decimal(r)) => Value::Decimal(Decimal::from(*l) * r),
+                    (Value::Decimal(l), Value::Integer(r)) => Value::Decimal(l * Decimal::from(*r)),
+                    (Value::Float(l), Value::Decimal(r)) => {
+                        Value::Decimal(Decimal::from_f64_retain(*l).unwrap_or_default() * r)
+                    }
+                    (Value::Decimal(l), Value::Float(r)) => {
+                        Value::Decimal(l * Decimal::from_f64_retain(*r).unwrap_or_default())
+                    }
                     _ => Value::Null,
                 },
                 "/" => match (&left_val, &right_val) {
@@ -468,6 +504,19 @@ fn evaluate_expr(
                         Value::Float(*l as f64 / r)
                     }
                     (Value::Float(l), Value::Integer(r)) if *r != 0 => Value::Float(l / *r as f64),
+                    (Value::Decimal(l), Value::Decimal(r)) if !r.is_zero() => Value::Decimal(l / r),
+                    (Value::Integer(l), Value::Decimal(r)) if !r.is_zero() => {
+                        Value::Decimal(Decimal::from(*l) / r)
+                    }
+                    (Value::Decimal(l), Value::Integer(r)) if *r != 0 => {
+                        Value::Decimal(l / Decimal::from(*r))
+                    }
+                    (Value::Float(l), Value::Decimal(r)) if !r.is_zero() => {
+                        Value::Decimal(Decimal::from_f64_retain(*l).unwrap_or_default() / r)
+                    }
+                    (Value::Decimal(l), Value::Float(r)) if *r != 0.0 => {
+                        Value::Decimal(l / Decimal::from_f64_retain(*r).unwrap_or_default())
+                    }
                     _ => Value::Null,
                 },
                 "=" | "==" | "EQ" => Value::Boolean(left_val == right_val),
@@ -477,6 +526,7 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Boolean(l > r),
                     (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) > r),
                     (Value::Float(l), Value::Integer(r)) => Value::Boolean(l > (r as f64)),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Boolean(l > r),
                     (Value::Text(l), Value::Text(r)) => Value::Boolean(l > r),
                     _ => Value::Boolean(false),
                 },
@@ -485,6 +535,7 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Boolean(l < r),
                     (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) < r),
                     (Value::Float(l), Value::Integer(r)) => Value::Boolean(l < (r as f64)),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Boolean(l < r),
                     (Value::Text(l), Value::Text(r)) => Value::Boolean(l < r),
                     _ => Value::Boolean(false),
                 },
@@ -493,6 +544,7 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Boolean(l >= r),
                     (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) >= r),
                     (Value::Float(l), Value::Integer(r)) => Value::Boolean(l >= (r as f64)),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Boolean(l >= r),
                     (Value::Text(l), Value::Text(r)) => Value::Boolean(l >= r),
                     _ => Value::Boolean(false),
                 },
@@ -501,6 +553,7 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Float(r)) => Value::Boolean(l <= r),
                     (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) <= r),
                     (Value::Float(l), Value::Integer(r)) => Value::Boolean(l <= (r as f64)),
+                    (Value::Decimal(l), Value::Decimal(r)) => Value::Boolean(l <= r),
                     (Value::Text(l), Value::Text(r)) => Value::Boolean(l <= r),
                     _ => Value::Boolean(false),
                 },
