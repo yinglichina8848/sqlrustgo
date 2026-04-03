@@ -768,15 +768,26 @@ fn compute_aggregate(
             }
         }
         AggregateFunction::Sum => {
-            let mut sum = 0i64;
+            let mut int_sum = 0i64;
+            let mut float_sum = 0.0f64;
+            let mut has_float = false;
+
             for val in &all_values {
-                if let Value::Integer(n) = val {
-                    sum += *n;
-                } else if let Value::Float(n) = val {
-                    sum += *n as i64;
+                match val {
+                    Value::Integer(n) => int_sum += *n,
+                    Value::Float(n) => {
+                        float_sum += *n;
+                        has_float = true;
+                    }
+                    _ => {}
                 }
             }
-            Value::Integer(sum)
+
+            if has_float {
+                Value::Float(int_sum as f64 + float_sum)
+            } else {
+                Value::Integer(int_sum)
+            }
         }
         AggregateFunction::Avg => {
             let mut sum = 0.0f64;
