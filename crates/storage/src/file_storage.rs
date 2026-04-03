@@ -1300,8 +1300,9 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
-        self.search_index(table, column, key)
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
+        // FileStorage doesn't support indexes yet
+        Vec::new()
     }
 
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {

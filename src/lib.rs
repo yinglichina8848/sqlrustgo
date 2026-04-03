@@ -316,6 +316,7 @@ fn handle_foreign_key_update(
 
 /// Extract index usage info from a WHERE clause
 /// Returns (column_name, op, value) if the WHERE can use an index
+/// For TEXT columns, value is the hash of the string
 fn extract_index_predicate(
     where_clause: &sqlrustgo_parser::Expression,
     columns: &[sqlrustgo_storage::ColumnDefinition],
@@ -330,7 +331,7 @@ fn extract_index_predicate(
             }
             
             // Check if left side is a column and right side is a value
-            let (col_name, value) = match (&**left, &**right) {
+            let (col_name, value_str) = match (&**left, &**right) {
                 (sqlrustgo_parser::Expression::Identifier(name), sqlrustgo_parser::Expression::Literal(val)) => {
                     (name.clone(), val.clone())
                 }
@@ -340,15 +341,29 @@ fn extract_index_predicate(
                 _ => return None,
             };
             
-            // Check if column exists and is an integer type
+            // Check if column exists
             let col_def = columns.iter().find(|c| &c.name == &col_name)?;
             let upper = col_def.data_type.to_uppercase();
-            if !upper.contains("INT") && upper != "BIGINT" && upper != "SMALLINT" && upper != "TINYINT" {
-                return None;
-            }
             
-            // Parse the value as i64
-            let value_i64 = value.parse::<i64>().ok()?;
+            // For TEXT columns, we need to hash the string value
+            // Hash must match the hash function used in to_index_key()
+            use std::hash::{Hash, Hasher};
+            use std::collections::hash_map::DefaultHasher;
+            
+            let value_i64 = if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
+                // Integer column: parse the value as i64
+                value_str.parse::<i64>().ok()?
+            } else {
+                // TEXT column: hash the string
+                // NOTE: For TEXT, only "=" operator works correctly with hash index
+                // Range operators (<, >) will not work correctly with hash
+                if op_upper != "=" {
+                    return None; // Hash doesn't support range queries
+                }
+                let mut hasher = DefaultHasher::new();
+                value_str.hash(&mut hasher);
+                hasher.finish() as i64
+            };
             
             Some((col_name, op_upper, value_i64))
         }
@@ -369,12 +384,15 @@ fn filter_using_index(
     match op {
         "=" => {
             // Exact match - use search_index and get_row (O(log n) instead of O(n))
-            if let Some(row_id) = storage.search_index(table_name, column_name, value) {
-                if let Ok(Some(row)) = storage.get_row(table_name, row_id as usize) {
-                    return Some(vec![row]);
-                }
+            let row_ids = storage.search_index(table_name, column_name, value);
+            if row_ids.is_empty() {
+                return Some(vec![]);
             }
-            return Some(vec![]);
+            let filtered: Vec<Vec<Value>> = row_ids
+                .into_iter()
+                .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
+                .collect();
+            return Some(filtered);
         }
         "<" | "<=" | ">" | ">=" => {
             // Range query - use index WITHOUT scanning all rows first
@@ -2170,7 +2188,8 @@ impl ExecutionEngine {
                         // If we already used index to filter, no need to filter again
                         if tables.len() == 1 {
                             if let Some((ref col_name, ref op, ref value)) = extract_index_predicate(where_clause, &columns) {
-                                if let Some(_) = storage.search_index(&tables[0], col_name, *value) {
+                                let index_results = storage.search_index(&tables[0], col_name, *value);
+                                if !index_results.is_empty() {
                                     // Already filtered by index, skip evaluation
                                     all_rows
                                 } else {
