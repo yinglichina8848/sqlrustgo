@@ -72,6 +72,8 @@ fn setup_sqlite_schema(conn: &Connection) {
 }
 
 fn setup_sqlite_data(conn: &Connection) {
+    conn.execute_batch("BEGIN TRANSACTION;").unwrap();
+
     conn.execute(
         "INSERT INTO region VALUES (0, 'AFRICA', 'Africa region')",
         [],
@@ -195,6 +197,8 @@ fn setup_sqlite_data(conn: &Connection) {
             ).unwrap();
         }
     }
+
+    conn.execute_batch("COMMIT;").unwrap();
 }
 
 fn setup_sqlrustgo_schema(engine: &mut ExecutionEngine) {
