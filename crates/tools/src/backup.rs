@@ -141,7 +141,6 @@ fn value_to_sql(value: &Value) -> String {
         Value::Null => "NULL".to_string(),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
-        Value::Decimal(d) => d.to_string(),
         Value::Text(s) => format!("'{}'", s.replace("'", "''")),
         Value::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
         Value::Blob(bytes) => format!("X'{}'", hex::encode(bytes)),
