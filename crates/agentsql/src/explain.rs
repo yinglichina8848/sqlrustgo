@@ -48,6 +48,7 @@ pub enum ExplainFormat {
 }
 
 pub struct ExplainService {
+    #[allow(dead_code)]
     options: ExplainOptions,
 }
 

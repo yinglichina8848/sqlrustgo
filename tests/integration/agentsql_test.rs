@@ -384,11 +384,7 @@ mod tests {
             action: "SELECT".to_string(),
             context: None,
         };
-        let policy_response = policy_engine.check(&policy_request);
-        assert!(
-            policy_response.allowed || !policy_response.allowed,
-            "Policy check should return valid response"
-        );
+        let _policy_response = policy_engine.check(&policy_request);
 
         let explain_result = explainer.explain("SELECT * FROM users");
         assert!(

@@ -265,6 +265,11 @@ pub enum Expr {
         expr: Box<Expr>,
         values: Vec<Expr>,
     },
+    /// CASE WHEN expression: CASE WHEN cond THEN result ELSE default END
+    CaseWhen {
+        conditions: Vec<(Box<Expr>, Box<Expr>)>,
+        else_result: Option<Box<Expr>>,
+    },
 }
 
 impl Expr {
@@ -334,6 +339,22 @@ impl Expr {
                     }
                 }
                 Some(Value::Boolean(false))
+            }
+            // CASE WHEN: evaluate conditions in order, return first matching result
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                for (cond, result) in conditions {
+                    if let Some(Value::Boolean(true)) = cond.evaluate(row, schema) {
+                        return result.evaluate(row, schema);
+                    }
+                }
+                if let Some(else_expr) = else_result {
+                    else_expr.evaluate(row, schema)
+                } else {
+                    Some(Value::Null)
+                }
             }
         }
     }
@@ -482,6 +503,19 @@ impl fmt::Display for Expr {
             Expr::InList { expr, values } => {
                 let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
                 write!(f, "{} IN ({})", expr, values_str.join(", "))
+            }
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                write!(f, "CASE ")?;
+                for (cond, result) in conditions {
+                    write!(f, "WHEN {} THEN {} ", cond, result)?;
+                }
+                if let Some(else_expr) = else_result {
+                    write!(f, "ELSE {} ", else_expr)?;
+                }
+                write!(f, "END")
             }
         }
     }

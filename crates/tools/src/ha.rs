@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use sqlrustgo_storage::{FailoverConfig, FailoverManager, FailoverState, NodeInfo, NodeType};
+use sqlrustgo_storage::{FailoverConfig, NodeInfo, NodeType};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -32,6 +32,7 @@ pub struct NodeStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ClusterConfig {
     pub health_check_interval_secs: u64,
     pub election_timeout_secs: u64,
@@ -53,6 +54,7 @@ impl From<&FailoverConfig> for ClusterConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct NodeAddRequest {
     pub addr: String,
     pub node_type: String,
@@ -176,7 +178,7 @@ fn show_status(master: Option<&str>, _config: Option<&Path>) -> Result<()> {
         println!("Current Master: {}", addr);
 
         let node_type = NodeType::Master;
-        let mut nodes = vec![NodeInfo::new(addr, node_type, 100)];
+        let nodes = vec![NodeInfo::new(addr, node_type, 100)];
 
         let status = query_cluster_status(&nodes);
         print_cluster_status(&status);
