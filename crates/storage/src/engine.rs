@@ -315,15 +315,6 @@ impl MemoryStorage {
         self.cancel_flag = None;
     }
 
-    fn check_cancel(&self) -> SqlResult<()> {
-        if let Some(ref flag) = self.cancel_flag {
-            if flag.load(Ordering::SeqCst) {
-                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
-            }
-        }
-        Ok(())
-    }
-
     pub fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
         self.views.insert(info.name.clone(), info);
         Ok(())
