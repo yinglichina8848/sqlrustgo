@@ -71,6 +71,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新**: v1.6.0 迁移指南
 - **新**: v1.6.0 API 变更文档
 
+## [2.1.0] - 2026-04-03 (RC)
+
+> 代号: Enterprise Observability
+> 状态: RC - Release Candidate
+
+### Added
+
+#### 可观测性 (Observability)
+- **M-001** Metrics trait 定义
+- **M-002** Buffer Pool Metrics 指标
+- **M-003** Executor Metrics 执行器指标
+- **M-004** `/metrics` Prometheus 端点
+- **M-005** Grafana Dashboard 配置
+- **M-006** 慢查询日志 (slow_query_log)
+
+#### SQL Firewall 安全
+- **#1134** SQL 防火墙核心模块
+- **#1134** 告警系统
+- **#1135** KILL 语句支持
+- **#1135** PROCESSLIST 显示
+
+#### 工具链 (Tools)
+- **#1018** Physical Backup CLI (全量/增量备份)
+- **#1198** 备份保留策略 (prune --keep/--keep-days)
+- **#1022** mysqldump 导入导出工具
+- **#1022** 日志轮转 (log rotation)
+
+#### SQL 功能扩展
+- **#1210** TPC-H Phase 1: BETWEEN, DATE, IN
+- **#1128** UUID 数据类型
+- **#1128** ARRAY 数据类型
+- **#1128** ENUM 数据类型
+
+#### 存储过程
+- **#1164** 存储过程控制流 (IF/WHILE/LOOP/DECLARE)
+- **#1164** 存储过程 SQL 集成
+
+### RC 阶段状态
+
+| 检查项 | 状态 |
+|--------|------|
+| 单元测试 | ✅ 35/35 (100%) |
+| 集成测试 | ⚠️ 1035/1039 (99.6%) |
+| 覆盖率 | ⏳ ≥80% (待验证) |
+| 性能测试 | ⏳ (待完成) |
+
+### RC 后续任务
+
+- [ ] 覆盖率提升至 ≥80%
+- [ ] 修复 4 个预存测试失败
+- [ ] 完成 TPC-H SF=0.1 完整测试
+- [ ] 完成性能基准测试
+
+---
+
 ## [1.5.0] - 2026-03-18 (GA)
 
 ### Added
