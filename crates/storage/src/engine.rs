@@ -162,7 +162,7 @@ pub trait StorageEngine: Send + Sync {
     fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
     /// Search using index - returns row IDs matching the key
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32>;
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32>;
 
     /// Range query using index - returns row IDs in range [start, end)
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
@@ -1021,11 +1021,12 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Option<u32> {
+    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
         let index_name = format!("{}_{}", table, column);
         self.indexes
             .get(&index_name)
-            .and_then(|tree| tree.search(key))
+            .map(|tree| tree.search_all(key))
+            .unwrap_or_default()
     }
 
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
@@ -1252,21 +1253,19 @@ impl StorageEngine for MemoryStorage {
             if let Some(table_info) = self.table_infos.get(table) {
                 for (col_idx, col_def) in table_info.columns.iter().enumerate() {
                     let upper = col_def.data_type.to_uppercase();
-                    if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
-                        // Auto-create index for integer columns
-                        let index_name = format!("{}_{}", table, col_def.name);
-                        let mut tree = SimpleBPlusTree::new();
-                        if let Some(all_records) = self.tables.get(table) {
-                            for (row_id, record) in all_records.iter().enumerate() {
-                                if let Some(value) = record.get(col_idx) {
-                                    if let Some(key) = value.to_index_key() {
-                                        tree.insert(key, row_id as u32);
-                                    }
+                    // Auto-create index for all columns (supports INTEGER, TEXT via hash)
+                    let index_name = format!("{}_{}", table, col_def.name);
+                    let mut tree = SimpleBPlusTree::new();
+                    if let Some(all_records) = self.tables.get(table) {
+                        for (row_id, record) in all_records.iter().enumerate() {
+                            if let Some(value) = record.get(col_idx) {
+                                if let Some(key) = value.to_index_key() {
+                                    tree.insert(key, row_id as u32);
                                 }
                             }
                         }
-                        self.indexes.insert(index_name, tree);
                     }
+                    self.indexes.insert(index_name, tree);
                 }
             }
         }
