@@ -916,15 +916,38 @@ fn compute_aggregate(
             }
         }
         AggregateFunction::Sum => {
-            let mut sum = 0i64;
+            if all_values.is_empty() {
+                return Value::Null;
+            }
+
+            let mut int_sum = 0i64;
+            let mut float_sum = 0.0f64;
+            let mut decimal_sum = Decimal::ZERO;
+            let mut has_decimal = false;
+            let mut has_float = false;
+
             for val in &all_values {
-                if let Value::Integer(n) = val {
-                    sum += *n;
-                } else if let Value::Float(n) = val {
-                    sum += *n as i64;
+                match val {
+                    Value::Integer(n) => int_sum += *n,
+                    Value::Float(n) => {
+                        float_sum += *n;
+                        has_float = true;
+                    }
+                    Value::Decimal(n) => {
+                        decimal_sum = decimal_sum + *n;
+                        has_decimal = true;
+                    }
+                    _ => {}
                 }
             }
-            Value::Integer(sum)
+
+            if has_decimal {
+                Value::Decimal(decimal_sum)
+            } else if has_float {
+                Value::Float(int_sum as f64 + float_sum)
+            } else {
+                Value::Integer(int_sum)
+            }
         }
         AggregateFunction::Avg => {
             let mut sum = 0.0f64;
@@ -2258,14 +2281,13 @@ impl ExecutionEngine {
                     }
                 }
 
-                // Sort rows by ORDER BY clause BEFORE projection
+// Sort rows by ORDER BY clause BEFORE projection
                 // This is necessary because ORDER BY can reference columns not in SELECT list
                 let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
                     sort_rows_by_order_by(filtered_rows, order_by, &columns)
                 } else {
                     filtered_rows
                 };
-
                 // Apply column projection if specified (not SELECT *)
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
