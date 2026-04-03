@@ -1,11 +1,9 @@
 //! GMP Extension Integration Tests
 
 use sqlrustgo_gmp::{
-    GmpExecutor, create_gmp_tables, create_embeddings_table,
-    query_by_type, query_by_status, DocStatus,
-    generate_embedding, cosine_similarity,
-    vector_search, hybrid_search,
-    Document, DocumentEmbedding,
+    cosine_similarity, create_embeddings_table, create_gmp_tables, generate_embedding,
+    hybrid_search, query_by_status, query_by_type, vector_search, DocStatus, Document,
+    DocumentEmbedding, GmpExecutor,
 };
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
@@ -62,8 +60,13 @@ fn test_full_document_lifecycle() {
     let results = executor.search("Rust memory safety", 5).unwrap();
     assert!(!results.is_empty());
     // Hash embeddings may not perfectly rank, just verify we get results with positive similarity
-    let rust_found = results.iter().any(|r| r.doc_id == rust_doc_id && r.similarity > 0.0);
-    assert!(rust_found || results[0].similarity > 0.0, "search should return relevant results");
+    let rust_found = results
+        .iter()
+        .any(|r| r.doc_id == rust_doc_id && r.similarity > 0.0);
+    assert!(
+        rust_found || results[0].similarity > 0.0,
+        "search should return relevant results"
+    );
 
     // Verify hybrid search works
     let hybrid_results = executor.hybrid_search("Rust Book", 5).unwrap();
@@ -252,5 +255,7 @@ fn test_hybrid_search_text_boost() {
     let results = executor.hybrid_search("book about programming", 5).unwrap();
     assert!(!results.is_empty());
     // The document with "book" in title should rank high
-    assert!(results.iter().any(|r| r.title.contains("Programming in Rust")));
+    assert!(results
+        .iter()
+        .any(|r| r.title.contains("Programming in Rust")));
 }

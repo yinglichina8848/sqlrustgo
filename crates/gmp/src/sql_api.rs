@@ -11,8 +11,8 @@ use crate::embedding::generate_embedding;
 use crate::vector_search::{
     create_embeddings_table, hybrid_search, upsert_embedding, vector_search, SearchResult,
 };
-use sqlrustgo_types::{SqlResult, Value};
 use sqlrustgo_storage::StorageEngine;
+use sqlrustgo_types::{SqlResult, Value};
 use std::sync::{Arc, RwLock};
 
 /// GMP Executor - provides a convenient API for GMP operations
@@ -147,9 +147,7 @@ impl GmpExecutor {
             // Concatenate all content sections
             let content: String = content_rows
                 .iter()
-                .filter(|row| {
-                    matches!(&row[0], Value::Integer(id) if *id == doc.id)
-                })
+                .filter(|row| matches!(&row[0], Value::Integer(id) if *id == doc.id))
                 .filter_map(|row| match &row[2] {
                     Value::Text(s) => Some(s.clone()),
                     _ => None,
@@ -309,9 +307,24 @@ mod tests {
         executor.init().unwrap();
 
         let docs = vec![
-            ("Doc 1", "TYPE1", "Content for document 1", vec!["key1", "key2"]),
-            ("Doc 2", "TYPE2", "Content for document 2", vec!["key2", "key3"]),
-            ("Doc 3", "TYPE1", "Content for document 3", vec!["key1", "key3"]),
+            (
+                "Doc 1",
+                "TYPE1",
+                "Content for document 1",
+                vec!["key1", "key2"],
+            ),
+            (
+                "Doc 2",
+                "TYPE2",
+                "Content for document 2",
+                vec!["key2", "key3"],
+            ),
+            (
+                "Doc 3",
+                "TYPE1",
+                "Content for document 3",
+                vec!["key1", "key3"],
+            ),
         ];
 
         let ids = executor.bulk_import(&docs).unwrap();
@@ -320,10 +333,7 @@ mod tests {
 
     #[test]
     fn test_sql_statement_builders() {
-        assert!(
-            sql::select_by_keyword("rust")
-                .contains("gmp_document_keywords")
-        );
+        assert!(sql::select_by_keyword("rust").contains("gmp_document_keywords"));
         assert!(sql::select_by_type("GUIDE").contains("GUIDE"));
         assert!(sql::select_by_status("ACTIVE").contains("ACTIVE"));
         assert!(sql::select_by_date_range(19000, 20000).contains("19000"));
