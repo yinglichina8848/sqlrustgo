@@ -10,7 +10,6 @@ mod physical_backup;
 mod upgrade;
 
 use anyhow::Result;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]

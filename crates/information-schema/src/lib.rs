@@ -172,6 +172,7 @@ impl<'a> InformationSchema<'a> {
             DataType::Date => (None, None, None),
             DataType::Timestamp => (None, None, None),
             DataType::Null => (None, None, None),
+            DataType::Uuid => (None, Some(128), None),
             DataType::Uuid => (None, None, None),
             DataType::Array => (None, None, None),
             DataType::Enum => (None, None, None),

@@ -39,6 +39,7 @@ pub struct PhysicalBackupManifest {
     /// Parent backup LSN for incremental backups
     pub parent_lsn: Option<String>,
     /// Storage data directory path
+    #[allow(dead_code)]
     pub data_dir: String,
     /// WAL directory path
     pub wal_dir: String,
