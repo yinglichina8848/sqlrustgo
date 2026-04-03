@@ -334,6 +334,9 @@ fn extract_index_predicate(
                 (sqlrustgo_parser::Expression::Identifier(name), sqlrustgo_parser::Expression::Literal(val)) => {
                     (name.clone(), val.clone())
                 }
+                (sqlrustgo_parser::Expression::QualifiedColumn(_, col), sqlrustgo_parser::Expression::Literal(val)) => {
+                    (col.clone(), val.clone())
+                }
                 _ => return None,
             };
             
@@ -365,11 +368,10 @@ fn filter_using_index(
 ) -> Option<Vec<Vec<Value>>> {
     match op {
         "=" => {
-            // Exact match - use search_index
+            // Exact match - use search_index and get_row (O(log n) instead of O(n))
             if let Some(row_id) = storage.search_index(table_name, column_name, value) {
-                let all_rows = storage.scan(table_name).ok()?;
-                if let Some(row) = all_rows.get(row_id as usize) {
-                    return Some(vec![row.clone()]);
+                if let Ok(Some(row)) = storage.get_row(table_name, row_id as usize) {
+                    return Some(vec![row]);
                 }
             }
             return Some(vec![]);
@@ -391,11 +393,10 @@ fn filter_using_index(
                 return Some(vec![]);
             }
             
-            // Now fetch only the specific rows we need
-            let all_rows = storage.scan(table_name).ok()?;
+            // Now fetch only the specific rows we need using get_row
             let filtered: Vec<Vec<Value>> = row_ids
                 .into_iter()
-                .filter_map(|id| all_rows.get(id as usize).cloned())
+                .filter_map(|id| storage.get_row(table_name, id as usize).ok().flatten())
                 .collect();
             return Some(filtered);
         }

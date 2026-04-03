@@ -93,6 +93,10 @@ pub trait StorageEngine: Send + Sync {
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
+    /// Get a single row by its index in the table
+    /// Returns None if the index is out of bounds
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>>;
+
     /// Scan rows in batches for streaming (memory-efficient)
     /// Returns (records, total_count, has_more)
     fn scan_batch(
@@ -431,6 +435,16 @@ impl StorageEngine for MemoryStorage {
         let records = self.tables.get(table).cloned().unwrap_or_default();
         self.check_cancelled()?;
         Ok(records)
+    }
+
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
+        self.check_cancelled()?;
+        let records = self.tables.get(table);
+        if let Some(records) = records {
+            Ok(records.get(row_index).cloned())
+        } else {
+            Ok(None)
+        }
     }
 
     fn scan_batch(
