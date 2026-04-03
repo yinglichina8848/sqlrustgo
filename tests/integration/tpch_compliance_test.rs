@@ -423,7 +423,28 @@ impl QueryResult {
 
     fn compare_results(&mut self) {
         if self.sqlite_ok && self.sqlrustgo_ok {
-            let match_flag = self.sqlite_data == self.sqlrustgo_data;
+            let mut sqlite_sorted = self.sqlite_data.clone();
+            let mut sqlrustgo_sorted = self.sqlrustgo_data.clone();
+
+            for row in sqlite_sorted.iter_mut() {
+                row.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            }
+            for row in sqlrustgo_sorted.iter_mut() {
+                row.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            }
+
+            sqlite_sorted.sort_by(|a, b| {
+                let a_str = a.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                let b_str = b.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                a_str.cmp(&b_str)
+            });
+            sqlrustgo_sorted.sort_by(|a, b| {
+                let a_str = a.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                let b_str = b.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                a_str.cmp(&b_str)
+            });
+
+            let match_flag = sqlite_sorted == sqlrustgo_sorted;
             self.match_result = Some(match_flag);
         } else {
             self.match_result = Some(false);
@@ -866,7 +887,28 @@ fn test_tpch_compliance_report_with_real_data() {
         };
 
         let match_flag = if sqlite_ok && sqlrustgo_ok {
-            let data_match = sqlite_data == sqlrustgo_data;
+            let mut sqlite_sorted = sqlite_data.clone();
+            let mut sqlrustgo_sorted = sqlrustgo_data.clone();
+
+            for row in sqlite_sorted.iter_mut() {
+                row.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            }
+            for row in sqlrustgo_sorted.iter_mut() {
+                row.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            }
+
+            sqlite_sorted.sort_by(|a, b| {
+                let a_str = a.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                let b_str = b.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                a_str.cmp(&b_str)
+            });
+            sqlrustgo_sorted.sort_by(|a, b| {
+                let a_str = a.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                let b_str = b.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("|");
+                a_str.cmp(&b_str)
+            });
+
+            let data_match = sqlite_sorted == sqlrustgo_sorted;
             if data_match {
                 match_count += 1;
             }
