@@ -317,6 +317,7 @@ fn binary_encode_value(value: &Value) -> Vec<u8> {
         Value::Boolean(b) => vec![if *b { 1 } else { 0 }],
         Value::Integer(n) => n.to_le_bytes().to_vec(),
         Value::Float(f) => f.to_le_bytes().to_vec(),
+        Value::Decimal(d) => d.serialize().to_vec(),
         Value::Text(s) => {
             let mut result = Vec::with_capacity(8 + s.len());
             result.extend_from_slice(&(s.len() as u64).to_le_bytes());
