@@ -671,7 +671,11 @@ fn test_tpch_q1_simple() {
 
     // Run SQLRustGo query
     let parse_result = parse(sql);
-    assert!(parse_result.is_ok(), "Parse error: {:?}", parse_result.err());
+    assert!(
+        parse_result.is_ok(),
+        "Parse error: {:?}",
+        parse_result.err()
+    );
 
     let result = sqlrustgo_engine.execute(parse_result.unwrap());
     match result {
