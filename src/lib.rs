@@ -16,6 +16,9 @@ pub use sqlrustgo_storage::{
 };
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
+// GMP Document Retrieval Extension
+pub use sqlrustgo_gmp::*;
+
 use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
@@ -317,9 +320,23 @@ fn evaluate_where_clause(
 ) -> bool {
     match expr {
         sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            if op_upper == "AND" {
+                let left_bool = evaluate_where_clause(left, row, columns);
+                if !left_bool {
+                    return false;
+                }
+                return evaluate_where_clause(right, row, columns);
+            } else if op_upper == "OR" {
+                let left_bool = evaluate_where_clause(left, row, columns);
+                if left_bool {
+                    return true;
+                }
+                return evaluate_where_clause(right, row, columns);
+            }
             let left_val = evaluate_expr(left, row, columns);
             let right_val = evaluate_expr(right, row, columns);
-            compare_values(&left_val, op, &right_val)
+            compare_values(&left_val, &op_upper, &right_val)
         }
         sqlrustgo_parser::Expression::Identifier(name) => {
             // Single identifier in WHERE - treat as boolean (for EXISTS subqueries, etc)
@@ -453,13 +470,56 @@ fn evaluate_expr(
                     (Value::Float(l), Value::Integer(r)) if *r != 0 => Value::Float(l / *r as f64),
                     _ => Value::Null,
                 },
+                "=" | "==" | "EQ" => Value::Boolean(left_val == right_val),
+                "!=" | "<>" | "NE" => Value::Boolean(left_val != right_val),
+                ">" | "GT" => match (left_val, right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Boolean(l > r),
+                    (Value::Float(l), Value::Float(r)) => Value::Boolean(l > r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) > r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Boolean(l > (r as f64)),
+                    (Value::Text(l), Value::Text(r)) => Value::Boolean(l > r),
+                    _ => Value::Boolean(false),
+                },
+                "<" | "LT" => match (left_val, right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Boolean(l < r),
+                    (Value::Float(l), Value::Float(r)) => Value::Boolean(l < r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) < r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Boolean(l < (r as f64)),
+                    (Value::Text(l), Value::Text(r)) => Value::Boolean(l < r),
+                    _ => Value::Boolean(false),
+                },
+                ">=" | "GE" => match (left_val, right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Boolean(l >= r),
+                    (Value::Float(l), Value::Float(r)) => Value::Boolean(l >= r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) >= r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Boolean(l >= (r as f64)),
+                    (Value::Text(l), Value::Text(r)) => Value::Boolean(l >= r),
+                    _ => Value::Boolean(false),
+                },
+                "<=" | "LE" => match (left_val, right_val) {
+                    (Value::Integer(l), Value::Integer(r)) => Value::Boolean(l <= r),
+                    (Value::Float(l), Value::Float(r)) => Value::Boolean(l <= r),
+                    (Value::Integer(l), Value::Float(r)) => Value::Boolean((l as f64) <= r),
+                    (Value::Float(l), Value::Integer(r)) => Value::Boolean(l <= (r as f64)),
+                    (Value::Text(l), Value::Text(r)) => Value::Boolean(l <= r),
+                    _ => Value::Boolean(false),
+                },
                 _ => Value::Null,
             }
         }
         sqlrustgo_parser::Expression::Wildcard => Value::Null,
         sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
         sqlrustgo_parser::Expression::Subquery(_) => Value::Null,
-        sqlrustgo_parser::Expression::QualifiedColumn(_, _) => Value::Null,
+        sqlrustgo_parser::Expression::QualifiedColumn(_table_name, col_name) => {
+            if let Some(idx) = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(col_name))
+            {
+                row.get(idx).cloned().unwrap_or(Value::Null)
+            } else {
+                Value::Null
+            }
+        }
         sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
         sqlrustgo_parser::Expression::Placeholder => Value::Null,
         sqlrustgo_parser::Expression::Between { expr, low, high } => {
@@ -641,19 +701,46 @@ fn compute_aggregate(
 ) -> Value {
     use sqlrustgo_parser::parser::AggregateFunction;
 
-    // Get the column index for the aggregate argument
+    // Get the column index for simple column references, or None for complex expressions
     let col_idx: Option<usize> = if agg.args.is_empty() {
-        // COUNT(*) has no arguments
         None
     } else {
         match &agg.args[0] {
             sqlrustgo_parser::Expression::Identifier(name) => columns
                 .iter()
                 .position(|c| c.name.eq_ignore_ascii_case(name)),
-            sqlrustgo_parser::Expression::Wildcard => Some(0), // Will be ignored for COUNT
+            sqlrustgo_parser::Expression::Wildcard => Some(0),
             _ => None,
         }
     };
+
+    // For complex expressions, we need to evaluate them per row
+    let arg_expr = if agg.args.is_empty() {
+        None
+    } else {
+        Some(&agg.args[0])
+    };
+
+    // Collect all values first (for DISTINCT handling)
+    let mut all_values: Vec<Value> = Vec::new();
+    for row in rows {
+        let val = if let Some(idx) = col_idx {
+            row.get(idx).cloned()
+        } else if let Some(expr) = arg_expr {
+            Some(evaluate_expr(expr, row, columns))
+        } else {
+            None
+        };
+        all_values.push(val.unwrap_or(Value::Null));
+    }
+
+    // Apply DISTINCT if specified
+    if agg.distinct {
+        let mut unique_values = all_values.clone();
+        unique_values.sort();
+        unique_values.dedup();
+        all_values = unique_values;
+    }
 
     match agg.func {
         AggregateFunction::Count => {
@@ -663,34 +750,19 @@ fn compute_aggregate(
                     Some(sqlrustgo_parser::Expression::Wildcard)
                 )
             {
-                // COUNT(*) - count all rows
-                Value::Integer(rows.len() as i64)
+                Value::Integer(all_values.len() as i64)
             } else {
-                // COUNT(column) - count non-null values
-                let mut count = 0i64;
-                for row in rows {
-                    if let Some(idx) = col_idx {
-                        if let Some(val) = row.get(idx) {
-                            if *val != Value::Null {
-                                count += 1;
-                            }
-                        }
-                    }
-                }
-                Value::Integer(count)
+                let count = all_values.iter().filter(|v| **v != Value::Null).count();
+                Value::Integer(count as i64)
             }
         }
         AggregateFunction::Sum => {
             let mut sum = 0i64;
-            for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if let Value::Integer(n) = val {
-                            sum += n;
-                        } else if let Value::Float(n) = val {
-                            sum += *n as i64;
-                        }
-                    }
+            for val in &all_values {
+                if let Value::Integer(n) = val {
+                    sum += *n;
+                } else if let Value::Float(n) = val {
+                    sum += *n as i64;
                 }
             }
             Value::Integer(sum)
@@ -698,17 +770,13 @@ fn compute_aggregate(
         AggregateFunction::Avg => {
             let mut sum = 0.0f64;
             let mut count = 0i64;
-            for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if let Value::Integer(n) = val {
-                            sum += *n as f64;
-                            count += 1;
-                        } else if let Value::Float(n) = val {
-                            sum += *n;
-                            count += 1;
-                        }
-                    }
+            for val in &all_values {
+                if let Value::Integer(n) = val {
+                    sum += *n as f64;
+                    count += 1;
+                } else if let Value::Float(n) = val {
+                    sum += *n;
+                    count += 1;
                 }
             }
             if count > 0 {
@@ -719,17 +787,13 @@ fn compute_aggregate(
         }
         AggregateFunction::Min => {
             let mut min: Option<Value> = None;
-            for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if *val != Value::Null {
-                            match &min {
-                                None => min = Some(val.clone()),
-                                Some(m) => {
-                                    if val < m {
-                                        min = Some(val.clone());
-                                    }
-                                }
+            for val in &all_values {
+                if *val != Value::Null {
+                    match &min {
+                        None => min = Some(val.clone()),
+                        Some(m) => {
+                            if val < m {
+                                min = Some(val.clone());
                             }
                         }
                     }
@@ -739,17 +803,13 @@ fn compute_aggregate(
         }
         AggregateFunction::Max => {
             let mut max: Option<Value> = None;
-            for row in rows {
-                if let Some(idx) = col_idx {
-                    if let Some(val) = row.get(idx) {
-                        if *val != Value::Null {
-                            match &max {
-                                None => max = Some(val.clone()),
-                                Some(m) => {
-                                    if val > m {
-                                        max = Some(val.clone());
-                                    }
-                                }
+            for val in &all_values {
+                if *val != Value::Null {
+                    match &max {
+                        None => max = Some(val.clone()),
+                        Some(m) => {
+                            if val > m {
+                                max = Some(val.clone());
                             }
                         }
                     }
@@ -846,6 +906,59 @@ fn evaluate_group_by_key(
         }
     }
     Some(key)
+}
+
+fn compare_values_for_sort(left: &Value, right: &Value) -> std::cmp::Ordering {
+    match (left, right) {
+        (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+        (Value::Null, _) => std::cmp::Ordering::Less,
+        (_, Value::Null) => std::cmp::Ordering::Greater,
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r),
+        (Value::Float(l), Value::Float(r)) => l.partial_cmp(r).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Text(l), Value::Text(r)) => l.cmp(r),
+        (Value::Boolean(l), Value::Boolean(r)) => l.cmp(r),
+        (Value::Integer(l), Value::Float(r)) => (*l as f64)
+            .partial_cmp(r)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(l), Value::Integer(r)) => l
+            .partial_cmp(&(*r as f64))
+            .unwrap_or(std::cmp::Ordering::Equal),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+fn sort_rows_by_order_by(
+    rows: Vec<Vec<Value>>,
+    order_by: &sqlrustgo_parser::parser::OrderByClause,
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Vec<Vec<Value>> {
+    let mut rows_with_keys: Vec<(Vec<Value>, Vec<Value>)> = rows
+        .into_iter()
+        .map(|row| {
+            let sort_keys: Vec<Value> = order_by
+                .items
+                .iter()
+                .filter_map(|item| evaluate_group_by_expr(&item.expr, &row, columns))
+                .collect();
+            (row, sort_keys)
+        })
+        .collect();
+
+    rows_with_keys.sort_by(|(_, keys1), (_, keys2)| {
+        for (key1, key2) in keys1.iter().zip(keys2.iter()) {
+            let cmp = compare_values_for_sort(key1, key2);
+            if cmp != std::cmp::Ordering::Equal {
+                let item_idx = keys1.iter().position(|k| k == key1).unwrap_or(0);
+                if !order_by.items[item_idx].asc {
+                    return cmp.reverse();
+                }
+                return cmp;
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    rows_with_keys.into_iter().map(|(row, _)| row).collect()
 }
 
 pub struct ExecutionEngine {
@@ -1716,13 +1829,10 @@ impl ExecutionEngine {
                 // SELECT * has columns = [{"*", None}]
                 let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
                 let projected_rows: Vec<Vec<Value>> = if is_select_star {
-                    // SELECT * - return all columns
                     filtered_rows
                 } else if select.columns.is_empty() {
-                    // No columns specified (edge case) - return all columns
                     filtered_rows
                 } else {
-                    // Project only the selected columns
                     filtered_rows
                         .into_iter()
                         .map(|row| {
@@ -1740,7 +1850,13 @@ impl ExecutionEngine {
                         .collect()
                 };
 
-                Ok(ExecutorResult::new(projected_rows, 0))
+                let result_rows = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(projected_rows, order_by, &columns)
+                } else {
+                    projected_rows
+                };
+
+                Ok(ExecutorResult::new(result_rows, 0))
             }
             Statement::Explain(explain) => {
                 let start = std::time::Instant::now();
