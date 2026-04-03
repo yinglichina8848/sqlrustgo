@@ -314,6 +314,95 @@ fn handle_foreign_key_update(
     Ok((total_cascade_updates, total_set_null_updates))
 }
 
+/// Extract index usage info from a WHERE clause
+/// Returns (column_name, op, value) if the WHERE can use an index
+fn extract_index_predicate(
+    where_clause: &sqlrustgo_parser::Expression,
+    columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<(String, String, i64)> {
+    match where_clause {
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            
+            // Only handle simple comparison operators
+            if !["<", ">", "=", "<=", ">="].contains(&op_upper.as_str()) {
+                return None;
+            }
+            
+            // Check if left side is a column and right side is a value
+            let (col_name, value) = match (&**left, &**right) {
+                (sqlrustgo_parser::Expression::Identifier(name), sqlrustgo_parser::Expression::Literal(val)) => {
+                    (name.clone(), val.clone())
+                }
+                _ => return None,
+            };
+            
+            // Check if column exists and is an integer type
+            let col_def = columns.iter().find(|c| &c.name == &col_name)?;
+            let upper = col_def.data_type.to_uppercase();
+            if !upper.contains("INT") && upper != "BIGINT" && upper != "SMALLINT" && upper != "TINYINT" {
+                return None;
+            }
+            
+            // Parse the value as i64
+            let value_i64 = value.parse::<i64>().ok()?;
+            
+            Some((col_name, op_upper, value_i64))
+        }
+        _ => None,
+    }
+}
+
+/// Use index to filter rows for a single table
+/// Returns Some(filtered_rows) if index was used, None if full scan needed
+fn filter_using_index(
+    storage: &std::sync::RwLockReadGuard<'_, dyn sqlrustgo_storage::StorageEngine>,
+    table_name: &str,
+    column_name: &str,
+    op: &str,
+    value: i64,
+    _columns: &[sqlrustgo_storage::ColumnDefinition],
+) -> Option<Vec<Vec<Value>>> {
+    match op {
+        "=" => {
+            // Exact match - use search_index
+            if let Some(row_id) = storage.search_index(table_name, column_name, value) {
+                let all_rows = storage.scan(table_name).ok()?;
+                if let Some(row) = all_rows.get(row_id as usize) {
+                    return Some(vec![row.clone()]);
+                }
+            }
+            return Some(vec![]);
+        }
+        "<" | "<=" | ">" | ">=" => {
+            // Range query - use index WITHOUT scanning all rows first
+            let (start, end) = match op {
+                "<" => (i64::MIN, value),
+                "<=" => (i64::MIN, value + 1),
+                ">" => (value + 1, i64::MAX),
+                ">=" => (value, i64::MAX),
+                _ => return None,
+            };
+            
+            // Get row IDs from index (this is O(log n) instead of O(n))
+            let row_ids = storage.range_index(table_name, column_name, start, end);
+            
+            if row_ids.is_empty() {
+                return Some(vec![]);
+            }
+            
+            // Now fetch only the specific rows we need
+            let all_rows = storage.scan(table_name).ok()?;
+            let filtered: Vec<Vec<Value>> = row_ids
+                .into_iter()
+                .filter_map(|id| all_rows.get(id as usize).cloned())
+                .collect();
+            return Some(filtered);
+        }
+        _ => None,
+    }
+}
+
 /// Evaluate a WHERE clause expression against a row
 fn evaluate_where_clause(
     expr: &sqlrustgo_parser::Expression,
@@ -2042,7 +2131,21 @@ impl ExecutionEngine {
                             all_columns.push(col.clone());
                         }
                     }
-                    let rows = storage.scan(table_name).unwrap_or_default();
+                    
+                    // Try to use index for single-table SELECT with WHERE on indexed column
+                    let rows = if tables.len() == 1 && select.where_clause.is_some() {
+                        if let Some((col_name, op, value)) = extract_index_predicate(select.where_clause.as_ref().unwrap(), &all_columns) {
+                            if let Some(indexed_rows) = filter_using_index(&storage, table_name, &col_name, &op, value, &all_columns) {
+                                indexed_rows
+                            } else {
+                                storage.scan(table_name).unwrap_or_default()
+                            }
+                        } else {
+                            storage.scan(table_name).unwrap_or_default()
+                        }
+                    } else {
+                        storage.scan(table_name).unwrap_or_default()
+                    };
 
                     let new_all_rows: Vec<Vec<Value>> = all_rows
                         .iter()
@@ -2063,10 +2166,21 @@ impl ExecutionEngine {
 
                 let filtered_rows: Vec<Vec<Value>> =
                     if let Some(ref where_clause) = select.where_clause {
-                        all_rows
-                            .into_iter()
-                            .filter(|row| evaluate_where_clause(where_clause, row, &columns))
-                            .collect()
+                        // If we already used index to filter, no need to filter again
+                        if tables.len() == 1 {
+                            if let Some((ref col_name, ref op, ref value)) = extract_index_predicate(where_clause, &columns) {
+                                if let Some(_) = storage.search_index(&tables[0], col_name, *value) {
+                                    // Already filtered by index, skip evaluation
+                                    all_rows
+                                } else {
+                                    all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                                }
+                            } else {
+                                all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                            }
+                        } else {
+                            all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                        }
                     } else {
                         all_rows
                     };

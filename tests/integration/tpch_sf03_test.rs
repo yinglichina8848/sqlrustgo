@@ -32,7 +32,6 @@ fn setup_sqlrustgo_engine_sf03_lineitem() -> ExecutionEngine {
 }
 
 #[test]
-#[ignore] // 耗时长，约 100 秒，仅用于本地性能分析
 fn test_sqlrustgo_sf03_count() {
     let mut engine = setup_sqlrustgo_engine_sf03_lineitem();
     
