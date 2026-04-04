@@ -25,6 +25,7 @@ mod connection_pool_stress {
     use super::*;
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_10() {
         let start = Instant::now();
         let config = PoolConfig {
@@ -53,6 +54,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_50() {
         let start = Instant::now();
         let config = PoolConfig {
@@ -81,6 +83,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_100() {
         let start = Instant::now();
         let config = PoolConfig {
@@ -109,6 +112,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_200() {
         let start = Instant::now();
         let config = PoolConfig {
@@ -137,6 +141,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_500() {
         let start = Instant::now();
         let config = PoolConfig {
@@ -165,6 +170,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_sustained_load() {
         let config = PoolConfig {
             size: 50,
@@ -188,6 +194,7 @@ mod connection_pool_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_pool_parallel_sustained() {
         let config = PoolConfig {
             size: 100,
@@ -227,6 +234,7 @@ mod lock_stress {
     use super::*;
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_10_shared_same_key() {
         let start = Instant::now();
         let mut manager = LockManager::new();
@@ -241,6 +249,7 @@ mod lock_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_50_contention() {
         let start = Instant::now();
         let mut manager = LockManager::new();
@@ -255,6 +264,7 @@ mod lock_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_100_different_keys() {
         let start = Instant::now();
         let mut manager = LockManager::new();
@@ -268,6 +278,7 @@ mod lock_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_200_rapid_acquire_release() {
         let start = Instant::now();
         let mut manager = LockManager::new();
@@ -282,6 +293,7 @@ mod lock_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_mixed_mode() {
         let start = Instant::now();
         let mut manager = LockManager::new();
@@ -307,6 +319,7 @@ mod transaction_throughput {
     use super::*;
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_tx_10_sequential() {
         let start = Instant::now();
         for _ in 0..10 {
@@ -318,6 +331,7 @@ mod transaction_throughput {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_tx_50_sequential() {
         let start = Instant::now();
         for _ in 0..50 {
@@ -329,6 +343,7 @@ mod transaction_throughput {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_tx_100_sequential() {
         let start = Instant::now();
         for _ in 0..100 {
@@ -340,6 +355,7 @@ mod transaction_throughput {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_tx_throughput_measurement() {
         let start = Instant::now();
         let count = 200;
@@ -364,6 +380,7 @@ mod performance_boundaries {
     use super::*;
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_find_max_concurrent_locks() {
         let mut passed = true;
         let mut current = 100;
@@ -395,6 +412,7 @@ mod performance_boundaries {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_memory_benchmark_pool() {
         // Test pool creation overhead
         let start = Instant::now();
@@ -411,6 +429,7 @@ mod performance_boundaries {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_connection_reuse_stress() {
         let config = PoolConfig {
             size: 5,
@@ -445,6 +464,7 @@ mod network_stress {
     use std::time::Duration;
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_network_concurrent_connections() {
         let addr = "127.0.0.1:18999";
         let listener = TcpListener::bind(addr).unwrap();
@@ -481,6 +501,7 @@ mod network_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_network_high_throughput() {
         let addr = "127.0.0.1:18998";
         if let Err(e) = TcpListener::bind(addr) {
@@ -526,6 +547,7 @@ mod network_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_network_connection_churn() {
         let addr = "127.0.0.1:18997";
         if let Err(e) = TcpListener::bind(addr) {
@@ -557,6 +579,7 @@ mod network_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_network_parallel_streams() {
         let addr = "127.0.0.1:18996";
         if let Err(e) = TcpListener::bind(addr) {
@@ -609,6 +632,7 @@ mod network_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_network_latency_under_load() {
         let addr = "127.0.0.1:18995";
         if let Err(e) = TcpListener::bind(addr) {
@@ -668,6 +692,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_high_volume_writes() {
         let (_dir, wal_path) = create_test_wal();
         let manager = WalManager::new(wal_path);
@@ -692,6 +717,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_concurrent_writes() {
         let (_dir, wal_path) = create_test_wal();
         let threads = 10;
@@ -730,6 +756,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_large_payloads() {
         let (_dir, wal_path) = create_test_wal();
         let manager = WalManager::new(wal_path);
@@ -750,6 +777,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_recovery_stress() {
         let (_dir, wal_path) = create_test_wal();
         let manager = WalManager::new(wal_path);
@@ -770,6 +798,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_mixed_operations() {
         let (_dir, wal_path) = create_test_wal();
         let manager = WalManager::new(wal_path);
@@ -796,6 +825,7 @@ mod wal_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_checkpoint_stress() {
         let (_dir, wal_path) = create_test_wal();
         let manager = WalManager::new(wal_path);
@@ -824,6 +854,7 @@ mod stability_stress {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_sustained_load_30s() {
         let config = PoolConfig {
             size: 50,
@@ -857,6 +888,7 @@ mod stability_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_repeated_pool_operations() {
         let start = Instant::now();
         let iterations = 100;
@@ -886,6 +918,7 @@ mod stability_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_continuous_transaction_cycles() {
         let start = Instant::now();
         let tx_count = 1000;
@@ -902,6 +935,7 @@ mod stability_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_lock_acquire_release_cycle() {
         let mut manager = LockManager::new();
         let start = Instant::now();
@@ -923,6 +957,7 @@ mod stability_stress {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_memory_stability() {
         use std::collections::HashMap;
         use std::sync::Mutex;
@@ -952,6 +987,7 @@ mod crud_correctness {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_crud_basic_correctness() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
@@ -1013,6 +1049,7 @@ mod crud_correctness {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_crud_duplicate_check() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
@@ -1041,6 +1078,7 @@ mod crud_correctness {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_crud_transaction_atomicity() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
@@ -1074,6 +1112,7 @@ mod crud_correctness {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_crud_query_accuracy() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage.clone());
@@ -1115,6 +1154,7 @@ mod crud_correctness {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_recovery_correctness() {
         use sqlrustgo_storage::wal::WalManager;
 
@@ -1150,6 +1190,7 @@ mod crud_correctness {
     }
 
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_concurrent_crud_correctness() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 

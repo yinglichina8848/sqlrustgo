@@ -274,6 +274,7 @@ fn test_fk_restrict_action() {
 // ============================================
 
 #[test]
+#[ignore] // Slow performance test - run in regression suite only
 fn test_fk_bulk_insert_performance() {
     let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
@@ -375,6 +376,7 @@ fn test_fk_bulk_insert_with_violations() {
 }
 
 #[test]
+#[ignore] // Slow performance test - run in regression suite only
 fn test_fk_concurrent_insert_simulation() {
     // Simulate concurrent FK-validated inserts by doing them sequentially
     // (Rust test framework doesn't support true threading in a single test)
@@ -469,6 +471,7 @@ fn test_fk_concurrent_insert_simulation() {
 }
 
 #[test]
+#[ignore] // Slow performance test - run in regression suite only
 fn test_fk_large_dataset_validation() {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 

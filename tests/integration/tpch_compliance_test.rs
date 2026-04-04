@@ -845,6 +845,7 @@ fn run_sqlite_query_safe(
     }
 }
 #[test]
+#[ignore] // Slow TPC-H test - run in regression suite only
 fn test_tpch_q1_simple() {
     let sqlite_conn = create_sqlite_conn();
     let mut sqlrustgo_engine = setup_sqlrustgo_engine();

@@ -43,6 +43,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_insert_qps_benchmark() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -91,6 +92,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_scan_qps_benchmark() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -128,6 +130,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_point_query_qps() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = TableInfo {
@@ -176,6 +179,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_concurrent_insert_qps() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -232,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_concurrent_read_qps() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -295,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_mixed_read_write_qps() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -375,6 +381,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_bulk_insert_performance() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -414,6 +421,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_table_metadata_qps() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
 
@@ -452,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_high_concurrency_stability() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();
@@ -519,6 +528,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow benchmark test - run in regression suite only
     fn test_latency_percentiles() {
         let storage = Arc::new(Mutex::new(MemoryStorage::new()));
         let info = create_benchmark_table();

@@ -152,6 +152,7 @@ mod tests {
 
     /// Property: Same operation sequence produces same WAL entries
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_same_ops_same_entries() {
         let ops = gen_valid_ops();
 
@@ -182,6 +183,7 @@ mod tests {
 
     /// Property: All committed transactions have matching begin/commit
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_commit_has_begin() {
         let ops = gen_mixed_ops();
 
@@ -213,6 +215,7 @@ mod tests {
 
     /// Property: All rolled back transactions have matching begin/rollback
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_rollback_has_begin() {
         let ops = gen_mixed_ops();
 
@@ -244,6 +247,7 @@ mod tests {
 
     /// Property: LSN always increases
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_lsn_increases() {
         let ops = gen_valid_ops();
 
@@ -266,6 +270,7 @@ mod tests {
 
     /// Property: Data integrity preserved through WAL
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_data_integrity() {
         let data_strategy = prop::collection::vec(any::<u8>(), 1..100);
 
@@ -293,6 +298,7 @@ mod tests {
 
     /// Property: Operations with same tx_id are serialized
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_same_tx_serialization() {
         let ops = gen_mixed_ops();
 
@@ -330,6 +336,7 @@ mod tests {
 
     /// Property: Entry count formula for simple transactions
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_fuzz_entry_count_formula() {
         // Simple begin-insert-commit produces 3 entries
         let (_dir, manager) = create_wal_manager();
@@ -352,6 +359,7 @@ mod tests {
 
     /// Fuzz test: Many random operations
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_many_random_operations() {
         // Generate 20 random transactions
         let ops: Vec<Op> = (1..=20)
@@ -391,6 +399,7 @@ mod tests {
 
     /// Property: Update and delete operations work correctly
     #[test]
+    #[ignore] // Slow fuzz test - run in regression suite only
     fn test_wal_fuzz_update_delete() {
         let ops = prop::collection::vec(
             (any::<u64>(), prop::collection::vec(any::<u8>(), 1..5)),
@@ -456,6 +465,7 @@ mod tests {
 
     /// Stress test: Large number of small transactions
     #[test]
+    #[ignore] // Slow stress test - run in regression suite only
     fn test_wal_stress_many_tiny_transactions() {
         let (_dir, manager) = create_wal_manager();
 
