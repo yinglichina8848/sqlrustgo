@@ -1,11 +1,11 @@
-//! TPC-H SF=0.3 Simple Query Test
+//! TPC-H SF=0.1 Simple Query Test
 //! Run with: cargo test --test tpch_sf03_test -- --nocapture
 
 use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-const TPCK_DATA_DIR: &str = "data/tpch-sf03";
+const TPCK_DATA_DIR: &str = "data/tpch-sf01";
 
 fn create_engine() -> ExecutionEngine {
     ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())))
@@ -36,7 +36,7 @@ fn test_sqlrustgo_sf03_count() {
     let mut engine = setup_sqlrustgo_engine_sf03_lineitem();
 
     // COUNT(*) query
-    println!("\nCOUNT(*) query (SF=0.3, 1.8M rows):");
+    println!("\nCOUNT(*) query (SF=0.1, 600K rows):");
     let start = std::time::Instant::now();
     let result = engine.execute(parse("SELECT COUNT(*) FROM lineitem").unwrap());
     let elapsed = start.elapsed();
@@ -68,7 +68,7 @@ fn test_sqlrustgo_sf03_sum_filtered() {
     let mut engine = setup_sqlrustgo_engine_sf03_lineitem();
 
     // SUM with filter
-    println!("\nSUM(l_quantity) with filter (SF=0.3):");
+    println!("\nSUM(l_quantity) with filter (SF=0.1):");
     let start = std::time::Instant::now();
     let result = engine
         .execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
