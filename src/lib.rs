@@ -324,33 +324,39 @@ fn extract_index_predicate(
     match where_clause {
         sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
             let op_upper = op.to_uppercase();
-            
+
             // Only handle simple comparison operators
             if !["<", ">", "=", "<=", ">="].contains(&op_upper.as_str()) {
                 return None;
             }
-            
+
             // Check if left side is a column and right side is a value
             let (col_name, value_str) = match (&**left, &**right) {
-                (sqlrustgo_parser::Expression::Identifier(name), sqlrustgo_parser::Expression::Literal(val)) => {
-                    (name.clone(), val.clone())
-                }
-                (sqlrustgo_parser::Expression::QualifiedColumn(_, col), sqlrustgo_parser::Expression::Literal(val)) => {
-                    (col.clone(), val.clone())
-                }
+                (
+                    sqlrustgo_parser::Expression::Identifier(name),
+                    sqlrustgo_parser::Expression::Literal(val),
+                ) => (name.clone(), val.clone()),
+                (
+                    sqlrustgo_parser::Expression::QualifiedColumn(_, col),
+                    sqlrustgo_parser::Expression::Literal(val),
+                ) => (col.clone(), val.clone()),
                 _ => return None,
             };
-            
+
             // Check if column exists
             let col_def = columns.iter().find(|c| c.name == col_name)?;
             let upper = col_def.data_type.to_uppercase();
-            
+
             // For TEXT columns, we need to hash the string value
             // Hash must match the hash function used in to_index_key()
-            use std::hash::{Hash, Hasher};
             use std::collections::hash_map::DefaultHasher;
-            
-            let value_i64 = if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
+            use std::hash::{Hash, Hasher};
+
+            let value_i64 = if upper.contains("INT")
+                || upper == "BIGINT"
+                || upper == "SMALLINT"
+                || upper == "TINYINT"
+            {
                 // Integer column: parse the value as i64
                 value_str.parse::<i64>().ok()?
             } else {
@@ -364,7 +370,7 @@ fn extract_index_predicate(
                 value_str.hash(&mut hasher);
                 hasher.finish() as i64
             };
-            
+
             Some((col_name, op_upper, value_i64))
         }
         _ => None,
@@ -403,14 +409,14 @@ fn filter_using_index(
                 ">=" => (value, i64::MAX),
                 _ => return None,
             };
-            
+
             // Get row IDs from index (this is O(log n) instead of O(n))
             let row_ids = storage.range_index(table_name, column_name, start, end);
-            
+
             if row_ids.is_empty() {
                 return Some(vec![]);
             }
-            
+
             // Now fetch only the specific rows we need using get_row
             let filtered: Vec<Vec<Value>> = row_ids
                 .into_iter()
@@ -1027,8 +1033,10 @@ fn evaluate_having_expr(
         // Handle binary comparison: SUM(amount) > 150
         sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
             let op_upper = op.to_uppercase();
-            if ["=", "==", "EQ", "!=", "<>", "NE", ">", "GT", "<", "LT", ">=", "GE", "<=", "LE"]
-                .contains(&op_upper.as_str())
+            if [
+                "=", "==", "EQ", "!=", "<>", "NE", ">", "GT", "<", "LT", ">=", "GE", "<=", "LE",
+            ]
+            .contains(&op_upper.as_str())
             {
                 // Try to evaluate left as aggregate
                 if let Some(left_val) =
@@ -1085,8 +1093,7 @@ fn evaluate_having_expr(
         sqlrustgo_parser::Expression::FunctionCall(name, args) => {
             let func_name = name.to_uppercase();
             if let Some(agg_func) = str_to_aggregate_function(&func_name) {
-                let rows_owned: Vec<Vec<Value>> =
-                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let rows_owned: Vec<Vec<Value>> = group_rows.iter().map(|r| (*r).clone()).collect();
                 let agg_call = sqlrustgo_parser::parser::AggregateCall {
                     func: agg_func,
                     args: args.clone(),
@@ -1149,8 +1156,7 @@ fn evaluate_having_value(
         sqlrustgo_parser::Expression::FunctionCall(name, args) => {
             let func_name = name.to_uppercase();
             if let Some(agg_func) = str_to_aggregate_function(&func_name) {
-                let rows_owned: Vec<Vec<Value>> =
-                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let rows_owned: Vec<Vec<Value>> = group_rows.iter().map(|r| (*r).clone()).collect();
                 let agg_call = sqlrustgo_parser::parser::AggregateCall {
                     func: agg_func,
                     args: args.clone(),
@@ -1203,8 +1209,7 @@ fn evaluate_aggregate_in_expr(
                     }
                 }
                 // If no exact match, try by function name alone
-                let rows_owned: Vec<Vec<Value>> =
-                    group_rows.iter().map(|r| (*r).clone()).collect();
+                let rows_owned: Vec<Vec<Value>> = group_rows.iter().map(|r| (*r).clone()).collect();
                 let agg_call = sqlrustgo_parser::parser::AggregateCall {
                     func: agg_func,
                     args: args.clone(),
@@ -2173,13 +2178,29 @@ impl ExecutionEngine {
                             all_columns.push(col.clone());
                         }
                     }
-                    
+
                     // Try to use index for single-table SELECT with WHERE on indexed column
                     #[allow(clippy::unnecessary_unwrap)]
                     let rows = if tables.len() == 1 && select.where_clause.is_some() {
-                        if let Some((col_name, op, value)) = extract_index_predicate(select.where_clause.as_ref().unwrap(), &all_columns) {
-                            if let Some(indexed_rows) = filter_using_index(&storage, table_name, &col_name, &op, value, &all_columns) {
-                                indexed_rows
+                        if let Some((col_name, op, value)) = extract_index_predicate(
+                            select.where_clause.as_ref().unwrap(),
+                            &all_columns,
+                        ) {
+                            if let Some(indexed_rows) = filter_using_index(
+                                &storage,
+                                table_name,
+                                &col_name,
+                                &op,
+                                value,
+                                &all_columns,
+                            ) {
+                                if indexed_rows.is_empty() {
+                                    // Index returned empty - fall back to full scan + WHERE filter
+                                    // to ensure we don't incorrectly return no rows
+                                    storage.scan(table_name).unwrap_or_default()
+                                } else {
+                                    indexed_rows
+                                }
                             } else {
                                 storage.scan(table_name).unwrap_or_default()
                             }
@@ -2207,27 +2228,41 @@ impl ExecutionEngine {
 
                 let columns = all_columns.clone();
 
-                let filtered_rows: Vec<Vec<Value>> =
-                    if let Some(ref where_clause) = select.where_clause {
-                        // If we already used index to filter, no need to filter again
-                        if tables.len() == 1 {
-                            if let Some((ref col_name, ref _op, ref value)) = extract_index_predicate(where_clause, &columns) {
-                                let index_results = storage.search_index(&tables[0], col_name, *value);
-                                if !index_results.is_empty() {
-                                    // Already filtered by index, skip evaluation
-                                    all_rows
-                                } else {
-                                    all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
-                                }
+                let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_clause) =
+                    select.where_clause
+                {
+                    // If we already used index to filter, no need to filter again
+                    if tables.len() == 1 {
+                        if let Some((ref col_name, ref _op, ref value)) =
+                            extract_index_predicate(where_clause, &columns)
+                        {
+                            let index_results = storage.search_index(&tables[0], col_name, *value);
+                            if !index_results.is_empty() {
+                                // Already filtered by index, skip evaluation
+                                all_rows
                             } else {
-                                all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                                all_rows
+                                    .into_iter()
+                                    .filter(|row| {
+                                        evaluate_where_clause(where_clause, row, &columns)
+                                    })
+                                    .collect()
                             }
                         } else {
-                            all_rows.into_iter().filter(|row| evaluate_where_clause(where_clause, row, &columns)).collect()
+                            all_rows
+                                .into_iter()
+                                .filter(|row| evaluate_where_clause(where_clause, row, &columns))
+                                .collect()
                         }
                     } else {
                         all_rows
-                    };
+                            .into_iter()
+                            .filter(|row| evaluate_where_clause(where_clause, row, &columns))
+                            .collect()
+                    }
+                } else {
+                    all_rows
+                };
 
                 // Handle aggregates if present
                 if !select.aggregates.is_empty() {
@@ -2261,8 +2296,12 @@ impl ExecutionEngine {
                             if let Some(ref having) = select.having {
                                 let rows_owned: Vec<Vec<Value>> =
                                     group_rows.iter().map(|r| (*r).clone()).collect();
-                                if !evaluate_having_expr(having, &rows_owned, &select.aggregates, &columns)
-                                {
+                                if !evaluate_having_expr(
+                                    having,
+                                    &rows_owned,
+                                    &select.aggregates,
+                                    &columns,
+                                ) {
                                     continue; // Skip this group
                                 }
                             }
@@ -2282,7 +2321,7 @@ impl ExecutionEngine {
                     }
                 }
 
-// Sort rows by ORDER BY clause BEFORE projection
+                // Sort rows by ORDER BY clause BEFORE projection
                 // This is necessary because ORDER BY can reference columns not in SELECT list
                 let ordered_rows: Vec<Vec<Value>> = if let Some(ref order_by) = select.order_by {
                     sort_rows_by_order_by(filtered_rows, order_by, &columns)
@@ -2655,7 +2694,12 @@ impl ExecutionEngine {
                 let mut right_hash: HashMap<Vec<Value>, Vec<Vec<Value>>> = HashMap::new();
                 for rrow in &right_rows {
                     let key = if let Some(ref col_name) = right_key_col {
-                        if let Some(idx) = right.schema().fields.iter().position(|f| &f.name == col_name) {
+                        if let Some(idx) = right
+                            .schema()
+                            .fields
+                            .iter()
+                            .position(|f| &f.name == col_name)
+                        {
                             if idx < rrow.len() {
                                 vec![rrow[idx].clone()]
                             } else {
@@ -2680,7 +2724,12 @@ impl ExecutionEngine {
                 // Probe with left rows
                 for (lidx, lrow) in left_rows.iter().enumerate() {
                     let key = if let Some(ref col_name) = left_key_col {
-                        if let Some(idx) = left.schema().fields.iter().position(|f| &f.name == col_name) {
+                        if let Some(idx) = left
+                            .schema()
+                            .fields
+                            .iter()
+                            .position(|f| &f.name == col_name)
+                        {
                             if idx < lrow.len() {
                                 vec![lrow[idx].clone()]
                             } else {
