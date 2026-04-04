@@ -1248,7 +1248,7 @@ impl StorageEngine for MemoryStorage {
 
         if !records.is_empty() {
             self.insert(table, records.clone())?;
-            
+
             // Auto-create indexes for integer columns after bulk load
             if let Some(table_info) = self.table_infos.get(table) {
                 for (col_idx, col_def) in table_info.columns.iter().enumerate() {
