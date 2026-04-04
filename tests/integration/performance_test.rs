@@ -712,7 +712,7 @@ fn test_composite_index() {
     storage.create_table_index("orders", "order_id", 1).unwrap();
 
     let result = storage.search_index("orders", "customer_id", 50);
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
     let range_result = storage.range_index("orders", "customer_id", 50, 60);
     assert!(!range_result.is_empty());
@@ -762,7 +762,7 @@ fn test_covering_index() {
     storage.create_table_index("users", "id", 0).unwrap();
 
     let result = storage.search_index("users", "id", 500);
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
     let range_result = storage.range_index("users", "id", 100, 200);
     assert!(!range_result.is_empty());
