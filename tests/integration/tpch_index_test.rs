@@ -19,7 +19,7 @@ fn setup_schema(engine: &mut ExecutionEngine) {
 fn test_index_usage() {
     let mut engine = create_engine();
     setup_schema(&mut engine);
-    
+
     // Load only first 1000 rows for quick test
     let filepath = format!("{}/lineitem.tbl", TPCK_DATA_DIR);
     if Path::new(&filepath).exists() {
@@ -34,9 +34,9 @@ fn test_index_usage() {
             }
         }
     }
-    
+
     // Indexes are auto-created by bulk_load
-    
+
     // Test: Simple query with WHERE on indexed column
     println!("\nTest 1: WHERE l_quantity = 10");
     let start = std::time::Instant::now();
@@ -47,7 +47,7 @@ fn test_index_usage() {
         }
         Err(e) => println!("  Error: {:?}", e),
     }
-    
+
     // Test: Range query
     println!("\nTest 2: WHERE l_quantity < 10");
     let start = std::time::Instant::now();
@@ -58,7 +58,7 @@ fn test_index_usage() {
         }
         Err(e) => println!("  Error: {:?}", e),
     }
-    
+
     // Test: Full scan (no WHERE)
     println!("\nTest 3: COUNT(*) without WHERE (full scan)");
     let start = std::time::Instant::now();

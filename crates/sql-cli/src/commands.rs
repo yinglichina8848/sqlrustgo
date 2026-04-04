@@ -120,7 +120,7 @@ fn get_table_indexes(storage: &dyn StorageEngine, table_name: &str) -> Vec<Index
         // For now, return empty - this can be enhanced when StorageEngine is extended
         for (i, col) in info.columns.iter().enumerate() {
             // Try search_index to see if column has an index
-            if let Some(_row_id) = storage.search_index(table_name, &col.name, 0) {
+            if !storage.search_index(table_name, &col.name, 0).is_empty() {
                 indexes.push(IndexInfo {
                     name: format!("idx_{}_{}", table_name, col.name),
                     column: col.name.clone(),
@@ -211,13 +211,14 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
         sqlrustgo_types::Value::Null => "NULL".to_string(),
         sqlrustgo_types::Value::Integer(i) => i.to_string(),
         sqlrustgo_types::Value::Float(f) => f.to_string(),
+        sqlrustgo_types::Value::Decimal(d) => d.to_string(),
         sqlrustgo_types::Value::Text(s) => s.clone(),
         sqlrustgo_types::Value::Boolean(b) => b.to_string(),
         sqlrustgo_types::Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
         sqlrustgo_types::Value::Date(d) => d.to_string(),
         sqlrustgo_types::Value::Timestamp(t) => t.to_string(),
         sqlrustgo_types::Value::Uuid(u) => u.to_string(),
-sqlrustgo_types::Value::Array(arr) => format!("[ARRAY: {} elements]", arr.len()),
+        sqlrustgo_types::Value::Array(arr) => format!("[ARRAY: {} elements]", arr.len()),
         sqlrustgo_types::Value::Enum(idx, s) => format!("{}({})", s, idx),
     }
 }

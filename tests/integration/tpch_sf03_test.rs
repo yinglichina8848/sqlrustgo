@@ -18,7 +18,7 @@ fn setup_schema(engine: &mut ExecutionEngine) {
 fn setup_sqlrustgo_engine_sf03_lineitem() -> ExecutionEngine {
     let mut engine = create_engine();
     setup_schema(&mut engine);
-    
+
     let filepath = format!("{}/lineitem.tbl", TPCK_DATA_DIR);
     if Path::new(&filepath).exists() {
         let mut storage = engine.storage.write().unwrap();
@@ -27,20 +27,20 @@ fn setup_sqlrustgo_engine_sf03_lineitem() -> ExecutionEngine {
             Err(e) => println!("Failed to load: {:?}", e),
         }
     }
-    
+
     engine
 }
 
 #[test]
 fn test_sqlrustgo_sf03_count() {
     let mut engine = setup_sqlrustgo_engine_sf03_lineitem();
-    
+
     // COUNT(*) query
     println!("\nCOUNT(*) query (SF=0.3, 1.8M rows):");
     let start = std::time::Instant::now();
     let result = engine.execute(parse("SELECT COUNT(*) FROM lineitem").unwrap());
     let elapsed = start.elapsed();
-    
+
     match result {
         Ok(rows) => {
             println!("COUNT(*): {:?} rows in {:?}", rows.rows.len(), elapsed);
@@ -52,7 +52,7 @@ fn test_sqlrustgo_sf03_count() {
             println!("Error: {:?}", e);
         }
     }
-    
+
     // Run 10 iterations for performance test
     let start = std::time::Instant::now();
     for _ in 0..10 {
@@ -66,13 +66,14 @@ fn test_sqlrustgo_sf03_count() {
 #[test]
 fn test_sqlrustgo_sf03_sum_filtered() {
     let mut engine = setup_sqlrustgo_engine_sf03_lineitem();
-    
+
     // SUM with filter
     println!("\nSUM(l_quantity) with filter (SF=0.3):");
     let start = std::time::Instant::now();
-    let result = engine.execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
+    let result = engine
+        .execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
     let elapsed = start.elapsed();
-    
+
     match result {
         Ok(rows) => {
             println!("SUM: {:?} in {:?}", rows.rows, elapsed);
@@ -81,11 +82,12 @@ fn test_sqlrustgo_sf03_sum_filtered() {
             println!("Error: {:?}", e);
         }
     }
-    
+
     // Run 10 iterations
     let start = std::time::Instant::now();
     for _ in 0..10 {
-        let _ = engine.execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
+        let _ = engine
+            .execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
     }
     let total = start.elapsed();
     let avg = total / 10;
