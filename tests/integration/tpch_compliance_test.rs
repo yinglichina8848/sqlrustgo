@@ -648,39 +648,6 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
     engine
 }
 
-fn setup_sqlrustgo_engine_with_bulk_load() -> ExecutionEngine {
-    let mut engine = create_sqlrustgo_engine();
-    setup_sqlrustgo_schema(&mut engine);
-
-    use std::io::Write;
-    let temp_dir = std::env::temp_dir();
-
-    let small_data = vec![
-        ("region", "0|AFRICA|Africa region\n1|AMERICA|America region\n2|ASIA|Asia region\n3|EUROPE|Europe region\n4|MIDDLE EAST|Middle East region\n"),
-        ("nation", "0|Egypt|0|Egypt\n1|Ethiopia|0|Ethiopia\n2|Japan|2|Japan\n3|India|2|India\n4|Iraq|4|Iraq\n"),
-        ("customer", "1|Customer#001|Address1|0|10-1111111|1000.00|AUTOMOBILE|comment1\n2|Customer#002|Address2|1|10-2222222|2000.00|BUILDING|comment2\n3|Customer#003|Address3|2|10-3333333|3000.00|AUTOMOBILE|comment3\n4|Customer#004|Address4|3|10-4444444|4000.00|FURNITURE|comment4\n5|Customer#005|Address5|4|10-5555555|5000.00|MACHINERY|comment5\n"),
-        ("supplier", "1|Supplier#1|Address1|0|10-1111111|1000.00|Supplier1\n2|Supplier#2|Address2|1|10-2222222|2000.00|Supplier2\n3|Supplier#3|Address3|2|10-3333333|3000.00|Supplier3\n"),
-        ("part", "1|Part1|MFGR#1|Brand#1|ECONOMY ANODIZED STEEL|15|MED BOX|1000.00|Part1\n2|Part2|MFGR#1|Brand#2|PROMO ANODIZED STEEL|25|LG CASE|2000.00|Part2\n3|Part3|MFGR#2|Brand#3|STANDARD POLISHED STEEL|35|MED CASE|1500.00|Part3\n4|Part4|MFGR#2|Brand#4|MEDIUM POLISHED STEEL|45|SM CASE|1200.00|Part4\n"),
-        ("partsupp", "1|1|100|500.00|PartSupp1\n1|2|200|600.00|PartSupp2\n2|2|150|700.00|PartSupp3\n3|3|120|800.00|PartSupp4\n4|1|80|550.00|PartSupp5\n"),
-        ("orders", "1|1|O|15000.00|1995-01-15|1-URGENT|Clerk#1|0|comment\n2|2|O|5000.00|1995-01-20|5-LOW|Clerk#2|0|comment\n3|3|F|8000.00|1995-02-01|3-MEDIUM|Clerk#3|0|comment\n4|1|O|25000.00|1995-02-15|1-URGENT|Clerk#1|0|comment\n5|2|O|3000.00|1995-03-01|2-HIGH|Clerk#2|0|comment\n6|2|O|30000.00|1995-09-15|1-URGENT|Clerk#1|0|comment\n7|2|O|25000.00|1995-09-10|5-LOW|Clerk#2|0|comment\n"),
-        ("lineitem", "1|1|1|1|15|15000.00|0.05|1.2|N|O|1995-01-20|1995-01-18|1995-01-25|NONE|AIR|comment1\n1|2|2|2|20|20000.00|0.05|1.6|N|O|1995-01-20|1995-01-18|1995-01-25|NONE|AIR|comment2\n2|3|3|1|5|5000.00|0.10|0.4|N|O|1995-01-25|1995-01-23|1995-01-30|NONE|TRUCK|comment3\n3|1|1|1|8|8000.00|0.08|0.64|N|O|1995-02-10|1995-02-08|1995-02-15|NONE|RAIL|comment4\n3|2|2|1|25|25000.00|0.03|2.0|A|F|1995-02-10|1995-02-08|1995-02-15|NONE|AIR|comment5\n4|3|3|1|10|10000.00|0.06|0.8|N|O|1995-02-20|1995-02-18|1995-02-25|NONE|SHIP|comment6\n5|1|1|1|12|12000.00|0.04|0.96|R|F|1995-03-05|1995-03-03|1995-03-10|NONE|AIR|comment7\n6|2|1|1|30|30000.00|0.05|1.5|N|O|1995-09-15|1995-09-01|1995-09-20|NONE|AIR|comment8\n7|2|2|1|25|25000.00|0.10|1.25|N|O|1995-09-10|1995-09-05|1995-09-15|NONE|TRUCK|comment9\n8|1|1|1|10|10000.00|0.03|0.3|N|O|1995-09-20|1995-09-10|1995-09-25|NONE|SHIP|comment10\n"),
-    ];
-
-    for (table, data) in small_data {
-        let filepath = temp_dir.join(format!("{}.tbl", table));
-        let mut file = std::fs::File::create(&filepath).unwrap();
-        file.write_all(data.as_bytes()).unwrap();
-
-        let mut storage = engine.storage.write().unwrap();
-        match storage.bulk_load_tbl_file(table, filepath.to_str().unwrap()) {
-            Ok(count) => println!("Loaded {} rows into {} (bulk)", count, table),
-            Err(e) => println!("Failed to load {}: {:?}", table, e),
-        }
-    }
-
-    engine
-}
-
 struct QueryResult {
     name: String,
     sqlite_ok: bool,
