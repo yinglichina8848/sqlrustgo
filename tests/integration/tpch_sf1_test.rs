@@ -20,7 +20,7 @@ fn setup_schema(engine: &mut ExecutionEngine) {
 fn setup_sqlrustgo_engine_sf1_lineitem() -> ExecutionEngine {
     let mut engine = create_engine();
     setup_schema(&mut engine);
-    
+
     let filepath = format!("{}/lineitem.tbl", TPCK_DATA_DIR);
     if Path::new(&filepath).exists() {
         let mut storage = engine.storage.write().unwrap();
@@ -31,7 +31,7 @@ fn setup_sqlrustgo_engine_sf1_lineitem() -> ExecutionEngine {
     } else {
         println!("SF=1 data not found at {}. Run: cd /tmp/tpch-dbgen && ./dbgen -s 1 -f && cp *.tbl ~/workspace/yinglichina/sqlrustgo/data/tpch-sf1/", TPCK_DATA_DIR);
     }
-    
+
     engine
 }
 
@@ -39,13 +39,13 @@ fn setup_sqlrustgo_engine_sf1_lineitem() -> ExecutionEngine {
 #[ignore] // SF=1 requires ~5GB memory, may OOM on 16GB systems
 fn test_sqlrustgo_sf1_count() {
     let mut engine = setup_sqlrustgo_engine_sf1_lineitem();
-    
+
     // COUNT(*) query
     println!("\nCOUNT(*) query (SF=1, 6M rows):");
     let start = std::time::Instant::now();
     let result = engine.execute(parse("SELECT COUNT(*) FROM lineitem").unwrap());
     let elapsed = start.elapsed();
-    
+
     match result {
         Ok(rows) => {
             println!("COUNT(*): {:?} rows in {:?}", rows.rows.len(), elapsed);
@@ -63,13 +63,14 @@ fn test_sqlrustgo_sf1_count() {
 #[ignore] // SF=1 requires ~5GB memory, may OOM on 16GB systems
 fn test_sqlrustgo_sf1_sum_filtered() {
     let mut engine = setup_sqlrustgo_engine_sf1_lineitem();
-    
+
     // SUM with filter
     println!("\nSUM(l_quantity) with filter (SF=1):");
     let start = std::time::Instant::now();
-    let result = engine.execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
+    let result = engine
+        .execute(parse("SELECT SUM(l_quantity) FROM lineitem WHERE l_quantity < 10").unwrap());
     let elapsed = start.elapsed();
-    
+
     match result {
         Ok(rows) => {
             println!("SUM: {:?} in {:?}", rows.rows, elapsed);

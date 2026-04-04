@@ -2075,7 +2075,10 @@ mod tests {
         let right = Expr::Column("x".to_string());
         let simplified = rule.simplify_binary(&left, &Operator::And, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(false))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(false))
+        ));
     }
 
     #[test]
@@ -2085,7 +2088,10 @@ mod tests {
         let right = Expr::Literal(Value::Boolean(false));
         let simplified = rule.simplify_binary(&left, &Operator::And, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(false))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(false))
+        ));
     }
 
     #[test]
@@ -2115,7 +2121,10 @@ mod tests {
         let right = Expr::Column("x".to_string());
         let simplified = rule.simplify_binary(&left, &Operator::Or, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(true))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(true))
+        ));
     }
 
     #[test]
@@ -2125,7 +2134,10 @@ mod tests {
         let right = Expr::Literal(Value::Boolean(true));
         let simplified = rule.simplify_binary(&left, &Operator::Or, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(true))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(true))
+        ));
     }
 
     #[test]
@@ -2134,7 +2146,10 @@ mod tests {
         let col = Expr::Column("x".to_string());
         let simplified = rule.simplify_binary(&col, &Operator::Eq, &col);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(true))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(true))
+        ));
     }
 
     #[test]
@@ -2143,7 +2158,10 @@ mod tests {
         let col = Expr::Column("x".to_string());
         let simplified = rule.simplify_binary(&col, &Operator::NotEq, &col);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Boolean(false))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Boolean(false))
+        ));
     }
 
     #[test]
@@ -2183,7 +2201,10 @@ mod tests {
         let right = Expr::Literal(Value::Integer(0));
         let simplified = rule.simplify_binary(&left, &Operator::Multiply, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Integer(0))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Integer(0))
+        ));
     }
 
     #[test]
@@ -2193,7 +2214,10 @@ mod tests {
         let right = Expr::Column("x".to_string());
         let simplified = rule.simplify_binary(&left, &Operator::Multiply, &right);
         assert!(simplified.is_some());
-        assert!(matches!(simplified.unwrap(), Expr::Literal(Value::Integer(0))));
+        assert!(matches!(
+            simplified.unwrap(),
+            Expr::Literal(Value::Integer(0))
+        ));
     }
 
     #[test]
@@ -2240,17 +2264,16 @@ mod tests {
         let rule = ExpressionSimplification::new();
         // simplify_unary returns None when op is not Not, or expr is not UnaryExpr
         let result = rule.simplify_unary(&Operator::Plus, &Expr::Column("x".to_string()));
-        assert!(result.is_none(), "simplify_unary should return None for non-NOT op");
+        assert!(
+            result.is_none(),
+            "simplify_unary should return None for non-NOT op"
+        );
     }
 
     #[test]
     fn test_predicate_simplifier_eval_binary_gt() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Gt,
-            &Value::Integer(5),
-            &Value::Integer(3),
-        );
+        let result = rule.eval_binary_op(&Operator::Gt, &Value::Integer(5), &Value::Integer(3));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2258,11 +2281,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_lt() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Lt,
-            &Value::Integer(2),
-            &Value::Integer(7),
-        );
+        let result = rule.eval_binary_op(&Operator::Lt, &Value::Integer(2), &Value::Integer(7));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2270,11 +2289,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_gteq() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::GtEq,
-            &Value::Integer(5),
-            &Value::Integer(5),
-        );
+        let result = rule.eval_binary_op(&Operator::GtEq, &Value::Integer(5), &Value::Integer(5));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2282,11 +2297,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_lteq() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::LtEq,
-            &Value::Integer(5),
-            &Value::Integer(5),
-        );
+        let result = rule.eval_binary_op(&Operator::LtEq, &Value::Integer(5), &Value::Integer(5));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2294,11 +2305,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_plus() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Plus,
-            &Value::Integer(3),
-            &Value::Integer(4),
-        );
+        let result = rule.eval_binary_op(&Operator::Plus, &Value::Integer(3), &Value::Integer(4));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Integer(7)));
     }
@@ -2306,11 +2313,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_minus() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Minus,
-            &Value::Integer(10),
-            &Value::Integer(3),
-        );
+        let result = rule.eval_binary_op(&Operator::Minus, &Value::Integer(10), &Value::Integer(3));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Integer(7)));
     }
@@ -2318,11 +2321,8 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_multiply() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Multiply,
-            &Value::Integer(3),
-            &Value::Integer(4),
-        );
+        let result =
+            rule.eval_binary_op(&Operator::Multiply, &Value::Integer(3), &Value::Integer(4));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Integer(12)));
     }
@@ -2330,11 +2330,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_eq_int() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::Eq,
-            &Value::Integer(5),
-            &Value::Integer(5),
-        );
+        let result = rule.eval_binary_op(&Operator::Eq, &Value::Integer(5), &Value::Integer(5));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2342,11 +2338,7 @@ mod tests {
     #[test]
     fn test_predicate_simplifier_eval_binary_ne_int() {
         let rule = ExpressionSimplification::new();
-        let result = rule.eval_binary_op(
-            &Operator::NotEq,
-            &Value::Integer(5),
-            &Value::Integer(3),
-        );
+        let result = rule.eval_binary_op(&Operator::NotEq, &Value::Integer(5), &Value::Integer(3));
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Value::Boolean(true)));
     }
@@ -2375,7 +2367,12 @@ mod tests {
         };
         let plan = rule.convert_to_index_scan("users", &predicate);
         assert!(matches!(plan, Plan::IndexScan { .. }));
-        if let Plan::IndexScan { table_name, predicate: pred, .. } = plan {
+        if let Plan::IndexScan {
+            table_name,
+            predicate: pred,
+            ..
+        } = plan
+        {
             assert_eq!(table_name, "users");
             assert!(pred.is_some());
         }

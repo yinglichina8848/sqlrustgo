@@ -328,7 +328,11 @@ impl StorageEngine for ColumnarStorage {
         Ok(records)
     }
 
-    fn get_row(&self, table: &str, row_index: usize) -> crate::engine::SqlResult<Option<Vec<Value>>> {
+    fn get_row(
+        &self,
+        table: &str,
+        row_index: usize,
+    ) -> crate::engine::SqlResult<Option<Vec<Value>>> {
         let store = self.tables.get(table).ok_or_else(|| {
             crate::engine::SqlError::ExecutionError(format!("Table not found: {}", table))
         })?;
