@@ -6,6 +6,7 @@ use sqlrustgo_vector::{
     ivf::IvfIndex,
     hnsw::HnswIndex,
     metrics::DistanceMetric,
+    parallel_knn::ParallelKnn,
     VectorIndex,
 };
 
@@ -174,6 +175,79 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_parallel_knn_search(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parallel_knn_search");
+    
+    for size in [1000, 10000].iter() {
+        let vectors = generate_random_vectors(*size, 128);
+        let query = vec![0.5f32; 128];
+        
+        // Sequential baseline
+        group.bench_with_input(
+            BenchmarkId::new("sequential", size), 
+            size, 
+            |b, &size| {
+                let mut index = FlatIndex::new(DistanceMetric::Cosine);
+                for (id, v) in vectors.iter().take(size) {
+                    let _ = index.insert(*id, v);
+                }
+                
+                b.iter(|| {
+                    let _ = index.search(black_box(&query), black_box(10));
+                });
+            }
+        );
+        
+        // Parallel search
+        group.bench_with_input(
+            BenchmarkId::new("parallel", size), 
+            size, 
+            |b, &size| {
+                let mut index = FlatIndex::new(DistanceMetric::Cosine);
+                for (id, v) in vectors.iter().take(size) {
+                    let _ = index.insert(*id, v);
+                }
+                let parallel_index = ParallelKnn::new(index);
+                
+                b.iter(|| {
+                    let result = parallel_index.parallel_search(black_box(&query), black_box(10));
+                    black_box(result);
+                });
+            }
+        );
+    }
+    group.finish();
+}
+
+fn bench_parallel_batch_search(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parallel_batch_search");
+    
+    let sizes = [10, 50, 100];
+    for size in sizes.iter() {
+        let vectors = generate_random_vectors(10000, 128);
+        let mut index = FlatIndex::new(DistanceMetric::Cosine);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        
+        let queries: Vec<_> = (0..*size)
+            .map(|_| (0..128).map(|_| rand::random::<f32>()).collect::<Vec<_>>())
+            .collect();
+        
+        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
+            b.iter(|| {
+                let results = sqlrustgo_vector::parallel_knn::batch_search(
+                    &index, 
+                    black_box(&queries[..size]), 
+                    black_box(10)
+                );
+                black_box(results);
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_flat_insert,
@@ -182,6 +256,8 @@ criterion_group!(
     bench_ivf_search,
     bench_hnsw_insert,
     bench_hnsw_search,
-    bench_scalar_vs_vectorized
+    bench_scalar_vs_vectorized,
+    bench_parallel_knn_search,
+    bench_parallel_batch_search
 );
 criterion_main!(benches);
