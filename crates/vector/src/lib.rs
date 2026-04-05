@@ -22,7 +22,9 @@
 //! let results = index.search(&[0.1, 0.2, 0.3], 1).unwrap();
 //! ```
 
+pub mod batch_writer;
 pub mod flat;
+pub mod gpu_accel;
 pub mod hnsw;
 pub mod ivf;
 pub mod metrics;
@@ -32,8 +34,12 @@ pub mod sql_vector_hybrid;
 pub mod error;
 pub mod traits;
 
+pub use batch_writer::{BatchVectorWriter, BatchWriteConfig};
 pub use error::{VectorError, VectorResult};
 pub use flat::FlatIndex;
+pub use gpu_accel::{
+    CpuSimdAccelerator, GpuAccelerator, GpuConfig, GpuDevice, GpuStatus, PerformanceComparison,
+};
 pub use hnsw::HnswIndex;
 pub use ivf::IvfIndex;
 pub use metrics::DistanceMetric;
