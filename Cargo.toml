@@ -29,6 +29,7 @@ members = [
     "crates/test-results",
     "crates/test-reporter",
     "crates/gmp",
+    "crates/vector",
     "test/sql92",
 ]
 
