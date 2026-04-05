@@ -26,6 +26,7 @@ pub mod flat;
 pub mod hnsw;
 pub mod ivf;
 pub mod metrics;
+pub mod parallel_knn;
 
 pub mod error;
 pub mod traits;
@@ -35,4 +36,5 @@ pub use flat::FlatIndex;
 pub use hnsw::HnswIndex;
 pub use ivf::IvfIndex;
 pub use metrics::DistanceMetric;
+pub use parallel_knn::{ParallelKnn, ParallelKnnConfig, ParallelKnnIndex, ParallelSearchResult};
 pub use traits::{VectorIndex, VectorIndexBuilder};
