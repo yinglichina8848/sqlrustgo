@@ -27,6 +27,7 @@ pub mod hnsw;
 pub mod ivf;
 pub mod metrics;
 pub mod parallel_knn;
+pub mod sql_vector_hybrid;
 
 pub mod error;
 pub mod traits;
@@ -37,4 +38,5 @@ pub use hnsw::HnswIndex;
 pub use ivf::IvfIndex;
 pub use metrics::DistanceMetric;
 pub use parallel_knn::{ParallelKnn, ParallelKnnConfig, ParallelKnnIndex, ParallelSearchResult};
+pub use sql_vector_hybrid::{HybridSearchConfig, HybridSearcher, HybridSearchResult};
 pub use traits::{VectorIndex, VectorIndexBuilder};
