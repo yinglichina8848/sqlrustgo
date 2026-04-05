@@ -248,6 +248,65 @@ fn bench_parallel_batch_search(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_write_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("write_throughput");
+    
+    for size in [1000, 10000, 100000].iter() {
+        let dim = 128;
+        
+        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
+            b.iter(|| {
+                let mut index = FlatIndex::new(DistanceMetric::Cosine);
+                for i in 0..size {
+                    let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                    let _ = index.insert(black_box(i as u64), black_box(&v));
+                }
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_large_scale_search(c: &mut Criterion) {
+    let mut group = c.benchmark_group("large_scale_search");
+    
+    // 100K vectors for memory-efficient testing
+    let size = 100000;
+    let dim = 128;
+    let mut vectors = Vec::with_capacity(size);
+    for i in 0..size {
+        let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+        vectors.push((i as u64, v));
+    }
+    
+    let query = vec![0.5f32; dim];
+    
+    // Flat index
+    group.bench_function("flat_100k", |b| {
+        let mut index = FlatIndex::new(DistanceMetric::Cosine);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        
+        b.iter(|| {
+            let _ = index.search(black_box(&query), black_box(10));
+        });
+    });
+    
+    // IVF index
+    group.bench_function("ivf_100k", |b| {
+        let mut index = IvfIndex::new(DistanceMetric::Euclidean, 100);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        index.build_index().unwrap();
+        
+        b.iter(|| {
+            let _ = index.search(black_box(&query), black_box(10));
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_flat_insert,
@@ -258,6 +317,8 @@ criterion_group!(
     bench_hnsw_search,
     bench_scalar_vs_vectorized,
     bench_parallel_knn_search,
-    bench_parallel_batch_search
+    bench_parallel_batch_search,
+    bench_write_throughput,
+    bench_large_scale_search
 );
 criterion_main!(benches);
