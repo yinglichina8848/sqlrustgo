@@ -57,6 +57,7 @@ sqlrustgo-telemetry = { path = "crates/telemetry" }
 sqlrustgo-network = { path = "crates/network" }
 sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
+sqlrustgo-vector = { path = "crates/vector" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }

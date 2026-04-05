@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 sqlrustgo-common.workspace = true
 sqlrustgo-types.workspace = true
+sqlrustgo-vector.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -22,6 +23,9 @@ parquet.workspace = true
 flate2 = "1.0"
 tar = "0.4"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+parking_lot.workspace = true
+rayon = "1.10"
+rand.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
