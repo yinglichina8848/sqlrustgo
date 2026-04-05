@@ -2,7 +2,7 @@
 //!
 //! Provides periodic checkpoint generation and management for WAL.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
