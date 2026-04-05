@@ -259,4 +259,48 @@ mod tests {
         let last = manager.last_checkpoint().unwrap();
         assert_eq!(last.lsn, 1000);
     }
+
+    #[test]
+    fn test_checkpoint_save_load() {
+        let temp = TempDir::new().unwrap();
+        let manager = CheckpointManager::with_dir(temp.path().to_path_buf()).unwrap();
+        
+        let meta = CheckpointMetadata {
+            lsn: 2000,
+            timestamp: 1609459300000,
+            tx_count: 100,
+            dirty_pages: 20,
+            file_path: temp.path().join("checkpoint.2"),
+        };
+        
+        manager.save_metadata(&meta).unwrap();
+        let loaded = manager.load_metadata().unwrap().unwrap();
+        
+        assert_eq!(loaded.lsn, 2000);
+        assert_eq!(loaded.tx_count, 100);
+    }
+
+    #[test]
+    fn test_checkpoint_cleanup() {
+        let temp = TempDir::new().unwrap();
+        let manager = CheckpointManager::with_dir(temp.path().to_path_buf()).unwrap();
+        
+        // Create some checkpoint files with valid JSON content
+        for i in 1..=5 {
+            let file_path = temp.path().join(format!("checkpoint.{}.json", i));
+            let meta = CheckpointMetadata {
+                lsn: i as u64 * 1000,
+                timestamp: 1609459200000 + i as u64 * 1000,
+                tx_count: 10 * i as u64,
+                dirty_pages: i as u64,
+                file_path: file_path.clone(),
+            };
+            // Write valid JSON to the numbered file
+            fs::write(&file_path, meta.to_json()).unwrap();
+        }
+        
+        // Keep only 2
+        let removed = manager.cleanup_old_checkpoints(2).unwrap();
+        assert_eq!(removed, 3);
+    }
 }
