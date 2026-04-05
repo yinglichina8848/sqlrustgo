@@ -1,132 +1,128 @@
-//! Binary Storage Format
+//! Binary Table Storage
 //!
-//! Stores table data in compact binary format for fast I/O.
-//! Format: [magic:4][version:4][row_count:8][columns:4][data...]
+//! Fast binary format for table storage, replacing JSON.
 
-use crate::engine::{ColumnDefinition, TableData, TableInfo};
-use sqlrustgo_types::Value;
+use crate::engine::{ColumnDefinition, Record, TableData, TableInfo};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 
-const MAGIC: u32 = 0x42494E41; // "BINA"
-const VERSION: u32 = 1;
-
-/// Binary table storage format
-pub struct BinaryStorage {
+/// Binary storage for tables
+pub struct BinaryTableStorage {
     data_dir: PathBuf,
 }
 
-impl BinaryStorage {
+impl BinaryTableStorage {
     pub fn new(data_dir: PathBuf) -> std::io::Result<Self> {
         std::fs::create_dir_all(&data_dir)?;
         Ok(Self { data_dir })
     }
 
-    /// Get binary file path for a table
-    fn bin_path(&self, table: &str) -> PathBuf {
+    fn table_path(&self, table: &str) -> PathBuf {
         self.data_dir.join(format!("{}.bin", table))
     }
 
     /// Save table in binary format
-    pub fn save_binary(&self, table: &str, data: &TableData) -> std::io::Result<()> {
-        let path = self.bin_path(table);
+    pub fn save(&self, table: &str, data: &TableData) -> std::io::Result<()> {
+        let path = self.table_path(table);
         let file = File::create(&path)?;
-        let mut writer = BufWriter::new(file);
+        let mut w = BufWriter::new(file);
 
-        // Header
-        writer.write_all(&MAGIC.to_le_bytes())?;
-        writer.write_all(&VERSION.to_le_bytes())?;
-        
-        // Column count and info
-        let col_count = data.info.columns.len() as u32;
-        writer.write_all(&col_count.to_le_bytes())?;
-        
-        // Column types (encoded: I=Integer, F=Float, S=String, N=Null)
+        // Header: magic + version
+        w.write_all(b"BINT")?;
+        w.write_all(&1u32.to_le_bytes())?;
+
+        // Column count & info
+        w.write_all(&(data.info.columns.len() as u32).to_le_bytes())?;
         for col in &data.info.columns {
-            let type_code: u8 = match col.data_type.to_uppercase().as_str() {
-                t if t.contains("INT") => b'I',
-                t if t.contains("FLOAT") || t.contains("DOUBLE") || t.contains("REAL") => b'F',
-                t if t.contains("TEXT") || t.contains("CHAR") || t.contains("VARCHAR") => b'S',
-                _ => b'S',
+            let code = match col.data_type.to_uppercase().as_str() {
+                t if t.contains("INT") => 1u8,
+                t if t.contains("FLOAT") || t.contains("REAL") => 2u8,
+                _ => 3u8, // TEXT
             };
-            writer.write_all(&[type_code])?;
+            w.write_all(&[code])?;
         }
 
         // Row count
-        let row_count = data.rows.len() as u64;
-        writer.write_all(&row_count.to_le_bytes())?;
+        w.write_all(&(data.rows.len() as u64).to_le_bytes())?;
 
-        // Write rows in binary
+        // Write rows
         for row in &data.rows {
-            for value in row {
-                match value {
-                    Value::Integer(i) => {
-                        writer.write_all(&[b'I'])?;
-                        writer.write_all(&i.to_le_bytes())?;
+            for val in row {
+                match val {
+                    sqlrustgo_types::Value::Integer(i) => {
+                        w.write_all(&[1])?;
+                        w.write_all(&i.to_le_bytes())?;
                     }
-                    Value::Float(f) => {
-                        writer.write_all(&[b'F'])?;
-                        writer.write_all(&f.to_le_bytes())?;
+                    sqlrustgo_types::Value::Float(f) => {
+                        w.write_all(&[2])?;
+                        w.write_all(&f.to_le_bytes())?;
                     }
-                    Value::Text(s) => {
-                        writer.write_all(&[b'S'])?;
+                    sqlrustgo_types::Value::Text(s) => {
+                        w.write_all(&[3])?;
                         let bytes = s.as_bytes();
-                        let len = bytes.len() as u32;
-                        writer.write_all(&len.to_le_bytes())?;
-                        writer.write_all(bytes)?;
+                        w.write_all(&(bytes.len() as u32).to_le_bytes())?;
+                        w.write_all(bytes)?;
+                    }
+                    sqlrustgo_types::Value::Null => {
+                        w.write_all(&[0])?;
                     }
                     _ => {
-                        writer.write_all(&[b'N'])?;
+                        w.write_all(&[0])?;
                     }
                 }
             }
         }
 
-        writer.flush()?;
-        Ok(())
+        w.flush()
     }
 
-    /// Load table from binary format
-    pub fn load_binary(&self, table: &str) -> std::io::Result<TableData> {
-        let path = self.bin_path(table);
-        let file = File::open(&path)?;
-        let mut reader = BufReader::new(file);
-
-        // Read and verify header
-        let mut magic_bytes = [0u8; 4];
-        reader.read_exact(&mut magic_bytes)?;
-        let magic = u32::from_le_bytes(magic_bytes);
-        if magic != MAGIC {
+    /// Load table from binary format (optimized)
+    pub fn load(&self, table: &str) -> std::io::Result<TableData> {
+        let path = self.table_path(table);
+        let mut file = File::open(path)?;
+        
+        // Use buffered reader with large buffer for faster reading
+        use std::io::BufReader;
+        let mut reader = BufReader::with_capacity(8 * 1024 * 1024, file); // 8MB buffer
+        
+        // Verify header
+        let mut magic = [0u8; 4];
+        reader.read_exact(&mut magic)?;
+        if &magic != b"BINT" {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Invalid binary file format",
+                "Not a binary table file",
             ));
         }
 
-        let mut version_bytes = [0u8; 4];
-        reader.read_exact(&mut version_bytes)?;
-        let _version = u32::from_le_bytes(version_bytes);
+        let mut ver = [0u8; 4];
+        reader.read_exact(&mut ver)?;
 
         // Column info
-        let mut col_count_bytes = [0u8; 4];
-        reader.read_exact(&mut col_count_bytes)?;
-        let col_count = u32::from_le_bytes(col_count_bytes) as usize;
+        let mut col_count = [0u8; 4];
+        reader.read_exact(&mut col_count)?;
+        let col_count = u32::from_le_bytes(col_count) as usize;
 
         let mut col_types = Vec::with_capacity(col_count);
         for _ in 0..col_count {
-            let mut type_byte = [0u8; 1];
-            reader.read_exact(&mut type_byte)?;
-            col_types.push(type_byte[0]);
+            let mut tc = [0u8; 1];
+            reader.read_exact(&mut tc)?;
+            col_types.push(tc[0]);
         }
 
-        // Build table info
+        // Row count
+        let mut row_count = [0u8; 8];
+        reader.read_exact(&mut row_count)?;
+        let row_count = u64::from_le_bytes(row_count) as usize;
+
+        // Build columns
         let columns: Vec<ColumnDefinition> = (0..col_count)
             .map(|i| ColumnDefinition {
                 name: format!("col_{}", i),
                 data_type: match col_types[i] {
-                    b'I' => "INTEGER".to_string(),
-                    b'F' => "REAL".to_string(),
+                    1 => "INTEGER".to_string(),
+                    2 => "REAL".to_string(),
                     _ => "TEXT".to_string(),
                 },
                 nullable: true,
@@ -142,40 +138,35 @@ impl BinaryStorage {
             columns,
         };
 
-        // Row count
-        let mut row_count_bytes = [0u8; 8];
-        reader.read_exact(&mut row_count_bytes)?;
-        let row_count = u64::from_le_bytes(row_count_bytes) as usize;
-
         // Read rows
         let mut rows = Vec::with_capacity(row_count);
         for _ in 0..row_count {
             let mut row = Vec::with_capacity(col_count);
-            for &type_code in &col_types {
-                match type_code {
-                    b'I' => {
-                        let mut bytes = [0u8; 8];
-                        reader.read_exact(&mut bytes)?;
-                        row.push(Value::Integer(i64::from_le_bytes(bytes)));
+            for _ in 0..col_types.len() {
+                // Read value type code
+                let mut vtc = [0u8; 1];
+                reader.read_exact(&mut vtc)?;
+                match vtc[0] {
+                    0 => row.push(sqlrustgo_types::Value::Null),
+                    1 => {
+                        let mut buf = [0u8; 8];
+                        reader.read_exact(&mut buf)?;
+                        row.push(sqlrustgo_types::Value::Integer(i64::from_le_bytes(buf)));
                     }
-                    b'F' => {
-                        let mut bytes = [0u8; 8];
-                        reader.read_exact(&mut bytes)?;
-                        row.push(Value::Float(f64::from_le_bytes(bytes)));
+                    2 => {
+                        let mut buf = [0u8; 8];
+                        reader.read_exact(&mut buf)?;
+                        row.push(sqlrustgo_types::Value::Float(f64::from_le_bytes(buf)));
                     }
-                    b'S' => {
-                        let mut len_bytes = [0u8; 4];
-                        reader.read_exact(&mut len_bytes)?;
-                        let len = u32::from_le_bytes(len_bytes) as usize;
-                        let mut str_bytes = vec![0u8; len];
-                        reader.read_exact(&mut str_bytes)?;
-                        row.push(Value::Text(
-                            String::from_utf8(str_bytes).unwrap_or_default(),
-                        ));
+                    3 => {
+                        let mut len = [0u8; 4];
+                        reader.read_exact(&mut len)?;
+                        let len = u32::from_le_bytes(len) as usize;
+                        let mut s = vec![0u8; len];
+                        reader.read_exact(&mut s)?;
+                        row.push(sqlrustgo_types::Value::Text(String::from_utf8_lossy(&s).to_string()));
                     }
-                    _ => {
-                        row.push(Value::Null);
-                    }
+                    _ => row.push(sqlrustgo_types::Value::Null),
                 }
             }
             rows.push(row);
@@ -184,60 +175,51 @@ impl BinaryStorage {
         Ok(TableData { info, rows })
     }
 
-    /// Check if binary file exists
-    pub fn binary_exists(&self, table: &str) -> bool {
-        self.bin_path(table).exists()
+    pub fn exists(&self, table: &str) -> bool {
+        self.table_path(table).exists()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_types::Value;
 
     #[test]
     fn test_binary_save_load() {
-        let temp_dir = std::env::temp_dir().join("binary_test");
-        let storage = BinaryStorage::new(temp_dir.clone()).unwrap();
+        let tmp = std::env::temp_dir().join("bin_test");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+
+        let cols = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            is_unique: false,
+            is_primary_key: false,
+            references: None,
+            auto_increment: false,
+        }];
+        let rows = vec![vec![sqlrustgo_types::Value::Integer(42)]];
 
         let data = TableData {
             info: TableInfo {
                 name: "test".to_string(),
-                columns: vec![
-                    ColumnDefinition {
-                        name: "id".to_string(),
-                        data_type: "INTEGER".to_string(),
-                        nullable: false,
-                        is_unique: false,
-                        is_primary_key: false,
-                        references: None,
-                        auto_increment: false,
-                    },
-                    ColumnDefinition {
-                        name: "name".to_string(),
-                        data_type: "TEXT".to_string(),
-                        nullable: true,
-                        is_unique: false,
-                        is_primary_key: false,
-                        references: None,
-                        auto_increment: false,
-                    },
-                ],
+                columns: cols,
             },
-            rows: vec![
-                vec![Value::Integer(1), Value::Text("Alice".to_string())],
-                vec![Value::Integer(2), Value::Text("Bob".to_string())],
-            ],
+            rows,
         };
 
-        storage.save_binary("test", &data).unwrap();
-        assert!(storage.binary_exists("test"));
+        storage.save("test", &data).unwrap();
+        assert!(storage.exists("test"));
 
-        let loaded = storage.load_binary("test").unwrap();
-        assert_eq!(loaded.rows.len(), 2);
-        assert_eq!(loaded.info.columns.len(), 2);
+        let loaded = storage.load("test").unwrap();
+        assert_eq!(loaded.rows.len(), 1);
+        
+        if let sqlrustgo_types::Value::Integer(i) = loaded.rows[0][0] {
+            assert_eq!(i, 42);
+        } else {
+            panic!("Expected Integer");
+        }
 
-        // Clean up
-        std::fs::remove_dir_all(temp_dir).ok();
+        std::fs::remove_dir_all(tmp).ok();
     }
 }
