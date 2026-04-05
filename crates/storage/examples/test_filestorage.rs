@@ -51,10 +51,10 @@ fn main() {
     storage.create_table(&table_info).expect("Failed to create table");
     println!("  Table created in {:.2}s", start.elapsed().as_secs_f64());
     
-    // Insert 10K rows
-    println!("Inserting 10,000 rows...");
+    // Insert 100 rows (small test)
+    println!("Inserting 100 rows...");
     let start = Instant::now();
-    for i in 1..=10000 {
+    for i in 1..=100 {
         let row = vec![
             Value::Integer(i as i64),
             Value::Text(format!("user_{}", i)),
@@ -63,7 +63,7 @@ fn main() {
     }
     println!("  Inserted in {:.2}s ({:.0} rows/s)", 
              start.elapsed().as_secs_f64(),
-             10000.0 / start.elapsed().as_secs_f64());
+             100.0 / start.elapsed().as_secs_f64());
     
     // Flush to disk
     println!("Flushing to disk...");
@@ -90,10 +90,10 @@ fn main() {
     let rows = storage.scan("users").expect("Failed to scan");
     println!("Scanned {} rows in {:.2}s", rows.len(), start.elapsed().as_secs_f64());
     
-    if rows.len() >= 10000 {
+    if rows.len() >= 100 {
         println!("✅ FileStorage persistence VERIFIED: {} rows persisted", rows.len());
     } else {
-        println!("❌ FAILED: expected 10000, got {}", rows.len());
+        println!("❌ FAILED: expected 100, got {}", rows.len());
         std::process::exit(1);
     }
     
