@@ -2,9 +2,9 @@
 //!
 //! Fast binary format for table storage, replacing JSON.
 
-use crate::engine::{ColumnDefinition, Record, TableData, TableInfo};
+use crate::engine::{ColumnDefinition, TableData, TableInfo};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::PathBuf;
 
 /// Binary storage for tables
@@ -80,7 +80,7 @@ impl BinaryTableStorage {
     /// Load table from binary format (optimized)
     pub fn load(&self, table: &str) -> std::io::Result<TableData> {
         let path = self.table_path(table);
-        let mut file = File::open(path)?;
+        let file = File::open(path)?;
         
         // Use buffered reader with large buffer for faster reading
         use std::io::BufReader;
