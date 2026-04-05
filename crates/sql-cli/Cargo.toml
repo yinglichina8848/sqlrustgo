@@ -1,6 +1,6 @@
 [package]
 name = "sqlrustgo-sql-cli"
-version = "1.6.1"
+version = "2.1.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
