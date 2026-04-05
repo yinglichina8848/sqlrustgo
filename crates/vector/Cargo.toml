@@ -1,0 +1,18 @@
+[package]
+name = "sqlrustgo-vector"
+version = "2.1.0"
+edition = "2021"
+authors = ["SQLRustGo Team"]
+license = "MIT"
+description = "High-performance vector index library for SQLRustGo"
+
+[dependencies]
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+parking_lot = "0.12"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.8"
+rand = "0.8"
