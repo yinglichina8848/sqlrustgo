@@ -2005,7 +2005,7 @@ fn test_memory_storage_search_index() {
     storage.create_table_index("users", "id", 0).unwrap();
 
     let result = storage.search_index("users", "id", 1);
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 }
 
 #[test]
@@ -2036,7 +2036,7 @@ fn test_memory_storage_range_index() {
     storage.create_table_index("users", "id", 0).unwrap();
 
     let result = storage.range_index("users", "id", 1, 10);
-    assert!(result.len() >= 0);
+    assert!(!result.is_empty());
 }
 
 #[test]

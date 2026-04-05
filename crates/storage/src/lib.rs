@@ -7,6 +7,7 @@ pub mod binary_format;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
+pub mod checkpoint;
 pub mod clock_replacer;
 pub mod columnar;
 pub mod engine;
@@ -67,6 +68,7 @@ pub use replication::{
     SlaveNode,
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
+pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
 
 #[cfg(test)]
