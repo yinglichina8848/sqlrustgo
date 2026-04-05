@@ -11,8 +11,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 fn main() {
-    let data_dir = PathBuf::from("/tmp/tpch_import_test");
-    let tpch_dir = PathBuf::from("/Users/liying/workspace/dev/heartopen/SQLRustGo/data/tpch-sf01-generated");
+    let data_dir = PathBuf::from("/tmp/tpch_import_test_sf1");
+    let tpch_dir = PathBuf::from("/Users/liying/workspace/dev/heartopen/SQLRustGo/data/tpch-sf1-generated");
     
     println!("==============================================");
     println!("  TPC-H Data Import Test (SF=0.1)");

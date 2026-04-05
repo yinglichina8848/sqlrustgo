@@ -23,6 +23,7 @@ pub mod read_write_split;
 pub mod replication;
 pub mod stats;
 pub mod wal;
+pub mod vector_storage;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 pub use backup_scheduler::{
@@ -71,6 +72,10 @@ pub use replication::{
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
 pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
+pub use vector_storage::{
+    Embedding, VectorColumnMeta, VectorIndexType, VectorStore, VectorStoreStats,
+    VectorStorageError, VectorStorageExt,
+};
 
 #[cfg(test)]
 mod tests {
