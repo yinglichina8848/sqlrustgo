@@ -153,4 +153,70 @@ mod tests {
         index.delete(1).unwrap();
         assert_eq!(index.len(), 1);
     }
+
+    #[test]
+    fn test_flat_index_empty_search() {
+        let index = FlatIndex::new(DistanceMetric::Euclidean);
+        let result = index.search(&[1.0, 0.0], 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_flat_index_large_k() {
+        let mut index = FlatIndex::new(DistanceMetric::Cosine);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.insert(2, &[0.0, 1.0]).unwrap();
+        let results = index.search(&[1.0, 0.0], 100).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_flat_index_all_metrics() {
+        for metric in [
+            DistanceMetric::Cosine,
+            DistanceMetric::Euclidean,
+            DistanceMetric::DotProduct,
+            DistanceMetric::Manhattan,
+        ] {
+            let mut index = FlatIndex::new(metric);
+            index.insert(1, &[1.0, 0.0]).unwrap();
+            index.insert(2, &[0.0, 1.0]).unwrap();
+            let results = index.search(&[1.0, 0.0], 1).unwrap();
+            assert_eq!(results[0].id, 1);
+        }
+    }
+
+    #[test]
+    fn test_flat_index_delete_not_found() {
+        let mut index = FlatIndex::new(DistanceMetric::Cosine);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        let result = index.delete(999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_flat_index_query_dimension_mismatch() {
+        let mut index = FlatIndex::new(DistanceMetric::Euclidean);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        let result = index.search(&[1.0, 0.0, 0.0], 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_flat_index_is_empty() {
+        let index = FlatIndex::new(DistanceMetric::Cosine);
+        assert!(index.is_empty());
+    }
+
+    #[test]
+    fn test_flat_index_1000_vectors() {
+        let mut index = FlatIndex::new(DistanceMetric::Euclidean);
+        for i in 0..1000 {
+            let v = vec![i as f32, i as f32, i as f32];
+            index.insert(i, &v).unwrap();
+        }
+        assert_eq!(index.len(), 1000);
+        let results = index.search(&[500.0, 500.0, 500.0], 10).unwrap();
+        assert_eq!(results.len(), 10);
+    }
 }

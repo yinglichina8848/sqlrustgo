@@ -293,4 +293,46 @@ mod tests {
         let results = index.search(&[50.0, 50.0], 5).unwrap();
         assert_eq!(results.len(), 5);
     }
+
+    #[test]
+    fn test_ivf_index_dimension_mismatch() {
+        let mut index = IvfIndex::new(DistanceMetric::Euclidean, 2);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        let result = index.insert(2, &[1.0, 0.0, 0.0]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ivf_index_search_before_build() {
+        let mut index = IvfIndex::new(DistanceMetric::Euclidean, 2);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        let result = index.search(&[1.0, 0.0], 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ivf_index_with_nlist() {
+        let mut index = IvfIndex::with_nlist(5, DistanceMetric::Cosine);
+        for i in 0..50 {
+            let v = vec![i as f32, (50 - i) as f32];
+            index.insert(i, &v).unwrap();
+        }
+        index.build_index().unwrap();
+        assert_eq!(index.len(), 50);
+    }
+
+    #[test]
+    fn test_ivf_index_empty() {
+        let index = IvfIndex::new(DistanceMetric::Euclidean, 2);
+        assert!(index.is_empty());
+    }
+
+    #[test]
+    fn test_ivf_index_query_dimension_mismatch() {
+        let mut index = IvfIndex::new(DistanceMetric::Euclidean, 2);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.build_index().unwrap();
+        let result = index.search(&[1.0, 0.0, 0.0], 5);
+        assert!(result.is_err());
+    }
 }

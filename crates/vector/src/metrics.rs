@@ -127,4 +127,62 @@ mod tests {
         let b = vec![4.0, 5.0, 6.0];
         assert!((dot_product(&a, &b) - 32.0).abs() < 0.001);
     }
+
+    #[test]
+    fn test_cosine_similarity_opposite() {
+        let a = vec![1.0, 0.0];
+        let b = vec![-1.0, 0.0];
+        assert!((cosine_similarity(&a, &b) + 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_cosine_similarity_zero_vector() {
+        let a = vec![0.0, 0.0];
+        let b = vec![1.0, 0.0];
+        assert!(cosine_similarity(&a, &b).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_euclidean_distance_same_point() {
+        let a = vec![1.0, 2.0, 3.0];
+        assert!(euclidean_distance(&a, &a).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_euclidean_distance_3d() {
+        let a = vec![0.0, 0.0, 0.0];
+        let b = vec![3.0, 4.0, 0.0];
+        let dist = euclidean_distance(&a, &b);
+        assert!((dist - 5.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_manhattan_distance_same_point() {
+        let a = vec![1.0, 2.0, 3.0];
+        assert!(manhattan_distance(&a, &a).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_compute_distance_all_metrics() {
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        assert!((compute_distance(&a, &b, DistanceMetric::Cosine) - 1.0).abs() < 0.001);
+        assert!((compute_distance(&a, &b, DistanceMetric::Euclidean) - std::f32::consts::SQRT_2).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_compute_similarity_all_metrics() {
+        let a = vec![1.0, 0.0];
+        let b = vec![1.0, 0.0];
+        assert!((compute_similarity(&a, &b, DistanceMetric::Cosine) - 1.0).abs() < 0.001);
+        assert!((compute_similarity(&a, &b, DistanceMetric::DotProduct) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_metric_name() {
+        assert_eq!(DistanceMetric::Cosine.name(), "cosine");
+        assert_eq!(DistanceMetric::Euclidean.name(), "euclidean");
+        assert_eq!(DistanceMetric::DotProduct.name(), "dotproduct");
+        assert_eq!(DistanceMetric::Manhattan.name(), "manhattan");
+    }
 }
