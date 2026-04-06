@@ -29,6 +29,7 @@ pub mod hnsw;
 pub mod ivf;
 pub mod metrics;
 pub mod parallel_knn;
+pub mod simd_explicit;
 pub mod sql_vector_hybrid;
 
 pub mod error;
@@ -44,5 +45,6 @@ pub use hnsw::HnswIndex;
 pub use ivf::IvfIndex;
 pub use metrics::DistanceMetric;
 pub use parallel_knn::{ParallelKnn, ParallelKnnConfig, ParallelKnnIndex, ParallelSearchResult};
+pub use simd_explicit::{dot_product_simd, euclidean_distance_simd, cosine_similarity_simd, manhattan_distance_simd, compute_similarity_simd, detect_simd_lanes, batch_compute_distances};
 pub use sql_vector_hybrid::{HybridSearchConfig, HybridSearcher, HybridSearchResult};
 pub use traits::{VectorIndex, VectorIndexBuilder};
