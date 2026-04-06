@@ -41,6 +41,8 @@ pub enum CompressionType {
     Snappy,
     /// Zstd compression
     Zstd,
+    /// LZ4 compression (fast)
+    Lz4,
 }
 
 impl CompressionType {
@@ -48,6 +50,7 @@ impl CompressionType {
     pub fn magic_bytes(&self) -> [u8; 4] {
         match self {
             CompressionType::None => *b"NONE",
+            CompressionType::Lz4 => *b"LZ4F",
             CompressionType::Snappy => *b"SNAP",
             CompressionType::Zstd => *b"ZSTD",
         }
@@ -329,6 +332,14 @@ impl ColumnSegment {
                     (values_json.clone(), CompressionType::None)
                 }
             }
+            CompressionType::Lz4 => {
+                let compressed = compress_lz4(&values_json)?;
+                if compressed.len() < values_json.len() {
+                    (compressed, CompressionType::Lz4)
+                } else {
+                    (values_json.clone(), CompressionType::None)
+                }
+            }
         };
 
         // Build header
@@ -422,6 +433,7 @@ impl ColumnSegment {
             CompressionType::None => compressed_data,
             CompressionType::Snappy => decompress_snappy(&compressed_data)?,
             CompressionType::Zstd => decompress_zstd(&compressed_data)?,
+            CompressionType::Lz4 => decompress_lz4(&compressed_data)?,
         };
 
         // Deserialize values
@@ -488,6 +500,19 @@ fn decompress_zstd(data: &[u8]) -> SegmentResult<Vec<u8>> {
     std::io::copy(&mut decoder, &mut decompressed)
         .map_err(|e| SegmentError::Decompression(e.to_string()))?;
     Ok(decompressed)
+}
+
+/// Compress data using LZ4 (block format)
+fn compress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
+    use lz4_flex::block::compress;
+    Ok(compress(data))
+}
+
+/// Decompress data using LZ4 (block format)
+fn decompress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
+    use lz4_flex::block::decompress;
+    decompress(data, data.len() * 4)
+        .map_err(|e| SegmentError::Decompression(format!("LZ4 error: {:?}", e)))
 }
 
 #[cfg(test)]
