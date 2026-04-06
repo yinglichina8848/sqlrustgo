@@ -24,6 +24,7 @@ pub mod replication;
 pub mod stats;
 pub mod wal;
 pub mod vector_storage;
+pub mod mmap_vector_store;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 pub use backup_scheduler::{
