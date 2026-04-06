@@ -25,7 +25,8 @@ tar = "0.4"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 parking_lot.workspace = true
 rayon = "1.10"
+memmap2.workspace = true
+tempfile.workspace = true
 rand.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true
