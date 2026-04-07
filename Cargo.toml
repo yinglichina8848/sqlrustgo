@@ -30,6 +30,7 @@ members = [
     "crates/test-reporter",
     "crates/gmp",
     "crates/vector",
+    "crates/rag",
     "test/sql92",
 ]
 
