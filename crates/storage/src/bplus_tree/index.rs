@@ -74,6 +74,7 @@ impl Ord for CompositeKey {
             }
         }
         self.values.len().cmp(&other.values.len())
+    }
 }
 
 /// Index value wrapper (row ID in index)
@@ -1646,14 +1647,19 @@ mod tests {
 
     #[test]
     fn test_composite_key_creation() {
-        let key = CompositeKey::new(vec![1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
+        let key = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        assert_eq!(key.values.len(), 3);
     }
 
     #[test]
     fn test_composite_key_from_slice() {
-        let key = CompositeKey::from_slice(&[1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
+        let key =
+            CompositeKey::from_slice(&[Value::Integer(1), Value::Integer(2), Value::Integer(3)]);
+        assert_eq!(key.values.len(), 3);
     }
 
     #[test]
@@ -1693,8 +1699,14 @@ mod tests {
     #[test]
     fn test_composite_btree_index_insert_unique() {
         let mut index = CompositeBTreeIndex::new(2);
-        index.insert(CompositeKey::new(vec![1, 2]), 100);
-        index.insert(CompositeKey::new(vec![3, 4]), 200);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]),
+            100,
+        );
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(3), Value::Integer(4)]),
+            200,
+        );
 
         assert_eq!(index.len(), 2);
     }
@@ -1702,9 +1714,12 @@ mod tests {
     #[test]
     fn test_composite_btree_index_search() {
         let mut index = CompositeBTreeIndex::new(2);
-        index.insert(CompositeKey::new(vec![1, 2]), 100);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]),
+            100,
+        );
 
-        let key = CompositeKey::new(vec![1, 2]);
+        let key = CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]);
         let result = index.search(&key);
         assert_eq!(result, Some(100));
     }
@@ -1712,12 +1727,12 @@ mod tests {
     #[test]
     fn test_composite_btree_index_range_query() {
         let mut index = CompositeBTreeIndex::new(1);
-        index.insert(CompositeKey::new(vec![1]), 100);
-        index.insert(CompositeKey::new(vec![5]), 200);
-        index.insert(CompositeKey::new(vec![10]), 300);
+        index.insert(CompositeKey::new(vec![Value::Integer(1)]), 100);
+        index.insert(CompositeKey::new(vec![Value::Integer(5)]), 200);
+        index.insert(CompositeKey::new(vec![Value::Integer(10)]), 300);
 
-        let start = CompositeKey::new(vec![2]);
-        let end = CompositeKey::new(vec![8]);
+        let start = CompositeKey::new(vec![Value::Integer(2)]);
+        let end = CompositeKey::new(vec![Value::Integer(8)]);
         let results = index.range_query(&start, &end);
         // Should return values in range
         assert!(results.len() >= 0);
@@ -1767,24 +1782,44 @@ mod composite_index_tests {
     #[test]
     fn test_composite_key_creation() {
         // Test composite key creation
-        let key = CompositeKey::new(vec![1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
-        assert_eq!(key.columns[0], 1);
-        assert_eq!(key.columns[1], 2);
-        assert_eq!(key.columns[2], 3);
+        let key = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        assert_eq!(key.values.len(), 3);
+        assert_eq!(key.values[0], Value::Integer(1));
+        assert_eq!(key.values[1], Value::Integer(2));
+        assert_eq!(key.values[2], Value::Integer(3));
     }
 
     #[test]
     fn test_composite_key_from_slice() {
-        let key = CompositeKey::from_slice(&[10, 20, 30]);
-        assert_eq!(key.columns, vec![10, 20, 30]);
+        let key =
+            CompositeKey::from_slice(&[Value::Integer(10), Value::Integer(20), Value::Integer(30)]);
+        assert_eq!(
+            key.values,
+            vec![Value::Integer(10), Value::Integer(20), Value::Integer(30)]
+        );
     }
 
     #[test]
     fn test_composite_key_equality() {
-        let key1 = CompositeKey::new(vec![1, 2, 3]);
-        let key2 = CompositeKey::new(vec![1, 2, 3]);
-        let key3 = CompositeKey::new(vec![1, 2, 4]);
+        let key1 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let key2 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let key3 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(4),
+        ]);
 
         assert_eq!(key1, key2);
         assert!(key1 != key3);
@@ -1795,10 +1830,16 @@ mod composite_index_tests {
         let mut index = CompositeBTreeIndex::new(2);
 
         // Insert composite keys
-        index.insert(CompositeKey::new(vec![1, 100]), 1);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(100)]),
+            1,
+        );
 
         // Search should work
-        let result = index.search(&CompositeKey::new(vec![1, 100]));
+        let result = index.search(&CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(100),
+        ]));
         assert!(result.is_some());
     }
 
