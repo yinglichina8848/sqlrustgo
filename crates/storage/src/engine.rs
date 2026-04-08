@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::bplus_tree::hash_index::HashIndex;
 use crate::bplus_tree::SimpleBPlusTree;
+use crate::columnar::{CompressionConfig, CompressionLevel};
 
 /// Column statistics for a single column
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -55,6 +56,8 @@ pub struct ColumnDefinition {
     pub is_primary_key: bool,
     pub references: Option<ForeignKeyConstraint>,
     pub auto_increment: bool,
+    /// Compression configuration for this column (None = use auto-select)
+    pub compression: Option<CompressionConfig>,
 }
 
 impl ColumnDefinition {
@@ -67,6 +70,7 @@ impl ColumnDefinition {
             is_primary_key: false,
             references: None,
             auto_increment: false,
+            compression: None, // Default: auto-select compression
         }
     }
 }

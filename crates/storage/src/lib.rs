@@ -45,7 +45,7 @@ pub use clock_replacer::ClockReplacer;
 
 pub use columnar::{
     Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk, ColumnarStorage,
-    CompressionType, TableStore,
+    CompressionConfig, CompressionLevel, CompressionType, TableStore,
 };
 
 pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
