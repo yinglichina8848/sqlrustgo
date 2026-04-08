@@ -4,15 +4,18 @@ pub mod backup;
 pub mod backup_scheduler;
 pub mod backup_storage;
 pub mod binary_format;
+pub mod binary_storage;
 pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod buffer_pool_metrics;
+pub mod checkpoint;
 pub mod clock_replacer;
 pub mod columnar;
 pub mod engine;
 pub mod failover_manager;
 pub mod file_storage;
 pub mod heap;
+pub mod mmap_vector_store;
 pub mod page;
 pub mod page_guard;
 pub mod parquet;
@@ -20,6 +23,7 @@ pub mod pitr_recovery;
 pub mod read_write_split;
 pub mod replication;
 pub mod stats;
+pub mod vector_storage;
 pub mod wal;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
@@ -33,6 +37,7 @@ pub use backup_storage::{
 };
 
 pub use binary_format::BinaryFormat;
+pub use bplus_tree::hash_index::HashIndex;
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use buffer_pool_metrics::BufferPoolMetrics;
@@ -43,6 +48,7 @@ pub use columnar::{
     CompressionType, TableStore,
 };
 
+pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
     TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
@@ -67,6 +73,10 @@ pub use replication::{
     SlaveNode,
 };
 pub use stats::{ColumnStats as TableColumnStats, StatsManager, TableStats};
+pub use vector_storage::{
+    Embedding, VectorColumnMeta, VectorIndexType, VectorStorageError, VectorStorageExt,
+    VectorStore, VectorStoreStats,
+};
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
 
 #[cfg(test)]

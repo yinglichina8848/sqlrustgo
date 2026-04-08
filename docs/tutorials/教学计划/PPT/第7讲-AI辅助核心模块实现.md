@@ -1,9 +1,6 @@
 ---
-马尔普：真实
-主题：盖亚
-页面：真实
-背景颜色：#fff
-color: #333
+title: 第七讲：AI辅助核心模块实现
+theme: gaia
 ---
 
 <!-- _class: 领导 -->
@@ -20,6 +17,7 @@ color: #333
 2. **AI辅助实现词法分析器**（30分钟）
 3. **AI辅助实现语法分析器**（30分钟）
 4. **AI辅助实现存储引擎**（30分钟）
+5. **从UML到Rust代码的AI辅助转换**（20分钟）
 
 ---
 
@@ -424,6 +422,243 @@ fn test_buffer_pool() {
 
 ---
 
+# Part 5: 从UML到Rust代码的AI辅助转换
+
+---
+
+## 5.1 What：UML到Rust代码的转换
+
+### 转换流程
+
+1. **UML设计类图 → Rust trait/struct**
+2. **接口定义 → Rust trait**
+3. **类实现 → Rust struct**
+4. **关系 → Rust引用/依赖**
+
+### 转换原则
+
+- **接口隔离**：一个trait对应一个职责
+- **依赖注入**：通过参数传递依赖
+- **所有权清晰**：明确数据所有权
+- **错误处理**：使用Result类型
+
+---
+
+## 5.2 How：从设计类图生成Rust代码
+
+### 示例：Storage模块设计类图
+
+```plantuml
+@startuml
+interface StorageEngine {
+  + read(table: String, key: Key): Result<Record>
+  + write(table: String, record: Record): Result<()>
+  + scan(table: String, filter: Filter): Result<Vec<Record>>
+  + create_table(schema: Schema): Result<()>
+}
+
+class BPlusTree {
+  - root_page_id: PageId
+  - buffer_pool: BufferPool
+  + insert(key: Key, value: Value): Result<()>
+  + search(key: Key): Result<Option<Value>>
+  + range_scan(start: Key, end: Key): Result<Vec<(Key, Value)>>
+}
+
+StorageEngine <|.. BPlusTree
+@enduml
+```
+
+---
+
+## 5.2 How：从设计类图生成Rust代码（续）
+
+### 提示词设计
+
+```
+基于以下UML设计类图，生成Rust代码：
+
+接口：
+- StorageEngine：read, write, scan, create_table方法
+- BPlusTree：实现StorageEngine，包含insert, search, range_scan方法
+
+要求：
+1. 使用Rust trait定义接口
+2. 使用struct实现具体类
+3. 包含适当的错误处理
+4. 考虑所有权和生命周期
+5. 提供基本的测试用例
+```
+
+### AI生成的代码
+
+```rust
+// 接口定义
+pub trait StorageEngine {
+    fn read(&self, table: &str, key: &Key) -> Result<Record>;
+    fn write(&mut self, table: &str, record: Record) -> Result<()>;
+    fn scan(&self, table: &str, filter: &Filter) -> Result<Vec<Record>>;
+    fn create_table(&mut self, schema: Schema) -> Result<()>;
+}
+
+// 具体实现
+pub struct BPlusTree {
+    root_page_id: PageId,
+    buffer_pool: BufferPool,
+}
+
+impl BPlusTree {
+    pub fn new(buffer_pool: BufferPool) -> Self {
+        BPlusTree {
+            root_page_id: 0,
+            buffer_pool,
+        }
+    }
+    
+    pub fn insert(&mut self, key: Key, value: Value) -> Result<()> {
+        // 实现B+树插入
+    }
+    
+    pub fn search(&self, key: &Key) -> Result<Option<Value>> {
+        // 实现B+树搜索
+    }
+    
+    pub fn range_scan(&self, start: &Key, end: &Key) -> Result<Vec<(Key, Value)>> {
+        // 实现范围扫描
+    }
+}
+
+impl StorageEngine for BPlusTree {
+    // 实现StorageEngine接口
+}
+```
+
+---
+
+## 5.3 AI辅助调试和重构
+
+### AI辅助调试
+
+#### 示例：编译错误分析
+
+**错误信息：**
+```
+error[E0382]: use of moved value: `buffer_pool`
+  --> src/storage/bptree.rs:10:13
+   |
+9  |     pub fn new(buffer_pool: BufferPool) -> Self {
+   |                ------------ move occurs because `buffer_pool` has type `BufferPool`, which does not implement the `Copy` trait
+10 |         BPlusTree {
+11 |             root_page_id: 0,
+12 |             buffer_pool,
+   |             ^^^^^^^^^^^ value moved here
+13 |         }
+14 |     }
+```
+
+**提示词：**
+```
+分析以下Rust编译错误，提供修复方案：
+[错误信息]
+```
+
+**AI解决方案：**
+```rust
+// 修复方案1：使用引用
+pub struct BPlusTree {
+    root_page_id: PageId,
+    buffer_pool: &'a mut BufferPool,
+}
+
+// 修复方案2：使用Arc<Mutex<BufferPool>>
+use std::sync::{Arc, Mutex};
+
+pub struct BPlusTree {
+    root_page_id: PageId,
+    buffer_pool: Arc<Mutex<BufferPool>>,
+}
+```
+
+---
+
+## 5.3 AI辅助调试和重构（续）
+
+### AI辅助重构
+
+#### 示例：提取函数
+
+**提示词：**
+```
+重构以下代码，提取重复的逻辑为单独的函数：
+[代码]
+```
+
+**AI解决方案：**
+```rust
+// 原代码
+fn process_batch(&mut self, batch: &RecordBatch) -> Result<()> {
+    for record in batch.records {
+        if self.validate_record(&record)? {
+            self.index_record(&record)?;
+            self.store_record(&record)?;
+        }
+    }
+    Ok(())
+}
+
+// 重构后
+fn process_batch(&mut self, batch: &RecordBatch) -> Result<()> {
+    for record in batch.records {
+        self.process_record(&record)?;
+    }
+    Ok(())
+}
+
+fn process_record(&mut self, record: &Record) -> Result<()> {
+    if self.validate_record(record)? {
+        self.index_record(record)?;
+        self.store_record(record)?;
+    }
+    Ok(())
+}
+```
+
+---
+
+## 5.4 存储引擎B+树和WAL的AI生成
+
+### B+树实现
+
+#### 提示词设计
+
+```
+实现B+树索引，要求：
+1. 支持插入、搜索、范围扫描操作
+2. 节点大小：16KB
+3. 分支因子：默认128
+4. 支持页面管理
+5. 使用Rust实现
+6. 考虑错误处理
+7. 提供测试用例
+```
+
+### WAL（预写日志）实现
+
+#### 提示词设计
+
+```
+实现数据库WAL（预写日志），要求：
+1. 支持事务日志记录
+2. 支持日志回放（recovery）
+3. 支持检查点（checkpoint）
+4. 日志格式：LSN + 操作类型 + 数据
+5. 使用Rust实现
+6. 考虑性能优化
+7. 提供测试用例
+```
+
+---
+
 # 核心知识点总结
 
 ---
@@ -451,6 +686,13 @@ fn test_buffer_pool() {
 - Page结构
 - BufferPool实现
 - 测试验证
+
+## 5. 从UML到Rust代码的AI辅助转换
+
+- UML到Rust的转换流程
+- 从设计类图生成代码
+- AI辅助调试和重构
+- B+树和WAL的AI生成
 
 ---
 
