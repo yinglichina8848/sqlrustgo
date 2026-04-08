@@ -4,16 +4,15 @@
 
 #![allow(clippy::type_complexity)]
 
-pub mod context;
 pub mod cost;
 pub mod network_cost;
 pub mod plan;
 pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
+pub mod stats_provider;
 
-pub use context::OptimizerContext;
-pub use cost::{CboOptimizer, SimpleCostModel};
+pub use cost::{AccessMethod, CboOptimizer, PredicateType, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use projection_pushdown::{
@@ -27,6 +26,10 @@ pub use rules::{
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
     StatsCollector, StatsError, StatsResult, TableStats,
+};
+pub use stats_provider::{
+    CachedStatisticsProvider, PersistentStatisticsProvider, StatisticsProviderBuilder,
+    StorageStatisticsProvider,
 };
 
 /// Optimizer trait - interface for query optimization
@@ -118,7 +121,7 @@ impl DefaultOptimizer {
         self.rules.push(Box::new(PredicatePushdown::new()));
         self.rules.push(Box::new(ProjectionPruning::new()));
         self.rules.push(Box::new(ExpressionSimplification::new()));
-        self.rules.push(Box::new(IndexSelect::with_default_ctx()));
+        self.rules.push(Box::new(IndexSelect::new()));
         self.rules.push(Box::new(JoinReordering::new()));
     }
 

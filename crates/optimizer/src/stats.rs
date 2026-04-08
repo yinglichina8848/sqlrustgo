@@ -1033,6 +1033,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
@@ -1042,6 +1043,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
         ];
         let storage = MockStorage::new().with_data("users", records, columns);
@@ -1073,6 +1075,7 @@ mod tests {
             is_primary_key: false,
             auto_increment: false,
             references: None,
+            compression: None,
         }];
         let storage = MockStorage::new().with_data("orders", records, columns);
 
@@ -1100,6 +1103,7 @@ mod tests {
             is_primary_key: false,
             auto_increment: false,
             references: None,
+            compression: None,
         }];
         let storage = MockStorage::new().with_data("users", records, columns);
 
@@ -1132,6 +1136,7 @@ mod tests {
             is_primary_key: false,
             auto_increment: false,
             references: None,
+            compression: None,
         }];
         let storage: Box<dyn StorageEngine> =
             Box::new(MockStorage::new().with_data("t", records, columns));

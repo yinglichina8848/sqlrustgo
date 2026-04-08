@@ -1822,6 +1822,7 @@ impl ExecutionEngine {
                             is_primary_key: col.primary_key,
                             references,
                             auto_increment: col.auto_increment,
+                            compression: None,
                         }
                     })
                     .collect();
@@ -3025,6 +3026,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();
@@ -3066,6 +3068,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();
@@ -3087,6 +3090,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();

@@ -31,6 +31,7 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             sqlrustgo_storage::ColumnDefinition {
                 name: "embedding".to_string(),
@@ -40,6 +41,7 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             sqlrustgo_storage::ColumnDefinition {
                 name: "updated_at".to_string(),
@@ -49,6 +51,7 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {

@@ -481,6 +481,7 @@ fn execute_sql(
                     is_primary_key: col.primary_key,
                     references: None,
                     auto_increment: col.auto_increment,
+                    compression: None,
                 })
                 .collect();
 
