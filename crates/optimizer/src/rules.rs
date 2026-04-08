@@ -1119,6 +1119,21 @@ impl RuleMeta {
     }
 }
 
+/// Index hint type for query optimization (MySQL-style)
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexHintType {
+    UseIndex,
+    ForceIndex,
+    IgnoreIndex,
+}
+
+/// Index hint for query optimization
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexHint {
+    pub hint_type: IndexHintType,
+    pub index_names: Vec<String>,
+}
+
 /// Rule context for pattern matching
 #[derive(Debug, Default)]
 pub struct RuleContext {
@@ -1128,6 +1143,8 @@ pub struct RuleContext {
     pub rules_applied: usize,
     /// Whether to continue optimization
     pub continue_optimization: bool,
+    /// Index hints from query (USE/FORCE/IGNORE INDEX)
+    pub index_hints: Vec<IndexHint>,
 }
 
 impl RuleContext {
@@ -1136,6 +1153,16 @@ impl RuleContext {
             depth: 0,
             rules_applied: 0,
             continue_optimization: true,
+            index_hints: Vec::new(),
+        }
+    }
+
+    pub fn with_index_hints(index_hints: Vec<IndexHint>) -> Self {
+        Self {
+            depth: 0,
+            rules_applied: 0,
+            continue_optimization: true,
+            index_hints,
         }
     }
 
