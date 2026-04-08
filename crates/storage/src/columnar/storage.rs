@@ -570,6 +570,37 @@ impl StorageEngine for ColumnarStorage {
             "Auto-increment not yet implemented for ColumnarStorage".to_string(),
         ))
     }
+
+    fn create_composite_index(
+        &mut self,
+        _table: &str,
+        _columns: Vec<String>,
+    ) -> crate::engine::SqlResult<crate::engine::IndexId> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
+    fn search_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _key: &crate::bplus_tree::index::CompositeKey,
+    ) -> crate::engine::SqlResult<Vec<u32>> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
+    fn range_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _start: &crate::bplus_tree::index::CompositeKey,
+        _end: &crate::bplus_tree::index::CompositeKey,
+    ) -> crate::engine::SqlResult<Vec<u32>> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
