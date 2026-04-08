@@ -190,32 +190,12 @@ impl GpuAccelerator for CpuSimdAccelerator {
 // OpenCL GPU Accelerator (Real Implementation)
 // =============================================================================
 
-<<<<<<< Updated upstream
 #[cfg(feature = "opencl")]
 mod opencl_impl {
     use super::*;
     use ocl::flags::{MEM_READ_ONLY, MEM_WRITE_ONLY, PROGRAM_BUILD_STATUS};
     use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
     use std::collections::HashMap;
-=======
-impl OpenClAccelerator {
-    pub fn new(config: GpuConfig) -> Self {
-        // In a real implementation, this would initialize OpenCL
-        // For now, return unavailable status
-        Self {
-            config,
-            status: GpuStatus::Unavailable,
-            device_info: None,
-        }
-    }
-
-    /// List available OpenCL devices
-    pub fn list_devices() -> Vec<GpuDevice> {
-        // Stub: would enumerate OpenCL devices
-        vec![]
-    }
-}
->>>>>>> Stashed changes
 
     /// OpenCL kernel source for vector distance computation
     const KERNEL_SOURCE: &str = r#"
@@ -653,33 +633,6 @@ impl OpenClAccelerator {
         fn is_available(&self) -> bool {
             self.status == GpuStatus::Available
         }
-=======
-
-        Ok(GpuBuffer {
-            id: rand::random(),
-            size: data.len(),
-            device_id: self.config.device_id,
-        })
-    }
-
-    fn compute_distances(
-        &self,
-        _query: &GpuBuffer,
-        _vectors: &[&GpuBuffer],
-        _metric: DistanceMetric,
-    ) -> VectorResult<Vec<f32>> {
-        Err(VectorError::InvalidParameter(
-            "OpenCL not initialized".to_string(),
-        ))
-    }
-
-    fn device_info(&self) -> Option<GpuDevice> {
-        self.device_info.clone()
-    }
-
-    fn is_available(&self) -> bool {
-        self.status == GpuStatus::Available
->>>>>>> Stashed changes
     }
 }
 
