@@ -23,6 +23,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -47,6 +48,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -76,6 +78,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -107,6 +110,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -136,6 +140,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -164,6 +169,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -194,6 +200,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -224,6 +231,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             })
             .collect();
 
@@ -256,6 +264,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -293,6 +302,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 

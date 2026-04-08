@@ -25,6 +25,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -39,6 +40,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "parent_id".to_string(),
@@ -53,6 +55,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -83,6 +86,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -97,6 +101,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "parent_id".to_string(),
@@ -111,6 +116,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -152,6 +158,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -166,6 +173,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
@@ -180,6 +188,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::Cascade),
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -214,6 +223,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -228,6 +238,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "dept_id".to_string(),
@@ -242,6 +253,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::SetNull),
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -256,7 +268,54 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
+        };
+
+        let child2 = TableInfo {
+            name: "project_members".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: true,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "employee_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: Some(ForeignKeyConstraint {
+                        referenced_table: "employees".to_string(),
+                        referenced_column: "id".to_string(),
+                        on_delete: None,
+                        on_update: None,
+                    }),
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "department_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: Some(ForeignKeyConstraint {
+                        referenced_table: "departments".to_string(),
+                        referenced_column: "id".to_string(),
+                        on_delete: None,
+                        on_update: None,
+                    }),
+                    compression: None,
+                },
+            ],
         };
 
         storage.create_table(&parent).unwrap();
@@ -290,6 +349,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "manager_id".to_string(),
@@ -304,6 +364,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -336,6 +397,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -349,6 +411,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -363,6 +426,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "customer_id".to_string(),
@@ -377,6 +441,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "product_id".to_string(),
@@ -391,6 +456,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -432,6 +498,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -446,6 +513,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "category_id".to_string(),
@@ -460,6 +528,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::Restrict),
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -492,6 +561,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "customer_id".to_string(),
@@ -506,6 +576,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::Cascade),
                         on_update: Some(ForeignKeyAction::Cascade),
                     }),
+                    compression: None,
                 },
             ],
         };
