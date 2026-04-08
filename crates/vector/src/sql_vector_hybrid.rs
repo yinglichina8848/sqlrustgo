@@ -87,11 +87,7 @@ impl HybridSearcher {
         }
     }
 
-<<<<<<< Updated upstream
     pub fn with_config(metric: DistanceMetric, config: HybridSearchConfig) -> Self {
-=======
-    pub fn with_config(metric: crate::metrics::DistanceMetric, config: HybridSearchConfig) -> Self {
->>>>>>> Stashed changes
         Self {
             vector_index: ParallelKnnIndex::with_config(
                 metric,
@@ -149,8 +145,6 @@ impl HybridSearcher {
         let results: Vec<(u64, f32)> = if self.config.parallel && n > self.config.chunk_size {
             // Parallel implementation - compute real vector similarity
             let chunk_size = self.config.chunk_size;
-<<<<<<< Updated upstream
-
             // Get all IDs that have SQL scores and vectors
             let candidate_ids: Vec<u64> = sql_scores
                 .iter()
@@ -159,15 +153,6 @@ impl HybridSearcher {
                 .collect();
 
             candidate_ids
-=======
-            let dimension = self.vector_index.dimension();
-
-            // We need to reconstruct vectors from the index
-            // This is a limitation - in practice, store vectors separately
-            let indices: Vec<u64> = (0..n as u64).collect();
-
-            indices
->>>>>>> Stashed changes
                 .into_par_iter()
                 .chunks(chunk_size)
                 .map(|chunk_ids: Vec<u64>| {
