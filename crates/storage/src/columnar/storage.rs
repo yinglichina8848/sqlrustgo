@@ -3,7 +3,10 @@
 //! A column-oriented storage engine implementing the StorageEngine trait.
 
 use crate::columnar::chunk::{ColumnChunk, ColumnStats};
-use crate::columnar::segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
+use crate::columnar::segment::{
+    auto_select_compression, ColumnSegment, ColumnStatsDisk, CompressionConfig, CompressionLevel,
+    CompressionType,
+};
 use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
 use crate::wal::WalManager;
 use sqlrustgo_types::Value;
@@ -143,8 +146,36 @@ impl TableStore {
         // Write each column as a segment
         for (col_idx, chunk) in &self.columns {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
-            let mut segment =
-                ColumnSegment::with_compression(*col_idx as u32, CompressionType::Zstd);
+
+            // Get compression config from column definition
+            let compression_config = self
+                .info
+                .columns
+                .get(*col_idx)
+                .and_then(|c| c.compression.clone())
+                .unwrap_or_default();
+
+            // Select compression algorithm based on config
+            let compression_type = if compression_config.auto_select {
+                let col_data_type = self
+                    .info
+                    .columns
+                    .get(*col_idx)
+                    .map(|c| c.data_type.as_str())
+                    .unwrap_or("");
+                auto_select_compression(col_data_type, compression_config.level).0
+            } else {
+                // Map level preference to compression type
+                match compression_config.level {
+                    CompressionLevel::Fastest => CompressionType::Lz4,
+                    CompressionLevel::Default => CompressionType::Snappy,
+                    CompressionLevel::Best => CompressionType::Zstd,
+                    CompressionLevel::Custom(n) if n < 5 => CompressionType::Lz4,
+                    CompressionLevel::Custom(_) => CompressionType::Zstd,
+                }
+            };
+
+            let mut segment = ColumnSegment::with_compression(*col_idx as u32, compression_type);
 
             let stats = ColumnStatsDisk::from(chunk.stats());
             segment.stats = stats;
