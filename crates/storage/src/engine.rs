@@ -1498,6 +1498,7 @@ mod tests {
                 references: None,
                 is_primary_key: false,
                 auto_increment: false,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -1525,6 +1526,7 @@ mod tests {
                 references: None,
                 is_primary_key: false,
                 auto_increment: false,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -1561,6 +1563,7 @@ mod tests {
                     is_unique: false,
                     is_primary_key: false,
                     auto_increment: false,
+                    compression: None,
                     references: None,
                 }],
             },
@@ -1580,6 +1583,7 @@ mod tests {
             is_unique: false,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         };
         assert_eq!(col.name, "id");
@@ -1694,6 +1698,7 @@ fn test_column_definition_new() {
         is_unique: true,
         is_primary_key: false,
         auto_increment: false,
+        compression: None,
         references: None,
     };
     assert_eq!(col.name, "id");
@@ -1714,6 +1719,7 @@ fn test_table_info_new() {
                 is_unique: true,
                 is_primary_key: false,
                 auto_increment: false,
+                compression: None,
                 references: None,
             },
             ColumnDefinition {
@@ -1723,6 +1729,7 @@ fn test_table_info_new() {
                 is_unique: false,
                 is_primary_key: false,
                 auto_increment: false,
+                compression: None,
                 references: None,
             },
         ],
@@ -1782,6 +1789,7 @@ fn test_column_definition_serialize() {
         is_unique: true,
         is_primary_key: false,
         auto_increment: false,
+        compression: None,
         references: None,
     };
     let json = serde_json::to_string(&col).unwrap();
@@ -1799,6 +1807,7 @@ fn test_table_info_serialize() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -1874,6 +1883,7 @@ fn test_memory_storage_insert_with_info() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -1897,6 +1907,7 @@ fn test_memory_storage_duplicate_key() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -1920,6 +1931,7 @@ fn test_memory_storage_get_table_info() {
             is_unique: false,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -1994,6 +2006,7 @@ fn test_memory_storage_create_index() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -2018,6 +2031,7 @@ fn test_memory_storage_drop_index() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -2043,6 +2057,7 @@ fn test_memory_storage_search_index() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -2071,6 +2086,7 @@ fn test_memory_storage_range_index() {
             is_unique: true,
             is_primary_key: false,
             auto_increment: false,
+            compression: None,
             references: None,
         }],
     };
@@ -2118,6 +2134,7 @@ fn test_column_definition_with_foreign_key() {
         is_primary_key: false,
         auto_increment: false,
         references: Some(fk),
+        compression: None,
     };
     assert!(col.references.is_some());
 }

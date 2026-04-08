@@ -492,6 +492,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
@@ -501,6 +502,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
         };
@@ -542,6 +544,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
@@ -551,6 +554,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
         };
@@ -639,6 +643,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                    compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -738,6 +743,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                    compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -763,6 +769,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                    compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -794,6 +801,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                    compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
