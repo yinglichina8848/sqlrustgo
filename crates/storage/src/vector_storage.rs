@@ -6,15 +6,15 @@
 use crate::binary_format::BinaryFormat;
 use crate::binary_storage::BinaryTableStorage;
 use crate::engine::TableData;
-use sqlrustgo_vector::error::VectorError;
-use sqlrustgo_vector::VectorResult;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::PathBuf;
+use sqlrustgo_vector::error::VectorError;
 use sqlrustgo_vector::metrics::DistanceMetric;
 use sqlrustgo_vector::parallel_knn::ParallelKnnIndex;
 use sqlrustgo_vector::traits::{IndexEntry, VectorIndex};
+use sqlrustgo_vector::VectorResult;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::PathBuf;
 
 /// Vector index types supported
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,7 +67,11 @@ impl std::fmt::Display for VectorStorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             VectorStorageError::DimensionMismatch { expected, actual } => {
-                write!(f, "Dimension mismatch: expected {}, got {}", expected, actual)
+                write!(
+                    f,
+                    "Dimension mismatch: expected {}, got {}",
+                    expected, actual
+                )
             }
             VectorStorageError::IndexTypeNotFound => write!(f, "Index type not found"),
             VectorStorageError::Serialization(s) => write!(f, "Serialization error: {}", s),
@@ -133,17 +137,19 @@ impl VectorStore {
         index_type: VectorIndexType,
     ) -> VectorResult<()> {
         let key = Self::index_key(table, column);
-        
+
         // Create the index
         let index: Box<dyn VectorIndex> = match index_type {
-            VectorIndexType::Flat => Box::new(sqlrustgo_vector::FlatIndex::with_dimension(dimension, metric)),
+            VectorIndexType::Flat => Box::new(sqlrustgo_vector::FlatIndex::with_dimension(
+                dimension, metric,
+            )),
             VectorIndexType::Hnsw => Box::new(sqlrustgo_vector::HnswIndex::new(metric)),
             VectorIndexType::Ivf => Box::new(sqlrustgo_vector::IvfIndex::new(metric, 100)),
             VectorIndexType::ParallelKnn => Box::new(ParallelKnnIndex::new(metric)),
         };
-        
+
         self.indices.insert(key.clone(), index);
-        
+
         // Create metadata
         let meta = VectorColumnMeta {
             column_name: column.to_string(),
@@ -153,17 +159,27 @@ impl VectorStore {
             vector_count: 0,
         };
         self.metadata.push(meta);
-        
+
         Ok(())
     }
 
     /// Insert a vector
-    pub fn insert(&mut self, table: &str, column: &str, id: u64, vector: &[f32]) -> VectorResult<()> {
+    pub fn insert(
+        &mut self,
+        table: &str,
+        column: &str,
+        id: u64,
+        vector: &[f32],
+    ) -> VectorResult<()> {
         let key = Self::index_key(table, column);
-        
-        let index = self.indices.get_mut(&key)
-            .ok_or_else(|| VectorError::InvalidParameter(format!("Vector column {}:{} not registered", table, column)))?;
-        
+
+        let index = self.indices.get_mut(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
         index.insert(id, vector)?;
         Ok(())
     }
@@ -176,15 +192,19 @@ impl VectorStore {
         vectors: Vec<(u64, Vec<f32>)>,
     ) -> VectorResult<usize> {
         let key = Self::index_key(table, column);
-        
-        let index = self.indices.get_mut(&key)
-            .ok_or_else(|| VectorError::InvalidParameter(format!("Vector column {}:{} not registered", table, column)))?;
-        
+
+        let index = self.indices.get_mut(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
         let count = vectors.len();
         for (id, vector) in vectors {
             index.insert(id, &vector)?;
         }
-        
+
         Ok(count)
     }
 
@@ -197,10 +217,14 @@ impl VectorStore {
         k: usize,
     ) -> VectorResult<Vec<IndexEntry>> {
         let key = Self::index_key(table, column);
-        
-        let index = self.indices.get(&key)
-            .ok_or_else(|| VectorError::InvalidParameter(format!("Vector column {}:{} not registered", table, column)))?;
-        
+
+        let index = self.indices.get(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
         index.search(query, k)
     }
 
@@ -218,41 +242,47 @@ impl VectorStore {
     /// Save all indices to disk
     pub fn save_all(&self) -> std::io::Result<()> {
         let index_dir = self.data_dir.join("vector_indices");
-        
+
         for (key, index) in &self.indices {
             let path = index_dir.join(format!("{}.vecidx", key.replace(":", "_")));
             self.save_index(key, index, &path)?;
         }
-        
+
         // Save metadata
         let meta_path = index_dir.join("metadata.json");
         let meta_json = serde_json::to_string_pretty(&self.metadata)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(meta_path, meta_json)?;
-        
+
         Ok(())
     }
 
     /// Save a single index to disk
-    fn save_index(&self, key: &str, index: &Box<dyn VectorIndex>, path: &PathBuf) -> std::io::Result<()> {
+    fn save_index(
+        &self,
+        key: &str,
+        index: &Box<dyn VectorIndex>,
+        path: &PathBuf,
+    ) -> std::io::Result<()> {
         let file = File::create(path)?;
         let mut w = BufWriter::new(file);
-        
+
         // Magic header
         w.write_all(b"VECIDX")?;
-        w.write_all(&1u32.to_le_bytes())?; // version
-        
+        w.write_all(&2u32.to_le_bytes())?; // version 2 - includes vectors
+
         // Key
         let key_bytes = key.as_bytes();
         w.write_all(&(key_bytes.len() as u32).to_le_bytes())?;
         w.write_all(key_bytes)?;
-        
+
         // Dimension
         w.write_all(&(index.dimension() as u32).to_le_bytes())?;
-        
+
         // Count
-        w.write_all(&(index.len() as u64).to_le_bytes())?;
-        
+        let count = index.len() as u64;
+        w.write_all(&(count as u64).to_le_bytes())?;
+
         // Metric
         let metric_byte = match index.metric() {
             DistanceMetric::Cosine => 0u8,
@@ -261,21 +291,17 @@ impl VectorStore {
             DistanceMetric::Manhattan => 3u8,
         };
         w.write_all(&[metric_byte])?;
-        
+
         // Vectors (id + dimension * f32)
         let dim = index.dimension();
-        for i in 0..index.len() {
-            // We can't iterate directly, need to search for each
-            let results = index.search(&vec![0.0; dim], index.len())
-                .unwrap_or_default();
-            for entry in results {
-                w.write_all(&entry.id.to_le_bytes())?;
-                // Note: actual vector storage would need separate lookup
-                // This is a simplified representation
+        let vectors = index.get_all();
+        for record in vectors {
+            w.write_all(&record.id.to_le_bytes())?;
+            for val in &record.vector {
+                w.write_all(&val.to_le_bytes())?;
             }
-            break; // Only need to write once, actual impl would track separately
         }
-        
+
         w.flush()?;
         Ok(())
     }
@@ -283,11 +309,11 @@ impl VectorStore {
     /// Load all indices from disk
     pub fn load_all(&mut self) -> std::io::Result<()> {
         let index_dir = self.data_dir.join("vector_indices");
-        
+
         if !index_dir.exists() {
             return Ok(());
         }
-        
+
         // Load metadata
         let meta_path = index_dir.join("metadata.json");
         if meta_path.exists() {
@@ -295,7 +321,7 @@ impl VectorStore {
             self.metadata = serde_json::from_str(&meta_json)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         }
-        
+
         // Load each index
         for entry in std::fs::read_dir(index_dir)? {
             let entry = entry?;
@@ -310,7 +336,7 @@ impl VectorStore {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -318,7 +344,7 @@ impl VectorStore {
     fn load_index(&self, path: &PathBuf) -> std::io::Result<Box<dyn VectorIndex>> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
-        
+
         // Verify magic
         let mut magic = [0u8; 6];
         reader.read_exact(&mut magic)?;
@@ -328,11 +354,12 @@ impl VectorStore {
                 "Not a vector index file",
             ));
         }
-        
+
         // Version
         let mut ver = [0u8; 4];
         reader.read_exact(&mut ver)?;
-        
+        let version = u32::from_le_bytes(ver);
+
         // Key
         let mut key_len = [0u8; 4];
         reader.read_exact(&mut key_len)?;
@@ -340,17 +367,17 @@ impl VectorStore {
         let mut key_buf = vec![0u8; key_len];
         reader.read_exact(&mut key_buf)?;
         let _key = String::from_utf8_lossy(&key_buf);
-        
+
         // Dimension
         let mut dim_buf = [0u8; 4];
         reader.read_exact(&mut dim_buf)?;
         let dimension = u32::from_le_bytes(dim_buf) as usize;
-        
+
         // Count
         let mut count_buf = [0u8; 8];
         reader.read_exact(&mut count_buf)?;
-        let _count = u64::from_le_bytes(count_buf) as usize;
-        
+        let count = u64::from_le_bytes(count_buf) as usize;
+
         // Metric
         let mut metric_byte = [0u8; 1];
         reader.read_exact(&mut metric_byte)?;
@@ -361,27 +388,57 @@ impl VectorStore {
             3 => DistanceMetric::Manhattan,
             _ => DistanceMetric::Cosine,
         };
-        
+
         // Create index
-        let index: Box<dyn VectorIndex> = Box::new(ParallelKnnIndex::new(metric));
-        
+        let mut index: Box<dyn VectorIndex> = Box::new(ParallelKnnIndex::new(metric));
+
+        // For version 2+, load the actual vectors
+        if version >= 2 && count > 0 {
+            for _ in 0..count {
+                // Read ID
+                let mut id_buf = [0u8; 8];
+                reader.read_exact(&mut id_buf)?;
+                let id = u64::from_le_bytes(id_buf);
+
+                // Read vector
+                let mut vector = vec![0.0_f32; dimension];
+                for i in 0..dimension {
+                    let mut val_buf = [0u8; 4];
+                    reader.read_exact(&mut val_buf)?;
+                    vector[i] = f32::from_le_bytes(val_buf);
+                }
+
+                // Insert into index
+                index.insert(id, &vector).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Insert error: {:?}", e),
+                    )
+                })?;
+            }
+        }
+
         Ok(index)
     }
 
     /// Delete a vector by ID
     pub fn delete(&mut self, table: &str, column: &str, id: u64) -> VectorResult<()> {
         let key = Self::index_key(table, column);
-        
-        let index = self.indices.get_mut(&key)
-            .ok_or_else(|| VectorError::InvalidParameter(format!("Vector column {}:{} not registered", table, column)))?;
-        
+
+        let index = self.indices.get_mut(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
         index.delete(id)
     }
 
     /// Clear all vectors for a column
     pub fn clear(&mut self, table: &str, column: &str) -> VectorResult<()> {
         let key = Self::index_key(table, column);
-        
+
         if let Some(index) = self.indices.get_mut(&key) {
             // Re-create the index
             let dimension = index.dimension();
@@ -389,24 +446,28 @@ impl VectorStore {
             let new_index: Box<dyn VectorIndex> = Box::new(ParallelKnnIndex::new(metric));
             self.indices.insert(key, new_index);
         }
-        
+
         Ok(())
     }
 
     /// Export vectors as binary format compatible with BinaryTableStorage
     pub fn export_vectors(&self, table: &str, column: &str) -> VectorResult<Vec<u8>> {
         let key = Self::index_key(table, column);
-        let index = self.indices.get(&key)
-            .ok_or_else(|| VectorError::InvalidParameter(format!("Vector column {}:{} not registered", table, column)))?;
-        
+        let index = self.indices.get(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
         let dim = index.dimension();
         let n = index.len();
-        
+
         // Binary format: header + vectors
         // Header: magic(6) + version(4) + dimension(4) + count(8) = 22 bytes
         // Per vector: id(8) + vector(dim * 4 bytes)
         let mut data = Vec::with_capacity(22 + n * (8 + dim * 4));
-        
+
         // Magic
         data.extend_from_slice(b"VECTOR ");
         // Version
@@ -415,10 +476,15 @@ impl VectorStore {
         data.extend_from_slice(&(dim as u32).to_le_bytes());
         // Count
         data.extend_from_slice(&(n as u64).to_le_bytes());
-        
-        // Note: Actual implementation would need to iterate over stored vectors
-        // This is a placeholder structure
-        
+
+        // Export all vectors
+        for record in index.get_all() {
+            data.extend_from_slice(&record.id.to_le_bytes());
+            for val in &record.vector {
+                data.extend_from_slice(&val.to_le_bytes());
+            }
+        }
+
         Ok(data)
     }
 
@@ -431,7 +497,7 @@ impl VectorStore {
     pub fn stats(&self) -> VectorStoreStats {
         let total_vectors: usize = self.indices.values().map(|i| i.len()).sum();
         let total_memory_est = total_vectors * 4 * 128; // rough estimate with dim=128
-        
+
         VectorStoreStats {
             total_vectors,
             total_columns: self.indices.len(),
@@ -451,24 +517,42 @@ pub struct VectorStoreStats {
 /// Extension trait for BinaryTableStorage to support vector operations
 pub trait VectorStorageExt {
     /// Save table with vector column support
-    fn save_with_vectors(&self, table: &str, data: &TableData, vector_store: &VectorStore) -> std::io::Result<()>;
-    
+    fn save_with_vectors(
+        &self,
+        table: &str,
+        data: &TableData,
+        vector_store: &VectorStore,
+    ) -> std::io::Result<()>;
+
     /// Load table with vector column support
-    fn load_with_vectors(&self, table: &str, vector_store: &mut VectorStore) -> std::io::Result<TableData>;
+    fn load_with_vectors(
+        &self,
+        table: &str,
+        vector_store: &mut VectorStore,
+    ) -> std::io::Result<TableData>;
 }
 
 impl VectorStorageExt for BinaryTableStorage {
-    fn save_with_vectors(&self, table: &str, data: &TableData, vector_store: &VectorStore) -> std::io::Result<()> {
+    fn save_with_vectors(
+        &self,
+        table: &str,
+        data: &TableData,
+        vector_store: &VectorStore,
+    ) -> std::io::Result<()> {
         // Save the regular table data
         self.save(table, data)?;
-        
+
         // Save vector indices
         vector_store.save_all()?;
-        
+
         Ok(())
     }
 
-    fn load_with_vectors(&self, table: &str, vector_store: &mut VectorStore) -> std::io::Result<TableData> {
+    fn load_with_vectors(
+        &self,
+        table: &str,
+        vector_store: &mut VectorStore,
+    ) -> std::io::Result<TableData> {
         let data = self.load(table)?;
         vector_store.load_all()?;
         Ok(data)
@@ -489,13 +573,21 @@ pub struct Embedding {
 
 impl Embedding {
     pub fn new(id: u64, vector: Vec<f32>) -> Self {
-        Self { id, vector, metadata: None }
+        Self {
+            id,
+            vector,
+            metadata: None,
+        }
     }
-    
+
     pub fn with_metadata(id: u64, vector: Vec<f32>, metadata: String) -> Self {
-        Self { id, vector, metadata: Some(metadata) }
+        Self {
+            id,
+            vector,
+            metadata: Some(metadata),
+        }
     }
-    
+
     /// Get dimension of the embedding
     pub fn dimension(&self) -> usize {
         self.vector.len()
@@ -505,7 +597,7 @@ impl Embedding {
 impl BinaryFormat for Embedding {
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        
+
         // Magic (6 bytes)
         data.extend_from_slice(b"EMBED\0");
         // Version
@@ -526,42 +618,53 @@ impl BinaryFormat for Embedding {
         } else {
             data.extend_from_slice(&0u32.to_le_bytes());
         }
-        
+
         data
     }
-    
+
     fn from_bytes(data: &[u8]) -> Result<Self, crate::binary_format::BinaryFormatError> {
         use crate::binary_format::BinaryFormatError;
-        
+
         // Minimum: magic(6) + version(1) + id(8) + dim(4) + meta_len(4) = 23 bytes
         if data.len() < 23 {
             return Err(BinaryFormatError::InsufficientData);
         }
-        
+
         // Magic (6 bytes: "EMBED\0")
         if &data[0..6] != b"EMBED\0" {
-            return Err(BinaryFormatError::InvalidFormat("Invalid embedding magic".to_string()));
+            return Err(BinaryFormatError::InvalidFormat(
+                "Invalid embedding magic".to_string(),
+            ));
         }
-        
+
         let mut offset = 6;
-        
+
         // Version
         let _version = data[offset];
         offset += 1;
-        
+
         // ID
         let id = u64::from_le_bytes([
-            data[offset], data[offset+1], data[offset+2], data[offset+3],
-            data[offset+4], data[offset+5], data[offset+6], data[offset+7],
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
         ]);
         offset += 8;
-        
+
         // Dimension
         let dim = u32::from_le_bytes([
-            data[offset], data[offset+1], data[offset+2], data[offset+3],
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
         ]) as usize;
         offset += 4;
-        
+
         // Vector
         if data.len() < offset + dim * 4 {
             return Err(BinaryFormatError::InsufficientData);
@@ -577,26 +680,33 @@ impl BinaryFormat for Embedding {
             vector.push(f32::from_le_bytes(bytes));
         }
         offset += dim * 4;
-        
+
         // Metadata
         if data.len() < offset + 4 {
             return Err(BinaryFormatError::InsufficientData);
         }
         let meta_len = u32::from_le_bytes([
-            data[offset], data[offset+1], data[offset+2], data[offset+3],
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
         ]) as usize;
         offset += 4;
-        
+
         let metadata = if meta_len > 0 {
             if data.len() < offset + meta_len {
                 return Err(BinaryFormatError::InsufficientData);
             }
-            Some(String::from_utf8_lossy(&data[offset..offset+meta_len]).to_string())
+            Some(String::from_utf8_lossy(&data[offset..offset + meta_len]).to_string())
         } else {
             None
         };
-        
-        Ok(Embedding { id, vector, metadata })
+
+        Ok(Embedding {
+            id,
+            vector,
+            metadata,
+        })
     }
 }
 
@@ -607,10 +717,10 @@ mod tests {
     #[test]
     fn test_embedding_binary_roundtrip() {
         let emb = Embedding::new(42, vec![1.0, 2.0, 3.0, 4.0]);
-        
+
         let bytes = emb.to_bytes();
         let restored = Embedding::from_bytes(&bytes).unwrap();
-        
+
         assert_eq!(restored.id, 42);
         assert_eq!(restored.vector, vec![1.0, 2.0, 3.0, 4.0]);
         assert!(restored.metadata.is_none());
@@ -619,10 +729,10 @@ mod tests {
     #[test]
     fn test_embedding_with_metadata() {
         let emb = Embedding::with_metadata(1, vec![0.1, 0.2], r#"{"source": "test"}"#.to_string());
-        
+
         let bytes = emb.to_bytes();
         let restored = Embedding::from_bytes(&bytes).unwrap();
-        
+
         assert_eq!(restored.id, 1);
         assert_eq!(restored.vector, vec![0.1, 0.2]);
         assert_eq!(restored.metadata.unwrap(), r#"{"source": "test"}"#);
@@ -632,7 +742,7 @@ mod tests {
     fn test_vector_store_creation() {
         let tmp = tempfile::tempdir().unwrap();
         let store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
+
         assert_eq!(store.indices.len(), 0);
     }
 
@@ -640,12 +750,21 @@ mod tests {
     fn test_vector_store_register_and_insert() {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
-        store.register_column("items", "embedding", 128, DistanceMetric::Cosine, VectorIndexType::ParallelKnn)
+
+        store
+            .register_column(
+                "items",
+                "embedding",
+                128,
+                DistanceMetric::Cosine,
+                VectorIndexType::ParallelKnn,
+            )
             .unwrap();
-        
-        store.insert("items", "embedding", 1, &vec![0.1; 128]).unwrap();
-        
+
+        store
+            .insert("items", "embedding", 1, &vec![0.1; 128])
+            .unwrap();
+
         assert_eq!(store.len("items", "embedding"), 1);
         assert!(!store.is_empty("items", "embedding"));
     }
@@ -654,18 +773,33 @@ mod tests {
     fn test_vector_store_search() {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
-        store.register_column("items", "embedding", 3, DistanceMetric::Cosine, VectorIndexType::Flat)
+
+        store
+            .register_column(
+                "items",
+                "embedding",
+                3,
+                DistanceMetric::Cosine,
+                VectorIndexType::Flat,
+            )
             .unwrap();
-        
+
         // Insert some vectors
-        store.insert("items", "embedding", 1, &[1.0, 0.0, 0.0]).unwrap();
-        store.insert("items", "embedding", 2, &[0.0, 1.0, 0.0]).unwrap();
-        store.insert("items", "embedding", 3, &[0.0, 0.0, 1.0]).unwrap();
-        
+        store
+            .insert("items", "embedding", 1, &[1.0, 0.0, 0.0])
+            .unwrap();
+        store
+            .insert("items", "embedding", 2, &[0.0, 1.0, 0.0])
+            .unwrap();
+        store
+            .insert("items", "embedding", 3, &[0.0, 0.0, 1.0])
+            .unwrap();
+
         // Search for [1, 0, 0] - should find ID 1 first
-        let results = store.search("items", "embedding", &[1.0, 0.0, 0.0], 2).unwrap();
-        
+        let results = store
+            .search("items", "embedding", &[1.0, 0.0, 0.0], 2)
+            .unwrap();
+
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 1);
     }
@@ -674,14 +808,19 @@ mod tests {
     fn test_vector_store_batch_insert() {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
-        store.register_column("items", "embedding", 4, DistanceMetric::Euclidean, VectorIndexType::Flat)
+
+        store
+            .register_column(
+                "items",
+                "embedding",
+                4,
+                DistanceMetric::Euclidean,
+                VectorIndexType::Flat,
+            )
             .unwrap();
-        
-        let vectors: Vec<(u64, Vec<f32>)> = (0..100)
-            .map(|i| (i, vec![i as f32; 4]))
-            .collect();
-        
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..100).map(|i| (i, vec![i as f32; 4])).collect();
+
         let count = store.batch_insert("items", "embedding", vectors).unwrap();
         assert_eq!(count, 100);
         assert_eq!(store.len("items", "embedding"), 100);
@@ -691,17 +830,24 @@ mod tests {
     fn test_vector_store_delete() {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
-        store.register_column("items", "embedding", 2, DistanceMetric::Cosine, VectorIndexType::Flat)
+
+        store
+            .register_column(
+                "items",
+                "embedding",
+                2,
+                DistanceMetric::Cosine,
+                VectorIndexType::Flat,
+            )
             .unwrap();
-        
+
         store.insert("items", "embedding", 1, &[1.0, 0.0]).unwrap();
         store.insert("items", "embedding", 2, &[0.0, 1.0]).unwrap();
-        
+
         assert_eq!(store.len("items", "embedding"), 2);
-        
+
         store.delete("items", "embedding", 1).unwrap();
-        
+
         assert_eq!(store.len("items", "embedding"), 1);
     }
 
@@ -709,18 +855,143 @@ mod tests {
     fn test_vector_store_stats() {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
-        
-        store.register_column("items", "emb1", 128, DistanceMetric::Cosine, VectorIndexType::Flat)
+
+        store
+            .register_column(
+                "items",
+                "emb1",
+                128,
+                DistanceMetric::Cosine,
+                VectorIndexType::Flat,
+            )
             .unwrap();
-        store.register_column("items", "emb2", 256, DistanceMetric::Euclidean, VectorIndexType::Hnsw)
+        store
+            .register_column(
+                "items",
+                "emb2",
+                256,
+                DistanceMetric::Euclidean,
+                VectorIndexType::Hnsw,
+            )
             .unwrap();
-        
+
         store.insert("items", "emb1", 1, &vec![0.1; 128]).unwrap();
         store.insert("items", "emb2", 1, &vec![0.2; 256]).unwrap();
-        
+
         let stats = store.stats();
-        
+
         assert_eq!(stats.total_vectors, 2);
         assert_eq!(stats.total_columns, 2);
+    }
+
+    #[test]
+    fn test_vector_store_save_and_load() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Create store and add vectors
+        let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
+        store
+            .register_column(
+                "items",
+                "embedding",
+                3,
+                DistanceMetric::Cosine,
+                VectorIndexType::Flat,
+            )
+            .unwrap();
+
+        store
+            .insert("items", "embedding", 1, &[1.0, 0.0, 0.0])
+            .unwrap();
+        store
+            .insert("items", "embedding", 2, &[0.0, 1.0, 0.0])
+            .unwrap();
+        store
+            .insert("items", "embedding", 3, &[0.0, 0.0, 1.0])
+            .unwrap();
+
+        assert_eq!(store.len("items", "embedding"), 3);
+
+        // Save
+        store.save_all().unwrap();
+
+        // Create new store and load
+        let mut store2 = VectorStore::new(tmp.path().to_path_buf()).unwrap();
+        store2.load_all().unwrap();
+
+        assert_eq!(store2.len("items", "embedding"), 3);
+
+        // Verify search still works
+        let results = store2
+            .search("items", "embedding", &[1.0, 0.0, 0.0], 2)
+            .unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+    }
+
+    #[test]
+    fn test_vector_store_export_vectors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
+        store
+            .register_column(
+                "items",
+                "embedding",
+                2,
+                DistanceMetric::Euclidean,
+                VectorIndexType::Flat,
+            )
+            .unwrap();
+
+        store.insert("items", "embedding", 1, &[1.0, 2.0]).unwrap();
+        store.insert("items", "embedding", 2, &[3.0, 4.0]).unwrap();
+
+        let data = store.export_vectors("items", "embedding").unwrap();
+
+        // Verify header
+        assert_eq!(&data[0..6], b"VECTOR ");
+        assert_eq!(data.len(), 22 + 2 * (8 + 2 * 4)); // header + 2 vectors
+    }
+
+    #[test]
+    fn test_vector_store_save_load_with_parallel_knn() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Create store with ParallelKnn index
+        let mut store = VectorStore::new(tmp.path().to_path_buf()).unwrap();
+        store
+            .register_column(
+                "items",
+                "embedding",
+                4,
+                DistanceMetric::Cosine,
+                VectorIndexType::ParallelKnn,
+            )
+            .unwrap();
+
+        // Insert 50 vectors
+        for i in 0..50 {
+            let v = vec![i as f32; 4];
+            store.insert("items", "embedding", i, &v).unwrap();
+        }
+
+        assert_eq!(store.len("items", "embedding"), 50);
+
+        // Save
+        store.save_all().unwrap();
+
+        // Create new store and load
+        let mut store2 = VectorStore::new(tmp.path().to_path_buf()).unwrap();
+        store2.load_all().unwrap();
+
+        assert_eq!(store2.len("items", "embedding"), 50);
+
+        // Verify search works with loaded data
+        let results = store2
+            .search("items", "embedding", &[25.0, 25.0, 25.0, 25.0], 5)
+            .unwrap();
+        assert_eq!(results.len(), 5);
+        // ID 25 should be the closest to [25, 25, 25, 25]
+        assert_eq!(results[0].id, 25);
     }
 }

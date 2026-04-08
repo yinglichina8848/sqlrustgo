@@ -16,6 +16,13 @@ impl IndexEntry {
     }
 }
 
+/// A vector with its ID for iteration/serialization
+#[derive(Debug, Clone)]
+pub struct VectorRecord {
+    pub id: u64,
+    pub vector: Vec<f32>,
+}
+
 /// Core trait for vector indexes
 pub trait VectorIndex: Send + Sync {
     fn insert(&mut self, id: u64, vector: &[f32]) -> VectorResult<()>;
@@ -33,6 +40,9 @@ pub trait VectorIndex: Send + Sync {
     fn dimension(&self) -> usize;
 
     fn metric(&self) -> DistanceMetric;
+
+    /// Get all vectors as records for iteration/serialization
+    fn get_all(&self) -> Vec<VectorRecord>;
 }
 
 pub trait VectorIndexBuilder: Default {

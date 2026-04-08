@@ -84,7 +84,11 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> HashIndex<K, V> {
 
     /// Get all entries as vector
     pub fn entries(&self) -> Vec<(K, V)> {
-        self.map.read().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.map
+            .read()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Batch insert from iterator
@@ -105,7 +109,8 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> HashIndex<K, V> {
     where
         F: Fn(&K) -> bool,
     {
-        self.map.read()
+        self.map
+            .read()
             .iter()
             .filter(|(k, _)| predicate(k))
             .map(|(_, v)| v.clone())
@@ -131,7 +136,9 @@ pub fn new_shared_hash_index<K: std::hash::Hash + Eq + Clone, V: Clone>() -> Sha
 }
 
 /// Constructor with capacity for SharedHashIndex
-pub fn shared_hash_index_with_capacity<K: std::hash::Hash + Eq + Clone, V: Clone>(capacity: usize) -> SharedHashIndex<K, V> {
+pub fn shared_hash_index_with_capacity<K: std::hash::Hash + Eq + Clone, V: Clone>(
+    capacity: usize,
+) -> SharedHashIndex<K, V> {
     std::sync::Arc::new(HashIndex::with_capacity(capacity))
 }
 
@@ -142,11 +149,11 @@ mod tests {
     #[test]
     fn test_hash_index_basic() {
         let index = HashIndex::new();
-        
+
         index.insert(1, "one".to_string());
         index.insert(2, "two".to_string());
         index.insert(3, "three".to_string());
-        
+
         assert_eq!(index.len(), 3);
         assert_eq!(index.get(&1), Some("one".to_string()));
         assert_eq!(index.get(&2), Some("two".to_string()));
@@ -157,10 +164,10 @@ mod tests {
     #[test]
     fn test_hash_index_update() {
         let index = HashIndex::new();
-        
+
         index.insert(1, "one".to_string());
         let old = index.insert(1, "ONE".to_string());
-        
+
         assert_eq!(old, Some("one".to_string()));
         assert_eq!(index.get(&1), Some("ONE".to_string()));
         assert_eq!(index.len(), 1);
@@ -169,10 +176,10 @@ mod tests {
     #[test]
     fn test_hash_index_remove() {
         let index = HashIndex::new();
-        
+
         index.insert(1, "one".to_string());
         assert!(index.contains(&1));
-        
+
         let removed = index.remove(&1);
         assert_eq!(removed, Some("one".to_string()));
         assert!(!index.contains(&1));
@@ -182,14 +189,14 @@ mod tests {
     #[test]
     fn test_hash_index_batch_insert() {
         let index = HashIndex::new();
-        
+
         let entries = vec![
             (1, "one".to_string()),
             (2, "two".to_string()),
             (3, "three".to_string()),
             (4, "four".to_string()),
         ];
-        
+
         let inserted = index.batch_insert(entries);
         assert_eq!(inserted, 4);
         assert_eq!(index.len(), 4);
@@ -198,12 +205,12 @@ mod tests {
     #[test]
     fn test_hash_index_filter() {
         let index = HashIndex::new();
-        
+
         index.insert(1, "one".to_string());
         index.insert(2, "two".to_string());
         index.insert(3, "three".to_string());
         index.insert(4, "four".to_string());
-        
+
         // Filter keys > 2
         let filtered: Vec<String> = index.filter(|k| *k > 2);
         assert_eq!(filtered.len(), 2);
@@ -212,10 +219,10 @@ mod tests {
     #[test]
     fn test_hash_index_string_keys() {
         let index: HashIndex<String, i32> = HashIndex::new();
-        
+
         index.insert("apple".to_string(), 1);
         index.insert("banana".to_string(), 2);
-        
+
         assert_eq!(index.get(&"apple".to_string()), Some(1));
         assert_eq!(index.get(&"banana".to_string()), Some(2));
     }
@@ -223,9 +230,9 @@ mod tests {
     #[test]
     fn test_shared_hash_index() {
         let index: SharedHashIndex<i32, String> = new_shared_hash_index();
-        
+
         index.insert(1, "one".to_string());
-        
+
         assert_eq!(index.get(&1), Some("one".to_string()));
         assert_eq!(index.len(), 1);
     }
@@ -233,10 +240,10 @@ mod tests {
     #[test]
     fn test_hash_index_entries() {
         let index = HashIndex::new();
-        
+
         index.insert(1, "one".to_string());
         index.insert(2, "two".to_string());
-        
+
         let entries = index.entries();
         assert_eq!(entries.len(), 2);
         assert!(entries.contains(&(1, "one".to_string())));

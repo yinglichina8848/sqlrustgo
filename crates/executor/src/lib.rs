@@ -20,6 +20,7 @@ pub mod sql_log;
 pub mod sql_normalizer;
 pub mod task_scheduler;
 pub mod test_framework;
+pub mod vector_scan;
 pub mod vectorization;
 
 pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
@@ -46,6 +47,7 @@ pub use reusable_vec::{
 pub use sql_log::{global_execution_log, ExecutionLog, LogLevel, SqlLogEntry};
 pub use sql_normalizer::SqlNormalizer;
 pub use task_scheduler::{create_default_scheduler, RayonTaskScheduler, TaskScheduler};
+pub use vector_scan::VectorScanVolcanoExecutor;
 pub use vectorization::{
     AggFunction, AggregateResult, BatchIterator, ColumnArray, DataChunk, RecordBatch, Vector,
     VectorizedExecutor,
