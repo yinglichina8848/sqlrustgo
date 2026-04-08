@@ -15,3 +15,8 @@ Thumbs.db
 *.db
 *.log
 .worktrees/
+
+# Third-party build artifacts
+third_party/**/*.o
+third_party/**/dbgen
+third_party/**/qgen
