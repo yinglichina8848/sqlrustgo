@@ -76,6 +76,29 @@ impl Default for CompressionConfig {
     }
 }
 
+impl CompressionLevel {
+    /// Get LZ4 compression level (0 = fastest, higher = better compression)
+    /// Note: lz4_flex uses compile-time settings, this is for API consistency
+    pub fn lz4_level(&self) -> i32 {
+        match self {
+            CompressionLevel::Fastest => 0,
+            CompressionLevel::Default => 12,
+            CompressionLevel::Best => 17,
+            CompressionLevel::Custom(n) => *n,
+        }
+    }
+
+    /// Get Zstd compression level (1-22, higher = better compression)
+    pub fn zstd_level(&self) -> i32 {
+        match self {
+            CompressionLevel::Fastest => 1,
+            CompressionLevel::Default => 3,
+            CompressionLevel::Best => 19,
+            CompressionLevel::Custom(n) => (*n).clamp(1, 22),
+        }
+    }
+}
+
 impl CompressionType {
     /// Get the magic bytes for this compression type
     pub fn magic_bytes(&self) -> [u8; 4] {
@@ -576,6 +599,32 @@ mod tests {
             Some(CompressionType::Lz4)
         );
         assert_eq!(CompressionType::from_magic(b"XXXX"), None);
+    }
+
+    #[test]
+    fn test_compression_level_lz4() {
+        assert_eq!(CompressionLevel::Fastest.lz4_level(), 0);
+        assert_eq!(CompressionLevel::Default.lz4_level(), 12);
+        assert_eq!(CompressionLevel::Best.lz4_level(), 17);
+        assert_eq!(CompressionLevel::Custom(10).lz4_level(), 10);
+    }
+
+    #[test]
+    fn test_compression_level_zstd() {
+        assert_eq!(CompressionLevel::Fastest.zstd_level(), 1);
+        assert_eq!(CompressionLevel::Default.zstd_level(), 3);
+        assert_eq!(CompressionLevel::Best.zstd_level(), 19);
+        assert_eq!(CompressionLevel::Custom(15).zstd_level(), 15);
+        // Test clamping
+        assert_eq!(CompressionLevel::Custom(100).zstd_level(), 22);
+        assert_eq!(CompressionLevel::Custom(-5).zstd_level(), 1);
+    }
+
+    #[test]
+    fn test_compression_config_default() {
+        let config = CompressionConfig::default();
+        assert_eq!(config.level, CompressionLevel::Default);
+        assert!(config.auto_select);
     }
 
     #[test]
