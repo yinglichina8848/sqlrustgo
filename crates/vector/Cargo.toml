@@ -13,6 +13,14 @@ serde_json = "1.0"
 parking_lot = "0.12"
 rand = "0.8"
 rayon = "1.10"
+log = "0.4"
+
+# OpenCL support for GPU acceleration (optional)
+ocl = { version = "0.19", optional = true }
+
+[features]
+default = []
+opencl = ["ocl"]
 
 [dev-dependencies]
 criterion = "0.8"
