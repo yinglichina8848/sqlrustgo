@@ -130,6 +130,7 @@ impl BinaryTableStorage {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             })
             .collect();
 

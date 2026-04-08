@@ -284,6 +284,7 @@ impl DataRestorer {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 })
                 .collect(),
         };
@@ -351,6 +352,7 @@ impl DataRestorer {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 })
                 .collect(),
         };
