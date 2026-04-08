@@ -258,6 +258,7 @@ pub struct MemoryStatsResponse {
 pub struct OpenClawHttpServer {
     host: String,
     port: u16,
+    actual_port: Arc<RwLock<u16>>,
     version: String,
     metrics_registry: Arc<RwLock<MetricsRegistry>>,
     storage: Arc<RwLock<dyn StorageEngine>>,
@@ -275,6 +276,7 @@ impl OpenClawHttpServer {
         Self {
             host: host.into(),
             port,
+            actual_port: Arc::new(RwLock::new(port)),
             version: "2.4.0".to_string(),
             metrics_registry: Arc::new(RwLock::new(MetricsRegistry::new())),
             storage,
@@ -288,10 +290,20 @@ impl OpenClawHttpServer {
         self.version.clone()
     }
 
+    /// Get server port (actual port after binding, or configured port if already bound)
+    pub fn get_port(&self) -> u16 {
+        *self.actual_port.read().unwrap()
+    }
+
     /// Start the HTTP server
     pub fn start(&self) -> Result<(), std::io::Error> {
         let addr = format!("{}:{}", self.host, self.port);
         let listener = std::net::TcpListener::bind(&addr)?;
+
+        // Update actual_port after binding
+        if let Ok(local_addr) = listener.local_addr() {
+            *self.actual_port.write().unwrap() = local_addr.port();
+        }
 
         println!("╔══════════════════════════════════════════════════════════════════╗");
         println!("║          SQLRustGo 2.4 - OpenClaw AI Integration               ║");

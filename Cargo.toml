@@ -423,6 +423,10 @@ name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
 
 [[test]]
+name = "openclaw_api_test"
+path = "tests/integration/openclaw_api_test.rs"
+
+[[test]]
 name = "distributed_transaction_test"
 path = "tests/integration/distributed_transaction_test.rs"
 
