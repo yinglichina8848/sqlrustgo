@@ -722,6 +722,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "value".to_string(),
@@ -731,6 +732,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             })
@@ -833,6 +835,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "value".to_string(),
@@ -842,6 +845,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             })
@@ -958,6 +962,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "name".to_string(),
@@ -967,6 +972,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "dept_id".to_string(),
@@ -976,6 +982,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             })
@@ -1022,6 +1029,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "dept_name".to_string(),
@@ -1031,6 +1039,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             })
@@ -1148,6 +1157,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "data".to_string(),
@@ -1157,6 +1167,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             })
