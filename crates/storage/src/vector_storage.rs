@@ -949,8 +949,8 @@ mod tests {
         let data = store.export_vectors("items", "embedding").unwrap();
 
         // Verify header
-        assert_eq!(&data[0..6], b"VECTOR ");
-        assert_eq!(data.len(), 22 + 2 * (8 + 2 * 4)); // header + 2 vectors
+        assert_eq!(&data[0..7], b"VECTOR ");
+        assert_eq!(data.len(), 23 + 2 * (8 + 2 * 4)); // header + 2 vectors
     }
 
     #[test]
@@ -964,14 +964,20 @@ mod tests {
                 "items",
                 "embedding",
                 4,
-                DistanceMetric::Cosine,
+                DistanceMetric::Euclidean,
                 VectorIndexType::ParallelKnn,
             )
             .unwrap();
 
-        // Insert 50 vectors
+        // Insert 50 vectors with distinct values using Euclidean distance
+        // Vector i = [i*10.0, i*10.0+1.0, i*10.0+2.0, i*10.0+3.0]
         for i in 0..50 {
-            let v = vec![i as f32; 4];
+            let v = vec![
+                i as f32 * 10.0,
+                i as f32 * 10.0 + 1.0,
+                i as f32 * 10.0 + 2.0,
+                i as f32 * 10.0 + 3.0,
+            ];
             store.insert("items", "embedding", i, &v).unwrap();
         }
 
@@ -987,11 +993,12 @@ mod tests {
         assert_eq!(store2.len("items", "embedding"), 50);
 
         // Verify search works with loaded data
+        // Search for vector [250, 251, 252, 253] - closest should be id 25
         let results = store2
-            .search("items", "embedding", &[25.0, 25.0, 25.0, 25.0], 5)
+            .search("items", "embedding", &[250.0, 251.0, 252.0, 253.0], 5)
             .unwrap();
         assert_eq!(results.len(), 5);
-        // ID 25 should be the closest to [25, 25, 25, 25]
+        // ID 25 should be the closest to [250, 251, 252, 253]
         assert_eq!(results[0].id, 25);
     }
 }
