@@ -4,9 +4,13 @@
 //! with configurable weighted scoring mechanism.
 
 use crate::error::{VectorError, VectorResult};
+use crate::metrics::DistanceMetric;
+use crate::parallel_knn::simd::compute_similarity_simd;
 use crate::parallel_knn::ParallelKnnIndex;
 use crate::traits::{IndexEntry, VectorIndex};
+use parking_lot::RwLock;
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 /// Hybrid search configuration
 #[derive(Debug, Clone)]
@@ -68,21 +72,22 @@ pub struct HybridSearchResult {
 /// Execute hybrid search combining SQL filter and vector similarity
 pub struct HybridSearcher {
     vector_index: ParallelKnnIndex,
+    vectors: RwLock<HashMap<u64, Vec<f32>>>, // Store vectors for real similarity computation
+    metric: DistanceMetric,
     config: HybridSearchConfig,
 }
 
 impl HybridSearcher {
-    pub fn new(metric: crate::metrics::DistanceMetric) -> Self {
+    pub fn new(metric: DistanceMetric) -> Self {
         Self {
             vector_index: ParallelKnnIndex::new(metric),
+            vectors: RwLock::new(HashMap::new()),
+            metric,
             config: HybridSearchConfig::default(),
         }
     }
 
-    pub fn with_config(
-        metric: crate::metrics::DistanceMetric,
-        config: HybridSearchConfig,
-    ) -> Self {
+    pub fn with_config(metric: DistanceMetric, config: HybridSearchConfig) -> Self {
         Self {
             vector_index: ParallelKnnIndex::with_config(
                 metric,
@@ -91,14 +96,16 @@ impl HybridSearcher {
                     simd_enabled: true,
                 },
             ),
+            vectors: RwLock::new(HashMap::new()),
+            metric,
             config,
         }
     }
 
     /// Insert a vector with optional SQL score
-    pub fn insert(&mut self, id: u64, vector: &[f32], sql_score: f32) -> VectorResult<()> {
-        // Store id and sql_score alongside vector for hybrid scoring
-        // In a real implementation, we'd use a separate structure
+    pub fn insert(&mut self, id: u64, vector: &[f32], _sql_score: f32) -> VectorResult<()> {
+        // Store vector for real similarity computation in hybrid search
+        self.vectors.write().insert(id, vector.to_vec());
         self.vector_index.insert(id, vector)?;
         Ok(())
     }
@@ -128,57 +135,60 @@ impl HybridSearcher {
 
         let alpha = self.config.alpha;
         let beta = self.config.beta;
+        let metric = self.metric;
+        let vectors = self.vectors.read();
 
         // Create id -> sql_score map
-        let sql_score_map: std::collections::HashMap<u64, f32> =
-            sql_scores.iter().cloned().collect();
+        let sql_score_map: HashMap<u64, f32> = sql_scores.iter().cloned().collect();
 
-        // Parallel vector similarity search + hybrid scoring
+        // Parallel vector similarity search + hybrid scoring with REAL vector computation
         let results: Vec<(u64, f32)> = if self.config.parallel && n > self.config.chunk_size {
-            // Parallel implementation
+            // Parallel implementation - compute real vector similarity
             let chunk_size = self.config.chunk_size;
-            let dimension = self.vector_index.dimension();
-            
-            // We need to reconstruct vectors from the index
-            // This is a limitation - in practice, store vectors separately
-            let indices: Vec<u64> = (0..n as u64).collect();
-            
-            indices
+
+            // Get all IDs that have SQL scores and vectors
+            let candidate_ids: Vec<u64> = sql_scores
+                .iter()
+                .filter(|&&(id, _)| vectors.contains_key(&id))
+                .map(|&(id, _)| id)
+                .collect();
+
+            candidate_ids
                 .into_par_iter()
                 .chunks(chunk_size)
                 .map(|chunk_ids: Vec<u64>| {
                     chunk_ids
                         .iter()
                         .filter_map(|&id| {
-                            sql_score_map.get(&id).map(|&sql_score| {
-                                // For demo, compute a mock vector score
-                                // In real impl, retrieve actual vector
-                                let vector_score = 0.5 + (id as f32 * 0.001);
-                                let combined = alpha * sql_score + beta * vector_score;
-                                (id, combined)
-                            })
+                            let sql_score = *sql_score_map.get(&id)?;
+                            let vector = vectors.get(&id)?;
+                            // Compute REAL vector similarity using SIMD-optimized computation
+                            let vector_score =
+                                compute_similarity_simd(query_vector, vector, metric);
+                            let combined = alpha * sql_score + beta * vector_score;
+                            Some((id, combined))
                         })
                         .collect::<Vec<_>>()
                 })
                 .flatten()
                 .collect()
         } else {
-            // Sequential implementation
+            // Sequential implementation - compute real vector similarity
             sql_scores
                 .iter()
-                .map(|&(id, sql_score)| {
-                    let vector_score = 0.5 + (id as f32 * 0.001); // Mock
+                .filter_map(|&(id, sql_score)| {
+                    let vector = vectors.get(&id)?;
+                    // Compute REAL vector similarity using SIMD-optimized computation
+                    let vector_score = compute_similarity_simd(query_vector, vector, metric);
                     let combined = alpha * sql_score + beta * vector_score;
-                    (id, combined)
+                    Some((id, combined))
                 })
                 .collect()
         };
 
         // Sort by combined score descending
         let mut sorted = results;
-        sorted.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         let entries: Vec<IndexEntry> = sorted
             .into_iter()
@@ -233,8 +243,7 @@ pub fn merge_with_sql_scores(
     alpha: f32,
     beta: f32,
 ) -> Vec<(u64, f32)> {
-    let sql_map: std::collections::HashMap<u64, f32> =
-        sql_scores.iter().cloned().collect();
+    let sql_map: std::collections::HashMap<u64, f32> = sql_scores.iter().cloned().collect();
 
     vector_results
         .into_iter()
@@ -250,12 +259,11 @@ pub fn merge_with_sql_scores(
 /// Re-rank results with vector scores
 pub fn rerank_with_vector(
     initial_results: Vec<(u64, f32)>, // (id, initial_score)
-    vector_scores: &[(u64, f32)],    // (id, vector_score)
+    vector_scores: &[(u64, f32)],     // (id, vector_score)
     alpha: f32,
     beta: f32,
 ) -> Vec<(u64, f32)> {
-    let vec_map: std::collections::HashMap<u64, f32> =
-        vector_scores.iter().cloned().collect();
+    let vec_map: std::collections::HashMap<u64, f32> = vector_scores.iter().cloned().collect();
 
     let mut combined: Vec<(u64, f32)> = initial_results
         .into_iter()
@@ -267,9 +275,7 @@ pub fn rerank_with_vector(
         })
         .collect();
 
-    combined.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    combined.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     combined
 }
@@ -281,7 +287,7 @@ mod tests {
     #[test]
     fn test_hybrid_search_basic() {
         let mut searcher = HybridSearcher::new(crate::metrics::DistanceMetric::Cosine);
-        
+
         // Insert vectors
         for i in 0..100 {
             let v = vec![i as f32; 128];
@@ -289,10 +295,12 @@ mod tests {
         }
 
         let query = vec![50.0f32; 128];
-        let sql_scores: Vec<_> = (0..100u64).map(|id| (id, 1.0 - (id as f32 / 100.0))).collect();
-        
+        let sql_scores: Vec<_> = (0..100u64)
+            .map(|id| (id, 1.0 - (id as f32 / 100.0)))
+            .collect();
+
         let result = searcher.search_hybrid(&query, &sql_scores, 10).unwrap();
-        
+
         assert_eq!(result.entries.len(), 10);
     }
 
@@ -304,12 +312,10 @@ mod tests {
             parallel: true,
             chunk_size: 500,
         };
-        
-        let searcher = HybridSearcher::with_config(
-            crate::metrics::DistanceMetric::Euclidean,
-            config,
-        );
-        
+
+        let searcher =
+            HybridSearcher::with_config(crate::metrics::DistanceMetric::Euclidean, config);
+
         assert_eq!(searcher.config.alpha, 0.3);
         assert_eq!(searcher.config.beta, 0.7);
     }
@@ -318,9 +324,9 @@ mod tests {
     fn test_merge_with_sql_scores() {
         let vector_results = vec![(1, 0.9), (2, 0.8), (3, 0.7), (4, 0.6)];
         let sql_scores = vec![(1, 1.0), (2, 0.8), (3, 0.6), (4, 0.4)];
-        
+
         let merged = merge_with_sql_scores(vector_results, &sql_scores, 0.5, 0.5);
-        
+
         assert_eq!(merged.len(), 4);
         // Check scores are combined
         assert!((merged[0].1 - 0.95).abs() < 0.01); // (1.0 + 0.9) / 2 * 2 = 0.95 with equal weights
@@ -330,9 +336,9 @@ mod tests {
     fn test_rerank_with_vector() {
         let initial = vec![(1, 1.0), (2, 0.9), (3, 0.8)];
         let vector_scores = vec![(1, 0.5), (2, 1.0), (3, 0.7)];
-        
+
         let reranked = rerank_with_vector(initial, &vector_scores, 0.5, 0.5);
-        
+
         assert_eq!(reranked[0].0, 2); // 2 has highest combined score
     }
 
@@ -341,7 +347,7 @@ mod tests {
         let searcher = HybridSearcher::new(crate::metrics::DistanceMetric::Cosine);
         let query = vec![0.5f32; 128];
         let sql_scores: Vec<_> = vec![];
-        
+
         let result = searcher.search_hybrid(&query, &sql_scores, 10);
         assert!(result.is_err());
     }
