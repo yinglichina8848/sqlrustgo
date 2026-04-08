@@ -888,6 +888,18 @@ impl IndexSelect {
             Expr::BinaryExpr {
                 op: Operator::Eq,
                 ..
+            } | Expr::BinaryExpr {
+                op: Operator::Gt,
+                ..
+            } | Expr::BinaryExpr {
+                op: Operator::Lt,
+                ..
+            } | Expr::BinaryExpr {
+                op: Operator::GtEq,
+                ..
+            } | Expr::BinaryExpr {
+                op: Operator::LtEq,
+                ..
             }
         )
     }
@@ -1517,8 +1529,8 @@ mod tests {
         };
 
         let result = rule.apply(&mut plan);
-        // Greater than is not indexable, should return false
-        assert!(!result);
+        // Greater than is now indexable (B+Tree range scan), should return true
+        assert!(result);
     }
 
     #[test]
@@ -2029,7 +2041,8 @@ mod tests {
         };
 
         let should_use = rule.should_use_index("users", &gt_predicate);
-        assert!(!should_use);
+        // Greater than is now indexable (B+Tree range scan)
+        assert!(should_use);
     }
 
     #[test]

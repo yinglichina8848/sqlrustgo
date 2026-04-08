@@ -7,6 +7,7 @@ pub mod executor;
 pub mod executor_metrics;
 pub mod explain;
 pub mod filter;
+pub mod index_scan;
 pub mod local_executor;
 pub mod operator_profile;
 pub mod parallel_executor;
@@ -31,6 +32,7 @@ pub use explain::{
     ExplainOutput,
 };
 pub use filter::FilterVolcanoExecutor;
+pub use index_scan::IndexScanVolcanoExecutor;
 pub use local_executor::LocalExecutor;
 pub use operator_profile::{
     OperatorProfile, ProfileTimer, Profiler, QueryProfile, GLOBAL_PROFILER,
