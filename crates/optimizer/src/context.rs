@@ -1,32 +1,27 @@
 // optimizer/src/context.rs
 
-use crate::cost::SimpleCostModel;
-use crate::stats::{InMemoryStatisticsProvider, StatisticsProvider};
+use crate::cost::CboOptimizer;
 use std::sync::Arc;
 
-/// Optimizer 全局上下文 - 持有成本模型和统计信息提供者
+/// Optimizer 全局上下文 - 持有 CboOptimizer 用于成本估算
 #[derive(Clone)]
 pub struct OptimizerContext {
-    /// 统计信息提供者
-    pub stats_provider: Arc<dyn StatisticsProvider>,
-    /// 成本模型
-    pub cost_model: Arc<SimpleCostModel>,
+    /// CboOptimizer 用于成本估算（包含 stats_provider）
+    pub cbo: Arc<CboOptimizer>,
 }
 
 impl OptimizerContext {
-    pub fn new(stats_provider: Arc<dyn StatisticsProvider>, cost_model: SimpleCostModel) -> Self {
-        Self {
-            stats_provider,
-            cost_model: Arc::new(cost_model),
-        }
+    pub fn new(cbo: CboOptimizer) -> Self {
+        Self { cbo: Arc::new(cbo) }
+    }
+
+    pub fn with_default_stats() -> Self {
+        Self::new(CboOptimizer::new())
     }
 }
 
 impl Default for OptimizerContext {
     fn default() -> Self {
-        Self {
-            stats_provider: Arc::new(InMemoryStatisticsProvider::new()),
-            cost_model: Arc::new(SimpleCostModel::default_model()),
-        }
+        Self::with_default_stats()
     }
 }
