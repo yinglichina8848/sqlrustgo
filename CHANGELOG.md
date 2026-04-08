@@ -136,13 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.3.0] - 2026-04-03
 
-> 代号: 功能合并版本
-> 状态: RC (合并到 v2.4.0)
-
-### Added
-
-- v2.3.0 功能已合并到 `develop/v2.4.0`
-- 所有 v2.2.0 及之前版本功能延续
+> **状态**: 无正式发布 (合并到 v2.4.0)
+> **说明**: v2.3.0 作为开发代号，所有功能已合并到 v2.4.0
 
 ---
 
