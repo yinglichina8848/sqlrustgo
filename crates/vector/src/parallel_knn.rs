@@ -2,52 +2,49 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::DistanceMetric;
-use crate::traits::{IndexEntry, VectorIndex};
+use crate::simd_explicit;
+use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use rayon::prelude::*;
 
-/// SIMD-accelerated distance computation using auto-vectorization
+/// SIMD-accelerated distance computation using explicit intrinsics (AVX2/AVX-512)
 pub mod simd {
     use super::*;
+    use crate::simd_explicit::{
+        dot_product_simd, euclidean_distance_simd, manhattan_distance_simd,
+    };
 
-    /// Compute dot product with auto-vectorization hints
+    /// Compute dot product using explicit SIMD intrinsics
     #[inline]
     pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-        debug_assert_eq!(a.len(), b.len());
-        a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+        dot_product_simd(a, b)
     }
 
-    /// Compute cosine similarity with auto-vectorization
+    /// Compute cosine similarity using explicit SIMD intrinsics
     #[inline]
     pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         let dot = dot_product(a, b);
-        let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-        
+        let norm_a = euclidean_distance_simd(a, a).sqrt();
+        let norm_b = euclidean_distance_simd(b, b).sqrt();
+
         if norm_a == 0.0 || norm_b == 0.0 {
             return 0.0;
         }
         dot / (norm_a * norm_b)
     }
 
-    /// Compute euclidean distance with auto-vectorization
+    /// Compute euclidean distance using explicit SIMD intrinsics
     #[inline]
     pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-        debug_assert_eq!(a.len(), b.len());
-        a.iter()
-            .zip(b.iter())
-            .map(|(x, y)| (x - y) * (x - y))
-            .sum::<f32>()
-            .sqrt()
+        euclidean_distance_simd(a, b)
     }
 
-    /// Compute manhattan distance with auto-vectorization
+    /// Compute manhattan distance using explicit SIMD intrinsics
     #[inline]
     pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {
-        debug_assert_eq!(a.len(), b.len());
-        a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).sum()
+        manhattan_distance_simd(a, b)
     }
 
-    /// Compute similarity based on metric with SIMD hints
+    /// Compute similarity based on metric with explicit SIMD
     #[inline]
     pub fn compute_similarity_simd(a: &[f32], b: &[f32], metric: DistanceMetric) -> f32 {
         match metric {
@@ -124,7 +121,7 @@ impl ParallelKnnIndex {
     /// Parallel search using rayon
     pub fn search(&self, query: &[f32], k: usize) -> VectorResult<ParallelSearchResult> {
         let start = std::time::Instant::now();
-        
+
         if self.vectors.is_empty() {
             return Err(VectorError::EmptyIndex);
         }
@@ -138,9 +135,10 @@ impl ParallelKnnIndex {
 
         let n = self.vectors.len();
         let chunk_size = self.config.chunk_size;
-        
+
         // Process in parallel chunks
-        let chunk_results: Vec<Vec<(u64, f32)>> = self.vectors
+        let chunk_results: Vec<Vec<(u64, f32)>> = self
+            .vectors
             .par_chunks(chunk_size)
             .map(|chunk| {
                 chunk
@@ -155,12 +153,10 @@ impl ParallelKnnIndex {
 
         // Merge results and get top-k
         let mut all_results: Vec<(u64, f32)> = chunk_results.into_iter().flatten().collect();
-        
+
         // Sort by score descending
-        all_results.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        
+        all_results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
         // Deduplicate and take top k
         let entries: Vec<IndexEntry> = all_results
             .into_iter()
@@ -176,12 +172,17 @@ impl ParallelKnnIndex {
     }
 
     /// Search with different thread counts
-    pub fn search_with_threads(&self, query: &[f32], k: usize, num_threads: usize) -> VectorResult<ParallelSearchResult> {
+    pub fn search_with_threads(
+        &self,
+        query: &[f32],
+        k: usize,
+        num_threads: usize,
+    ) -> VectorResult<ParallelSearchResult> {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads)
             .build()
             .ok();
-        
+
         if let Some(pool) = pool {
             pool.install(|| self.search(query, k))
         } else {
@@ -232,6 +233,16 @@ impl VectorIndex for ParallelKnnIndex {
     fn metric(&self) -> DistanceMetric {
         self.metric
     }
+
+    fn get_all(&self) -> Vec<VectorRecord> {
+        self.vectors
+            .iter()
+            .map(|(id, vector)| VectorRecord {
+                id: *id,
+                vector: vector.clone(),
+            })
+            .collect()
+    }
 }
 
 /// Parallel KNN wrapper that adds parallel search to any VectorIndex
@@ -255,7 +266,7 @@ impl<I: VectorIndex> ParallelKnn<I> {
     /// Parallel search using rayon
     pub fn parallel_search(&self, query: &[f32], k: usize) -> VectorResult<ParallelSearchResult> {
         let start = std::time::Instant::now();
-        
+
         let n = self.inner.len();
         if n == 0 {
             return Err(VectorError::EmptyIndex);
@@ -270,7 +281,7 @@ impl<I: VectorIndex> ParallelKnn<I> {
 
         let chunk_size = self.config.chunk_size;
         let metric = self.inner.metric();
-        
+
         // Process in parallel chunks
         let chunk_results: Vec<Vec<(u64, f32)>> = (0..n)
             .into_par_iter()
@@ -293,11 +304,9 @@ impl<I: VectorIndex> ParallelKnn<I> {
 
         // Merge results and get top-k
         let mut all_results: Vec<(u64, f32)> = chunk_results.into_iter().flatten().collect();
-        
-        all_results.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        
+
+        all_results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
         let entries: Vec<IndexEntry> = all_results
             .into_iter()
             .take(k)
@@ -344,6 +353,10 @@ impl<I: VectorIndex> VectorIndex for ParallelKnn<I> {
     fn metric(&self) -> DistanceMetric {
         self.inner.metric()
     }
+
+    fn get_all(&self) -> Vec<VectorRecord> {
+        self.inner.get_all()
+    }
 }
 
 /// Top-K merger for parallel results
@@ -351,20 +364,16 @@ pub fn merge_top_k<K: Send + Sync>(chunks: Vec<Vec<(K, f32)>>, k: usize) -> Vec<
     if chunks.is_empty() {
         return Vec::new();
     }
-    
+
     let total: Vec<(K, f32)> = chunks.into_iter().flatten().collect();
-    
+
     if total.len() > 10000 {
         let mut sorted = total;
-        sorted.par_sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sorted.par_sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         sorted.into_iter().take(k).collect()
     } else {
         let mut sorted = total;
-        sorted.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         sorted.into_iter().take(k).collect()
     }
 }
@@ -393,10 +402,10 @@ mod tests {
             let v: Vec<f32> = (0..128).map(|j| (i as f32 + j as f32) / 1000.0).collect();
             index.insert(i, &v).unwrap();
         }
-        
+
         let query = vec![500.0f32; 128];
         let result = index.search(&query, 10).unwrap();
-        
+
         assert_eq!(result.entries.len(), 10);
         assert_eq!(result.vectors_searched, 1000);
         assert!(result.search_time_ms < 1000.0);
@@ -416,7 +425,7 @@ mod tests {
             vec![(4, 0.95), (5, 0.85), (6, 0.75)],
             vec![(7, 0.92), (8, 0.82)],
         ];
-        
+
         let merged = merge_top_k(chunks, 5);
         assert_eq!(merged.len(), 5);
         assert_eq!(merged[0].0, 4);
@@ -430,10 +439,10 @@ mod tests {
             let v = vec![i as f32; 64];
             flat.insert(i, &v).unwrap();
         }
-        
+
         let queries = vec![vec![50.0f32; 64], vec![25.0f32; 64]];
         let results = batch_search(&flat, &queries, 5).unwrap();
-        
+
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].len(), 5);
         assert_eq!(results[1].len(), 5);
@@ -443,7 +452,7 @@ mod tests {
     fn test_simd_functions() {
         let a = vec![1.0f32, 0.0, 0.0];
         let b = vec![1.0f32, 0.0, 0.0];
-        
+
         assert!((simd::cosine_similarity(&a, &b) - 1.0).abs() < 0.001);
         assert!((simd::dot_product(&a, &b) - 1.0).abs() < 0.001);
         assert!(simd::euclidean_distance(&a, &b).abs() < 0.001);
@@ -456,7 +465,7 @@ mod tests {
             let v = vec![i as f32; 32];
             flat.insert(i, &v).unwrap();
         }
-        
+
         let knn = ParallelKnn::new(flat);
         let result = knn.parallel_search(&[50.0f32; 32], 10).unwrap();
         assert_eq!(result.entries.len(), 10);
@@ -469,12 +478,12 @@ mod tests {
             simd_enabled: true,
         };
         let mut index = ParallelKnnIndex::with_config(DistanceMetric::Euclidean, config);
-        
+
         for i in 0..1000 {
             let v = vec![i as f32; 64];
             index.insert(i, &v).unwrap();
         }
-        
+
         let result = index.search(&[500.0f32; 64], 10).unwrap();
         assert_eq!(result.entries.len(), 10);
     }

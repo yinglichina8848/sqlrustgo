@@ -81,11 +81,11 @@ impl BinaryTableStorage {
     pub fn load(&self, table: &str) -> std::io::Result<TableData> {
         let path = self.table_path(table);
         let file = File::open(path)?;
-        
+
         // Use buffered reader with large buffer for faster reading
         use std::io::BufReader;
         let mut reader = BufReader::with_capacity(8 * 1024 * 1024, file); // 8MB buffer
-        
+
         // Verify header
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
@@ -164,7 +164,9 @@ impl BinaryTableStorage {
                         let len = u32::from_le_bytes(len) as usize;
                         let mut s = vec![0u8; len];
                         reader.read_exact(&mut s)?;
-                        row.push(sqlrustgo_types::Value::Text(String::from_utf8_lossy(&s).to_string()));
+                        row.push(sqlrustgo_types::Value::Text(
+                            String::from_utf8_lossy(&s).to_string(),
+                        ));
                     }
                     _ => row.push(sqlrustgo_types::Value::Null),
                 }
@@ -213,7 +215,7 @@ mod tests {
 
         let loaded = storage.load("test").unwrap();
         assert_eq!(loaded.rows.len(), 1);
-        
+
         if let sqlrustgo_types::Value::Integer(i) = loaded.rows[0][0] {
             assert_eq!(i, 42);
         } else {

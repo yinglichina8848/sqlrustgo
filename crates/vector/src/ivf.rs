@@ -2,7 +2,7 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
-use crate::traits::{IndexEntry, VectorIndex};
+use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 
 #[derive(Debug, Clone)]
 struct ClusterCenter {
@@ -274,6 +274,16 @@ impl VectorIndex for IvfIndex {
 
     fn metric(&self) -> DistanceMetric {
         self.metric
+    }
+
+    fn get_all(&self) -> Vec<VectorRecord> {
+        self.vectors
+            .iter()
+            .map(|(id, vector)| VectorRecord {
+                id: *id,
+                vector: vector.clone(),
+            })
+            .collect()
     }
 }
 
