@@ -50,7 +50,6 @@ impl CompressionType {
     pub fn magic_bytes(&self) -> [u8; 4] {
         match self {
             CompressionType::None => *b"NONE",
-            CompressionType::Lz4 => *b"LZ4F",
             CompressionType::Snappy => *b"SNAP",
             CompressionType::Zstd => *b"ZSTD",
             CompressionType::Lz4 => *b"LZ4 ",
@@ -702,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_lz4_compression_ratio() {
-        // Test that LZ4 achieves compression on repetitive data
+        // Test that LZ4 achieves compression ratio > 2x on repetitive data
         let dir = tempdir().unwrap();
         let path = dir.path().join("segment_lz4_ratio.bin");
 
@@ -711,14 +710,82 @@ mod tests {
             .map(|i| Value::Text("same_string_value".to_string()))
             .collect();
 
+        // Calculate original data size (JSON serialized)
+        let original_size = serde_json::to_vec(&values).unwrap().len();
+
         let segment = ColumnSegment::with_compression(1, CompressionType::Lz4);
         segment.write_to_file(&path, &values, None).unwrap();
 
+        // Check actual file size vs original
+        let metadata = std::fs::metadata(&path).unwrap();
+        let compressed_size = metadata.len() as usize;
+
+        // Account for header overhead (approximately 200 bytes for header + bitmap)
+        let data_overhead = 200;
+        let actual_compressed = compressed_size.saturating_sub(data_overhead);
+        let ratio = original_size as f64 / actual_compressed as f64;
+
+        println!(
+            "LZ4: original={} bytes, compressed={} bytes, ratio={:.2}x",
+            original_size, actual_compressed, ratio
+        );
+
+        // Verify compression ratio > 2x for highly repetitive data
+        assert!(
+            ratio > 2.0,
+            "LZ4 compression ratio {} should be > 2.0x",
+            ratio
+        );
+
+        // Verify data integrity
         let mut read_segment = ColumnSegment::new(0);
         let (read_values, _) = read_segment.read_from_file(&path).unwrap();
-
         assert_eq!(read_values.len(), 10000);
         assert_eq!(read_values[0], Value::Text("same_string_value".to_string()));
+    }
+
+    #[test]
+    fn test_zstd_compression_ratio() {
+        // Test that Zstd achieves compression ratio > 2x on repetitive data
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("segment_zstd_ratio.bin");
+
+        // Highly repetitive data should compress well
+        let values: Vec<Value> = (0..10000)
+            .map(|i| Value::Text("same_string_value".to_string()))
+            .collect();
+
+        // Calculate original data size (JSON serialized)
+        let original_size = serde_json::to_vec(&values).unwrap().len();
+
+        let segment = ColumnSegment::with_compression(1, CompressionType::Zstd);
+        segment.write_to_file(&path, &values, None).unwrap();
+
+        // Check actual file size vs original
+        let metadata = std::fs::metadata(&path).unwrap();
+        let compressed_size = metadata.len() as usize;
+
+        // Account for header overhead (approximately 200 bytes for header + bitmap)
+        let data_overhead = 200;
+        let actual_compressed = compressed_size.saturating_sub(data_overhead);
+        let ratio = original_size as f64 / actual_compressed as f64;
+
+        println!(
+            "Zstd: original={} bytes, compressed={} bytes, ratio={:.2}x",
+            original_size, actual_compressed, ratio
+        );
+
+        // Verify compression ratio > 2x for highly repetitive data
+        assert!(
+            ratio > 2.0,
+            "Zstd compression ratio {} should be > 2.0x",
+            ratio
+        );
+
+        // Verify data integrity
+        let mut read_segment = ColumnSegment::new(0);
+        let (read_values, _) = read_segment.read_from_file(&path).unwrap();
+        assert_eq!(read_values.len(), 10000);
     }
 
     #[test]
