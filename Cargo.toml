@@ -29,6 +29,9 @@ members = [
     "crates/test-results",
     "crates/test-reporter",
     "crates/gmp",
+    "crates/vector",
+    "crates/rag",
+    "crates/graph",
     "test/sql92",
 ]
 
@@ -56,6 +59,8 @@ sqlrustgo-telemetry = { path = "crates/telemetry" }
 sqlrustgo-network = { path = "crates/network" }
 sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
+sqlrustgo-vector = { path = "crates/vector" }
+sqlrustgo-graph = { path = "crates/graph" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
@@ -77,6 +82,8 @@ num_cpus = "1.17"
 tempfile = "3.25.0"
 criterion = "0.8"
 miniz_oxide = "0.7"
+memmap2 = "0.9"
+lz4_flex = "0.11"
 rand = "0.8"
 sha2 = "0.10"
 hmac = "0.12"
@@ -101,6 +108,7 @@ sqlrustgo-telemetry = { path = "crates/telemetry" }
 sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
+sqlrustgo-vector = { path = "crates/vector" }
 
 [package]
 name = "sqlrustgo"
@@ -415,6 +423,10 @@ name = "teaching_scenario_client_server_test"
 path = "tests/integration/teaching_scenario_client_server_test.rs"
 
 [[test]]
+name = "openclaw_api_test"
+path = "tests/integration/openclaw_api_test.rs"
+
+[[test]]
 name = "distributed_transaction_test"
 path = "tests/integration/distributed_transaction_test.rs"
 
@@ -517,6 +529,10 @@ path = "tests/integration/tpch_text_index_test.rs"
 [[test]]
 name = "agentsql_test"
 path = "tests/integration/agentsql_test.rs"
+
+[[test]]
+name = "vector_storage_integration_test"
+path = "tests/integration/vector_storage_integration_test.rs"
 
 # Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
 # This prevents any single test from consuming excessive memory

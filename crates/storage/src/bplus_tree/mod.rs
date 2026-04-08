@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub mod hash_index;
 pub mod index;
 
 pub use index::{

@@ -3,6 +3,7 @@
 pub mod health;
 pub mod http_server;
 pub mod metrics_endpoint;
+pub mod openclaw_endpoints;
 pub mod teaching_endpoints;
 
 pub mod connection_pool;
@@ -14,6 +15,7 @@ pub use security_integration::{SecurityGuard, SecurityIntegration, SecurityStats
 pub use health::{ComponentHealth, HealthChecker, HealthComponent, HealthReport, HealthStatus};
 pub use http_server::HttpServer;
 pub use metrics_endpoint::MetricsRegistry;
+pub use openclaw_endpoints::OpenClawHttpServer;
 pub use teaching_endpoints::{TeachingEndpoints, TeachingHttpServer};
 
 #[cfg(test)]
