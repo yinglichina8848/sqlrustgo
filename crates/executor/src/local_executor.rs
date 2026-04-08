@@ -4,8 +4,8 @@
 
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
-    ProjectionExec, SortMergeJoinExec,
+    AggregateExec, AggregateFunction, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType,
+    Operator, PhysicalPlan, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -130,6 +130,7 @@ impl<'a> LocalExecutor<'a> {
             let start = Instant::now();
             let result = match plan.name() {
                 "SeqScan" => self.execute_seq_scan(plan),
+                "IndexScan" => self.execute_index_scan(plan),
                 "Projection" => self.execute_projection(plan),
                 "Filter" => self.execute_filter(plan),
                 "Aggregate" => self.execute_aggregate(plan),
@@ -163,6 +164,7 @@ impl<'a> LocalExecutor<'a> {
         let start = Instant::now();
         let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
+            "IndexScan" => self.execute_index_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
             "Aggregate" => self.execute_aggregate(plan),
@@ -218,6 +220,108 @@ impl<'a> LocalExecutor<'a> {
 
         // Record to GLOBAL_PROFILER
         GLOBAL_PROFILER.record("SeqScan", "scan", duration.as_nanos() as u64, row_count, 1);
+
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    /// Execute index scan using storage engine's index APIs
+    fn execute_index_scan(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        let table_name = plan.table_name();
+        if table_name.is_empty() {
+            return Ok(ExecutorResult::empty());
+        }
+
+        let index_scan = plan
+            .as_any()
+            .downcast_ref::<IndexScanExec>()
+            .ok_or_else(|| "Not an IndexScanExec".to_string())?;
+
+        let table_name = index_scan.table_name();
+        let key_expr = index_scan.key_expr();
+        let (range_min, range_max) = index_scan.key_range();
+
+        let start = Instant::now();
+
+        // Determine row_ids based on predicate type
+        let row_ids: Vec<u32> = match key_expr {
+            Expr::BinaryExpr {
+                op: Operator::Eq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                self.storage.search_index(table_name, col_name, val)
+            }
+            Expr::BinaryExpr {
+                op: Operator::Gt,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id > value means range (value+1, +infinity)
+                self.storage
+                    .range_index(table_name, col_name, val + 1, i64::MAX)
+            }
+            Expr::BinaryExpr {
+                op: Operator::Lt,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id < value means range (-infinity, value-1)
+                self.storage
+                    .range_index(table_name, col_name, i64::MIN, val - 1)
+            }
+            Expr::BinaryExpr {
+                op: Operator::GtEq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id >= value means range [value, +infinity)
+                self.storage
+                    .range_index(table_name, col_name, val, i64::MAX)
+            }
+            Expr::BinaryExpr {
+                op: Operator::LtEq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id <= value means range (-infinity, value]
+                self.storage
+                    .range_index(table_name, col_name, i64::MIN, val)
+            }
+            _ => {
+                // Fall back to range if key_range is set
+                if let (Some(min), Some(max)) = (range_min, range_max) {
+                    self.storage
+                        .range_index(table_name, index_scan.index_name(), min, max)
+                } else {
+                    return Err(format!("Unsupported index predicate: {:?}", key_expr).into());
+                }
+            }
+        };
+
+        // Fetch complete rows for each row_id
+        let mut rows = Vec::new();
+        for row_id in row_ids {
+            if let Some(record) = self.storage.get_row(table_name, row_id as usize)? {
+                rows.push(record.into_iter().map(|v| v).collect());
+            }
+        }
+
+        let row_count = rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "IndexScan",
+            "index_scan",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
 
         Ok(ExecutorResult::new(rows, 0))
     }
@@ -691,6 +795,18 @@ impl<'a> LocalExecutor<'a> {
             }
             _ => Ok(ExecutorResult::empty()),
         }
+    }
+}
+
+/// Extract column name and integer value from binary expression for index operations
+fn extract_column_value_for_index<'a>(
+    left: &'a Expr,
+    right: &'a Expr,
+) -> Result<(&'a str, i64), String> {
+    match (left, right) {
+        (Expr::Column(col), Expr::Literal(Value::Integer(v))) => Ok((col.name.as_str(), *v)),
+        (Expr::Literal(Value::Integer(v)), Expr::Column(col)) => Ok((col.name.as_str(), *v)),
+        _ => Err("Expected column = integer or integer = column".into()),
     }
 }
 
