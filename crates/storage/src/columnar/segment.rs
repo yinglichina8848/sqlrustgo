@@ -45,6 +45,19 @@ pub enum CompressionType {
     Lz4,
 }
 
+/// Compression level options
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompressionLevel {
+    /// Fastest compression - speed priority
+    Fastest,
+    /// Balanced between speed and ratio
+    Default,
+    /// Best compression - ratio priority
+    Best,
+    /// Custom compression level
+    Custom(i32),
+}
+
 impl CompressionType {
     /// Get the magic bytes for this compression type
     pub fn magic_bytes(&self) -> [u8; 4] {
