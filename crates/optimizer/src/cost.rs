@@ -336,3 +336,12 @@ impl Default for CboOptimizer {
         Self::new()
     }
 }
+
+/// 索引访问方法
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexAccessMethod {
+    /// 使用索引扫描 (Hash 或 B+Tree)
+    IndexScan,
+    /// 使用顺序扫描
+    SeqScan,
+}
