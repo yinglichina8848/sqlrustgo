@@ -167,7 +167,10 @@ mod tests {
         let a = vec![1.0, 0.0];
         let b = vec![0.0, 1.0];
         assert!((compute_distance(&a, &b, DistanceMetric::Cosine) - 1.0).abs() < 0.001);
-        assert!((compute_distance(&a, &b, DistanceMetric::Euclidean) - std::f32::consts::SQRT_2).abs() < 0.001);
+        assert!(
+            (compute_distance(&a, &b, DistanceMetric::Euclidean) - std::f32::consts::SQRT_2).abs()
+                < 0.001
+        );
     }
 
     #[test]

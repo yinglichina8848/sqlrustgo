@@ -2,7 +2,7 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
-use crate::traits::{IndexEntry, VectorIndex};
+use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 
 #[derive(Debug, Clone)]
 struct VectorEntry {
@@ -117,6 +117,16 @@ impl VectorIndex for FlatIndex {
 
     fn metric(&self) -> DistanceMetric {
         self.metric
+    }
+
+    fn get_all(&self) -> Vec<VectorRecord> {
+        self.vectors
+            .iter()
+            .map(|e| VectorRecord {
+                id: e.id,
+                vector: e.vector.clone(),
+            })
+            .collect()
     }
 }
 

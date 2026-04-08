@@ -101,14 +101,14 @@ impl CheckpointManager {
             let last = *self.last_checkpoint_time.read().unwrap();
             last.elapsed()
         };
-        
+
         // Check time interval
         if elapsed >= self.config.interval {
             return true;
         }
-        
+
         // TODO: Check WAL size
-        
+
         false
     }
 
@@ -143,34 +143,38 @@ impl CheckpointManager {
         if !path.exists() {
             return Ok(None);
         }
-        
+
         let mut file = BufReader::new(File::open(&path)?);
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        
+
         Ok(CheckpointMetadata::from_json(&contents))
     }
 
     /// List all checkpoint files
     pub fn list_checkpoints(&self) -> std::io::Result<Vec<CheckpointMetadata>> {
         let mut checkpoints = Vec::new();
-        
+
         for entry in fs::read_dir(&self.checkpoint_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().map(|e| e == "json").unwrap_or(false)
-               && path.file_name().map(|n| n != "checkpoint.json").unwrap_or(false) {
+                && path
+                    .file_name()
+                    .map(|n| n != "checkpoint.json")
+                    .unwrap_or(false)
+            {
                 let mut file = BufReader::new(File::open(&path)?);
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
-                
+
                 if let Some(meta) = CheckpointMetadata::from_json(&contents) {
                     checkpoints.push(meta);
                 }
             }
         }
-        
+
         checkpoints.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
         Ok(checkpoints)
     }
@@ -180,13 +184,13 @@ impl CheckpointManager {
         let checkpoints = self.list_checkpoints()?;
         let to_delete = checkpoints.iter().skip(keep);
         let mut removed = 0;
-        
+
         for checkpoint in to_delete {
             if fs::remove_file(&checkpoint.file_path).is_ok() {
                 removed += 1;
             }
         }
-        
+
         Ok(removed)
     }
 }
@@ -211,10 +215,10 @@ mod tests {
             dirty_pages: 50,
             file_path: PathBuf::from("/tmp/checkpoint.1"),
         };
-        
+
         let json = meta.to_json();
         let parsed = CheckpointMetadata::from_json(&json).unwrap();
-        
+
         assert_eq!(parsed.lsn, meta.lsn);
         assert_eq!(parsed.timestamp, meta.timestamp);
         assert_eq!(parsed.tx_count, meta.tx_count);
@@ -234,9 +238,9 @@ mod tests {
             max_wal_size_mb: 100,
             incremental: true,
         };
-        
+
         let manager = CheckpointManager::new(temp.path().to_path_buf(), config).unwrap();
-        
+
         // Should not need checkpoint immediately
         assert!(!manager.needs_checkpoint());
     }
@@ -245,7 +249,7 @@ mod tests {
     fn test_checkpoint_record() {
         let temp = TempDir::new().unwrap();
         let manager = CheckpointManager::with_dir(temp.path().to_path_buf()).unwrap();
-        
+
         let meta = CheckpointMetadata {
             lsn: 1000,
             timestamp: 1609459200000,
@@ -253,9 +257,9 @@ mod tests {
             dirty_pages: 10,
             file_path: temp.path().join("checkpoint.1"),
         };
-        
+
         manager.record_checkpoint(meta.clone());
-        
+
         let last = manager.last_checkpoint().unwrap();
         assert_eq!(last.lsn, 1000);
     }
@@ -264,7 +268,7 @@ mod tests {
     fn test_checkpoint_save_load() {
         let temp = TempDir::new().unwrap();
         let manager = CheckpointManager::with_dir(temp.path().to_path_buf()).unwrap();
-        
+
         let meta = CheckpointMetadata {
             lsn: 2000,
             timestamp: 1609459300000,
@@ -272,10 +276,10 @@ mod tests {
             dirty_pages: 20,
             file_path: temp.path().join("checkpoint.2"),
         };
-        
+
         manager.save_metadata(&meta).unwrap();
         let loaded = manager.load_metadata().unwrap().unwrap();
-        
+
         assert_eq!(loaded.lsn, 2000);
         assert_eq!(loaded.tx_count, 100);
     }
@@ -284,7 +288,7 @@ mod tests {
     fn test_checkpoint_cleanup() {
         let temp = TempDir::new().unwrap();
         let manager = CheckpointManager::with_dir(temp.path().to_path_buf()).unwrap();
-        
+
         // Create some checkpoint files with valid JSON content
         for i in 1..=5 {
             let file_path = temp.path().join(format!("checkpoint.{}.json", i));
@@ -298,7 +302,7 @@ mod tests {
             // Write valid JSON to the numbered file
             fs::write(&file_path, meta.to_json()).unwrap();
         }
-        
+
         // Keep only 2
         let removed = manager.cleanup_old_checkpoints(2).unwrap();
         assert_eq!(removed, 3);

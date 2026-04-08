@@ -1287,6 +1287,19 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 
+    fn create_hash_index(
+        &mut self,
+        _table: &str,
+        _column: &str,
+        _column_index: usize,
+    ) -> SqlResult<()> {
+        // Hash index not yet implemented for file storage
+        // TODO: Implement using HashIndex with disk persistence
+        Err(SqlError::ExecutionError(
+            "Hash index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+
     fn drop_table_index(&mut self, table_name: &str, column_name: &str) -> SqlResult<()> {
         if let Ok(mut indexes) = self.indexes.write() {
             indexes.remove(&(table_name.to_string(), column_name.to_string()));
