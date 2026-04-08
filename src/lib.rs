@@ -1822,6 +1822,7 @@ impl ExecutionEngine {
                             is_primary_key: col.primary_key,
                             references,
                             auto_increment: col.auto_increment,
+                            compression: None,
                         }
                     })
                     .collect();
