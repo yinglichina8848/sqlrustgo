@@ -200,7 +200,7 @@ mod tests {
             is_primary_key: false,
             references: None,
             auto_increment: false,
-                    compression: None,
+            compression: None,
         }];
         let rows = vec![vec![sqlrustgo_types::Value::Integer(42)]];
 

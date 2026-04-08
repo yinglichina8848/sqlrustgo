@@ -44,8 +44,8 @@ pub use buffer_pool_metrics::BufferPoolMetrics;
 pub use clock_replacer::ClockReplacer;
 
 pub use columnar::{
-    Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk, ColumnarStorage,
-    CompressionConfig, CompressionLevel, CompressionType, TableStore,
+    auto_select_compression, Bitmap, ColumnChunk, ColumnSegment, ColumnStats, ColumnStatsDisk,
+    ColumnarStorage, CompressionConfig, CompressionLevel, CompressionType, TableStore,
 };
 
 pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};

@@ -522,8 +522,14 @@ pub fn auto_select_compression(
         }
         // Boolean - no compression needed
         "BOOLEAN" => (CompressionType::None, CompressionLevel::Default),
-        // Text types - use Zstd for better compression
-        "VARCHAR" | "CHAR" | "TEXT" | "BLOB" | "JSON" => (CompressionType::Zstd, level),
+        // Text types - Fastest level uses Snappy for balance, otherwise Zstd
+        "VARCHAR" | "CHAR" | "TEXT" | "BLOB" | "JSON" => {
+            if level == CompressionLevel::Fastest {
+                (CompressionType::Snappy, CompressionLevel::Default)
+            } else {
+                (CompressionType::Zstd, level)
+            }
+        }
         // Default to Zstd
         _ => (CompressionType::Zstd, level),
     }
