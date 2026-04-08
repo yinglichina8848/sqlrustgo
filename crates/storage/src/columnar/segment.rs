@@ -509,6 +509,26 @@ impl ColumnSegment {
     }
 }
 
+/// Auto-select compression algorithm based on data type hint
+/// Returns (CompressionType, CompressionLevel)
+pub fn auto_select_compression(
+    data_type: &str,
+    level: CompressionLevel,
+) -> (CompressionType, CompressionLevel) {
+    match data_type {
+        // Numeric types - LZ4 is fast and effective
+        "INTEGER" | "BIGINT" | "SMALLINT" | "TINYINT" | "FLOAT" | "DOUBLE" | "DECIMAL" => {
+            (CompressionType::Lz4, level)
+        }
+        // Boolean - no compression needed
+        "BOOLEAN" => (CompressionType::None, CompressionLevel::Default),
+        // Text types - use Zstd for better compression
+        "VARCHAR" | "CHAR" | "TEXT" | "BLOB" | "JSON" => (CompressionType::Zstd, level),
+        // Default to Zstd
+        _ => (CompressionType::Zstd, level),
+    }
+}
+
 /// Compress data using Snappy
 fn compress_snappy(data: &[u8]) -> SegmentResult<Vec<u8>> {
     use std::io::Write;
@@ -625,6 +645,33 @@ mod tests {
         let config = CompressionConfig::default();
         assert_eq!(config.level, CompressionLevel::Default);
         assert!(config.auto_select);
+    }
+
+    #[test]
+    fn test_auto_select_compression() {
+        // Integer -> LZ4
+        let (algo, _) = auto_select_compression("INTEGER", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Lz4);
+
+        // Float -> LZ4
+        let (algo, _) = auto_select_compression("FLOAT", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Lz4);
+
+        // Text -> Zstd
+        let (algo, _) = auto_select_compression("TEXT", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Zstd);
+
+        // Varchar -> Zstd
+        let (algo, _) = auto_select_compression("VARCHAR", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Zstd);
+
+        // Boolean -> None
+        let (algo, _) = auto_select_compression("BOOLEAN", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::None);
+
+        // Bigint -> LZ4
+        let (algo, _) = auto_select_compression("BIGINT", CompressionLevel::Best);
+        assert_eq!(algo, CompressionType::Lz4);
     }
 
     #[test]
