@@ -71,6 +71,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新**: v1.6.0 迁移指南
 - **新**: v1.6.0 API 变更文档
 
+## [2.4.0] - 2026-04-09 (RC1)
+
+> 代号: Graph Intelligence
+> 状态: RC1 - Release Candidate 1
+
+### Added
+
+#### Graph Engine (Issue #1077)
+- **#1077** Graph Engine 核心架构 (独立 crate)
+- **#1077** GQL Parser - Graph Query Language 解析器
+- **#1077** Graph Planning - 图查询规划器
+- **#1077** Graph Execution - 图遍历执行器
+
+#### OpenClaw API (Issue #1078)
+- **#1078** OpenClaw HTTP Server
+- **#1078** `/query` - SQL 查询端点
+- **#1078** `/nl_query` - 自然语言查询
+- **#1078** `/schema` - Schema introspection
+- **#1078** `/stats` - 执行统计
+- **#1078** `/memory/*` - 记忆管理 API
+
+#### 列式存储压缩 (Issue #1302)
+- **#1302** LZ4 压缩支持
+- **#1302** Zstd 压缩支持
+- **#1302** `compression` 字段添加到 ColumnDefinition
+
+#### CBO 索引选择 (Issue #1303)
+- **#1303** Cost-based optimizer 索引选择
+- **#1303** 索引选择启发式算法
+
+#### TPC-H SF=1 性能 (Issue #1304)
+- **#1304** TPC-H SF=1 完整测试 (11/11 通过)
+- **#1304** 性能基准测试报告
+
+### Changed
+
+- Graph Engine 独立为 `crates/graph-engine`
+- 内部 ID 使用 u64/u32 (UUID 仅作为 property 字段)
+- API 返回 Iterator 而非 Vec，支持 lazy evaluation
+
+### Fixed
+
+- **#1324** 修复 `compression` 字段缺失问题
+- **#1323** 移除二进制文件 (third_party/*.o, dbgen, qgen)
+- **#1325** CBO Index Selection 修复
+
+### RC1 测试统计
+
+| 测试类别 | 通过 | 总数 | 状态 |
+|----------|------|------|------|
+| 单元测试 | 35 | 35 | ✅ 100% |
+| 集成测试 | 1040 | 1042 | ✅ 99.8% |
+| TPC-H SF=1 | 11 | 11 | ✅ 100% |
+| OpenClaw API | 11 | 11 | ✅ 100% |
+
+### RC1 后续任务
+
+- [ ] TPC-H SF=10 完整测试
+- [ ] Graph Engine 文档完善
+- [ ] OpenClaw API 文档完善
+
+---
+
+## [2.3.0] - 2026-04-03
+
+> 代号: 功能合并版本
+> 状态: RC (合并到 v2.4.0)
+
+### Added
+
+- v2.3.0 功能已合并到 `develop/v2.4.0`
+- 所有 v2.2.0 及之前版本功能延续
+
+---
+
 ## [2.1.0] - 2026-04-03 (RC)
 
 > 代号: Enterprise Observability
