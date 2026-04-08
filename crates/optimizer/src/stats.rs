@@ -940,8 +940,21 @@ mod tests {
             Ok(())
         }
 
-        fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Option<u32> {
-            None
+        fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Vec<u32> {
+            Vec::new()
+        }
+
+        fn get_row(&self, _table: &str, _row_index: usize) -> SqlResult<Option<Record>> {
+            Ok(None)
+        }
+
+        fn create_hash_index(
+            &mut self,
+            _table: &str,
+            _column: &str,
+            _slot_count: usize,
+        ) -> SqlResult<()> {
+            Ok(())
         }
 
         fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
