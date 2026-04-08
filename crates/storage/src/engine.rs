@@ -10,6 +10,7 @@ use std::sync::Arc;
 use crate::bplus_tree::hash_index::HashIndex;
 use crate::bplus_tree::index::{CompositeBTreeIndex, CompositeKey};
 use crate::bplus_tree::SimpleBPlusTree;
+use crate::columnar::convert::StorageColumnArray;
 use crate::columnar::{CompressionConfig, CompressionLevel};
 
 /// 索引唯一标识符
@@ -270,6 +271,47 @@ pub trait StorageEngine: Send + Sync {
         }
         Ok(())
     }
+}
+
+/// VectorStorage trait - abstraction for columnar vectorized storage access
+/// Enables efficient columnar scans for vectorized execution engines
+pub trait VectorStorage: Send + Sync {
+    /// Scan all columns from a table in columnar format for vectorized execution
+    /// Returns Vec<StorageColumnArray>, one per column
+    fn scan_vectorized(&self, table: &str) -> SqlResult<Vec<StorageColumnArray>>;
+
+    /// Get a batch of columnar data for streaming vectorized execution
+    /// Returns (columns, total_rows, has_more)
+    fn scan_vectorized_batch(
+        &self,
+        table: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<(Vec<StorageColumnArray>, usize, bool)> {
+        let all_columns = self.scan_vectorized(table)?;
+        let total_rows = all_columns.first().map(|c| c.len()).unwrap_or(0);
+        let has_more = offset + limit < total_rows;
+
+        // Slice each column
+        let batch_columns: Vec<StorageColumnArray> = all_columns
+            .into_iter()
+            .map(|col| {
+                use crate::columnar::convert::StorageColumnArray as S;
+                match col {
+                    S::Int64(v) => S::Int64(v.into_iter().skip(offset).take(limit).collect()),
+                    S::Float64(v) => S::Float64(v.into_iter().skip(offset).take(limit).collect()),
+                    S::Boolean(v) => S::Boolean(v.into_iter().skip(offset).take(limit).collect()),
+                    S::Text(v) => S::Text(v.into_iter().skip(offset).take(limit).collect()),
+                    S::Null => S::Null,
+                }
+            })
+            .collect();
+
+        Ok((batch_columns, total_rows, has_more))
+    }
+
+    /// Get the number of rows in a table
+    fn get_row_count(&self, table: &str) -> SqlResult<usize>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -1476,6 +1518,47 @@ impl MemoryStorage {
 
         self.on_write_complete(table);
         Ok(())
+    }
+}
+
+/// VectorStorage implementation for MemoryStorage
+/// Converts row-oriented storage to column-oriented for vectorized execution
+impl VectorStorage for MemoryStorage {
+    fn scan_vectorized(&self, table: &str) -> SqlResult<Vec<StorageColumnArray>> {
+        let records = self.tables.get(table).cloned().unwrap_or_default();
+
+        if records.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let num_rows = records.len();
+        let num_cols = records.first().map(|r| r.len()).unwrap_or(0);
+
+        // Convert rows to columns
+        let mut columns: Vec<Vec<Value>> = vec![Vec::with_capacity(num_rows); num_cols];
+        for record in &records {
+            for (col_idx, value) in record.iter().enumerate() {
+                if col_idx < columns.len() {
+                    columns[col_idx].push(value.clone());
+                }
+            }
+        }
+
+        // Convert each column vector to StorageColumnArray
+        let storage_columns: Vec<StorageColumnArray> = columns
+            .into_iter()
+            .map(|col_values| {
+                use crate::columnar::convert::IntoStorageColumnArray;
+                let chunk = crate::columnar::ColumnChunk::from_values(col_values);
+                chunk.into_storage_column_array()
+            })
+            .collect();
+
+        Ok(storage_columns)
+    }
+
+    fn get_row_count(&self, table: &str) -> SqlResult<usize> {
+        Ok(self.tables.get(table).map(|t| t.len()).unwrap_or(0))
     }
 }
 
