@@ -450,6 +450,18 @@ impl StorageEngine for ColumnarStorage {
         ))
     }
 
+    fn create_hash_index(
+        &mut self,
+        _table: &str,
+        _column: &str,
+        _column_index: usize,
+    ) -> crate::engine::SqlResult<()> {
+        // Hash index not yet implemented for columnar storage
+        Err(crate::engine::SqlError::ExecutionError(
+            "Hash index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
     fn drop_table_index(&mut self, _table: &str, _column: &str) -> crate::engine::SqlResult<()> {
         Err(crate::engine::SqlError::ExecutionError(
             "Index dropping not yet implemented for ColumnarStorage".to_string(),

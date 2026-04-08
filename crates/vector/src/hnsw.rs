@@ -2,7 +2,7 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
-use crate::traits::{IndexEntry, VectorIndex};
+use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use rand::Rng;
 
 #[derive(Debug, Clone)]
@@ -304,6 +304,16 @@ impl VectorIndex for HnswIndex {
 
     fn metric(&self) -> DistanceMetric {
         self.metric
+    }
+
+    fn get_all(&self) -> Vec<VectorRecord> {
+        self.nodes
+            .iter()
+            .map(|n| VectorRecord {
+                id: n.id,
+                vector: n.vector.clone(),
+            })
+            .collect()
     }
 }
 

@@ -108,6 +108,7 @@ sqlrustgo-telemetry = { path = "crates/telemetry" }
 sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
+sqlrustgo-vector = { path = "crates/vector" }
 
 [package]
 name = "sqlrustgo"
@@ -524,6 +525,10 @@ path = "tests/integration/tpch_text_index_test.rs"
 [[test]]
 name = "agentsql_test"
 path = "tests/integration/agentsql_test.rs"
+
+[[test]]
+name = "vector_storage_integration_test"
+path = "tests/integration/vector_storage_integration_test.rs"
 
 # Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
 # This prevents any single test from consuming excessive memory

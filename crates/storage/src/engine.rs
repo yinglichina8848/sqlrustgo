@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::bplus_tree::hash_index::HashIndex;
 use crate::bplus_tree::SimpleBPlusTree;
 
 /// Column statistics for a single column
@@ -158,6 +159,15 @@ pub trait StorageEngine: Send + Sync {
         column_index: usize,
     ) -> SqlResult<()>;
 
+    /// Create a hash index on a table for O(1) point lookups
+    /// Use for primary key and unique index columns
+    fn create_hash_index(
+        &mut self,
+        table: &str,
+        column: &str,
+        column_index: usize,
+    ) -> SqlResult<()>;
+
     /// Drop an index from a table
     fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
@@ -247,7 +257,10 @@ pub struct MemoryStorage {
     views: HashMap<String, ViewInfo>,
     triggers: HashMap<String, TriggerInfo>,
     table_triggers: HashMap<String, Vec<String>>,
+    /// B+Tree indexes for range queries
     indexes: HashMap<String, SimpleBPlusTree>,
+    /// Hash indexes for O(1) point lookups
+    hash_indexes: HashMap<String, std::sync::Arc<HashIndex<i64, u32>>>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
     auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
     cancel_flag: Option<Arc<AtomicBool>>,
@@ -292,6 +305,7 @@ impl MemoryStorage {
             triggers: HashMap::new(),
             table_triggers: HashMap::new(),
             indexes: HashMap::new(),
+            hash_indexes: HashMap::new(),
             write_callback: None,
             auto_increment_counters: HashMap::new(),
             cancel_flag: None,
@@ -306,6 +320,7 @@ impl MemoryStorage {
             triggers: HashMap::new(),
             table_triggers: HashMap::new(),
             indexes: HashMap::new(),
+            hash_indexes: HashMap::new(),
             write_callback: Some(callback),
             auto_increment_counters: HashMap::new(),
             cancel_flag: None,
@@ -1015,14 +1030,46 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
+    fn create_hash_index(
+        &mut self,
+        table: &str,
+        column: &str,
+        column_index: usize,
+    ) -> SqlResult<()> {
+        let index_name = format!("{}_{}", table, column);
+        let hash_index: std::sync::Arc<HashIndex<i64, u32>> = std::sync::Arc::new(HashIndex::new());
+
+        if let Some(records) = self.tables.get(table) {
+            for (row_id, record) in records.iter().enumerate() {
+                if let Some(value) = record.get(column_index) {
+                    if let Some(key) = value.to_index_key() {
+                        hash_index.insert(key, row_id as u32);
+                    }
+                }
+            }
+        }
+
+        self.hash_indexes.insert(index_name, hash_index);
+        Ok(())
+    }
+
     fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
         let index_name = format!("{}_{}", table, column);
         self.indexes.remove(&index_name);
+        self.hash_indexes.remove(&index_name);
         Ok(())
     }
 
     fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
         let index_name = format!("{}_{}", table, column);
+        // First try hash index for O(1) lookup
+        if let Some(hash_idx) = self.hash_indexes.get(&index_name) {
+            if let Some(row_id) = hash_idx.get(&key) {
+                return vec![row_id];
+            }
+            return Vec::new();
+        }
+        // Fall back to B+Tree index
         self.indexes
             .get(&index_name)
             .map(|tree| tree.search_all(key))
