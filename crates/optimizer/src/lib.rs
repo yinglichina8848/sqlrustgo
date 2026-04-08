@@ -12,6 +12,7 @@ pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 pub mod stats_provider;
+pub mod stats_registry;
 
 pub use context::OptimizerContext;
 pub use cost::{AccessMethod, CboOptimizer, PredicateType, SimpleCostModel};
@@ -33,6 +34,7 @@ pub use stats_provider::{
     CachedStatisticsProvider, PersistentStatisticsProvider, StatisticsProviderBuilder,
     StorageStatisticsProvider,
 };
+pub use stats_registry::StatsRegistry;
 
 /// Optimizer trait - interface for query optimization
 pub trait Optimizer {
