@@ -1015,6 +1015,31 @@ mod tests {
         fn get_auto_increment_counter(&self, _table: &str, _column_index: usize) -> SqlResult<i64> {
             Ok(0)
         }
+
+        fn create_composite_index(
+            &mut self,
+            _table: &str,
+            _columns: Vec<String>,
+        ) -> SqlResult<sqlrustgo_storage::engine::IndexId> {
+            Ok(sqlrustgo_storage::engine::IndexId(0))
+        }
+
+        fn search_composite_index(
+            &self,
+            _index_id: sqlrustgo_storage::engine::IndexId,
+            _key: &sqlrustgo_storage::bplus_tree::index::CompositeKey,
+        ) -> SqlResult<Vec<u32>> {
+            Ok(vec![])
+        }
+
+        fn range_composite_index(
+            &self,
+            _index_id: sqlrustgo_storage::engine::IndexId,
+            _start: &sqlrustgo_storage::bplus_tree::index::CompositeKey,
+            _end: &sqlrustgo_storage::bplus_tree::index::CompositeKey,
+        ) -> SqlResult<Vec<u32>> {
+            Ok(vec![])
+        }
     }
 
     #[test]

@@ -461,6 +461,21 @@ pub struct OrderByItem {
     pub nulls_first: bool, // true = NULLS FIRST, false = NULLS LAST
 }
 
+/// Index hint type (MySQL-style)
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexHintType {
+    UseIndex,
+    ForceIndex,
+    IgnoreIndex,
+}
+
+/// Index hint for query optimization
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexHint {
+    pub hint_type: IndexHintType,
+    pub index_names: Vec<String>,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
@@ -478,6 +493,8 @@ pub struct SelectStatement {
     pub order_by: Option<OrderByClause>,
     // CTE (Common Table Expression) - SQL-99
     pub with_clause: Option<WithClause>,
+    // Index hints for query optimization (MySQL-style USE/FORCE/IGNORE INDEX)
+    pub index_hints: Vec<IndexHint>,
 }
 
 /// Common Table Expression (CTE) - SQL-99
@@ -1187,7 +1204,10 @@ impl Parser {
                 | Some(Token::Order)
                 | Some(Token::Limit)
                 | Some(Token::Having)
-                | Some(Token::Semicolon) => {
+                | Some(Token::Semicolon)
+                | Some(Token::Use)
+                | Some(Token::Force)
+                | Some(Token::Ignore) => {
                     break;
                 }
                 _ => {}
@@ -1269,6 +1289,111 @@ impl Parser {
         }
 
         let table = tables.first().cloned().unwrap_or_default();
+
+        // Parse index hints (USE INDEX, FORCE INDEX, IGNORE INDEX) - MySQL syntax
+        let mut index_hints: Vec<IndexHint> = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Use) => {
+                    self.next(); // consume USE
+                                 // Check for INDEX or KEY
+                    let is_key = if let Some(Token::Identifier(name)) = self.current() {
+                        if name.to_uppercase() == "KEY" {
+                            self.next();
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if !is_key {
+                        // Expect INDEX keyword
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            if name.to_uppercase() == "INDEX" {
+                                self.next();
+                            }
+                        }
+                    }
+                    // Parse index name list in parentheses
+                    self.expect(Token::LParen)?;
+                    let mut index_names = Vec::new();
+                    loop {
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            index_names.push(name.clone());
+                            self.next();
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                    self.expect(Token::RParen)?;
+                    index_hints.push(IndexHint {
+                        hint_type: IndexHintType::UseIndex,
+                        index_names,
+                    });
+                }
+                Some(Token::Force) => {
+                    self.next(); // consume FORCE
+                                 // Expect INDEX
+                    if let Some(Token::Identifier(name)) = self.current() {
+                        if name.to_uppercase() == "INDEX" {
+                            self.next();
+                        }
+                    }
+                    // Parse index name list in parentheses
+                    self.expect(Token::LParen)?;
+                    let mut index_names = Vec::new();
+                    loop {
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            index_names.push(name.clone());
+                            self.next();
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                    self.expect(Token::RParen)?;
+                    index_hints.push(IndexHint {
+                        hint_type: IndexHintType::ForceIndex,
+                        index_names,
+                    });
+                }
+                Some(Token::Ignore) => {
+                    self.next(); // consume IGNORE
+                                 // Expect INDEX
+                    if let Some(Token::Identifier(name)) = self.current() {
+                        if name.to_uppercase() == "INDEX" {
+                            self.next();
+                        }
+                    }
+                    // Parse index name list in parentheses
+                    self.expect(Token::LParen)?;
+                    let mut index_names = Vec::new();
+                    loop {
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            index_names.push(name.clone());
+                            self.next();
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                    self.expect(Token::RParen)?;
+                    index_hints.push(IndexHint {
+                        hint_type: IndexHintType::IgnoreIndex,
+                        index_names,
+                    });
+                }
+                _ => break,
+            }
+        }
 
         // Combine join conditions with WHERE clause
         let mut combined_where: Option<Expression> = None;
@@ -1409,6 +1534,7 @@ impl Parser {
             having,
             order_by,
             with_clause: None,
+            index_hints,
         };
 
         // Check for LIMIT and OFFSET

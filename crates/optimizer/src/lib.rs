@@ -4,6 +4,7 @@
 
 #![allow(clippy::type_complexity)]
 
+pub mod context;
 pub mod cost;
 pub mod network_cost;
 pub mod plan;
@@ -11,7 +12,9 @@ pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 pub mod stats_provider;
+pub mod stats_registry;
 
+pub use context::OptimizerContext;
 pub use cost::{AccessMethod, CboOptimizer, PredicateType, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
@@ -19,9 +22,9 @@ pub use projection_pushdown::{
     ColumnPruner, ProjectionPushdownConfig, ProjectionPushdownOptimizer, ProjectionPushdownRule,
 };
 pub use rules::{
-    ConstantFolding, Expr, ExpressionSimplification, IndexSelect, JoinReordering, JoinType,
-    MatchResult, Operator, Plan, PlanPattern, PredicatePushdown, ProjectionPruning, RuleContext,
-    RuleMeta, SimpleColumnSet, Value,
+    ConstantFolding, Expr, ExpressionSimplification, IndexHint, IndexHintType, IndexSelect,
+    JoinReordering, JoinType, MatchResult, Operator, Plan, PlanPattern, PredicatePushdown,
+    ProjectionPruning, RuleContext, RuleMeta, SimpleColumnSet, Value,
 };
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
@@ -31,6 +34,7 @@ pub use stats_provider::{
     CachedStatisticsProvider, PersistentStatisticsProvider, StatisticsProviderBuilder,
     StorageStatisticsProvider,
 };
+pub use stats_registry::StatsRegistry;
 
 /// Optimizer trait - interface for query optimization
 pub trait Optimizer {

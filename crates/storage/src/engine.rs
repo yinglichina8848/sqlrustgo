@@ -8,8 +8,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::bplus_tree::hash_index::HashIndex;
+use crate::bplus_tree::index::{CompositeBTreeIndex, CompositeKey};
 use crate::bplus_tree::SimpleBPlusTree;
 use crate::columnar::{CompressionConfig, CompressionLevel};
+
+/// 索引唯一标识符
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IndexId(pub u32);
 
 /// Column statistics for a single column
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -181,6 +186,20 @@ pub trait StorageEngine: Send + Sync {
     /// Range query using index - returns row IDs in range [start, end)
     fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
 
+    /// Create a composite (multi-column) index
+    fn create_composite_index(&mut self, table: &str, columns: Vec<String>) -> SqlResult<IndexId>;
+
+    /// Search using composite index - returns row IDs matching the composite key
+    fn search_composite_index(&self, index_id: IndexId, key: &CompositeKey) -> SqlResult<Vec<u32>>;
+
+    /// Range query using composite index
+    fn range_composite_index(
+        &self,
+        index_id: IndexId,
+        start: &CompositeKey,
+        end: &CompositeKey,
+    ) -> SqlResult<Vec<u32>>;
+
     /// Create a view
     fn create_view(&mut self, info: ViewInfo) -> SqlResult<()>;
 
@@ -265,6 +284,8 @@ pub struct MemoryStorage {
     indexes: HashMap<String, SimpleBPlusTree>,
     /// Hash indexes for O(1) point lookups
     hash_indexes: HashMap<String, std::sync::Arc<HashIndex<i64, u32>>>,
+    /// Composite (multi-column) indexes
+    composite_indexes: HashMap<IndexId, CompositeBTreeIndex>,
     write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
     auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
     cancel_flag: Option<Arc<AtomicBool>>,
@@ -310,6 +331,7 @@ impl MemoryStorage {
             table_triggers: HashMap::new(),
             indexes: HashMap::new(),
             hash_indexes: HashMap::new(),
+            composite_indexes: HashMap::new(),
             write_callback: None,
             auto_increment_counters: HashMap::new(),
             cancel_flag: None,
@@ -325,6 +347,7 @@ impl MemoryStorage {
             table_triggers: HashMap::new(),
             indexes: HashMap::new(),
             hash_indexes: HashMap::new(),
+            composite_indexes: HashMap::new(),
             write_callback: Some(callback),
             auto_increment_counters: HashMap::new(),
             cancel_flag: None,
@@ -1086,6 +1109,67 @@ impl StorageEngine for MemoryStorage {
             .get(&index_name)
             .map(|tree| tree.range_query(start, end))
             .unwrap_or_default()
+    }
+
+    fn create_composite_index(&mut self, table: &str, columns: Vec<String>) -> SqlResult<IndexId> {
+        let num_columns = columns.len();
+        let mut index = CompositeBTreeIndex::new(num_columns);
+
+        if let Some(records) = self.tables.get(table) {
+            // Get column indices from column names
+            let table_info = self
+                .table_infos
+                .get(table)
+                .ok_or_else(|| SqlError::ExecutionError(format!("Table {} not found", table)))?;
+
+            let column_indices: Vec<usize> = columns
+                .iter()
+                .map(|col_name| {
+                    table_info
+                        .columns
+                        .iter()
+                        .position(|c| &c.name == col_name)
+                        .ok_or_else(|| {
+                            SqlError::ExecutionError(format!(
+                                "Column {} not found in table {}",
+                                col_name, table
+                            ))
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            for (row_id, record) in records.iter().enumerate() {
+                let key = CompositeKey::from_row(record, &column_indices);
+                index.insert(key, row_id as u32);
+            }
+        }
+
+        let id = IndexId(self.composite_indexes.len() as u32);
+        self.composite_indexes.insert(id, index);
+        Ok(id)
+    }
+
+    fn search_composite_index(&self, index_id: IndexId, key: &CompositeKey) -> SqlResult<Vec<u32>> {
+        self.composite_indexes
+            .get(&index_id)
+            .map(|idx| idx.search(key).map(|v| vec![v]).unwrap_or_default())
+            .ok_or_else(|| {
+                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id)).into()
+            })
+    }
+
+    fn range_composite_index(
+        &self,
+        index_id: IndexId,
+        start: &CompositeKey,
+        end: &CompositeKey,
+    ) -> SqlResult<Vec<u32>> {
+        self.composite_indexes
+            .get(&index_id)
+            .map(|idx| idx.range_query(start, end))
+            .ok_or_else(|| {
+                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id)).into()
+            })
     }
 
     fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {

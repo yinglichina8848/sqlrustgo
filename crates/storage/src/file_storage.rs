@@ -1472,6 +1472,37 @@ impl StorageEngine for FileStorage {
         })?;
         Ok(*table_counters.get(&column_index).unwrap_or(&0))
     }
+
+    fn create_composite_index(
+        &mut self,
+        _table: &str,
+        _columns: Vec<String>,
+    ) -> SqlResult<crate::engine::IndexId> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+
+    fn search_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _key: &crate::bplus_tree::index::CompositeKey,
+    ) -> SqlResult<Vec<u32>> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+
+    fn range_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _start: &crate::bplus_tree::index::CompositeKey,
+        _end: &crate::bplus_tree::index::CompositeKey,
+    ) -> SqlResult<Vec<u32>> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
