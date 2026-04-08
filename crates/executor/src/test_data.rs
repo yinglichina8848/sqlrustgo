@@ -188,6 +188,7 @@ impl TestTableBuilder {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             })
             .collect();
         sqlrustgo_storage::TableInfo {
