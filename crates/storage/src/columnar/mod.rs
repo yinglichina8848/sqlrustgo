@@ -7,5 +7,7 @@ pub mod segment;
 pub mod storage;
 
 pub use chunk::{Bitmap, ColumnChunk, ColumnStats};
-pub use segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
+pub use segment::{
+    ColumnSegment, ColumnStatsDisk, CompressionConfig, CompressionLevel, CompressionType,
+};
 pub use storage::{ColumnarStorage, TableStore};
