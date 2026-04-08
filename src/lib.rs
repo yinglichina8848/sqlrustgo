@@ -3026,6 +3026,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();
@@ -3067,6 +3068,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();
@@ -3088,6 +3090,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 }],
             })
             .unwrap();
