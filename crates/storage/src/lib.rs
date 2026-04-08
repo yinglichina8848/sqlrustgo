@@ -15,6 +15,7 @@ pub mod engine;
 pub mod failover_manager;
 pub mod file_storage;
 pub mod heap;
+pub mod index_registry;
 pub mod mmap_vector_store;
 pub mod page;
 pub mod page_guard;
@@ -50,12 +51,13 @@ pub use columnar::{
 
 pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
 pub use engine::{
-    ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
-    TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
+    ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, IndexId, MemoryStorage, Record,
+    StorageEngine, TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
 };
 pub use failover_manager::{FailoverConfig, FailoverManager, FailoverState, NodeInfo, NodeType};
 pub use file_storage::FileStorage;
 pub use heap::{HeapStorage, RowId};
+pub use index_registry::{IndexMeta, IndexRegistry, IndexType};
 pub use page::Page;
 pub use page_guard::PageGuard;
 pub use parquet::{export_to_parquet, import_from_parquet};

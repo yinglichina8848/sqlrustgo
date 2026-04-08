@@ -1,6 +1,7 @@
 //! Disk-based B+Tree index implementation
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo_types::Value;
 use std::collections::{BTreeMap, HashSet};
 use thiserror::Error;
 
@@ -23,24 +24,40 @@ pub struct UniqueConstraintViolation {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub i64);
 
-/// Composite key for multi-column indexes
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
+/// Composite key for multi-column indexes - uses Vec<Value> with lexicographic ordering
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CompositeKey {
-    pub columns: Vec<i64>,
+    /// Column values in order
+    pub values: Vec<Value>,
 }
 
 impl CompositeKey {
-    pub fn new(columns: Vec<i64>) -> Self {
-        Self { columns }
+    pub fn new(values: Vec<Value>) -> Self {
+        Self { values }
     }
 
-    pub fn from_slice(slice: &[i64]) -> Self {
+    pub fn from_slice(slice: &[Value]) -> Self {
         Self {
-            columns: slice.to_vec(),
+            values: slice.to_vec(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    /// Create from a row with specified column indices
+    pub fn from_row(row: &[Value], column_indices: &[usize]) -> Self {
+        Self {
+            values: column_indices
+                .iter()
+                .map(|&i| row.get(i).cloned().unwrap_or(Value::Null))
+                .collect(),
         }
     }
 }
 
+/// Lexicographic ordering for CompositeKey
 impl PartialOrd for CompositeKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -49,18 +66,19 @@ impl PartialOrd for CompositeKey {
 
 impl Ord for CompositeKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        for (a, b) in self.columns.iter().zip(other.columns.iter()) {
-            match a.cmp(b) {
-                std::cmp::Ordering::Equal => continue,
-                other => return other,
+        for (lhs, rhs) in self.values.iter().zip(other.values.iter()) {
+            match lhs.partial_cmp(rhs) {
+                Some(std::cmp::Ordering::Equal) => continue,
+                Some(cmp) => return cmp,
+                None => return std::cmp::Ordering::Equal,
             }
         }
-        self.columns.len().cmp(&other.columns.len())
-    }
+        self.values.len().cmp(&other.values.len())
 }
 
+/// Index value wrapper (row ID in index)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Value(pub u32);
+pub struct IndexValue(pub u32);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BTreeNode {
@@ -601,9 +619,14 @@ impl CompositeBTreeIndex {
     }
 
     fn encode_composite_key(&self, key: &CompositeKey) -> i64 {
-        // Simple encoding: use first column as the key
-        // For full implementation, would need more sophisticated encoding
-        key.columns.first().copied().unwrap_or(0)
+        // Simplified encoding: use first column as i64 for storage
+        // For proper multi-column support, the BTreeNode would need generic key types
+        // This is a temporary solution until the full refactor
+        if let Some(Value::Integer(v)) = key.values.first() {
+            *v
+        } else {
+            0
+        }
     }
 
     fn allocate_node(&mut self, node: BTreeNode) -> u32 {
