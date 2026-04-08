@@ -12,7 +12,7 @@ pub mod rules;
 pub mod stats;
 pub mod stats_provider;
 
-pub use cost::{CboOptimizer, SimpleCostModel};
+pub use cost::{AccessMethod, CboOptimizer, PredicateType, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use projection_pushdown::{

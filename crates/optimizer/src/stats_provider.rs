@@ -282,14 +282,13 @@ mod tests {
 
     #[test]
     fn test_cached_statistics_provider_cache_hit() {
-        let inner = Box::new(crate::stats::InMemoryStatisticsProvider::new());
-        let mut cached = CachedStatisticsProvider::new(inner);
+        let mut inner = crate::stats::InMemoryStatisticsProvider::new();
+        // Add stats to inner provider first (update_stats requires table to exist)
+        inner.add_stats(TableStats::new("test_table").with_row_count(100));
 
-        // Add some stats
-        let stats = TableStats::new("test_table").with_row_count(100);
-        cached.update_stats("test_table", stats).unwrap();
+        let cached = CachedStatisticsProvider::new(Box::new(inner));
 
-        // First call should cache
+        // First call should get from inner provider and cache
         let result = cached.table_stats("test_table");
         assert!(result.is_some());
         assert_eq!(result.unwrap().row_count, 100);

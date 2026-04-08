@@ -337,11 +337,128 @@ impl Default for CboOptimizer {
     }
 }
 
-/// 索引访问方法
+/// 谓词类型 - 用于成本估算决策
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IndexAccessMethod {
-    /// 使用索引扫描 (Hash 或 B+Tree)
-    IndexScan,
-    /// 使用顺序扫描
+pub enum PredicateType {
+    /// 等值谓词 (e.g., WHERE col = 100)
+    Eq,
+    /// 范围谓词 (e.g., WHERE col > 100)
+    Range,
+    /// IN 谓词 (e.g., WHERE col IN (1, 2, 3))
+    In,
+    /// LIKE 谓词 (e.g., WHERE col LIKE '%abc%')
+    Like,
+}
+
+impl PredicateType {
+    /// 从字符串判断谓词类型
+    pub fn from_op(op: &str) -> Self {
+        match op {
+            "=" | "==" | "!=" | "<>" | "<=>" => PredicateType::Eq,
+            ">" | "<" | ">=" | "<=" => PredicateType::Range,
+            "LIKE" | "NOT LIKE" => PredicateType::Like,
+            "IN" | "NOT IN" => PredicateType::In,
+            _ => PredicateType::Eq, // Default to Eq for unknown operators
+        }
+    }
+}
+
+/// 访问方法选择
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccessMethod {
+    /// 顺序扫描
     SeqScan,
+    /// 索引扫描 (B+Tree)
+    IndexScan,
+    /// Hash 索引查找
+    HashIndex,
+}
+
+impl std::fmt::Display for AccessMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessMethod::SeqScan => write!(f, "seq_scan"),
+            AccessMethod::IndexScan => write!(f, "index_scan"),
+            AccessMethod::HashIndex => write!(f, "hash_index"),
+        }
+    }
+}
+
+impl CboOptimizer {
+    /// Estimate cost for range scan using index
+    pub fn estimate_range_scan_cost(&self, table: &str, column: &str, selectivity: f64) -> f64 {
+        if let Some(ref provider) = self.stats_provider {
+            if let Some(stats) = provider.table_stats(table) {
+                let row_count = stats.row_count();
+                let page_count = stats.page_count();
+                let index_pages = ((row_count as f64 * selectivity) / 100.0).max(1.0) as u64;
+
+                return self.cost_model.index_scan_cost(
+                    (row_count as f64 * selectivity) as u64,
+                    index_pages,
+                    page_count,
+                );
+            }
+        }
+        // Default estimate
+        self.cost_model.index_scan_cost(100, 1, 10)
+    }
+
+    /// Select best access method considering all factors
+    pub fn select_best_access_method(
+        &self,
+        table: &str,
+        column: &str,
+        predicate_type: PredicateType,
+    ) -> AccessMethod {
+        let selectivity = self
+            .stats_provider
+            .as_ref()
+            .map(|p| p.selectivity(table, column))
+            .unwrap_or(0.1);
+
+        match predicate_type {
+            PredicateType::Eq => {
+                // For equality, use index if selectivity is low (high cardinality)
+                let threshold = 0.05; // 5%
+                if selectivity < threshold {
+                    AccessMethod::IndexScan
+                } else {
+                    AccessMethod::SeqScan
+                }
+            }
+            PredicateType::Range => {
+                // For range, compare seq_scan vs index_scan costs
+                let seq_cost = self.estimate_scan_cost(table);
+                let range_cost = self.estimate_range_scan_cost(table, column, selectivity);
+                if range_cost < seq_cost {
+                    AccessMethod::IndexScan
+                } else {
+                    AccessMethod::SeqScan
+                }
+            }
+            PredicateType::In => {
+                // IN is similar to multiple EQ, usually benefits from index
+                AccessMethod::IndexScan
+            }
+            PredicateType::Like => {
+                // LIKE with leading wildcard can't use index
+                AccessMethod::SeqScan
+            }
+        }
+    }
+
+    /// Legacy method for backward compatibility
+    pub fn select_access_method_simple(
+        &self,
+        table: &str,
+        column: &str,
+        selectivity_threshold: f64,
+    ) -> &str {
+        let access = self.select_best_access_method(table, column, PredicateType::Eq);
+        match access {
+            AccessMethod::IndexScan if selectivity_threshold < 0.05 => "index_scan",
+            _ => "seq_scan",
+        }
+    }
 }
