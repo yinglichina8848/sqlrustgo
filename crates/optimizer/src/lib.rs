@@ -4,6 +4,7 @@
 
 #![allow(clippy::type_complexity)]
 
+pub mod context;
 pub mod cost;
 pub mod network_cost;
 pub mod plan;
@@ -11,6 +12,7 @@ pub mod projection_pushdown;
 pub mod rules;
 pub mod stats;
 
+pub use context::OptimizerContext;
 pub use cost::{CboOptimizer, SimpleCostModel};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
