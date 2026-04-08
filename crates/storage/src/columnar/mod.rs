@@ -3,6 +3,7 @@
 //! Column-oriented storage structures for SQLRustGo.
 
 pub mod chunk;
+pub mod convert;
 pub mod segment;
 pub mod storage;
 
