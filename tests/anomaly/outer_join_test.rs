@@ -26,6 +26,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 sqlrustgo_storage::ColumnDefinition {
                     name: "value".to_string(),
@@ -65,6 +66,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 sqlrustgo_storage::ColumnDefinition {
                     name: "name".to_string(),
@@ -274,6 +276,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 sqlrustgo_storage::ColumnDefinition {
                     name: "category_id".to_string(),

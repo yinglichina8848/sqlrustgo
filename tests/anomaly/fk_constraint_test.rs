@@ -25,6 +25,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -39,6 +40,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "parent_id".to_string(),
@@ -53,6 +55,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -83,6 +86,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -97,6 +101,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "parent_id".to_string(),
@@ -111,6 +116,7 @@ mod tests {
                         on_delete: None,
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -152,6 +158,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -166,6 +173,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
@@ -180,6 +188,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::Cascade),
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -214,6 +223,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -228,6 +238,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "dept_id".to_string(),
@@ -290,6 +301,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "manager_id".to_string(),
@@ -363,6 +375,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "customer_id".to_string(),
@@ -432,6 +445,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -446,6 +460,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "category_id".to_string(),
@@ -492,6 +507,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "customer_id".to_string(),

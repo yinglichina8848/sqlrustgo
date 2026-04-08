@@ -30,6 +30,7 @@ fn create_test_table_info() -> TableInfo {
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
@@ -39,6 +40,7 @@ fn create_test_table_info() -> TableInfo {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "value".to_string(),
@@ -48,6 +50,7 @@ fn create_test_table_info() -> TableInfo {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "active".to_string(),
