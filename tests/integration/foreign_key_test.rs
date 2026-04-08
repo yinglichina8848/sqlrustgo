@@ -381,57 +381,20 @@ fn test_fk_concurrent_insert_simulation() {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 
     // Create tables
-    {
-        let mut storage = storage.write().unwrap();
-        storage
-            .create_table(&TableInfo {
-                name: "users".to_string(),
-                columns: vec![ColumnDefinition {
-                    name: "id".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
-                }],
-            })
-            .unwrap();
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
 
-        storage
-            .create_table(&TableInfo {
-                name: "orders".to_string(),
-                columns: vec![
-                    ColumnDefinition {
-                        name: "id".to_string(),
-                        data_type: "INTEGER".to_string(),
-                        nullable: false,
-                        is_unique: false,
-                        is_primary_key: false,
-                        references: None,
-                        auto_increment: false,
-                    },
-                    ColumnDefinition {
-                        name: "user_id".to_string(),
-                        data_type: "INTEGER".to_string(),
-                        nullable: false,
-                        is_unique: false,
-                        is_primary_key: false,
-                        references: Some(ForeignKeyConstraint {
-                            referenced_table: "users".to_string(),
-                            referenced_column: "id".to_string(),
-                            on_delete: None,
-on_update: None,
-                        }),
-                        auto_increment: false,
-                        compression: None,
-                    },
-                ],
-            })
-            .unwrap();
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER PRIMARY KEY)").unwrap())
+        .unwrap();
 
-        let result = engine.execute(parse("INSERT INTO orders VALUES (1, 1)").unwrap());
+    engine
+        .execute(
+            parse("CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))")
+                .unwrap(),
+        )
+        .unwrap();
+
+    let result = engine.execute(parse("INSERT INTO orders VALUES (1, 1)").unwrap());
     assert!(result.is_err());
 
     if let Err(e) = result {

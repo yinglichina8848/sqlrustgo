@@ -60,6 +60,7 @@ fn create_test_table_info() -> TableInfo {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
         ],
     }
