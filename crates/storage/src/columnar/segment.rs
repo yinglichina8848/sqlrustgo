@@ -435,7 +435,7 @@ impl ColumnSegment {
             CompressionType::None => compressed_data,
             CompressionType::Snappy => decompress_snappy(&compressed_data)?,
             CompressionType::Zstd => decompress_zstd(&compressed_data)?,
-            CompressionType::Lz4 => decompress_lz4(&compressed_data)?,
+            CompressionType::Lz4 => decompress_lz4(&compressed_data, header.data_size as usize)?,
         };
 
         // Deserialize values
@@ -511,9 +511,9 @@ fn compress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
 }
 
 /// Decompress data using LZ4 (block format)
-fn decompress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
+fn decompress_lz4(data: &[u8], dest_size: usize) -> SegmentResult<Vec<u8>> {
     use lz4_flex::block::decompress;
-    decompress(data, data.len() * 4)
+    decompress(data, dest_size)
         .map_err(|e| SegmentError::Decompression(format!("LZ4 error: {:?}", e)))
 }
 

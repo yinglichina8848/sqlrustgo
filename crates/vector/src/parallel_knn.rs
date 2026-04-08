@@ -23,8 +23,9 @@ pub mod simd {
     #[inline]
     pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         let dot = dot_product(a, b);
-        let norm_a = euclidean_distance_simd(a, a).sqrt();
-        let norm_b = euclidean_distance_simd(b, b).sqrt();
+        // Norm is sqrt(dot_product), not euclidean_distance to self (which is always 0)
+        let norm_a = dot_product(a, a).sqrt();
+        let norm_b = dot_product(b, b).sqrt();
 
         if norm_a == 0.0 || norm_b == 0.0 {
             return 0.0;
