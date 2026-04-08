@@ -31,6 +31,7 @@ members = [
     "crates/gmp",
     "crates/vector",
     "crates/rag",
+    "crates/graph",
     "test/sql92",
 ]
 
@@ -59,6 +60,7 @@ sqlrustgo-network = { path = "crates/network" }
 sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
 sqlrustgo-vector = { path = "crates/vector" }
+sqlrustgo-graph = { path = "crates/graph" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
