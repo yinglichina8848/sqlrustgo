@@ -292,6 +292,7 @@ fn test_index_scan_performance_vs_seqscan() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -351,6 +352,7 @@ fn test_join_performance_hash_join() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -372,6 +374,7 @@ fn test_join_performance_hash_join() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -684,6 +687,7 @@ fn test_composite_index() {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "order_id".to_string(),
@@ -693,6 +697,7 @@ fn test_composite_index() {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
         })
@@ -736,6 +741,7 @@ fn test_covering_index() {
                     is_primary_key: true,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -743,6 +749,7 @@ fn test_covering_index() {
                     nullable: false,
                     is_unique: false,
                     is_primary_key: false,
+                    compression: None,
                     references: None,
                     auto_increment: false,
                 },

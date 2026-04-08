@@ -28,6 +28,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "data".to_string(),
@@ -37,6 +38,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         }
@@ -140,6 +142,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -428,6 +431,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 }],
             };
             storage.lock().unwrap().create_table(&info).unwrap();
