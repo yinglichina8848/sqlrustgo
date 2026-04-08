@@ -352,6 +352,7 @@ fn execute_create_table(
             is_primary_key: false,
             references: None,
             auto_increment: false,
+            compression: None,
         })
         .collect();
 

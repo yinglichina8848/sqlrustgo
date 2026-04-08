@@ -857,6 +857,7 @@ impl JoinReordering {
 #[allow(dead_code)]
 pub struct IndexSelect {
     cost_model: crate::SimpleCostModel,
+    cbo_optimizer: Option<crate::CboOptimizer>,
     available_indexes: Vec<(String, String)>,
 }
 
@@ -864,22 +865,72 @@ impl IndexSelect {
     pub fn new() -> Self {
         Self {
             cost_model: crate::SimpleCostModel::default_model(),
+            cbo_optimizer: None,
             available_indexes: Vec::new(),
         }
     }
 
+    /// Add a statistics provider for cost estimation
+    pub fn with_stats_provider(mut self, provider: Box<dyn crate::StatisticsProvider>) -> Self {
+        // Create a CBO optimizer with the stats provider
+        self.cbo_optimizer = Some(crate::CboOptimizer::new().with_stats_provider(provider));
+        self
+    }
+
+    /// Add an available index for a table
     pub fn with_index(mut self, table: impl Into<String>, index: impl Into<String>) -> Self {
         self.available_indexes.push((table.into(), index.into()));
         self
     }
 
     fn should_use_index(&self, table: &str, predicate: &Expr) -> bool {
-        for (t, _) in &self.available_indexes {
-            if t == table {
-                return self.is_indexable_predicate(predicate);
+        // First check if predicate is indexable
+        if !self.is_indexable_predicate(predicate) {
+            return false;
+        }
+
+        // Check if table has an index
+        let has_index = self.available_indexes.iter().any(|(t, _)| t == table);
+        if !has_index {
+            return false;
+        }
+
+        // If we have a CBO optimizer with stats, use cost-based decision
+        if let Some(ref cbo) = self.cbo_optimizer {
+            let column = self.extract_column_name(predicate);
+            let predicate_type = self.classify_predicate(predicate);
+            let access_method = cbo.select_best_access_method(table, &column, predicate_type);
+            return matches!(access_method, crate::AccessMethod::IndexScan);
+        }
+
+        // Fallback: use index if available and predicate is indexable
+        true
+    }
+
+    /// Extract column name from predicate
+    fn extract_column_name(&self, predicate: &Expr) -> String {
+        if let Expr::BinaryExpr { left, .. } = predicate {
+            if let Expr::Column(col_name) = left.as_ref() {
+                return col_name.clone();
             }
         }
-        false
+        "id".to_string() // Default column
+    }
+
+    /// Classify predicate type for cost estimation
+    fn classify_predicate(&self, predicate: &Expr) -> crate::PredicateType {
+        if let Expr::BinaryExpr { op, .. } = predicate {
+            match op {
+                Operator::Eq => crate::PredicateType::Eq,
+                Operator::Gt | Operator::Lt | Operator::GtEq | Operator::LtEq => {
+                    crate::PredicateType::Range
+                }
+                Operator::Like => crate::PredicateType::Like,
+                _ => crate::PredicateType::Eq,
+            }
+        } else {
+            crate::PredicateType::Eq
+        }
     }
 
     fn is_indexable_predicate(&self, expr: &Expr) -> bool {
