@@ -1071,6 +1071,7 @@ pub fn restore_backup(dir: &Path, target: &Path, clean: bool) -> Result<()> {
                 is_unique: c.is_unique,
                 auto_increment: c.auto_increment,
                 references: None,
+                compression: None,
             })
             .collect();
 
@@ -1278,6 +1279,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: true,
                 auto_increment: true,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
@@ -1287,6 +1289,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "email".to_string(),
@@ -1296,6 +1299,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: true,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "created_at".to_string(),
@@ -1305,6 +1309,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
         ],
     };
@@ -1349,6 +1354,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: true,
                 auto_increment: true,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "user_id".to_string(),
@@ -1363,6 +1369,7 @@ fn create_demo_storage() -> MemoryStorage {
                     on_delete: None,
                     on_update: None,
                 }),
+                compression: None,
             },
             ColumnDefinition {
                 name: "total".to_string(),
@@ -1372,6 +1379,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "status".to_string(),
@@ -1381,6 +1389,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
         ],
     };
@@ -1425,6 +1434,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: true,
                 auto_increment: true,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "name".to_string(),
@@ -1434,6 +1444,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
             ColumnDefinition {
                 name: "price".to_string(),
@@ -1443,6 +1454,7 @@ fn create_demo_storage() -> MemoryStorage {
                 is_unique: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             },
         ],
     };

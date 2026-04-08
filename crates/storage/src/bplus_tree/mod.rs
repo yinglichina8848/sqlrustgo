@@ -10,7 +10,7 @@ pub mod hash_index;
 pub mod index;
 
 pub use index::{
-    deserialize_node, serialize_node, BTreeIndex, BTreeMetadata, BTreeNode, IndexValue, Key,
+    deserialize_node, serialize_node, BTreeIndex, BTreeMetadata, BTreeNode, Key, Value,
 };
 
 pub type BPlusTree = SimpleBPlusTree;

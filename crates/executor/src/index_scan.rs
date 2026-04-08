@@ -170,8 +170,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_storage() -> MemoryStorage {
-        let temp = TempDir::new().unwrap();
-        MemoryStorage::new(temp.path().to_path_buf())
+        MemoryStorage::new()
     }
 
     #[test]
