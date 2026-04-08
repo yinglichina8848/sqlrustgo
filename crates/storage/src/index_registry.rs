@@ -15,7 +15,7 @@ pub enum IndexType {
 }
 
 /// 索引元数据
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndexMeta {
     /// 索引 ID
     pub id: IndexId,

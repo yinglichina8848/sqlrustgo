@@ -16,6 +16,8 @@ pub use parser::ForeignKeyAction;
 pub use parser::ForeignKeyRef;
 pub use parser::FrameBoundInfo;
 pub use parser::GrantStatement;
+pub use parser::IndexHint;
+pub use parser::IndexHintType;
 pub use parser::KillStatement;
 pub use parser::KillType;
 pub use parser::Privilege;
@@ -50,6 +52,7 @@ mod tests {
             having: None,
             order_by: None,
             with_clause: None,
+            index_hints: vec![],
         });
     }
 

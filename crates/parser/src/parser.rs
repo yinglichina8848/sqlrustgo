@@ -461,6 +461,21 @@ pub struct OrderByItem {
     pub nulls_first: bool, // true = NULLS FIRST, false = NULLS LAST
 }
 
+/// Index hint type (MySQL-style)
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexHintType {
+    UseIndex,
+    ForceIndex,
+    IgnoreIndex,
+}
+
+/// Index hint for query optimization
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexHint {
+    pub hint_type: IndexHintType,
+    pub index_names: Vec<String>,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
@@ -478,6 +493,8 @@ pub struct SelectStatement {
     pub order_by: Option<OrderByClause>,
     // CTE (Common Table Expression) - SQL-99
     pub with_clause: Option<WithClause>,
+    // Index hints for query optimization (MySQL-style USE/FORCE/IGNORE INDEX)
+    pub index_hints: Vec<IndexHint>,
 }
 
 /// Common Table Expression (CTE) - SQL-99
@@ -1409,6 +1426,7 @@ impl Parser {
             having,
             order_by,
             with_clause: None,
+            index_hints: Vec::new(),
         };
 
         // Check for LIMIT and OFFSET
