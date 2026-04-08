@@ -11,6 +11,7 @@ sqlrustgo-executor = { path = "../executor" }
 sqlrustgo-catalog = { path = "../catalog" }
 sqlrustgo-storage = { path = "../storage" }
 sqlrustgo-types = { path = "../types" }
+sqlrustgo-rag = { path = "../rag" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 axum = "0.7"

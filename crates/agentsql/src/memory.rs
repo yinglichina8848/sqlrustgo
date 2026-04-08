@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sqlrustgo_rag::{Document, RAGPipeline};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -94,6 +95,7 @@ pub struct MemoryService {
     agent_memories: HashMap<String, Vec<String>>,
     session_memories: HashMap<String, Vec<String>>,
     tag_memories: HashMap<String, Vec<String>>,
+    rag_pipeline: RAGPipeline,
 }
 
 impl MemoryService {
@@ -103,6 +105,7 @@ impl MemoryService {
             agent_memories: HashMap::new(),
             session_memories: HashMap::new(),
             tag_memories: HashMap::new(),
+            rag_pipeline: RAGPipeline::new(),
         }
     }
 
@@ -131,6 +134,11 @@ impl MemoryService {
         };
 
         self.memories.insert(id.clone(), entry);
+
+        // Add to RAG pipeline for full-text search
+        let doc_id = generate_doc_id_from_mem_id(&id);
+        self.rag_pipeline
+            .add_document(Document::new(doc_id, request.content.clone()));
 
         if let Some(ref agent_id) = request.agent_id {
             self.agent_memories
@@ -207,11 +215,13 @@ impl MemoryService {
     }
 
     pub fn search_memory(&self, request: SearchMemoryRequest) -> SearchMemoryResponse {
-        let mut candidates: Vec<&MemoryEntry> = self.memories.values().collect();
-
-        if let Some(ref agent_id) = request.agent_id {
+        // Get agent-filtered candidates first
+        let candidates: Vec<&MemoryEntry> = if let Some(ref agent_id) = request.agent_id {
             if let Some(memory_ids) = self.agent_memories.get(agent_id) {
-                candidates.retain(|m| memory_ids.contains(&m.id));
+                self.memories
+                    .values()
+                    .filter(|m| memory_ids.contains(&m.id))
+                    .collect()
             } else {
                 return SearchMemoryResponse {
                     results: vec![],
@@ -219,18 +229,45 @@ impl MemoryService {
                     scores: vec![],
                 };
             }
+        } else {
+            self.memories.values().collect()
+        };
+
+        // Apply memory_type filter
+        let candidates: Vec<&MemoryEntry> = if let Some(ref memory_type) = request.memory_type {
+            candidates
+                .into_iter()
+                .filter(|m| m.memory_type == *memory_type)
+                .collect()
+        } else {
+            candidates
+        };
+
+        // Use RAG pipeline for full-text search with Chinese support
+        let limit = request.limit.unwrap_or(10);
+        let rag_results = self.rag_pipeline.search(&request.query, limit * 2);
+
+        // Map RAG doc_ids back to memory entries and filter by candidates
+        let mut scored: Vec<(&MemoryEntry, f32)> = Vec::new();
+        for (doc_id, _content) in rag_results {
+            // Find memory entry by doc_id
+            if let Some(memory) = candidates.iter().find(|m| {
+                let mem_doc_id = generate_doc_id_from_mem_id(&m.id);
+                mem_doc_id == doc_id
+            }) {
+                // RAG returned this document, it matches the query
+                // Use importance as additional scoring factor
+                let score = 1.0 + memory.importance;
+                scored.push((memory, score));
+            }
         }
 
-        if let Some(ref memory_type) = request.memory_type {
-            candidates.retain(|m| m.memory_type == *memory_type);
-        }
+        // If RAG returned no results, fall back to keyword matching for remaining candidates
+        if scored.is_empty() {
+            let query_lower = request.query.to_lowercase();
+            let query_terms: Vec<&str> = query_lower.split_whitespace().collect();
 
-        let query_lower = request.query.to_lowercase();
-        let query_terms: Vec<&str> = query_lower.split_whitespace().collect();
-
-        let mut scored: Vec<(&MemoryEntry, f32)> = candidates
-            .into_iter()
-            .filter_map(|m| {
+            for m in &candidates {
                 let mut score = 0.0;
                 let content_lower = m.content.to_lowercase();
                 let mut has_match = false;
@@ -245,22 +282,18 @@ impl MemoryService {
                     }
                 }
 
-                if m.content.to_lowercase().contains(&query_lower) {
+                if content_lower.contains(&query_lower) {
                     score += 2.0;
                 }
 
                 if has_match {
                     score += m.importance;
-                    Some((m, score))
-                } else {
-                    None
+                    scored.push((m, score));
                 }
-            })
-            .collect();
+            }
+        }
 
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let limit = request.limit.unwrap_or(10);
         scored.truncate(limit);
 
         SearchMemoryResponse {
@@ -300,6 +333,10 @@ impl MemoryService {
         let cleared = to_remove.len();
         for id in &to_remove {
             if let Some(memory) = self.memories.remove(id) {
+                // Remove from RAG pipeline
+                let doc_id = generate_doc_id_from_mem_id(id);
+                self.rag_pipeline.delete_document(doc_id);
+
                 if let Some(ref agent_id) = memory.agent_id {
                     if let Some(ids) = self.agent_memories.get_mut(agent_id) {
                         ids.retain(|i| i != id);
@@ -346,6 +383,10 @@ impl MemoryService {
 
     pub fn delete_memory(&mut self, id: &str) -> bool {
         if let Some(memory) = self.memories.remove(id) {
+            // Remove from RAG pipeline
+            let doc_id = generate_doc_id_from_mem_id(id);
+            self.rag_pipeline.delete_document(doc_id);
+
             if let Some(ref agent_id) = memory.agent_id {
                 if let Some(ids) = self.agent_memories.get_mut(agent_id) {
                     ids.retain(|i| i != id);
@@ -389,6 +430,16 @@ fn generate_random_suffix() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     format!("{:x}{:x}", duration.as_secs(), duration.subsec_nanos())
+}
+
+/// Generate a u64 doc_id from a memory id string for RAG pipeline
+fn generate_doc_id_from_mem_id(mem_id: &str) -> u64 {
+    // Use a hash of the memory id to generate a consistent u64
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    mem_id.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[cfg(test)]
@@ -583,5 +634,94 @@ mod tests {
 
         assert_eq!(response.total, 1);
         assert!(response.memories[0].content.contains("Session 1"));
+    }
+
+    #[test]
+    fn test_search_memory_chinese() {
+        let mut service = MemoryService::new();
+
+        // Save Chinese memories
+        service.save_memory(SaveMemoryRequest {
+            content: "Rust编程语言性能优异".to_string(),
+            memory_type: Some(MemoryType::Conversation),
+            tags: None,
+            agent_id: Some("agent1".to_string()),
+            session_id: None,
+            importance: Some(0.8),
+            metadata: None,
+        });
+
+        service.save_memory(SaveMemoryRequest {
+            content: "Python适合数据科学和机器学习".to_string(),
+            memory_type: Some(MemoryType::Conversation),
+            tags: None,
+            agent_id: Some("agent1".to_string()),
+            session_id: None,
+            importance: Some(0.7),
+            metadata: None,
+        });
+
+        // Search with Chinese query
+        let response = service.search_memory(SearchMemoryRequest {
+            query: "Rust 性能".to_string(),
+            agent_id: Some("agent1".to_string()),
+            memory_type: None,
+            limit: Some(10),
+        });
+
+        // Should find the Rust memory
+        assert!(response.total >= 1, "Should find at least one result");
+        assert!(response.results.iter().any(|m| m.content.contains("Rust")));
+    }
+
+    #[test]
+    fn test_search_memory_multilingual() {
+        let mut service = MemoryService::new();
+
+        service.save_memory(SaveMemoryRequest {
+            content: "Hello world".to_string(),
+            memory_type: Some(MemoryType::Conversation),
+            tags: None,
+            agent_id: Some("agent1".to_string()),
+            session_id: None,
+            importance: None,
+            metadata: None,
+        });
+
+        service.save_memory(SaveMemoryRequest {
+            content: "你好世界".to_string(),
+            memory_type: Some(MemoryType::Conversation),
+            tags: None,
+            agent_id: Some("agent1".to_string()),
+            session_id: None,
+            importance: None,
+            metadata: None,
+        });
+
+        // Search Chinese
+        let response_cn = service.search_memory(SearchMemoryRequest {
+            query: "你好".to_string(),
+            agent_id: Some("agent1".to_string()),
+            memory_type: None,
+            limit: Some(10),
+        });
+        assert!(response_cn.total >= 1);
+        assert!(response_cn
+            .results
+            .iter()
+            .any(|m| m.content.contains("你好")));
+
+        // Search English
+        let response_en = service.search_memory(SearchMemoryRequest {
+            query: "Hello".to_string(),
+            agent_id: Some("agent1".to_string()),
+            memory_type: None,
+            limit: Some(10),
+        });
+        assert!(response_en.total >= 1);
+        assert!(response_en
+            .results
+            .iter()
+            .any(|m| m.content.contains("Hello")));
     }
 }
