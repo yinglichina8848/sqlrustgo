@@ -11,6 +11,10 @@ use crate::bplus_tree::hash_index::HashIndex;
 use crate::bplus_tree::SimpleBPlusTree;
 use crate::columnar::{CompressionConfig, CompressionLevel};
 
+/// 索引唯一标识符
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IndexId(pub u32);
+
 /// Column statistics for a single column
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ColumnStats {
