@@ -118,7 +118,7 @@ impl DefaultOptimizer {
         self.rules.push(Box::new(PredicatePushdown::new()));
         self.rules.push(Box::new(ProjectionPruning::new()));
         self.rules.push(Box::new(ExpressionSimplification::new()));
-        self.rules.push(Box::new(IndexSelect::new()));
+        self.rules.push(Box::new(IndexSelect::with_default_ctx()));
         self.rules.push(Box::new(JoinReordering::new()));
     }
 
