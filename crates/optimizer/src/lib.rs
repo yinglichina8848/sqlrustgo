@@ -22,9 +22,9 @@ pub use projection_pushdown::{
     ColumnPruner, ProjectionPushdownConfig, ProjectionPushdownOptimizer, ProjectionPushdownRule,
 };
 pub use rules::{
-    ConstantFolding, Expr, ExpressionSimplification, IndexSelect, JoinReordering, JoinType,
-    MatchResult, Operator, Plan, PlanPattern, PredicatePushdown, ProjectionPruning, RuleContext,
-    RuleMeta, SimpleColumnSet, Value,
+    ConstantFolding, Expr, ExpressionSimplification, IndexHint, IndexHintType, IndexSelect,
+    JoinReordering, JoinType, MatchResult, Operator, Plan, PlanPattern, PredicatePushdown,
+    ProjectionPruning, RuleContext, RuleMeta, SimpleColumnSet, Value,
 };
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
