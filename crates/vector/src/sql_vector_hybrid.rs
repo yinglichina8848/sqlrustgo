@@ -248,6 +248,21 @@ impl HybridSearcher {
         // Return 1.0 for pass, 0.0 for fail (or computed score)
         1.0
     }
+
+    /// Get the number of vectors in the index
+    pub fn len(&self) -> usize {
+        self.vector_index.len()
+    }
+
+    /// Check if the index is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Get the distance metric used by this searcher
+    pub fn metric(&self) -> DistanceMetric {
+        self.metric
+    }
 }
 
 /// Merge parallel search results with SQL scores
