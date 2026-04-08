@@ -58,6 +58,24 @@ pub enum CompressionLevel {
     Custom(i32),
 }
 
+/// Compression configuration for a column
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompressionConfig {
+    /// Compression level
+    pub level: CompressionLevel,
+    /// Auto-select algorithm based on data type
+    pub auto_select: bool,
+}
+
+impl Default for CompressionConfig {
+    fn default() -> Self {
+        Self {
+            level: CompressionLevel::Default,
+            auto_select: true,
+        }
+    }
+}
+
 impl CompressionType {
     /// Get the magic bytes for this compression type
     pub fn magic_bytes(&self) -> [u8; 4] {
