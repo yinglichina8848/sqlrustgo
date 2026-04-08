@@ -11,13 +11,13 @@
 v2.4.0 是 SQLRustGo 的图引擎与智能查询版本，引入 Graph Engine、OpenClaw API、列式存储压缩等核心功能。
 
 ## 发布日期
-**2026-04-09 (RC1)**
+**2026-04-09 (GA)**
 
 ## 代号
 **Graph Intelligence** - 图引擎 + 智能查询版
 
 ## 当前状态
-**RC1 (Release Candidate 1)** - 2026-04-09 进入 RC1 阶段
+**GA (General Availability)** - 2026-04-09 正式发布
 
 ---
 
@@ -178,10 +178,9 @@ v2.4.0 是 SQLRustGo 的图引擎与智能查询版本，引入 Graph Engine、O
 
 ## 下一步计划
 
-- v2.4.0 GA 发布 (待社区反馈)
 - v2.5 开发启动 (GMP 内审 + OpenClaw 调度优化)
 
 ---
 
-*发布版本: v2.4.0-rc1*
+*发布版本: v2.4.0-GA*
 *生成日期: 2026-04-09*
