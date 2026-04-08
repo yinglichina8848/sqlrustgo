@@ -105,17 +105,26 @@ impl MmapVectorStore {
     }
 
     /// Total number of vectors
-    pub fn len(&self) -> usize { self.count }
+    pub fn len(&self) -> usize {
+        self.count
+    }
 
     /// Check if empty
-    pub fn is_empty(&self) -> bool { self.count == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
 
     /// Vector dimension
-    pub fn dimension(&self) -> usize { self.dimension }
+    pub fn dimension(&self) -> usize {
+        self.dimension
+    }
 
     /// Iterate over all vectors
     pub fn iter(&self) -> MmapVectorIter<'_> {
-        MmapVectorIter { store: self, position: 0 }
+        MmapVectorIter {
+            store: self,
+            position: 0,
+        }
     }
 
     /// Check if mmap is loaded
@@ -140,7 +149,10 @@ impl<'a> Iterator for MmapVectorIter<'a> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.store.count - self.position, Some(self.store.count - self.position))
+        (
+            self.store.count - self.position,
+            Some(self.store.count - self.position),
+        )
     }
 }
 
@@ -149,7 +161,11 @@ pub struct MmapVectorStoreBuilder;
 
 impl MmapVectorStoreBuilder {
     /// Create mmap store from a file
-    pub fn from_file(path: &Path, dimension: usize, count: usize) -> std::io::Result<MmapVectorStore> {
+    pub fn from_file(
+        path: &Path,
+        dimension: usize,
+        count: usize,
+    ) -> std::io::Result<MmapVectorStore> {
         let file = std::fs::File::open(path)?;
         let mmap = unsafe { MmapOptions::new().map(&file)? };
         let mut store = MmapVectorStore::from_mmap(mmap, dimension, count);
@@ -158,16 +174,19 @@ impl MmapVectorStoreBuilder {
     }
 
     /// Create and populate a mmap store from vectors
-    pub fn build_from_vectors(vectors: &[(u64, Vec<f32>)], dimension: usize) -> std::io::Result<MmapVectorStore> {
+    pub fn build_from_vectors(
+        vectors: &[(u64, Vec<f32>)],
+        dimension: usize,
+    ) -> std::io::Result<MmapVectorStore> {
         let bytes_per_vector = dimension * 4 + 8;
         let total_bytes = vectors.len() * bytes_per_vector;
-        
+
         let mut file = tempfile::tempfile()?;
         file.set_len(total_bytes as u64)?;
-        
+
         {
             let mut mmap = unsafe { MmapOptions::new().map_mut(&file)? };
-            
+
             for (i, (id, vec)) in vectors.iter().enumerate() {
                 let offset = i * bytes_per_vector;
                 mmap[offset..offset + 8].copy_from_slice(&id.to_le_bytes());
@@ -178,23 +197,27 @@ impl MmapVectorStoreBuilder {
             }
             mmap.flush()?;
         }
-        
+
         let mmap = unsafe { MmapOptions::new().map(&file)? };
         let mut store = MmapVectorStore::from_mmap(mmap, dimension, vectors.len());
         Ok(store)
     }
-    
+
     /// Save vectors to a binary file
-    pub fn save_to_file(vectors: &[(u64, Vec<f32>)], dimension: usize, path: &Path) -> std::io::Result<u64> {
+    pub fn save_to_file(
+        vectors: &[(u64, Vec<f32>)],
+        dimension: usize,
+        path: &Path,
+    ) -> std::io::Result<u64> {
         let bytes_per_vector = dimension * 4 + 8;
         let count = vectors.len() as u64;
         let total_bytes = vectors.len() * bytes_per_vector;
-        
+
         let file = std::fs::File::create(path)?;
         file.set_len(total_bytes as u64)?;
-        
+
         let mut mmap = unsafe { MmapOptions::new().map_mut(&file)? };
-        
+
         for (i, (id, vec)) in vectors.iter().enumerate() {
             let offset = i * bytes_per_vector;
             mmap[offset..offset + 8].copy_from_slice(&id.to_le_bytes());
@@ -203,7 +226,7 @@ impl MmapVectorStoreBuilder {
                 mmap[data_offset..data_offset + 4].copy_from_slice(&val.to_le_bytes());
             }
         }
-        
+
         mmap.flush()?;
         drop(mmap);
         drop(file);
