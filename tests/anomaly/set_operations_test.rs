@@ -22,6 +22,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -46,6 +47,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
@@ -122,6 +124,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).ok();
@@ -177,6 +180,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 }],
             };
             storage.create_table(&info).ok();
