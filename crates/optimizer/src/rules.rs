@@ -1120,7 +1120,7 @@ impl RuleMeta {
 }
 
 /// Index hint type for query optimization (MySQL-style)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexHintType {
     UseIndex,
     ForceIndex,
@@ -1128,7 +1128,7 @@ pub enum IndexHintType {
 }
 
 /// Index hint for query optimization
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexHint {
     pub hint_type: IndexHintType,
     pub index_names: Vec<String>,
@@ -2493,5 +2493,96 @@ mod tests {
         } else {
             panic!("Expected Filter plan");
         }
+    }
+
+    // ===== IndexHint and RuleContext tests =====
+
+    #[test]
+    fn test_index_hint_type_derives() {
+        let hint_use = IndexHintType::UseIndex;
+        let hint_force = IndexHintType::ForceIndex;
+        let hint_ignore = IndexHintType::IgnoreIndex;
+
+        // Test Clone
+        let hint_use_clone = hint_use.clone();
+        assert_eq!(hint_use, hint_use_clone);
+
+        // Test PartialEq
+        assert_eq!(hint_use, IndexHintType::UseIndex);
+        assert_ne!(hint_use, hint_force);
+        assert_ne!(hint_use, hint_ignore);
+
+        // Test Eq (requires all fields to implement Eq)
+        assert_eq!(hint_use, hint_use); // Reflexive
+    }
+
+    #[test]
+    fn test_index_hint_derives() {
+        let hint = IndexHint {
+            hint_type: IndexHintType::UseIndex,
+            index_names: vec!["idx_id".to_string(), "idx_name".to_string()],
+        };
+
+        // Test Clone
+        let hint_clone = hint.clone();
+        assert_eq!(hint, hint_clone);
+
+        // Test PartialEq
+        assert_eq!(hint, hint);
+        assert_ne!(
+            hint,
+            IndexHint {
+                hint_type: IndexHintType::ForceIndex,
+                index_names: vec!["idx_id".to_string()],
+            }
+        );
+
+        // Test Eq
+        assert_eq!(hint, hint);
+    }
+
+    #[test]
+    fn test_rule_context_with_index_hints() {
+        let hints = vec![
+            IndexHint {
+                hint_type: IndexHintType::UseIndex,
+                index_names: vec!["idx_id".to_string()],
+            },
+            IndexHint {
+                hint_type: IndexHintType::IgnoreIndex,
+                index_names: vec!["idx_old".to_string()],
+            },
+        ];
+
+        let ctx = RuleContext::with_index_hints(hints.clone());
+
+        assert_eq!(ctx.index_hints.len(), 2);
+        assert_eq!(ctx.index_hints[0].hint_type, IndexHintType::UseIndex);
+        assert_eq!(ctx.index_hints[0].index_names[0], "idx_id");
+        assert_eq!(ctx.index_hints[1].hint_type, IndexHintType::IgnoreIndex);
+    }
+
+    #[test]
+    fn test_rule_context_new_has_empty_hints() {
+        let ctx = RuleContext::new();
+        assert!(ctx.index_hints.is_empty());
+        assert_eq!(ctx.depth, 0);
+        assert_eq!(ctx.rules_applied, 0);
+        assert!(ctx.continue_optimization);
+    }
+
+    #[test]
+    fn test_index_hint_multiple_index_names() {
+        let hint = IndexHint {
+            hint_type: IndexHintType::UseIndex,
+            index_names: vec![
+                "idx_primary".to_string(),
+                "idxSecondary".to_string(),
+                "IDX_TERTIARY".to_string(),
+            ],
+        };
+
+        assert_eq!(hint.index_names.len(), 3);
+        assert_eq!(hint.index_names[0], "idx_primary");
     }
 }

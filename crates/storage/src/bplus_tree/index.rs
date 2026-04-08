@@ -57,6 +57,50 @@ impl CompositeKey {
     }
 }
 
+/// Compare two Values with a total order.
+/// Null is considered less than any other value.
+/// When types differ, ordering is based on type variant order.
+fn compare_values(lhs: &Value, rhs: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    // Define type precedence for total ordering across variants
+    fn type_order(v: &Value) -> u8 {
+        match v {
+            Value::Null => 0,
+            Value::Boolean(_) => 1,
+            Value::Integer(_) => 2,
+            Value::Float(_) => 3,
+            Value::Decimal(_) => 4,
+            Value::Text(_) => 5,
+            Value::Blob(_) => 6,
+            Value::Date(_) => 7,
+            Value::Timestamp(_) => 8,
+            Value::Uuid(_) => 9,
+            Value::Array(_) => 10,
+            Value::Enum(_, _) => 11,
+        }
+    }
+
+    // If both are Null, they're equal
+    match (lhs, rhs) {
+        (Value::Null, Value::Null) => Ordering::Equal,
+        (Value::Null, _) => Ordering::Less,
+        (_, Value::Null) => Ordering::Greater,
+        _ => {
+            // First compare by type order
+            let type_cmp = type_order(lhs).cmp(&type_order(rhs));
+            if type_cmp != Ordering::Equal {
+                return type_cmp;
+            }
+            // Same type - use PartialOrd
+            match lhs.partial_cmp(rhs) {
+                Some(cmp) => cmp,
+                None => Ordering::Equal, // Shouldn't happen for same-type comparisons
+            }
+        }
+    }
+}
+
 /// Lexicographic ordering for CompositeKey
 impl PartialOrd for CompositeKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -67,10 +111,9 @@ impl PartialOrd for CompositeKey {
 impl Ord for CompositeKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         for (lhs, rhs) in self.values.iter().zip(other.values.iter()) {
-            match lhs.partial_cmp(rhs) {
-                Some(std::cmp::Ordering::Equal) => continue,
-                Some(cmp) => return cmp,
-                None => return std::cmp::Ordering::Equal,
+            let cmp = compare_values(lhs, rhs);
+            if cmp != std::cmp::Ordering::Equal {
+                return cmp;
             }
         }
         self.values.len().cmp(&other.values.len())
