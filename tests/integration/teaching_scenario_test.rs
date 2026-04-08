@@ -121,6 +121,7 @@ fn test_hash_join_with_condition() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -146,6 +147,7 @@ fn test_hash_join_with_condition() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -462,6 +464,7 @@ fn test_multiple_joins() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
@@ -483,6 +486,7 @@ fn test_multiple_joins() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();

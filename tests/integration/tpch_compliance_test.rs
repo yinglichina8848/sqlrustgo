@@ -38,6 +38,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "r_name".to_string(),
@@ -47,6 +48,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "r_comment".to_string(),
@@ -56,6 +58,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -72,6 +75,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "n_name".to_string(),
@@ -81,6 +85,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "n_regionkey".to_string(),
@@ -90,6 +95,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "n_comment".to_string(),
@@ -99,6 +105,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -115,6 +122,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_name".to_string(),
@@ -124,6 +132,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_address".to_string(),
@@ -133,6 +142,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_nationkey".to_string(),
@@ -142,6 +152,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_phone".to_string(),
@@ -151,6 +162,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_acctbal".to_string(),
@@ -160,6 +172,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_mktsegment".to_string(),
@@ -169,6 +182,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "c_comment".to_string(),
@@ -178,6 +192,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -194,6 +209,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_name".to_string(),
@@ -203,6 +219,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_address".to_string(),
@@ -212,6 +229,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_nationkey".to_string(),
@@ -221,6 +239,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_phone".to_string(),
@@ -230,6 +249,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_acctbal".to_string(),
@@ -239,6 +259,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "s_comment".to_string(),
@@ -248,6 +269,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -264,6 +286,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_name".to_string(),
@@ -273,6 +296,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_mfgr".to_string(),
@@ -282,6 +306,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_brand".to_string(),
@@ -291,6 +316,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_type".to_string(),
@@ -300,6 +326,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_size".to_string(),
@@ -309,6 +336,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_container".to_string(),
@@ -318,6 +346,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_retailprice".to_string(),
@@ -327,6 +356,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "p_comment".to_string(),
@@ -336,6 +366,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -352,6 +383,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "ps_suppkey".to_string(),
@@ -361,6 +393,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "ps_availqty".to_string(),
@@ -370,6 +403,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "ps_supplycost".to_string(),
@@ -379,6 +413,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "ps_comment".to_string(),
@@ -388,6 +423,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -404,6 +440,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_custkey".to_string(),
@@ -413,6 +450,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_orderstatus".to_string(),
@@ -422,6 +460,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_totalprice".to_string(),
@@ -431,6 +470,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_orderdate".to_string(),
@@ -440,6 +480,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_orderpriority".to_string(),
@@ -449,6 +490,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_clerk".to_string(),
@@ -458,6 +500,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_shippriority".to_string(),
@@ -467,6 +510,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "o_comment".to_string(),
@@ -476,6 +520,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
@@ -492,6 +537,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_partkey".to_string(),
@@ -501,6 +547,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_suppkey".to_string(),
@@ -510,6 +557,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_linenumber".to_string(),
@@ -519,6 +567,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_quantity".to_string(),
@@ -528,6 +577,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_extendedprice".to_string(),
@@ -537,6 +587,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_discount".to_string(),
@@ -546,6 +597,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_tax".to_string(),
@@ -555,6 +607,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_returnflag".to_string(),
@@ -564,6 +617,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_linestatus".to_string(),
@@ -573,6 +627,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_shipdate".to_string(),
@@ -582,6 +637,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_commitdate".to_string(),
@@ -591,6 +647,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_receiptdate".to_string(),
@@ -600,6 +657,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_shipinstruct".to_string(),
@@ -609,6 +667,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_shipmode".to_string(),
@@ -618,6 +677,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "l_comment".to_string(),
@@ -627,6 +687,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         references: None,
                         is_primary_key: false,
                         auto_increment: false,
+                        compression: None,
                     },
                 ],
             })
