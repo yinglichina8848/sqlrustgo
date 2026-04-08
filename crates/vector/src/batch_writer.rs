@@ -5,8 +5,8 @@
 use crate::error::{VectorError, VectorResult};
 use crate::parallel_knn::ParallelKnnIndex;
 use crate::traits::VectorIndex;
-use std::thread;
 use std::sync::{Arc, RwLock};
+use std::thread;
 
 /// Batch write configuration
 #[derive(Debug, Clone)]
@@ -50,10 +50,7 @@ impl BatchVectorWriter {
         }
     }
 
-    pub fn with_config(
-        metric: crate::metrics::DistanceMetric,
-        config: BatchWriteConfig,
-    ) -> Self {
+    pub fn with_config(metric: crate::metrics::DistanceMetric, config: BatchWriteConfig) -> Self {
         Self {
             index: Arc::new(RwLock::new(ParallelKnnIndex::with_config(
                 metric,
@@ -74,17 +71,17 @@ impl BatchVectorWriter {
             let mut buffer = self.buffer.write().unwrap();
             buffer.push((id, vector));
         }
-        
+
         {
             let mut count = self.pending_count.write().unwrap();
             *count += 1;
         }
-        
+
         // Auto-flush if threshold reached
         if self.should_flush() {
             self.flush()?;
         }
-        
+
         Ok(())
     }
 
@@ -99,11 +96,11 @@ impl BatchVectorWriter {
             let mut pending = self.pending_count.write().unwrap();
             *pending += count;
         }
-        
+
         if self.should_flush() {
             self.flush()?;
         }
-        
+
         Ok(count)
     }
 
@@ -119,19 +116,19 @@ impl BatchVectorWriter {
             let mut buffer = self.buffer.write().unwrap();
             std::mem::take(&mut *buffer)
         };
-        
+
         if vectors.is_empty() {
             return Ok(());
         }
-        
+
         let mut count = self.pending_count.write().unwrap();
         *count = 0;
         drop(count);
-        
+
         if self.config.async_indexing {
             let index = Arc::clone(&self.index);
             let metric = self.index.read().unwrap().metric();
-            
+
             thread::spawn(move || {
                 let mut index = index.write().unwrap();
                 for (id, vector) in vectors {
@@ -146,7 +143,7 @@ impl BatchVectorWriter {
                 index.insert(id, &vector)?;
             }
         }
-        
+
         Ok(())
     }
 
@@ -156,20 +153,20 @@ impl BatchVectorWriter {
             let mut buffer = self.buffer.write().unwrap();
             std::mem::take(&mut *buffer)
         };
-        
+
         let mut count = self.pending_count.write().unwrap();
         *count = 0;
         drop(count);
-        
+
         if vectors.is_empty() {
             return Ok(());
         }
-        
+
         let mut index = self.index.write().unwrap();
         for (id, vector) in vectors {
             index.insert(id, &vector)?;
         }
-        
+
         Ok(())
     }
 
@@ -203,12 +200,12 @@ mod tests {
     #[test]
     fn test_batch_writer_insert() {
         let mut writer = BatchVectorWriter::new(crate::metrics::DistanceMetric::Cosine);
-        
+
         for i in 0..100 {
             let v = vec![i as f32; 128];
             writer.insert(i, v).unwrap();
         }
-        
+
         assert_eq!(writer.pending(), 100);
     }
 
@@ -220,17 +217,15 @@ mod tests {
             async_indexing: false,
             num_threads: 1,
         };
-        
-        let mut writer = BatchVectorWriter::with_config(
-            crate::metrics::DistanceMetric::Euclidean,
-            config,
-        );
-        
+
+        let mut writer =
+            BatchVectorWriter::with_config(crate::metrics::DistanceMetric::Euclidean, config);
+
         for i in 0..100 {
             let v = vec![i as f32; 64];
             writer.insert(i, v).unwrap();
         }
-        
+
         // Should have auto-flushed at 50
         assert_eq!(writer.pending(), 0);
         assert_eq!(writer.indexed_count(), 100);
@@ -239,11 +234,9 @@ mod tests {
     #[test]
     fn test_batch_insert() {
         let mut writer = BatchVectorWriter::new(crate::metrics::DistanceMetric::Cosine);
-        
-        let vectors: Vec<_> = (0..1000)
-            .map(|i| (i as u64, vec![i as f32; 128]))
-            .collect();
-        
+
+        let vectors: Vec<_> = (0..1000).map(|i| (i as u64, vec![i as f32; 128])).collect();
+
         let count = writer.batch_insert(vectors).unwrap();
         assert_eq!(count, 1000);
     }
@@ -251,14 +244,14 @@ mod tests {
     #[test]
     fn test_flush_sync() {
         let mut writer = BatchVectorWriter::new(crate::metrics::DistanceMetric::Cosine);
-        
+
         for i in 0..100 {
             let v = vec![i as f32; 64];
             writer.insert(i, v).unwrap();
         }
-        
+
         writer.flush_sync().unwrap();
-        
+
         assert_eq!(writer.pending(), 0);
         assert_eq!(writer.indexed_count(), 100);
     }

@@ -41,6 +41,8 @@ pub enum CompressionType {
     Snappy,
     /// Zstd compression
     Zstd,
+    /// LZ4 compression (high speed, moderate compression)
+    Lz4,
 }
 
 impl CompressionType {
@@ -50,6 +52,7 @@ impl CompressionType {
             CompressionType::None => *b"NONE",
             CompressionType::Snappy => *b"SNAP",
             CompressionType::Zstd => *b"ZSTD",
+            CompressionType::Lz4 => *b"LZ4 ",
         }
     }
 
@@ -59,6 +62,7 @@ impl CompressionType {
             b"NONE" => Some(CompressionType::None),
             b"SNAP" => Some(CompressionType::Snappy),
             b"ZSTD" => Some(CompressionType::Zstd),
+            b"LZ4 " => Some(CompressionType::Lz4),
             _ => None,
         }
     }
@@ -329,6 +333,14 @@ impl ColumnSegment {
                     (values_json.clone(), CompressionType::None)
                 }
             }
+            CompressionType::Lz4 => {
+                let compressed = compress_lz4(&values_json)?;
+                if compressed.len() < values_json.len() {
+                    (compressed, CompressionType::Lz4)
+                } else {
+                    (values_json.clone(), CompressionType::None)
+                }
+            }
         };
 
         // Build header
@@ -422,6 +434,7 @@ impl ColumnSegment {
             CompressionType::None => compressed_data,
             CompressionType::Snappy => decompress_snappy(&compressed_data)?,
             CompressionType::Zstd => decompress_zstd(&compressed_data)?,
+            CompressionType::Lz4 => decompress_lz4(&compressed_data)?,
         };
 
         // Deserialize values
@@ -490,6 +503,19 @@ fn decompress_zstd(data: &[u8]) -> SegmentResult<Vec<u8>> {
     Ok(decompressed)
 }
 
+/// Compress data using LZ4
+fn compress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
+    lz4::block::compress(data, Some(lz4::block::CompressionMode::FAST(1)), false)
+        .map(|v| v.to_vec())
+        .map_err(|e| SegmentError::Compression(format!("LZ4 compress error: {:?}", e)))
+}
+
+/// Decompress data using LZ4
+fn decompress_lz4(data: &[u8]) -> SegmentResult<Vec<u8>> {
+    lz4::block::decompress(data, None)
+        .map_err(|e| SegmentError::Decompression(format!("LZ4 decompress error: {:?}", e)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +526,7 @@ mod tests {
         assert_eq!(CompressionType::None.magic_bytes(), *b"NONE");
         assert_eq!(CompressionType::Snappy.magic_bytes(), *b"SNAP");
         assert_eq!(CompressionType::Zstd.magic_bytes(), *b"ZSTD");
+        assert_eq!(CompressionType::Lz4.magic_bytes(), *b"LZ4 ");
 
         assert_eq!(
             CompressionType::from_magic(b"NONE"),
@@ -512,6 +539,10 @@ mod tests {
         assert_eq!(
             CompressionType::from_magic(b"ZSTD"),
             Some(CompressionType::Zstd)
+        );
+        assert_eq!(
+            CompressionType::from_magic(b"LZ4 "),
+            Some(CompressionType::Lz4)
         );
         assert_eq!(CompressionType::from_magic(b"XXXX"), None);
     }
@@ -635,6 +666,58 @@ mod tests {
         assert_eq!(read_values[0], Value::Text("value_0".to_string()));
         assert_eq!(read_values[999], Value::Text("value_999".to_string()));
         assert!(read_bitmap.is_none());
+    }
+
+    #[test]
+    fn test_write_and_read_with_lz4_compression() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("segment_lz4.bin");
+
+        let values: Vec<Value> = (0..1000)
+            .map(|i| Value::Text(format!("compressible_value_{}", i)))
+            .collect();
+
+        let segment = ColumnSegment::with_compression(1, CompressionType::Lz4);
+        segment.write_to_file(&path, &values, None).unwrap();
+
+        let mut read_segment = ColumnSegment::new(0);
+        let (read_values, read_bitmap) = read_segment.read_from_file(&path).unwrap();
+
+        assert_eq!(read_segment.column_id(), 1);
+        assert_eq!(read_values.len(), 1000);
+        assert_eq!(
+            read_values[0],
+            Value::Text("compressible_value_0".to_string())
+        );
+        assert_eq!(
+            read_values[999],
+            Value::Text("compressible_value_999".to_string())
+        );
+        assert!(read_bitmap.is_none());
+
+        // Verify it actually used LZ4 compression (check the compression type stored)
+        assert_eq!(read_segment.compression(), CompressionType::Lz4);
+    }
+
+    #[test]
+    fn test_lz4_compression_ratio() {
+        // Test that LZ4 achieves compression on repetitive data
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("segment_lz4_ratio.bin");
+
+        // Highly repetitive data should compress well
+        let values: Vec<Value> = (0..10000)
+            .map(|i| Value::Text("same_string_value".to_string()))
+            .collect();
+
+        let segment = ColumnSegment::with_compression(1, CompressionType::Lz4);
+        segment.write_to_file(&path, &values, None).unwrap();
+
+        let mut read_segment = ColumnSegment::new(0);
+        let (read_values, _) = read_segment.read_from_file(&path).unwrap();
+
+        assert_eq!(read_values.len(), 10000);
+        assert_eq!(read_values[0], Value::Text("same_string_value".to_string()));
     }
 
     #[test]
