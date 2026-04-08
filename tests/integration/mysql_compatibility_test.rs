@@ -319,6 +319,7 @@ fn test_memory_storage_scan_batch_with_cancel() {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         })
         .unwrap();
