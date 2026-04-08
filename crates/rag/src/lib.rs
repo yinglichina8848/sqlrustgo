@@ -897,6 +897,7 @@ mod sqlrustgo_integration {
                             is_primary_key: true,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::CONTENT.to_string(),
@@ -906,6 +907,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::METADATA.to_string(),
@@ -915,6 +917,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::SOURCE.to_string(),
@@ -924,6 +927,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::VERSION.to_string(),
@@ -933,6 +937,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::CREATED_AT.to_string(),
@@ -942,6 +947,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                         ColumnDefinition {
                             name: columns::UPDATED_AT.to_string(),
@@ -951,6 +957,7 @@ mod sqlrustgo_integration {
                             is_primary_key: false,
                             references: None,
                             auto_increment: false,
+                            compression: None,
                         },
                     ],
                 };
@@ -1198,6 +1205,7 @@ pub mod storage_helpers {
                     is_primary_key: true,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::CONTENT.to_string(),
@@ -1207,6 +1215,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::METADATA.to_string(),
@@ -1216,6 +1225,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::SOURCE.to_string(),
@@ -1225,6 +1235,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::VERSION.to_string(),
@@ -1234,6 +1245,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::CREATED_AT.to_string(),
@@ -1243,6 +1255,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: columns::UPDATED_AT.to_string(),
@@ -1252,6 +1265,7 @@ pub mod storage_helpers {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
         };

@@ -231,6 +231,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: true,
                 references: None,
                 auto_increment: true,
+                compression: None,
             },
             ColumnDefinition {
                 name: "title".to_string(),
@@ -240,6 +241,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "doc_type".to_string(),
@@ -249,6 +251,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "version".to_string(),
@@ -258,6 +261,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "created_at".to_string(),
@@ -267,6 +271,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "updated_at".to_string(),
@@ -276,6 +281,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "effective_date".to_string(),
@@ -285,6 +291,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "status".to_string(),
@@ -294,6 +301,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {
@@ -313,6 +321,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "section".to_string(),
@@ -322,6 +331,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "content".to_string(),
@@ -331,6 +341,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {
@@ -350,6 +361,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
             ColumnDefinition {
                 name: "keyword".to_string(),
@@ -359,6 +371,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 is_primary_key: true,
                 references: None,
                 auto_increment: false,
+                compression: None,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {

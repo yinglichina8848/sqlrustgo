@@ -1,11 +1,8 @@
 //! Optimizer Rules Module
 
-use crate::context::OptimizerContext;
-use crate::cost::IndexAccessMethod;
 use crate::Rule;
 use std::any::Any;
 use std::fmt::Debug;
-use std::sync::Arc;
 
 // =============================================================================
 // Simple Plan Enum for demonstration
@@ -859,44 +856,80 @@ impl JoinReordering {
 /// IndexSelect rule - chooses between index scan and table scan based on cost
 #[allow(dead_code)]
 pub struct IndexSelect {
-    optimizer_ctx: Arc<OptimizerContext>,
+    cost_model: crate::SimpleCostModel,
+    cbo_optimizer: Option<crate::CboOptimizer>,
     available_indexes: Vec<(String, String)>,
 }
 
 impl IndexSelect {
-    pub fn new(optimizer_ctx: Arc<OptimizerContext>) -> Self {
+    pub fn new() -> Self {
         Self {
-            optimizer_ctx,
+            cost_model: crate::SimpleCostModel::default_model(),
+            cbo_optimizer: None,
             available_indexes: Vec::new(),
         }
     }
 
+    /// Add a statistics provider for cost estimation
+    pub fn with_stats_provider(mut self, provider: Box<dyn crate::StatisticsProvider>) -> Self {
+        // Create a CBO optimizer with the stats provider
+        self.cbo_optimizer = Some(crate::CboOptimizer::new().with_stats_provider(provider));
+        self
+    }
+
+    /// Add an available index for a table
     pub fn with_index(mut self, table: impl Into<String>, index: impl Into<String>) -> Self {
         self.available_indexes.push((table.into(), index.into()));
         self
     }
 
-    /// 基于成本的索引选择（纯 CBO，无 heuristic threshold）
-    fn should_use_index(&self, table: &str, predicate: &Expr) -> IndexAccessMethod {
-        // 1. 检查是否有可用索引
+    fn should_use_index(&self, table: &str, predicate: &Expr) -> bool {
+        // First check if predicate is indexable
+        if !self.is_indexable_predicate(predicate) {
+            return false;
+        }
+
+        // Check if table has an index
         let has_index = self.available_indexes.iter().any(|(t, _)| t == table);
         if !has_index {
-            return IndexAccessMethod::SeqScan;
+            return false;
         }
 
-        // 2. 检查谓词是否可索引
-        if !self.is_indexable_predicate(predicate) {
-            return IndexAccessMethod::SeqScan;
+        // If we have a CBO optimizer with stats, use cost-based decision
+        if let Some(ref cbo) = self.cbo_optimizer {
+            let column = self.extract_column_name(predicate);
+            let predicate_type = self.classify_predicate(predicate);
+            let access_method = cbo.select_best_access_method(table, &column, predicate_type);
+            return matches!(access_method, crate::AccessMethod::IndexScan);
         }
 
-        // 3. 纯成本决策：比较 seq_scan 和 index_scan 成本
-        let seq_scan_cost = self.optimizer_ctx.cbo.estimate_scan_cost(table);
-        let index_scan_cost = self.optimizer_ctx.cbo.estimate_index_scan_cost(table, "");
+        // Fallback: use index if available and predicate is indexable
+        true
+    }
 
-        if index_scan_cost < seq_scan_cost {
-            IndexAccessMethod::IndexScan
+    /// Extract column name from predicate
+    fn extract_column_name(&self, predicate: &Expr) -> String {
+        if let Expr::BinaryExpr { left, .. } = predicate {
+            if let Expr::Column(col_name) = left.as_ref() {
+                return col_name.clone();
+            }
+        }
+        "id".to_string() // Default column
+    }
+
+    /// Classify predicate type for cost estimation
+    fn classify_predicate(&self, predicate: &Expr) -> crate::PredicateType {
+        if let Expr::BinaryExpr { op, .. } = predicate {
+            match op {
+                Operator::Eq => crate::PredicateType::Eq,
+                Operator::Gt | Operator::Lt | Operator::GtEq | Operator::LtEq => {
+                    crate::PredicateType::Range
+                }
+                Operator::Like => crate::PredicateType::Like,
+                _ => crate::PredicateType::Eq,
+            }
         } else {
-            IndexAccessMethod::SeqScan
+            crate::PredicateType::Eq
         }
     }
 
@@ -938,16 +971,9 @@ impl IndexSelect {
     }
 }
 
-impl IndexSelect {
-    /// 使用默认 OptimizerContext 创建
-    pub fn with_default_ctx() -> Self {
-        Self::new(Arc::new(OptimizerContext::default()))
-    }
-}
-
 impl Default for IndexSelect {
     fn default() -> Self {
-        Self::with_default_ctx()
+        Self::new()
     }
 }
 
@@ -961,8 +987,7 @@ impl Rule<Plan> for IndexSelect {
         match plan {
             Plan::Filter { input, predicate } => {
                 if let Plan::TableScan { table_name, .. } = input.as_ref() {
-                    if self.should_use_index(table_name, predicate) == IndexAccessMethod::IndexScan
-                    {
+                    if self.should_use_index(table_name, predicate) {
                         let index_scan = self.convert_to_index_scan(table_name, predicate);
                         **input = index_scan;
                         return true;
