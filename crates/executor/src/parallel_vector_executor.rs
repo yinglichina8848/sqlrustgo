@@ -223,6 +223,11 @@ impl ParallelVectorExecutor {
         Ok(Self { partition_agent })
     }
 
+    /// Get the number of partitions
+    pub fn num_partitions(&self) -> usize {
+        self.partition_agent.num_partitions()
+    }
+
     /// Execute parallel scan with vectorized aggregation
     pub fn execute_parallel_scan_agg(
         &self,
@@ -242,22 +247,41 @@ impl ParallelVectorExecutor {
                     Err(_) => return None,
                 };
 
-                // Collect all data chunks
-                let mut all_columns: Vec<ColumnArray> = Vec::new();
+                // Collect all data chunks and accumulate per-column
+                let mut batch_data: Vec<Vec<ColumnArray>> = Vec::new();
+                let mut num_columns = 0;
 
                 while let Ok(Some(chunk)) = executor.next_batch() {
-                    for col in chunk.columns() {
-                        all_columns.push(col.clone());
-                    }
+                    num_columns = chunk.num_columns();
+                    batch_data.push(chunk.columns().to_vec());
                 }
 
                 // If no data, return None
-                if all_columns.is_empty() {
+                if batch_data.is_empty() {
                     return None;
                 }
 
+                // Accumulate all batches into per-column ColumnArrays
+                // batch_data is [batch0_cols, batch1_cols, ...] where each batch_cols is [col0, col1, ...]
+                // We need to accumulate col0 from all batches, col1 from all batches, etc.
+                let mut accumulated_columns: Vec<ColumnArray> = Vec::new();
+
+                for col_idx in 0..num_columns {
+                    // Collect all column arrays for this column index across batches
+                    let mut all_col_arrays: Vec<&ColumnArray> = Vec::new();
+                    for batch in &batch_data {
+                        if let Some(col) = batch.get(col_idx) {
+                            all_col_arrays.push(col);
+                        }
+                    }
+
+                    // Merge all column arrays into one
+                    let merged = merge_column_arrays(&all_col_arrays);
+                    accumulated_columns.push(merged);
+                }
+
                 // Compute aggregates on this partition's data
-                let values = compute_partial_aggregates(&all_columns, &agg_functions);
+                let values = compute_partial_aggregates(&accumulated_columns, &agg_functions);
                 Some(AggregateResult { values })
             })
             .collect();
@@ -375,6 +399,53 @@ impl ParallelVectorExecutor {
             .collect();
 
         Ok(filtered_chunks)
+    }
+}
+
+/// Merge multiple ColumnArrays of the same type into a single ColumnArray
+fn merge_column_arrays(arrays: &[&ColumnArray]) -> ColumnArray {
+    if arrays.is_empty() {
+        return ColumnArray::Null;
+    }
+
+    match arrays[0] {
+        ColumnArray::Int64(_) => {
+            let mut combined: Vec<i64> = Vec::new();
+            for arr in arrays {
+                if let ColumnArray::Int64(v) = arr {
+                    combined.extend(v.iter().copied());
+                }
+            }
+            ColumnArray::Int64(combined)
+        }
+        ColumnArray::Float64(_) => {
+            let mut combined: Vec<f64> = Vec::new();
+            for arr in arrays {
+                if let ColumnArray::Float64(v) = arr {
+                    combined.extend(v.iter().copied());
+                }
+            }
+            ColumnArray::Float64(combined)
+        }
+        ColumnArray::Boolean(_) => {
+            let mut combined: Vec<bool> = Vec::new();
+            for arr in arrays {
+                if let ColumnArray::Boolean(v) = arr {
+                    combined.extend(v.iter().copied());
+                }
+            }
+            ColumnArray::Boolean(combined)
+        }
+        ColumnArray::Text(_) => {
+            let mut combined: Vec<String> = Vec::new();
+            for arr in arrays {
+                if let ColumnArray::Text(v) = arr {
+                    combined.extend(v.iter().cloned());
+                }
+            }
+            ColumnArray::Text(combined)
+        }
+        ColumnArray::Null => ColumnArray::Null,
     }
 }
 
