@@ -643,7 +643,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
-                    compression: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -743,7 +743,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
-                    compression: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -769,7 +769,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
-                    compression: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -801,7 +801,7 @@ mod tests {
                 is_primary_key: false,
                 references: None,
                 auto_increment: false,
-                    compression: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
