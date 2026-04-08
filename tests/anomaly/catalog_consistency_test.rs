@@ -24,6 +24,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "email".to_string(),
@@ -33,6 +34,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -42,6 +44,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         }
@@ -59,6 +62,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
@@ -73,6 +77,7 @@ mod tests {
                         on_delete: Some(ForeignKeyAction::Cascade),
                         on_update: Some(ForeignKeyAction::Cascade),
                     }),
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "amount".to_string(),
@@ -82,6 +87,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         }
@@ -125,6 +131,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "name".to_string(),
@@ -134,6 +141,7 @@ mod tests {
                         is_primary_key: false,
                         auto_increment: false,
                         references: None,
+                        compression: None,
                     },
                 ],
             },
@@ -310,6 +318,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "varchar_col".to_string(),
@@ -319,6 +328,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "real_col".to_string(),
@@ -328,6 +338,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         };
@@ -415,6 +426,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
 
