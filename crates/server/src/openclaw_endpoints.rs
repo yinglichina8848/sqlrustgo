@@ -8,6 +8,9 @@ use crate::metrics_endpoint::MetricsRegistry;
 use crate::scheduler;
 use query_stats::StatsCollector;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_gmp::audit::{self, AuditLog};
+use sqlrustgo_gmp::compliance::{ComplianceCheckRequest, ComplianceResult};
+use sqlrustgo_gmp::report::{AuditReport, CapaReport, DeviationReport};
 use sqlrustgo_parser::parse;
 use sqlrustgo_rag::{Document, OpenClawClient};
 use sqlrustgo_storage::engine::{StorageEngine, Value};
@@ -1147,6 +1150,170 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                         })
                         .to_string();
                         ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // =============================================================================
+                // GMP Audit and Compliance Endpoints
+                // =============================================================================
+
+                // GET /api/v2/gmp/report/audit - Generate audit report
+                ("GET", "/api/v2/gmp/report/audit") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_audit_report(&*storage, start_time, now) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/report/deviation - Generate deviation report
+                ("GET", "/api/v2/gmp/report/deviation") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_deviation_report(
+                        &*storage, start_time, now,
+                    ) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/report/capa - Generate CAPA report
+                ("GET", "/api/v2/gmp/report/capa") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_capa_report(&*storage, start_time, now) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // POST /api/v2/gmp/compliance/check - Run compliance check
+                ("POST", "/api/v2/gmp/compliance/check") => {
+                    let storage = storage.read().unwrap();
+                    let request = ComplianceCheckRequest::default();
+
+                    match sqlrustgo_gmp::compliance::check_batch_compliance(&*storage, &request) {
+                        Ok(result) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&result).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Compliance check failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/audit/logs - Get audit logs
+                ("GET", "/api/v2/gmp/audit/logs") => {
+                    let storage = storage.read().unwrap();
+
+                    match sqlrustgo_gmp::audit::get_all_audit_logs(&*storage) {
+                        Ok(logs) => {
+                            let response = serde_json::json!({
+                                "success": true,
+                                "total": logs.len(),
+                                "logs": logs
+                            });
+                            (
+                                "HTTP/1.1 200 OK",
+                                "application/json",
+                                serde_json::to_string(&response).unwrap_or_else(|_| {
+                                    r#"{"error":"Serialization error"}"#.to_string()
+                                }),
+                            )
+                        }
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Failed to get audit logs: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
                     }
                 }
 
