@@ -1,0 +1,370 @@
+//! Unified Cost Model Module
+//!
+//! Combines SQL, Vector, and Graph cost models for unified cost estimation.
+
+use crate::cost::SimpleCostModel;
+use crate::graph_cost::GraphCostModel;
+use crate::rules::JoinType;
+use crate::unified_plan::UnifiedPlan;
+use crate::vector_cost::VectorCostModel;
+
+/// Execution path types for cost comparison
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionPath {
+    /// Pure SQL execution
+    Sql,
+    /// Pure Vector execution
+    Vector,
+    /// Pure Graph execution
+    Graph,
+    /// Hybrid SQL + Vector execution
+    HybridSqlVector,
+    /// Hybrid SQL + Graph execution
+    HybridSqlGraph,
+    /// Hybrid Vector + Graph execution
+    HybridVectorGraph,
+    /// All three combined
+    Unified,
+}
+
+impl ExecutionPath {
+    /// Check if this path involves hybrid execution
+    pub fn is_hybrid(&self) -> bool {
+        matches!(
+            self,
+            ExecutionPath::HybridSqlVector
+                | ExecutionPath::HybridSqlGraph
+                | ExecutionPath::HybridVectorGraph
+                | ExecutionPath::Unified
+        )
+    }
+
+    /// Check if this path involves vector operations
+    pub fn involves_vector(&self) -> bool {
+        matches!(
+            self,
+            ExecutionPath::Vector
+                | ExecutionPath::HybridSqlVector
+                | ExecutionPath::HybridVectorGraph
+                | ExecutionPath::Unified
+        )
+    }
+
+    /// Check if this path involves graph operations
+    pub fn involves_graph(&self) -> bool {
+        matches!(
+            self,
+            ExecutionPath::Graph
+                | ExecutionPath::HybridSqlGraph
+                | ExecutionPath::HybridVectorGraph
+                | ExecutionPath::Unified
+        )
+    }
+}
+
+/// UnifiedCostModel - combines all cost models for cross-domain optimization
+#[derive(Debug, Clone)]
+pub struct UnifiedCostModel {
+    /// SQL cost model
+    sql_cost_model: SimpleCostModel,
+    /// Vector cost model
+    vector_cost_model: VectorCostModel,
+    /// Graph cost model
+    graph_cost_model: GraphCostModel,
+    /// Vector dimension for cost estimation
+    vector_dimension: u32,
+    /// Graph size for cost estimation
+    graph_size: u64,
+}
+
+impl UnifiedCostModel {
+    /// Create a new UnifiedCostModel with all component models
+    pub fn new(
+        sql_cost_model: SimpleCostModel,
+        vector_cost_model: VectorCostModel,
+        graph_cost_model: GraphCostModel,
+        vector_dimension: u32,
+        graph_size: u64,
+    ) -> Self {
+        Self {
+            sql_cost_model,
+            vector_cost_model,
+            graph_cost_model,
+            vector_dimension,
+            graph_size,
+        }
+    }
+
+    /// Create a UnifiedCostModel with default settings
+    pub fn default_model(vector_dimension: u32, graph_size: u64) -> Self {
+        Self {
+            sql_cost_model: SimpleCostModel::default_model(),
+            vector_cost_model: VectorCostModel::default_model(),
+            graph_cost_model: GraphCostModel::default_model(),
+            vector_dimension,
+            graph_size,
+        }
+    }
+
+    /// Estimate cost for any UnifiedPlan
+    pub fn estimate_cost(&self, plan: &UnifiedPlan) -> f64 {
+        match plan {
+            // Pure SQL operations - delegate to SimpleCostModel
+            UnifiedPlan::TableScan {
+                table_name: _,
+                projection: _,
+            } => {
+                // Simplified: use row_count=1000, page_count=10
+                let row_count = 1000u64;
+                let page_count = 10u64;
+                self.sql_cost_model.seq_scan_cost(row_count, page_count)
+            }
+            UnifiedPlan::IndexScan { .. } => self.sql_cost_model.index_scan_cost(100, 1, 10),
+            UnifiedPlan::Filter { input, .. } => {
+                self.estimate_cost(input) * 1.1 // 10% overhead
+            }
+            UnifiedPlan::Projection { input, .. } => self.estimate_cost(input),
+            UnifiedPlan::Join {
+                left,
+                right,
+                join_type,
+                ..
+            } => {
+                let left_rows = left.estimate_cardinality();
+                let right_rows = right.estimate_cardinality();
+                let join_method = match join_type {
+                    JoinType::Inner => "hash_join",
+                    _ => "nested_loop",
+                };
+                self.sql_cost_model
+                    .join_cost(left_rows, right_rows, join_method)
+            }
+            UnifiedPlan::Aggregate {
+                input, group_by, ..
+            } => {
+                let row_count = input.estimate_cardinality();
+                self.sql_cost_model
+                    .agg_cost(row_count, group_by.len() as u32)
+            }
+            UnifiedPlan::Sort { input, .. } => {
+                let row_count = input.estimate_cardinality();
+                self.sql_cost_model.sort_cost(row_count, 100)
+            }
+            UnifiedPlan::Limit { limit, input } => {
+                self.estimate_cost(input).min(*limit as f64 * 0.1)
+            }
+
+            // Vector operations - delegate to VectorCostModel
+            UnifiedPlan::VectorScan { .. } | UnifiedPlan::HybridVectorScan { .. } => self
+                .vector_cost_model
+                .estimate_plan_cost(plan, self.vector_dimension),
+
+            // Graph operations - delegate to GraphCostModel
+            UnifiedPlan::GraphScan { .. } | UnifiedPlan::HybridGraphScan { .. } => self
+                .graph_cost_model
+                .estimate_plan_cost(plan, self.graph_size),
+
+            // Cross-domain joins - combine costs
+            UnifiedPlan::SqlVectorJoin {
+                sql_plan,
+                vector_plan,
+                ..
+            } => self.estimate_cost(sql_plan) + self.estimate_cost(vector_plan) * 1.2,
+            UnifiedPlan::SqlGraphJoin {
+                sql_plan,
+                graph_plan,
+                ..
+            } => self.estimate_cost(sql_plan) + self.estimate_cost(graph_plan) * 1.2,
+            UnifiedPlan::VectorGraphJoin {
+                vector_plan,
+                graph_plan,
+                ..
+            } => self.estimate_cost(vector_plan) + self.estimate_cost(graph_plan) * 1.2,
+
+            UnifiedPlan::EmptyRelation => 0.0,
+        }
+    }
+
+    /// Select the best execution path for a query
+    pub fn select_best_path(
+        &self,
+        sql_cost: f64,
+        vector_cost: f64,
+        graph_cost: f64,
+        hybrid_sql_vector_cost: Option<f64>,
+        hybrid_sql_graph_cost: Option<f64>,
+    ) -> (ExecutionPath, f64) {
+        let mut candidates = vec![
+            (ExecutionPath::Sql, sql_cost),
+            (ExecutionPath::Vector, vector_cost),
+            (ExecutionPath::Graph, graph_cost),
+        ];
+
+        if let Some(cost) = hybrid_sql_vector_cost {
+            candidates.push((ExecutionPath::HybridSqlVector, cost));
+        }
+        if let Some(cost) = hybrid_sql_graph_cost {
+            candidates.push((ExecutionPath::HybridSqlGraph, cost));
+        }
+
+        // Also consider full unified if we have hybrid costs
+        if let (Some(hsq), Some(hsg)) = (hybrid_sql_vector_cost, hybrid_sql_graph_cost) {
+            candidates.push((ExecutionPath::Unified, sql_cost + hsq + hsg));
+        }
+
+        // Filter out invalid paths (f64::MAX) and find minimum
+        let valid_candidates: Vec<_> = candidates
+            .into_iter()
+            .filter(|(_, cost)| cost.is_finite())
+            .collect();
+
+        if valid_candidates.is_empty() {
+            // Fallback: return SQL if all costs are invalid
+            return (ExecutionPath::Sql, sql_cost);
+        }
+
+        // Find the minimum cost candidate
+        let mut best @ (_, mut best_cost) = valid_candidates[0];
+        for candidate in &valid_candidates[1..] {
+            if candidate.1 < best_cost {
+                best = *candidate;
+                best_cost = candidate.1;
+            }
+        }
+
+        best
+    }
+
+    /// Get the SQL cost model for direct access
+    pub fn sql_model(&self) -> &SimpleCostModel {
+        &self.sql_cost_model
+    }
+
+    /// Get the vector cost model for direct access
+    pub fn vector_model(&self) -> &VectorCostModel {
+        &self.vector_cost_model
+    }
+
+    /// Get the graph cost model for direct access
+    pub fn graph_model(&self) -> &GraphCostModel {
+        &self.graph_cost_model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::unified_plan::{GraphScanType, VectorScanType};
+
+    #[test]
+    fn test_execution_path_is_hybrid() {
+        assert!(ExecutionPath::HybridSqlVector.is_hybrid());
+        assert!(ExecutionPath::HybridSqlGraph.is_hybrid());
+        assert!(ExecutionPath::Unified.is_hybrid());
+        assert!(!ExecutionPath::Sql.is_hybrid());
+        assert!(!ExecutionPath::Vector.is_hybrid());
+    }
+
+    #[test]
+    fn test_execution_path_involves() {
+        assert!(ExecutionPath::Vector.involves_vector());
+        assert!(ExecutionPath::HybridSqlVector.involves_vector());
+        assert!(ExecutionPath::Graph.involves_graph());
+        assert!(ExecutionPath::HybridSqlGraph.involves_graph());
+    }
+
+    #[test]
+    fn test_unified_cost_model_default() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let plan = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_vector_cost() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let plan = UnifiedPlan::VectorScan {
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Knn { k: 10 },
+            limit: Some(10),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_graph_cost() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social_graph".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user_123".to_string()),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_select_best_path() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let (path, cost) = model.select_best_path(100.0, 50.0, 200.0, Some(80.0), Some(150.0));
+        assert_eq!(path, ExecutionPath::Vector);
+        assert_eq!(cost, 50.0);
+    }
+
+    #[test]
+    fn test_select_best_path_sql() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let (path, cost) = model.select_best_path(100.0, 500.0, 200.0, None, None);
+        assert_eq!(path, ExecutionPath::Sql);
+        assert_eq!(cost, 100.0);
+    }
+
+    #[test]
+    fn test_estimate_join_cost() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let left = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let right = UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_sql_vector_join_cost() {
+        let model = UnifiedCostModel::default_model(128, 10000);
+        let sql_plan = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let vector_plan = Box::new(UnifiedPlan::VectorScan {
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Knn { k: 10 },
+            limit: Some(10),
+        });
+        let plan = UnifiedPlan::SqlVectorJoin {
+            sql_plan,
+            vector_plan,
+            join_condition: crate::rules::Expr::Column("user_id".to_string()),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+}
