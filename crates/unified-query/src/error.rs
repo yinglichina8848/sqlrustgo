@@ -38,6 +38,22 @@ impl<T> QueryResult<T> {
             _ => None,
         }
     }
+
+    pub fn unwrap(self) -> T {
+        match self {
+            QueryResult::Ok(t) => t,
+            QueryResult::Partial(warnings) => panic!("QueryResult::Partial({:?})", warnings),
+            QueryResult::Err(msg) => panic!("QueryResult::Err({})", msg),
+        }
+    }
+
+    pub fn expect(self, msg: &str) -> T {
+        match self {
+            QueryResult::Ok(t) => t,
+            QueryResult::Partial(warnings) => panic!("{}: Partial({:?})", msg, warnings),
+            QueryResult::Err(err_msg) => panic!("{}: Err({})", msg, err_msg),
+        }
+    }
 }
 
 #[cfg(test)]
