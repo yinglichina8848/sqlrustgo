@@ -336,7 +336,8 @@ fn bench_10k_knn_performance(c: &mut Criterion) {
 
 fn bench_100k_knn_performance(c: &mut Criterion) {
     let mut group = c.benchmark_group("issue_1343_100k_knn");
-    group.sample_size(20);
+    group.measurement_time(std::time::Duration::from_secs(2));
+    group.sample_size(10);
 
     let size = 100_000;
     let dim = 128;
@@ -355,7 +356,7 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
     });
 
     group.bench_function("hnsw_cosine", |b| {
-        let mut index = HnswIndex::with_params(16, 128, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 64, 32, DistanceMetric::Cosine);
         for (id, v) in vectors.iter() {
             let _ = index.insert(*id, v);
         }
