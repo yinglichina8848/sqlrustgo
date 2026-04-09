@@ -133,6 +133,33 @@ impl TableStore {
         result
     }
 
+    /// Get all data as columnar arrays for vectorized execution
+    /// Returns (schema, columns) where columns is Vec<StorageColumnArray>
+    pub fn scan_columnar(
+        &self,
+    ) -> ColumnarResult<(
+        Vec<String>,
+        Vec<crate::columnar::convert::StorageColumnArray>,
+    )> {
+        use crate::columnar::convert::{IntoStorageColumnArray, StorageColumnArray};
+
+        let schema: Vec<String> = self.info.columns.iter().map(|c| c.name.clone()).collect();
+        let mut columns: Vec<StorageColumnArray> = Vec::with_capacity(self.info.columns.len());
+
+        // Add columns in order
+        for col_idx in 0..self.info.columns.len() {
+            if let Some(col_chunk) = self.columns.get(&col_idx) {
+                let col_array: StorageColumnArray = col_chunk.clone().into_storage_column_array();
+                columns.push(col_array);
+            } else {
+                // Column doesn't exist, add empty/null column
+                columns.push(StorageColumnArray::Null);
+            }
+        }
+
+        Ok((schema, columns))
+    }
+
     /// Get statistics for a column
     pub fn get_column_stats(&self, col_idx: usize) -> Option<&ColumnStats> {
         self.columns.get(&col_idx).map(|c| c.stats())
@@ -341,6 +368,24 @@ impl ColumnarStorage {
 impl Default for ColumnarStorage {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ColumnarStorage {
+    /// Scan entire table and return columnar data for vectorized execution
+    /// Returns (schema, columns) tuple
+    pub fn scan_columnar(
+        &self,
+        table: &str,
+    ) -> ColumnarResult<(
+        Vec<String>,
+        Vec<crate::columnar::convert::StorageColumnArray>,
+    )> {
+        let store = self
+            .tables
+            .get(table)
+            .ok_or_else(|| ColumnarError::TableNotFound(table.to_string()))?;
+        store.scan_columnar()
     }
 }
 
