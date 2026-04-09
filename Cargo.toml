@@ -28,10 +28,12 @@ members = [
     "crates/test-runner",
     "crates/test-results",
     "crates/test-reporter",
+    "crates/mysql-server",
     "crates/gmp",
     "crates/vector",
     "crates/rag",
     "crates/graph",
+    "crates/unified-query",
     "test/sql92",
 ]
 
@@ -61,6 +63,7 @@ sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
 sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
+sqlrustgo-unified-query = { path = "crates/unified-query" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
