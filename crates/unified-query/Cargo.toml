@@ -1,0 +1,19 @@
+[package]
+name = "sqlrustgo-unified-query"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+lru-cache.workspace = true
+parking_lot.workspace = true
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+sqlrustgo-storage.workspace = true
+sqlrustgo-vector.workspace = true
+sqlrustgo-graph.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+
