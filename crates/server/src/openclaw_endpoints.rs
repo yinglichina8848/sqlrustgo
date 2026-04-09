@@ -5,6 +5,7 @@
 //! for AI-powered agent workflows.
 
 use crate::metrics_endpoint::MetricsRegistry;
+use crate::scheduler;
 use query_stats::StatsCollector;
 use serde::{Deserialize, Serialize};
 use sqlrustgo_optimizer::{
@@ -267,6 +268,7 @@ pub struct OpenClawHttpServer {
     storage: Arc<RwLock<dyn StorageEngine>>,
     openclaw_client: Arc<RwLock<OpenClawClient>>,
     query_stats: Arc<StatsCollector>,
+    scheduler_state: Arc<scheduler::SchedulerState>,
 }
 
 impl OpenClawHttpServer {
@@ -285,7 +287,13 @@ impl OpenClawHttpServer {
             storage,
             openclaw_client: Arc::new(RwLock::new(OpenClawClient::new())),
             query_stats: Arc::new(StatsCollector::new(1000)),
+            scheduler_state: Arc::new(scheduler::SchedulerState::new()),
         }
+    }
+
+    /// Get scheduler state
+    pub fn get_scheduler_state(&self) -> Arc<scheduler::SchedulerState> {
+        Arc::clone(&self.scheduler_state)
     }
 
     /// Get server version
@@ -326,6 +334,18 @@ impl OpenClawHttpServer {
         println!("║    - POST /memory/search  - Search memories                   ║");
         println!("║    - POST /memory/clear   - Clear memories                    ║");
         println!("║    - GET  /memory/stats    - Get memory statistics            ║");
+        println!("╠══════════════════════════════════════════════════════════════════╣");
+        println!("║  Scheduler API Endpoints (v2):                                ║");
+        println!("║    - POST /api/v2/scheduler/task      - Create task            ║");
+        println!("║    - GET  /api/v2/scheduler/task/{{id}} - Get task status       ║");
+        println!("║    - GET  /api/v2/scheduler/tasks     - List tasks            ║");
+        println!("║    - DELETE /api/v2/scheduler/task/{{id}} - Delete task         ║");
+        println!("║    - POST /api/v2/scheduler/workflow   - Create workflow      ║");
+        println!("║    - GET  /api/v2/scheduler/workflow/{{id}} - Get workflow      ║");
+        println!("║    - POST /api/v2/scheduler/execute   - Execute workflow      ║");
+        println!("║    - POST /api/v2/scheduler/agent     - Register agent        ║");
+        println!("║    - GET  /api/v2/scheduler/agents    - List agents           ║");
+        println!("║    - POST /api/v2/scheduler/agent/sync - Sync agent status  ║");
         println!("╚══════════════════════════════════════════════════════════════════╝");
 
         for stream in listener.incoming() {
@@ -336,6 +356,7 @@ impl OpenClawHttpServer {
                     let storage = Arc::clone(&self.storage);
                     let openclaw_client = Arc::clone(&self.openclaw_client);
                     let query_stats = Arc::clone(&self.query_stats);
+                    let scheduler_state = Arc::clone(&self.scheduler_state);
 
                     std::thread::spawn(move || {
                         let _ = handle_openclaw_request(
@@ -345,6 +366,7 @@ impl OpenClawHttpServer {
                             &storage,
                             &openclaw_client,
                             &query_stats,
+                            &scheduler_state,
                         );
                     });
                 }
@@ -366,6 +388,7 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
     storage: &Arc<RwLock<dyn StorageEngine>>,
     openclaw_client: &Arc<RwLock<OpenClawClient>>,
     query_stats: &Arc<StatsCollector>,
+    scheduler_state: &Arc<scheduler::SchedulerState>,
 ) -> Result<(), std::io::Error> {
     let mut buffer = [0u8; 8192];
     let bytes_read = stream.read(&mut buffer)?;
@@ -753,6 +776,381 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                         "text/plain; version=0.0.4",
                         prometheus_output,
                     )
+                }
+
+                // =================================================================
+                // Scheduler API Endpoints (v2)
+                // =================================================================
+
+                // POST /api/v2/scheduler/task - Create task
+                ("POST", "/api/v2/scheduler/task") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::CreateTaskRequest>(&body_str) {
+                            Ok(req) => {
+                                let mut task = scheduler::Task::new(req.name, req.payload);
+                                if let Some(desc) = req.description {
+                                    task.description = Some(desc);
+                                }
+                                if let Some(priority) = req.priority {
+                                    task.priority = priority;
+                                }
+                                if let Some(max_retries) = req.max_retries {
+                                    task.max_retries = max_retries;
+                                }
+                                let id = scheduler_state.create_task(task);
+                                let response = scheduler::CreateTaskResponse {
+                                    id,
+                                    status: "pending".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/task/{id} - Get task status
+                ("GET", path) if path.starts_with("/api/v2/scheduler/task/") => {
+                    let task_id = path.strip_prefix("/api/v2/scheduler/task/").unwrap_or("");
+                    if let Some(task) = scheduler_state.get_task(task_id) {
+                        let response = scheduler::GetTaskResponse {
+                            task: Some(task),
+                            error: None,
+                        };
+                        (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    } else {
+                        let response = scheduler::GetTaskResponse {
+                            task: None,
+                            error: Some("Task not found".to_string()),
+                        };
+                        (
+                            "HTTP/1.1 404 Not Found",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    }
+                }
+
+                // GET /api/v2/scheduler/tasks - List all tasks
+                ("GET", "/api/v2/scheduler/tasks") => {
+                    let tasks = scheduler_state.list_tasks();
+                    let response = scheduler::ListTasksResponse {
+                        total: tasks.len(),
+                        tasks,
+                    };
+                    (
+                        "HTTP/1.1 200 OK",
+                        "application/json",
+                        serde_json::to_string(&response)
+                            .unwrap_or_else(|_| r#"{"error":"Serialization error"}"#.to_string()),
+                    )
+                }
+
+                // DELETE /api/v2/scheduler/task/{id} - Delete task
+                ("DELETE", path) if path.starts_with("/api/v2/scheduler/task/") => {
+                    let task_id = path.strip_prefix("/api/v2/scheduler/task/").unwrap_or("");
+                    if scheduler_state.delete_task(task_id) {
+                        let json = serde_json::json!({
+                            "success": true,
+                            "message": "Task deleted"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 200 OK", "application/json", json)
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Task not found"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 404 Not Found", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/scheduler/workflow - Create workflow
+                ("POST", "/api/v2/scheduler/workflow") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::CreateWorkflowRequest>(&body_str) {
+                            Ok(req) => {
+                                let workflow = scheduler::Workflow::new(req.name, req.steps);
+                                let id = scheduler_state.create_workflow(workflow);
+                                let response = scheduler::CreateWorkflowResponse {
+                                    id,
+                                    status: "created".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/workflow/{id} - Get workflow
+                ("GET", path) if path.starts_with("/api/v2/scheduler/workflow/") => {
+                    let workflow_id = path
+                        .strip_prefix("/api/v2/scheduler/workflow/")
+                        .unwrap_or("");
+                    if let Some(workflow) = scheduler_state.get_workflow(workflow_id) {
+                        let response = scheduler::GetWorkflowResponse {
+                            workflow: Some(workflow),
+                            error: None,
+                        };
+                        (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    } else {
+                        let response = scheduler::GetWorkflowResponse {
+                            workflow: None,
+                            error: Some("Workflow not found".to_string()),
+                        };
+                        (
+                            "HTTP/1.1 404 Not Found",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    }
+                }
+
+                // POST /api/v2/scheduler/execute - Execute workflow
+                ("POST", "/api/v2/scheduler/execute") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::ExecuteWorkflowRequest>(&body_str) {
+                            Ok(req) => {
+                                // Check if workflow exists
+                                if scheduler_state.get_workflow(&req.workflow_id).is_none() {
+                                    let response = scheduler::ExecuteWorkflowResponse {
+                                        execution_id: String::new(),
+                                        status: "error".to_string(),
+                                        message: "Workflow not found".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 404 Not Found",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                } else {
+                                    // Create execution record
+                                    let mut execution =
+                                        scheduler::ExecutionRecord::new(req.workflow_id.clone());
+                                    execution.status = scheduler::ExecutionStatus::Running;
+
+                                    // For now, we'll execute synchronously and mark as completed
+                                    // In a full implementation, this would be async
+                                    let execution_id = execution.id.clone();
+                                    scheduler_state.record_execution(execution);
+
+                                    let response = scheduler::ExecuteWorkflowResponse {
+                                        execution_id,
+                                        status: "running".to_string(),
+                                        message: "Workflow execution started".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 202 Accepted",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/scheduler/agent - Register agent
+                ("POST", "/api/v2/scheduler/agent") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::RegisterAgentRequest>(&body_str) {
+                            Ok(req) => {
+                                let agent = scheduler::Agent {
+                                    id: uuid::Uuid::new_v4().to_string(),
+                                    name: req.name,
+                                    status: scheduler::AgentStatus::Idle,
+                                    capabilities: req.capabilities,
+                                    current_task_id: None,
+                                    tasks_completed: 0,
+                                    created_at: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs(),
+                                };
+                                let id = scheduler_state.register_agent(agent);
+                                let response = scheduler::RegisterAgentResponse {
+                                    id,
+                                    status: "registered".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/agents - List all agents
+                ("GET", "/api/v2/scheduler/agents") => {
+                    let agents = scheduler_state.list_agents();
+                    let response = scheduler::ListAgentsResponse {
+                        total: agents.len(),
+                        agents,
+                    };
+                    (
+                        "HTTP/1.1 200 OK",
+                        "application/json",
+                        serde_json::to_string(&response)
+                            .unwrap_or_else(|_| r#"{"error":"Serialization error"}"#.to_string()),
+                    )
+                }
+
+                // POST /api/v2/scheduler/agent/sync - Sync agent status
+                ("POST", "/api/v2/scheduler/agent/sync") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::SyncAgentStatusRequest>(&body_str) {
+                            Ok(req) => {
+                                if scheduler_state.update_agent_status(
+                                    &req.agent_id,
+                                    req.status,
+                                    req.current_task_id,
+                                ) {
+                                    // Update tasks_completed if provided
+                                    if let Some(completed) = req.tasks_completed {
+                                        if let Some(mut agent) =
+                                            scheduler_state.get_agent(&req.agent_id)
+                                        {
+                                            agent.tasks_completed = completed;
+                                        }
+                                    }
+                                    let response = scheduler::SyncAgentStatusResponse {
+                                        success: true,
+                                        message: "Status updated".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 200 OK",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                } else {
+                                    let response = scheduler::SyncAgentStatusResponse {
+                                        success: false,
+                                        message: "Agent not found".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 404 Not Found",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
                 }
 
                 // 404 for all other paths
