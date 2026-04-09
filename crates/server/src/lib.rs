@@ -4,6 +4,7 @@ pub mod health;
 pub mod http_server;
 pub mod metrics_endpoint;
 pub mod openclaw_endpoints;
+pub mod scheduler;
 pub mod teaching_endpoints;
 
 pub mod connection_pool;
@@ -16,6 +17,13 @@ pub use health::{ComponentHealth, HealthChecker, HealthComponent, HealthReport, 
 pub use http_server::HttpServer;
 pub use metrics_endpoint::MetricsRegistry;
 pub use openclaw_endpoints::OpenClawHttpServer;
+pub use scheduler::{
+    Agent, AgentStatus, CreateTaskRequest, CreateTaskResponse, CreateWorkflowRequest,
+    CreateWorkflowResponse, ExecuteWorkflowRequest, ExecuteWorkflowResponse, ExecutionRecord,
+    ExecutionStatus, GetExecutionResponse, GetTaskResponse, GetWorkflowResponse, ListAgentsResponse,
+    ListTasksResponse, RegisterAgentRequest, RegisterAgentResponse, SchedulerState, SyncAgentStatusRequest,
+    SyncAgentStatusResponse, Task, TaskPriority, TaskStatus, Workflow, WorkflowStep,
+};
 pub use teaching_endpoints::{TeachingEndpoints, TeachingHttpServer};
 
 #[cfg(test)]
