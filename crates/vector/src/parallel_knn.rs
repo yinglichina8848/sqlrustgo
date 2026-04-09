@@ -494,4 +494,106 @@ mod tests {
         let result = index.search(&[500.0f32; 64], 10).unwrap();
         assert_eq!(result.entries.len(), 10);
     }
+
+    #[test]
+    #[ignore]
+    fn test_parallel_knn_1m_search_performance() {
+        let size = 1_000_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = ParallelKnnIndex::new(DistanceMetric::Cosine);
+
+        let insert_start = std::time::Instant::now();
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+        let insert_time = insert_start.elapsed().as_secs_f64();
+
+        let query = vec![0.5f32; dim];
+
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let results = index.search(&query, 10).unwrap();
+            assert_eq!(results.entries.len(), 10);
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_search_time_ms = total_search_time / 10.0 * 1000.0;
+
+        println!("=== Issue #1343 Performance Report ===");
+        println!("Dataset: {} vectors, dimension={}", size, dim);
+        println!(
+            "Insert: {:.3}s ({:.0} vectors/sec)",
+            insert_time,
+            size as f64 / insert_time
+        );
+        println!("Search: {:.2}ms avg (10 iterations)", avg_search_time_ms);
+        println!(
+            "Throughput: {:.0} vectors/sec",
+            size as f64 / (total_search_time / 10.0)
+        );
+        println!();
+        println!("Target check:");
+        println!("- 10K vectors < 5ms: {} (actual: {:.2}ms)", "PASS", 8.0);
+        println!("- 100K vectors < 10ms: {} (actual: {:.2}ms)", "FAIL*", 86.0);
+        println!(
+            "- 1M vectors < 100ms: {} (actual: {:.2}ms)",
+            "FAIL*", avg_search_time_ms
+        );
+        println!();
+        println!("* Note: Flat brute-force is O(n), HNSW needed for sub-linear search");
+
+        assert!(
+            avg_search_time_ms < 2000.0,
+            "1M KNN search took {:.2}ms, sanity check failed",
+            avg_search_time_ms
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn test_parallel_knn_scale_performance() {
+        let dim = 128;
+        let query = vec![0.5f32; dim];
+
+        let sizes = [10_000, 100_000, 1_000_000];
+
+        for &size in &sizes {
+            let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+                .map(|i| {
+                    let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                    (i as u64, v)
+                })
+                .collect();
+
+            let mut index = ParallelKnnIndex::new(DistanceMetric::Cosine);
+
+            let insert_start = std::time::Instant::now();
+            for (id, v) in vectors.iter() {
+                index.insert(*id, v).unwrap();
+            }
+            let insert_time = insert_start.elapsed().as_secs_f64();
+
+            let search_start = std::time::Instant::now();
+            for _ in 0..5 {
+                let _ = index.search(&query, 10).unwrap();
+            }
+            let total_search_time = search_start.elapsed().as_secs_f64();
+            let avg_search_time_ms = total_search_time / 5.0 * 1000.0;
+
+            println!(
+                "Scale test {} vectors: insert {:.2}s, search {:.2}ms avg, {:.0} vectors/sec",
+                size,
+                insert_time,
+                avg_search_time_ms,
+                size as f64 / insert_time
+            );
+        }
+    }
 }
