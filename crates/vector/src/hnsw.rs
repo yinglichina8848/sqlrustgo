@@ -7,6 +7,7 @@ use crate::metrics::{compute_similarity, DistanceMetric};
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use parking_lot::RwLock;
 use rand::Rng;
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
@@ -354,6 +355,145 @@ impl VectorIndex for HnswIndex {
     }
 }
 
+impl HnswIndex {
+    fn distance(&self, idx1: usize, idx2: usize) -> f32 {
+        let v1 = &self.nodes[idx1].vector;
+        let v2 = &self.nodes[idx2].vector;
+        -compute_similarity(v1, v2, self.metric)
+    }
+
+    pub fn build_from_vectors(&mut self, vectors: Vec<(u64, Vec<f32>)>) -> VectorResult<()> {
+        if vectors.is_empty() {
+            return Ok(());
+        }
+
+        let dim = vectors[0].1.len();
+        self.dimension = dim;
+
+        for (id, vector) in vectors {
+            let node = HnswNode {
+                id,
+                vector,
+                level: 0,
+            };
+            self.nodes.push(node);
+        }
+
+        let n = self.nodes.len();
+        self.max_level = (n as f64).ln().ceil() as usize;
+        self.max_level = self.max_level.min(16).max(1);
+
+        while self.layers.len() <= self.max_level {
+            self.layers.push(Layer {
+                neighbors: vec![Vec::new(); n],
+            });
+        }
+
+        let m = self.m.max(1);
+        let ef = self.ef_construction.max(m * 4);
+
+        self.build_layer0_graph(n, m, ef)?;
+
+        let mut level = 1;
+        let mut current_n = n;
+
+        while level <= self.max_level && current_n > 1 {
+            self.layers.push(Layer {
+                neighbors: vec![Vec::new(); current_n],
+            });
+
+            let prob = 1.0 / self.m as f32;
+            for i in 0..current_n {
+                let mut lvl = 0;
+                while self.rng.gen::<f32>() < prob && lvl < self.max_level {
+                    lvl += 1;
+                }
+                self.nodes[i].level = lvl.max(self.nodes[i].level);
+            }
+
+            let sample_rate = (m as f32).recip();
+            let mut next_n = 0;
+
+            for i in 0..current_n {
+                if self.rng.gen::<f32>() < sample_rate {
+                    if next_n == i {
+                        next_n += 1;
+                    }
+                }
+            }
+
+            if next_n < 2 {
+                break;
+            }
+
+            current_n = next_n;
+            level += 1;
+        }
+
+        self.entry_point = Some(0);
+
+        Ok(())
+    }
+
+    fn build_layer0_graph(&mut self, n: usize, m: usize, _ef: usize) -> VectorResult<()> {
+        for layer in self.layers.iter_mut() {
+            while layer.neighbors.len() < n {
+                layer.neighbors.push(Vec::new());
+            }
+        }
+
+        let nodes = &self.nodes;
+        let metric = self.metric;
+        let max_candidates = (m * 4).max(32);
+
+        let all_knns: Vec<Vec<usize>> = (0..n)
+            .into_par_iter()
+            .map(|idx| -> Vec<usize> {
+                let query = &nodes[idx].vector;
+                let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
+
+                for j in 0..n {
+                    if j == idx {
+                        continue;
+                    }
+                    let d = -compute_similarity(query, &nodes[j].vector, metric);
+                    results.push(DistNode { dist: d, idx: j });
+                    if results.len() > max_candidates {
+                        let _ = results.pop();
+                    }
+                }
+
+                let mut neighbors: Vec<usize> =
+                    results.into_vec().into_iter().map(|n| n.idx).collect();
+                neighbors.sort_by(|&a, &b| {
+                    let da = -compute_similarity(query, &nodes[a].vector, metric);
+                    let db = -compute_similarity(query, &nodes[b].vector, metric);
+                    da.partial_cmp(&db).unwrap()
+                });
+                neighbors.truncate(m);
+                neighbors
+            })
+            .collect();
+
+        for (idx, knns) in all_knns.into_iter().enumerate() {
+            for &neighbor_idx in &knns {
+                if self.layers[0].neighbors[idx].len() < m
+                    && !self.layers[0].neighbors[idx].contains(&neighbor_idx)
+                {
+                    self.layers[0].neighbors[idx].push(neighbor_idx);
+                }
+                if self.layers[0].neighbors[neighbor_idx].len() < m
+                    && !self.layers[0].neighbors[neighbor_idx].contains(&idx)
+                {
+                    self.layers[0].neighbors[neighbor_idx].push(idx);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,7 +522,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(8, 32, 32, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -416,7 +556,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(4, 8, 32, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -456,7 +596,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(4, 8, 32, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -464,6 +604,44 @@ mod tests {
         }
         let build_time = build_start.elapsed().as_secs_f64();
         println!("100K HNSW build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 10.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("100K HNSW search: {:.2}ms avg (target < 10ms)", avg_elapsed);
+
+        if avg_elapsed < 10.0 {
+            println!("PASS ✅");
+        } else {
+            println!("FAIL ❌ - Need further optimization");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_100k_batch_build() {
+        let size = 100_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        index.build_from_vectors(vectors).unwrap();
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("100K HNSW BATCH build: {:.2}s", build_time);
 
         let query = vec![0.5f32; dim];
         let search_start = std::time::Instant::now();
@@ -496,7 +674,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(4, 8, 32, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
