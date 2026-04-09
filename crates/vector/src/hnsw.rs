@@ -336,4 +336,37 @@ mod tests {
         let results = index.search(&[50.0, 50.0], 5).unwrap();
         assert_eq!(results.len(), 5);
     }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_100k_search_performance() {
+        let size = 100_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(8, 32, 32, DistanceMetric::Cosine);
+
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+
+        let query = vec![0.5f32; dim];
+        let start = std::time::Instant::now();
+        let results = index.search(&query, 10).unwrap();
+        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+
+        assert_eq!(results.len(), 10);
+        println!("100K HNSW search: {:.2}ms (target < 10ms)", elapsed);
+        assert!(
+            elapsed < 10.0,
+            "100K HNSW search took {:.2}ms, expected < 10ms",
+            elapsed
+        );
+    }
 }
