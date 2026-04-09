@@ -205,6 +205,18 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["PKG:sqlrustgo-executor:test_stored_proc"],
             description: "executor crate 内部测试: 存储过程 (36 tests)",
         },
+        // 并行执行测试
+        TestCategory {
+            name: "并行执行测试 (Parallel Executor)",
+            test_files: vec!["PKG:sqlrustgo-executor:test_parallel_executor"],
+            description: "并行执行器测试: 线程对比、加速比、数据规模、聚合函数 (44 tests)",
+        },
+        // 向量化并行执行测试
+        TestCategory {
+            name: "向量化并行测试 (Vectorized Parallel)",
+            test_files: vec!["PKG:sqlrustgo-executor:test_vectorized_parallel"],
+            description: "向量化执行器测试: 批量扫描、SIMD聚合、并行聚合、性能基准 (37 tests)",
+        },
         // 工具测试
         TestCategory {
             name: "工具测试 (Tools)",
