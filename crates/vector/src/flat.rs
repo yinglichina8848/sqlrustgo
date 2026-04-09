@@ -128,6 +128,10 @@ impl VectorIndex for FlatIndex {
             })
             .collect()
     }
+
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_> {
+        Box::new(self.vectors.iter().map(|e| (e.id, e.vector.as_slice())))
+    }
 }
 
 #[cfg(test)]

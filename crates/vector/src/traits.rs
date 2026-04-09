@@ -43,6 +43,10 @@ pub trait VectorIndex: Send + Sync {
 
     /// Get all vectors as records for iteration/serialization
     fn get_all(&self) -> Vec<VectorRecord>;
+
+    /// Iterate over all vectors without cloning (borrowed references)
+    /// Returns iterator of (id, vector_slice) pairs
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_>;
 }
 
 pub trait VectorIndexBuilder: Default {
