@@ -449,6 +449,7 @@ fn handle_connection(
 
         let cmd = packet.payload.first().copied().unwrap_or(0);
         let payload = &packet.payload[1..];
+        tracing::info!("Received packet: cmd=0x{:02x}, payload_len={}", cmd, payload.len());
 
         match cmd {
             packet_type::COM_QUIT => {
@@ -457,7 +458,14 @@ fn handle_connection(
             }
 
             packet_type::COM_PING => {
-                make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
+                tracing::info!(">>> COM_PING received, seq={}", seq);
+                let result = make_ok_packet(seq, 0, 0).write_to(&mut stream);
+                tracing::info!(">>> COM_PING write result: {:?}", result);
+                match result {
+                    Ok(()) => {}
+                    Err(e) => tracing::warn!("Write error in COM_PING: {}", e),
+                }
+                match result {
                 seq = seq.wrapping_add(1);
             }
 
@@ -505,7 +513,6 @@ fn handle_connection(
                         Err(_) => {
                             tracing::error!("PANIC in execute_select!");
                             make_err_packet(seq, 2000, "Internal server error").write_to(&mut stream)?;
-                        }
                     }
                     }
                 } else {
@@ -530,7 +537,7 @@ fn handle_connection(
             }
 
             _ => {
-                tracing::debug!("Unknown command {} from {}", cmd, addr);
+                tracing::warn!("Unknown command 0x{:02x} from {} (payload first bytes: {:?})", cmd, addr, &payload[..std::cmp::min(10, payload.len())]);
                 make_err_packet(seq, 1047, "Unknown command").write_to(&mut stream)?;
                 seq = seq.wrapping_add(1);
             }
