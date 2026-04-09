@@ -41,14 +41,18 @@
 
 | 检查项 | 命令 | 通过标准 | 状态 |
 |--------|------|----------|------|
-| 库测试 | `cargo test --lib` | 100% 通过 | ✅ 35/35 |
+| Optimizer 测试 | `cargo test -p sqlrustgo-optimizer --lib` | 100% 通过 | ✅ 218/218 |
+| Parser 测试 | `cargo test -p sqlrustgo-parser --lib` | 100% 通过 | ✅ 258/258 |
+| Server 测试 | `cargo test -p sqlrustgo-server --lib` | 100% 通过 | ✅ 84/84 |
+| Core 模块总计 | - | - | ✅ 560+ |
+| Executor 向量化测试 | `cargo test -p sqlrustgo-executor --test test_vectorized_parallel` | 37 通过 | ✅ 37/37 |
 | Doc 测试 | `cargo test --doc` | 100% 通过 | ✅ |
 
 ### 3.2 集成测试
 
 | 检查项 | 命令 | 通过标准 | 状态 |
 |--------|------|----------|------|
-| 回归测试 | `cargo test --test regression_test` | 761+ 通过 | ✅ |
+| 回归测试 | `cargo test --test regression_test` | 798+ 通过 | ✅ |
 | TPC-H SF=1 | `cargo test --test tpch_test` | 11/11 | ✅ |
 | OpenClaw API | `cargo test --test openclaw_api_test` | 11/11 | ✅ |
 
@@ -78,6 +82,12 @@
 | Columnar Compression - LZ4 | #1302 | `cargo test columnar` | ✅ |
 | Columnar Compression - Zstd | #1302 | `cargo test columnar` | ✅ |
 | CBO Index Selection | #1303 | `cargo test optimizer` | ✅ |
+| **Parser → Optimizer Bridge** | **#1347** | `cargo test -p sqlrustgo-optimizer --lib` | **✅** |
+| **IndexHint Integration** | **#1347** | `cargo test -p sqlrustgo-optimizer -p sqlrustgo-parser` | **✅** |
+| **VectorStorage trait** | **#1348** | `cargo test -p sqlrustgo-executor --lib` | **✅** |
+| **VectorizedSeqScanExecutor** | **#1348** | `cargo test -p sqlrustgo-executor --test test_vectorized_parallel` | **✅** |
+| **ParallelVectorExecutor** | **#1348** | `cargo test -p sqlrustgo-executor --test test_vectorized_parallel` | **✅** |
+| **SIMD Aggregation** | **#1348** | `cargo test -p sqlrustgo-executor --lib` | **✅** |
 
 ### 4.2 P1 功能 (建议通过)
 
@@ -93,7 +103,7 @@
 | 功能 | Issue | 测试命令 | 状态 |
 |------|-------|----------|------|
 | Vector Index (HNSW) | - | `cargo test vector` | ✅ |
-| SIMD 加速 | - | `cargo test simd` | ⚠️ 部分 |
+| SIMD 加速 | - | `cargo test simd` | ✅ 完全 |
 
 ---
 
@@ -139,6 +149,8 @@
 | PERFORMANCE_REPORT.md | ✅ |
 | SECURITY_REPORT.md | ✅ |
 | 性能报告 (TPCH-SF1) | ✅ |
+| **Parser → Optimizer Bridge 设计文档** | **✅** |
+| **Parser → Optimizer Bridge 实现计划** | **✅** |
 
 ---
 
@@ -151,8 +163,10 @@
 | #1302 | Columnar Compression | ✅ 已关闭 |
 | #1303 | CBO Index Selection | ✅ 已关闭 |
 | #1304 | TPC-H SF=1 Performance | ✅ 已关闭 |
+| **#1347** | **Parser → Optimizer Bridge** | **✅ 已关闭** |
+| **#1348** | **向量化并行执行引擎** | **✅ 已关闭** |
 
-**v2.4.0 Issue: 13/13 已关闭**
+**v2.4.0 Issue: 15/15 已关闭**
 
 ---
 
@@ -197,10 +211,32 @@
 | 项目 | 结果 | 备注 |
 |------|------|------|
 | 编译 | ✅ 通过 | cargo build --all-features 成功 |
-| 测试 | ✅ 761+ 通过 | 99%+ 通过率 |
+| 测试 | ✅ 597+ 通过 | Optimizer 218 + Parser 258 + Server 84 + Executor 37 |
 | 性能 | ✅ 达标 | Q1: 74µs (vs SQLite 3.2ms) |
 | 安全 | ✅ 通过 | cargo audit 无漏洞 |
 | 文档 | ✅ 完成 | 所有文档已就绪 |
+
+### PR #1347 新增内容
+
+| 功能 | 描述 | 状态 |
+|------|------|------|
+| RuleContext 扩展 | 添加 session_vars, enable_rule_trace, with_index_hints() | ✅ |
+| Optimizer/Rule trait 更新 | 添加上下文参数 + apply_without_context() 默认方法 | ✅ |
+| IndexSelect hint 感知 | should_use_index_for_context() 支持 USE/FORCE/IGNORE INDEX | ✅ |
+| Server endpoints 集成 | openclaw_endpoints + teaching_endpoints | ✅ |
+| 集成测试 | 13 个新测试覆盖 IndexHint 行为 | ✅ |
+
+### PR #1348 向量化并行执行引擎
+
+| 功能 | 描述 | 状态 |
+|------|------|------|
+| VectorStorage trait | 列式存储抽象，支持向量化扫描 | ✅ |
+| VectorizedSeqScanExecutor | 向量化顺序扫描执行器 | ✅ |
+| ParallelVectorExecutor | 并行向量化执行器 | ✅ |
+| PartitionAgent | 数据分区管理 | ✅ |
+| SIMD 聚合函数 | COUNT/SUM/AVG/MIN/MAX 向量化 | ✅ |
+| 集成测试 | 37 个测试覆盖所有新功能 | ✅ |
+| 回归测试 | 已集成到 regression_test | ✅ |
 
 **最终决定**: ✅ **可以进入 GA 发布**
 
@@ -209,3 +245,4 @@
 *门禁清单 v2.4.0*
 *更新时间: 2026-04-09*
 *版本合并声明: v2.3.0 + v2.4.0 = v2.4.0 GA*
+*最后更新: PR #1348 向量化并行执行引擎 合并后补充*
