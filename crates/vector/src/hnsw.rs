@@ -356,12 +356,6 @@ impl VectorIndex for HnswIndex {
 }
 
 impl HnswIndex {
-    fn distance(&self, idx1: usize, idx2: usize) -> f32 {
-        let v1 = &self.nodes[idx1].vector;
-        let v2 = &self.nodes[idx2].vector;
-        -compute_similarity(v1, v2, self.metric)
-    }
-
     pub fn build_from_vectors(&mut self, vectors: Vec<(u64, Vec<f32>)>) -> VectorResult<()> {
         if vectors.is_empty() {
             return Ok(());
@@ -562,65 +556,6 @@ impl HnswIndex {
                     && self.layers[0].neighbors[j].len() < m
                 {
                     self.layers[0].neighbors[j].push(i);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn build_layer0_graph(&mut self, n: usize, m: usize, _ef: usize) -> VectorResult<()> {
-        for layer in self.layers.iter_mut() {
-            while layer.neighbors.len() < n {
-                layer.neighbors.push(Vec::new());
-            }
-        }
-
-        let nodes = &self.nodes;
-        let metric = self.metric;
-        let max_candidates = (m * 4).max(32);
-
-        let all_knns: Vec<Vec<usize>> = (0..n)
-            .into_par_iter()
-            .map(|idx| -> Vec<usize> {
-                let query = &nodes[idx].vector;
-                let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
-
-                for j in 0..n {
-                    if j == idx {
-                        continue;
-                    }
-                    let d = -compute_similarity(query, &nodes[j].vector, metric);
-                    results.push(DistNode { dist: d, idx: j });
-                    if results.len() > max_candidates {
-                        let _ = results.pop();
-                    }
-                }
-
-                let mut neighbors: Vec<usize> =
-                    results.into_vec().into_iter().map(|n| n.idx).collect();
-
-                neighbors.sort_by(|&a, &b| {
-                    let da = -compute_similarity(query, &nodes[a].vector, metric);
-                    let db = -compute_similarity(query, &nodes[b].vector, metric);
-                    da.partial_cmp(&db).unwrap()
-                });
-                neighbors.truncate(m);
-                neighbors
-            })
-            .collect();
-
-        for (idx, knns) in all_knns.into_iter().enumerate() {
-            for &neighbor_idx in &knns {
-                if self.layers[0].neighbors[idx].len() < m
-                    && !self.layers[0].neighbors[idx].contains(&neighbor_idx)
-                {
-                    self.layers[0].neighbors[idx].push(neighbor_idx);
-                }
-                if self.layers[0].neighbors[neighbor_idx].len() < m
-                    && !self.layers[0].neighbors[neighbor_idx].contains(&idx)
-                {
-                    self.layers[0].neighbors[neighbor_idx].push(idx);
                 }
             }
         }
