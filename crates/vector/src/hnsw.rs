@@ -380,57 +380,122 @@ impl HnswIndex {
         }
 
         let n = self.nodes.len();
-        self.max_level = (n as f64).ln().ceil() as usize;
-        self.max_level = self.max_level.min(16).max(1);
+        let m = self.m.max(1);
+        let ef_construction = self.ef_construction.max(64);
 
+        // Assign random levels to each node based on probability 1/m
+        let prob = 1.0 / m as f32;
+        for node in self.nodes.iter_mut() {
+            let mut lvl = 0;
+            while self.rng.gen::<f32>() < prob {
+                lvl += 1;
+            }
+            node.level = lvl;
+        }
+
+        // Calculate max level
+        self.max_level = self.nodes.iter().map(|n| n.level).max().unwrap_or(0);
+        self.max_level = self.max_level.min(16);
+
+        // Initialize layers
         while self.layers.len() <= self.max_level {
             self.layers.push(Layer {
                 neighbors: vec![Vec::new(); n],
             });
         }
 
-        let m = self.m.max(1);
-        let ef = self.ef_construction.max(m * 4);
+        // Find entry point (node with highest level)
+        self.entry_point = self
+            .nodes
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, n)| n.level)
+            .map(|(idx, _)| idx);
 
-        self.build_layer0_graph(n, m, ef)?;
+        // Parallel build layer 0 k-NN
+        let nodes = &self.nodes;
+        let metric = self.metric;
+        let max_candidates = (m * 4).max(64);
 
-        let mut level = 1;
-        let mut current_n = n;
+        let all_knns: Vec<Vec<usize>> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let query = &nodes[idx].vector;
+                let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
 
-        while level <= self.max_level && current_n > 1 {
-            self.layers.push(Layer {
-                neighbors: vec![Vec::new(); current_n],
-            });
-
-            let prob = 1.0 / self.m as f32;
-            for i in 0..current_n {
-                let mut lvl = 0;
-                while self.rng.gen::<f32>() < prob && lvl < self.max_level {
-                    lvl += 1;
+                for j in 0..n {
+                    if j == idx {
+                        continue;
+                    }
+                    let d = -compute_similarity(query, &nodes[j].vector, metric);
+                    results.push(DistNode { dist: d, idx: j });
+                    if results.len() > max_candidates {
+                        let _ = results.pop();
+                    }
                 }
-                self.nodes[i].level = lvl.max(self.nodes[i].level);
+
+                let mut neighbors: Vec<usize> =
+                    results.into_vec().into_iter().map(|n| n.idx).collect();
+
+                // Sort by distance and take top m
+                neighbors.sort_by(|&a, &b| {
+                    let da = -compute_similarity(query, &nodes[a].vector, metric);
+                    let db = -compute_similarity(query, &nodes[b].vector, metric);
+                    da.partial_cmp(&db).unwrap()
+                });
+
+                neighbors.truncate(m);
+                neighbors
+            })
+            .collect();
+
+        // Build bidirectional k-NN graph for layer 0
+        for (idx, knns) in all_knns.into_iter().enumerate() {
+            for &neighbor in &knns {
+                if self.layers[0].neighbors[idx].len() < m
+                    && !self.layers[0].neighbors[idx].contains(&neighbor)
+                {
+                    self.layers[0].neighbors[idx].push(neighbor);
+                }
+                if self.layers[0].neighbors[neighbor].len() < m
+                    && !self.layers[0].neighbors[neighbor].contains(&idx)
+                {
+                    self.layers[0].neighbors[neighbor].push(idx);
+                }
+            }
+        }
+
+        // Build higher layers - just connect nodes to random neighbors at same level
+        for level in 1..=self.max_level {
+            let level_nodes: Vec<usize> = self
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.level >= level)
+                .map(|(idx, _)| idx)
+                .collect();
+
+            if level_nodes.len() < 2 {
+                continue;
             }
 
-            let sample_rate = (m as f32).recip();
-            let mut next_n = 0;
+            let m_level = (m / 2 + 1).max(2);
 
-            for i in 0..current_n {
-                if self.rng.gen::<f32>() < sample_rate {
-                    if next_n == i {
-                        next_n += 1;
+            for &idx in &level_nodes {
+                let mut connected = 0;
+                for &other in &level_nodes {
+                    if other == idx || connected >= m_level {
+                        break;
+                    }
+                    if self.layers[level].neighbors[idx].len() < m_level
+                        && !self.layers[level].neighbors[idx].contains(&other)
+                    {
+                        self.layers[level].neighbors[idx].push(other);
+                        connected += 1;
                     }
                 }
             }
-
-            if next_n < 2 {
-                break;
-            }
-
-            current_n = next_n;
-            level += 1;
         }
-
-        self.entry_point = Some(0);
 
         Ok(())
     }
