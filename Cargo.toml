@@ -34,6 +34,7 @@ members = [
     "crates/rag",
     "crates/graph",
     "crates/unified-query",
+    "crates/unified-storage",
     "test/sql92",
 ]
 
@@ -64,6 +65,7 @@ sqlrustgo-agentsql = { path = "crates/agentsql" }
 sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
 sqlrustgo-unified-query = { path = "crates/unified-query" }
+sqlrustgo-unified-storage = { path = "crates/unified-storage" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
