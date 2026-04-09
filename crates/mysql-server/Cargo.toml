@@ -1,0 +1,28 @@
+[package]
+name = "sqlrustgo-mysql-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlrustgo = { path = "../.." }
+sqlrustgo-parser = { path = "../parser" }
+sqlrustgo-planner = { path = "../planner" }
+sqlrustgo-executor = { path = "../executor" }
+sqlrustgo-storage = { path = "../storage" }
+sqlrustgo-types = { path = "../types" }
+sqlrustgo-common = { path = "../common" }
+byteorder = "1"
+thiserror = "1"
+tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lib]
+name = "sqlrustgo_mysql_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sqlrustgo-mysql-server"
+path = "src/main.rs"
