@@ -485,10 +485,12 @@ impl ParallelVolcanoExecutor {
         let child_result = self.execute_child(children[0])?;
         let rows = &child_result.rows;
         let total_rows = rows.len();
+        let input_schema = children[0].schema();
 
         // Small dataset: use sequential execution
         if total_rows < 100_000 || degree <= 1 {
-            let result = self.sequential_aggregate(rows, &group_expr, &aggregate_expr);
+            let result =
+                self.sequential_aggregate(rows, &group_expr, &aggregate_expr, input_schema);
             let duration = start.elapsed();
             GLOBAL_PROFILER.record(
                 "ParallelAggregate",
@@ -503,10 +505,10 @@ impl ParallelVolcanoExecutor {
         // Parallel aggregation with two-phase approach
         let results = if group_expr.is_empty() {
             // No GROUP BY: parallel reduce
-            self.parallel_no_group_aggregate(rows, &aggregate_expr)
+            self.parallel_no_group_aggregate(rows, &aggregate_expr, input_schema)
         } else {
             // GROUP BY: partition and local aggregate
-            self.parallel_group_aggregate(rows, &group_expr, &aggregate_expr, degree)
+            self.parallel_group_aggregate(rows, &group_expr, &aggregate_expr, degree, input_schema)
         };
 
         let duration = start.elapsed();
@@ -527,6 +529,7 @@ impl ParallelVolcanoExecutor {
         rows: &[Vec<Value>],
         group_expr: &[sqlrustgo_planner::Expr],
         aggregate_expr: &[sqlrustgo_planner::Expr],
+        input_schema: &sqlrustgo_planner::Schema,
     ) -> ExecutorResult {
         use std::collections::HashMap;
 
@@ -539,8 +542,7 @@ impl ParallelVolcanoExecutor {
                         .iter()
                         .map(|row| {
                             if let Some(arg) = args.first() {
-                                arg.evaluate(row, &sqlrustgo_planner::Schema::empty())
-                                    .unwrap_or(Value::Null)
+                                arg.evaluate(row, input_schema).unwrap_or(Value::Null)
                             } else {
                                 Value::Integer(rows.len() as i64)
                             }
@@ -557,10 +559,7 @@ impl ParallelVolcanoExecutor {
             for row in rows {
                 let key: Vec<Value> = group_expr
                     .iter()
-                    .map(|expr| {
-                        expr.evaluate(row, &sqlrustgo_planner::Schema::empty())
-                            .unwrap_or(Value::Null)
-                    })
+                    .map(|expr| expr.evaluate(row, input_schema).unwrap_or(Value::Null))
                     .collect();
                 groups.entry(key).or_default().push(row.clone());
             }
@@ -575,8 +574,7 @@ impl ParallelVolcanoExecutor {
                             .iter()
                             .map(|r| {
                                 if let Some(arg) = args.first() {
-                                    arg.evaluate(r, &sqlrustgo_planner::Schema::empty())
-                                        .unwrap_or(Value::Null)
+                                    arg.evaluate(r, input_schema).unwrap_or(Value::Null)
                                 } else {
                                     Value::Integer(group_rows.len() as i64)
                                 }
@@ -596,6 +594,7 @@ impl ParallelVolcanoExecutor {
         &self,
         rows: &[Vec<Value>],
         aggregate_expr: &[sqlrustgo_planner::Expr],
+        input_schema: &sqlrustgo_planner::Schema,
     ) -> ExecutorResult {
         use rayon::iter::{IntoParallelIterator, ParallelIterator};
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -654,8 +653,7 @@ impl ParallelVolcanoExecutor {
                         .iter()
                         .map(|row| {
                             if let Some(arg) = args.first() {
-                                arg.evaluate(row, &sqlrustgo_planner::Schema::empty())
-                                    .unwrap_or(Value::Null)
+                                arg.evaluate(row, input_schema).unwrap_or(Value::Null)
                             } else {
                                 Value::Integer(rows.len() as i64)
                             }
@@ -679,6 +677,7 @@ impl ParallelVolcanoExecutor {
         group_expr: &[sqlrustgo_planner::Expr],
         aggregate_expr: &[sqlrustgo_planner::Expr],
         degree: usize,
+        input_schema: &sqlrustgo_planner::Schema,
     ) -> ExecutorResult {
         use rayon::iter::{IntoParallelIterator, ParallelIterator};
         use std::collections::HashMap;
@@ -710,10 +709,7 @@ impl ParallelVolcanoExecutor {
                 for row in &rows[start..end] {
                     let key: Vec<Value> = group_expr
                         .iter()
-                        .map(|expr| {
-                            expr.evaluate(row, &sqlrustgo_planner::Schema::empty())
-                                .unwrap_or(Value::Null)
-                        })
+                        .map(|expr| expr.evaluate(row, input_schema).unwrap_or(Value::Null))
                         .collect();
                     local_groups.entry(key).or_default().push(row.clone());
                 }
@@ -739,8 +735,7 @@ impl ParallelVolcanoExecutor {
                         .iter()
                         .map(|r| {
                             if let Some(arg) = args.first() {
-                                arg.evaluate(r, &sqlrustgo_planner::Schema::empty())
-                                    .unwrap_or(Value::Null)
+                                arg.evaluate(r, input_schema).unwrap_or(Value::Null)
                             } else {
                                 Value::Integer(group_rows.len() as i64)
                             }

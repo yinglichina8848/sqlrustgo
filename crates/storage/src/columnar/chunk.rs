@@ -177,6 +177,23 @@ impl ColumnChunk {
         }
     }
 
+    /// Create a ColumnChunk from a vector of values
+    pub fn from_values(values: Vec<Value>) -> Self {
+        let len = values.len();
+        let mut chunk = Self {
+            data: Vec::with_capacity(len),
+            null_bitmap: Some(Bitmap::with_capacity(len)),
+            stats: ColumnStats::new(),
+        };
+
+        for value in values {
+            let is_null = value == Value::Null;
+            chunk.push_value(value, is_null);
+        }
+
+        chunk
+    }
+
     /// Push a non-null value to the chunk
     pub fn push(&mut self, value: Value) {
         self.push_value(value, false);
@@ -272,6 +289,11 @@ impl ColumnChunk {
     /// Get all values (including nulls as Value::Null)
     pub fn values(&self) -> &[Value] {
         &self.data
+    }
+
+    /// Get owned data
+    pub fn data(self) -> Vec<Value> {
+        self.data
     }
 
     /// Iterate over non-null values
