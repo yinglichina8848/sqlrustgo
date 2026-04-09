@@ -376,7 +376,9 @@ fn execute_select(
     sql: &str,
     engine: &mut ExecutionEngine,
 ) -> MySqlResult<(Vec<String>, Vec<String>, Vec<Vec<Value>>)> {
+    tracing::info!("execute_select called with: [{}]", sql);
     let statement: Statement = parse(sql).map_err(|e| MySqlError::Sql(e))?;
+    tracing::info!("parse done, executing...");
     let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
 
     // Determine column names and types from result
@@ -401,10 +403,12 @@ fn execute_write(
 
 fn is_select_query(sql: &str) -> bool {
     let upper = sql.trim().to_uppercase();
-    upper.starts_with("SELECT")
+    let result = upper.starts_with("SELECT")
         || upper.starts_with("SHOW")
         || upper.starts_with("DESCRIBE")
-        || upper.starts_with("EXPLAIN")
+        || upper.starts_with("EXPLAIN");
+    tracing::info!("is_select_query([{}]) = {}", sql, result);
+    result
 }
 
 // ============================================================================
@@ -437,7 +441,10 @@ fn handle_connection(
     loop {
         let packet = match Packet::read_from(&mut stream) {
             Ok(p) => p,
-            Err(_) => break,
+            Err(e) => {
+                tracing::info!("Packet read error: {}", e);
+                break;
+            }
         };
 
         let cmd = packet.payload.first().copied().unwrap_or(0);
@@ -464,7 +471,7 @@ fn handle_connection(
                     .trim_end_matches('\0')
                     .trim()
                     .to_string();
-                tracing::debug!("Query from {}: {}", addr, query);
+                tracing::info!("Query from {}: [{}] (seq={})", addr, query, seq);
 
                 if query.is_empty() {
                     make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
@@ -474,25 +481,32 @@ fn handle_connection(
 
                 let mut engine = ExecutionEngine::new(storage.clone());
 
+                tracing::info!("is_select={}, query=[{}]", is_select_query(&query), query);
                 if is_select_query(&query) {
-                    match execute_select(&query, &mut engine) {
-                        Ok((columns, column_types, rows)) => {
+                    tracing::info!("Executing SELECT...");
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        execute_select(&query, &mut engine)
+                    }));
+                    match result {
+                        Ok(Ok((columns, column_types, rows))) => {
+                            tracing::info!("SELECT returned {} rows", rows.len());
                             send_result_set(&mut stream, &columns, &column_types, &rows, seq)?;
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
                             tracing::warn!("Query error: {}", e);
                             let code: u16 = match &e {
                                 MySqlError::Sql(s)
-                                    if s.contains("not found") || s.contains("does not exist") =>
-                                {
-                                    1146
-                                }
+                                    if s.contains("not found") || s.contains("does not exist") => 1146,
                                 MySqlError::Sql(_) => 1064,
                                 _ => 2000,
                             };
-                            make_err_packet(seq, code, &e.to_string())
-                                .write_to(&mut stream)?;
+                            make_err_packet(seq, code, &e.to_string()).write_to(&mut stream)?;
                         }
+                        Err(_) => {
+                            tracing::error!("PANIC in execute_select!");
+                            make_err_packet(seq, 2000, "Internal server error").write_to(&mut stream)?;
+                        }
+                    }
                     }
                 } else {
                     match execute_write(&query, &mut engine) {
