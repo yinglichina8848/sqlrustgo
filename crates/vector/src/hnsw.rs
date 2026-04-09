@@ -315,6 +315,10 @@ impl VectorIndex for HnswIndex {
             })
             .collect()
     }
+
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_> {
+        Box::new(self.nodes.iter().map(|n| (n.id, n.vector.as_slice())))
+    }
 }
 
 #[cfg(test)]

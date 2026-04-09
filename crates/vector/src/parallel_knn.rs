@@ -244,6 +244,14 @@ impl VectorIndex for ParallelKnnIndex {
             })
             .collect()
     }
+
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_> {
+        Box::new(
+            self.vectors
+                .iter()
+                .map(|(id, vector)| (*id, vector.as_slice())),
+        )
+    }
 }
 
 /// Parallel KNN wrapper that adds parallel search to any VectorIndex
@@ -283,17 +291,16 @@ impl<I: VectorIndex> ParallelKnn<I> {
         let chunk_size = self.config.chunk_size;
         let metric = self.inner.metric();
 
-        let all_vectors = self.inner.get_all();
+        let all_vectors: Vec<(u64, &[f32])> = self.inner.iter_vectors().collect();
 
         let chunk_results: Vec<Vec<(u64, f32)>> = all_vectors
             .par_chunks(chunk_size)
-            .map(|chunk: &[VectorRecord]| {
+            .map(|chunk| {
                 chunk
                     .iter()
-                    .map(|record: &VectorRecord| {
-                        let score =
-                            crate::metrics::compute_similarity(query, &record.vector, metric);
-                        (record.id, score)
+                    .map(|(id, vector)| {
+                        let score = crate::metrics::compute_similarity(query, vector, metric);
+                        (*id, score)
                     })
                     .collect::<Vec<_>>()
             })
@@ -352,6 +359,10 @@ impl<I: VectorIndex> VectorIndex for ParallelKnn<I> {
 
     fn get_all(&self) -> Vec<VectorRecord> {
         self.inner.get_all()
+    }
+
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_> {
+        self.inner.iter_vectors()
     }
 }
 
