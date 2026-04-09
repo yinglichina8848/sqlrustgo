@@ -211,7 +211,6 @@
 | 项目 | 结果 | 备注 |
 |------|------|------|
 | 编译 | ✅ 通过 | cargo build --all-features 成功 |
-<<<<<<< HEAD
 | 测试 | ✅ 597+ 通过 | Optimizer 218 + Parser 258 + Server 84 + Executor 37 |
 | 性能 | ✅ 达标 | Q1: 74µs (vs SQLite 3.2ms) |
 | 安全 | ✅ 通过 | cargo audit 无漏洞 |
