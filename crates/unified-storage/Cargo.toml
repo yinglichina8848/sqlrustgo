@@ -1,0 +1,13 @@
+[package]
+name = "sqlrustgo-unified-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+sqlrustgo-storage.workspace = true
+sqlrustgo-vector.workspace = true
+sqlrustgo-graph.workspace = true
+sqlrustgo-types.workspace = true
