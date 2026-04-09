@@ -283,27 +283,22 @@ impl<I: VectorIndex> ParallelKnn<I> {
         let chunk_size = self.config.chunk_size;
         let metric = self.inner.metric();
 
-        // Process in parallel chunks
-        let chunk_results: Vec<Vec<(u64, f32)>> = (0..n)
-            .into_par_iter()
-            .chunks(chunk_size)
-            .map(|chunk_ids: Vec<usize>| {
-                chunk_ids
+        let all_vectors = self.inner.get_all();
+
+        let chunk_results: Vec<Vec<(u64, f32)>> = all_vectors
+            .par_chunks(chunk_size)
+            .map(|chunk: &[VectorRecord]| {
+                chunk
                     .iter()
-                    .filter_map(|&idx| {
-                        // Get vector by index - this is a limitation
-                        // In a real implementation, we'd have direct access
-                        self.inner
-                            .search(query, k)
-                            .ok()
-                            .and_then(|results| results.into_iter().next())
-                            .map(|e| (e.id, e.score))
+                    .map(|record: &VectorRecord| {
+                        let score =
+                            crate::metrics::compute_similarity(query, &record.vector, metric);
+                        (record.id, score)
                     })
                     .collect::<Vec<_>>()
             })
             .collect();
 
-        // Merge results and get top-k
         let mut all_results: Vec<(u64, f32)> = chunk_results.into_iter().flatten().collect();
 
         all_results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
