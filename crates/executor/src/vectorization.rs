@@ -820,6 +820,20 @@ impl RecordBatch {
     }
 }
 
+/// Conversion from StorageColumnArray (storage layer) to ColumnArray (executor layer)
+impl From<sqlrustgo_storage::columnar::convert::StorageColumnArray> for ColumnArray {
+    fn from(arr: sqlrustgo_storage::columnar::convert::StorageColumnArray) -> Self {
+        use sqlrustgo_storage::columnar::convert::StorageColumnArray as S;
+        match arr {
+            S::Int64(v) => ColumnArray::Int64(v),
+            S::Float64(v) => ColumnArray::Float64(v),
+            S::Boolean(v) => ColumnArray::Boolean(v),
+            S::Text(v) => ColumnArray::Text(v),
+            S::Null => ColumnArray::Null,
+        }
+    }
+}
+
 /// BatchIterator - trait for iterating over batches
 pub trait BatchIterator {
     type Item;

@@ -2,6 +2,7 @@
 
 use crate::Rule;
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 // =============================================================================
@@ -167,7 +168,7 @@ impl Rule<Plan> for PredicatePushdown {
         "PredicatePushdown"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.pushdown(plan)
     }
 }
@@ -259,7 +260,7 @@ impl Rule<Plan> for ProjectionPruning {
         "ProjectionPruning"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.prune(plan)
     }
 }
@@ -366,7 +367,7 @@ impl Rule<Plan> for ConstantFolding {
         "ConstantFolding"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.fold(plan)
     }
 }
@@ -907,6 +908,31 @@ impl IndexSelect {
         true
     }
 
+    /// 判断是否应该使用索引（考虑 index hints）
+    pub fn should_use_index_for_context(&self, ctx: &RuleContext) -> bool {
+        // 如果没有 hints，使用原有逻辑
+        if ctx.index_hints.is_empty() {
+            return true;
+        }
+
+        // 遍历 hints 检查是否有限制
+        for hint in &ctx.index_hints {
+            match hint.hint_type {
+                IndexHintType::UseIndex | IndexHintType::ForceIndex => {
+                    // 如果有 USE/FORCE INDEX hint，这个 IndexSelect 应该被考虑
+                    // 返回 true 让 should_use_index 做最终决定
+                    return true;
+                }
+                IndexHintType::IgnoreIndex => {
+                    // 如果有 IGNORE INDEX hint，忽略所有索引
+                    return false;
+                }
+            }
+        }
+        // 没有匹配的 hint，使用原有逻辑
+        true
+    }
+
     /// Extract column name from predicate
     fn extract_column_name(&self, predicate: &Expr) -> String {
         if let Expr::BinaryExpr { left, .. } = predicate {
@@ -983,7 +1009,11 @@ impl Rule<Plan> for IndexSelect {
     }
 
     #[allow(clippy::replace_box)]
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, ctx: &mut RuleContext) -> bool {
+        // Check index hints
+        if !self.should_use_index_for_context(ctx) {
+            return false;
+        }
         match plan {
             Plan::Filter { input, predicate } => {
                 if let Plan::TableScan { table_name, .. } = input.as_ref() {
@@ -1012,7 +1042,7 @@ impl Rule<Plan> for JoinReordering {
         "JoinReordering"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.reorder(plan)
     }
 }
@@ -1023,7 +1053,7 @@ impl Rule<Plan> for ExpressionSimplification {
         "ExpressionSimplification"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.simplify(plan)
     }
 }
@@ -1134,35 +1164,45 @@ pub struct IndexHint {
     pub index_names: Vec<String>,
 }
 
-/// Rule context for pattern matching
-#[derive(Debug, Default)]
+/// 优化器运行时上下文
+#[derive(Debug, Clone, Default)]
 pub struct RuleContext {
+    /// Index hints from SQL query (USE/FORCE/IGNORE INDEX)
+    pub index_hints: Vec<IndexHint>,
+    /// Session optimizer variables (future extension)
+    pub session_vars: HashMap<String, Value>,
+    /// 是否启用规则追踪调试
+    pub enable_rule_trace: bool,
+    // === 内部状态 ===
     /// Current optimization depth
     pub depth: usize,
     /// Total rules applied
     pub rules_applied: usize,
     /// Whether to continue optimization
     pub continue_optimization: bool,
-    /// Index hints from query (USE/FORCE/IGNORE INDEX)
-    pub index_hints: Vec<IndexHint>,
 }
 
 impl RuleContext {
+    /// 创建空的 RuleContext
     pub fn new() -> Self {
         Self {
+            index_hints: Vec::new(),
+            session_vars: HashMap::new(),
+            enable_rule_trace: false,
             depth: 0,
             rules_applied: 0,
             continue_optimization: true,
-            index_hints: Vec::new(),
         }
     }
 
     pub fn with_index_hints(index_hints: Vec<IndexHint>) -> Self {
         Self {
+            index_hints,
+            session_vars: HashMap::new(),
+            enable_rule_trace: false,
             depth: 0,
             rules_applied: 0,
             continue_optimization: true,
-            index_hints,
         }
     }
 
@@ -1319,7 +1359,8 @@ mod tests {
     fn test_predicate_pushdown_apply() {
         let rule = PredicatePushdown::new();
         let mut plan = Plan::EmptyRelation;
-        let result = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = rule.apply(&mut plan, &mut ctx);
         assert!(!result); // Returns false (no change) for EmptyRelation
     }
 
@@ -1339,7 +1380,8 @@ mod tests {
     fn test_projection_pruning_apply() {
         let rule = ProjectionPruning::new();
         let mut plan = Plan::EmptyRelation;
-        let result = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = rule.apply(&mut plan, &mut ctx);
         assert!(!result);
     }
 
@@ -1359,7 +1401,8 @@ mod tests {
     fn test_constant_folding_apply() {
         let rule = ConstantFolding::new();
         let mut plan = Plan::EmptyRelation;
-        let result = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = rule.apply(&mut plan, &mut ctx);
         assert!(!result);
     }
 
@@ -1502,7 +1545,8 @@ mod tests {
             table_name: "users".to_string(),
             projection: None,
         };
-        let result = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = rule.apply(&mut plan, &mut ctx);
         assert!(!result); // No change for table scan
     }
 
@@ -1540,7 +1584,8 @@ mod tests {
             condition: None,
         };
 
-        let result = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = rule.apply(&mut plan, &mut ctx);
         assert!(result);
     }
 
@@ -1559,7 +1604,7 @@ mod tests {
             }),
         };
 
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         // No index available, so should return false
         assert!(!result);
     }
@@ -1580,7 +1625,7 @@ mod tests {
             }),
         };
 
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(result);
         // Plan should be converted to IndexScan
         if let Plan::Filter { input, .. } = &plan {
@@ -1606,7 +1651,7 @@ mod tests {
             }),
         };
 
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         // Greater than is now indexable (B+Tree range scan), should return true
         assert!(result);
     }
@@ -1886,7 +1931,7 @@ mod tests {
                 projection: None,
             }),
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -1905,7 +1950,7 @@ mod tests {
             }),
             condition: Some(Expr::Column("id".to_string())),
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -1919,7 +1964,7 @@ mod tests {
                 projection: None,
             }),
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -1934,7 +1979,7 @@ mod tests {
             input: Box::new(Plan::EmptyRelation),
         };
         let rule = ConstantFolding::new();
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(result);
     }
 
@@ -1952,7 +1997,7 @@ mod tests {
                 projection: None,
             }),
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -1978,7 +2023,7 @@ mod tests {
             }),
             condition: None,
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -1992,7 +2037,7 @@ mod tests {
                 projection: Some(vec![0, 1]),
             }),
         };
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(!result);
     }
 
@@ -2011,7 +2056,7 @@ mod tests {
             input: Box::new(Plan::EmptyRelation),
         };
         let rule = ConstantFolding::new();
-        let result = rule.apply(&mut plan);
+        let result = rule.apply_without_context(&mut plan);
         assert!(result);
     }
 
@@ -2485,7 +2530,7 @@ mod tests {
                 projection: None,
             }),
         };
-        let changed = rule.apply(&mut plan);
+        let changed = rule.apply_without_context(&mut plan);
         assert!(changed);
         // The TableScan inside Filter should be replaced with IndexScan
         if let Plan::Filter { input, .. } = &plan {
@@ -2584,5 +2629,163 @@ mod tests {
 
         assert_eq!(hint.index_names.len(), 3);
         assert_eq!(hint.index_names[0], "idx_primary");
+    }
+
+    // ===== IndexSelect with IndexHint integration tests =====
+
+    #[test]
+    fn test_index_select_without_hints() {
+        // No hints should allow index usage
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::new();
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_use_index_hint() {
+        // USE INDEX hint should allow the specified index
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![IndexHint {
+            hint_type: IndexHintType::UseIndex,
+            index_names: vec!["idx_id".to_string()],
+        }]);
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_ignore_index_hint() {
+        // IGNORE INDEX hint should disallow the specified index
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![IndexHint {
+            hint_type: IndexHintType::IgnoreIndex,
+            index_names: vec!["idx_id".to_string()],
+        }]);
+        assert!(!rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_force_index_hint() {
+        // FORCE INDEX hint should allow the specified index
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![IndexHint {
+            hint_type: IndexHintType::ForceIndex,
+            index_names: vec!["idx_id".to_string()],
+        }]);
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_multiple_hints() {
+        // Multiple hints - first matching hint wins in current implementation
+        // USE INDEX comes first, so it returns true (doesn't reach IGNORE)
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![
+            IndexHint {
+                hint_type: IndexHintType::UseIndex,
+                index_names: vec!["idx_id".to_string()],
+            },
+            IndexHint {
+                hint_type: IndexHintType::IgnoreIndex,
+                index_names: vec!["idx_id".to_string()],
+            },
+        ]);
+        // Current implementation: first hint (USE) wins, returns true
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_ignore_first_then_use() {
+        // When IGNORE comes first, it should return false
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![
+            IndexHint {
+                hint_type: IndexHintType::IgnoreIndex,
+                index_names: vec!["idx_id".to_string()],
+            },
+            IndexHint {
+                hint_type: IndexHintType::UseIndex,
+                index_names: vec!["idx_id".to_string()],
+            },
+        ]);
+        // Current implementation: IGNORE comes first, returns false
+        assert!(!rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_use_index_different_index() {
+        // USE INDEX for a different index - current impl returns true for USE hint
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![IndexHint {
+            hint_type: IndexHintType::UseIndex,
+            index_names: vec!["idx_other".to_string()],
+        }]);
+        // Current implementation returns true for USE/FORCE hints
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_index_select_with_empty_hints() {
+        // Empty hints list should behave like no hints
+        let rule = IndexSelect::new().with_index("users", "idx_id");
+        let ctx = RuleContext::with_index_hints(vec![]);
+        assert!(rule.should_use_index_for_context(&ctx));
+    }
+
+    #[test]
+    fn test_rule_context_clone_with_index_hints() {
+        let hints = vec![IndexHint {
+            hint_type: IndexHintType::UseIndex,
+            index_names: vec!["idx_id".to_string()],
+        }];
+        let ctx = RuleContext::with_index_hints(hints);
+        let ctx_clone = ctx.clone();
+
+        assert_eq!(ctx.index_hints.len(), ctx_clone.index_hints.len());
+        assert_eq!(
+            ctx.index_hints[0].hint_type,
+            ctx_clone.index_hints[0].hint_type
+        );
+    }
+
+    #[test]
+    fn test_rule_context_enable_rule_trace() {
+        let mut ctx = RuleContext::new();
+        assert!(!ctx.enable_rule_trace);
+        ctx.enable_rule_trace = true;
+        assert!(ctx.enable_rule_trace);
+    }
+
+    #[test]
+    fn test_rule_context_depth_tracking() {
+        let mut ctx = RuleContext::new();
+        assert_eq!(ctx.depth, 0);
+        ctx.increment_depth();
+        assert_eq!(ctx.depth, 1);
+        ctx.increment_depth();
+        assert_eq!(ctx.depth, 2);
+        ctx.decrement_depth();
+        assert_eq!(ctx.depth, 1);
+        ctx.decrement_depth();
+        assert_eq!(ctx.depth, 0);
+        ctx.decrement_depth(); // Should not go below 0
+        assert_eq!(ctx.depth, 0);
+    }
+
+    #[test]
+    fn test_rule_context_rules_applied_tracking() {
+        let mut ctx = RuleContext::new();
+        assert_eq!(ctx.rules_applied, 0);
+        ctx.rules_applied += 1;
+        assert_eq!(ctx.rules_applied, 1);
+        ctx.rules_applied += 5;
+        assert_eq!(ctx.rules_applied, 6);
+    }
+
+    #[test]
+    fn test_rule_context_continue_optimization() {
+        let mut ctx = RuleContext::new();
+        assert!(ctx.continue_optimization);
+        ctx.continue_optimization = false;
+        assert!(!ctx.continue_optimization);
     }
 }
