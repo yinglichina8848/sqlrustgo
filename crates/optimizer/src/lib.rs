@@ -38,8 +38,18 @@ pub use stats_registry::StatsRegistry;
 
 /// Optimizer trait - interface for query optimization
 pub trait Optimizer {
-    /// Optimize a query plan
-    fn optimize(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()>;
+    /// Optimize a query plan with context
+    fn optimize(
+        &mut self,
+        plan: &mut dyn std::any::Any,
+        ctx: &mut RuleContext,
+    ) -> OptimizerResult<()>;
+
+    /// Optimize without context (backward compatible)
+    fn optimize_without_context(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
+        let mut ctx = RuleContext::new();
+        self.optimize(plan, &mut ctx)
+    }
 }
 
 /// Rule trait - interface for optimization rules
@@ -47,8 +57,14 @@ pub trait Rule<Plan> {
     /// Get rule name
     fn name(&self) -> &str;
 
-    /// Apply the rule to a plan
-    fn apply(&self, plan: &mut Plan) -> bool;
+    /// Apply the rule to a plan with context
+    fn apply(&self, plan: &mut Plan, ctx: &mut RuleContext) -> bool;
+
+    /// Apply without context (backward compatible)
+    fn apply_without_context(&self, plan: &mut Plan) -> bool {
+        let mut ctx = RuleContext::new();
+        self.apply(plan, &mut ctx)
+    }
 }
 
 /// CostModel trait - interface for cost estimation
@@ -61,7 +77,11 @@ pub trait CostModel {
 pub struct NoOpOptimizer;
 
 impl Optimizer for NoOpOptimizer {
-    fn optimize(&mut self, _plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
+    fn optimize(
+        &mut self,
+        _plan: &mut dyn std::any::Any,
+        _ctx: &mut RuleContext,
+    ) -> OptimizerResult<()> {
         Ok(())
     }
 }
@@ -149,7 +169,11 @@ impl DefaultOptimizer {
 }
 
 impl Optimizer for DefaultOptimizer {
-    fn optimize(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
+    fn optimize(
+        &mut self,
+        plan: &mut dyn std::any::Any,
+        ctx: &mut RuleContext,
+    ) -> OptimizerResult<()> {
         if let Some(plan) = plan.downcast_mut::<Plan>() {
             let mut changed = true;
             let mut iterations = 0;
@@ -158,8 +182,9 @@ impl Optimizer for DefaultOptimizer {
                 changed = false;
                 iterations += 1;
                 for rule in &self.rules {
-                    if !self.disabled_rules.contains(rule.name()) && rule.apply(plan) {
+                    if !self.disabled_rules.contains(rule.name()) && rule.apply(plan, ctx) {
                         changed = true;
+                        ctx.rules_applied += 1;
                     }
                 }
             }
@@ -182,7 +207,8 @@ mod tests {
     fn test_noop_optimizer() {
         let mut optimizer = NoOpOptimizer;
         let mut plan = String::from("test plan");
-        let result = optimizer.optimize(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = optimizer.optimize(&mut plan, &mut ctx);
         assert!(result.is_ok());
     }
 
@@ -240,7 +266,11 @@ mod tests {
         }
 
         impl Optimizer for TestOptimizer {
-            fn optimize(&mut self, _plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
+            fn optimize(
+                &mut self,
+                _plan: &mut dyn std::any::Any,
+                _ctx: &mut RuleContext,
+            ) -> OptimizerResult<()> {
                 *self.called.borrow_mut() = true;
                 Ok(())
             }
@@ -250,7 +280,8 @@ mod tests {
             called: std::cell::RefCell::new(false),
         };
         let mut plan = String::from("test");
-        optimizer.optimize(&mut plan).unwrap();
+        let mut ctx = RuleContext::new();
+        optimizer.optimize(&mut plan, &mut ctx).unwrap();
         assert!(*optimizer.called.borrow());
     }
 
@@ -263,7 +294,7 @@ mod tests {
                 "TestRule"
             }
 
-            fn apply(&self, plan: &mut String) -> bool {
+            fn apply(&self, plan: &mut String, _ctx: &mut RuleContext) -> bool {
                 plan.push_str("_modified");
                 true
             }
@@ -273,7 +304,8 @@ mod tests {
         assert_eq!(rule.name(), "TestRule");
 
         let mut plan = String::from("original");
-        let changed = rule.apply(&mut plan);
+        let mut ctx = RuleContext::new();
+        let changed = rule.apply(&mut plan, &mut ctx);
         assert!(changed);
         assert_eq!(plan, "original_modified");
     }
@@ -308,7 +340,8 @@ mod tests {
     fn test_default_optimizer_new() {
         let mut optimizer = DefaultOptimizer::new();
         let mut plan = String::from("test");
-        let result = optimizer.optimize(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = optimizer.optimize(&mut plan, &mut ctx);
         assert!(result.is_ok());
     }
 
@@ -317,7 +350,8 @@ mod tests {
         let cbo = CboOptimizer::new();
         let mut optimizer = DefaultOptimizer::new().with_cbo(cbo);
         let mut plan = String::from("test");
-        let result = optimizer.optimize(&mut plan);
+        let mut ctx = RuleContext::new();
+        let result = optimizer.optimize(&mut plan, &mut ctx);
         assert!(result.is_ok());
     }
 

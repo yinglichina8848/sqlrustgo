@@ -8,6 +8,9 @@
 use crate::metrics_endpoint::MetricsRegistry;
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::{OperatorProfile, QueryTrace, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
+use sqlrustgo_optimizer::{
+    IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
+};
 use sqlrustgo_parser::{parse, Expression, Statement, TransactionCommand};
 use sqlrustgo_storage::engine::{StorageEngine, Value};
 use std::sync::{Arc, RwLock};
@@ -503,6 +506,33 @@ fn execute_sql(
         Statement::Select(select) => {
             if !storage.has_table(&select.table) {
                 return Err(format!("Table '{}' not found", select.table));
+            }
+
+            // 创建 RuleContext（Parser → Optimizer 桥接）
+            let rule_context = RuleContext::with_index_hints(
+                select
+                    .index_hints
+                    .iter()
+                    .map(|h| OptimizerIndexHint {
+                        hint_type: match h.hint_type {
+                            sqlrustgo_parser::IndexHintType::UseIndex => {
+                                OptimizerIndexHintType::UseIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::ForceIndex => {
+                                OptimizerIndexHintType::ForceIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::IgnoreIndex => {
+                                OptimizerIndexHintType::IgnoreIndex
+                            }
+                        },
+                        index_names: h.index_names.clone(),
+                    })
+                    .collect(),
+            );
+
+            // 如果有 index hints，记录日志（当前 endpoint 不使用 optimizer）
+            if !rule_context.index_hints.is_empty() {
+                log::info!("index hints detected for table '{}': {:?} - note: optimizer not used in this endpoint", select.table, rule_context.index_hints);
             }
 
             let table_info = storage.get_table_info(&select.table).ok();

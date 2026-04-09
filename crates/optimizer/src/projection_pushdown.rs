@@ -4,7 +4,7 @@
 //! reducing I/O and memory usage by reading only required columns.
 
 use crate::Rule;
-use crate::{Expr, Plan};
+use crate::{Expr, Plan, RuleContext};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -64,7 +64,7 @@ impl Rule<Plan> for ProjectionPushdownRule {
         "ProjectionPushdown"
     }
 
-    fn apply(&self, plan: &mut Plan) -> bool {
+    fn apply(&self, plan: &mut Plan, _ctx: &mut RuleContext) -> bool {
         self.optimize(plan)
     }
 }
@@ -345,7 +345,7 @@ impl ProjectionPushdownOptimizer {
     }
 
     /// Optimize a plan
-    pub fn optimize(&self, plan: &Plan) -> Plan {
+    pub fn optimize(&self, plan: &Plan, ctx: &mut RuleContext) -> Plan {
         if !self.config.enabled {
             return plan.clone();
         }
@@ -357,7 +357,7 @@ impl ProjectionPushdownOptimizer {
         let mut changed = true;
         let mut iterations = 0;
         while changed && iterations < 10 {
-            changed = rule.apply(&mut optimized);
+            changed = rule.apply(&mut optimized, ctx);
             iterations += 1;
         }
 
@@ -434,7 +434,8 @@ mod tests {
             table_name: "users".to_string(),
             projection: None,
         };
-        let optimized = optimizer.optimize(&plan);
+        let mut ctx = crate::rules::RuleContext::new();
+        let optimized = optimizer.optimize(&plan, &mut ctx);
         assert!(matches!(optimized, Plan::TableScan { .. }));
     }
 
@@ -511,7 +512,8 @@ mod tests {
             table_name: "users".to_string(),
             projection: None,
         };
-        let optimized = optimizer.optimize(&plan);
+        let mut ctx = crate::rules::RuleContext::new();
+        let optimized = optimizer.optimize(&plan, &mut ctx);
         // Should return same plan since disabled
         assert!(matches!(optimized, Plan::TableScan { .. }));
     }
