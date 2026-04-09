@@ -497,6 +497,75 @@ impl HnswIndex {
             }
         }
 
+        // Iterative refinement (NN-descent style)
+        self.refine_layer0_graph(n, m)?;
+
+        Ok(())
+    }
+
+    fn refine_layer0_graph(&mut self, n: usize, m: usize) -> VectorResult<()> {
+        let iterations = 5;
+        let nodes = &self.nodes;
+        let metric = self.metric;
+
+        for _iter in 0..iterations {
+            let mut improved = 0;
+
+            for idx in 0..n {
+                let query = &nodes[idx].vector;
+                let mut candidates: Vec<usize> = self.layers[0].neighbors[idx].clone();
+
+                for &neighbor in &self.layers[0].neighbors[idx] {
+                    for &nn in &self.layers[0].neighbors[neighbor] {
+                        if nn != idx && !candidates.contains(&nn) {
+                            candidates.push(nn);
+                        }
+                    }
+                }
+
+                let mut best: BinaryHeap<DistNode> = BinaryHeap::new();
+
+                for &cand in &candidates {
+                    if cand == idx {
+                        continue;
+                    }
+                    let d = -compute_similarity(query, &nodes[cand].vector, metric);
+                    best.push(DistNode { dist: d, idx: cand });
+                    if best.len() > m {
+                        let _ = best.pop();
+                    }
+                }
+
+                let new_neighbors: Vec<usize> =
+                    best.into_vec().into_iter().map(|n| n.idx).collect();
+
+                let old_set: std::collections::HashSet<_> =
+                    self.layers[0].neighbors[idx].iter().cloned().collect();
+                let new_set: std::collections::HashSet<_> = new_neighbors.iter().cloned().collect();
+
+                let diff = old_set.symmetric_difference(&new_set).count();
+                improved += diff;
+
+                if diff > 0 {
+                    self.layers[0].neighbors[idx] = new_neighbors;
+                }
+            }
+
+            if improved < n / 100 {
+                break;
+            }
+        }
+
+        for i in 0..n {
+            for &j in self.layers[0].neighbors[i].clone().iter() {
+                if !self.layers[0].neighbors[j].contains(&i)
+                    && self.layers[0].neighbors[j].len() < m
+                {
+                    self.layers[0].neighbors[j].push(i);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -530,6 +599,7 @@ impl HnswIndex {
 
                 let mut neighbors: Vec<usize> =
                     results.into_vec().into_iter().map(|n| n.idx).collect();
+
                 neighbors.sort_by(|&a, &b| {
                     let da = -compute_similarity(query, &nodes[a].vector, metric);
                     let db = -compute_similarity(query, &nodes[b].vector, metric);
@@ -587,7 +657,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -621,7 +691,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -661,7 +731,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
@@ -701,7 +771,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         index.build_from_vectors(vectors).unwrap();
@@ -739,7 +809,7 @@ mod tests {
             })
             .collect();
 
-        let mut index = HnswIndex::with_params(16, 200, 64, DistanceMetric::Cosine);
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
 
         let build_start = std::time::Instant::now();
         for (id, v) in vectors.iter() {
