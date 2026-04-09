@@ -193,6 +193,11 @@ harness = false
 name = "bench_columnar"
 harness = false
 
+[[bench]]
+name = "scheduler_bench"
+harness = false
+path = "crates/server/benches/scheduler_bench.rs"
+
 # [[bin]]
 # name = "tpch_benchmark"
 # path = "benches/tpch_comprehensive_main.rs"
@@ -538,6 +543,10 @@ path = "tests/integration/agentsql_test.rs"
 [[test]]
 name = "vector_storage_integration_test"
 path = "tests/integration/vector_storage_integration_test.rs"
+
+[[test]]
+name = "scheduler_integration_test"
+path = "crates/server/tests/scheduler_integration_test.rs"
 
 # Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
 # This prevents any single test from consuming excessive memory
