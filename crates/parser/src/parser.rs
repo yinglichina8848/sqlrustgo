@@ -1283,6 +1283,12 @@ impl Parser {
                 } else {
                     break;
                 }
+            } else if matches!(self.current(), Some(Token::Use))
+                || matches!(self.current(), Some(Token::Force))
+                || matches!(self.current(), Some(Token::Ignore))
+            {
+                // Index hints start here - don't break, let the index hints loop handle them
+                break;
             } else {
                 break;
             }
@@ -1313,6 +1319,9 @@ impl Parser {
                             if name.to_uppercase() == "INDEX" {
                                 self.next();
                             }
+                        } else if matches!(self.current(), Some(Token::Index)) {
+                            // Handle Token::Index directly
+                            self.next();
                         }
                     }
                     // Parse index name list in parentheses
@@ -1342,6 +1351,8 @@ impl Parser {
                         if name.to_uppercase() == "INDEX" {
                             self.next();
                         }
+                    } else if matches!(self.current(), Some(Token::Index)) {
+                        self.next();
                     }
                     // Parse index name list in parentheses
                     self.expect(Token::LParen)?;
@@ -1370,6 +1381,8 @@ impl Parser {
                         if name.to_uppercase() == "INDEX" {
                             self.next();
                         }
+                    } else if matches!(self.current(), Some(Token::Index)) {
+                        self.next();
                     }
                     // Parse index name list in parentheses
                     self.expect(Token::LParen)?;
@@ -5957,5 +5970,105 @@ fn test_parse_procedure_return() {
             _ => panic!("Expected RawSql statement"),
         },
         _ => panic!("Expected CreateProcedure statement"),
+    }
+}
+
+// ===== IndexHint Parsing Tests =====
+
+#[test]
+fn test_parse_select_with_force_index_hint() {
+    // Use 'order_status' instead of 'status' since STATUS is a keyword
+    let sql = "SELECT * FROM orders FORCE INDEX (idx_orders_primary) WHERE order_status = 'active'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "orders");
+            assert_eq!(s.index_hints.len(), 1);
+            assert_eq!(s.index_hints[0].hint_type, IndexHintType::ForceIndex);
+            assert_eq!(s.index_hints[0].index_names, vec!["idx_orders_primary"]);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_use_index_hint() {
+    let sql = "SELECT * FROM users USE INDEX (idx_id) WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert_eq!(s.index_hints.len(), 1);
+            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
+            assert_eq!(s.index_hints[0].index_names, vec!["idx_id"]);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_multiple_index_hints() {
+    let sql = "SELECT * FROM users USE INDEX (idx_id) IGNORE INDEX (idx_old)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert_eq!(s.index_hints.len(), 2);
+            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
+            assert_eq!(s.index_hints[1].hint_type, IndexHintType::IgnoreIndex);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_multiple_index_names() {
+    let sql = "SELECT * FROM users USE INDEX (idx_primary, idx_secondary, idx_tertiary)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert_eq!(s.index_hints.len(), 1);
+            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
+            assert_eq!(s.index_hints[0].index_names.len(), 3);
+            assert_eq!(s.index_hints[0].index_names[0], "idx_primary");
+            assert_eq!(s.index_hints[0].index_names[1], "idx_secondary");
+            assert_eq!(s.index_hints[0].index_names[2], "idx_tertiary");
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_without_index_hints() {
+    let sql = "SELECT id, name FROM users WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert!(s.index_hints.is_empty(), "Expected no index hints");
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_select_with_empty_index_hints() {
+    let sql = "SELECT * FROM users USE INDEX ()";
+    let result = parse(sql);
+    // USE INDEX with empty parentheses should parse but with empty index names
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert_eq!(s.index_hints.len(), 1);
+            assert_eq!(s.index_hints[0].index_names.len(), 0);
+        }
+        _ => panic!("Expected SELECT statement"),
     }
 }
