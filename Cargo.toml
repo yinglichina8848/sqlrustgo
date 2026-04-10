@@ -90,7 +90,7 @@ hmac = "0.12"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 fnv = "1.0"
 proptest = "1.1"
-arrow = { version = "53" }
+arrow = { version = "58" }
 parquet = { version = "53" }
 rust_decimal = "1.0"
 
