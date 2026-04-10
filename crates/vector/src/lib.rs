@@ -29,6 +29,7 @@ pub mod hnsw;
 pub mod ivf;
 pub mod metrics;
 pub mod parallel_knn;
+pub mod pq;
 pub mod simd_explicit;
 pub mod sql_vector_hybrid;
 
