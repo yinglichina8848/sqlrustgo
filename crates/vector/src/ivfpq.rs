@@ -366,4 +366,66 @@ mod tests {
         let index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
         assert!(index.is_empty());
     }
+
+    #[test]
+    #[ignore]
+    fn test_ivfpq_1m_performance() {
+        let size = 1_000_000;
+        let dim = 128;
+
+        let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 256, 16);
+
+        println!("Generating {} vectors...", size);
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        println!("Inserting vectors...");
+        for (id, v) in vectors {
+            index.insert(id, &v).unwrap();
+        }
+
+        println!("Building index...");
+        let build_start = std::time::Instant::now();
+        index.build_index().unwrap();
+        let build_time = build_start.elapsed();
+
+        let query = vec![0.5f32; dim];
+
+        println!("Warming up...");
+        for _ in 0..3 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+
+        println!("Running search benchmark...");
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let results = index.search(&query, 10).unwrap();
+            assert_eq!(results.len(), 10);
+        }
+        let total_search_time = search_start.elapsed();
+        let avg_search_time_ms = total_search_time.as_secs_f64() / 10.0 * 1000.0;
+
+        println!("\n=== IVFPQ 1M Performance ===");
+        println!("Build time: {:.2}s", build_time.as_secs_f64());
+        println!("Search time: {:.2}ms avg", avg_search_time_ms);
+        println!("Target: < 100ms");
+        println!(
+            "Status: {}",
+            if avg_search_time_ms < 100.0 {
+                "PASS"
+            } else {
+                "FAIL"
+            }
+        );
+
+        assert!(
+            avg_search_time_ms < 100.0,
+            "1M search took {}ms, target is < 100ms",
+            avg_search_time_ms
+        );
+    }
 }
