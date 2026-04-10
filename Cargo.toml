@@ -64,7 +64,7 @@ sqlrustgo-graph = { path = "crates/graph" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
-tonic = "0.12"
+tonic = "0.14"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
