@@ -9,6 +9,7 @@ use crate::error::{VectorError, VectorResult};
 ///
 /// Splits vectors into sub-vectors and quantizes each to k_sub centroids.
 /// Encoding: 128 dim / 16 sub_vecs = 8 dim per sub-vector, each encoded as 1 byte.
+#[derive(Debug, Clone)]
 pub struct ProductQuantizer {
     /// Original vector dimension
     pub dimension: usize,
@@ -19,7 +20,7 @@ pub struct ProductQuantizer {
     /// Dimension of each sub-vector
     pub sub_dim: usize,
     /// Codebook: [sub_idx][centroid_idx][sub_dim]
-    centroids: Vec<Vec<Vec<f32>>>,
+    pub centroids: Vec<Vec<Vec<f32>>>,
 }
 
 impl ProductQuantizer {

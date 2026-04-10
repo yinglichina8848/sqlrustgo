@@ -27,6 +27,7 @@ pub mod flat;
 pub mod gpu_accel;
 pub mod hnsw;
 pub mod ivf;
+pub mod ivfpq;
 pub mod metrics;
 pub mod parallel_knn;
 pub mod pq;
