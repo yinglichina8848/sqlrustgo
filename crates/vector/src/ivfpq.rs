@@ -61,36 +61,12 @@ impl IvfpqIndex {
             return Vec::new();
         }
         let k = k.min(vectors.len());
-        let mut centers: Vec<Vec<f32>> = Vec::with_capacity(k);
-        centers.push(vectors[0].clone());
 
-        for _ in 1..k {
-            let mut distances: Vec<f32> = Vec::with_capacity(vectors.len());
-            for v in vectors {
-                let min_dist = centers
-                    .iter()
-                    .map(|c| euclidean(v, c))
-                    .fold(f32::MAX, f32::min);
-                distances.push(min_dist);
-            }
-            let total: f32 = distances.iter().sum();
-            if total <= 0.0 {
-                let idx = rand::random::<usize>() % vectors.len();
-                centers.push(vectors[idx].clone());
-                continue;
-            }
-            let mut threshold = rand::random::<f32>() * total;
-            let mut selected = 0;
-            for (i, d) in distances.iter().enumerate() {
-                threshold -= d;
-                if threshold <= 0.0 {
-                    selected = i;
-                    break;
-                }
-            }
-            centers.push(vectors[selected].clone());
-        }
-        centers
+        // Random sampling initialization (faster than k-means++)
+        let mut rng = rand::thread_rng();
+        let indices: Vec<usize> = rand::seq::index::sample(&mut rng, vectors.len(), k).into_vec();
+
+        indices.iter().map(|&i| vectors[i].clone()).collect()
     }
 
     fn kmeans_assign(vectors: &[Vec<f32>], centers: &[Vec<f32>]) -> Vec<usize> {
