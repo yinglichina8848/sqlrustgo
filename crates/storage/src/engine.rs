@@ -12,6 +12,7 @@ use crate::bplus_tree::index::{CompositeBTreeIndex, CompositeKey};
 use crate::bplus_tree::SimpleBPlusTree;
 use crate::columnar::convert::StorageColumnArray;
 use crate::columnar::{CompressionConfig, CompressionLevel};
+use crate::predicate::Predicate;
 
 /// 索引唯一标识符
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -253,6 +254,19 @@ pub trait StorageEngine: Send + Sync {
             })
             .collect();
         Ok(projected)
+    }
+
+    fn scan_predicate(&self, table: &str, predicate: &Predicate) -> SqlResult<Vec<Record>> {
+        let all_records = self.scan(table)?;
+        let filtered = all_records
+            .into_iter()
+            .filter(|row| self.eval_predicate_for_scan(row, predicate))
+            .collect();
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(&self, _row: &Record, _predicate: &Predicate) -> bool {
+        true
     }
 
     fn set_cancel_flag(&mut self, _flag: Arc<AtomicBool>) {}
