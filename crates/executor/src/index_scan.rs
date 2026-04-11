@@ -1,8 +1,9 @@
 //! Index Scan Executor - uses storage engine's index APIs for fast lookups
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
+use crate::scan::{IndexScanable, ScanExecutor, ScanStats};
 use sqlrustgo_planner::{Expr, Operator, Schema};
-use sqlrustgo_storage::StorageEngine;
+use sqlrustgo_storage::{predicate::Predicate, StorageEngine};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::sync::Arc;
@@ -146,6 +147,34 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl<S: StorageEngine> IndexScanable for IndexScanVolcanoExecutor<S> {
+    fn can_use_index(&self, predicate: &Predicate) -> bool {
+        matches!(
+            predicate,
+            Predicate::Eq(_, _)
+                | Predicate::Lt(_, _)
+                | Predicate::Lte(_, _)
+                | Predicate::Gt(_, _)
+                | Predicate::Gte(_, _)
+        )
+    }
+
+    fn estimate_index_cost(&self, predicate: &Predicate) -> f64 {
+        let selectivity = match predicate {
+            Predicate::Eq(_, _) => 0.01,
+            Predicate::Lt(_, _) | Predicate::Lte(_, _) => 0.25,
+            Predicate::Gt(_, _) | Predicate::Gte(_, _) => 0.25,
+            _ => 1.0,
+        };
+        let total_rows = self.rows.len() as f64;
+        total_rows * selectivity + (total_rows * 0.1)
+    }
+
+    fn estimate_seq_cost(&self) -> f64 {
+        self.rows.len() as f64
     }
 }
 
