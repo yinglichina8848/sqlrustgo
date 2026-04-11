@@ -435,7 +435,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_ivfpq_1m_performance() {
         let size = 1_000_000;
         let dim = 128;
@@ -497,7 +496,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_ivfpq_100k_performance() {
         let size = 100_000;
         let dim = 128;
@@ -553,7 +551,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_ivfpq_10k_performance() {
         let size = 10_000;
         let dim = 128;
