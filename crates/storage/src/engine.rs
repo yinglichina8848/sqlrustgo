@@ -260,13 +260,17 @@ pub trait StorageEngine: Send + Sync {
         let all_records = self.scan(table)?;
         let filtered = all_records
             .into_iter()
-            .filter(|row| self.eval_predicate_for_scan(row, predicate))
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
             .collect();
         Ok(filtered)
     }
 
-    fn eval_predicate_for_scan(&self, _row: &Record, _predicate: &Predicate) -> bool {
+    fn eval_predicate_for_scan(&self, _table: &str, _row: &Record, _predicate: &Predicate) -> bool {
         true
+    }
+
+    fn eval_expr(&self, _table: &str, _row: &Record, _expr: &crate::predicate::Expr) -> Value {
+        Value::Null
     }
 
     fn set_cancel_flag(&mut self, _flag: Arc<AtomicBool>) {}
@@ -558,6 +562,81 @@ impl StorageEngine for MemoryStorage {
         let has_more = offset + limit < total;
         let batch = table_records.into_iter().skip(offset).take(limit).collect();
         Ok((batch, total, has_more))
+    }
+
+    fn scan_predicate(&self, table: &str, predicate: &Predicate) -> SqlResult<Vec<Record>> {
+        self.check_cancelled()?;
+        let table_records = self.tables.get(table).cloned().unwrap_or_default();
+        self.check_cancelled()?;
+
+        let filtered: Vec<Record> = table_records
+            .into_iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(&self, table: &str, row: &Record, predicate: &Predicate) -> bool {
+        match predicate {
+            Predicate::Eq(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val == r_val
+            }
+            Predicate::Lt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val < r_val
+            }
+            Predicate::Lte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val <= r_val
+            }
+            Predicate::Gt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val > r_val
+            }
+            Predicate::Gte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val >= r_val
+            }
+            Predicate::And(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    && self.eval_predicate_for_scan(table, row, r)
+            }
+            Predicate::Or(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    || self.eval_predicate_for_scan(table, row, r)
+            }
+            Predicate::Not(p) => !self.eval_predicate_for_scan(table, row, p),
+            Predicate::IsNull(expr) => matches!(self.eval_expr(table, row, expr), Value::Null),
+            Predicate::IsNotNull(expr) => !matches!(self.eval_expr(table, row, expr), Value::Null),
+            Predicate::In(col, values) => {
+                let col_val = self.eval_expr(table, row, col);
+                values
+                    .iter()
+                    .any(|v| col_val == self.eval_expr(table, row, v))
+            }
+        }
+    }
+
+    fn eval_expr(&self, table: &str, row: &Record, expr: &crate::predicate::Expr) -> Value {
+        match expr {
+            crate::predicate::Expr::Column(name) => {
+                if let Some(info) = self.table_infos.get(table) {
+                    if let Some(idx) = info.columns.iter().position(|c| c.name == *name) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            }
+            crate::predicate::Expr::Value(v) => v.clone(),
+            crate::predicate::Expr::Parameter(_) => Value::Null,
+        }
     }
 
     fn insert(&mut self, table: &str, mut records: Vec<Record>) -> SqlResult<()> {
