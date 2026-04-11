@@ -21,6 +21,7 @@ pub mod page;
 pub mod page_guard;
 pub mod parquet;
 pub mod pitr_recovery;
+pub mod predicate;
 pub mod read_write_split;
 pub mod replication;
 pub mod stats;
@@ -66,6 +67,7 @@ pub use pitr_recovery::{
     RecoveryPoint, RecoveryRecord, RecoveryResult, RecoveryStatus, RecoveryTarget,
     RecoveryValidator, ValidationResult,
 };
+pub use predicate::{Expr, IndexOp, Predicate};
 pub use read_write_split::{
     Connection, ConnectionPool, ConsistencyMode, LoadBalanceStrategy, NodeRole, QueryType,
     ReadAfterWriteConsistency, ReadWriteRouter, ReadWriteSplitConfig, ReplicaNode, RouteResult,
