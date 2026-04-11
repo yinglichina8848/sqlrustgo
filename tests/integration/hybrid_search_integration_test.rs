@@ -263,10 +263,15 @@ fn test_hybrid_euclidean_metric() {
 
 #[test]
 fn test_hybrid_execute_filtered_search_empty_predicates() {
+    use std::collections::HashMap;
+
     let mut searcher = HybridSearcher::new(DistanceMetric::Cosine);
     for i in 0..10u64 {
         let v = vec![i as f32; 128];
-        searcher.insert(i, &v, 1.0).unwrap();
+        let mut row = HashMap::new();
+        row.insert("_score".to_string(), SqlValue::Float(1.0));
+        row.insert("id".to_string(), SqlValue::Integer(i as i64));
+        searcher.insert_with_row(i, &v, row).unwrap();
     }
 
     let query = vec![5.0f32; 128];
@@ -281,15 +286,16 @@ fn test_hybrid_execute_filtered_search_empty_predicates() {
 #[test]
 fn test_hybrid_sql_predicate_types() {
     use SqlPredicate::*;
+    use SqlValue::*;
 
     let pred_equal = Equal {
         column: "category".to_string(),
-        value: "electronics".to_string(),
+        value: Text("electronics".to_string()),
     };
 
     let pred_range = LessThan {
         column: "price".to_string(),
-        value: 100.0,
+        value: Float(100.0),
     };
 
     let pred_and = And(Box::new(pred_equal.clone()), Box::new(pred_range.clone()));
