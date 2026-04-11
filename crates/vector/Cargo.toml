@@ -15,13 +15,6 @@ rand = "0.8"
 rayon = "1.10"
 log = "0.4"
 
-# OpenCL support for GPU acceleration (optional)
-ocl = { version = "0.19", optional = true }
-
-[features]
-default = []
-opencl = ["ocl"]
-
 [dev-dependencies]
 criterion = "0.8"
 rand = "0.8"

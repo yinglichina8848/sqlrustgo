@@ -61,16 +61,24 @@ impl std::fmt::Display for MySqlError {
 impl std::error::Error for MySqlError {}
 
 impl From<std::io::Error> for MySqlError {
-    fn from(e: std::io::Error) -> Self { MySqlError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        MySqlError::Io(e)
+    }
 }
 impl From<String> for MySqlError {
-    fn from(e: String) -> Self { MySqlError::Sql(e) }
+    fn from(e: String) -> Self {
+        MySqlError::Sql(e)
+    }
 }
 impl From<&str> for MySqlError {
-    fn from(e: &str) -> Self { MySqlError::Sql(e.to_string()) }
+    fn from(e: &str) -> Self {
+        MySqlError::Sql(e.to_string())
+    }
 }
 impl From<SqlError> for MySqlError {
-    fn from(e: SqlError) -> Self { MySqlError::Sql(e.to_string()) }
+    fn from(e: SqlError) -> Self {
+        MySqlError::Sql(e.to_string())
+    }
 }
 
 pub type MySqlResult<T> = Result<T, MySqlError>;
@@ -92,7 +100,11 @@ impl Packet {
         let sequence = r.read_u8()?;
         let mut payload = vec![0u8; length as usize];
         r.read_exact(&mut payload)?;
-        Ok(Self { length, sequence, payload })
+        Ok(Self {
+            length,
+            sequence,
+            payload,
+        })
     }
 
     pub fn write_to<W: Write>(&self, w: &mut W) -> MySqlResult<()> {
@@ -141,15 +153,21 @@ fn make_handshake_packet(seq: u8) -> Packet {
     p.write_u32::<LittleEndian>(1).unwrap(); // connection id
     p.extend_from_slice(b"sqlrustgo"); // auth plugin data (8 bytes)
     p.push(0x00);
-    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16).unwrap();
+    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16)
+        .unwrap();
     p.push(0x2c); // utf8mb4
     p.write_u16::<LittleEndian>(0x0002).unwrap(); // SERVER_STATUS_AUTOCOMMIT
-    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16).unwrap();
+    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
+        .unwrap();
     p.push(9); // auth plugin data length
     p.extend_from_slice(&[0u8; 10]); // reserved
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
-    Packet { length: p.len() as u32, sequence: seq, payload: p }
+    Packet {
+        length: p.len() as u32,
+        sequence: seq,
+        payload: p,
+    }
 }
 
 fn make_ok_packet(seq: u8, affected_rows: u64, last_insert_id: u64) -> Packet {
@@ -159,7 +177,11 @@ fn make_ok_packet(seq: u8, affected_rows: u64, last_insert_id: u64) -> Packet {
     write_lenenc_int(&mut p, last_insert_id).unwrap();
     p.write_u16::<LittleEndian>(0x0002).unwrap();
     p.write_u16::<LittleEndian>(0).unwrap();
-    Packet { length: p.len() as u32, sequence: seq, payload: p }
+    Packet {
+        length: p.len() as u32,
+        sequence: seq,
+        payload: p,
+    }
 }
 
 fn make_err_packet(seq: u8, code: u16, message: &str) -> Packet {
@@ -170,7 +192,11 @@ fn make_err_packet(seq: u8, code: u16, message: &str) -> Packet {
     p.extend_from_slice(b"#00000");
     p.extend_from_slice(message.as_bytes());
     p.push(0x00);
-    Packet { length: p.len() as u32, sequence: seq, payload: p }
+    Packet {
+        length: p.len() as u32,
+        sequence: seq,
+        payload: p,
+    }
 }
 
 fn make_eof_packet(seq: u8, status: u16) -> Packet {
@@ -178,7 +204,11 @@ fn make_eof_packet(seq: u8, status: u16) -> Packet {
     p.push(0xfe);
     p.write_u16::<LittleEndian>(0).unwrap();
     p.write_u16::<LittleEndian>(status).unwrap();
-    Packet { length: p.len() as u32, sequence: seq, payload: p }
+    Packet {
+        length: p.len() as u32,
+        sequence: seq,
+        payload: p,
+    }
 }
 
 // ============================================================================
@@ -213,39 +243,65 @@ mod col_type {
 fn col_type_from_string(sql_type: &str) -> u8 {
     let upper = sql_type.to_uppercase();
     if upper.contains("INT") {
-        if upper.contains("BIGINT") { col_type::LONGLONG }
-        else if upper.contains("MEDIUMINT") || upper.contains("INT24") { col_type::INT24 }
-        else if upper.contains("SMALLINT") { col_type::SHORT }
-        else if upper.contains("TINYINT") { col_type::TINY }
-        else { col_type::LONG }
-    } else if upper.contains("FLOAT") { col_type::FLOAT }
-    else if upper.contains("DOUBLE") { col_type::DOUBLE }
-    else if upper.contains("DECIMAL") || upper.contains("NUMERIC") { col_type::NEWDECIMAL }
-    else if upper.contains("CHAR") || upper.contains("TEXT") || upper.contains("VARCHAR") { col_type::VARSTRING }
-    else if upper.contains("BLOB") || upper.contains("BINARY") { col_type::BLOB }
-    else if upper.contains("DATE") { col_type::DATE }
-    else if upper.contains("TIME") { col_type::TIME }
-    else if upper.contains("DATETIME") || upper.contains("TIMESTAMP") { col_type::DATETIME }
-    else { col_type::STRING }
+        if upper.contains("BIGINT") {
+            col_type::LONGLONG
+        } else if upper.contains("MEDIUMINT") || upper.contains("INT24") {
+            col_type::INT24
+        } else if upper.contains("SMALLINT") {
+            col_type::SHORT
+        } else if upper.contains("TINYINT") {
+            col_type::TINY
+        } else {
+            col_type::LONG
+        }
+    } else if upper.contains("FLOAT") {
+        col_type::FLOAT
+    } else if upper.contains("DOUBLE") {
+        col_type::DOUBLE
+    } else if upper.contains("DECIMAL") || upper.contains("NUMERIC") {
+        col_type::NEWDECIMAL
+    } else if upper.contains("CHAR") || upper.contains("TEXT") || upper.contains("VARCHAR") {
+        col_type::VARSTRING
+    } else if upper.contains("BLOB") || upper.contains("BINARY") {
+        col_type::BLOB
+    } else if upper.contains("DATE") {
+        col_type::DATE
+    } else if upper.contains("TIME") {
+        col_type::TIME
+    } else if upper.contains("DATETIME") || upper.contains("TIMESTAMP") {
+        col_type::DATETIME
+    } else {
+        col_type::STRING
+    }
 }
 
 fn col_len_from_type(sql_type: &str) -> u32 {
     let upper = sql_type.to_uppercase();
-    if upper.contains("INT(1)") { 1 }
-    else if upper.contains("INT(") {
-        upper.split("INT(").nth(1)
+    if upper.contains("INT(1)") {
+        1
+    } else if upper.contains("INT(") {
+        upper
+            .split("INT(")
+            .nth(1)
             .and_then(|s| s.split(')').next())
             .and_then(|s| s.parse().ok())
             .unwrap_or(11)
-    } else if upper.contains("FLOAT") { 12 }
-    else if upper.contains("DOUBLE") { 22 }
-    else if upper.contains("VARCHAR(") {
-        upper.split("VARCHAR(").nth(1)
+    } else if upper.contains("FLOAT") {
+        12
+    } else if upper.contains("DOUBLE") {
+        22
+    } else if upper.contains("VARCHAR(") {
+        upper
+            .split("VARCHAR(")
+            .nth(1)
             .and_then(|s| s.split(')').next())
             .and_then(|s| s.parse().ok())
             .unwrap_or(255)
-    } else if upper.contains("TEXT") { 65535 }
-    else { 255 }
+    } else if upper.contains("TEXT") {
+        65535
+    } else {
+        255
+    }
 }
 
 fn value_to_string(v: &Value) -> String {
@@ -288,8 +344,10 @@ fn value_to_string(v: &Value) -> String {
             let hour = ((secs % 86400) / 3600) as u32;
             let min = ((secs % 3600) / 60) as u32;
             let sec = (secs % 60) as u32;
-            format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
-                year, month, day, hour, min, sec, micros)
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
+                year, month, day, hour, min, sec, micros
+            )
         }
         Value::Uuid(u) => format!("{:036}", u),
         Value::Array(arr) => format!("{:?}", arr),
@@ -305,12 +363,7 @@ fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     Ok(())
 }
 
-fn write_column_def<W: Write>(
-    w: &mut W,
-    name: &str,
-    sql_type: &str,
-    seq: u8,
-) -> MySqlResult<()> {
+fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) -> MySqlResult<()> {
     let mut p = Vec::new();
     write_lenenc_string(&mut p, b"def").unwrap();
     write_lenenc_string(&mut p, b"").unwrap();
@@ -320,12 +373,18 @@ fn write_column_def<W: Write>(
     write_lenenc_string(&mut p, name.as_bytes()).unwrap();
     p.push(0x0c);
     p.write_u16::<LittleEndian>(0x21).unwrap(); // charset utf8mb4
-    p.write_u32::<LittleEndian>(col_len_from_type(sql_type)).unwrap();
+    p.write_u32::<LittleEndian>(col_len_from_type(sql_type))
+        .unwrap();
     p.push(col_type_from_string(sql_type));
     p.write_u16::<LittleEndian>(0x01).unwrap(); // NOT_NULL_FLAG
     p.push(0x00);
     p.write_u16::<LittleEndian>(0).unwrap();
-    Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+    Packet {
+        length: p.len() as u32,
+        sequence: seq,
+        payload: p,
+    }
+    .write_to(w)?;
     Ok(())
 }
 
@@ -340,13 +399,21 @@ fn send_result_set<W: Write>(
     {
         let mut p = Vec::new();
         write_lenenc_int(&mut p, columns.len() as u64).unwrap();
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
 
     // Column definitions
     for (i, name) in columns.iter().enumerate() {
-        let ct = column_types.get(i).map(|s| s.as_str()).unwrap_or("VARCHAR(255)");
+        let ct = column_types
+            .get(i)
+            .map(|s| s.as_str())
+            .unwrap_or("VARCHAR(255)");
         write_column_def(w, name, ct, seq)?;
         seq = seq.wrapping_add(1);
     }
@@ -359,7 +426,12 @@ fn send_result_set<W: Write>(
     for row in rows {
         let mut p = Vec::new();
         write_text_row(&mut p, row)?;
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
 
@@ -392,10 +464,7 @@ fn execute_select(
     Ok((columns, column_types, result.rows))
 }
 
-fn execute_write(
-    sql: &str,
-    engine: &mut ExecutionEngine,
-) -> MySqlResult<usize> {
+fn execute_write(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<usize> {
     let statement: Statement = parse(sql).map_err(|e| MySqlError::Sql(e))?;
     let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
     Ok(result.affected_rows)
@@ -449,7 +518,11 @@ fn handle_connection(
 
         let cmd = packet.payload.first().copied().unwrap_or(0);
         let payload = &packet.payload[1..];
-        tracing::info!("Received packet: cmd=0x{:02x}, payload_len={}", cmd, payload.len());
+        tracing::info!(
+            "Received packet: cmd=0x{:02x}, payload_len={}",
+            cmd,
+            payload.len()
+        );
 
         match cmd {
             packet_type::COM_QUIT => {
@@ -465,7 +538,6 @@ fn handle_connection(
                     Ok(()) => {}
                     Err(e) => tracing::warn!("Write error in COM_PING: {}", e),
                 }
-                match result {
                 seq = seq.wrapping_add(1);
             }
 
@@ -504,7 +576,10 @@ fn handle_connection(
                             tracing::warn!("Query error: {}", e);
                             let code: u16 = match &e {
                                 MySqlError::Sql(s)
-                                    if s.contains("not found") || s.contains("does not exist") => 1146,
+                                    if s.contains("not found") || s.contains("does not exist") =>
+                                {
+                                    1146
+                                }
                                 MySqlError::Sql(_) => 1064,
                                 _ => 2000,
                             };
@@ -512,8 +587,9 @@ fn handle_connection(
                         }
                         Err(_) => {
                             tracing::error!("PANIC in execute_select!");
-                            make_err_packet(seq, 2000, "Internal server error").write_to(&mut stream)?;
-                    }
+                            make_err_packet(seq, 2000, "Internal server error")
+                                .write_to(&mut stream)?;
+                        }
                     }
                 } else {
                     match execute_write(&query, &mut engine) {
@@ -522,8 +598,7 @@ fn handle_connection(
                         }
                         Err(e) => {
                             tracing::warn!("Write error: {}", e);
-                            make_err_packet(seq, 1064, &e.to_string())
-                                .write_to(&mut stream)?;
+                            make_err_packet(seq, 1064, &e.to_string()).write_to(&mut stream)?;
                         }
                     }
                 }
@@ -537,7 +612,12 @@ fn handle_connection(
             }
 
             _ => {
-                tracing::warn!("Unknown command 0x{:02x} from {} (payload first bytes: {:?})", cmd, addr, &payload[..std::cmp::min(10, payload.len())]);
+                tracing::warn!(
+                    "Unknown command 0x{:02x} from {} (payload first bytes: {:?})",
+                    cmd,
+                    addr,
+                    &payload[..std::cmp::min(10, payload.len())]
+                );
                 make_err_packet(seq, 1047, "Unknown command").write_to(&mut stream)?;
                 seq = seq.wrapping_add(1);
             }
@@ -574,7 +654,10 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
                     if let Err(e) = engine.execute(stmt) {
                         tracing::warn!("Init table error (may already exist): {}", e);
                     } else {
-                        tracing::info!("Created table via: {}", sql.split_whitespace().nth(2).unwrap_or("?"));
+                        tracing::info!(
+                            "Created table via: {}",
+                            sql.split_whitespace().nth(2).unwrap_or("?")
+                        );
                     }
                 }
                 Err(e) => {
@@ -587,7 +670,9 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let addr = stream.peer_addr().unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
+                let addr = stream
+                    .peer_addr()
+                    .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
                 let storage = storage.clone();
                 thread::spawn(move || {
                     if let Err(e) = handle_connection(stream, addr, storage) {

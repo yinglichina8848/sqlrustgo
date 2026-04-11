@@ -134,6 +134,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 StorageColumn {
                     name: "email".to_string(),
@@ -143,6 +144,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 StorageColumn {
                     name: "name".to_string(),
@@ -152,6 +154,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         };
@@ -166,6 +169,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 StorageColumn {
                     name: "user_id".to_string(),
@@ -180,6 +184,7 @@ mod tests {
                         on_delete: Some(StorageFkAction::Cascade),
                         on_update: None,
                     }),
+                    compression: None,
                 },
             ],
         };
@@ -238,6 +243,7 @@ mod tests {
                 is_primary_key: false,
                 auto_increment: false,
                 references: None,
+                compression: None,
             }],
         };
         storage.create_table(&info).unwrap();
@@ -259,6 +265,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 StorageColumn {
                     name: "not_null_col".to_string(),
@@ -268,6 +275,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         };
@@ -302,6 +310,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
                 StorageColumn {
                     name: "regular_col".to_string(),
@@ -311,6 +320,7 @@ mod tests {
                     is_primary_key: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         };

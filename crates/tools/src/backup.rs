@@ -1542,6 +1542,7 @@ mod tests {
                     is_unique: true,
                     auto_increment: true,
                     references: None,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -1551,6 +1552,7 @@ mod tests {
                     is_unique: false,
                     auto_increment: false,
                     references: None,
+                    compression: None,
                 },
             ],
         };
