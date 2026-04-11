@@ -344,6 +344,97 @@ mod tests {
     }
 
     #[test]
+    fn test_ivfpq_delete() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.insert(2, &[0.0, 1.0]).unwrap();
+        index.insert(3, &[0.5, 0.5]).unwrap();
+
+        index.build_index().unwrap();
+        assert!(index.built);
+
+        index.delete(2).unwrap();
+        assert!(!index.built);
+    }
+
+    #[test]
+    fn test_ivfpq_delete_not_found() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.build_index().unwrap();
+
+        let result = index.delete(999);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ivfpq_query_dimension_mismatch() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.build_index().unwrap();
+
+        let result = index.search(&[1.0, 0.0, 0.0], 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ivfpq_build_empty() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        let result = index.build_index();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ivfpq_get_all() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.insert(2, &[0.0, 1.0]).unwrap();
+        index.insert(3, &[0.5, 0.5]).unwrap();
+
+        index.build_index().unwrap();
+
+        let all = index.get_all();
+        assert_eq!(all.len(), 3);
+        let ids: Vec<u64> = all.iter().map(|r| r.id).collect();
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+        assert!(ids.contains(&3));
+    }
+
+    #[test]
+    fn test_ivfpq_iter_vectors() {
+        let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 2, 4);
+        index.insert(1, &[1.0, 0.0]).unwrap();
+        index.insert(2, &[0.0, 1.0]).unwrap();
+
+        index.build_index().unwrap();
+
+        let vectors: Vec<(u64, Vec<f32>)> = index
+            .iter_vectors()
+            .map(|(id, v)| (id, v.to_vec()))
+            .collect();
+        assert_eq!(vectors.len(), 2);
+    }
+
+    #[test]
+    fn test_ivfpq_all_metrics() {
+        for metric in [
+            DistanceMetric::Cosine,
+            DistanceMetric::Euclidean,
+            DistanceMetric::DotProduct,
+            DistanceMetric::Manhattan,
+        ] {
+            let mut index = IvfpqIndex::new(metric, 2, 4);
+            index.insert(1, &[1.0, 0.0]).unwrap();
+            index.insert(2, &[0.0, 1.0]).unwrap();
+            index.build_index().unwrap();
+
+            let results = index.search(&[1.0, 0.0], 1).unwrap();
+            assert_eq!(results[0].id, 1);
+        }
+    }
+
+    #[test]
     #[ignore]
     fn test_ivfpq_1m_performance() {
         let size = 1_000_000;
