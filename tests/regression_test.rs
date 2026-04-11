@@ -217,6 +217,15 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["PKG:sqlrustgo-executor:test_vectorized_parallel"],
             description: "向量化执行器测试: 批量扫描、SIMD聚合、并行聚合、性能基准 (37 tests)",
         },
+        // 向量检索测试
+        TestCategory {
+            name: "向量检索测试 (Vector Search)",
+            test_files: vec![
+                "vector_storage_integration_test",
+                "hybrid_search_integration_test",
+            ],
+            description: "向量存储集成测试: Flat/HNSW/IVF/IVFPQ索引, 混合搜索 (40+ tests)",
+        },
         // 工具测试
         TestCategory {
             name: "工具测试 (Tools)",
