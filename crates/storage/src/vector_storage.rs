@@ -212,6 +212,22 @@ impl VectorStore {
         Ok(count)
     }
 
+    /// Build the index after inserting vectors (required for IVF and IVFPQ)
+    /// IVF and IVFPQ indexes require build_index() to be called after inserting
+    /// vectors and before calling search().
+    pub fn build_index(&mut self, table: &str, column: &str) -> VectorResult<()> {
+        let key = Self::index_key(table, column);
+
+        let index = self.indices.get_mut(&key).ok_or_else(|| {
+            VectorError::InvalidParameter(format!(
+                "Vector column {}:{} not registered",
+                table, column
+            ))
+        })?;
+
+        index.build_index()
+    }
+
     /// Search for similar vectors
     pub fn search(
         &self,
