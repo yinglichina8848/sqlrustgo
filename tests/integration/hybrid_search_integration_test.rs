@@ -320,6 +320,173 @@ fn test_hybrid_sql_predicate_types() {
 }
 
 // ============================================================================
+// T5.5: Predicate Filtering Tests
+// ============================================================================
+
+#[test]
+fn test_hybrid_predicate_filtering_less_than() {
+    use sqlrustgo_vector::sql_vector_hybrid::{SqlPredicate, SqlValue};
+    use std::collections::HashMap;
+
+    let mut searcher = HybridSearcher::new(DistanceMetric::Cosine);
+
+    // Insert 5 vectors with category_id: 0, 1, 2, 3, 4
+    for i in 0..5u64 {
+        let v = vec![i as f32; 128];
+        let mut row = HashMap::new();
+        row.insert("_score".to_string(), SqlValue::Float(1.0));
+        row.insert("category_id".to_string(), SqlValue::Integer(i as i64));
+        searcher.insert_with_row(i, &v, row).unwrap();
+    }
+
+    // Query with predicate: category_id < 3
+    // Should only return ids 0, 1, 2
+    let query = vec![2.0f32; 128];
+    let predicates = vec![SqlPredicate::LessThan {
+        column: "category_id".to_string(),
+        value: SqlValue::Integer(3),
+    }];
+
+    let result = searcher
+        .execute_filtered_search(&query, &predicates, 5)
+        .unwrap();
+
+    // Verify all returned entries have category_id < 3
+    for entry in &result.entries {
+        assert!(
+            entry.id < 3,
+            "Entry id {} should be < 3 based on predicate filter",
+            entry.id
+        );
+    }
+    assert_eq!(result.entries.len(), 3);
+}
+
+#[test]
+fn test_hybrid_predicate_filtering_equal() {
+    use sqlrustgo_vector::sql_vector_hybrid::{SqlPredicate, SqlValue};
+    use std::collections::HashMap;
+
+    let mut searcher = HybridSearcher::new(DistanceMetric::Cosine);
+
+    // Insert vectors with different category values
+    let categories = vec![
+        "electronics",
+        "clothing",
+        "electronics",
+        "food",
+        "electronics",
+    ];
+    for (i, cat) in categories.iter().enumerate() {
+        let v = vec![i as f32; 128];
+        let mut row = HashMap::new();
+        row.insert("_score".to_string(), SqlValue::Float(1.0));
+        row.insert("category".to_string(), SqlValue::Text(cat.to_string()));
+        searcher.insert_with_row(i as u64, &v, row).unwrap();
+    }
+
+    // Query with predicate: category = "electronics"
+    let query = vec![2.0f32; 128];
+    let predicates = vec![SqlPredicate::Equal {
+        column: "category".to_string(),
+        value: SqlValue::Text("electronics".to_string()),
+    }];
+
+    let result = searcher
+        .execute_filtered_search(&query, &predicates, 5)
+        .unwrap();
+
+    // Should only return ids 0, 2, 4 (electronics)
+    assert_eq!(result.entries.len(), 3);
+    for entry in &result.entries {
+        assert!(
+            entry.id == 0 || entry.id == 2 || entry.id == 4,
+            "Entry id {} should be electronics category",
+            entry.id
+        );
+    }
+}
+
+#[test]
+fn test_hybrid_predicate_filtering_and() {
+    use sqlrustgo_vector::sql_vector_hybrid::{SqlPredicate, SqlValue};
+    use std::collections::HashMap;
+
+    let mut searcher = HybridSearcher::new(DistanceMetric::Cosine);
+
+    // Insert 10 vectors with price: 10, 20, 30, ..., 100
+    for i in 0..10u64 {
+        let v = vec![i as f32; 128];
+        let mut row = HashMap::new();
+        row.insert("_score".to_string(), SqlValue::Float(1.0));
+        row.insert(
+            "price".to_string(),
+            SqlValue::Integer(((i + 1) * 10) as i64),
+        );
+        row.insert("in_stock".to_string(), SqlValue::Boolean(i % 2 == 0));
+        searcher.insert_with_row(i, &v, row).unwrap();
+    }
+
+    // Query with predicate: price >= 30 AND price <= 70
+    let query = vec![5.0f32; 128];
+    let predicates = vec![SqlPredicate::And(
+        Box::new(SqlPredicate::GreaterThanEq {
+            column: "price".to_string(),
+            value: SqlValue::Integer(30),
+        }),
+        Box::new(SqlPredicate::LessThanEq {
+            column: "price".to_string(),
+            value: SqlValue::Integer(70),
+        }),
+    )];
+
+    let result = searcher
+        .execute_filtered_search(&query, &predicates, 10)
+        .unwrap();
+
+    // Should return ids with price 30, 40, 50, 60, 70 (ids 2, 3, 4, 5, 6)
+    assert_eq!(result.entries.len(), 5);
+    for entry in &result.entries {
+        assert!(
+            entry.id >= 2 && entry.id <= 6,
+            "Entry id {} should have price between 30 and 70",
+            entry.id
+        );
+    }
+}
+
+#[test]
+fn test_hybrid_predicate_filtering_no_match() {
+    use sqlrustgo_vector::sql_vector_hybrid::{SqlPredicate, SqlValue};
+    use std::collections::HashMap;
+
+    let mut searcher = HybridSearcher::new(DistanceMetric::Cosine);
+
+    // Insert 3 vectors with values 0, 1, 2
+    for i in 0..3u64 {
+        let v = vec![i as f32; 128];
+        let mut row = HashMap::new();
+        row.insert("_score".to_string(), SqlValue::Float(1.0));
+        row.insert("value".to_string(), SqlValue::Integer(i as i64));
+        searcher.insert_with_row(i, &v, row).unwrap();
+    }
+
+    // Query with predicate: value > 100 (no match)
+    let query = vec![1.0f32; 128];
+    let predicates = vec![SqlPredicate::GreaterThan {
+        column: "value".to_string(),
+        value: SqlValue::Integer(100),
+    }];
+
+    let result = searcher
+        .execute_filtered_search(&query, &predicates, 5)
+        .unwrap();
+
+    // Should return no results
+    assert_eq!(result.entries.len(), 0);
+}
+
+// ============================================================================
 // T6: Performance Benchmark Tests (Quick)
 // ============================================================================
 
