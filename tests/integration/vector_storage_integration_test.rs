@@ -41,12 +41,6 @@ fn test_basic_write_read(index_type: VectorIndexType) {
     let dir = create_temp_dir();
     let mut store = VectorStore::new(dir.path().to_path_buf()).unwrap();
 
-    // IVF requires build_index which isn't exposed, so skip it
-    if index_type == VectorIndexType::Ivf {
-        println!("✓ T1: Skipping {:?} - requires build_index()", index_type);
-        return;
-    }
-
     store
         .register_column(
             "items",
@@ -63,6 +57,11 @@ fn test_basic_write_read(index_type: VectorIndexType) {
     }
 
     assert_eq!(store.len("items", "embedding"), 10);
+
+    // IVF and IVFPQ require build_index before search
+    if matches!(index_type, VectorIndexType::Ivf | VectorIndexType::Ivfpq) {
+        store.build_index("items", "embedding").unwrap();
+    }
 
     // Search and verify
     let query = vec![0.5f32; 128];
@@ -83,7 +82,6 @@ fn test_t1_hnsw_basic_write_read() {
 }
 
 #[test]
-#[ignore] // IVF requires build_index() not yet exposed via VectorStore
 fn test_t1_ivf_basic_write_read() {
     test_basic_write_read(VectorIndexType::Ivf);
 }
@@ -91,6 +89,11 @@ fn test_t1_ivf_basic_write_read() {
 #[test]
 fn test_t1_parallel_knn_basic_write_read() {
     test_basic_write_read(VectorIndexType::ParallelKnn);
+}
+
+#[test]
+fn test_t1_ivfpq_basic_write_read() {
+    test_basic_write_read(VectorIndexType::Ivfpq);
 }
 
 // ============================================================================
@@ -103,12 +106,6 @@ fn test_t1_parallel_knn_basic_write_read() {
 fn test_serialization_roundtrip(index_type: VectorIndexType) {
     let dir = create_temp_dir();
     let mut store = VectorStore::new(dir.path().to_path_buf()).unwrap();
-
-    // IVF requires build_index which isn't exposed
-    if index_type == VectorIndexType::Ivf {
-        println!("✓ T2: Skipping {:?} - requires build_index()", index_type);
-        return;
-    }
 
     store
         .register_column(
@@ -123,6 +120,11 @@ fn test_serialization_roundtrip(index_type: VectorIndexType) {
     let vectors = generate_random_vectors(20, 128);
     for (id, vec) in &vectors {
         store.insert("items", "embedding", *id, vec).unwrap();
+    }
+
+    // IVF and IVFPQ require build_index before save for proper serialization
+    if matches!(index_type, VectorIndexType::Ivf | VectorIndexType::Ivfpq) {
+        store.build_index("items", "embedding").unwrap();
     }
 
     // Save to disk
@@ -153,7 +155,6 @@ fn test_t2_hnsw_serialization_roundtrip() {
 }
 
 #[test]
-#[ignore]
 fn test_t2_ivf_serialization_roundtrip() {
     test_serialization_roundtrip(VectorIndexType::Ivf);
 }
@@ -161,6 +162,11 @@ fn test_t2_ivf_serialization_roundtrip() {
 #[test]
 fn test_t2_parallel_knn_serialization_roundtrip() {
     test_serialization_roundtrip(VectorIndexType::ParallelKnn);
+}
+
+#[test]
+fn test_t2_ivfpq_serialization_roundtrip() {
+    test_serialization_roundtrip(VectorIndexType::Ivfpq);
 }
 
 // ============================================================================
