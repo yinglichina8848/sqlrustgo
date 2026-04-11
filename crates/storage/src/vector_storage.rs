@@ -8,6 +8,7 @@ use crate::binary_storage::BinaryTableStorage;
 use crate::engine::TableData;
 use serde::{Deserialize, Serialize};
 use sqlrustgo_vector::error::VectorError;
+use sqlrustgo_vector::ivfpq::IvfpqIndex;
 use sqlrustgo_vector::metrics::DistanceMetric;
 use sqlrustgo_vector::parallel_knn::ParallelKnnIndex;
 use sqlrustgo_vector::traits::{IndexEntry, VectorIndex};
@@ -27,6 +28,8 @@ pub enum VectorIndexType {
     Ivf,
     /// Parallel KNN (SIMD-accelerated)
     ParallelKnn,
+    /// IVFPQ index (IVF + Product Quantization)
+    Ivfpq,
 }
 
 impl Default for VectorIndexType {
@@ -146,6 +149,7 @@ impl VectorStore {
             VectorIndexType::Hnsw => Box::new(sqlrustgo_vector::HnswIndex::new(metric)),
             VectorIndexType::Ivf => Box::new(sqlrustgo_vector::IvfIndex::new(metric, 100)),
             VectorIndexType::ParallelKnn => Box::new(ParallelKnnIndex::new(metric)),
+            VectorIndexType::Ivfpq => Box::new(IvfpqIndex::new(metric, 128, 16)),
         };
 
         self.indices.insert(key.clone(), index);
