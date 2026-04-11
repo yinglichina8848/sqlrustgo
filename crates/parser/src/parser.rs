@@ -734,6 +734,8 @@ impl Parser {
             Some(Token::Copy) => self.parse_copy(),
             Some(Token::Merge) => self.parse_merge(),
             Some(Token::Truncate) => self.parse_truncate(),
+            Some(Token::Call) => self.parse_call(),
+            Some(Token::Delimiter) => self.parse_delimiter(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -896,7 +898,7 @@ impl Parser {
                         _ => return Err("Expected MATCHED or NOT MATCHED".to_string()),
                     }
                 }
-                None => break,
+                None | Some(Token::Eof) => break,
                 _ => return Err("Unexpected token in MERGE".to_string()),
             }
         }
@@ -6061,7 +6063,6 @@ fn test_parse_select_without_index_hints() {
 fn test_parse_select_with_empty_index_hints() {
     let sql = "SELECT * FROM users USE INDEX ()";
     let result = parse(sql);
-    // USE INDEX with empty parentheses should parse but with empty index names
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
         Statement::Select(s) => {
@@ -6070,5 +6071,163 @@ fn test_parse_select_with_empty_index_hints() {
             assert_eq!(s.index_hints[0].index_names.len(), 0);
         }
         _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_qualified_column() {
+    let sql = "SELECT users.id, users.name FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.columns.len(), 2);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_merge_basic() {
+    let sql = "MERGE INTO target USING source ON condition WHEN MATCHED THEN UPDATE SET col = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Merge(m) => {
+            assert_eq!(m.target_table, "target");
+            assert_eq!(m.source_table, "source");
+            assert!(m.when_matched.is_some());
+        }
+        _ => panic!("Expected MERGE statement"),
+    }
+}
+
+#[test]
+fn test_parse_merge_update_set() {
+    let sql = "MERGE INTO t1 USING t2 ON t1.id = t2.id WHEN MATCHED THEN UPDATE SET name = t2.name";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Merge(m) => {
+            assert_eq!(m.target_table, "t1");
+            assert_eq!(m.source_table, "t2");
+            match &m.when_matched {
+                Some(MergeAction::Update { set_clauses }) => {
+                    assert_eq!(set_clauses.len(), 1);
+                    assert_eq!(set_clauses[0].0, "name");
+                }
+                _ => panic!("Expected UPDATE action"),
+            }
+        }
+        _ => panic!("Expected MERGE statement"),
+    }
+}
+
+#[test]
+fn test_parse_prepare_basic() {
+    let sql = "PREPARE my_stmt FROM 'SELECT * FROM users'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Prepare(p) => {
+            assert_eq!(p.name, "my_stmt");
+            assert_eq!(p.sql, "SELECT * FROM users");
+        }
+        _ => panic!("Expected PREPARE statement"),
+    }
+}
+
+#[test]
+fn test_parse_execute_basic() {
+    let sql = "EXECUTE my_stmt";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Execute(e) => {
+            assert_eq!(e.name, "my_stmt");
+            assert!(e.params.is_empty());
+        }
+        _ => panic!("Expected EXECUTE statement"),
+    }
+}
+
+#[test]
+fn test_parse_execute_with_params() {
+    let sql = "EXECUTE my_stmt USING 1, 2, 3";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Execute(e) => {
+            assert_eq!(e.name, "my_stmt");
+            assert_eq!(e.params.len(), 3);
+        }
+        _ => panic!("Expected EXECUTE statement"),
+    }
+}
+
+#[test]
+fn test_parse_deallocate_prepare() {
+    let sql = "DEALLOCATE PREPARE my_stmt";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::DeallocatePrepare(d) => {
+            assert_eq!(d.name, "my_stmt");
+        }
+        _ => panic!("Expected DEALLOCATE PREPARE statement"),
+    }
+}
+
+#[test]
+fn test_parse_call_procedure() {
+    let sql = "CALL my_proc(1, 'test')";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Call(c) => {
+            assert_eq!(c.procedure_name, "my_proc");
+            assert_eq!(c.args.len(), 2);
+        }
+        _ => panic!("Expected CALL statement"),
+    }
+}
+
+#[test]
+fn test_parse_call_no_args() {
+    let sql = "CALL my_proc()";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Call(c) => {
+            assert_eq!(c.procedure_name, "my_proc");
+            assert!(c.args.is_empty());
+        }
+        _ => panic!("Expected CALL statement"),
+    }
+}
+
+#[test]
+fn test_parse_delimiter_semicolon() {
+    let sql = "DELIMITER ;";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Delimiter(d) => {
+            assert_eq!(d.delimiter, ";");
+        }
+        _ => panic!("Expected DELIMITER statement"),
+    }
+}
+
+#[test]
+fn test_parse_delimiter_custom() {
+    let sql = "DELIMITER newdelimiter";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Delimiter(d) => {
+            assert_eq!(d.delimiter, "newdelimiter");
+        }
+        _ => panic!("Expected DELIMITER statement"),
     }
 }
