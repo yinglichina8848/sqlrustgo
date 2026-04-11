@@ -545,6 +545,10 @@ name = "vector_storage_integration_test"
 path = "tests/integration/vector_storage_integration_test.rs"
 
 [[test]]
+name = "hybrid_search_integration_test"
+path = "tests/integration/hybrid_search_integration_test.rs"
+
+[[test]]
 name = "scheduler_integration_test"
 path = "crates/server/tests/scheduler_integration_test.rs"
 
