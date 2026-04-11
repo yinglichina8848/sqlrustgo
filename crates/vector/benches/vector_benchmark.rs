@@ -7,7 +7,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use sqlrustgo_vector::{
-    flat::FlatIndex, hnsw::HnswIndex, ivf::IvfIndex, metrics::DistanceMetric,
+    flat::FlatIndex, hnsw::HnswIndex, ivf::IvfIndex, ivfpq::IvfpqIndex, metrics::DistanceMetric,
     parallel_knn::ParallelKnn, sql_vector_hybrid::HybridSearcher, VectorIndex,
 };
 
@@ -512,6 +512,160 @@ fn bench_hybrid_query_performance(c: &mut Criterion) {
     });
 }
 
+// ============================================================================
+// IVFPQ Benchmarks (Issue #1343)
+// ============================================================================
+
+fn bench_ivfpq_insert(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ivfpq_insert");
+
+    for size in [100, 1000, 10000].iter() {
+        let vectors = generate_random_vectors(*size, 128);
+
+        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
+            b.iter(|| {
+                let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 10, 16);
+                for (id, v) in vectors.iter().take(size) {
+                    let _ = index.insert(black_box(*id), black_box(v.as_slice()));
+                }
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_ivfpq_search(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ivfpq_search");
+
+    for size in [100, 1000, 10000].iter() {
+        let vectors = generate_random_vectors(*size, 128);
+        let query = vec![0.5f32; 128];
+
+        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
+            let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 10, 16);
+            for (id, v) in vectors.iter().take(size) {
+                let _ = index.insert(*id, v);
+            }
+            index.build_index().unwrap();
+
+            b.iter(|| {
+                let _ = index.search(black_box(&query), black_box(10));
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_ivfpq_10k_knn(c: &mut Criterion) {
+    let mut group = c.benchmark_group("issue_1343_ivfpq_10k_knn");
+    group.sample_size(50);
+
+    let size = 10_000;
+    let dim = 128;
+    let vectors = generate_random_vectors(size, dim);
+    let query = vec![0.5f32; dim];
+
+    group.bench_function("ivfpq_cosine", |b| {
+        let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 64, 16);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        index.build_index().unwrap();
+
+        b.iter(|| {
+            let _ = index.search(black_box(&query), black_box(10));
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_ivfpq_100k_knn(c: &mut Criterion) {
+    let mut group = c.benchmark_group("issue_1343_ivfpq_100k_knn");
+    group.measurement_time(std::time::Duration::from_secs(2));
+    group.sample_size(10);
+
+    let size = 100_000;
+    let dim = 128;
+    let vectors = generate_random_vectors(size, dim);
+    let query = vec![0.5f32; dim];
+
+    group.bench_function("ivfpq_cosine", |b| {
+        let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 128, 16);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        index.build_index().unwrap();
+
+        b.iter(|| {
+            let _ = index.search(black_box(&query), black_box(10));
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_ivfpq_1m_knn(c: &mut Criterion) {
+    let mut group = c.benchmark_group("issue_1343_ivfpq_1m_knn");
+    group.sample_size(10);
+
+    let size = 1_000_000;
+    let dim = 128;
+    let vectors = generate_random_vectors(size, dim);
+    let query = vec![0.5f32; dim];
+
+    group.bench_function("ivfpq_cosine", |b| {
+        let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 256, 16);
+        for (id, v) in vectors.iter() {
+            let _ = index.insert(*id, v);
+        }
+        index.build_index().unwrap();
+
+        b.iter(|| {
+            let _ = index.search(black_box(&query), black_box(10));
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_ivfpq_parameter_tuning(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ivfpq_param_tuning");
+
+    let size = 50_000;
+    let dim = 128;
+    let vectors = generate_random_vectors(size, dim);
+    let query = vec![0.5f32; dim];
+
+    for nlists in [32, 64, 128, 256].iter() {
+        group.bench_with_input(BenchmarkId::new("nlist", nlists), nlists, |b, &nlist| {
+            let mut index = IvfpqIndex::new(DistanceMetric::Cosine, nlist, 16);
+            for (id, v) in vectors.iter() {
+                let _ = index.insert(*id, v);
+            }
+            index.build_index().unwrap();
+
+            b.iter(|| {
+                let _ = index.search(black_box(&query), black_box(10));
+            });
+        });
+    }
+
+    for k_sub in [32, 64, 128, 256].iter() {
+        group.bench_with_input(BenchmarkId::new("k_sub", k_sub), k_sub, |b, &k| {
+            let mut index = IvfpqIndex::with_params(128, 16, k, DistanceMetric::Cosine);
+            for (id, v) in vectors.iter() {
+                let _ = index.insert(*id, v);
+            }
+            index.build_index().unwrap();
+
+            b.iter(|| {
+                let _ = index.search(black_box(&query), black_box(10));
+            });
+        });
+    }
+}
+
 criterion_group!(
     benches,
     bench_flat_insert,
@@ -530,6 +684,12 @@ criterion_group!(
     bench_1m_knn_performance,
     bench_hnsw_parameter_tuning,
     bench_ivf_parameter_tuning,
-    bench_hybrid_query_performance
+    bench_hybrid_query_performance,
+    bench_ivfpq_insert,
+    bench_ivfpq_search,
+    bench_ivfpq_10k_knn,
+    bench_ivfpq_100k_knn,
+    bench_ivfpq_1m_knn,
+    bench_ivfpq_parameter_tuning
 );
 criterion_main!(benches);
