@@ -51,6 +51,42 @@ pub struct ColumnStats {
     pub avg_value: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct IndexStats {
+    pub index_name: String,
+    pub column_name: String,
+    pub index_type: String,
+    pub cardinality: u64,
+    pub selectivity: f64,
+}
+
+impl IndexStats {
+    pub fn new(index_name: impl Into<String>, column_name: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+            column_name: column_name.into(),
+            index_type: String::new(),
+            cardinality: 0,
+            selectivity: 0.0,
+        }
+    }
+
+    pub fn with_type(mut self, index_type: impl Into<String>) -> Self {
+        self.index_type = index_type.into();
+        self
+    }
+
+    pub fn with_cardinality(mut self, cardinality: u64) -> Self {
+        self.cardinality = cardinality;
+        self
+    }
+
+    pub fn with_selectivity(mut self, selectivity: f64) -> Self {
+        self.selectivity = selectivity;
+        self
+    }
+}
+
 impl ColumnStats {
     pub fn new(column_name: impl Into<String>) -> Self {
         Self {
@@ -111,6 +147,8 @@ pub struct TableStats {
     pub size_bytes: u64,
     /// Column statistics
     pub column_stats: HashMap<String, ColumnStats>,
+    /// Index statistics
+    pub index_stats: HashMap<String, IndexStats>,
     /// Last updated timestamp (Unix epoch)
     pub last_updated: u64,
 }
@@ -122,6 +160,7 @@ impl TableStats {
             row_count: 0,
             size_bytes: 0,
             column_stats: HashMap::new(),
+            index_stats: HashMap::new(),
             last_updated: 0,
         }
     }
