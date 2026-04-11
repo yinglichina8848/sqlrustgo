@@ -40,17 +40,120 @@ impl Default for HybridSearchConfig {
 #[derive(Debug, Clone)]
 pub enum SqlPredicate {
     /// Equal comparison
-    Equal { column: String, value: String },
+    Equal { column: String, value: SqlValue },
     /// Range comparison (less than)
-    LessThan { column: String, value: f32 },
+    LessThan { column: String, value: SqlValue },
     /// Range comparison (greater than)
-    GreaterThan { column: String, value: f32 },
+    GreaterThan { column: String, value: SqlValue },
+    /// Less than or equal
+    LessThanEq { column: String, value: SqlValue },
+    /// Greater than or equal
+    GreaterThanEq { column: String, value: SqlValue },
     /// IN list
-    In { column: String, values: Vec<String> },
+    In {
+        column: String,
+        values: Vec<SqlValue>,
+    },
     /// AND combination
     And(Box<SqlPredicate>, Box<SqlPredicate>),
     /// OR combination
     Or(Box<SqlPredicate>, Box<SqlPredicate>),
+    /// NOT negation
+    Not(Box<SqlPredicate>),
+}
+
+impl SqlPredicate {
+    pub fn and(left: SqlPredicate, right: SqlPredicate) -> Self {
+        SqlPredicate::And(Box::new(left), Box::new(right))
+    }
+
+    pub fn or(left: SqlPredicate, right: SqlPredicate) -> Self {
+        SqlPredicate::Or(Box::new(left), Box::new(right))
+    }
+
+    pub fn not(predicate: SqlPredicate) -> Self {
+        SqlPredicate::Not(Box::new(predicate))
+    }
+}
+
+/// SQL value types for predicate evaluation
+#[derive(Debug, Clone, PartialEq)]
+pub enum SqlValue {
+    Null,
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    Text(String),
+}
+
+impl SqlValue {
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            SqlValue::Integer(i) => Some(*i as f64),
+            SqlValue::Float(f) => Some(*f),
+            SqlValue::Text(s) => s.parse().ok(),
+            _ => None,
+        }
+    }
+
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            SqlValue::Integer(i) => Some(*i),
+            SqlValue::Float(f) => Some(*f as i64),
+            SqlValue::Text(s) => s.parse().ok(),
+            _ => None,
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            SqlValue::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn compare(&self, op: &CompareOp, other: &SqlValue) -> bool {
+        match op {
+            CompareOp::Equal => self == other,
+            CompareOp::NotEqual => self != other,
+            CompareOp::LessThan => {
+                let (Some(a), Some(b)) = (self.as_f64(), other.as_f64()) else {
+                    return false;
+                };
+                a < b
+            }
+            CompareOp::LessThanOrEqual => {
+                let (Some(a), Some(b)) = (self.as_f64(), other.as_f64()) else {
+                    return false;
+                };
+                a <= b
+            }
+            CompareOp::GreaterThan => {
+                let (Some(a), Some(b)) = (self.as_f64(), other.as_f64()) else {
+                    return false;
+                };
+                a > b
+            }
+            CompareOp::GreaterThanOrEqual => {
+                let (Some(a), Some(b)) = (self.as_f64(), other.as_f64()) else {
+                    return false;
+                };
+                a >= b
+            }
+            CompareOp::In => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CompareOp {
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    In,
 }
 
 /// Row with metadata for hybrid search
@@ -72,7 +175,8 @@ pub struct HybridSearchResult {
 /// Execute hybrid search combining SQL filter and vector similarity
 pub struct HybridSearcher {
     vector_index: ParallelKnnIndex,
-    vectors: RwLock<HashMap<u64, Vec<f32>>>, // Store vectors for real similarity computation
+    vectors: RwLock<HashMap<u64, Vec<f32>>>,
+    row_data: RwLock<HashMap<u64, HashMap<String, SqlValue>>>,
     metric: DistanceMetric,
     config: HybridSearchConfig,
 }
@@ -82,6 +186,7 @@ impl HybridSearcher {
         Self {
             vector_index: ParallelKnnIndex::new(metric),
             vectors: RwLock::new(HashMap::new()),
+            row_data: RwLock::new(HashMap::new()),
             metric,
             config: HybridSearchConfig::default(),
         }
@@ -97,6 +202,7 @@ impl HybridSearcher {
                 },
             ),
             vectors: RwLock::new(HashMap::new()),
+            row_data: RwLock::new(HashMap::new()),
             metric,
             config,
         }
@@ -104,8 +210,20 @@ impl HybridSearcher {
 
     /// Insert a vector with optional SQL score
     pub fn insert(&mut self, id: u64, vector: &[f32], _sql_score: f32) -> VectorResult<()> {
-        // Store vector for real similarity computation in hybrid search
         self.vectors.write().insert(id, vector.to_vec());
+        self.vector_index.insert(id, vector)?;
+        Ok(())
+    }
+
+    /// Insert a vector with row data for predicate filtering
+    pub fn insert_with_row(
+        &mut self,
+        id: u64,
+        vector: &[f32],
+        row: HashMap<String, SqlValue>,
+    ) -> VectorResult<()> {
+        self.vectors.write().insert(id, vector.to_vec());
+        self.row_data.write().insert(id, row);
         self.vector_index.insert(id, vector)?;
         Ok(())
     }
@@ -204,34 +322,84 @@ impl HybridSearcher {
 
     /// Execute SQL WHERE pre-filter + vector Top-K
     ///
-    /// This simulates: SELECT * FROM items WHERE sql_filter ORDER BY vector_score LIMIT k
+    /// This implements: SELECT * FROM items WHERE sql_filter ORDER BY vector_score LIMIT k
     pub fn execute_filtered_search(
         &self,
         query_vector: &[f32],
         predicates: &[SqlPredicate],
         k: usize,
     ) -> VectorResult<HybridSearchResult> {
-        let start = std::time::Instant::now();
+        let row_data = self.row_data.read();
+        let vectors = self.vectors.read();
 
-        // In a real implementation:
-        // 1. Execute SQL WHERE predicates using storage engine
-        // 2. Get filtered rows with their SQL scores
-        // 3. Compute vector similarity for filtered rows
-        // 4. Combine scores and return Top-K
-
-        // For now, simulate with all rows
         let all_ids: Vec<(u64, f32)> = (0..self.vector_index.len() as u64)
-            .map(|id| (id, self.eval_predicates(predicates, id)))
+            .filter_map(|id| {
+                let row = row_data.get(&id)?;
+                if self.eval_predicates(predicates, row) {
+                    let sql_score = self.compute_sql_score_from_row(row);
+                    Some((id, sql_score))
+                } else {
+                    None
+                }
+            })
             .collect();
+
+        drop(row_data);
+        drop(vectors);
 
         self.search_hybrid(query_vector, &all_ids, k)
     }
 
-    /// Evaluate predicates against a row (simplified)
-    fn eval_predicates(&self, _predicates: &[SqlPredicate], _id: u64) -> f32 {
-        // In real impl, evaluate SQL predicates against row data
-        // Return 1.0 for pass, 0.0 for fail (or computed score)
-        1.0
+    /// Evaluate predicates against a row
+    fn eval_predicates(
+        &self,
+        predicates: &[SqlPredicate],
+        row: &HashMap<String, SqlValue>,
+    ) -> bool {
+        if predicates.is_empty() {
+            return true;
+        }
+        predicates.iter().all(|p| self.eval_predicate(p, row))
+    }
+
+    /// Evaluate a single predicate against a row
+    fn eval_predicate(&self, predicate: &SqlPredicate, row: &HashMap<String, SqlValue>) -> bool {
+        match predicate {
+            SqlPredicate::Equal { column, value } => {
+                row.get(column).map(|v| v == value).unwrap_or(false)
+            }
+            SqlPredicate::LessThan { column, value } => row
+                .get(column)
+                .map(|v| v.compare(&CompareOp::LessThan, value))
+                .unwrap_or(false),
+            SqlPredicate::GreaterThan { column, value } => row
+                .get(column)
+                .map(|v| v.compare(&CompareOp::GreaterThan, value))
+                .unwrap_or(false),
+            SqlPredicate::LessThanEq { column, value } => row
+                .get(column)
+                .map(|v| v.compare(&CompareOp::LessThanOrEqual, value))
+                .unwrap_or(false),
+            SqlPredicate::GreaterThanEq { column, value } => row
+                .get(column)
+                .map(|v| v.compare(&CompareOp::GreaterThanOrEqual, value))
+                .unwrap_or(false),
+            SqlPredicate::In { column, values } => {
+                row.get(column).map(|v| values.contains(v)).unwrap_or(false)
+            }
+            SqlPredicate::And(left, right) => {
+                self.eval_predicate(left, row) && self.eval_predicate(right, row)
+            }
+            SqlPredicate::Or(left, right) => {
+                self.eval_predicate(left, row) || self.eval_predicate(right, row)
+            }
+            SqlPredicate::Not(p) => !self.eval_predicate(p, row),
+        }
+    }
+
+    /// Compute SQL score from row data (placeholder - can be extended)
+    fn compute_sql_score_from_row(&self, row: &HashMap<String, SqlValue>) -> f32 {
+        row.get("_score").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32
     }
 
     /// Get the number of vectors in the index
