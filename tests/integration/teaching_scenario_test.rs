@@ -703,28 +703,130 @@ fn test_teaching_transaction_isolation() {
 
 #[test]
 fn test_teaching_join_inner() {
-    let mut engine = ExecutionEngine::default();
+    use sqlrustgo_planner::HashJoinExec;
 
-    engine
-        .execute(parse("CREATE TABLE customers (id INTEGER, name TEXT)").unwrap())
-        .unwrap();
-    engine
-        .execute(parse("INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob')").unwrap())
-        .unwrap();
+    let mut storage = MemoryStorage::new();
 
-    engine
-        .execute(
-            parse("CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount INTEGER)").unwrap(),
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "customers".to_string(),
+            columns: vec![
+                sqlrustgo_storage::ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+                sqlrustgo_storage::ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+            ],
+        })
+        .unwrap();
+    storage
+        .insert(
+            "customers",
+            vec![
+                vec![Value::Integer(1), Value::Text("Alice".to_string())],
+                vec![Value::Integer(2), Value::Text("Bob".to_string())],
+            ],
         )
-        .unwrap();
-    engine
-        .execute(parse("INSERT INTO orders VALUES (1, 1, 100), (2, 2, 200)").unwrap())
-        .unwrap();
+        .ok();
 
-    let result = engine
-        .execute(parse("SELECT customers.name, orders.amount FROM customers JOIN orders ON customers.id = orders.customer_id").unwrap())
+    storage
+        .create_table(&sqlrustgo_storage::TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                sqlrustgo_storage::ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+                sqlrustgo_storage::ColumnDefinition {
+                    name: "customer_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+                sqlrustgo_storage::ColumnDefinition {
+                    name: "amount".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
+                },
+            ],
+        })
         .unwrap();
-    assert_eq!(result.rows.len(), 2);
+    storage
+        .insert(
+            "orders",
+            vec![
+                vec![Value::Integer(1), Value::Integer(1), Value::Integer(100)],
+                vec![Value::Integer(2), Value::Integer(2), Value::Integer(200)],
+            ],
+        )
+        .ok();
+
+    let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
+
+    let left_schema = Schema::new(vec![
+        Field::new("id".to_string(), DataType::Integer),
+        Field::new("name".to_string(), DataType::Text),
+    ]);
+    let right_schema = Schema::new(vec![
+        Field::new("customer_id".to_string(), DataType::Integer),
+        Field::new("amount".to_string(), DataType::Integer),
+    ]);
+
+    let left_scan = Box::new(SeqScanExec::new(
+        "customers".to_string(),
+        left_schema.clone(),
+    ));
+    let right_scan = Box::new(SeqScanExec::new("orders".to_string(), right_schema.clone()));
+
+    let join_schema = Schema::new(vec![
+        Field::new("name".to_string(), DataType::Text),
+        Field::new("amount".to_string(), DataType::Integer),
+    ]);
+
+    let join = HashJoinExec::new(
+        left_scan,
+        right_scan,
+        JoinType::Inner,
+        Some(Expr::binary_expr(
+            Expr::column("id"),
+            Operator::Eq,
+            Expr::column("customer_id"),
+        )),
+        join_schema,
+    );
+
+    let result = engine.execute_plan(&join).unwrap();
+    assert_eq!(result.rows.len(), 2, "Inner join should return 2 rows");
 }
 
 #[test]
