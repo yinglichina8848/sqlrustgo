@@ -6231,3 +6231,236 @@ fn test_parse_delimiter_custom() {
         _ => panic!("Expected DELIMITER statement"),
     }
 }
+
+#[test]
+fn test_parse_extract_year() {
+    let sql = "SELECT EXTRACT(YEAR FROM birth_date) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_extract_month() {
+    let sql = "SELECT EXTRACT(MONTH FROM birth_date) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_extract_day() {
+    let sql = "SELECT EXTRACT(DAY FROM birth_date) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_row_number() {
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_rank() {
+    let sql = "SELECT RANK() OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_dense_rank() {
+    let sql = "SELECT DENSE_RANK() OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_lag() {
+    let sql = "SELECT LAG(value) OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_lead() {
+    let sql = "SELECT LEAD(value) OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_first_value() {
+    let sql = "SELECT FIRST_VALUE(value) OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_last_value() {
+    let sql = "SELECT LAST_VALUE(value) OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_nth_value() {
+    let sql = "SELECT NTH_VALUE(value, 2) OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_window_partition_by() {
+    let sql = "SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_order_by_asc() {
+    let sql = "SELECT id FROM users ORDER BY id ASC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_order_by_desc() {
+    let sql = "SELECT id FROM users ORDER BY id DESC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_order_by_nulls_first() {
+    let sql = "SELECT id FROM users ORDER BY id NULLS FIRST";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_order_by_nulls_last() {
+    let sql = "SELECT id FROM users ORDER BY id DESC NULLS LAST";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_order_by_multiple() {
+    let sql = "SELECT id FROM users ORDER BY id, name DESC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_arithmetic_multiply() {
+    let sql = "SELECT a * b FROM t";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_negative_number() {
+    let sql = "SELECT -42 FROM t";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_decimal_number() {
+    let sql = "SELECT 3.14159 FROM t";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_count_star() {
+    let sql = "SELECT COUNT(*) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_sum() {
+    let sql = "SELECT SUM(amount) FROM orders";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_avg() {
+    let sql = "SELECT AVG(price) FROM products";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_min() {
+    let sql = "SELECT MIN(price) FROM products";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_max() {
+    let sql = "SELECT MAX(price) FROM products";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+}
+
+#[test]
+fn test_parse_where_between() {
+    let sql = "SELECT id FROM users WHERE age BETWEEN 18 AND 65";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_where_like() {
+    let sql = "SELECT id FROM users WHERE name LIKE 'John%'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_where_is_null() {
+    let sql = "SELECT id FROM users WHERE email IS NULL";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_where_is_not_null() {
+    let sql = "SELECT id FROM users WHERE email IS NOT NULL";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
