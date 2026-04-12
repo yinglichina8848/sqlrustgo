@@ -13,9 +13,10 @@ use uuid::Uuid;
 // ============================================================================
 
 /// Task status
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
+    #[default]
     Pending,
     Running,
     Completed,
@@ -23,26 +24,15 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Pending
-    }
-}
-
 /// Task priority
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskPriority {
+    #[default]
     Low,
     Medium,
     High,
     Critical,
-}
-
-impl Default for TaskPriority {
-    fn default() -> Self {
-        TaskPriority::Medium
-    }
 }
 
 /// A single task in the scheduler
@@ -210,17 +200,11 @@ impl SchedulerState {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        if self
-            .tasks
+        self.tasks
             .write()
             .unwrap()
             .insert(id.to_string(), task)
             .is_some()
-        {
-            true
-        } else {
-            false
-        }
     }
 
     pub fn list_tasks(&self) -> Vec<Task> {

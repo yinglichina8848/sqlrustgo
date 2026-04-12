@@ -463,9 +463,6 @@ impl ParallelVolcanoExecutor {
 
     /// Execute parallel aggregate
     fn execute_parallel_aggregate(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
-        use rayon::iter::{IntoParallelIterator, ParallelIterator};
-        use std::collections::HashMap;
-
         let start = Instant::now();
         let degree = self.parallel_degree;
 
@@ -620,7 +617,7 @@ impl ParallelVolcanoExecutor {
 
         // For COUNT, use atomic counters
         let mut has_count = false;
-        let mut count_func_idx = 0;
+        let mut _count_func_idx = 0;
         for (i, agg_expr) in aggregate_expr.iter().enumerate() {
             if let sqlrustgo_planner::Expr::AggregateFunction {
                 func: AggregateFunction::Count,
@@ -628,7 +625,7 @@ impl ParallelVolcanoExecutor {
             } = agg_expr
             {
                 has_count = true;
-                count_func_idx = i;
+                _count_func_idx = i;
                 break;
             }
         }

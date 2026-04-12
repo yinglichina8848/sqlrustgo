@@ -22,41 +22,35 @@ impl ResultFusion {
     ) -> FusionResult {
         let mut all_scores: Vec<FusionScore> = Vec::new();
 
-        if let Some(sql_results) = results.sql_results {
-            if let QueryResult::Ok(rows) = sql_results {
-                for (idx, _row) in rows.iter().enumerate() {
-                    let sql_score = 1.0 - (idx as f32 * 0.01).min(0.5);
-                    all_scores.push(FusionScore {
-                        id: format!("sql_{}", idx),
-                        score: weights.sql * sql_score,
-                        source: vec!["sql".to_string()],
-                    });
-                }
+        if let Some(QueryResult::Ok(rows)) = results.sql_results {
+            for (idx, _row) in rows.iter().enumerate() {
+                let sql_score = 1.0 - (idx as f32 * 0.01).min(0.5);
+                all_scores.push(FusionScore {
+                    id: format!("sql_{}", idx),
+                    score: weights.sql * sql_score,
+                    source: vec!["sql".to_string()],
+                });
             }
         }
 
-        if let Some(vector_results) = results.vector_results {
-            if let QueryResult::Ok(results) = vector_results {
-                for result in results {
-                    all_scores.push(FusionScore {
-                        id: result.id.clone(),
-                        score: weights.vector * result.score,
-                        source: vec!["vector".to_string()],
-                    });
-                }
+        if let Some(QueryResult::Ok(results)) = results.vector_results {
+            for result in results {
+                all_scores.push(FusionScore {
+                    id: result.id.clone(),
+                    score: weights.vector * result.score,
+                    source: vec!["vector".to_string()],
+                });
             }
         }
 
-        if let Some(graph_results) = results.graph_results {
-            if let QueryResult::Ok(results) = graph_results {
-                for result in results {
-                    let path_id = result.path.join("_");
-                    all_scores.push(FusionScore {
-                        id: path_id,
-                        score: weights.graph * result.score,
-                        source: vec!["graph".to_string()],
-                    });
-                }
+        if let Some(QueryResult::Ok(results)) = results.graph_results {
+            for result in results {
+                let path_id = result.path.join("_");
+                all_scores.push(FusionScore {
+                    id: path_id,
+                    score: weights.graph * result.score,
+                    source: vec!["graph".to_string()],
+                });
             }
         }
 

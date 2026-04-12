@@ -7,22 +7,15 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Vector index types for cost estimation
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
 pub enum VectorIndexType {
     /// IVF (Inverted File) index
     Ivf,
     /// HNSW (Hierarchical Navigable Small World) index
+    #[default]
     Hnsw,
-    /// PQ (Product Quantization) based index
-    PQ,
     /// Simple brute force (no index)
     BruteForce,
-}
-
-impl Default for VectorIndexType {
-    fn default() -> Self {
-        VectorIndexType::Hnsw
-    }
 }
 
 /// Cost factors for vector operations
@@ -45,7 +38,6 @@ impl Default for VectorCostFactors {
         let mut index_type_multipliers = HashMap::new();
         index_type_multipliers.insert(VectorIndexType::Ivf, 0.1);
         index_type_multipliers.insert(VectorIndexType::Hnsw, 0.05);
-        index_type_multipliers.insert(VectorIndexType::PQ, 0.08);
         index_type_multipliers.insert(VectorIndexType::BruteForce, 1.0);
 
         Self {
@@ -94,7 +86,7 @@ impl VectorCostModel {
     /// - n: total vectors in index
     /// - dimension: vector dimension
     /// - index_type: type of index used
-    pub fn knn_cost(&self, k: usize, n: u64, dimension: u32, index_type: &VectorIndexType) -> f64 {
+    pub fn knn_cost(&self, _k: usize, n: u64, dimension: u32, index_type: &VectorIndexType) -> f64 {
         let base_comparisons = n as f64 * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
         let index_multiplier = self.factors.get_index_multiplier(index_type);
         base_comparisons * index_multiplier
@@ -111,8 +103,7 @@ impl VectorCostModel {
         // ANN search scans a fraction of the index
         let scan_fraction = (ef as f64 / 100.0).min(1.0);
         let scanned_vectors = n as f64 * scan_fraction;
-        let base_cost =
-            scanned_vectors as f64 * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
+        let base_cost = scanned_vectors * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
         let index_multiplier = self.factors.get_index_multiplier(index_type);
         base_cost * index_multiplier
     }
@@ -134,8 +125,7 @@ impl VectorCostModel {
         // Similarity search typically scans more vectors than ANN
         let scan_fraction = (1.0 - threshold as f64).max(0.1);
         let scanned_vectors = n as f64 * scan_fraction;
-        let base_cost =
-            scanned_vectors as f64 * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
+        let base_cost = scanned_vectors * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
         let index_multiplier = self.factors.get_index_multiplier(index_type);
         base_cost * index_multiplier
     }
@@ -157,8 +147,7 @@ impl VectorCostModel {
         // Range search scans vectors within radius
         let scan_fraction = (radius as f64 * 0.1).min(1.0);
         let scanned_vectors = n as f64 * scan_fraction;
-        let base_cost =
-            scanned_vectors as f64 * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
+        let base_cost = scanned_vectors * self.factors.cpu_cost_per_vector_cmp * dimension as f64;
         let index_multiplier = self.factors.get_index_multiplier(index_type);
         base_cost * index_multiplier
     }

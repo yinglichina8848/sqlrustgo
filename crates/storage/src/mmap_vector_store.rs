@@ -84,10 +84,10 @@ impl MmapVectorStore {
         let mmap = self.mmap.as_ref().expect("mmap not initialized");
         let data_start = offset + 8;
         let mut vec = vec![0.0_f32; self.dimension];
-        for i in 0..self.dimension {
+        for (i, slot) in vec.iter_mut().enumerate() {
             let byte_offset = data_start + i * 4;
             let bytes: [u8; 4] = mmap[byte_offset..byte_offset + 4].try_into().unwrap();
-            vec[i] = f32::from_le_bytes(bytes);
+            *slot = f32::from_le_bytes(bytes);
         }
         vec
     }
@@ -181,7 +181,7 @@ impl MmapVectorStoreBuilder {
         let bytes_per_vector = dimension * 4 + 8;
         let total_bytes = vectors.len() * bytes_per_vector;
 
-        let mut file = tempfile::tempfile()?;
+        let file = tempfile::tempfile()?;
         file.set_len(total_bytes as u64)?;
 
         {
@@ -199,7 +199,7 @@ impl MmapVectorStoreBuilder {
         }
 
         let mmap = unsafe { MmapOptions::new().map(&file)? };
-        let mut store = MmapVectorStore::from_mmap(mmap, dimension, vectors.len());
+        let store = MmapVectorStore::from_mmap(mmap, dimension, vectors.len());
         Ok(store)
     }
 

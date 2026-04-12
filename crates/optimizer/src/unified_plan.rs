@@ -34,21 +34,11 @@ pub enum GraphScanType {
 }
 
 /// Graph pattern for matching
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct GraphPattern {
     pub node_labels: Vec<String>,
     pub edge_labels: Vec<String>,
     pub path_pattern: String,
-}
-
-impl Default for GraphPattern {
-    fn default() -> Self {
-        Self {
-            node_labels: Vec::new(),
-            edge_labels: Vec::new(),
-            path_pattern: String::new(),
-        }
-    }
 }
 
 /// Unified plan node types - extends SQL plan with vector and graph operations

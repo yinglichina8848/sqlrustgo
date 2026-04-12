@@ -2,6 +2,8 @@
 //!
 //! A MySQL-compatible interactive SQL shell
 
+#![allow(dead_code)]
+
 use rustyline::history::FileHistory;
 use rustyline::Editor;
 use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
@@ -10,12 +12,10 @@ use sqlrustgo_parser::parser::{
     CreateTableStatement, DropTableStatement, Expression, InsertStatement, KillStatement, KillType,
     SelectStatement,
 };
-use sqlrustgo_parser::Statement;
 use sqlrustgo_security::SessionManager;
 use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::env;
-use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 /// Check if teaching mode is enabled via environment variable

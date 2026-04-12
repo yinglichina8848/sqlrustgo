@@ -73,9 +73,21 @@ impl ParallelExecutor {
         );
 
         ParallelQueryResults {
-            sql_results: if plan.execute_sql { Some(sql_results) } else { None },
-            vector_results: if plan.execute_vector { Some(vector_results) } else { None },
-            graph_results: if plan.execute_graph { Some(graph_results) } else { None },
+            sql_results: if plan.execute_sql {
+                Some(sql_results)
+            } else {
+                None
+            },
+            vector_results: if plan.execute_vector {
+                Some(vector_results)
+            } else {
+                None
+            },
+            graph_results: if plan.execute_graph {
+                Some(graph_results)
+            } else {
+                None
+            },
         }
     }
 }
@@ -101,7 +113,7 @@ mod tests {
             top_k: 10,
             offset: 0,
         };
-        
+
         let request = UnifiedQueryRequest {
             query: "test".to_string(),
             mode: crate::api::QueryMode::SQL,
@@ -112,7 +124,7 @@ mod tests {
             top_k: None,
             offset: None,
         };
-        
+
         let results = executor.execute(&request, &plan).await;
         assert!(results.sql_results.is_some());
         assert!(results.vector_results.is_none());

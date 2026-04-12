@@ -1,9 +1,7 @@
 // SQLRustGo window function executor module
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
-use sqlrustgo_planner::{
-    Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction,
-};
+use sqlrustgo_planner::{Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::collections::HashMap;

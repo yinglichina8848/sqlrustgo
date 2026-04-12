@@ -13,12 +13,12 @@
 //!
 //! Traceability chain: Batch → Device → Calibration → Regulation
 
+pub mod error;
 pub mod model;
 pub mod store;
 pub mod traversal;
-pub mod error;
 
+pub use error::*;
 pub use model::*;
 pub use store::*;
 pub use traversal::*;
-pub use error::*;

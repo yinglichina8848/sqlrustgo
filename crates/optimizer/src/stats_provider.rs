@@ -72,7 +72,7 @@ impl CachedStatisticsProvider {
     /// Create from an Arc-wrapped provider
     /// Note: This requires StatisticsProvider to implement Clone, which it doesn't by default.
     /// Use `new(Box::new(...))` instead.
-    #[allow(dead_code, clippy::ARC_WITH_REF_WRAPPER)]
+    #[allow(dead_code)]
     pub fn from_arc(_inner: Arc<dyn StatisticsProvider>) -> Self {
         unimplemented!("Arc<dyn StatisticsProvider> cannot be directly converted. Use new() with a boxed provider instead.")
     }
@@ -101,9 +101,7 @@ impl StatisticsProvider for CachedStatisticsProvider {
         }
 
         // Cache miss - get from inner provider
-        let stats = self.inner.table_stats(table);
-
-        stats
+        self.inner.table_stats(table)
     }
 
     fn update_stats(&self, table: &str, _stats: TableStats) -> StatsResult<()> {
@@ -127,6 +125,7 @@ impl StatisticsProvider for CachedStatisticsProvider {
 /// - 使用存储引擎的专用命名空间存储统计信息
 /// - 统计信息序列化为 JSON 格式存储
 pub struct StorageStatisticsProvider {
+    #[allow(dead_code)]
     storage: Arc<dyn StorageEngine>,
     namespace: String,
     cache: HashMap<String, TableStats>,
@@ -160,6 +159,7 @@ impl StorageStatisticsProvider {
         }
     }
 
+    #[allow(dead_code)]
     fn stats_key(&self, table: &str) -> String {
         format!("{}:{}", self.namespace, table)
     }

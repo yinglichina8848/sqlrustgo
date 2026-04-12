@@ -26,6 +26,7 @@ impl AuditAction {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "CREATE" => Some(AuditAction::Create),
@@ -327,6 +328,7 @@ pub fn create_audit_log_table(storage: &mut dyn StorageEngine) -> SqlResult<()> 
 }
 
 /// Record an audit log entry
+#[allow(clippy::too_many_arguments)]
 pub fn record_audit_log(
     storage: &mut dyn StorageEngine,
     user_id: &str,
