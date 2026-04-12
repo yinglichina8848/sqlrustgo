@@ -5,7 +5,7 @@
 
 pub mod generator;
 
-use generator::{TransactionGenerator, TransactionOperation};
+use generator::TransactionGenerator;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;

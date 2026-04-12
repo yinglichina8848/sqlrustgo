@@ -82,6 +82,7 @@ impl PlanAlternative {
 pub struct QueryPlanner {
     config: QueryPlannerConfig,
     path_selector: PathSelector,
+    #[allow(dead_code)]
     unified_cost_model: UnifiedCostModel,
     plan_cache: HashMap<String, QueryPlanResult>,
 }

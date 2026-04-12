@@ -7,8 +7,9 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Graph index types for cost estimation
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
 pub enum GraphIndexType {
+    #[default]
     /// Adjacency list representation
     AdjacencyList,
     /// Compressed adjacency
@@ -17,12 +18,6 @@ pub enum GraphIndexType {
     LabeledIndex,
     /// Spatial-temporal graph index
     SpatioTemporal,
-}
-
-impl Default for GraphIndexType {
-    fn default() -> Self {
-        GraphIndexType::AdjacencyList
-    }
 }
 
 /// Cost factors for graph operations

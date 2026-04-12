@@ -2,22 +2,20 @@
 //!
 //! Optimizes write throughput for bulk vector insertions.
 
-use crate::error::{VectorError, VectorResult};
+use crate::error::VectorResult;
 use crate::parallel_knn::ParallelKnnIndex;
 use crate::traits::VectorIndex;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+type BufferedEntry = (u64, Vec<f32>);
+
 /// Batch write configuration
 #[derive(Debug, Clone)]
 pub struct BatchWriteConfig {
-    /// Buffer capacity before auto-flush
     pub buffer_capacity: usize,
-    /// Flush threshold (number of vectors)
     pub flush_threshold: usize,
-    /// Enable async indexing
     pub async_indexing: bool,
-    /// Number of writer threads
     pub num_threads: usize,
 }
 
@@ -35,7 +33,7 @@ impl Default for BatchWriteConfig {
 /// Batch vector writer with buffered writes
 pub struct BatchVectorWriter {
     index: Arc<RwLock<ParallelKnnIndex>>,
-    buffer: Arc<RwLock<Vec<(u64, Vec<f32>)>>>,
+    buffer: Arc<RwLock<Vec<BufferedEntry>>>,
     config: BatchWriteConfig,
     pending_count: Arc<RwLock<usize>>,
 }
@@ -127,7 +125,7 @@ impl BatchVectorWriter {
 
         if self.config.async_indexing {
             let index = Arc::clone(&self.index);
-            let metric = self.index.read().unwrap().metric();
+            let _metric = self.index.read().unwrap().metric();
 
             thread::spawn(move || {
                 let mut index = index.write().unwrap();

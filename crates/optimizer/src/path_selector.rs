@@ -4,7 +4,6 @@
 
 use crate::unified_cost::{ExecutionPath, UnifiedCostModel};
 use crate::unified_plan::UnifiedPlan;
-use std::collections::HashMap;
 use std::fmt::Debug;
 
 /// PathSelector configuration
@@ -215,13 +214,13 @@ impl PathSelector {
                 )
             }
             ExecutionPath::HybridSqlVector => {
-                format!("Hybrid SQL+Vector path selected. Best for mixed workloads.")
+                "Hybrid SQL+Vector path selected. Best for mixed workloads.".to_string()
             }
             ExecutionPath::HybridSqlGraph => {
-                format!("Hybrid SQL+Graph path selected. Best for graph-enriched SQL queries.")
+                "Hybrid SQL+Graph path selected. Best for graph-enriched SQL queries.".to_string()
             }
             ExecutionPath::Unified => {
-                format!("Unified path selected. All three domains involved in query.")
+                "Unified path selected. All three domains involved in query.".to_string()
             }
             _ => format!("Path: {:?}", path),
         }

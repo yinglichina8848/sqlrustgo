@@ -1009,7 +1009,7 @@ mod sqlrustgo_integration {
                 .map_err(|e| e.to_string())?;
 
             for record in records {
-                let doc_id = match record.get(0) {
+                let doc_id = match record.first() {
                     Some(Value::Integer(id)) => *id as u64,
                     _ => continue,
                 };
@@ -1103,7 +1103,7 @@ mod sqlrustgo_integration {
                     }
                 })
                 .filter_map(|record| {
-                    let doc_id = match record.get(0) {
+                    let doc_id = match record.first() {
                         Some(Value::Integer(i)) => *i as u64,
                         _ => return None,
                     };
@@ -1150,7 +1150,7 @@ mod sqlrustgo_integration {
                     }
                 })
                 .filter_map(|record| {
-                    let doc_id = match record.get(0) {
+                    let doc_id = match record.first() {
                         Some(Value::Integer(i)) => *i as u64,
                         _ => return None,
                     };

@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResultRecord {
@@ -131,7 +131,7 @@ impl ResultCollector {
         None
     }
 
-    fn save_session_to_disk(&self, session: &TestRunSession, base_path: &PathBuf) {
+    fn save_session_to_disk(&self, session: &TestRunSession, base_path: &Path) {
         let file_name = format!("session_{}.json", session.timestamp.format("%Y%m%d_%H%M%S"));
         let file_path = base_path.join(&file_name);
 
@@ -374,7 +374,7 @@ impl ResultAnalyzer {
 
                     failed_tests
                         .entry(result.test_id.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(session.id.clone());
                 }
             }

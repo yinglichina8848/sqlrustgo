@@ -5,7 +5,6 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::DistanceMetric;
-use std::sync::RwLock;
 
 /// GPU device info
 #[derive(Debug, Clone)]
@@ -67,6 +66,7 @@ pub trait GpuAccelerator: Send + Sync {
 pub struct GpuBuffer {
     pub id: u64,
     pub size: usize,
+    #[allow(dead_code)]
     device_id: usize,
 }
 

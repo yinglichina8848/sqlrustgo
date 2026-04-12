@@ -135,7 +135,7 @@ impl HnswIndex {
         ep_idx: usize,
         ef: usize,
         level: usize,
-        visited: &mut Vec<u32>,
+        visited: &mut [u32],
         marker: u32,
     ) -> Vec<(usize, f32)> {
         visited[ep_idx] = marker;
@@ -375,7 +375,7 @@ impl HnswIndex {
 
         let n = self.nodes.len();
         let m = self.m.max(1);
-        let ef_construction = self.ef_construction.max(64);
+        let _ef_construction = self.ef_construction.max(64);
 
         // Assign random levels to each node based on probability 1/m
         let prob = 1.0 / m as f32;
@@ -417,11 +417,11 @@ impl HnswIndex {
                 let query = &nodes[idx].vector;
                 let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
 
-                for j in 0..n {
+                for (j, node) in nodes.iter().enumerate().take(n) {
                     if j == idx {
                         continue;
                     }
-                    let d = -compute_similarity(query, &nodes[j].vector, metric);
+                    let d = -compute_similarity(query, &node.vector, metric);
                     results.push(DistNode { dist: d, idx: j });
                     if results.len() > max_candidates {
                         let _ = results.pop();

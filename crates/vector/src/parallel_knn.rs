@@ -2,7 +2,6 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::DistanceMetric;
-use crate::simd_explicit;
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use rayon::prelude::*;
 

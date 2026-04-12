@@ -13,6 +13,7 @@ pub struct OltpPointSelect {
     max_id: u64,
 }
 
+#[allow(dead_code)]
 impl OltpPointSelect {
     pub fn new() -> Self {
         Self { max_id: 1_000_000 }
