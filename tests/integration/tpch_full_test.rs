@@ -318,7 +318,7 @@ mod tests {
                 result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
-            assert!(result.is_ok(), "Q13 execution failed: {:?}", result.err());
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
@@ -462,7 +462,7 @@ mod tests {
                 result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
-            assert!(result.is_ok(), "Q22 execution failed: {:?}", result.err());
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
