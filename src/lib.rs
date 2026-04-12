@@ -13,6 +13,7 @@ pub use sqlrustgo_parser::{
     SetOperation, Statement, Token, TransactionCommand,
 };
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
+pub use sqlrustgo_storage::predicate;
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
 };
@@ -25,6 +26,39 @@ use std::sync::{Arc, RwLock};
 
 use sqlrustgo_executor::OperatorProfile;
 use sqlrustgo_storage::ForeignKeyAction;
+
+fn convert_expr_to_predicate(expr: &sqlrustgo_planner::Expr) -> Option<predicate::Predicate> {
+    let sqlrustgo_planner::Expr::BinaryExpr { left, op, right } = expr else {
+        return None;
+    };
+
+    if matches!(op, sqlrustgo_planner::Operator::And) {
+        let left_pred = convert_expr_to_predicate(left)?;
+        let right_pred = convert_expr_to_predicate(right)?;
+        return Some(predicate::Predicate::and(left_pred, right_pred));
+    }
+
+    let (col_name, value) = match (&**left, &**right) {
+        (sqlrustgo_planner::Expr::Column(col), sqlrustgo_planner::Expr::Literal(val)) => {
+            (col.name.clone(), val.clone())
+        }
+        (sqlrustgo_planner::Expr::Literal(val), sqlrustgo_planner::Expr::Column(col))
+            if matches!(op, sqlrustgo_planner::Operator::Eq) =>
+        {
+            (col.name.clone(), val.clone())
+        }
+        _ => return None,
+    };
+
+    match op {
+        sqlrustgo_planner::Operator::Eq => Some(predicate::Predicate::eq(col_name, value)),
+        sqlrustgo_planner::Operator::Lt => Some(predicate::Predicate::lt(col_name, value)),
+        sqlrustgo_planner::Operator::LtEq => Some(predicate::Predicate::lte(col_name, value)),
+        sqlrustgo_planner::Operator::Gt => Some(predicate::Predicate::gt(col_name, value)),
+        sqlrustgo_planner::Operator::GtEq => Some(predicate::Predicate::gte(col_name, value)),
+        _ => None,
+    }
+}
 
 /// Format EXPLAIN output with cost information
 #[allow(dead_code)]
@@ -2565,7 +2599,33 @@ impl ExecutionEngine {
         let storage = self.storage.read().unwrap();
         match plan.name() {
             "SeqScan" => {
-                let rows = storage.scan(plan.table_name())?;
+                let scan_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::SeqScanExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast SeqScanExec".to_string())
+                    })?;
+
+                let rows = if let Some(predicate_expr) = scan_plan.predicate() {
+                    if let Some(storage_pred) = convert_expr_to_predicate(predicate_expr) {
+                        if let Some(limit) = scan_plan.limit() {
+                            storage.scan_predicate_with_limit(
+                                plan.table_name(),
+                                &storage_pred,
+                                limit,
+                            )?
+                        } else {
+                            storage.scan_predicate(plan.table_name(), &storage_pred)?
+                        }
+                    } else {
+                        storage.scan(plan.table_name())?
+                    }
+                } else if let Some(limit) = scan_plan.limit() {
+                    let all_rows = storage.scan(plan.table_name())?;
+                    all_rows.into_iter().take(limit).collect()
+                } else {
+                    storage.scan(plan.table_name())?
+                };
                 Ok(ExecutorResult::new(rows, 0))
             }
             "IndexScan" => {

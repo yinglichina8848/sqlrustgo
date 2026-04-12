@@ -1184,6 +1184,119 @@ impl StorageEngine for FileStorage {
             .unwrap_or_default())
     }
 
+    fn scan_predicate(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+    ) -> SqlResult<Vec<Record>> {
+        let table_data = match self.get_table(table) {
+            Some(data) => data,
+            None => return Ok(vec![]),
+        };
+
+        let filtered: Vec<Record> = table_data
+            .rows
+            .iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+        limit: usize,
+    ) -> SqlResult<Vec<Record>> {
+        let table_data = match self.get_table(table) {
+            Some(data) => data,
+            None => return Ok(vec![]),
+        };
+
+        let filtered: Vec<Record> = table_data
+            .rows
+            .iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .take(limit)
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(
+        &self,
+        table: &str,
+        row: &Record,
+        predicate: &crate::predicate::Predicate,
+    ) -> bool {
+        match predicate {
+            crate::predicate::Predicate::Eq(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val == r_val
+            }
+            crate::predicate::Predicate::Lt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val < r_val
+            }
+            crate::predicate::Predicate::Lte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val <= r_val
+            }
+            crate::predicate::Predicate::Gt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val > r_val
+            }
+            crate::predicate::Predicate::Gte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val >= r_val
+            }
+            crate::predicate::Predicate::And(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    && self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Or(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    || self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Not(p) => !self.eval_predicate_for_scan(table, row, p),
+            crate::predicate::Predicate::IsNull(expr) => {
+                matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::IsNotNull(expr) => {
+                !matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::In(col, values) => {
+                let col_val = self.eval_expr(table, row, col);
+                values
+                    .iter()
+                    .any(|v| col_val == self.eval_expr(table, row, v))
+            }
+        }
+    }
+
+    fn eval_expr(&self, table: &str, row: &Record, expr: &crate::predicate::Expr) -> Value {
+        match expr {
+            crate::predicate::Expr::Column(name) => {
+                if let Some(data) = self.get_table(table) {
+                    if let Some(idx) = data.info.columns.iter().position(|c| c.name == *name) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            }
+            crate::predicate::Expr::Value(v) => v.clone(),
+            crate::predicate::Expr::Parameter(_) => Value::Null,
+        }
+    }
+
     fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
         Ok(self
             .get_table(table)
