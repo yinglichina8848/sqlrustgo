@@ -58,6 +58,7 @@ mod tests {
             order_by: None,
             with_clause: None,
             index_hints: vec![],
+            derived_tables: vec![],
         });
     }
 

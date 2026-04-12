@@ -476,6 +476,13 @@ pub struct IndexHint {
     pub index_names: Vec<String>,
 }
 
+/// Derived table (inline view) in FROM clause - SELECT * FROM (SELECT ...) AS alias
+#[derive(Debug, Clone, PartialEq)]
+pub struct DerivedTable {
+    pub alias: String,
+    pub subquery: Box<SelectStatement>,
+}
+
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
@@ -495,6 +502,8 @@ pub struct SelectStatement {
     pub with_clause: Option<WithClause>,
     // Index hints for query optimization (MySQL-style USE/FORCE/IGNORE INDEX)
     pub index_hints: Vec<IndexHint>,
+    // Derived tables (inline views) - SELECT * FROM (SELECT ...) AS alias
+    pub derived_tables: Vec<DerivedTable>,
 }
 
 /// Common Table Expression (CTE) - SQL-99
@@ -615,6 +624,8 @@ pub enum Expression {
     },
     /// Parameter placeholder for prepared statements (?)
     Placeholder,
+    /// Unary NOT expression: NOT expr
+    Not(Box<Expression>),
     /// BETWEEN expression: expr BETWEEN low AND high
     Between {
         expr: Box<Expression>,
@@ -625,6 +636,11 @@ pub enum Expression {
     InList {
         expr: Box<Expression>,
         values: Vec<Expression>,
+    },
+    /// IN subquery expression: expr IN (SELECT ...)
+    InSubquery {
+        expr: Box<Expression>,
+        subquery: Box<Statement>,
     },
     /// CASE WHEN expression: CASE WHEN cond THEN val ELSE default END
     CaseWhen {
@@ -974,7 +990,7 @@ impl Parser {
                     self.next();
                     continue;
                 }
-                Some(Token::Extract) | Some(Token::Substring) => {
+                Some(Token::Extract) | Some(Token::Substring) | Some(Token::Substr) => {
                     let expr = self.parse_expression()?;
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
@@ -1197,6 +1213,7 @@ impl Parser {
         self.expect(Token::From)?;
 
         let mut tables = Vec::new();
+        let mut derived_tables: Vec<DerivedTable> = Vec::new();
         let mut join_conditions: Vec<(String, Expression)> = Vec::new();
         loop {
             // Check for keywords that end FROM clause - do this first!
@@ -1209,13 +1226,67 @@ impl Parser {
                 | Some(Token::Semicolon)
                 | Some(Token::Use)
                 | Some(Token::Force)
-                | Some(Token::Ignore) => {
+                | Some(Token::Ignore)
+                | Some(Token::RParen)
+                | Some(Token::Eof) => {
                     break;
                 }
                 _ => {}
             }
 
-            // Check for JOIN (which is tokenized as Identifier in our lexer)
+            // Check for LEFT/RIGHT/FULL JOIN (these are tokenized as Identifiers)
+            if let Some(Token::Identifier(name)) = self.current() {
+                let upper = name.to_uppercase();
+                if upper == "LEFT" || upper == "RIGHT" || upper == "FULL" {
+                    // Consume LEFT/RIGHT/FULL
+                    self.next();
+                    // Check for optional OUTER keyword
+                    if let Some(Token::Identifier(outer_name)) = self.current() {
+                        if outer_name.to_uppercase() == "OUTER" {
+                            self.next();
+                        }
+                    }
+                    // Expect JOIN
+                    match self.current() {
+                        Some(Token::Identifier(join_name))
+                            if join_name.to_uppercase() == "JOIN" =>
+                        {
+                            self.next(); // consume JOIN
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected JOIN after LEFT/RIGHT/FULL, got {:?}", t))
+                        }
+                        None => return Err("Expected JOIN after LEFT/RIGHT/FULL".to_string()),
+                    }
+
+                    // Parse the table to join
+                    let join_table = match self.current() {
+                        Some(Token::Identifier(table_name)) => {
+                            let n = table_name.clone();
+                            self.next();
+                            n
+                        }
+                        Some(t) => {
+                            return Err(format!("Expected table name after JOIN, got {:?}", t))
+                        }
+                        None => return Err("Expected table name after JOIN".to_string()),
+                    };
+                    tables.push(join_table.clone());
+
+                    // Expect ON
+                    if !matches!(self.current(), Some(Token::On)) {
+                        return Err("Expected ON after JOIN".to_string());
+                    }
+                    self.next(); // consume ON
+
+                    // Parse join condition
+                    let condition = self.parse_expression()?;
+                    join_conditions.push((join_table, condition));
+                    continue;
+                }
+            }
+
+            // Check for simple JOIN (tokenized as Identifier in our lexer)
             if let Some(Token::Identifier(name)) = self.current() {
                 if name.to_uppercase() == "JOIN" {
                     // Parse JOIN ... ON
@@ -1248,13 +1319,40 @@ impl Parser {
                 }
             }
 
+            if matches!(self.current(), Some(Token::LParen)) {
+                self.next();
+                if !matches!(self.current(), Some(Token::Select)) {
+                    return Err("Expected SELECT in subquery".to_string());
+                }
+                let subquery_stmt = self.parse_select()?;
+                let subquery = match subquery_stmt {
+                    Statement::Select(s) => s,
+                    _ => return Err("Expected SELECT in subquery".to_string()),
+                };
+                self.expect(Token::RParen)?;
+                self.expect(Token::As)?;
+                let alias = match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        let a = name.clone();
+                        self.next();
+                        a
+                    }
+                    _ => return Err("Expected alias name after AS".to_string()),
+                };
+                derived_tables.push(DerivedTable {
+                    alias,
+                    subquery: Box::new(subquery),
+                });
+                break;
+            }
+
             let table_name = match self.current() {
                 Some(Token::Identifier(name)) => {
                     let name = name.clone();
-                    self.next(); // consume identifier
+                    self.next();
 
                     if matches!(self.current(), Some(Token::Dot)) {
-                        self.next(); // consume dot
+                        self.next();
                         match self.next() {
                             Some(Token::Identifier(table_name)) => {
                                 format!("{}.{}", name, table_name)
@@ -1280,8 +1378,9 @@ impl Parser {
                 self.next(); // consume comma
                 continue;
             } else if let Some(Token::Identifier(name)) = self.current() {
-                if name.to_uppercase() == "JOIN" {
-                    // Continue to JOIN parsing
+                let upper = name.to_uppercase();
+                if upper == "JOIN" || upper == "LEFT" || upper == "RIGHT" || upper == "FULL" {
+                    continue;
                 } else {
                     break;
                 }
@@ -1550,6 +1649,7 @@ impl Parser {
             order_by,
             with_clause: None,
             index_hints,
+            derived_tables,
         };
 
         // Check for LIMIT and OFFSET
@@ -2029,8 +2129,60 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse comparison expression (=, !=, >, <, >=, <=, BETWEEN)
+    /// Parse comparison expression (=, !=, >, <, >=, <=, BETWEEN, IN, NOT IN, LIKE, NOT LIKE)
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
+        // Check for NOT LIKE or NOT IN (compound operators)
+        if matches!(self.current(), Some(Token::Not)) {
+            self.next(); // consume NOT
+            let left = self.parse_arithmetic_expression()?;
+            // NOT was consumed, now check for LIKE or IN
+            if matches!(self.current(), Some(Token::Like)) {
+                self.next(); // consume LIKE
+                let pattern = self.parse_arithmetic_expression()?;
+                return Ok(Expression::Not(Box::new(Expression::BinaryOp(
+                    Box::new(left),
+                    "LIKE".to_string(),
+                    Box::new(pattern),
+                ))));
+            }
+            if matches!(self.current(), Some(Token::In)) {
+                self.next(); // consume IN
+                self.expect(Token::LParen)?;
+                // Check if this is a subquery: NOT IN (SELECT ...)
+                if matches!(self.current(), Some(Token::Select)) {
+                    let select_stmt = self.parse_select()?;
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::Not(Box::new(Expression::InSubquery {
+                        expr: Box::new(left),
+                        subquery: Box::new(select_stmt),
+                    })));
+                }
+                // Regular NOT IN with value list
+                let mut values = Vec::new();
+                loop {
+                    values.push(self.parse_arithmetic_expression()?);
+                    match self.current() {
+                        Some(Token::Comma) => {
+                            self.next(); // consume comma
+                        }
+                        Some(Token::RParen) => {
+                            self.next(); // consume RParen
+                            break;
+                        }
+                        _ => {
+                            return Err("Expected ',' or ')' after value in NOT IN list".to_string())
+                        }
+                    }
+                }
+                return Ok(Expression::Not(Box::new(Expression::InList {
+                    expr: Box::new(left),
+                    values,
+                })));
+            }
+            let expr = self.parse_comparison_expression()?;
+            return Ok(Expression::Not(Box::new(expr)));
+        }
+
         let left = self.parse_arithmetic_expression()?;
 
         // Check for comparison operator
@@ -2054,10 +2206,22 @@ impl Parser {
                         high: Box::new(high),
                     });
                 }
-                // Check for IN: expr IN (value1, value2, ...)
+                // Check for IN: expr IN (value1, value2, ...) or expr IN (SELECT ...)
                 if matches!(self.current(), Some(Token::In)) {
                     self.next(); // consume IN
                     self.expect(Token::LParen)?;
+
+                    // Check if this is a subquery: IN (SELECT ...)
+                    if matches!(self.current(), Some(Token::Select)) {
+                        let select_stmt = self.parse_select()?;
+                        self.expect(Token::RParen)?;
+                        return Ok(Expression::InSubquery {
+                            expr: Box::new(left),
+                            subquery: Box::new(select_stmt),
+                        });
+                    }
+
+                    // Regular IN with value list
                     let mut values = Vec::new();
                     loop {
                         values.push(self.parse_arithmetic_expression()?);
@@ -2103,9 +2267,56 @@ impl Parser {
         ))
     }
 
-    /// Parse arithmetic expression (+, -, *, /)
+    /// Parse arithmetic expression (+, -, *, /) and unary NOT
     fn parse_arithmetic_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_primary_expression()?;
+
+        if matches!(self.current(), Some(Token::Not)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Like)) {
+                self.next();
+                let pattern = self.parse_arithmetic_expression()?;
+                return Ok(Expression::Not(Box::new(Expression::BinaryOp(
+                    Box::new(left),
+                    "LIKE".to_string(),
+                    Box::new(pattern),
+                ))));
+            }
+            if matches!(self.current(), Some(Token::In)) {
+                self.next();
+                self.expect(Token::LParen)?;
+                if matches!(self.current(), Some(Token::Select)) {
+                    let select_stmt = self.parse_select()?;
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::Not(Box::new(Expression::InSubquery {
+                        expr: Box::new(left),
+                        subquery: Box::new(select_stmt),
+                    })));
+                }
+                let mut values = Vec::new();
+                loop {
+                    values.push(self.parse_arithmetic_expression()?);
+                    match self.current() {
+                        Some(Token::Comma) => {
+                            self.next();
+                        }
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        _ => {
+                            return Err("Expected ',' or ')' after value in NOT IN list".to_string())
+                        }
+                    }
+                }
+                return Ok(Expression::Not(Box::new(Expression::InList {
+                    expr: Box::new(left),
+                    values,
+                })));
+            }
+            let expr = self.parse_comparison_expression()?;
+            return Ok(Expression::Not(Box::new(expr)));
+        }
 
         // Check for arithmetic operator
         let op = match self.current() {
@@ -2190,7 +2401,7 @@ impl Parser {
                 self.next();
                 self.parse_extract_expression()
             }
-            Some(Token::Substring) => {
+            Some(Token::Substring) | Some(Token::Substr) => {
                 self.next();
                 self.parse_substring_expression()
             }
@@ -2313,20 +2524,40 @@ impl Parser {
         Ok(Expression::Extract { field, expr })
     }
 
-    /// Parse SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    /// Parse SUBSTRING/SUBSTR expression
+    /// Supports两种语法:
+    /// - SUBSTRING(expr FROM start FOR len) - SQL-92标准
+    /// - SUBSTR(expr, start, len) - MySQL风格
     fn parse_substring_expression(&mut self) -> Result<Expression, String> {
         self.expect(Token::LParen)?;
         let expr = Box::new(self.parse_expression()?);
-        self.expect(Token::From)?;
-        let start = Box::new(self.parse_expression()?);
-        let len = if matches!(self.current(), Some(Token::For)) {
+
+        // Check syntax type: FROM means SQL-92, comma means MySQL
+        if matches!(self.current(), Some(Token::From)) {
+            // SQL-92 syntax: SUBSTRING(expr FROM start FOR len)
             self.next();
-            Some(Box::new(self.parse_expression()?))
+            let start = Box::new(self.parse_expression()?);
+            let len = if matches!(self.current(), Some(Token::For)) {
+                self.next();
+                Some(Box::new(self.parse_expression()?))
+            } else {
+                None
+            };
+            self.expect(Token::RParen)?;
+            Ok(Expression::Substring { expr, start, len })
         } else {
-            None
-        };
-        self.expect(Token::RParen)?;
-        Ok(Expression::Substring { expr, start, len })
+            // MySQL/Oracle syntax: SUBSTR(expr, start, len)
+            self.expect(Token::Comma)?;
+            let start = Box::new(self.parse_expression()?);
+            self.expect(Token::Comma)?;
+            let len = Box::new(self.parse_expression()?);
+            self.expect(Token::RParen)?;
+            Ok(Expression::Substring {
+                expr,
+                start,
+                len: Some(len),
+            })
+        }
     }
     /// Parse a window function: ROW_NUMBER() OVER (...)
     fn parse_window_function(&mut self) -> Result<Expression, String> {
@@ -4247,6 +4478,41 @@ pub fn parse(sql: &str) -> Result<Statement, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_not_in_subquery() {
+        let sql = "SELECT c_custkey FROM customer WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%')";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_inline_view_with_join() {
+        let sql = "SELECT * FROM (SELECT c_custkey FROM customer LEFT JOIN orders ON c_custkey = o_custkey) AS cust_orders";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_inline_view_simple() {
+        let sql = "SELECT * FROM (SELECT c_custkey FROM customer) AS cust_orders";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_q13() {
+        let sql = "SELECT c_count, COUNT(*) AS custdist FROM (SELECT c_custkey, COUNT(o_orderkey) AS c_count FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%' WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%') GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY c_count DESC, custdist DESC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse Q13: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_q22() {
+        let sql = "SELECT cntrycode, COUNT(*) AS numcust, SUM(c_acctbal) AS totacctbal FROM (SELECT SUBSTR(c_phone, 1, 2) AS cntrycode, c_acctbal FROM customer WHERE SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT AVG(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse Q22: {:?}", result.err());
+    }
 
     #[test]
     fn test_parse_select() {
