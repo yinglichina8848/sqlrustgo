@@ -4489,6 +4489,13 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_q13() {
+        let sql = "SELECT c_count, COUNT(*) AS custdist FROM (SELECT c_custkey, COUNT(o_orderkey) AS c_count FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%' WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%') GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY c_count DESC, custdist DESC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse Q13: {:?}", result.err());
+    }
+
+    #[test]
     fn test_parse_select() {
         let result = parse("SELECT id FROM users");
         assert!(result.is_ok());
