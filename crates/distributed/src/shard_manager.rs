@@ -198,6 +198,7 @@ impl Default for ShardManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::partition::PartitionValue;
 
     #[test]
     fn test_create_shard() {
