@@ -7,9 +7,9 @@ use std::collections::HashMap;
 /// Thread-safe label registry
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LabelRegistry {
-    string_to_id: HashMap<String, LabelId>,
-    id_to_string: HashMap<LabelId, String>,
-    next_id: LabelId,
+    pub(crate) string_to_id: HashMap<String, LabelId>,
+    pub(crate) id_to_string: HashMap<LabelId, String>,
+    pub(crate) next_id: LabelId,
 }
 
 impl LabelRegistry {

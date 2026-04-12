@@ -79,13 +79,13 @@ pub trait GraphStore {
 /// In-memory implementation of GraphStore
 #[derive(Clone, Default)]
 pub struct InMemoryGraphStore {
-    nodes: NodeStore,
-    edges: EdgeStore,
-    adjacency: AdjacencyIndex,
-    labels: LabelRegistry,
-    label_index: LabelIndex,
-    next_node_id: NodeId,
-    next_edge_id: EdgeId,
+    pub(crate) nodes: NodeStore,
+    pub(crate) edges: EdgeStore,
+    pub(crate) adjacency: AdjacencyIndex,
+    pub(crate) labels: LabelRegistry,
+    pub(crate) label_index: LabelIndex,
+    pub(crate) next_node_id: NodeId,
+    pub(crate) next_edge_id: EdgeId,
 }
 
 impl InMemoryGraphStore {
