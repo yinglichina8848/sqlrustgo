@@ -189,31 +189,37 @@ impl BufferPool {
         let mut pages = self.pages.lock().unwrap();
         let mut lru = self.lru.lock().unwrap();
 
-        // If page already exists, just update LRU
         if pages.contains_key(&page_id) {
             lru.retain(|&id| id != page_id);
             lru.push_front(page_id);
             return;
         }
 
-        // Evict if at capacity - skip pinned pages
+        let mut evicted = false;
+        let mut examined = std::collections::HashSet::new();
         while pages.len() >= self.capacity && !lru.is_empty() {
             if let Some(evicted_id) = lru.pop_back() {
-                // Skip pinned pages - they cannot be evicted
                 if self.is_pinned(evicted_id) {
-                    // Move to front, will try next candidate
+                    if examined.contains(&evicted_id) {
+                        lru.push_front(evicted_id);
+                        break;
+                    }
+                    examined.insert(evicted_id);
                     lru.push_front(evicted_id);
                     continue;
                 }
+                examined.insert(evicted_id);
                 pages.remove(&evicted_id);
+                evicted = true;
                 let mut stats = self.stats.write().unwrap();
                 stats.evictions += 1;
             }
         }
 
-        // Insert new page
-        pages.insert(page_id, page);
-        lru.push_front(page_id);
+        if evicted || pages.len() < self.capacity {
+            pages.insert(page_id, page);
+            lru.push_front(page_id);
+        }
     }
 
     /// Allocate a new page
@@ -938,18 +944,19 @@ mod tests {
         // Try to insert new page - cannot evict any (both pinned)
         pool.insert(Arc::new(Page::new(3)));
 
-        // Pool is still at capacity (pinned pages can't be evicted)
+        // Pool is still at capacity (pinned pages can't be evicted, so page 3 not inserted)
         assert_eq!(pool.len(), 2);
+        assert!(pool.get(3).is_none()); // Page 3 was not inserted
 
         // Unpin one page
         pool.unpin(1);
 
-        // Now insert should evict page 1
+        // Now insert should evict page 1 and insert page 4
         pool.insert(Arc::new(Page::new(4)));
 
         assert!(pool.get(1).is_none()); // Evicted
         assert!(pool.get(2).is_some()); // Still pinned
-        assert!(pool.get(3).is_some());
-        assert!(pool.get(4).is_some());
+        assert!(pool.get(3).is_none()); // Was never inserted
+        assert!(pool.get(4).is_some()); // Newly inserted
     }
 }
