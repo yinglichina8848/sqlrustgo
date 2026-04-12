@@ -634,6 +634,7 @@ lazy_static::lazy_static! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_operator_profile_creation() {
