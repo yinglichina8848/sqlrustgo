@@ -1803,6 +1803,14 @@ impl VolExecutorBuilder {
 
 pub trait Storage: Send + Sync {
     fn scan(&self, table_name: &str) -> SqlResult<Vec<Vec<Value>>>;
+
+    fn scan_predicate(
+        &self,
+        table_name: &str,
+        _predicate: &sqlrustgo_storage::predicate::Predicate,
+    ) -> SqlResult<Vec<Vec<Value>>> {
+        self.scan(table_name)
+    }
 }
 
 pub struct MockStorageForExecutor {

@@ -7,6 +7,7 @@
 pub mod context;
 pub mod cost;
 pub mod graph_cost;
+pub mod index_selector;
 pub mod network_cost;
 pub mod path_selector;
 pub mod plan;
@@ -14,6 +15,7 @@ pub mod projection_pushdown;
 pub mod query_planner;
 pub mod rules;
 pub mod stats;
+pub mod stats_collector;
 pub mod stats_provider;
 pub mod stats_registry;
 pub mod unified_cost;
@@ -24,12 +26,12 @@ pub use context::OptimizerContext;
 pub use cost::{AccessMethod, CboOptimizer, PredicateType, SimpleCostModel};
 pub use graph_cost::{GraphCostFactors, GraphCostModel, GraphIndexType};
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
-pub use path_selector::{PathSelector, PathSelectorConfig, PathSelection};
+pub use path_selector::{PathSelection, PathSelector, PathSelectorConfig};
 pub use plan::{OptimizerError, OptimizerResult};
 pub use projection_pushdown::{
     ColumnPruner, ProjectionPushdownConfig, ProjectionPushdownOptimizer, ProjectionPushdownRule,
 };
-pub use query_planner::{PlanAlternative, QueryPlanner, QueryPlannerConfig, QueryPlanResult};
+pub use query_planner::{PlanAlternative, QueryPlanResult, QueryPlanner, QueryPlannerConfig};
 pub use rules::{
     ConstantFolding, Expr, ExpressionSimplification, IndexHint, IndexHintType, IndexSelect,
     JoinReordering, JoinType, MatchResult, Operator, Plan, PlanPattern, PredicatePushdown,
@@ -45,9 +47,7 @@ pub use stats_provider::{
 };
 pub use stats_registry::StatsRegistry;
 pub use unified_cost::{ExecutionPath, UnifiedCostModel};
-pub use unified_plan::{
-    GraphPattern, GraphScanType, UnifiedPlan, VectorScanType,
-};
+pub use unified_plan::{GraphPattern, GraphScanType, UnifiedPlan, VectorScanType};
 pub use vector_cost::{VectorCostFactors, VectorCostModel, VectorIndexType};
 
 /// Optimizer trait - interface for query optimization
