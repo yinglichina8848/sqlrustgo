@@ -26,7 +26,7 @@ impl NodeStore {
         let label = node.label;
         self.nodes.insert(node_id, node);
         // Update label index
-        let mut entry = self.label_index.entry(label).or_insert_with(Vec::new);
+        let mut entry = self.label_index.entry(label).or_default();
         if !entry.contains(&node_id) {
             entry.push(node_id);
         }

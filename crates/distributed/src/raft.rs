@@ -3,22 +3,17 @@
 //! Provides leader election and log replication for distributed coordination.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+
 use std::time::{Duration, Instant};
 
 pub type NodeId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RaftState {
+    #[default]
     Follower,
     Candidate,
     Leader,
-}
-
-impl Default for RaftState {
-    fn default() -> Self {
-        RaftState::Follower
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,7 +237,7 @@ impl RaftNode {
 
         if self.state == RaftState::Candidate && resp.vote_granted {
             let votes = self.count_votes();
-            if votes > (self.peers.len() + 1) / 2 {
+            if votes > self.peers.len().div_ceil(2) {
                 self.become_leader();
             }
         }

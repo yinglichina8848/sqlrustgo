@@ -8,15 +8,13 @@ use crate::metrics_endpoint::MetricsRegistry;
 use crate::scheduler;
 use query_stats::StatsCollector;
 use serde::{Deserialize, Serialize};
-use sqlrustgo_gmp::audit::{self, AuditLog};
-use sqlrustgo_gmp::compliance::{ComplianceCheckRequest, ComplianceResult};
-use sqlrustgo_gmp::report::{AuditReport, CapaReport, DeviationReport};
+use sqlrustgo_gmp::compliance::ComplianceCheckRequest;
 use sqlrustgo_optimizer::{
     IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
 };
 use sqlrustgo_parser::parse;
 use sqlrustgo_rag::{Document, OpenClawClient};
-use sqlrustgo_storage::engine::{StorageEngine, Value};
+use sqlrustgo_storage::engine::StorageEngine;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -411,11 +409,9 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
 
             // Find request body for POST requests
             let body_content = if method == "POST" {
-                if let Some(body_start) = request.find("\r\n\r\n") {
-                    Some(request[body_start + 4..].to_string())
-                } else {
-                    None
-                }
+                request
+                    .find("\r\n\r\n")
+                    .map(|body_start| request[body_start + 4..].to_string())
             } else {
                 None
             };
@@ -556,7 +552,7 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                             Ok(req) => {
                                 let mut client = openclaw_client.write().unwrap();
                                 let doc_id = Uuid::new_v4().as_u128() as u64;
-                                let memory_type =
+                                let _memory_type =
                                     req.memory_type.unwrap_or_else(|| "custom".to_string());
 
                                 let mut doc = Document::new(doc_id, req.content);
@@ -1364,6 +1360,7 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
 // ============================================================================
 
 /// SQL execution result
+#[allow(dead_code)]
 struct SqlExecResult {
     columns: Vec<String>,
     rows: Vec<Vec<serde_json::Value>>,
@@ -1441,7 +1438,7 @@ fn execute_sql(
 
             let result_rows: Vec<Vec<serde_json::Value>> = filtered_rows
                 .into_iter()
-                .map(|row| row.into_iter().map(|v| value_to_json(v)).collect())
+                .map(|row| row.into_iter().map(value_to_json).collect())
                 .collect();
 
             Ok(SqlExecResult {
@@ -1852,7 +1849,7 @@ fn base64_encode(data: &[u8]) -> String {
 /// Natural language to SQL (stub implementation using RAG)
 fn nl_to_sql(
     query: &str,
-    context: &Option<String>,
+    _context: &Option<String>,
     storage: &Arc<RwLock<dyn StorageEngine>>,
 ) -> NlQueryResponse {
     // This is a stub implementation
@@ -1865,17 +1862,10 @@ fn nl_to_sql(
     // Simple keyword-based SQL generation
     let query_lower = query.to_lowercase();
     let sql = if query_lower.contains("show") || query_lower.contains("list") {
-        if query_lower.contains("table") {
-            format!(
-                "SELECT * FROM {}",
-                tables.first().unwrap_or(&"dual".to_string())
-            )
-        } else {
-            format!(
-                "SELECT * FROM {}",
-                tables.first().unwrap_or(&"dual".to_string())
-            )
-        }
+        format!(
+            "SELECT * FROM {}",
+            tables.first().unwrap_or(&"dual".to_string())
+        )
     } else if query_lower.contains("count") {
         if let Some(table) = tables.first() {
             format!("SELECT COUNT(*) FROM {}", table)

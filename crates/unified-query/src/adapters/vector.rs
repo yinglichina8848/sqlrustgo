@@ -1,7 +1,7 @@
 use crate::api::{UnifiedQueryRequest, VectorResult};
 use crate::error::QueryResult;
 use crate::QueryPlan;
-use sqlrustgo_vector::{FlatIndex, VectorIndex, DistanceMetric};
+use sqlrustgo_vector::{DistanceMetric, FlatIndex, VectorIndex};
 
 /// Vector adapter for similarity search
 pub struct VectorAdapter {
@@ -40,7 +40,7 @@ impl VectorAdapter {
 
         // Extract query embedding (in production, this would use an embedding model)
         let query_embedding = self.extract_embedding(&request.query, vector_query);
-        
+
         match query_embedding {
             Some(embedding) => {
                 let top_k = if vector_query.top_k > 0 {
@@ -62,7 +62,7 @@ impl VectorAdapter {
                                 }),
                             })
                             .collect();
-                        
+
                         QueryResult::Ok(vector_results)
                     }
                     Err(e) => QueryResult::Err(format!("Vector search error: {}", e)),
@@ -75,22 +75,26 @@ impl VectorAdapter {
     /// Extract embedding from query text
     /// In production, this would call an embedding model (e.g., OpenAI, local model)
     /// For now, we generate a simple hash-based embedding for demonstration
-    fn extract_embedding(&self, query: &str, vector_query: &crate::api::VectorQuery) -> Option<Vec<f32>> {
+    fn extract_embedding(
+        &self,
+        query: &str,
+        _vector_query: &crate::api::VectorQuery,
+    ) -> Option<Vec<f32>> {
         // If there's a column specified, we would look up the vector for that column
         // For now, generate a pseudo-embedding based on query hash
         let dim = self.index.dimension();
         if dim == 0 {
             return None;
         }
-        
+
         let mut embedding = vec![0.0f32; dim];
         let bytes = query.as_bytes();
-        
+
         for (i, byte) in bytes.iter().enumerate() {
             let idx = i % dim;
             embedding[idx] = (*byte as f32) / 255.0;
         }
-        
+
         // Normalize
         let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
         if magnitude > 0.0 {
@@ -98,22 +102,18 @@ impl VectorAdapter {
                 *v /= magnitude;
             }
         }
-        
+
         Some(embedding)
     }
 
     /// Add a vector to the index
     pub fn insert(&mut self, id: u64, vector: Vec<f32>) -> Result<(), String> {
-        self.index
-            .insert(id, &vector)
-            .map_err(|e| e.to_string())
+        self.index.insert(id, &vector).map_err(|e| e.to_string())
     }
 
     /// Build the index for searching
     pub fn build_index(&mut self) -> Result<(), String> {
-        self.index
-            .build_index()
-            .map_err(|e| e.to_string())
+        self.index.build_index().map_err(|e| e.to_string())
     }
 
     /// Get index dimension
@@ -144,13 +144,13 @@ mod tests {
     #[tokio::test]
     async fn test_vector_adapter_search() {
         let mut adapter = VectorAdapter::new();
-        
+
         // Insert some vectors
         adapter.insert(1, vec![0.1, 0.2, 0.3]).unwrap();
         adapter.insert(2, vec![0.4, 0.5, 0.6]).unwrap();
         adapter.insert(3, vec![0.7, 0.8, 0.9]).unwrap();
         adapter.build_index().unwrap();
-        
+
         let request = UnifiedQueryRequest {
             query: "test query".to_string(),
             mode: crate::api::QueryMode::Vector,
@@ -165,7 +165,7 @@ mod tests {
             top_k: Some(2),
             offset: Some(0),
         };
-        
+
         let plan = QueryPlan {
             execute_sql: false,
             execute_vector: true,
@@ -174,10 +174,10 @@ mod tests {
             top_k: 2,
             offset: 0,
         };
-        
+
         let results = adapter.execute(&request, &plan).await;
         assert!(results.is_ok());
-        
+
         let vector_results = results.unwrap();
         assert!(!vector_results.is_empty());
     }

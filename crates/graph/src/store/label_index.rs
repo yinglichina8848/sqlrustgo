@@ -24,7 +24,7 @@ impl LabelIndex {
 
     /// Add a node to label index
     pub fn add_node(&self, node_id: NodeId, label: LabelId) {
-        let mut entry = self.node_index.entry(label).or_insert_with(Vec::new);
+        let mut entry = self.node_index.entry(label).or_default();
         if !entry.contains(&node_id) {
             entry.push(node_id);
         }
@@ -54,7 +54,7 @@ impl LabelIndex {
 
     /// Add an edge to label index
     pub fn add_edge(&self, edge_id: EdgeId, label: LabelId) {
-        let mut entry = self.edge_index.entry(label).or_insert_with(Vec::new);
+        let mut entry = self.edge_index.entry(label).or_default();
         if !entry.contains(&edge_id) {
             entry.push(edge_id);
         }

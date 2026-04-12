@@ -386,7 +386,7 @@ impl std::fmt::Display for AccessMethod {
 
 impl CboOptimizer {
     /// Estimate cost for range scan using index
-    pub fn estimate_range_scan_cost(&self, table: &str, column: &str, selectivity: f64) -> f64 {
+    pub fn estimate_range_scan_cost(&self, table: &str, _column: &str, selectivity: f64) -> f64 {
         if let Some(ref provider) = self.stats_provider {
             if let Some(stats) = provider.table_stats(table) {
                 let row_count = stats.row_count();

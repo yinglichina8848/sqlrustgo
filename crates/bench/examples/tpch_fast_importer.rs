@@ -107,7 +107,13 @@ impl ImportStats {
 fn parse_lineitem(line: &str) -> Option<Vec<String>> {
     let fields: Vec<&str> = line.split('|').collect();
     if fields.len() >= 16 {
-        Some(fields.iter().take(16).map(|s| s.trim().to_string()).collect())
+        Some(
+            fields
+                .iter()
+                .take(16)
+                .map(|s| s.trim().to_string())
+                .collect(),
+        )
     } else {
         None
     }
@@ -117,7 +123,13 @@ fn parse_lineitem(line: &str) -> Option<Vec<String>> {
 fn parse_orders(line: &str) -> Option<Vec<String>> {
     let fields: Vec<&str> = line.split('|').collect();
     if fields.len() >= 9 {
-        Some(fields.iter().take(9).map(|s| s.trim().to_string()).collect())
+        Some(
+            fields
+                .iter()
+                .take(9)
+                .map(|s| s.trim().to_string())
+                .collect(),
+        )
     } else {
         None
     }
@@ -127,7 +139,13 @@ fn parse_orders(line: &str) -> Option<Vec<String>> {
 fn parse_customer(line: &str) -> Option<Vec<String>> {
     let fields: Vec<&str> = line.split('|').collect();
     if fields.len() >= 8 {
-        Some(fields.iter().take(8).map(|s| s.trim().to_string()).collect())
+        Some(
+            fields
+                .iter()
+                .take(8)
+                .map(|s| s.trim().to_string())
+                .collect(),
+        )
     } else {
         None
     }
@@ -150,35 +168,41 @@ where
     let file = File::open(file_path)?;
     let reader = BufReader::with_capacity(1 << 20, file); // 1MB buffer
     let file_size = fs::metadata(file_path)?.len() as f64 / (1024.0 * 1024.0);
-    
-    println!("  Importing {} from {} ({:.1} MB)...", table_name, file_path.display(), file_size);
-    
+
+    println!(
+        "  Importing {} from {} ({:.1} MB)...",
+        table_name,
+        file_path.display(),
+        file_size
+    );
+
     let mut rows = Vec::with_capacity(config.batch_size);
     let mut row_count = 0;
     let mut batch_num = 0;
-    
+
     for line in reader.lines() {
         if let Some(fields) = parse_fn(&line?) {
             rows.push(fields);
             row_count += 1;
-            
+
             if rows.len() >= config.batch_size {
                 batch_num += 1;
-                
+
                 // Execute batch insert
                 let mut stmt = conn.prepare_cached(insert_sql)?;
                 let tx = conn.unchecked_transaction()?;
-                
+
                 for row in rows.drain(..) {
-                    let params: Vec<&dyn rusqlite::ToSql> = row.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+                    let params: Vec<&dyn rusqlite::ToSql> =
+                        row.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
                     stmt.execute(params.as_slice())?;
                 }
-                
+
                 tx.commit()?;
                 drop(stmt);
-                
+
                 progress.increment(config.batch_size);
-                
+
                 if batch_num % 10 == 0 {
                     let (_, rate, pct) = progress.progress();
                     let eta = progress.eta_seconds();
@@ -190,34 +214,38 @@ where
             }
         }
     }
-    
+
     // Insert remaining rows
     if !rows.is_empty() {
         let mut stmt = conn.prepare_cached(insert_sql)?;
         let tx = conn.unchecked_transaction()?;
-        
+
         for row in rows.drain(..) {
-            let params: Vec<&dyn rusqlite::ToSql> = row.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+            let params: Vec<&dyn rusqlite::ToSql> =
+                row.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
             stmt.execute(params.as_slice())?;
         }
-        
+
         tx.commit()?;
     }
-    
+
     progress.increment(rows.len());
-    
+
     Ok(ImportStats::new(row_count, start.elapsed(), file_size))
 }
 
 /// Run the importer
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    
-    let input_dir = args.get(1).map(Path::new).unwrap_or(Path::new("data/tpch-sf01"));
+
+    let input_dir = args
+        .get(1)
+        .map(Path::new)
+        .unwrap_or(Path::new("data/tpch-sf01"));
     let output_path = args.get(2).map(|s| s.as_str()).unwrap_or("tpch_import.db");
     let batch_size: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(10000);
     let num_threads: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(4);
-    
+
     println!("==============================================");
     println!("  TPC-H Fast Importer");
     println!("==============================================");
@@ -226,23 +254,23 @@ fn main() {
     println!("Batch size: {}", batch_size);
     println!("Threads: {}", num_threads);
     println!();
-    
+
     let config = BatchConfig {
         batch_size,
         num_threads,
         progress_interval: 50000,
     };
-    
+
     // Remove existing database
     if Path::new(output_path).exists() {
         println!("Removing existing database...");
         fs::remove_file(output_path).unwrap();
     }
-    
+
     // Create connection
     println!("Creating database...");
     let conn = Connection::open(output_path).unwrap();
-    
+
     // Set performance pragmas
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
@@ -253,13 +281,13 @@ fn main() {
          PRAGMA threads = 4;",
     )
     .unwrap();
-    
+
     // Estimate total rows
     let total_rows = 60_000_000 + 15_000_000 + 1_500_000 + 2_000_000 + 100_000 + 8_000_000;
     let progress = ProgressTracker::new(total_rows);
-    
+
     let total_start = Instant::now();
-    
+
     // Import small tables first
     let lineitem_path = input_dir.join("lineitem.tbl");
     if lineitem_path.exists() {
@@ -274,39 +302,50 @@ fn main() {
             &progress,
         )
         .unwrap();
-        println!("    -> {} rows ({:.0} rows/s)", stats.rows_imported, stats.rows_per_sec);
+        println!(
+            "    -> {} rows ({:.0} rows/s)",
+            stats.rows_imported, stats.rows_per_sec
+        );
     }
-    
+
     // Import other tables
     let tables = [
-        ("orders", "orders.tbl", "INSERT INTO orders VALUES (?,?,?,?,?,?,?,?,?)", parse_orders as fn(&str) -> _),
-        ("customer", "customer.tbl", "INSERT INTO customer VALUES (?,?,?,?,?,?,?,?)", parse_customer),
+        (
+            "orders",
+            "orders.tbl",
+            "INSERT INTO orders VALUES (?,?,?,?,?,?,?,?,?)",
+            parse_orders as fn(&str) -> _,
+        ),
+        (
+            "customer",
+            "customer.tbl",
+            "INSERT INTO customer VALUES (?,?,?,?,?,?,?,?)",
+            parse_customer,
+        ),
     ];
-    
+
     for (name, file, sql, parser) in tables.iter() {
         let path = input_dir.join(file);
         if path.exists() {
-            let stats = import_table_file(
-                &conn,
-                &path,
-                name,
-                sql,
-                *parser,
-                &config,
-                &progress,
-            )
-            .unwrap();
-            println!("    -> {} rows ({:.0} rows/s)", stats.rows_imported, stats.rows_per_sec);
+            let stats =
+                import_table_file(&conn, &path, name, sql, *parser, &config, &progress).unwrap();
+            println!(
+                "    -> {} rows ({:.0} rows/s)",
+                stats.rows_imported, stats.rows_per_sec
+            );
         }
     }
-    
+
     let total_elapsed = total_start.elapsed();
     let (_, total_rate, _) = progress.progress();
-    
+
     println!();
     println!("==============================================");
     println!("  Import Complete!");
     println!("  Total time: {:.2}s", total_elapsed.as_secs_f64());
-    println!("  Total rows: {} ({:.0} rows/s)", progress.total, total_rate);
+    println!(
+        "  Total rows: {} ({:.0} rows/s)",
+        progress.total, total_rate
+    );
     println!("==============================================");
 }

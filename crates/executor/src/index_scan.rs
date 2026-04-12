@@ -112,7 +112,7 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
         // Fetch complete rows for each row_id
         for row_id in row_ids {
             if let Some(record) = self.storage.get_row(&self.table_name, row_id as usize)? {
-                self.rows.push(record.into_iter().map(|v| v).collect());
+                self.rows.push(record.into_iter().collect::<Vec<_>>());
             }
         }
         Ok(())

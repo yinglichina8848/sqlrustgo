@@ -1,7 +1,6 @@
 // optimizer/src/stats_registry.rs
 
-use crate::stats::{ColumnStats, StatisticsProvider, StatsResult, TableStats};
-use std::collections::HashMap;
+use crate::stats::{StatisticsProvider, StatsResult, TableStats};
 use std::sync::Arc;
 
 /// 统计信息注册表 - 管理全局统计信息并同步 ANALYZE 结果

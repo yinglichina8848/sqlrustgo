@@ -4,8 +4,8 @@
 //! Checks document status, versioning, approval workflows, and other
 //! GMP requirements.
 
-use crate::audit::{query_audit_logs, AuditLog, TABLE_AUDIT_LOG};
-use crate::document::{query_by_status, query_by_type, DocStatus, Document, TABLE_DOCUMENTS};
+use crate::audit::query_audit_logs;
+use crate::document::{query_by_status, query_by_type, DocStatus};
 use serde::{Deserialize, Serialize};
 use sqlrustgo_storage::StorageEngine;
 use std::collections::HashMap;
@@ -231,6 +231,7 @@ pub fn check_batch_compliance(
     request: &ComplianceCheckRequest,
 ) -> SqlResult<ComplianceResult> {
     let mut all_violations = Vec::new();
+    #[allow(unused_assignments)]
     let mut docs_checked = 0;
 
     // Get all documents of specified type, or all documents

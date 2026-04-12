@@ -15,10 +15,11 @@ use sqlrustgo_vector::traits::{IndexEntry, VectorIndex};
 use sqlrustgo_vector::VectorResult;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
 
 /// Vector index types supported
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum VectorIndexType {
     /// Flat index (brute-force O(n) search)
     Flat,
@@ -26,16 +27,11 @@ pub enum VectorIndexType {
     Hnsw,
     /// IVF index (Inverted File with k-means)
     Ivf,
+    #[default]
     /// Parallel KNN (SIMD-accelerated)
     ParallelKnn,
     /// IVFPQ index (IVF + Product Quantization)
     Ivfpq,
-}
-
-impl Default for VectorIndexType {
-    fn default() -> Self {
-        VectorIndexType::ParallelKnn
-    }
 }
 
 /// Metadata for a vector column
@@ -95,6 +91,7 @@ pub struct VectorStore {
     /// In-memory indices (table_column -> index)
     indices: std::collections::HashMap<String, Box<dyn VectorIndex>>,
     /// Metric used for this store
+    #[allow(dead_code)]
     default_metric: DistanceMetric,
 }
 
@@ -265,7 +262,7 @@ impl VectorStore {
 
         for (key, index) in &self.indices {
             let path = index_dir.join(format!("{}.vecidx", key.replace(":", "_")));
-            self.save_index(key, index, &path)?;
+            self.save_index(key, index.as_ref(), &path)?;
         }
 
         // Save metadata
@@ -278,12 +275,8 @@ impl VectorStore {
     }
 
     /// Save a single index to disk
-    fn save_index(
-        &self,
-        key: &str,
-        index: &Box<dyn VectorIndex>,
-        path: &PathBuf,
-    ) -> std::io::Result<()> {
+    #[allow(clippy::ptr_arg)]
+    fn save_index(&self, key: &str, index: &dyn VectorIndex, path: &Path) -> std::io::Result<()> {
         let file = File::create(path)?;
         let mut w = BufWriter::new(file);
 
@@ -301,7 +294,7 @@ impl VectorStore {
 
         // Count
         let count = index.len() as u64;
-        w.write_all(&(count as u64).to_le_bytes())?;
+        w.write_all(&count.to_le_bytes())?;
 
         // Metric
         let metric_byte = match index.metric() {
@@ -313,7 +306,7 @@ impl VectorStore {
         w.write_all(&[metric_byte])?;
 
         // Vectors (id + dimension * f32)
-        let dim = index.dimension();
+        let _dim = index.dimension();
         let vectors = index.get_all();
         for record in vectors {
             w.write_all(&record.id.to_le_bytes())?;
@@ -422,10 +415,10 @@ impl VectorStore {
 
                 // Read vector
                 let mut vector = vec![0.0_f32; dimension];
-                for i in 0..dimension {
+                for slot in vector.iter_mut() {
                     let mut val_buf = [0u8; 4];
                     reader.read_exact(&mut val_buf)?;
-                    vector[i] = f32::from_le_bytes(val_buf);
+                    *slot = f32::from_le_bytes(val_buf);
                 }
 
                 // Insert into index
@@ -461,7 +454,7 @@ impl VectorStore {
 
         if let Some(index) = self.indices.get_mut(&key) {
             // Re-create the index
-            let dimension = index.dimension();
+            let _dimension = index.dimension();
             let metric = index.metric();
             let new_index: Box<dyn VectorIndex> = Box::new(ParallelKnnIndex::new(metric));
             self.indices.insert(key, new_index);

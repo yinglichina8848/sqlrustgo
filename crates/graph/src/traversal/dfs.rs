@@ -140,7 +140,7 @@ pub fn dfs_with_timing<G>(graph: &G, start: NodeId) -> DfsResult
 where
     G: Fn(NodeId) -> Vec<NodeId>,
 {
-    let mut visited = Vec::new();
+    let visited = Vec::new();
     let mut entry_time = std::collections::HashMap::new();
     let mut exit_time = std::collections::HashMap::new();
     let mut parents = std::collections::HashMap::new();

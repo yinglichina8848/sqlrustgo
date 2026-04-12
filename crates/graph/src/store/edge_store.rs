@@ -32,13 +32,13 @@ impl EdgeStore {
         self.edges.insert(edge_id, edge);
 
         // Update outgoing index
-        let mut outgoing_entry = self.outgoing.entry(from).or_insert_with(Vec::new);
+        let mut outgoing_entry = self.outgoing.entry(from).or_default();
         if !outgoing_entry.contains(&edge_id) {
             outgoing_entry.push(edge_id);
         }
 
         // Update incoming index
-        let mut incoming_entry = self.incoming.entry(to).or_insert_with(Vec::new);
+        let mut incoming_entry = self.incoming.entry(to).or_default();
         if !incoming_entry.contains(&edge_id) {
             incoming_entry.push(edge_id);
         }

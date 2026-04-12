@@ -75,7 +75,7 @@ pub async fn run_benchmark(args: BenchArgs) -> Result<()> {
                         let count = ops_count.fetch_add(1, Ordering::Relaxed);
 
                         // Check memory every `check_interval` operations
-                        if count > 0 && count % check_interval == 0 {
+                        if count > 0 && count.is_multiple_of(check_interval) {
                             if memory_limiter.is_exceeded() {
                                 tracing::error!(
                                     "❌ Memory limit exceeded! Current: {}",

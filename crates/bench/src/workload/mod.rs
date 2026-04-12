@@ -12,6 +12,7 @@ use crate::db::Database;
 
 /// Workload trait - defines a benchmark workload
 #[async_trait]
+#[allow(dead_code)]
 pub trait Workload: Send + Sync {
     /// Execute one iteration of the workload
     async fn execute(&self, db: &dyn Database) -> anyhow::Result<()>;

@@ -5,7 +5,7 @@
 use crate::raft::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub type TransactionId = u64;
 
@@ -233,8 +233,8 @@ impl DistributedLockManager {
 
     pub fn list_all_locks(&self) -> Vec<LockInfo> {
         self.locks
-            .iter()
-            .map(|(_, e)| LockInfo {
+            .values()
+            .map(|e| LockInfo {
                 key: e.key.clone(),
                 owner: e.owner,
                 tx_id: e.tx_id,

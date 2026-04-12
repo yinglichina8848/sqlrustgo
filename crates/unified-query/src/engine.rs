@@ -31,18 +31,18 @@ impl UnifiedQueryEngine {
     /// Execute a unified query
     pub async fn execute(&self, request: UnifiedQueryRequest) -> UnifiedQueryResponse {
         let start_time = Instant::now();
-        
+
         // Step 1: Route the request to create a query plan
         let plan = self.router.route(&request).expect("Invalid request");
-        
+
         // Step 2: Execute queries in parallel using tokio::join!
         let results = self.executor.execute(&request, &plan).await;
-        
+
         // Step 3: Fuse results with weighted scoring
         let fusion_result = self.fusion.fuse(results, &plan.weights, plan.top_k);
-        
+
         let total_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         // Step 4: Build response
         UnifiedQueryResponse {
             sql_results: None,
@@ -90,18 +90,18 @@ impl UnifiedQueryEngine {
     pub async fn execute_cached(&self, request: UnifiedQueryRequest) -> UnifiedQueryResponse {
         // Generate cache key from request
         let cache_key = self.generate_cache_key(&request);
-        
+
         // Check cache
-        if let Some(cached) = self.cache.get(&cache_key) {
+        if let Some(_cached) = self.cache.get(&cache_key) {
             // Return cached result (simplified - would need to deserialize)
             // For now, just execute without cache
         }
-        
+
         let response = self.execute(request).await;
-        
+
         // Store in cache
         // self.cache.insert(cache_key, response);
-        
+
         response
     }
 
@@ -109,7 +109,7 @@ impl UnifiedQueryEngine {
     fn generate_cache_key(&self, request: &UnifiedQueryRequest) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         request.query.hash(&mut hasher);
         format!("{:x}", hasher.finish())
@@ -145,7 +145,7 @@ mod tests {
             top_k: Some(10),
             offset: Some(0),
         };
-        
+
         let response = engine.execute(request).await;
         assert!(response.query_plan.mode.contains("SQL"));
         assert_eq!(response.execution_time_ms >= 0, true);
@@ -172,7 +172,7 @@ mod tests {
             top_k: Some(10),
             offset: Some(0),
         };
-        
+
         let response = engine.execute(request).await;
         assert!(response.query_plan.mode.contains("SQLVectorGraph"));
         assert_eq!(response.fusion_scores.len() >= 0, true);

@@ -307,7 +307,7 @@ impl<'a> LocalExecutor<'a> {
         let mut rows = Vec::new();
         for row_id in row_ids {
             if let Some(record) = self.storage.get_row(table_name, row_id as usize)? {
-                rows.push(record.into_iter().map(|v| v).collect());
+                rows.push(record.into_iter().collect::<Vec<_>>());
             }
         }
 

@@ -2,6 +2,8 @@
 //!
 //! Implements MySQL-style meta commands
 
+#![allow(dead_code)]
+
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_storage::{StorageEngine, TableInfo};
 use sqlrustgo_types::SqlError;
@@ -198,7 +200,7 @@ pub fn print_result(result: ExecutorResult) {
 
     // Print rows
     for row in &result.rows {
-        let row_str: Vec<String> = row.iter().map(|v| format_value(v)).collect();
+        let row_str: Vec<String> = row.iter().map(format_value).collect();
         println!("{}", row_str.join("\t"));
     }
 

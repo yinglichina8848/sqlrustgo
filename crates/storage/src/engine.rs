@@ -1323,7 +1323,7 @@ impl StorageEngine for MemoryStorage {
             .get(&index_id)
             .map(|idx| idx.search(key).map(|v| vec![v]).unwrap_or_default())
             .ok_or_else(|| {
-                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id)).into()
+                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id))
             })
     }
 
@@ -1337,7 +1337,7 @@ impl StorageEngine for MemoryStorage {
             .get(&index_id)
             .map(|idx| idx.range_query(start, end))
             .ok_or_else(|| {
-                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id)).into()
+                SqlError::ExecutionError(format!("Composite index {:?} not found", index_id))
             })
     }
 

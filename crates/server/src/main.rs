@@ -102,12 +102,8 @@ fn handle_client(
                 security.log_error(&user, &format!("Write error: {}", e), session_id);
                 return Err(e);
             }
-            if let Err(e) = stream.write_all(b"\n") {
-                return Err(e);
-            }
-            if let Err(e) = stream.flush() {
-                return Err(e);
-            }
+            stream.write_all(b"\n")?;
+            stream.flush()?;
         }
     }
 }

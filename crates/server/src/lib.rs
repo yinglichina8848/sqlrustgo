@@ -20,9 +20,10 @@ pub use openclaw_endpoints::OpenClawHttpServer;
 pub use scheduler::{
     Agent, AgentStatus, CreateTaskRequest, CreateTaskResponse, CreateWorkflowRequest,
     CreateWorkflowResponse, ExecuteWorkflowRequest, ExecuteWorkflowResponse, ExecutionRecord,
-    ExecutionStatus, GetExecutionResponse, GetTaskResponse, GetWorkflowResponse, ListAgentsResponse,
-    ListTasksResponse, RegisterAgentRequest, RegisterAgentResponse, SchedulerState, SyncAgentStatusRequest,
-    SyncAgentStatusResponse, Task, TaskPriority, TaskStatus, Workflow, WorkflowStep,
+    ExecutionStatus, GetExecutionResponse, GetTaskResponse, GetWorkflowResponse,
+    ListAgentsResponse, ListTasksResponse, RegisterAgentRequest, RegisterAgentResponse,
+    SchedulerState, SyncAgentStatusRequest, SyncAgentStatusResponse, Task, TaskPriority,
+    TaskStatus, Workflow, WorkflowStep,
 };
 pub use teaching_endpoints::{TeachingEndpoints, TeachingHttpServer};
 
