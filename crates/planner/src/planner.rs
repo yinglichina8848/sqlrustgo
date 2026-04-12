@@ -120,6 +120,19 @@ impl DefaultPlanner {
                 )))
             }
             LogicalPlan::Filter { predicate, input } => {
+                if let LogicalPlan::TableScan {
+                    table_name,
+                    schema,
+                    projection,
+                } = input.as_ref()
+                {
+                    let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
+                    exec = exec.with_predicate(predicate.clone());
+                    if let Some(proj) = projection {
+                        exec = exec.with_projection(proj.clone());
+                    }
+                    return Ok(Box::new(exec));
+                }
                 let input_plan = self.create_physical_plan_internal(input)?;
                 Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
             }
@@ -387,7 +400,7 @@ mod tests {
         let planner = DefaultPlanner::new();
         let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
 
-        assert_eq!(physical_plan.name(), "Filter");
+        assert_eq!(physical_plan.name(), "SeqScan");
     }
 
     #[test]

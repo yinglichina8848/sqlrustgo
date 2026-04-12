@@ -67,6 +67,7 @@ pub struct SeqScanExec {
     table_name: String,
     schema: Schema,
     projection: Option<Vec<usize>>,
+    predicate: Option<Expr>,
 }
 
 impl SeqScanExec {
@@ -75,11 +76,17 @@ impl SeqScanExec {
             table_name,
             schema: schema.clone(),
             projection: None,
+            predicate: None,
         }
     }
 
     pub fn with_projection(mut self, projection: Vec<usize>) -> Self {
         self.projection = Some(projection);
+        self
+    }
+
+    pub fn with_predicate(mut self, predicate: Expr) -> Self {
+        self.predicate = Some(predicate);
         self
     }
 
@@ -89,6 +96,10 @@ impl SeqScanExec {
 
     pub fn projection(&self) -> Option<&Vec<usize>> {
         self.projection.as_ref()
+    }
+
+    pub fn predicate(&self) -> Option<&Expr> {
+        self.predicate.as_ref()
     }
 }
 

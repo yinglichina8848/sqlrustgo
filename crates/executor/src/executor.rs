@@ -69,10 +69,9 @@ pub struct SeqScanVolcanoExecutor {
     storage: std::sync::Arc<dyn Storage>,
     initialized: bool,
     current_idx: usize,
-    /// Encoded row bytes for zero-copy access
     row_bytes: Vec<Vec<u8>>,
-    /// Schema for decoding RowRef columns (same as self.schema but separate for RowRef trait)
     column_types: Vec<sqlrustgo_types::ColumnType>,
+    predicate: Option<sqlrustgo_storage::predicate::Predicate>,
 }
 
 impl SeqScanVolcanoExecutor {
@@ -98,7 +97,13 @@ impl SeqScanVolcanoExecutor {
                     sqlrustgo_planner::DataType::Json => sqlrustgo_types::ColumnType::Text,
                 })
                 .collect(),
+            predicate: None,
         }
+    }
+
+    pub fn with_predicate(mut self, predicate: sqlrustgo_storage::predicate::Predicate) -> Self {
+        self.predicate = Some(predicate);
+        self
     }
 
     /// Get next row as RowRef (zero-copy access to encoded bytes)
@@ -123,8 +128,13 @@ impl VolcanoExecutor for SeqScanVolcanoExecutor {
         if self.initialized {
             return Ok(());
         }
-        // Scan from storage and encode to bytes for zero-copy access
-        let rows = self.storage.scan(&self.table_name).unwrap_or_default();
+        let rows = if let Some(ref predicate) = self.predicate {
+            self.storage
+                .scan_predicate(&self.table_name, predicate)
+                .unwrap_or_default()
+        } else {
+            self.storage.scan(&self.table_name).unwrap_or_default()
+        };
         self.row_bytes = rows.iter().map(|r| encode_row(r)).collect();
         self.current_idx = 0;
         self.initialized = true;
