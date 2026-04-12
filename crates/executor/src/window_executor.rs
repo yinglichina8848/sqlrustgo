@@ -588,7 +588,7 @@ impl VolcanoExecutor for WindowVolcanoExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_planner::{Expr, SortExpr};
+    use sqlrustgo_planner::{Column, ExcludeMode, Expr, SortExpr};
 
     fn create_test_partition() -> PartitionState {
         // Create test rows: (id, value)
