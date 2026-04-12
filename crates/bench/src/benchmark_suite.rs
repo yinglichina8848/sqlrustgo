@@ -61,7 +61,7 @@ impl Default for BenchmarkResult {
 impl BenchmarkResult {
     /// Create a new benchmark result from a histogram of latencies
     fn from_histogram(hist: &Histogram<u64>, duration_secs: f64, total_ops: u64) -> Self {
-        if hist.len() == 0 || total_ops == 0 {
+        if hist.is_empty() || total_ops == 0 {
             return Self::default();
         }
 
@@ -126,7 +126,7 @@ where
                 // Wait for all threads to start
                 rt.block_on(barrier.wait());
 
-                while start.elapsed() < Duration::from_secs(warmup_secs as u64) {
+                while start.elapsed() < Duration::from_secs(warmup_secs) {
                     let tx_start = Instant::now();
                     for _ in 0..stmts_per_tx {
                         let _sql = sql_gen(&mut rng, thread_id);
@@ -300,7 +300,7 @@ impl BenchmarkSuite {
         for test in &self.tests {
             output.push_str(&format!("| {} | {:.0} |\n", test.name(), test.target_qps()));
         }
-        output.push_str("\n");
+        output.push('\n');
 
         // Results table
         output.push_str("## Results\n\n");
@@ -332,7 +332,7 @@ impl BenchmarkSuite {
                 status
             ));
         }
-        output.push_str("\n");
+        output.push('\n');
 
         // Summary
         let total_qps: f64 = results.iter().map(|(_, r)| r.qps).sum();

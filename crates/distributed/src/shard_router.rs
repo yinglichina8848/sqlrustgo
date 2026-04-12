@@ -2,10 +2,8 @@
 //!
 //! Handles SQL routing based on partition keys.
 
-use crate::partition::{PartitionKey, PartitionValue};
-use crate::shard_manager::{NodeId, ShardId, ShardInfo, ShardManager};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use crate::partition::PartitionValue;
+use crate::shard_manager::{NodeId, ShardId, ShardManager};
 
 #[derive(Debug, Clone)]
 pub struct RoutedQuery {
@@ -75,16 +73,16 @@ impl ShardRouter {
 
         let shard_id = partition_key
             .partition(&key_value)
-            .ok_or_else(|| RouterError::InvalidPartitionKey(table.to_string()))?;
+            .ok_or(RouterError::InvalidPartitionKey(table.to_string()))?;
 
         let shard = self
             .shard_manager
             .get_shard(shard_id)
-            .ok_or_else(|| RouterError::ShardNotFound(shard_id))?;
+            .ok_or(RouterError::ShardNotFound(shard_id))?;
 
         let node_id = shard
             .primary_node()
-            .ok_or_else(|| RouterError::NoReplicaAvailable(shard_id))?;
+            .ok_or(RouterError::NoReplicaAvailable(shard_id))?;
 
         Ok(RoutedQuery {
             shard_id,
@@ -136,11 +134,11 @@ impl ShardRouter {
                 let shard = self
                     .shard_manager
                     .get_shard(shard_id)
-                    .ok_or_else(|| RouterError::ShardNotFound(shard_id))?;
+                    .ok_or(RouterError::ShardNotFound(shard_id))?;
 
                 let node_id = shard
                     .primary_node()
-                    .ok_or_else(|| RouterError::NoReplicaAvailable(shard_id))?;
+                    .ok_or(RouterError::NoReplicaAvailable(shard_id))?;
 
                 queries.push(RoutedQuery {
                     shard_id,
@@ -166,7 +164,7 @@ impl ShardRouter {
     ) -> Result<RoutedPlan, RouterError> {
         let mut queries = Vec::new();
         let mut shards = Vec::new();
-        let mut current_shard = 0;
+        let mut _current_shard = 0;
 
         for (i, boundary) in boundaries.iter().enumerate() {
             if start < *boundary
@@ -182,11 +180,11 @@ impl ShardRouter {
                     let shard = self
                         .shard_manager
                         .get_shard(i as u64)
-                        .ok_or_else(|| RouterError::ShardNotFound(i as u64))?;
+                        .ok_or(RouterError::ShardNotFound(i as u64))?;
 
                     let node_id = shard
                         .primary_node()
-                        .ok_or_else(|| RouterError::NoReplicaAvailable(i as u64))?;
+                        .ok_or(RouterError::NoReplicaAvailable(i as u64))?;
 
                     let range_start = if i == 0 {
                         start
@@ -204,7 +202,7 @@ impl ShardRouter {
                         ),
                     });
                 }
-                current_shard = i + 1;
+                _current_shard = i + 1;
             }
         }
 
@@ -217,11 +215,11 @@ impl ShardRouter {
             let shard = self
                 .shard_manager
                 .get_shard(shard_id)
-                .ok_or_else(|| RouterError::ShardNotFound(shard_id))?;
+                .ok_or(RouterError::ShardNotFound(shard_id))?;
 
             let node_id = shard
                 .primary_node()
-                .ok_or_else(|| RouterError::NoReplicaAvailable(shard_id))?;
+                .ok_or(RouterError::NoReplicaAvailable(shard_id))?;
 
             queries.push(RoutedQuery {
                 shard_id,
@@ -264,11 +262,11 @@ impl ShardRouter {
             let shard = self
                 .shard_manager
                 .get_shard(shard_id)
-                .ok_or_else(|| RouterError::ShardNotFound(shard_id))?;
+                .ok_or(RouterError::ShardNotFound(shard_id))?;
 
             let node_id = shard
                 .primary_node()
-                .ok_or_else(|| RouterError::NoReplicaAvailable(shard_id))?;
+                .ok_or(RouterError::NoReplicaAvailable(shard_id))?;
 
             queries.push(RoutedQuery {
                 shard_id,

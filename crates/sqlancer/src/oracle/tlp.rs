@@ -1,6 +1,5 @@
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
 
 pub struct TlpOracle {
     num_threads: usize,

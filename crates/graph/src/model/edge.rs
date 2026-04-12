@@ -4,17 +4,12 @@ use super::{EdgeId, LabelId, NodeId, PropertyMap};
 use serde::{Deserialize, Serialize};
 
 /// Edge direction
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Direction {
-    Outgoing,      // ->
+    #[default]
+    Outgoing, // ->
     Incoming,      // <-
     Bidirectional, // <->
-}
-
-impl Default for Direction {
-    fn default() -> Self {
-        Direction::Outgoing
-    }
 }
 
 /// Edge entity in the graph

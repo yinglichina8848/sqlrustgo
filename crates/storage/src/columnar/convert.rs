@@ -27,6 +27,10 @@ impl StorageColumnArray {
             StorageColumnArray::Null => 0,
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// Extension trait for converting ColumnChunk to StorageColumnArray
@@ -120,11 +124,11 @@ impl IntoStorageColumnArray for ColumnChunk {
             {
                 let arr: Vec<i64> = values
                     .iter()
-                    .filter_map(|v| {
+                    .map(|v| {
                         if let Value::Integer(n) = v {
-                            Some(*n)
+                            *n
                         } else {
-                            Some(0) // Default for non-integer values
+                            0 // Default for non-integer values
                         }
                     })
                     .collect();

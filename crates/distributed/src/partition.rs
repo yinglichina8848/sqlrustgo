@@ -72,7 +72,7 @@ impl PartitionValue {
 
 pub fn hash_partition(value: &PartitionValue, num_shards: u64) -> u64 {
     match value {
-        PartitionValue::Integer(n) => (*n as i64).abs() as u64 % num_shards,
+        PartitionValue::Integer(n) => (*n).unsigned_abs() % num_shards,
         PartitionValue::Text(h) => h % num_shards,
     }
 }

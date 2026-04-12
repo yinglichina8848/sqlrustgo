@@ -5,12 +5,12 @@
 use crate::raft::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 
 pub type TransactionId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum TransactionState {
+    #[default]
     Init,
     Preparing,
     Prepared,
@@ -18,12 +18,6 @@ pub enum TransactionState {
     Committed,
     Aborting,
     Aborted,
-}
-
-impl Default for TransactionState {
-    fn default() -> Self {
-        TransactionState::Init
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,6 +148,7 @@ pub enum TwoPCMessage {
 pub struct TwoPhaseCommit {
     node_id: NodeId,
     transactions: HashMap<TransactionId, DistributedTransaction>,
+    #[allow(dead_code)]
     is_coordinator: bool,
     next_tx_id: TransactionId,
 }
@@ -337,7 +332,7 @@ impl TwoPhaseCommit {
         let tx = self.transactions.get_mut(&tx_id);
 
         if let Some(tx) = tx {
-            if success && tx.participants.iter().all(|p| p.node_id != node_id || true) {
+            if success && tx.participants.iter().all(|p| p.node_id != node_id) {
                 let all_acknowledged = tx
                     .participants
                     .iter()
@@ -387,7 +382,7 @@ impl TwoPhaseCommit {
         vec![]
     }
 
-    fn handle_ack(&mut self, tx_id: TransactionId) -> Vec<(NodeId, TwoPCMessage)> {
+    fn handle_ack(&mut self, _tx_id: TransactionId) -> Vec<(NodeId, TwoPCMessage)> {
         vec![]
     }
 
@@ -395,7 +390,7 @@ impl TwoPhaseCommit {
         let tx = self
             .transactions
             .get_mut(&tx_id)
-            .ok_or_else(|| TwoPCError::TransactionNotFound(tx_id))?;
+            .ok_or(TwoPCError::TransactionNotFound(tx_id))?;
 
         if tx.state != TransactionState::Init {
             return Err(TwoPCError::InvalidState(tx.state));

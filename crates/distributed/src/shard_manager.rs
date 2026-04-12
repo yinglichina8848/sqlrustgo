@@ -2,25 +2,20 @@
 //!
 //! Provides shard lifecycle management and routing.
 
-use crate::partition::{PartitionKey, PartitionStrategy, PartitionValue};
+use crate::partition::PartitionKey;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 pub type NodeId = u64;
 pub type ShardId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ShardStatus {
+    #[default]
     Active,
     Migrating,
     Readonly,
     Offline,
-}
-
-impl Default for ShardStatus {
-    fn default() -> Self {
-        ShardStatus::Active
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

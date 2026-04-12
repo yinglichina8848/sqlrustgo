@@ -146,6 +146,7 @@ impl VectorizedSeqScanExecutor {
 
 /// Iterator adapter for VolcanoExecutor compatibility
 /// Wraps vectorized batch iteration in row-by-row interface
+#[allow(dead_code)]
 pub struct VectorizedSeqScanIterator {
     executor: VectorizedSeqScanExecutor,
     current_batch: Option<DataChunk>,

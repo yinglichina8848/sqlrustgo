@@ -1,8 +1,8 @@
 // adapters/mod.rs
+pub mod graph;
 pub mod storage;
 pub mod vector;
-pub mod graph;
 
+pub use graph::GraphAdapter;
 pub use storage::StorageAdapter;
 pub use vector::VectorAdapter;
-pub use graph::GraphAdapter;

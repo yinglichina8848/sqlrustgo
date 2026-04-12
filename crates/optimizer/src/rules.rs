@@ -916,7 +916,7 @@ impl IndexSelect {
         }
 
         // 遍历 hints 检查是否有限制
-        for hint in &ctx.index_hints {
+        if let Some(hint) = ctx.index_hints.first() {
             match hint.hint_type {
                 IndexHintType::UseIndex | IndexHintType::ForceIndex => {
                     // 如果有 USE/FORCE INDEX hint，这个 IndexSelect 应该被考虑

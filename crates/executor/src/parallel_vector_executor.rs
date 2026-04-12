@@ -6,7 +6,6 @@
 use rayon::prelude::*;
 use sqlrustgo_storage::engine::VectorStorage;
 use sqlrustgo_types::{SqlError, Value};
-use std::sync::Arc;
 
 use crate::vector_executor::VectorizedSeqScanExecutor;
 use crate::vectorization::{simd_agg, AggFunction, AggregateResult, ColumnArray, DataChunk};
@@ -518,9 +517,7 @@ fn merge_aggregate_results(
     let num_aggs = agg_functions.len();
     let mut merged = Vec::with_capacity(num_aggs);
 
-    for agg_idx in 0..num_aggs {
-        let (agg_func, _) = &agg_functions[agg_idx];
-
+    for (agg_idx, (agg_func, _)) in agg_functions.iter().enumerate().take(num_aggs) {
         // Collect all values for this aggregate
         let values: Vec<&Value> = results
             .iter()

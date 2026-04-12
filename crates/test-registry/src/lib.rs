@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TestCategory {
@@ -115,7 +115,7 @@ impl TestRegistry {
 
         self.modules
             .entry(metadata.module.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(metadata.id.clone());
     }
 
@@ -303,7 +303,7 @@ impl TestRegistryBuilder {
         self
     }
 
-    fn infer_module(&self, path: &PathBuf) -> String {
+    fn infer_module(&self, path: &Path) -> String {
         let path_str = path.to_string_lossy().to_string();
 
         if path_str.contains("parser") {

@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMode {
+    #[default]
     SQL,
     Vector,
     Graph,
@@ -11,12 +12,6 @@ pub enum QueryMode {
     SQLGraph,
     VectorGraph,
     SQLVectorGraph,
-}
-
-impl Default for QueryMode {
-    fn default() -> Self {
-        QueryMode::SQL
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

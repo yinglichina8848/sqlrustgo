@@ -14,6 +14,7 @@ pub struct OltpReadOnly {
     statements_per_tx: usize,
 }
 
+#[allow(dead_code)]
 impl OltpReadOnly {
     pub fn new() -> Self {
         Self {

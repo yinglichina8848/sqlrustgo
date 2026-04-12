@@ -4,8 +4,7 @@
 
 use crate::columnar::chunk::{ColumnChunk, ColumnStats};
 use crate::columnar::segment::{
-    auto_select_compression, ColumnSegment, ColumnStatsDisk, CompressionConfig, CompressionLevel,
-    CompressionType,
+    auto_select_compression, ColumnSegment, ColumnStatsDisk, CompressionLevel, CompressionType,
 };
 use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
 use crate::wal::WalManager;

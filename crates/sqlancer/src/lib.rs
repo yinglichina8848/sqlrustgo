@@ -7,7 +7,7 @@ pub mod generator;
 pub mod oracle;
 
 use generator::{DdlGenerator, DmlGenerator};
-use oracle::{OracleResult, TlpOracle};
+use oracle::TlpOracle;
 use rand::Rng;
 use std::time::{Duration, Instant};
 
@@ -34,6 +34,7 @@ pub struct Fuzzer {
     config: FuzzerConfig,
     ddl_gen: DdlGenerator,
     dml_gen: DmlGenerator,
+    #[allow(dead_code)]
     oracle: TlpOracle,
 }
 

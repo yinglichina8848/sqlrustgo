@@ -4,9 +4,9 @@
 //! from standard MySQL clients (mysql CLI, connectors, etc.)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use sqlrustgo::{parse, ExecutionEngine, ExecutorResult, SqlError, SqlResult, Value};
+use sqlrustgo::{parse, ExecutionEngine, ExecutorResult, SqlError, Value};
 use sqlrustgo_parser::Statement;
-use sqlrustgo_storage::{MemoryStorage, StorageEngine};
+use sqlrustgo_storage::MemoryStorage;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
@@ -215,6 +215,7 @@ fn make_eof_packet(seq: u8, status: u16) -> Packet {
 // Result Set
 // ============================================================================
 
+#[allow(dead_code)]
 mod col_type {
     pub const DECIMAL: u8 = 0x00;
     pub const TINY: u8 = 0x01;
@@ -444,12 +445,11 @@ fn send_result_set<W: Write>(
 // SQL Execution
 // ============================================================================
 
-fn execute_select(
-    sql: &str,
-    engine: &mut ExecutionEngine,
-) -> MySqlResult<(Vec<String>, Vec<String>, Vec<Vec<Value>>)> {
+type SelectResult = (Vec<String>, Vec<String>, Vec<Vec<Value>>);
+
+fn execute_select(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<SelectResult> {
     tracing::info!("execute_select called with: [{}]", sql);
-    let statement: Statement = parse(sql).map_err(|e| MySqlError::Sql(e))?;
+    let statement: Statement = parse(sql).map_err(MySqlError::Sql)?;
     tracing::info!("parse done, executing...");
     let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
 
@@ -465,7 +465,7 @@ fn execute_select(
 }
 
 fn execute_write(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<usize> {
-    let statement: Statement = parse(sql).map_err(|e| MySqlError::Sql(e))?;
+    let statement: Statement = parse(sql).map_err(MySqlError::Sql)?;
     let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
     Ok(result.affected_rows)
 }
