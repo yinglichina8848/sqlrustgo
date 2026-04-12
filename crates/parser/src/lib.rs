@@ -409,6 +409,229 @@ fn test_parse_merge() {
     assert!(result.is_ok(), "Failed to parse MERGE: {:?}", result);
 }
 
+#[test]
+fn test_parse_alter_table_add_column() {
+    let sql = "ALTER TABLE users ADD COLUMN age INTEGER";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE ADD COLUMN: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_alter_table_drop_column() {
+    let sql = "ALTER TABLE users DROP COLUMN age";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE DROP COLUMN: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_create_unique_index() {
+    let sql = "CREATE UNIQUE INDEX idx ON users (email)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE UNIQUE INDEX: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_transaction() {
+    let sql = "BEGIN";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse BEGIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_commit() {
+    let sql = "COMMIT";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse COMMIT: {:?}", result);
+}
+
+#[test]
+fn test_parse_rollback() {
+    let sql = "ROLLBACK";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ROLLBACK: {:?}", result);
+}
+
+#[test]
+fn test_parse_insert_set() {
+    let sql = "INSERT INTO users SET name='test', email='test@example.com'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse INSERT SET: {:?}", result);
+}
+
+#[test]
+fn test_parse_insert_values() {
+    let sql = "INSERT INTO users (id, name) VALUES (1, 'test')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse INSERT VALUES: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_update() {
+    let sql = "UPDATE users SET name='test' WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UPDATE: {:?}", result);
+}
+
+#[test]
+fn test_parse_delete() {
+    let sql = "DELETE FROM users WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DELETE: {:?}", result);
+}
+
+#[test]
+fn test_parse_truncate() {
+    let sql = "TRUNCATE TABLE users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse TRUNCATE: {:?}", result);
+}
+
+#[test]
+fn test_parse_drop_table() {
+    let sql = "DROP TABLE users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DROP TABLE: {:?}", result);
+}
+
+#[test]
+fn test_parse_revoke() {
+    let sql = "REVOKE INSERT ON users FROM admin";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse REVOKE: {:?}", result);
+}
+
+#[test]
+fn test_parse_show_processlist() {
+    let sql = "SHOW PROCESSLIST";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SHOW PROCESSLIST: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_explain() {
+    let sql = "EXPLAIN SELECT * FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse EXPLAIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_call_procedure() {
+    let sql = "CALL my_proc(1, 'test')";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CALL: {:?}", result);
+}
+
+#[test]
+fn test_parse_prepare() {
+    let sql = "PREPARE stmt FROM 'SELECT * FROM users'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse PREPARE: {:?}", result);
+}
+
+#[test]
+fn test_parse_limit() {
+    let sql = "SELECT * FROM users LIMIT 10";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIMIT: {:?}", result);
+}
+
+#[test]
+fn test_parse_limit_offset() {
+    let sql = "SELECT * FROM users LIMIT 10 OFFSET 5";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIMIT OFFSET: {:?}", result);
+}
+
+#[test]
+fn test_parse_inner_join() {
+    let sql = "SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse INNER JOIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_left_join() {
+    let sql = "SELECT * FROM users LEFT JOIN orders ON users.id = orders.user_id";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LEFT JOIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_between() {
+    let sql = "SELECT * FROM users WHERE age BETWEEN 18 AND 65";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse BETWEEN: {:?}", result);
+}
+
+#[test]
+fn test_parse_like() {
+    let sql = "SELECT * FROM users WHERE name LIKE 'John%'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIKE: {:?}", result);
+}
+
+#[test]
+fn test_parse_is_null() {
+    let sql = "SELECT * FROM users WHERE email IS NULL";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse IS NULL: {:?}", result);
+}
+
+#[test]
+fn test_parse_is_not_null() {
+    let sql = "SELECT * FROM users WHERE email IS NOT NULL";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse IS NOT NULL: {:?}", result);
+}
+
+#[test]
+fn test_parse_union() {
+    let sql = "SELECT id FROM users UNION SELECT id FROM admins";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UNION: {:?}", result);
+}
+
+#[test]
+fn test_parse_union_all() {
+    let sql = "SELECT id FROM users UNION ALL SELECT id FROM admins";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UNION ALL: {:?}", result);
+}
+
+#[test]
+fn test_parse_alias() {
+    let sql = "SELECT u.id, u.name AS user_name FROM users AS u";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse alias: {:?}", result);
+}
+
+#[test]
+fn test_parse_cte_simple() {
+    let sql = "WITH cte AS (SELECT id FROM users) SELECT * FROM cte";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CTE: {:?}", result);
+}
+
 // Stored Procedures
 pub use parser::{
     CallProcedureStatement, CreateProcedureStatement, DelimiterStatement, DropProcedureStatement,
