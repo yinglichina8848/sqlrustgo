@@ -355,6 +355,19 @@ impl WalManager {
         reader.read_all()
     }
 
+    /// Force sync WAL to disk for durability
+    pub fn sync(&self) -> std::io::Result<()> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.wal_path)?;
+        file.sync_all()?;
+        Ok(())
+    }
+
     /// Create a checkpoint
     pub fn checkpoint(&self, tx_id: u64) -> std::io::Result<u64> {
         let mut writer = self.get_writer()?;
