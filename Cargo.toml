@@ -549,6 +549,10 @@ name = "hybrid_search_integration_test"
 path = "tests/integration/hybrid_search_integration_test.rs"
 
 [[test]]
+name = "wal_transaction_integration_test"
+path = "tests/integration/wal_transaction_integration_test.rs"
+
+[[test]]
 name = "scheduler_integration_test"
 path = "crates/server/tests/scheduler_integration_test.rs"
 
