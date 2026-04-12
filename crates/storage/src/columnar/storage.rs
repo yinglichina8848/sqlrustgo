@@ -404,6 +404,98 @@ impl StorageEngine for ColumnarStorage {
         Ok(records)
     }
 
+    fn scan_predicate(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+    ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
+        let store = match self.tables.get(table) {
+            Some(s) => s,
+            None => return Ok(vec![]),
+        };
+
+        let mut filtered = Vec::new();
+        for i in 0..store.row_count() {
+            if let Some(row) = store.get_row(i) {
+                if self.eval_predicate_for_scan(table, &row, predicate) {
+                    filtered.push(row);
+                }
+            }
+        }
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(
+        &self,
+        table: &str,
+        row: &Vec<Value>,
+        predicate: &crate::predicate::Predicate,
+    ) -> bool {
+        match predicate {
+            crate::predicate::Predicate::Eq(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val == r_val
+            }
+            crate::predicate::Predicate::Lt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val < r_val
+            }
+            crate::predicate::Predicate::Lte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val <= r_val
+            }
+            crate::predicate::Predicate::Gt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val > r_val
+            }
+            crate::predicate::Predicate::Gte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val >= r_val
+            }
+            crate::predicate::Predicate::And(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    && self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Or(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    || self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Not(p) => !self.eval_predicate_for_scan(table, row, p),
+            crate::predicate::Predicate::IsNull(expr) => {
+                matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::IsNotNull(expr) => {
+                !matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::In(col, values) => {
+                let col_val = self.eval_expr(table, row, col);
+                values
+                    .iter()
+                    .any(|v| col_val == self.eval_expr(table, row, v))
+            }
+        }
+    }
+
+    fn eval_expr(&self, table: &str, row: &Vec<Value>, expr: &crate::predicate::Expr) -> Value {
+        match expr {
+            crate::predicate::Expr::Column(name) => {
+                if let Some(store) = self.tables.get(table) {
+                    if let Some(&idx) = store.column_indices.get(name) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            }
+            crate::predicate::Expr::Value(v) => v.clone(),
+            crate::predicate::Expr::Parameter(_) => Value::Null,
+        }
+    }
+
     fn get_row(
         &self,
         table: &str,
