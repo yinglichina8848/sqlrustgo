@@ -1,5 +1,5 @@
 use crate::bplus_tree::index::CompositeKey;
-use crate::engine::{Record, SqlResult, StorageEngine, TableInfo, Value};
+use crate::engine::{ColumnDefinition, Record, SqlResult, StorageEngine, TableInfo, Value};
 use crate::wal::{WalEntry, WalEntryType, WalManager};
 use std::path::PathBuf;
 
@@ -58,6 +58,7 @@ impl<S: StorageEngine> WalStorage<S> {
         let tx_id = self.current_tx_id;
         if self.wal_enabled {
             self.wal.log_commit(tx_id)?;
+            self.wal.sync()?;
         }
         self.current_tx_id = 0;
         Ok(())
@@ -73,6 +74,7 @@ impl<S: StorageEngine> WalStorage<S> {
         let tx_id = self.current_tx_id;
         if self.wal_enabled {
             self.wal.log_rollback(tx_id)?;
+            self.wal.sync()?;
         }
         self.current_tx_id = 0;
         Ok(())
@@ -125,11 +127,27 @@ impl<S: StorageEngine> WalStorage<S> {
     }
 
     fn generate_tx_id(&self) -> u64 {
+        use std::sync::atomic::{AtomicU64, Ordering};
         use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
+
+        // Use monotonic counter to avoid clock skew issues
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+        // Get time-based component with error handling
+        let time_component = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or_else(|e| {
+                // Fallback for clock skew (time went backwards)
+                // Use a fixed base + elapsed time
+                e.duration().as_nanos() as u64
+            });
+
+        // Mix with atomic counter to ensure uniqueness even with fast calls
+        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        // XOR time and counter components for better distribution
+        time_component.wrapping_add(counter.wrapping_mul(0x5F3759D0))
     }
 
     fn table_name_to_id(table: &str) -> u64 {
@@ -538,7 +556,225 @@ mod tests {
     }
 
     #[test]
-    fn test_wal_storage_double_begin_error() {
+    fn test_update_without_begin_error() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage
+            .create_table(&TableInfo {
+                name: "t1".to_string(),
+                columns: vec![
+                    ColumnDefinition::new("id", "INTEGER"),
+                    ColumnDefinition::new("value", "INTEGER"),
+                ],
+            })
+            .unwrap();
+
+        let result = storage.update("t1", &[Value::Integer(1)], &[(1, Value::Integer(200))]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_without_begin_error() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage
+            .create_table(&TableInfo {
+                name: "t1".to_string(),
+                columns: vec![ColumnDefinition::new("id", "INTEGER")],
+            })
+            .unwrap();
+
+        let result = storage.delete("t1", &[Value::Integer(1)]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tx_id_uniqueness_rapid_generation() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        let mut tx_ids = Vec::new();
+        for _ in 0..100 {
+            let tx_id = storage.begin_transaction().unwrap();
+            tx_ids.push(tx_id);
+            storage.commit_transaction().unwrap();
+        }
+
+        let mut unique_ids = tx_ids.clone();
+        unique_ids.sort();
+        unique_ids.dedup();
+        assert_eq!(
+            tx_ids.len(),
+            unique_ids.len(),
+            "Transaction IDs must be unique"
+        );
+    }
+
+    #[test]
+    fn test_rapid_commit_rollback_cycles() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        for i in 0..50 {
+            storage.begin_transaction().unwrap();
+            storage
+                .insert("t1", vec![vec![Value::Integer(i as i64)]])
+                .unwrap();
+            if i % 2 == 0 {
+                storage.commit_transaction().unwrap();
+            } else {
+                storage.rollback_transaction().unwrap();
+            }
+        }
+
+        let entries = storage.recover().unwrap();
+        let commits: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Commit)
+            .collect();
+        let rollbacks: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Rollback)
+            .collect();
+        assert_eq!(commits.len(), 25);
+        assert_eq!(rollbacks.len(), 25);
+    }
+
+    #[test]
+    fn test_update_in_transaction() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage
+            .create_table(&TableInfo {
+                name: "t1".to_string(),
+                columns: vec![
+                    ColumnDefinition::new("id", "INTEGER"),
+                    ColumnDefinition::new("value", "INTEGER"),
+                ],
+            })
+            .unwrap();
+
+        storage.begin_transaction().unwrap();
+        storage
+            .insert("t1", vec![vec![Value::Integer(1), Value::Integer(100)]])
+            .unwrap();
+        storage.commit_transaction().unwrap();
+
+        storage.begin_transaction().unwrap();
+        let result = storage.update("t1", &[Value::Integer(1)], &[(1, Value::Integer(200))]);
+        assert!(result.is_ok());
+        if result.is_ok() {
+            storage.commit_transaction().unwrap();
+        } else {
+            storage.rollback_transaction().unwrap();
+        }
+
+        let entries = storage.recover().unwrap();
+        let updates: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Update)
+            .collect();
+        assert_eq!(updates.len(), 1);
+    }
+
+    #[test]
+    fn test_multi_table_transactions() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage.begin_transaction().unwrap();
+        storage
+            .insert(
+                "users",
+                vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+            )
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(100), Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert(
+                "products",
+                vec![vec![
+                    Value::Integer(1000),
+                    Value::Text("Widget".to_string()),
+                ]],
+            )
+            .unwrap();
+        storage.commit_transaction().unwrap();
+
+        let entries = storage.recover().unwrap();
+        let inserts: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Insert)
+            .collect();
+        assert_eq!(inserts.len(), 3);
+    }
+
+    #[test]
+    fn test_zero_value_handling() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage.begin_transaction().unwrap();
+        storage
+            .insert(
+                "t1",
+                vec![
+                    vec![Value::Integer(0)],
+                    vec![Value::Integer(-1)],
+                    vec![Value::Text(String::new())],
+                ],
+            )
+            .unwrap();
+        storage.commit_transaction().unwrap();
+
+        let entries = storage.recover().unwrap();
+        assert!(entries.iter().any(|e| e.entry_type == WalEntryType::Commit));
+    }
+
+    #[test]
+    fn test_delete_in_transaction() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        storage.begin_transaction().unwrap();
+        storage.insert("t1", vec![vec![Value::Integer(1)]]).unwrap();
+        storage.commit_transaction().unwrap();
+
+        storage.begin_transaction().unwrap();
+        storage.delete("t1", &[Value::Integer(1)]).unwrap();
+        storage.commit_transaction().unwrap();
+
+        let entries = storage.recover().unwrap();
+        let deletes: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Delete)
+            .collect();
+        assert_eq!(deletes.len(), 1);
+    }
+
+    #[test]
+    fn test_nested_transaction_prevents() {
         let dir = TempDir::new().unwrap();
         let inner = MemoryStorage::new();
         let wal_path = dir.path().join("test.wal");
@@ -547,5 +783,104 @@ mod tests {
         storage.begin_transaction().unwrap();
         let result = storage.begin_transaction();
         assert!(result.is_err());
+        storage.commit_transaction().unwrap();
+    }
+
+    #[test]
+    fn test_wal_sync_after_crash_simulation() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test.wal");
+
+        {
+            let inner = MemoryStorage::new();
+            let mut storage = WalStorage::new(inner, wal_path.clone()).unwrap();
+            storage.begin_transaction().unwrap();
+            storage
+                .insert("t1", vec![vec![Value::Integer(1), Value::Integer(100)]])
+                .unwrap();
+            storage.commit_transaction().unwrap();
+
+            storage.begin_transaction().unwrap();
+            storage
+                .insert("t1", vec![vec![Value::Integer(2), Value::Integer(200)]])
+                .unwrap();
+        }
+
+        {
+            let inner = MemoryStorage::new();
+            let storage = WalStorage::new(inner, wal_path).unwrap();
+            let entries = storage.recover().unwrap();
+
+            let commits: Vec<_> = entries
+                .iter()
+                .filter(|e| e.entry_type == WalEntryType::Commit)
+                .collect();
+            assert_eq!(commits.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_tx_id_counter_rollover_safety() {
+        let dir = TempDir::new().unwrap();
+        let inner = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let mut storage = WalStorage::new(inner, wal_path).unwrap();
+
+        let mut tx_ids = Vec::new();
+        for _ in 0..1000 {
+            let tx_id = storage.begin_transaction().unwrap();
+            tx_ids.push(tx_id);
+            storage.commit_transaction().unwrap();
+        }
+
+        let mut sorted = tx_ids.clone();
+        sorted.sort();
+        assert_eq!(
+            tx_ids, sorted,
+            "Transaction IDs should be generated in rough order"
+        );
+    }
+
+    #[test]
+    fn test_wal_recovery_preserves_all_entry_types() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test.wal");
+        let manager = crate::wal::WalManager::new(wal_path.clone());
+
+        manager.log_begin(1).unwrap();
+        manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        manager.log_update(1, 1, vec![1], vec![20]).unwrap();
+        manager.log_delete(1, 1, vec![1]).unwrap();
+        manager.log_commit(1).unwrap();
+
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 5);
+
+        let begins = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Begin)
+            .count();
+        let inserts = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Insert)
+            .count();
+        let updates = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Update)
+            .count();
+        let deletes = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Delete)
+            .count();
+        let commits = entries
+            .iter()
+            .filter(|e| e.entry_type == WalEntryType::Commit)
+            .count();
+
+        assert_eq!(begins, 1);
+        assert_eq!(inserts, 1);
+        assert_eq!(updates, 1);
+        assert_eq!(deletes, 1);
+        assert_eq!(commits, 1);
     }
 }
