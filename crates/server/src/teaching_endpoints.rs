@@ -13,6 +13,7 @@ use sqlrustgo_optimizer::{
 };
 use sqlrustgo_parser::{parse, Expression, Statement, TransactionCommand};
 use sqlrustgo_storage::engine::{StorageEngine, Value};
+use sqlrustgo_transaction::TransactionManager;
 use std::sync::{Arc, RwLock};
 
 /// Teaching Enhanced endpoints configuration
@@ -52,6 +53,7 @@ pub struct TeachingHttpServer {
     metrics_registry: Arc<RwLock<MetricsRegistry>>,
     teaching_endpoints: TeachingEndpoints,
     storage: Option<Arc<RwLock<dyn StorageEngine>>>,
+    tx_manager: Arc<RwLock<TransactionManager>>,
 }
 
 impl TeachingHttpServer {
@@ -64,6 +66,7 @@ impl TeachingHttpServer {
             metrics_registry: Arc::new(RwLock::new(MetricsRegistry::new())),
             teaching_endpoints: TeachingEndpoints::default(),
             storage: None,
+            tx_manager: Arc::new(RwLock::new(TransactionManager::new())),
         }
     }
 
@@ -156,6 +159,7 @@ impl TeachingHttpServer {
                     let metrics_registry = Arc::clone(&self.metrics_registry);
                     let teaching = self.teaching_endpoints.clone();
                     let storage = self.storage.clone();
+                    let tx_manager = Arc::clone(&self.tx_manager);
 
                     std::thread::spawn(move || {
                         let _ = handle_teaching_request(
@@ -164,6 +168,7 @@ impl TeachingHttpServer {
                             &metrics_registry,
                             &teaching,
                             &storage,
+                            &tx_manager,
                         );
                     });
                 }
@@ -199,6 +204,7 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
     metrics_registry: &Arc<RwLock<MetricsRegistry>>,
     teaching: &TeachingEndpoints,
     storage: &Option<Arc<RwLock<dyn StorageEngine>>>,
+    tx_manager: &Arc<RwLock<TransactionManager>>,
 ) -> Result<(), std::io::Error> {
     let mut buffer = [0u8; 2048];
     let bytes_read = stream.read(&mut buffer)?;
@@ -224,7 +230,7 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
                     match serde_json::from_str::<SqlRequest>(body_str) {
                         Ok(sql_req) => {
                             if let Some(ref storage) = storage {
-                                let result = execute_sql(&sql_req.sql, storage);
+                                let result = execute_sql(&sql_req.sql, storage, tx_manager);
                                 let response = match result {
                                     Ok(exec_result) => SqlResponse {
                                         columns: Some(exec_result.columns),
@@ -408,6 +414,7 @@ fn handle_teaching_request<T: std::io::Read + std::io::Write>(
 fn execute_sql(
     sql: &str,
     storage: &Arc<RwLock<dyn StorageEngine>>,
+    tx_manager: &Arc<RwLock<TransactionManager>>,
 ) -> Result<SqlExecResult, String> {
     // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
@@ -415,6 +422,44 @@ fn execute_sql(
     let mut storage = storage
         .write()
         .map_err(|e| format!("Storage lock error: {}", e))?;
+
+    // Handle transaction commands first
+    if let Statement::Transaction(ref tx_stmt) = statement {
+        let mut tx_mgr = tx_manager.write().map_err(|e| e.to_string())?;
+        match tx_stmt.command {
+            TransactionCommand::Begin => {
+                tx_mgr.begin().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Commit => {
+                tx_mgr.commit().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Rollback => {
+                tx_mgr.rollback().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            _ => {
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+        }
+    }
 
     match statement {
         Statement::Insert(insert) => {
@@ -688,29 +733,6 @@ fn execute_sql(
                 affected_rows: updated_count,
             })
         }
-
-        Statement::Transaction(tx) => match tx.command {
-            TransactionCommand::Begin => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            TransactionCommand::Commit => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            TransactionCommand::Rollback => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            _ => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-        },
 
         Statement::DropTable(drop) => {
             if !storage.has_table(&drop.name) {
