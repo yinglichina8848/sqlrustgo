@@ -681,4 +681,51 @@ mod tests {
         assert_eq!(stats.min_value, Some(Value::Text("apple".to_string())));
         assert_eq!(stats.max_value, Some(Value::Text("zebra".to_string())));
     }
+
+    #[test]
+    fn test_column_chunk_block_stats() {
+        let mut chunk = ColumnChunk::new();
+        for i in 0..2048 {
+            chunk.push(Value::Integer(i as i64));
+        }
+
+        assert_eq!(chunk.num_blocks(), 2);
+        assert_eq!(chunk.get_block_index(0), 0);
+        assert_eq!(chunk.get_block_index(1023), 0);
+        assert_eq!(chunk.get_block_index(1024), 1);
+        assert_eq!(chunk.get_block_index(2047), 1);
+        assert_eq!(chunk.get_block_end(0), 1024);
+        assert_eq!(chunk.get_block_end(1), 2048);
+    }
+
+    #[test]
+    fn test_column_chunk_can_skip_block() {
+        use crate::predicate::Predicate;
+
+        let mut chunk = ColumnChunk::new();
+        for i in 0..2048 {
+            chunk.push(Value::Integer(i as i64));
+        }
+
+        let pred_gt = Predicate::gt("id", Value::Integer(100));
+        let pred_lt = Predicate::lt("id", Value::Integer(100));
+        let pred_eq = Predicate::eq("id", Value::Integer(100));
+
+        assert!(!chunk.can_skip_block(0, "id", &pred_gt));
+        assert!(!chunk.can_skip_block(0, "id", &pred_lt));
+        assert!(!chunk.can_skip_block(0, "id", &pred_eq));
+    }
+
+    #[test]
+    fn test_column_chunk_can_skip_block_high_value() {
+        use crate::predicate::Predicate;
+
+        let mut chunk = ColumnChunk::new();
+        for i in 0..1024 {
+            chunk.push(Value::Integer((i * 10) as i64));
+        }
+
+        let pred_gt = Predicate::gt("id", Value::Integer(10240));
+        assert!(chunk.can_skip_block(0, "id", &pred_gt));
+    }
 }
