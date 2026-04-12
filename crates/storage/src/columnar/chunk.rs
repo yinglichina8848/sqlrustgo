@@ -150,12 +150,19 @@ impl Default for ColumnStats {
     }
 }
 
+/// Block size for columnar storage (number of rows per block)
+pub const COLUMN_CHUNK_BLOCK_SIZE: usize = 1024;
+
 /// ColumnChunk - column-oriented storage for a single column
 #[derive(Debug, Clone)]
 pub struct ColumnChunk {
     data: Vec<Value>,
     null_bitmap: Option<Bitmap>,
     stats: ColumnStats,
+    /// Per-block minimum values
+    block_mins: Vec<Option<Value>>,
+    /// Per-block maximum values
+    block_maxes: Vec<Option<Value>>,
 }
 
 impl ColumnChunk {
@@ -165,6 +172,8 @@ impl ColumnChunk {
             data: Vec::new(),
             null_bitmap: None,
             stats: ColumnStats::new(),
+            block_mins: Vec::new(),
+            block_maxes: Vec::new(),
         }
     }
 
@@ -174,6 +183,8 @@ impl ColumnChunk {
             data: Vec::with_capacity(capacity),
             null_bitmap: Some(Bitmap::with_capacity(capacity)),
             stats: ColumnStats::new(),
+            block_mins: Vec::new(),
+            block_maxes: Vec::new(),
         }
     }
 
@@ -184,6 +195,8 @@ impl ColumnChunk {
             data: Vec::with_capacity(len),
             null_bitmap: Some(Bitmap::with_capacity(len)),
             stats: ColumnStats::new(),
+            block_mins: Vec::new(),
+            block_maxes: Vec::new(),
         };
 
         for value in values {
@@ -207,6 +220,12 @@ impl ColumnChunk {
     /// Push a value with null flag
     fn push_value(&mut self, value: Value, is_null: bool) {
         let index = self.data.len();
+        let block_idx = index / COLUMN_CHUNK_BLOCK_SIZE;
+
+        while self.block_mins.len() <= block_idx {
+            self.block_mins.push(None);
+            self.block_maxes.push(None);
+        }
 
         // Ensure null_bitmap exists (create even for non-nulls to track positions)
         if self.null_bitmap.is_none() {
@@ -230,6 +249,24 @@ impl ColumnChunk {
 
         self.data.push(value.clone());
         self.stats.update(&value, is_null);
+
+        if !is_null {
+            if let Some(ref mut min) = self.block_mins[block_idx] {
+                if value < *min {
+                    *min = value.clone();
+                }
+            } else {
+                self.block_mins[block_idx] = Some(value.clone());
+            }
+
+            if let Some(ref mut max) = self.block_maxes[block_idx] {
+                if value > *max {
+                    *max = value.clone();
+                }
+            } else {
+                self.block_maxes[block_idx] = Some(value.clone());
+            }
+        }
     }
 
     /// Set the value at index to null
@@ -301,6 +338,130 @@ impl ColumnChunk {
         ColumnChunkIter {
             chunk: self,
             index: 0,
+        }
+    }
+
+    /// Get the number of blocks in this chunk
+    pub fn num_blocks(&self) -> usize {
+        (self.data.len() + COLUMN_CHUNK_BLOCK_SIZE - 1) / COLUMN_CHUNK_BLOCK_SIZE.max(1)
+    }
+
+    /// Get block index for a given row index
+    pub fn get_block_index(&self, row_index: usize) -> usize {
+        row_index / COLUMN_CHUNK_BLOCK_SIZE
+    }
+
+    /// Get block start row index (inclusive)
+    pub fn get_block_start(&self, block_idx: usize) -> usize {
+        block_idx * COLUMN_CHUNK_BLOCK_SIZE
+    }
+
+    /// Get block end row index (exclusive)
+    pub fn get_block_end(&self, block_idx: usize) -> usize {
+        std::cmp::min(
+            self.get_block_start(block_idx) + COLUMN_CHUNK_BLOCK_SIZE,
+            self.data.len(),
+        )
+    }
+
+    /// Check if a block can be skipped based on predicate
+    /// Returns true if the block can be skipped (predicate cannot match any row in block)
+    pub fn can_skip_block(
+        &self,
+        block_idx: usize,
+        col_name: &str,
+        predicate: &crate::predicate::Predicate,
+    ) -> bool {
+        if block_idx >= self.block_mins.len() {
+            return false;
+        }
+
+        match predicate {
+            crate::predicate::Predicate::Eq(expr, const_val) => {
+                let (name, value) = match (&**expr, &**const_val) {
+                    (crate::predicate::Expr::Column(name), crate::predicate::Expr::Value(v)) => {
+                        if name != col_name {
+                            return false;
+                        }
+                        (name.as_str(), v)
+                    }
+                    _ => return false,
+                };
+                let min = match &self.block_mins[block_idx] {
+                    Some(v) => v,
+                    None => return false,
+                };
+                let max = match &self.block_maxes[block_idx] {
+                    Some(v) => v,
+                    None => return false,
+                };
+                value < min || value > max
+            }
+            crate::predicate::Predicate::Gt(expr, const_val) => {
+                let value = match (&**expr, &**const_val) {
+                    (crate::predicate::Expr::Column(name), crate::predicate::Expr::Value(v)) => {
+                        if name.as_str() != col_name {
+                            return false;
+                        }
+                        v
+                    }
+                    _ => return false,
+                };
+                if let Some(max) = &self.block_maxes[block_idx] {
+                    max <= value
+                } else {
+                    false
+                }
+            }
+            crate::predicate::Predicate::Gte(expr, const_val) => {
+                let value = match (&**expr, &**const_val) {
+                    (crate::predicate::Expr::Column(name), crate::predicate::Expr::Value(v)) => {
+                        if name.as_str() != col_name {
+                            return false;
+                        }
+                        v
+                    }
+                    _ => return false,
+                };
+                if let Some(max) = &self.block_maxes[block_idx] {
+                    max < value
+                } else {
+                    false
+                }
+            }
+            crate::predicate::Predicate::Lt(expr, const_val) => {
+                let value = match (&**expr, &**const_val) {
+                    (crate::predicate::Expr::Column(name), crate::predicate::Expr::Value(v)) => {
+                        if name.as_str() != col_name {
+                            return false;
+                        }
+                        v
+                    }
+                    _ => return false,
+                };
+                if let Some(min) = &self.block_mins[block_idx] {
+                    min >= value
+                } else {
+                    false
+                }
+            }
+            crate::predicate::Predicate::Lte(expr, const_val) => {
+                let value = match (&**expr, &**const_val) {
+                    (crate::predicate::Expr::Column(name), crate::predicate::Expr::Value(v)) => {
+                        if name.as_str() != col_name {
+                            return false;
+                        }
+                        v
+                    }
+                    _ => return false,
+                };
+                if let Some(min) = &self.block_mins[block_idx] {
+                    min > value
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 }
