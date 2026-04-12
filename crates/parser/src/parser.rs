@@ -990,7 +990,7 @@ impl Parser {
                     self.next();
                     continue;
                 }
-                Some(Token::Extract) | Some(Token::Substring) => {
+                Some(Token::Extract) | Some(Token::Substring) | Some(Token::Substr) => {
                     let expr = self.parse_expression()?;
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
@@ -2409,7 +2409,7 @@ impl Parser {
                 self.next();
                 self.parse_extract_expression()
             }
-            Some(Token::Substring) => {
+            Some(Token::Substring) | Some(Token::Substr) => {
                 self.next();
                 self.parse_substring_expression()
             }
@@ -2532,20 +2532,40 @@ impl Parser {
         Ok(Expression::Extract { field, expr })
     }
 
-    /// Parse SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
+    /// Parse SUBSTRING/SUBSTR expression
+    /// Supports两种语法:
+    /// - SUBSTRING(expr FROM start FOR len) - SQL-92标准
+    /// - SUBSTR(expr, start, len) - MySQL风格
     fn parse_substring_expression(&mut self) -> Result<Expression, String> {
         self.expect(Token::LParen)?;
         let expr = Box::new(self.parse_expression()?);
-        self.expect(Token::From)?;
-        let start = Box::new(self.parse_expression()?);
-        let len = if matches!(self.current(), Some(Token::For)) {
+
+        // Check syntax type: FROM means SQL-92, comma means MySQL
+        if matches!(self.current(), Some(Token::From)) {
+            // SQL-92 syntax: SUBSTRING(expr FROM start FOR len)
             self.next();
-            Some(Box::new(self.parse_expression()?))
+            let start = Box::new(self.parse_expression()?);
+            let len = if matches!(self.current(), Some(Token::For)) {
+                self.next();
+                Some(Box::new(self.parse_expression()?))
+            } else {
+                None
+            };
+            self.expect(Token::RParen)?;
+            Ok(Expression::Substring { expr, start, len })
         } else {
-            None
-        };
-        self.expect(Token::RParen)?;
-        Ok(Expression::Substring { expr, start, len })
+            // MySQL/Oracle syntax: SUBSTR(expr, start, len)
+            self.expect(Token::Comma)?;
+            let start = Box::new(self.parse_expression()?);
+            self.expect(Token::Comma)?;
+            let len = Box::new(self.parse_expression()?);
+            self.expect(Token::RParen)?;
+            Ok(Expression::Substring {
+                expr,
+                start,
+                len: Some(len),
+            })
+        }
     }
     /// Parse a window function: ROW_NUMBER() OVER (...)
     fn parse_window_function(&mut self) -> Result<Expression, String> {
@@ -4493,6 +4513,13 @@ mod tests {
         let sql = "SELECT c_count, COUNT(*) AS custdist FROM (SELECT c_custkey, COUNT(o_orderkey) AS c_count FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%' WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%') GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY c_count DESC, custdist DESC";
         let result = parse(sql);
         assert!(result.is_ok(), "Failed to parse Q13: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_q22() {
+        let sql = "SELECT cntrycode, COUNT(*) AS numcust, SUM(c_acctbal) AS totacctbal FROM (SELECT SUBSTR(c_phone, 1, 2) AS cntrycode, c_acctbal FROM customer WHERE SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT AVG(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Failed to parse Q22: {:?}", result.err());
     }
 
     #[test]
