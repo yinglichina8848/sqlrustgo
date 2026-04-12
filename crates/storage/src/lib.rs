@@ -27,6 +27,7 @@ pub mod replication;
 pub mod stats;
 pub mod vector_storage;
 pub mod wal;
+pub mod wal_storage;
 
 pub use backup::{BackupExporter, BackupFormat, DataRestorer};
 pub use backup_scheduler::{
@@ -82,6 +83,7 @@ pub use vector_storage::{
     VectorStore, VectorStoreStats,
 };
 pub use wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
+pub use wal_storage::WalStorage;
 
 #[cfg(test)]
 mod tests {
