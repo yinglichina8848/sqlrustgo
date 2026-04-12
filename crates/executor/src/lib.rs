@@ -23,6 +23,7 @@ pub mod sql_log;
 pub mod sql_normalizer;
 pub mod task_scheduler;
 pub mod test_framework;
+pub mod transactional_executor;
 pub mod vector_executor;
 pub mod vector_scan;
 pub mod vectorization;

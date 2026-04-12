@@ -13,6 +13,7 @@ sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 sqlrustgo-parser.workspace = true
 sqlrustgo-vector.workspace = true
+sqlrustgo-transaction.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
