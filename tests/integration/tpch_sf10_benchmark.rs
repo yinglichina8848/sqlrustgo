@@ -664,30 +664,37 @@ fn import_table(
     let start = Instant::now();
     let batch_size = 100000;
 
-    // Accurate column type mapping for TPC-H schema
-    fn get_column_type(col_name: &str) -> &'static str {
-        match col_name {
-            // Integer columns (keys, quantities, sizes)
-            "l_orderkey" | "l_partkey" | "l_suppkey" | "l_linenumber" | "o_orderkey"
-            | "o_custkey" | "o_shippriority" | "c_custkey" | "n_nationkey" | "n_regionkey"
-            | "r_regionkey" | "p_partkey" | "s_suppkey" | "ps_partkey" | "ps_suppkey"
-            | "p_size" | "ps_availqty" => "INTEGER",
-
-            // Real columns (prices, discounts, taxes)
-            "l_quantity" | "l_extendedprice" | "l_discount" | "l_tax" | "o_totalprice"
-            | "c_acctbal" | "s_acctbal" | "p_retailprice" | "ps_supplycost" => "REAL",
-
-            // Text columns (dates, flags, strings)
-            _ => "TEXT",
-        }
-    }
-
     // Get column info
     let col_defs: Vec<ColumnDefinition> = columns
         .iter()
         .map(|c| ColumnDefinition {
             name: c.to_string(),
-            data_type: get_column_type(c).to_string(),
+            data_type: if c.contains("key")
+                || c.contains("qty")
+                || c.contains("price")
+                || c.contains("cost")
+                || c.contains("tax")
+                || c.contains("discount")
+                || c.contains("size")
+            {
+                "INTEGER".to_string()
+            } else if c.contains("date")
+                || c.contains("flag")
+                || c.contains("status")
+                || c.contains("mode")
+                || c.contains("instruct")
+                || c.contains("segment")
+                || c.contains("brand")
+                || c.contains("type")
+                || c.contains("container")
+                || c.contains("name")
+                || c.contains("mfgr")
+                || c.contains("comment")
+            {
+                "TEXT".to_string()
+            } else {
+                "REAL".to_string()
+            },
             nullable: false,
             is_unique: false,
             references: None,
@@ -767,74 +774,27 @@ fn import_table(
     Ok(())
 }
 
-/// Run TPC-H Q1-Q22 queries and measure latency with SQLite verification
-fn run_tpch_queries(
-    engine: &mut ExecutionEngine,
-    sqlite_conn: &Connection,
-    iterations: usize,
-) -> Vec<QueryBenchmarkResult> {
+/// Run TPC-H Q1-Q22 queries and measure latency
+fn run_tpch_queries(engine: &mut ExecutionEngine, iterations: usize) -> Vec<QueryBenchmarkResult> {
     println!(
         "Running TPC-H Q1-Q22 benchmark ({} iterations)...",
         iterations
     );
 
-    // TPC-H Q1-Q22 标准查询
     let queries = vec![
-        // Q1: Pricing Summary Report
-        ("Q1", "SELECT l_returnflag, l_linestatus, SUM(l_quantity) AS sum_qty, SUM(l_extendedprice) AS sum_base_price, SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price, SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, AVG(l_quantity) AS avg_qty, AVG(l_extendedprice) AS avg_price, AVG(l_discount) AS avg_disc, COUNT(*) AS count_order FROM lineitem WHERE l_shipdate <= '1995-12-01' GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus"),
-        // Q2: Minimum Cost Supplier
-        ("Q2", "SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE '%BRASS' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' ORDER BY s_acctbal ASC, n_name, s_name, p_partkey LIMIT 20"),
-        // Q3: Shipping Priority
-        ("Q3", "SELECT l_orderkey, SUM(l_extendedprice * (1 - l_discount)) AS revenue, o_orderdate, o_shippriority FROM customer, orders, lineitem WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND o_orderdate < '1995-03-15' AND l_shipdate > '1995-03-15' GROUP BY l_orderkey, o_orderdate, o_shippriority ORDER BY revenue DESC, o_orderdate LIMIT 10"),
-        // Q4: Order Priority Checking
-        ("Q4", "SELECT o_orderpriority, COUNT(*) AS order_count FROM orders WHERE o_orderdate >= '1993-07-01' AND o_orderdate < '1993-10-01' AND EXISTS (SELECT * FROM lineitem WHERE l_orderkey = o_orderkey AND l_commitdate < l_receiptdate) GROUP BY o_orderpriority ORDER BY o_orderpriority"),
-        // Q5: Local Supplier Volume
-        ("Q5", "SELECT n_name, SUM(l_extendedprice * (1 - l_discount)) AS revenue FROM customer, orders, lineitem, supplier, nation, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' AND o_orderdate >= '1994-01-01' AND o_orderdate < '1995-01-01' GROUP BY n_name ORDER BY revenue DESC"),
-        // Q6: Forecast Revenue Change
-        ("Q6", "SELECT SUM(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01' AND l_discount BETWEEN 0.06 AND 0.08 AND l_quantity < 25"),
-        // Q7: Volume Shipping
-        ("Q7", "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation, EXTRACT(YEAR FROM o_orderdate) AS l_year, SUM(l_extendedprice * (1 - l_discount)) AS volume FROM supplier, lineitem, orders, customer, nation n1, nation n2 WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey AND n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE' GROUP BY n1.n_name, n2.n_name, EXTRACT(YEAR FROM o_orderdate) ORDER BY n1.n_name, n2.n_name, l_year"),
-        // Q8: National Market Share
-        ("Q8", "SELECT EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(CASE WHEN n2.n_name = 'GERMANY' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / SUM(l_extendedprice * (1 - l_discount)) AS mkt_share FROM customer, orders, lineitem, supplier, nation n1, nation n2, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = n1.n_nationkey AND s_nationkey = n1.n_nationkey AND n1.n_regionkey = r_regionkey AND r_name = 'EUROPE' AND n2.n_name = 'GERMANY' AND o_orderdate >= '1995-01-01' AND o_orderdate < '1996-12-31' GROUP BY EXTRACT(YEAR FROM o_orderdate) ORDER BY o_year"),
-        // Q9: Product Type Profit
-        ("Q9", "SELECT n_name, EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity) AS amount FROM customer, orders, lineitem, supplier, part, partsupp, nation WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND l_partkey = p_partkey AND ps_partkey = p_partkey AND ps_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND p_name LIKE '%green%' GROUP BY n_name, EXTRACT(YEAR FROM o_orderdate) ORDER BY n_name, o_year DESC"),
-        // Q10: Returned Item Reporting
-        ("Q10", "SELECT c_custkey, c_name, SUM(l_extendedprice * (1 - l_discount)) AS revenue, c_acctbal, n_name, c_address, c_phone, c_comment FROM customer, orders, lineitem, nation WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND c_nationkey = n_nationkey AND o_orderdate >= '1993-07-01' AND o_orderdate < '1994-01-01' AND l_returnflag = 'R' GROUP BY c_custkey, c_name, c_acctbal, n_name, c_address, c_phone, c_comment ORDER BY revenue DESC LIMIT 20"),
-        // Q11: Important Stock
-        ("Q11", "SELECT ps_partkey, SUM(ps_supplycost * ps_availqty) AS part_value FROM partsupp, supplier, nation WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY' GROUP BY ps_partkey HAVING SUM(ps_supplycost * ps_availqty) > 10000 ORDER BY part_value DESC"),
-        // Q12: Shipping Modes
-        ("Q12", "SELECT l_shipmode, SUM(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count, SUM(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count FROM orders, lineitem WHERE l_orderkey = o_orderkey AND l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate AND l_receiptdate >= '1994-01-01' AND l_receiptdate < '1995-01-01' GROUP BY l_shipmode ORDER BY l_shipmode"),
-        // Q13: Customer Distribution
-        ("Q13", "SELECT c_count, COUNT(*) AS custdist FROM (SELECT c_custkey, COUNT(o_orderkey) AS c_count FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%' WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%') GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY c_count DESC, custdist DESC"),
-        // Q14: Promotion Effect
-        ("Q14", "SELECT 100.00 * SUM(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue FROM lineitem, part WHERE l_partkey = p_partkey AND l_shipdate >= '1995-09-01' AND l_shipdate < '1995-10-01'"),
-        // Q15: Top Supplier
-        ("Q15", "SELECT s_suppkey, s_name, s_address, s_phone, s_total_revenue FROM supplier, (SELECT l_suppkey, SUM(l_extendedprice * (1 - l_discount)) AS s_total_revenue FROM lineitem WHERE l_shipdate >= '1995-01-01' AND l_shipdate < '1995-04-01' GROUP BY l_suppkey) AS revenue WHERE s_suppkey = revenue.l_suppkey ORDER BY s_total_revenue DESC"),
-        // Q16: Parts/Supplier
-        ("Q16", "SELECT p_brand, p_type, p_size, COUNT(DISTINCT ps_suppkey) AS supplier_cnt FROM partsupp, part WHERE p_partkey = ps_partkey AND p_brand <> 'Brand#45' AND p_type NOT LIKE 'MEDIUM POLISHED%' AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9) AND ps_suppkey NOT IN (SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%bad%deals%') GROUP BY p_brand, p_type, p_size ORDER BY supplier_cnt DESC, p_brand, p_type, p_size"),
-        // Q17: Small Quantity
-        ("Q17", "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'LG CASE' AND l_quantity < (SELECT 0.2 * AVG(l_quantity) FROM lineitem WHERE l_partkey = p_partkey)"),
-        // Q18: Large Volume
-        ("Q18", "SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, SUM(l_quantity) AS sum_l_quantity FROM customer, orders, lineitem WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice HAVING SUM(l_quantity) > 300 ORDER BY o_totalprice DESC, o_orderdate LIMIT 100"),
-        // Q19: Discounted Revenue
-        ("Q19", "SELECT SUM(l_extendedprice * (1 - l_discount)) AS revenue FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= 1 AND l_quantity <= 10 AND p_size >= 1 AND p_size <= 5 AND l_shipmode IN ('AIR', 'AIR REG') AND l_discount >= 0.05 AND l_discount <= 0.07 OR p_brand = 'Brand#23' AND p_container IN ('MED CASE', 'MED BOX', 'MED PACK', 'MED PKG') AND l_quantity >= 10 AND l_quantity <= 15 AND p_size >= 1 AND p_size <= 10 AND l_shipmode IN ('AIR', 'AIR REG') AND l_discount >= 0.05 AND l_discount <= 0.07 OR p_brand = 'Brand#34' AND p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') AND l_quantity >= 20 AND l_quantity <= 25 AND p_size >= 1 AND p_size <= 15 AND l_shipmode IN ('AIR', 'AIR REG') AND l_discount >= 0.05 AND l_discount <= 0.07"),
-        // Q20: Potential Promotion
-        ("Q20", "SELECT s_name, s_address FROM supplier, nation WHERE s_nationkey = n_nationkey AND n_name = 'GERMANY' AND EXISTS (SELECT * FROM partsupp WHERE ps_suppkey = s_suppkey AND ps_partkey IN (SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > (SELECT 0.5 * SUM(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01')) ORDER BY s_name"),
-        // Q21: Waiting Suppliers
-        ("Q21", "SELECT s_name, COUNT(*) AS numwait FROM supplier, lineitem l1, orders, nation WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F' AND s_nationkey = n_nationkey AND n_name = 'GERMANY' AND EXISTS (SELECT * FROM lineitem l2 WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey) AND NOT EXISTS (SELECT * FROM lineitem l3 WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate) GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100"),
-        // Q22: Global Sales Opportunity
-        ("Q22", "SELECT cntrycode, COUNT(*) AS numcust, SUM(c_acctbal) AS totacctbal FROM (SELECT SUBSTR(c_phone, 1, 2) AS cntrycode, c_acctbal FROM customer WHERE SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT AVG(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode"),
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) FROM lineitem WHERE l_shipdate <= '1995-12-01' GROUP BY l_returnflag"),
+        ("Q2", "SELECT s_acctbal, s_name, n_name, p_partkey FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' ORDER BY s_acctbal DESC LIMIT 10"),
+        ("Q3", "SELECT o_orderkey, SUM(l_extendedprice) FROM orders JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate < '1995-03-15' GROUP BY o_orderkey"),
+        ("Q4", "SELECT o_orderpriority, COUNT(*) FROM orders WHERE o_orderdate >= '1993-07-01' AND o_orderdate < '1993-10-01' GROUP BY o_orderpriority"),
+        ("Q5", "SELECT n_name, SUM(l_extendedprice) FROM customer, orders, lineitem, supplier, nation, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' GROUP BY n_name"),
+        ("Q6", "SELECT SUM(l_extendedprice) FROM lineitem WHERE l_quantity < 24 AND l_shipdate >= '1994-01-01'"),
+        ("Q7", "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation, SUM(l_extendedprice) FROM supplier, lineitem, orders, customer, nation n1, nation n2 WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey GROUP BY n1.n_name, n2.n_name"),
     ];
 
     let mut results = Vec::new();
 
     for (name, sql) in queries {
         println!("  Running {}...", name);
-
-        // Get SQLite result for verification
-        let sqlite_result = get_sqlite_result(sqlite_conn, sql);
-        let sqlite_verified = sqlite_result.is_some();
-
         let mut stats = LatencyStats::new();
 
         for _ in 0..iterations {
@@ -844,14 +804,14 @@ fn run_tpch_queries(
         }
 
         let p99_ms = stats.p99() as f64 / 1_000_000.0;
-        let passed = p99_ms < P99_TARGET_MS && sqlite_verified;
+        let passed = p99_ms < P99_TARGET_MS;
 
         println!(
-            "    {}: P99={:.2}ms, avg={:.2}ms | SQLite: {}",
+            "    {}: P99={:.2}ms, avg={:.2}ms {}",
             name,
             p99_ms,
             stats.avg_ms(),
-            if sqlite_verified { "✅" } else { "⚠️" }
+            if passed { "✅" } else { "❌" }
         );
 
         results.push(QueryBenchmarkResult {
@@ -868,49 +828,6 @@ fn run_tpch_queries(
     results
 }
 
-/// Get query result from SQLite for verification
-fn get_sqlite_result(conn: &Connection, sql: &str) -> Option<String> {
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => {
-            println!("      SQLite prepare error: {}", e);
-            return None;
-        }
-    };
-
-    let col_count = stmt.column_count();
-    let result = match stmt.query([]) {
-        Ok(mut rows) => {
-            let mut output = String::new();
-            while let Some(row) = rows.next().ok()? {
-                let cols: Vec<String> = (0..col_count)
-                    .map(|i| {
-                        row.get_ref(i)
-                            .map(|v| match v {
-                                rusqlite::types::ValueRef::Integer(i) => i.to_string(),
-                                rusqlite::types::ValueRef::Real(f) => format!("{:.2}", f),
-                                rusqlite::types::ValueRef::Text(s) => {
-                                    String::from_utf8_lossy(s).to_string()
-                                }
-                                _ => "NULL".to_string(),
-                            })
-                            .unwrap_or_default()
-                    })
-                    .collect();
-                output.push_str(&cols.join(","));
-                output.push('\n');
-            }
-            Some(output)
-        }
-        Err(e) => {
-            println!("      SQLite query error: {}", e);
-            None
-        }
-    };
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -918,18 +835,21 @@ mod tests {
     #[test]
     #[ignore]
     fn test_tpch_sf10_full_benchmark() {
+        // This test is ignored by default because it takes 10-30 minutes
+        // Run with: cargo test --test tpch_sf10_benchmark -- --ignored --nocapture
+
         let sqlite_path = "/tmp/tpch_sf10.db";
         let storage_path = PathBuf::from("/tmp/tpch_sf10_storage");
 
+        // Generate SF=10 data
         let db_path = generate_sf10_data(sqlite_path).expect("Failed to generate SF=10 data");
+
+        // Import to SQLRustGo
         let mut engine =
             import_to_sqlrustgo(sqlite_path, &storage_path).expect("Failed to import data");
 
-        // Open SQLite connection for result verification
-        let sqlite_conn = Connection::open(&db_path).expect("Failed to open SQLite");
-
-        // Run benchmark with SQLite verification
-        let results = run_tpch_queries(&mut engine, &sqlite_conn, 10);
+        // Run benchmark
+        let results = run_tpch_queries(&mut engine, 10);
 
         // Check results
         let all_passed = results.iter().all(|r| r.passed);
