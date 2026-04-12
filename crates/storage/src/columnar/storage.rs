@@ -372,8 +372,6 @@ impl Default for ColumnarStorage {
 }
 
 impl ColumnarStorage {
-    /// Scan entire table and return columnar data for vectorized execution
-    /// Returns (schema, columns) tuple
     pub fn scan_columnar(
         &self,
         table: &str,
@@ -386,6 +384,29 @@ impl ColumnarStorage {
             .get(table)
             .ok_or_else(|| ColumnarError::TableNotFound(table.to_string()))?;
         store.scan_columnar()
+    }
+
+    fn extract_column_name_from_predicate(
+        &self,
+        predicate: &crate::predicate::Predicate,
+    ) -> Option<String> {
+        match predicate {
+            crate::predicate::Predicate::Eq(expr, _)
+            | crate::predicate::Predicate::Lt(expr, _)
+            | crate::predicate::Predicate::Lte(expr, _)
+            | crate::predicate::Predicate::Gt(expr, _)
+            | crate::predicate::Predicate::Gte(expr, _) => match &**expr {
+                crate::predicate::Expr::Column(name) => Some(name.clone()),
+                _ => None,
+            },
+            crate::predicate::Predicate::And(left, right) => self
+                .extract_column_name_from_predicate(left)
+                .or_else(|| self.extract_column_name_from_predicate(right)),
+            crate::predicate::Predicate::Or(left, right) => self
+                .extract_column_name_from_predicate(left)
+                .or_else(|| self.extract_column_name_from_predicate(right)),
+            _ => None,
+        }
     }
 }
 
@@ -437,13 +458,50 @@ impl StorageEngine for ColumnarStorage {
         };
 
         let mut filtered = Vec::with_capacity(limit);
-        for i in 0..store.row_count() {
-            if filtered.len() >= limit {
-                break;
+        let row_count = store.row_count();
+
+        let col_name = self.extract_column_name_from_predicate(predicate);
+        let col_chunk = col_name.as_ref().and_then(|name| {
+            store
+                .column_indices
+                .get(name)
+                .and_then(|&idx| store.columns.get(&idx))
+        });
+
+        if let Some(chunk) = col_chunk {
+            let num_blocks = chunk.num_blocks();
+            for block_idx in 0..num_blocks {
+                if filtered.len() >= limit {
+                    break;
+                }
+
+                if chunk.can_skip_block(block_idx, col_name.as_deref().unwrap_or(""), predicate) {
+                    continue;
+                }
+
+                let block_start = chunk.get_block_start(block_idx);
+                let block_end = chunk.get_block_end(block_idx);
+
+                for i in block_start..block_end {
+                    if filtered.len() >= limit {
+                        break;
+                    }
+                    if let Some(row) = store.get_row(i) {
+                        if self.eval_predicate_for_scan(table, &row, predicate) {
+                            filtered.push(row);
+                        }
+                    }
+                }
             }
-            if let Some(row) = store.get_row(i) {
-                if self.eval_predicate_for_scan(table, &row, predicate) {
-                    filtered.push(row);
+        } else {
+            for i in 0..row_count {
+                if filtered.len() >= limit {
+                    break;
+                }
+                if let Some(row) = store.get_row(i) {
+                    if self.eval_predicate_for_scan(table, &row, predicate) {
+                        filtered.push(row);
+                    }
                 }
             }
         }
