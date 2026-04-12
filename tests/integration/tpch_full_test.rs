@@ -101,347 +101,368 @@ mod tests {
         #[test]
         fn test_tpch_q1_pricing_summary() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM lineitem";
+            let sql = "SELECT l_returnflag, l_linestatus, SUM(l_quantity) AS sum_qty, SUM(l_extendedprice) AS sum_base_price, SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price, SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, AVG(l_quantity) AS avg_qty, AVG(l_extendedprice) AS avg_price, AVG(l_discount) AS avg_disc, COUNT(*) AS count_order FROM lineitem WHERE l_shipdate <= '1995-12-01' GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q1: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q2_minimum_cost_supplier() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM part";
+            let sql = "SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE '%BRASS' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' ORDER BY s_acctbal ASC, n_name, s_name, p_partkey LIMIT 20";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q2: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q3_shipping_priority() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM orders";
+            let sql = "SELECT l_orderkey, SUM(l_extendedprice * (1 - l_discount)) AS revenue, o_orderdate, o_shippriority FROM customer, orders, lineitem WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND o_orderdate < '1995-03-15' AND l_shipdate > '1995-03-15' GROUP BY l_orderkey, o_orderdate, o_shippriority ORDER BY revenue DESC, o_orderdate LIMIT 10";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q3: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q4_order_priority() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM orders";
+            let sql = "SELECT o_orderpriority, COUNT(*) AS order_count FROM orders WHERE o_orderdate >= '1993-07-01' AND o_orderdate < '1993-10-01' AND EXISTS (SELECT * FROM lineitem WHERE l_orderkey = o_orderkey AND l_commitdate < l_receiptdate) GROUP BY o_orderpriority ORDER BY o_orderpriority";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q4: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q5_local_supplier_volume() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM customer";
+            let sql = "SELECT n_name, SUM(l_extendedprice * (1 - l_discount)) AS revenue FROM customer, orders, lineitem, supplier, nation, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' AND o_orderdate >= '1994-01-01' AND o_orderdate < '1995-01-01' GROUP BY n_name ORDER BY revenue DESC";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q5: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q6_forecast_revenue_change() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT SUM(l_extendedprice) FROM lineitem WHERE l_discount > 0";
+            let sql = "SELECT SUM(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01' AND l_discount BETWEEN 0.06 AND 0.08 AND l_quantity < 25";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q6: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q6_with_between() {
             let mut engine = setup_engine_with_data();
-            let sql =
-                "SELECT SUM(l_extendedprice) FROM lineitem WHERE l_discount BETWEEN 0.05 AND 0.07";
+            let sql = "SELECT SUM(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01' AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 25";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
-            let result_clone = result.as_ref().map(|r| r.rows.len());
             println!(
                 "SQLRustGo Q6 (BETWEEN): {:?} in {:?}",
-                result_clone, elapsed
+                result.as_ref().map(|r| r.rows.len()),
+                elapsed
             );
-            assert!(elapsed.as_secs_f64() < 1.0);
             assert!(result.is_ok());
+            assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q7_volume_shipping() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM lineitem";
+            let sql = "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation, EXTRACT(YEAR FROM o_orderdate) AS l_year, SUM(l_extendedprice * (1 - l_discount)) AS volume FROM supplier, lineitem, orders, customer, nation n1, nation n2 WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey AND n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE' GROUP BY n1.n_name, n2.n_name, EXTRACT(YEAR FROM o_orderdate) ORDER BY n1.n_name, n2.n_name, l_year";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q7: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q8_national_market_share() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM supplier";
+            let sql = "SELECT EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(CASE WHEN n2.n_name = 'GERMANY' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / SUM(l_extendedprice * (1 - l_discount)) AS mkt_share FROM customer, orders, lineitem, supplier, nation n1, nation n2, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = n1.n_nationkey AND s_nationkey = n1.n_nationkey AND n1.n_regionkey = r_regionkey AND r_name = 'EUROPE' AND n2.n_name = 'GERMANY' AND o_orderdate >= '1995-01-01' AND o_orderdate < '1996-12-31' GROUP BY EXTRACT(YEAR FROM o_orderdate) ORDER BY o_year";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q8: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q9_product_type_profit() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM nation";
+            let sql = "SELECT n_name, EXTRACT(YEAR FROM o_orderdate) AS o_year, SUM(l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity) AS amount FROM customer, orders, lineitem, supplier, part, partsupp, nation WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND l_partkey = p_partkey AND ps_partkey = p_partkey AND ps_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND p_name LIKE '%green%' GROUP BY n_name, EXTRACT(YEAR FROM o_orderdate) ORDER BY n_name, o_year DESC";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q9: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q10_returned_item() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM lineitem WHERE l_returnflag = 'R'";
+            let sql = "SELECT c_custkey, c_name, SUM(l_extendedprice * (1 - l_discount)) AS revenue, c_acctbal, n_name, c_address, c_phone, c_comment FROM customer, orders, lineitem, nation WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND c_nationkey = n_nationkey AND o_orderdate >= '1993-07-01' AND o_orderdate < '1994-01-01' AND l_returnflag = 'R' GROUP BY c_custkey, c_name, c_acctbal, n_name, c_address, c_phone, c_comment ORDER BY revenue DESC LIMIT 20";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q10: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q11_important_stock() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM partsupp";
+            let sql = "SELECT ps_partkey, SUM(ps_supplycost * ps_availqty) AS part_value FROM partsupp, supplier, nation WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY' GROUP BY ps_partkey HAVING SUM(ps_supplycost * ps_availqty) > 10000 ORDER BY part_value DESC";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q11: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q12_shipping_modes() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM lineitem WHERE l_shipmode = 'AIR'";
+            let sql = "SELECT l_shipmode, SUM(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count, SUM(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count FROM orders, lineitem WHERE l_orderkey = o_orderkey AND l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate AND l_receiptdate >= '1994-01-01' AND l_receiptdate < '1995-01-01' GROUP BY l_shipmode ORDER BY l_shipmode";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q12: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q13_customer_distribution() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM customer";
+            let sql = "SELECT c_count, COUNT(*) AS custdist FROM (SELECT c_custkey, COUNT(o_orderkey) AS c_count FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%' WHERE c_custkey NOT IN (SELECT o_custkey FROM orders WHERE o_comment LIKE '%special%requests%') GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY c_count DESC, custdist DESC";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q13: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q14_promotion_effect() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT COUNT(*) FROM lineitem WHERE l_quantity < 25";
+            let sql = "SELECT 100.00 * SUM(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue FROM lineitem, part WHERE l_partkey = p_partkey AND l_shipdate >= '1995-09-01' AND l_shipdate < '1995-10-01'";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q14: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q15_top_supplier() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM supplier";
+            let sql = "SELECT s_suppkey, s_name, s_address, s_phone, s_total_revenue FROM supplier, (SELECT l_suppkey, SUM(l_extendedprice * (1 - l_discount)) AS s_total_revenue FROM lineitem WHERE l_shipdate >= '1995-01-01' AND l_shipdate < '1995-04-01' GROUP BY l_suppkey) AS revenue WHERE s_suppkey = revenue.l_suppkey ORDER BY s_total_revenue DESC";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q15: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q16_parts_supplier() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM part WHERE p_size = 10";
+            let sql = "SELECT p_brand, p_type, p_size, COUNT(DISTINCT ps_suppkey) AS supplier_cnt FROM partsupp, part WHERE p_partkey = ps_partkey AND p_brand <> 'Brand#45' AND p_type NOT LIKE 'MEDIUM POLISHED%' AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9) AND ps_suppkey NOT IN (SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%bad%deals%') GROUP BY p_brand, p_type, p_size ORDER BY supplier_cnt DESC, p_brand, p_type, p_size";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q16: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q17_small_quantity() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM lineitem WHERE l_quantity < 20";
+            let sql = "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'LG CASE' AND l_quantity < (SELECT 0.2 * AVG(l_quantity) FROM lineitem WHERE l_partkey = p_partkey)";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q17: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q18_large_volume() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM orders WHERE o_totalprice > 10000";
+            let sql = "SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, SUM(l_quantity) AS sum_l_quantity FROM customer, orders, lineitem WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice HAVING SUM(l_quantity) > 300 ORDER BY o_totalprice DESC, o_orderdate LIMIT 100";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q18: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q19_discounted_revenue() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM lineitem WHERE l_discount > 0.05";
+            let sql = "SELECT SUM(l_extendedprice * (1 - l_discount)) AS revenue FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= 1 AND l_quantity <= 10 AND p_size >= 1 AND p_size <= 5 AND l_shipmode IN ('AIR', 'AIR REG') AND l_discount >= 0.05 AND l_discount <= 0.07";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q19: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q20_potential_promotion() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM supplier WHERE s_nationkey = 1";
+            let sql = "SELECT s_name, s_address FROM supplier, nation WHERE s_nationkey = n_nationkey AND n_name = 'GERMANY' AND EXISTS (SELECT * FROM partsupp WHERE ps_suppkey = s_suppkey AND ps_partkey IN (SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > (SELECT 0.5 * SUM(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= '1994-01-01' AND l_shipdate < '1995-01-01')) ORDER BY s_name";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q20: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q21_waiting_suppliers() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM nation";
+            let sql = "SELECT s_name, COUNT(*) AS numwait FROM supplier, lineitem l1, orders, nation WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F' AND s_nationkey = n_nationkey AND n_name = 'GERMANY' AND EXISTS (SELECT * FROM lineitem l2 WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey) AND NOT EXISTS (SELECT * FROM lineitem l3 WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate) GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q21: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
         #[test]
         fn test_tpch_q22_global_sales() {
             let mut engine = setup_engine_with_data();
-            let sql = "SELECT * FROM customer WHERE c_acctbal > 1000";
+            let sql = "SELECT cntrycode, COUNT(*) AS numcust, SUM(c_acctbal) AS totacctbal FROM (SELECT SUBSTR(c_phone, 1, 2) AS cntrycode, c_acctbal FROM customer WHERE SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT AVG(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND SUBSTR(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode";
             let start = Instant::now();
             let result = engine.execute(parse(sql).unwrap());
             let elapsed = start.elapsed();
             println!(
                 "SQLRustGo Q22: {:?} in {:?}",
-                result.map(|r| r.rows.len()),
+                result.as_ref().map(|r| r.rows.len()),
                 elapsed
             );
+            assert!(result.is_ok());
             assert!(elapsed.as_secs_f64() < 1.0);
         }
 
