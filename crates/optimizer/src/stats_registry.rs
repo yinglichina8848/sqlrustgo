@@ -57,34 +57,17 @@ mod tests {
 
     #[test]
     fn test_stats_registry_sync() {
-        // Create inner provider and add initial stats
         let mut inner = InMemoryStatisticsProvider::new();
-        let initial_stats = TableStats {
-            table_name: "users".to_string(),
-            row_count: 0,
-            size_bytes: 0,
-            column_stats: HashMap::new(),
-            last_updated: 0,
-        };
+        let initial_stats = TableStats::new("users");
         inner.add_stats(initial_stats);
 
         let registry = StatsRegistry::new(Arc::new(inner));
 
-        // Initially has stats
         assert!(registry.has_stats("users"));
 
-        // Sync stats - InMemoryStatisticsProvider validates but doesn't persist
-        // (this is by design - it's a read-only cache)
-        let stats = TableStats {
-            table_name: "users".to_string(),
-            row_count: 1000,
-            size_bytes: 0,
-            column_stats: HashMap::new(),
-            last_updated: 0,
-        };
+        let stats = TableStats::new("users").with_row_count(1000);
         registry.sync_table_stats("users", stats).unwrap();
 
-        // Still has stats
         assert!(registry.has_stats("users"));
         let loaded = registry.table_stats("users").unwrap();
         assert_eq!(loaded.table_name, "users");
