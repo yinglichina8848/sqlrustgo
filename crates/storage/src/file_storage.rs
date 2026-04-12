@@ -1204,6 +1204,28 @@ impl StorageEngine for FileStorage {
         Ok(filtered)
     }
 
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+        limit: usize,
+    ) -> SqlResult<Vec<Record>> {
+        let table_data = match self.get_table(table) {
+            Some(data) => data,
+            None => return Ok(vec![]),
+        };
+
+        let filtered: Vec<Record> = table_data
+            .rows
+            .iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .take(limit)
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
     fn eval_predicate_for_scan(
         &self,
         table: &str,

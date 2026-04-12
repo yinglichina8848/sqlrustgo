@@ -2602,10 +2602,21 @@ impl ExecutionEngine {
 
                 let rows = if let Some(predicate_expr) = scan_plan.predicate() {
                     if let Some(storage_pred) = convert_expr_to_predicate(predicate_expr) {
-                        storage.scan_predicate(plan.table_name(), &storage_pred)?
+                        if let Some(limit) = scan_plan.limit() {
+                            storage.scan_predicate_with_limit(
+                                plan.table_name(),
+                                &storage_pred,
+                                limit,
+                            )?
+                        } else {
+                            storage.scan_predicate(plan.table_name(), &storage_pred)?
+                        }
                     } else {
                         storage.scan(plan.table_name())?
                     }
+                } else if let Some(limit) = scan_plan.limit() {
+                    let all_rows = storage.scan(plan.table_name())?;
+                    all_rows.into_iter().take(limit).collect()
                 } else {
                     storage.scan(plan.table_name())?
                 };
