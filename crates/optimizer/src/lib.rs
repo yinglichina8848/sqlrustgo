@@ -15,6 +15,7 @@ pub mod projection_pushdown;
 pub mod query_planner;
 pub mod rules;
 pub mod stats;
+pub mod stats_collector;
 pub mod stats_provider;
 pub mod stats_registry;
 pub mod unified_cost;
