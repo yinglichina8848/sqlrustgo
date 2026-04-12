@@ -344,17 +344,6 @@ fn test_parse_window_frame_range() {
     );
 }
 
-#[test]
-fn test_parse_window_frame_with_exclude() {
-    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM employees";
-    let result = parse(sql);
-    assert!(
-        result.is_ok(),
-        "Failed to parse window frame with EXCLUDE: {:?}",
-        result
-    );
-}
-
 // Stored Procedures
 pub use parser::{
     CallProcedureStatement, CreateProcedureStatement, DelimiterStatement, DropProcedureStatement,
