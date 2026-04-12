@@ -32,6 +32,12 @@ fn convert_expr_to_predicate(expr: &sqlrustgo_planner::Expr) -> Option<predicate
         return None;
     };
 
+    if matches!(op, sqlrustgo_planner::Operator::And) {
+        let left_pred = convert_expr_to_predicate(left)?;
+        let right_pred = convert_expr_to_predicate(right)?;
+        return Some(predicate::Predicate::and(left_pred, right_pred));
+    }
+
     let (col_name, value) = match (&**left, &**right) {
         (sqlrustgo_planner::Expr::Column(col), sqlrustgo_planner::Expr::Literal(val)) => {
             (col.name.clone(), val.clone())
