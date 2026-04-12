@@ -89,7 +89,14 @@ impl<S: StorageEngine> WalStorage<S> {
     }
 
     pub fn recover(&self) -> SqlResult<Vec<WalEntry>> {
-        Ok(self.wal.recover()?)
+        if !self.wal_enabled {
+            return Ok(Vec::new());
+        }
+        match self.wal.recover() {
+            Ok(entries) => Ok(entries),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn inner(&self) -> &S {
