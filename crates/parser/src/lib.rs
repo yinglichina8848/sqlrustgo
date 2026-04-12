@@ -1,10 +1,13 @@
 // SQLRustGo Parser Module
 pub use sqlrustgo_common::{SqlError, SqlResult};
 
+pub mod error;
 pub mod expression;
 pub mod lexer;
 pub mod parser;
 pub mod token;
+
+pub use error::{ParseError, ParseResult};
 
 pub use lexer::Lexer;
 pub use parser::Parser;
@@ -334,7 +337,6 @@ fn test_parse_window_frame_rows() {
 
 #[test]
 fn test_parse_window_frame_range() {
-    // Test RANK with frame (simple version)
     let sql = "SELECT RANK() OVER (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM employees";
     let result = parse(sql);
     assert!(
@@ -342,6 +344,69 @@ fn test_parse_window_frame_range() {
         "Failed to parse RANGE window frame: {:?}",
         result
     );
+}
+
+#[test]
+fn test_parse_create_user() {
+    let sql = "CREATE USER 'admin'@'%' IDENTIFIED BY 'secret'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CREATE USER: {:?}", result);
+}
+
+#[test]
+fn test_parse_drop_user() {
+    let sql = "DROP USER 'admin'@'%'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DROP USER: {:?}", result);
+}
+
+#[test]
+fn test_parse_copy() {
+    let sql = "COPY users FROM '/data/users.csv' (FORMAT PARQUET)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse COPY: {:?}", result);
+}
+
+#[test]
+fn test_parse_delimiter() {
+    let sql = "DELIMITER $$";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DELIMITER: {:?}", result);
+}
+
+#[test]
+fn test_parse_kill() {
+    let sql = "KILL CONNECTION 123";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse KILL: {:?}", result);
+}
+
+#[test]
+fn test_parse_execute() {
+    let sql = "EXECUTE my_stmt";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse EXECUTE: {:?}", result);
+}
+
+#[test]
+fn test_parse_deallocate() {
+    let sql = "DEALLOCATE PREPARE my_stmt";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DEALLOCATE: {:?}", result);
+}
+
+#[test]
+fn test_parse_show_status() {
+    let sql = "SHOW STATUS";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SHOW STATUS: {:?}", result);
+}
+
+#[test]
+fn test_parse_merge() {
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET name = source.name";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse MERGE: {:?}", result);
 }
 
 // Stored Procedures
