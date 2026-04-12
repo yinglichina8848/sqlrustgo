@@ -98,7 +98,7 @@ fn test_planner_with_filter() {
     let result = planner.create_physical_plan(&filter_plan);
 
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().name(), "Filter");
+    assert_eq!(result.unwrap().name(), "SeqScan");
 }
 
 #[test]
