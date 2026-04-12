@@ -95,6 +95,59 @@ impl Default for Bitmap {
     }
 }
 
+/// BloomFilter for fast set membership testing
+#[derive(Debug, Clone)]
+pub struct BloomFilter {
+    bits: Vec<u64>,
+    num_bits: usize,
+    num_hashes: usize,
+}
+
+impl BloomFilter {
+    pub fn new(expected_elements: usize, false_positive_rate: f64) -> Self {
+        let num_bits = (-1.0 * (expected_elements as f64) * false_positive_rate.ln()
+            / (2.0_f64.ln().powi(2)))
+        .ceil() as usize;
+        let num_bits = num_bits.next_power_of_two().max(64);
+        let num_hashes =
+            ((num_bits as f64 / expected_elements as f64) * 2.0_f64.ln()).ceil() as usize;
+        let num_hashes = num_hashes.max(1).min(16);
+
+        Self {
+            bits: vec![0u64; num_bits / 64],
+            num_bits,
+            num_hashes,
+        }
+    }
+
+    pub fn insert(&mut self, value: &str) {
+        for seed in 0..self.num_hashes {
+            let idx = self.hash(value, seed) % self.num_bits;
+            self.bits[idx / 64] |= 1u64 << (idx % 64);
+        }
+    }
+
+    pub fn may_contain(&self, value: &str) -> bool {
+        for seed in 0..self.num_hashes {
+            let idx = self.hash(value, seed) % self.num_bits;
+            if self.bits[idx / 64] & (1u64 << (idx % 64)) == 0 {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn hash(&self, value: &str, seed: usize) -> usize {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        seed.hash(&mut hasher);
+        (hasher.finish() as usize) % self.num_bits
+    }
+}
+
 /// Statistics for a column chunk
 #[derive(Debug, Clone)]
 pub struct ColumnStats {
@@ -371,6 +424,10 @@ impl ColumnChunk {
                 } else {
                     false
                 }
+            }
+            crate::predicate::Predicate::And(left, right) => {
+                self.can_skip_block(block_idx, col_name, left)
+                    || self.can_skip_block(block_idx, col_name, right)
             }
             _ => false,
         }
@@ -709,5 +766,62 @@ mod tests {
 
         let pred_gt = Predicate::gt("id", Value::Integer(10240));
         assert!(chunk.can_skip_block(0, "id", &pred_gt));
+    }
+
+    #[test]
+    fn test_bloom_filter_insert_and_check() {
+        let mut bloom = BloomFilter::new(1000, 0.01);
+        bloom.insert("hello");
+        bloom.insert("world");
+        bloom.insert("bloom");
+
+        assert!(bloom.may_contain("hello"));
+        assert!(bloom.may_contain("world"));
+        assert!(bloom.may_contain("bloom"));
+    }
+
+    #[test]
+    fn test_bloom_filter_not_contained() {
+        let mut bloom = BloomFilter::new(1000, 0.01);
+        bloom.insert("hello");
+        bloom.insert("world");
+
+        assert!(!bloom.may_contain("missing"));
+        assert!(!bloom.may_contain("other"));
+    }
+
+    #[test]
+    fn test_bloom_filter_false_positive_rate() {
+        let mut bloom = BloomFilter::new(1000, 0.01);
+        for i in 0..500 {
+            bloom.insert(&format!("value_{}", i));
+        }
+
+        let mut false_positives = 0;
+        for i in 500..1000 {
+            if bloom.may_contain(&format!("value_{}", i)) {
+                false_positives += 1;
+            }
+        }
+
+        let fp_rate = false_positives as f64 / 500.0;
+        assert!(fp_rate < 0.05, "False positive rate too high: {}", fp_rate);
+    }
+
+    #[test]
+    fn test_can_skip_block_and_predicate() {
+        use crate::predicate::Predicate;
+
+        let mut chunk = ColumnChunk::new();
+        for i in 0..2048 {
+            chunk.push(Value::Integer(i as i64));
+        }
+
+        let and_pred = Predicate::and(
+            Predicate::gt("id", Value::Integer(2000)),
+            Predicate::lt("id", Value::Integer(3000)),
+        );
+
+        assert!(chunk.can_skip_block(0, "id", &and_pred));
     }
 }
