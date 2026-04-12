@@ -408,6 +408,73 @@ impl ColumnarStorage {
             _ => None,
         }
     }
+
+    fn build_bloom_filter_for_in(
+        &self,
+        predicate: &crate::predicate::Predicate,
+    ) -> Option<(String, crate::columnar::chunk::BloomFilter)> {
+        match predicate {
+            crate::predicate::Predicate::In(expr, values) => {
+                let col_name = match &**expr {
+                    crate::predicate::Expr::Column(name) => name.clone(),
+                    _ => return None,
+                };
+
+                let mut bloom = crate::columnar::chunk::BloomFilter::new(values.len(), 0.01);
+                for val_expr in values {
+                    if let crate::predicate::Expr::Value(sqlrustgo_types::Value::Text(s)) = val_expr
+                    {
+                        bloom.insert(s);
+                    }
+                }
+
+                Some((col_name, bloom))
+            }
+            crate::predicate::Predicate::And(left, right) => self
+                .build_bloom_filter_for_in(left)
+                .or_else(|| self.build_bloom_filter_for_in(right)),
+            crate::predicate::Predicate::Or(left, right) => self
+                .build_bloom_filter_for_in(left)
+                .or_else(|| self.build_bloom_filter_for_in(right)),
+            _ => None,
+        }
+    }
+
+    fn eval_predicate_with_bloom(
+        &self,
+        table: &str,
+        row: &Vec<Value>,
+        predicate: &crate::predicate::Predicate,
+        bloom_filter: &Option<(String, crate::columnar::chunk::BloomFilter)>,
+    ) -> bool {
+        if let Some((bloom_col_name, bloom)) = bloom_filter {
+            match predicate {
+                crate::predicate::Predicate::In(expr, values) => {
+                    if let crate::predicate::Expr::Column(col_name) = &**expr {
+                        if col_name == bloom_col_name {
+                            let col_val = self.eval_expr(table, row, expr);
+                            if let Value::Text(s) = &col_val {
+                                if !bloom.may_contain(s) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    return self.eval_predicate_for_scan(table, row, predicate);
+                }
+                crate::predicate::Predicate::And(left, right) => {
+                    return self.eval_predicate_with_bloom(table, row, left, bloom_filter)
+                        && self.eval_predicate_with_bloom(table, row, right, bloom_filter);
+                }
+                crate::predicate::Predicate::Or(left, right) => {
+                    return self.eval_predicate_with_bloom(table, row, left, bloom_filter)
+                        || self.eval_predicate_with_bloom(table, row, right, bloom_filter);
+                }
+                _ => return self.eval_predicate_for_scan(table, row, predicate),
+            }
+        }
+        self.eval_predicate_for_scan(table, row, predicate)
+    }
 }
 
 impl StorageEngine for ColumnarStorage {
@@ -468,6 +535,8 @@ impl StorageEngine for ColumnarStorage {
                 .and_then(|&idx| store.columns.get(&idx))
         });
 
+        let bloom_filter = self.build_bloom_filter_for_in(predicate);
+
         if let Some(chunk) = col_chunk {
             let num_blocks = chunk.num_blocks();
             for block_idx in 0..num_blocks {
@@ -487,7 +556,7 @@ impl StorageEngine for ColumnarStorage {
                         break;
                     }
                     if let Some(row) = store.get_row(i) {
-                        if self.eval_predicate_for_scan(table, &row, predicate) {
+                        if self.eval_predicate_with_bloom(table, &row, predicate, &bloom_filter) {
                             filtered.push(row);
                         }
                     }
@@ -499,7 +568,7 @@ impl StorageEngine for ColumnarStorage {
                     break;
                 }
                 if let Some(row) = store.get_row(i) {
-                    if self.eval_predicate_for_scan(table, &row, predicate) {
+                    if self.eval_predicate_with_bloom(table, &row, predicate, &bloom_filter) {
                         filtered.push(row);
                     }
                 }
