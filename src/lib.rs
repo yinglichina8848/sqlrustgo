@@ -514,6 +514,7 @@ fn evaluate_where_clause(
         sqlrustgo_parser::Expression::QualifiedColumn(_, _) => false,
         sqlrustgo_parser::Expression::WindowFunction { .. } => false,
         sqlrustgo_parser::Expression::Placeholder => false,
+        sqlrustgo_parser::Expression::Not(expr) => !evaluate_where_clause(expr, row, columns),
         sqlrustgo_parser::Expression::Between { expr, low, high } => {
             let expr_val = evaluate_expr(expr, row, columns);
             let low_val = evaluate_expr(low, row, columns);
@@ -528,6 +529,10 @@ fn evaluate_where_clause(
                     return true;
                 }
             }
+            false
+        }
+        sqlrustgo_parser::Expression::InSubquery { .. } => {
+            // Subquery in IN clause - for now, return false (not supported in WHERE)
             false
         }
         sqlrustgo_parser::Expression::CaseWhen {
@@ -723,6 +728,14 @@ fn evaluate_expr(
         }
         sqlrustgo_parser::Expression::WindowFunction { .. } => Value::Null,
         sqlrustgo_parser::Expression::Placeholder => Value::Null,
+        sqlrustgo_parser::Expression::Not(expr) => {
+            let inner = evaluate_expr(expr, row, columns);
+            match inner {
+                Value::Boolean(b) => Value::Boolean(!b),
+                Value::Null => Value::Null,
+                _ => Value::Null,
+            }
+        }
         sqlrustgo_parser::Expression::Between { expr, low, high } => {
             let expr_val = evaluate_expr(expr, row, columns);
             let low_val = evaluate_expr(low, row, columns);
@@ -744,6 +757,10 @@ fn evaluate_expr(
                 }
             }
             Value::Boolean(false)
+        }
+        sqlrustgo_parser::Expression::InSubquery { .. } => {
+            // Subquery in IN clause - for now, return NULL (not fully supported)
+            Value::Null
         }
         sqlrustgo_parser::Expression::CaseWhen {
             conditions,
