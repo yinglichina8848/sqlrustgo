@@ -2,7 +2,11 @@
 //! Persists table data to JSON files
 
 use crate::bplus_tree::BPlusTree;
-use crate::engine::{ColumnDefinition, Record, StorageEngine, TableData, TableInfo};
+use crate::engine::{
+    ColumnDefinition, ColumnStats, Record, StorageEngine, TableData, TableInfo, TableStats,
+    TriggerInfo,
+};
+use crate::wal::{WalManager, WalWriter};
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -11,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 /// File-based storage manager
+#[allow(dead_code)]
 pub struct FileStorage {
     /// Base directory for database files
     data_dir: PathBuf,
@@ -18,6 +23,22 @@ pub struct FileStorage {
     tables: HashMap<String, TableData>,
     /// B+ Tree indexes protected by RwLock for concurrent access
     indexes: RwLock<HashMap<(String, String), BPlusTree>>,
+    /// Insert buffer for batch optimization (INSERT 性能优化)
+    insert_buffer: HashMap<String, Vec<Record>>,
+    /// Buffer threshold - flush when reaching this count
+    buffer_threshold: usize,
+    /// Enable buffer for batch inserts
+    enable_buffer: bool,
+    /// WAL writer for durability
+    wal_writer: Option<WalWriter>,
+    /// WAL manager for recovery
+    wal_manager: Option<WalManager>,
+    /// Auto-increment counters: table_name -> (column_index -> next_value)
+    auto_increment_counters: RwLock<HashMap<String, HashMap<usize, i64>>>,
+    /// Triggers: trigger_name -> TriggerInfo
+    triggers: RwLock<HashMap<String, TriggerInfo>>,
+    /// Table triggers: table_name -> Vec<trigger_name>
+    table_triggers: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl FileStorage {
@@ -30,6 +51,14 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
+            insert_buffer: HashMap::new(),
+            buffer_threshold: 10,
+            enable_buffer: true,
+            wal_writer: None,
+            wal_manager: None,
+            auto_increment_counters: RwLock::new(HashMap::new()),
+            triggers: RwLock::new(HashMap::new()),
+            table_triggers: RwLock::new(HashMap::new()),
         };
 
         // Load existing tables
@@ -39,6 +68,49 @@ impl FileStorage {
         storage.load_all_indexes()?;
 
         Ok(storage)
+    }
+
+    /// 从 WAL 恢复数据 (简化版 - 待完善)
+    #[allow(dead_code)]
+    fn recover_from_wal(&mut self, _manager: &WalManager) -> SqlResult<()> {
+        // TODO: 实现 WAL 恢复
+        Ok(())
+    }
+
+    /// 启用/禁用批量缓冲模式
+    pub fn set_batch_mode(&mut self, enable: bool) {
+        self.enable_buffer = enable;
+    }
+
+    /// 刷新所有缓冲（事务提交时调用）
+    pub fn flush_all_buffers(&mut self) -> SqlResult<()> {
+        let tables: Vec<String> = self.insert_buffer.keys().cloned().collect();
+        for table in tables {
+            self.do_flush_buffer(&table);
+        }
+        Ok(())
+    }
+
+    /// 直接写入（无缓冲）- 内部方法
+    fn do_insert_direct(&mut self, table: &str, records: Vec<Record>) {
+        if let Some(ref mut data) = self.tables.get_mut(table) {
+            data.rows.extend(records);
+            let table_data = data.clone();
+            let _ = self.save_table(table, &table_data);
+        }
+    }
+
+    /// 刷新缓冲到磁盘 - 内部方法
+    fn do_flush_buffer(&mut self, table: &str) {
+        if let Some(records) = self.insert_buffer.remove(table) {
+            if !records.is_empty() {
+                if let Some(ref mut data) = self.tables.get_mut(table) {
+                    data.rows.extend(records);
+                    let table_data = data.clone();
+                    let _ = self.save_table(table, &table_data);
+                }
+            }
+        }
     }
 
     /// Get the path for a table file
@@ -294,31 +366,35 @@ impl FileStorage {
     ) -> std::io::Result<()> {
         let key_exists = (table_name.to_string(), column_name.to_string());
 
-        // Clone the key for later use
-        let has_index = self
-            .indexes
-            .read()
-            .map(|indexes| indexes.contains_key(&key_exists))
-            .unwrap_or(false);
+        // Check if index exists and get a clone of it for saving
+        let index_clone = {
+            let has_index = self
+                .indexes
+                .read()
+                .map(|indexes| indexes.contains_key(&key_exists))
+                .unwrap_or(false);
 
-        if has_index {
-            // First get a clone of the index to save, then modify
-            let index_clone = {
-                let indexes = self.indexes.read().unwrap();
-                indexes.get(&key_exists).cloned()
-            };
+            if !has_index {
+                return Ok(());
+            }
 
-            // Update the in-memory index
+            // Get write lock, insert, and save
             if let Ok(mut indexes) = self.indexes.write() {
                 if let Some(index) = indexes.get_mut(&key_exists) {
                     index.insert(key, row_id);
+                    // Clone the index for saving
+                    Some(index.clone())
+                } else {
+                    None
                 }
+            } else {
+                None
             }
+        };
 
-            // Save to disk (outside the write lock)
-            if let Some(idx) = index_clone {
-                let _ = self.save_index(table_name, column_name, &idx);
-            }
+        // Save to disk outside the lock
+        if let Some(index) = index_clone {
+            self.save_index(table_name, column_name, &index)?;
         }
 
         Ok(())
@@ -401,37 +477,74 @@ mod tests {
         {
             let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
 
-            // Insert a table
+            // Insert table with data
             let table_data = TableData {
                 info: TableInfo {
-                    name: "users".to_string(),
+                    name: "idx_test".to_string(),
                     columns: vec![
                         ColumnDefinition {
                             name: "id".to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
+                            is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
+                            references: None,
+                            compression: None,
                         },
                         ColumnDefinition {
-                            name: "name".to_string(),
-                            data_type: "TEXT".to_string(),
-                            nullable: true,
+                            name: "value".to_string(),
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                            is_unique: false,
+                            is_primary_key: false,
+                            auto_increment: false,
+                            references: None,
+                            compression: None,
                         },
                     ],
                 },
-                rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+                rows: vec![
+                    vec![Value::Integer(1), Value::Integer(100)],
+                    vec![Value::Integer(2), Value::Integer(200)],
+                ],
             };
-
             storage
-                .insert_table("users".to_string(), table_data)
+                .insert_table("idx_test".to_string(), table_data)
                 .unwrap();
+
+            // Create index on id column (column_index = 0)
+            storage.create_index("idx_test", "id", 0).unwrap();
+
+            // Test has_index
+            assert!(storage.has_index("idx_test", "id"));
+            assert!(!storage.has_index("idx_test", "nonexistent"));
+
+            // Test search_index
+            let row_id = storage.search_index("idx_test", "id", 1);
+            assert!(row_id.is_some());
+
+            // Test range_index
+            let range_results = storage.range_index("idx_test", "id", 1, 3);
+            assert!(!range_results.is_empty());
+
+            // Test insert_with_index
+            storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
+
+            // Test drop_index
+            storage.drop_index("idx_test", "id").unwrap();
+            assert!(!storage.has_index("idx_test", "id"));
+
+            // Test flush_indexes
+            storage.flush_indexes().unwrap();
         }
 
         // Load from disk
         {
             let storage = FileStorage::new(temp_dir.clone()).unwrap();
-            let table = storage.get_table("users").unwrap();
-            assert_eq!(table.info.name, "users");
-            assert_eq!(table.rows.len(), 1);
+            let table = storage.get_table("idx_test").unwrap();
+            assert_eq!(table.info.name, "idx_test");
+            assert_eq!(table.rows.len(), 2);
         }
 
         let _ = remove_dir_all(&temp_dir);
@@ -449,6 +562,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -489,6 +607,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -524,6 +647,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -560,11 +688,21 @@ mod tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
+                        compression: None,
                     },
                     ColumnDefinition {
                         name: "value".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
+                        compression: None,
                     },
                 ],
             },
@@ -578,31 +716,50 @@ mod tests {
             .unwrap();
 
         // Create index on id column (column_index = 0)
+        eprintln!("TEST: about to call create_index");
         storage.create_index("idx_test", "id", 0).unwrap();
+        eprintln!("TEST: create_index returned");
 
         // Test has_index
+        eprintln!("TEST: about to call has_index");
         assert!(storage.has_index("idx_test", "id"));
+        eprintln!("TEST: has_index passed");
         assert!(!storage.has_index("idx_test", "nonexistent"));
+        eprintln!("TEST: has_index nonexistent passed");
 
         // Test search_index
+        eprintln!("TEST: about to call search_index");
         let row_id = storage.search_index("idx_test", "id", 1);
+        eprintln!("TEST: search_index returned: {:?}", row_id);
         assert!(row_id.is_some());
+        eprintln!("TEST: search_index passed");
 
         // Test range_index
+        eprintln!("TEST: about to call range_index");
         let range_results = storage.range_index("idx_test", "id", 1, 3);
+        eprintln!("TEST: range_index returned: {:?}", range_results.len());
         assert!(!range_results.is_empty());
+        eprintln!("TEST: range_index passed");
 
         // Test insert_with_index
+        eprintln!("TEST: about to call insert_with_index");
         storage.insert_with_index("idx_test", "id", 3, 2).unwrap();
+        eprintln!("TEST: insert_with_index returned");
 
         // Test drop_index
+        eprintln!("TEST: about to call drop_index");
         storage.drop_index("idx_test", "id").unwrap();
+        eprintln!("TEST: drop_index returned");
         assert!(!storage.has_index("idx_test", "id"));
+        eprintln!("TEST: drop_index assertion passed");
 
         // Test flush_indexes
+        eprintln!("TEST: about to call flush_indexes");
         storage.flush_indexes().unwrap();
+        eprintln!("TEST: flush_indexes returned");
 
         let _ = remove_dir_all(&temp_dir);
+        eprintln!("TEST: test complete");
     }
 
     #[test]
@@ -620,6 +777,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -664,6 +826,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -699,6 +866,11 @@ mod tests {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
@@ -764,6 +936,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -797,6 +974,11 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    auto_increment: false,
+                    references: None,
+                    compression: None,
                 }],
             },
             rows: vec![],
@@ -853,6 +1035,145 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_scan() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_scan");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Create table first
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
+                compression: None,
+            }],
+        };
+        storage.create_table(&info).unwrap();
+
+        // Insert data
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        // Scan
+        let records = storage.scan("users").unwrap();
+        assert_eq!(records.len(), 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_scan_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_scan_empty");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let records = storage.scan("nonexistent").unwrap();
+        assert!(records.is_empty());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_list_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_list");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+
+        let tables = storage.list_tables();
+        assert!(tables.contains(&"users".to_string()));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_delete() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_delete");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        let count = storage.delete("users", &[]).unwrap();
+        assert_eq!(count, 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_delete_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_del_emp");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let count = storage.delete("nonexistent", &[]).unwrap();
+        assert_eq!(count, 0);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_update() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_update");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+        };
+        storage.create_table(&info).unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+
+        let count = storage
+            .update("users", &[], &[(0, Value::Integer(2))])
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_update_empty() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_upd_emp");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let count = storage.update("nonexistent", &[], &[]).unwrap();
+        assert_eq!(count, 0);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
 
 impl StorageEngine for FileStorage {
@@ -863,11 +1184,146 @@ impl StorageEngine for FileStorage {
             .unwrap_or_default())
     }
 
+    fn scan_predicate(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+    ) -> SqlResult<Vec<Record>> {
+        let table_data = match self.get_table(table) {
+            Some(data) => data,
+            None => return Ok(vec![]),
+        };
+
+        let filtered: Vec<Record> = table_data
+            .rows
+            .iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+        limit: usize,
+    ) -> SqlResult<Vec<Record>> {
+        let table_data = match self.get_table(table) {
+            Some(data) => data,
+            None => return Ok(vec![]),
+        };
+
+        let filtered: Vec<Record> = table_data
+            .rows
+            .iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .take(limit)
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(
+        &self,
+        table: &str,
+        row: &Record,
+        predicate: &crate::predicate::Predicate,
+    ) -> bool {
+        match predicate {
+            crate::predicate::Predicate::Eq(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val == r_val
+            }
+            crate::predicate::Predicate::Lt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val < r_val
+            }
+            crate::predicate::Predicate::Lte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val <= r_val
+            }
+            crate::predicate::Predicate::Gt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val > r_val
+            }
+            crate::predicate::Predicate::Gte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val >= r_val
+            }
+            crate::predicate::Predicate::And(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    && self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Or(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    || self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Not(p) => !self.eval_predicate_for_scan(table, row, p),
+            crate::predicate::Predicate::IsNull(expr) => {
+                matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::IsNotNull(expr) => {
+                !matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::In(col, values) => {
+                let col_val = self.eval_expr(table, row, col);
+                values
+                    .iter()
+                    .any(|v| col_val == self.eval_expr(table, row, v))
+            }
+        }
+    }
+
+    fn eval_expr(&self, table: &str, row: &Record, expr: &crate::predicate::Expr) -> Value {
+        match expr {
+            crate::predicate::Expr::Column(name) => {
+                if let Some(data) = self.get_table(table) {
+                    if let Some(idx) = data.info.columns.iter().position(|c| c.name == *name) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            }
+            crate::predicate::Expr::Value(v) => v.clone(),
+            crate::predicate::Expr::Parameter(_) => Value::Null,
+        }
+    }
+
+    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
+        Ok(self
+            .get_table(table)
+            .and_then(|data| data.rows.get(row_index).cloned()))
+    }
+
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
-        if let Some(ref mut data) = self.tables.get_mut(table) {
-            data.rows.extend(records);
-            let table_data = data.clone();
-            self.save_table(table, &table_data)?;
+        if records.is_empty() {
+            return Ok(());
+        }
+
+        // 混合模式优化：批量 >= 10 条用缓冲，单条直接写
+        if self.enable_buffer && records.len() >= self.buffer_threshold {
+            // 批量模式：先缓冲，达到阈值后批量写入
+            self.insert_buffer
+                .entry(table.to_string())
+                .or_default()
+                .extend(records);
+
+            // 达到阈值，批量持久化
+            if self.insert_buffer.get(table).map(|b| b.len()).unwrap_or(0) >= self.buffer_threshold
+            {
+                self.do_flush_buffer(table);
+            }
+        } else {
+            // 单条模式：直接写入（低延迟优先）
+            self.do_insert_direct(table, records);
         }
         Ok(())
     }
@@ -912,7 +1368,9 @@ impl StorageEngine for FileStorage {
     fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
         self.get_table(table)
             .map(|t| t.info.clone())
-            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })
     }
 
     fn has_table(&self, table: &str) -> bool {
@@ -923,15 +1381,21 @@ impl StorageEngine for FileStorage {
         self.tables.keys().cloned().collect()
     }
 
-    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
-        // Inline the implementation to avoid potential recursion issues
-        // Get table from tables
-        let table_data = self.tables.get(table).cloned()
-            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))?;
+    fn create_table_index(
+        &mut self,
+        table_name: &str,
+        column_name: &str,
+        column_index: usize,
+    ) -> SqlResult<()> {
+        let table = self
+            .tables
+            .get(table_name)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table_name.to_string(),
+            })?;
 
-        // Build B+ Tree from existing rows
-        let mut index = crate::bplus_tree::BPlusTree::new();
-        for (row_id, row) in table_data.rows.iter().enumerate() {
+        let mut index = BPlusTree::new();
+        for (row_id, row) in table.rows.iter().enumerate() {
             if let Some(value) = row.get(column_index) {
                 if let Some(key) = value.to_index_key() {
                     index.insert(key, row_id as u32);
@@ -939,28 +1403,396 @@ impl StorageEngine for FileStorage {
             }
         }
 
-        // Save to disk
-        self.save_index(table, column, &index).map_err(SqlError::from)?;
+        self.save_index(table_name, column_name, &index)
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
 
-        // Store in memory
-        let mut indexes = self.indexes.write().unwrap();
-        indexes.insert((table.to_string(), column.to_string()), index);
+        if let Ok(mut indexes) = self.indexes.write() {
+            indexes.insert((table_name.to_string(), column_name.to_string()), index);
+        }
 
         Ok(())
     }
 
-    fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
-        let key = (table.to_string(), column.to_string());
+    fn create_hash_index(
+        &mut self,
+        _table: &str,
+        _column: &str,
+        _column_index: usize,
+    ) -> SqlResult<()> {
+        // Hash index not yet implemented for file storage
+        // TODO: Implement using HashIndex with disk persistence
+        Err(SqlError::ExecutionError(
+            "Hash index not yet implemented for FileStorage".to_string(),
+        ))
+    }
 
+    fn drop_table_index(&mut self, table_name: &str, column_name: &str) -> SqlResult<()> {
         if let Ok(mut indexes) = self.indexes.write() {
-            indexes.remove(&key);
+            indexes.remove(&(table_name.to_string(), column_name.to_string()));
         }
 
-        let path = self.index_path(table, column);
+        let path = self.index_path(table_name, column_name);
         if path.exists() {
-            std::fs::remove_file(path).map_err(SqlError::from)?;
+            std::fs::remove_file(path).map_err(|e| SqlError::ExecutionError(e.to_string()))?;
         }
 
         Ok(())
+    }
+
+    fn search_index(&self, _table: &str, _column: &str, _key: i64) -> Vec<u32> {
+        // FileStorage doesn't support indexes yet
+        Vec::new()
+    }
+
+    fn range_index(&self, _table: &str, _column: &str, _start: i64, _end: i64) -> Vec<u32> {
+        Vec::new()
+    }
+
+    fn create_view(&mut self, _info: crate::engine::ViewInfo) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn get_view(&self, _name: &str) -> Option<crate::engine::ViewInfo> {
+        None
+    }
+
+    fn list_views(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn has_view(&self, _name: &str) -> bool {
+        false
+    }
+
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        let name = info.name.clone();
+        let table_name = info.table_name.clone();
+        self.triggers.write().unwrap().insert(name.clone(), info);
+        self.table_triggers
+            .write()
+            .unwrap()
+            .entry(table_name)
+            .or_default()
+            .push(name);
+        Ok(())
+    }
+
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        let mut triggers = self.triggers.write().unwrap();
+        if let Some(info) = triggers.remove(name) {
+            if let Some(table_triggers) = self
+                .table_triggers
+                .write()
+                .unwrap()
+                .get_mut(&info.table_name)
+            {
+                table_triggers.retain(|n| n != name);
+            }
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Trigger {} not found",
+                name
+            )))
+        }
+    }
+
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        self.triggers.read().unwrap().get(name).cloned()
+    }
+
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        self.table_triggers
+            .read()
+            .unwrap()
+            .get(table)
+            .map(|names| {
+                let triggers = self.triggers.read().unwrap();
+                names
+                    .iter()
+                    .filter_map(|n| triggers.get(n).cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
+        let table_data = self
+            .tables
+            .get(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
+
+        let records = &table_data.rows;
+        let table_info = &table_data.info;
+
+        let mut column_stats = Vec::new();
+
+        for col in &table_info.columns {
+            let mut null_count = 0u64;
+            let mut distinct_values = std::collections::HashSet::new();
+
+            if let Some(idx) = table_info.columns.iter().position(|c| c.name == col.name) {
+                for record in records {
+                    if let Some(val) = record.get(idx) {
+                        match val {
+                            Value::Null => null_count += 1,
+                            _ => {
+                                distinct_values.insert(val.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            column_stats.push(ColumnStats {
+                column_name: col.name.clone(),
+                distinct_count: distinct_values.len() as u64,
+                null_count,
+                min_value: None,
+                max_value: None,
+            });
+        }
+
+        Ok(TableStats {
+            table_name: table.to_string(),
+            row_count: records.len() as u64,
+            column_stats,
+        })
+    }
+
+    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let mut counters = self
+            .auto_increment_counters
+            .write()
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        let table_counters = counters
+            .entry(table.to_string())
+            .or_insert_with(HashMap::new);
+        let next = *table_counters.entry(column_index).or_insert(0);
+        table_counters.insert(column_index, next + 1);
+        Ok(next + 1)
+    }
+
+    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
+        let counters = self
+            .auto_increment_counters
+            .read()
+            .map_err(|e| SqlError::ExecutionError(e.to_string()))?;
+        let table_counters = counters.get(table).ok_or_else(|| SqlError::TableNotFound {
+            table: table.to_string(),
+        })?;
+        Ok(*table_counters.get(&column_index).unwrap_or(&0))
+    }
+
+    fn create_composite_index(
+        &mut self,
+        _table: &str,
+        _columns: Vec<String>,
+    ) -> SqlResult<crate::engine::IndexId> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+
+    fn search_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _key: &crate::bplus_tree::index::CompositeKey,
+    ) -> SqlResult<Vec<u32>> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+
+    fn range_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _start: &crate::bplus_tree::index::CompositeKey,
+        _end: &crate::bplus_tree::index::CompositeKey,
+    ) -> SqlResult<Vec<u32>> {
+        Err(SqlError::ExecutionError(
+            "Composite index not yet implemented for FileStorage".to_string(),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod storage_engine_tests {
+    use super::*;
+    use crate::engine::ColumnDefinition;
+    use std::fs::remove_dir_all;
+
+    // === Tests for StorageEngine trait implementation ===
+
+    #[test]
+    fn test_storage_engine_trait_get_table_info() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_info");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
+                        compression: None,
+                    }],
+                },
+                rows: vec![],
+            };
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
+
+            // Get table info through trait
+            let info = storage.get_table_info("users").unwrap();
+            assert_eq!(info.name, "users");
+            assert_eq!(info.columns.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_has_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_has_table");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![],
+                },
+                rows: vec![],
+            };
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
+
+            // Test has_table
+            assert!(storage.has_table("users"));
+            assert!(!storage.has_table("nonexistent"));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_list_tables() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_list");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert multiple tables
+            let table1 = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![],
+                },
+                rows: vec![],
+            };
+            let table2 = TableData {
+                info: TableInfo {
+                    name: "orders".to_string(),
+                    columns: vec![],
+                },
+                rows: vec![],
+            };
+            storage.insert_table("users".to_string(), table1).unwrap();
+            storage.insert_table("orders".to_string(), table2).unwrap();
+
+            // Test list_tables
+            let tables = storage.list_tables();
+            assert!(tables.contains(&"users".to_string()));
+            assert!(tables.contains(&"orders".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_create_table_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_create_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table with data
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
+                        compression: None,
+                    }],
+                },
+                rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+            };
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
+
+            // Create index through trait
+            storage.create_table_index("users", "id", 0).unwrap();
+
+            // Verify index exists
+            assert!(storage.has_index("users", "id"));
+        }
+    }
+
+    #[test]
+    fn test_storage_engine_trait_drop_table_index() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_drop_idx");
+        let _ = remove_dir_all(&temp_dir);
+
+        {
+            let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+            // Insert a table and create index
+            let table_data = TableData {
+                info: TableInfo {
+                    name: "users".to_string(),
+                    columns: vec![ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        is_unique: false,
+                        is_primary_key: false,
+                        auto_increment: false,
+                        references: None,
+                        compression: None,
+                    }],
+                },
+                rows: vec![vec![Value::Integer(1)]],
+            };
+            storage
+                .insert_table("users".to_string(), table_data)
+                .unwrap();
+            storage.create_index("users", "id", 0).unwrap();
+
+            // Drop index through trait
+            storage.drop_table_index("users", "id").unwrap();
+
+            // Verify index is dropped
+            assert!(!storage.has_index("users", "id"));
+        }
     }
 }

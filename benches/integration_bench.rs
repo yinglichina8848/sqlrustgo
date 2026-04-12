@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use std::sync::Arc;
 
 fn bench_end_to_end_select(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
 
     engine
         .execute(
@@ -77,7 +78,7 @@ fn bench_end_to_end_insert(c: &mut Criterion) {
     for size in [10, 100, 1000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
-                let mut engine = ExecutionEngine::new();
+                let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
                 engine
                     .execute(parse("CREATE TABLE e2e_insert (id INTEGER, value TEXT)").unwrap())
                     .unwrap();
@@ -100,7 +101,7 @@ fn bench_end_to_end_insert(c: &mut Criterion) {
 }
 
 fn bench_end_to_end_update(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE e2e_update (id INTEGER, value INTEGER)").unwrap())
         .unwrap();
@@ -131,7 +132,7 @@ fn bench_end_to_end_update(c: &mut Criterion) {
 fn bench_end_to_end_transaction(c: &mut Criterion) {
     c.bench_function("e2e_transaction", |b| {
         b.iter(|| {
-            let mut engine = ExecutionEngine::new();
+            let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
             engine
                 .execute(parse("CREATE TABLE e2e_tx (id INTEGER, value TEXT)").unwrap())
                 .unwrap();
@@ -158,7 +159,7 @@ fn bench_end_to_end_transaction(c: &mut Criterion) {
 }
 
 fn bench_end_to_end_join(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(
             parse("CREATE TABLE e2e_orders (id INTEGER, user_id INTEGER, amount INTEGER)").unwrap(),
@@ -202,7 +203,7 @@ fn bench_end_to_end_join(c: &mut Criterion) {
 }
 
 fn bench_end_to_end_complex(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
 
     engine.execute(parse("CREATE TABLE events (id INTEGER, user_id INTEGER, event_type TEXT, value INTEGER, created_at INTEGER)").unwrap()).unwrap();
 

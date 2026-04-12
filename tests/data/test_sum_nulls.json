@@ -1,0 +1,39 @@
+{
+  "name": "test_sum_nulls",
+  "columns": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "val",
+      "data_type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      {
+        "Integer": 1
+      },
+      {
+        "Integer": 10
+      }
+    ],
+    [
+      {
+        "Integer": 2
+      },
+      "Null"
+    ],
+    [
+      {
+        "Integer": 3
+      },
+      {
+        "Integer": 20
+      }
+    ]
+  ]
+}

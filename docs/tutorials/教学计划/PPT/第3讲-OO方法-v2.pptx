@@ -1,0 +1,1754 @@
+\section{第三讲：面向对象分析、设计与实现}\label{ux7b2cux4e09ux8bb2ux9762ux5411ux5bf9ux8c61ux5206ux6790ux8bbeux8ba1ux4e0eux5b9eux73b0}
+
+\begin{frame}{从结构化到面向对象的方法演进}
+\protect\phantomsection\label{ux4eceux7ed3ux6784ux5316ux5230ux9762ux5411ux5bf9ux8c61ux7684ux65b9ux6cd5ux6f14ux8fdb}
+\begin{block}{以高校图书管理系统为例}
+\protect\phantomsection\label{ux4ee5ux9ad8ux6821ux56feux4e66ux7ba1ux7406ux7cfbux7edfux4e3aux4f8b}
+\textbf{80分钟 \textbar{} 两节课}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\end{frame}
+
+\section{第一部分：OO的历史与演进（What \&
+Why）}\label{ux7b2cux4e00ux90e8ux5206ooux7684ux5386ux53f2ux4e0eux6f14ux8fdbwhat-why}
+
+\begin{frame}{第一部分：OO的历史与演进（What \& Why）}
+\emph{本部分回答：OO从何而来？为什么需要OO？}
+\end{frame}
+
+\begin{frame}{第1页：软件危机与结构化方法（1960s-1980s）}
+\protect\phantomsection\label{ux7b2c1ux9875ux8f6fux4ef6ux5371ux673aux4e0eux7ed3ux6784ux5316ux65b9ux6cd51960s-1980s}
+\begin{block}{历史背景}
+\protect\phantomsection\label{ux5386ux53f2ux80ccux666f}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{1960年代-1970年代}：软件规模爆炸，项目频繁延期
+\item
+  \textbf{典型问题}：
+
+  \begin{itemize}
+  \tightlist
+  \item
+    需求变更导致大规模返工
+  \item
+    代码难以维护，``修复一个bug引入三个bug''
+  \item
+    团队沟通困难，文档与代码脱节
+  \end{itemize}
+\end{itemize}
+\end{block}
+
+\begin{block}{结构化方法的诞生}
+\protect\phantomsection\label{ux7ed3ux6784ux5316ux65b9ux6cd5ux7684ux8bdeux751f}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{核心思想}：自顶向下、逐步求精、功能分解
+\item
+  \textbf{三大建模工具}：
+
+  \begin{itemize}
+  \tightlist
+  \item
+    数据流图（DFD）：描述功能处理过程
+  \item
+    实体-关系图（ERD）：描述数据结构
+  \item
+    流程图/状态图：描述行为逻辑
+  \end{itemize}
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第2页：结构化方法的核心缺陷}
+\protect\phantomsection\label{ux7b2c2ux9875ux7ed3ux6784ux5316ux65b9ux6cd5ux7684ux6838ux5fc3ux7f3aux9677}
+\begin{block}{数据与操作分离}
+\protect\phantomsection\label{ux6570ux636eux4e0eux64cdux4f5cux5206ux79bb}
+\begin{verbatim}
+[学生数据] ←→ [借书处理程序] ←→ [图书数据]
+     ↑              ↓              ↑
+   数据库        业务逻辑        数据库
+\end{verbatim}
+\end{block}
+
+\begin{block}{痛点示例：图书管理系统需求变更}
+\protect\phantomsection\label{ux75dbux70b9ux793aux4f8bux56feux4e66ux7ba1ux7406ux7cfbux7edfux9700ux6c42ux53d8ux66f4}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+需求变更 & 结构化方法的影响 \\
+\midrule\noalign{}
+\endhead
+增加''教师借书期限不同'' & 修改所有涉及期限计算的处理程序 \\
+增加''预约图书功能'' & 修改学生、图书、借阅三个数据结构和处理程序 \\
+增加''电子书借阅'' & 新增数据文件，修改大部分现有程序 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+
+\textbf{本质问题}：数据和操作分离，导致\textbf{变化传播范围广}
+\end{block}
+\end{frame}
+
+\begin{frame}{第3页：面向对象方法的诞生（1980s-1990s）}
+\protect\phantomsection\label{ux7b2c3ux9875ux9762ux5411ux5bf9ux8c61ux65b9ux6cd5ux7684ux8bdeux751f1980s-1990s}
+\begin{block}{图形界面革命的推动}
+\protect\phantomsection\label{ux56feux5f62ux754cux9762ux9769ux547dux7684ux63a8ux52a8}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{1980年代}：Macintosh、Windows等图形操作系统普及
+\item
+  \textbf{界面元素天然具有对象特征}：
+
+  \begin{itemize}
+  \tightlist
+  \item
+    窗口：有状态（大小、位置）和行为（打开、关闭）
+  \item
+    按钮：有状态（启用/禁用）和行为（点击响应）
+  \item
+    菜单、对话框、图标\ldots{}
+  \end{itemize}
+\end{itemize}
+\end{block}
+
+\begin{block}{面向对象的核心洞察}
+\protect\phantomsection\label{ux9762ux5411ux5bf9ux8c61ux7684ux6838ux5fc3ux6d1eux5bdf}
+\begin{quote}
+\textbf{``软件系统应该像现实世界一样，由自治的对象组成，对象通过消息协作完成任务''}
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Simula（1967）}：首次引入''类''和''对象''概念
+\item
+  \textbf{Smalltalk（1970s）}：第一个纯面向对象语言
+\item
+  \textbf{C++（1980s）}：将OO带入主流工程实践
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第4页：面向对象发展简史}
+\protect\phantomsection\label{ux7b2c4ux9875ux9762ux5411ux5bf9ux8c61ux53d1ux5c55ux7b80ux53f2}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+年代 & 里程碑 & 关键贡献 \\
+\midrule\noalign{}
+\endhead
+1960s & Simula 67 & 引入''类''和''对象''概念 \\
+1970s & Smalltalk & 第一个纯OO语言，完善消息传递机制 \\
+1980s & C++ & 将OO带入主流工程实践，兼容C语言 \\
+1990s & Java & 纯OO语言，跨平台，企业级应用 \\
+1997 & UML 1.0 & 统一建模语言，成为OMG标准 \\
+2005 & UML 2.0 & 扩展图的数量和精确性 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{frame}
+
+\begin{frame}{第5页：方法演进对比（What）}
+\protect\phantomsection\label{ux7b2c5ux9875ux65b9ux6cd5ux6f14ux8fdbux5bf9ux6bd4what}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+维度 & 结构化方法 & 面向对象方法 \\
+\midrule\noalign{}
+\endhead
+\textbf{基本单位} & 功能模块 & 对象（数据+操作封装） \\
+\textbf{系统视角} & 功能分解 & 责任分配与协作 \\
+\textbf{应对变化} & 修改连锁反应 & 局部修改，不影响其他对象 \\
+\textbf{复用方式} & 代码复制或函数库 & 继承、组合、多态 \\
+\textbf{建模工具} & DFD、ERD、流程图 &
+UML用例图、类图、顺序图\ldots{} \\
+\textbf{适合场景} & 数据处理型系统 & 交互密集型、复杂业务系统 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+
+\begin{block}{图书管理系统示例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux793aux4f8b}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{结构化}：先设计''借书处理''功能，再设计所需的数据结构
+\item
+  \textbf{面向对象}：先识别''学生''、``图书''、``借阅记录''等对象，再设计它们的协作
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第6页：OO核心思想：责任驱动（What）}
+\protect\phantomsection\label{ux7b2c6ux9875ooux6838ux5fc3ux601dux60f3ux8d23ux4efbux9a71ux52a8what}
+\begin{block}{什么是对象？}
+\protect\phantomsection\label{ux4ec0ux4e48ux662fux5bf9ux8c61}
+\begin{quote}
+\textbf{对象 = 责任（Responsibility）的封装体}
+\end{quote}
+\end{block}
+
+\begin{block}{三大特征详解}
+\protect\phantomsection\label{ux4e09ux5927ux7279ux5f81ux8be6ux89e3}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{封装（Encapsulation）}：隐藏内部细节，只暴露必要接口
+
+  \begin{itemize}
+  \tightlist
+  \item
+    图书对象知道如何检查是否可借，外界无需知道具体规则
+  \item
+    学生对象管理自己的借阅记录，外界不能直接修改
+  \end{itemize}
+\item
+  \textbf{继承（Inheritance）}：复用和扩展责任
+
+  \begin{itemize}
+  \tightlist
+  \item
+    ``教师''和''学生''复用''用户''的基础责任，各自扩展特殊责任
+  \item
+    避免重复代码，支持层次分类
+  \end{itemize}
+\item
+  \textbf{多态（Polymorphism）}：替换责任执行者
+
+  \begin{itemize}
+  \tightlist
+  \item
+    无论是教师还是学生，都通过统一的''借书''接口处理
+  \item
+    系统可以统一处理不同类型的用户
+  \end{itemize}
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第7页：Why OO？应对软件复杂性}
+\protect\phantomsection\label{ux7b2c7ux9875why-ooux5e94ux5bf9ux8f6fux4ef6ux590dux6742ux6027}
+\begin{block}{复杂性来源与OO解决方案}
+\protect\phantomsection\label{ux590dux6742ux6027ux6765ux6e90ux4e0eooux89e3ux51b3ux65b9ux6848}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.1905}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2619}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.5476}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+复杂性来源
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+OO解决方案
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+图书管理系统示例
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{认知负担} & 封装隐藏细节 &
+学生只需知道''借书''接口，无需了解库存检查逻辑 \\
+\textbf{需求变化} & 继承和多态支持扩展 &
+新增''访客''用户类型，继承基础用户类即可 \\
+\textbf{团队协作} & 对象职责清晰，接口明确 &
+前端团队与后端团队通过''借书接口''契约协作 \\
+\textbf{系统演化} & 对象自治，修改局部化 &
+修改逾期罚款规则，只影响''借阅记录''对象 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}{第8页：OO vs 结构化：修改成本对比（Why）}
+\protect\phantomsection\label{ux7b2c8ux9875oo-vs-ux7ed3ux6784ux5316ux4feeux6539ux6210ux672cux5bf9ux6bd4why}
+\begin{block}{场景：图书管理系统增加''电子书借阅''}
+\protect\phantomsection\label{ux573aux666fux56feux4e66ux7ba1ux7406ux7cfbux7edfux589eux52a0ux7535ux5b50ux4e66ux501fux9605}
+\textbf{结构化方法修改范围}：
+
+\begin{itemize}
+\tightlist
+\item
+  修改学生数据结构（增加电子书权限字段）
+\item
+  修改图书数据结构（增加介质类型字段）
+\item
+  修改借书处理程序（增加电子书特殊逻辑）
+\item
+  修改还书处理程序（增加电子书自动归还逻辑）
+\item
+  修改查询程序、统计程序\ldots{}
+\item
+  \textbf{影响范围：整个系统}
+\end{itemize}
+
+\textbf{面向对象方法修改范围}：
+
+\begin{itemize}
+\tightlist
+\item
+  新增''EBook''类（继承Book）
+\item
+  修改''借书''方法（增加电子书特殊处理）
+\item
+  \textbf{影响范围：两个类}
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第9页：从现实到软件：OO建模的本质（What）}
+\protect\phantomsection\label{ux7b2c9ux9875ux4eceux73b0ux5b9eux5230ux8f6fux4ef6ooux5efaux6a21ux7684ux672cux8d28what}
+\begin{block}{图书管理系统的现实世界}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux7684ux73b0ux5b9eux4e16ux754c}
+\begin{verbatim}
+现实世界                    软件系统
+─────────                   ─────────
+学生 ──借书──→ 图书          Student对象 ──消息──→ Book对象
+   │                            │
+   └── 产生 ──→ 借阅记录        └── 创建 ──→ BorrowRecord对象
+\end{verbatim}
+\end{block}
+
+\begin{block}{OOA/OOD/OOP的关系}
+\protect\phantomsection\label{ooaoodoopux7684ux5173ux7cfb}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3846}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2821}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+阶段
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+目标
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+产出
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{OOA}（面向对象分析） & 理解问题，建立概念模型 &
+用例图、概念类图 \\
+\textbf{OOD}（面向对象设计） & 设计解决方案 &
+设计类图、顺序图、详细方法 \\
+\textbf{OOP}（面向对象编程） & 编码实现 & 可执行代码 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第10页：本讲目标与结构（How）}
+\protect\phantomsection\label{ux7b2c10ux9875ux672cux8bb2ux76eeux6807ux4e0eux7ed3ux6784how}
+\begin{block}{学习目标}
+\protect\phantomsection\label{ux5b66ux4e60ux76eeux6807}
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{理解} OO思想的核心（责任、封装、协作）
+\item
+  \textbf{掌握} OOA过程（从需求发现对象）
+\item
+  \textbf{掌握} OOD过程（设计类、应用SOLID原则）
+\item
+  \textbf{能够} 完成图书管理系统的OOA/OOD
+\end{enumerate}
+\end{block}
+
+\begin{block}{课程结构}
+\protect\phantomsection\label{ux8bfeux7a0bux7ed3ux6784}
+\begin{verbatim}
+第一节课（40分钟）：OOA分析过程
+├── 需求获取与用例分析
+├── 名词分析法发现对象
+└── 建立概念类图
+
+第二节课（40分钟）：OOD设计过程
+├── 从分析到设计的过渡
+├── 详细类设计（属性、方法、关系）
+├── SOLID设计原则应用
+└── 设计优化与评审
+\end{verbatim}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\end{frame}
+
+\section{第二部分：面向对象分析（OOA）}\label{ux7b2cux4e8cux90e8ux5206ux9762ux5411ux5bf9ux8c61ux5206ux6790ooa}
+
+\begin{frame}{第二部分：面向对象分析（OOA）}
+\emph{本部分回答：如何从需求中发现对象？}
+\end{frame}
+
+\begin{frame}{第11页：OOA的核心任务}
+\protect\phantomsection\label{ux7b2c11ux9875ooaux7684ux6838ux5fc3ux4efbux52a1}
+\begin{block}{什么是OOA？}
+\protect\phantomsection\label{ux4ec0ux4e48ux662fooa}
+\begin{quote}
+\textbf{面向对象分析（OOA）= 理解问题域，建立概念模型的过程}
+\end{quote}
+\end{block}
+
+\begin{block}{核心任务}
+\protect\phantomsection\label{ux6838ux5fc3ux4efbux52a1}
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{理解需求}：与领域专家沟通，收集功能需求
+\item
+  \textbf{识别对象}：从需求描述中发现业务实体
+\item
+  \textbf{确定属性}：对象的特征信息
+\item
+  \textbf{识别关系}：对象之间的关联、继承、依赖
+\item
+  \textbf{产出模型}：用例图、概念类图、活动图
+\end{enumerate}
+\end{block}
+
+\begin{block}{图书管理系统OOA产出示例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfooaux4ea7ux51faux793aux4f8b}
+\begin{itemize}
+\tightlist
+\item
+  用例图：学生借书、还书、查询；管理员管理图书\ldots{}
+\item
+  概念类图：学生、教师、图书、借阅记录、逾期罚款\ldots{}
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第12页：需求获取：用例分析}
+\protect\phantomsection\label{ux7b2c12ux9875ux9700ux6c42ux83b7ux53d6ux7528ux4f8bux5206ux6790}
+\begin{block}{图书管理系统需求（简化版）}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux9700ux6c42ux7b80ux5316ux7248}
+\begin{quote}
+\textbf{用户故事}：
+
+\begin{enumerate}
+\tightlist
+\item
+  学生和教师可以借阅图书，每本书最多借30天
+\item
+  逾期每天罚款0.5元，最高不超过书价
+\item
+  管理员可以添加、删除、修改图书信息
+\item
+  用户可以查询图书信息和借阅历史
+\item
+  系统需要记录所有借阅历史
+\end{enumerate}
+\end{quote}
+\end{block}
+
+\begin{block}{用例识别}
+\protect\phantomsection\label{ux7528ux4f8bux8bc6ux522b}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+参与者 & 用例（功能） \\
+\midrule\noalign{}
+\endhead
+学生 & 借书、还书、查询图书、查看借阅历史 \\
+教师 & 借书、还书、查询图书、查看借阅历史 \\
+管理员 & 图书管理（增删改）、查看统计报表 \\
+系统 & 计算逾期罚款、发送催还通知 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}{第13页：名词分析法：发现对象}
+\protect\phantomsection\label{ux7b2c13ux9875ux540dux8bcdux5206ux6790ux6cd5ux53d1ux73b0ux5bf9ux8c61}
+\begin{block}{方法步骤}
+\protect\phantomsection\label{ux65b9ux6cd5ux6b65ux9aa4}
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{划线}：从需求描述中划出所有名词
+\item
+  \textbf{筛选}：排除系统、界面、外部系统，保留业务实体
+\item
+  \textbf{分类}：区分对象、属性、值对象
+\item
+  \textbf{验证}：检查对象是否有明确的责任
+\end{enumerate}
+\end{block}
+
+\begin{block}{图书管理系统名词分析}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux540dux8bcdux5206ux6790}
+\begin{quote}
+``\textbf{学生}和\textbf{教师}可以\textbf{借阅图书}。每本\textbf{图书}有\textbf{ISBN}、\textbf{书名}、\textbf{作者}、\textbf{出版社}。\textbf{借阅}时需登记\textbf{借阅人}、\textbf{借阅日期}、\textbf{应还日期}。\textbf{图书管理员}负责管理\textbf{图书}和\textbf{借阅记录}。\textbf{系统}需要记录\textbf{借阅历史}，并支持\textbf{逾期罚款}计算。''
+\end{quote}
+\end{block}
+\end{frame}
+
+\begin{frame}{第14页：候选对象筛选}
+\protect\phantomsection\label{ux7b2c14ux9875ux5019ux9009ux5bf9ux8c61ux7b5bux9009}
+\begin{block}{第一轮筛选：排除非业务实体}
+\protect\phantomsection\label{ux7b2cux4e00ux8f6eux7b5bux9009ux6392ux9664ux975eux4e1aux52a1ux5b9eux4f53}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+候选名词 & 判断 & 理由 \\
+\midrule\noalign{}
+\endhead
+学生 & ✅ 保留 & 业务实体，有明确责任（借书、还书） \\
+教师 & ✅ 保留 & 业务实体，与学生类似但权限不同 \\
+图书 & ✅ 保留 & 核心业务实体 \\
+ISBN & ❌ 排除 & 图书的属性，不是独立对象 \\
+书名 & ❌ 排除 & 图书的属性 \\
+作者 & ❌ 排除 & 图书的属性（或单独对象，视复杂度） \\
+出版社 & ❌ 排除 & 图书的属性（简化处理） \\
+借阅 & ✅ 保留 & 业务实体，需要记录状态 \\
+借阅人 & ❌ 排除 & 学生/教师的引用 \\
+借阅日期 & ❌ 排除 & 借阅记录的属性 \\
+应还日期 & ❌ 排除 & 借阅记录的属性 \\
+图书管理员 & ✅ 保留 & 业务实体（或与用户合并） \\
+借阅记录 & ✅ 保留 & 核心业务实体 \\
+系统 & ❌ 排除 & 边界外 \\
+借阅历史 & ❌ 排除 & 借阅记录的集合 \\
+逾期罚款 & ⚠️ 值对象 & 无独立身份，依附于借阅记录 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第15页：对象分类与泛化}
+\protect\phantomsection\label{ux7b2c15ux9875ux5bf9ux8c61ux5206ux7c7bux4e0eux6cdbux5316}
+\begin{block}{识别泛化关系（继承）}
+\protect\phantomsection\label{ux8bc6ux522bux6cdbux5316ux5173ux7cfbux7ee7ux627f}
+\begin{verbatim}
+        用户（User）
+       /          \
+    学生（Student）  教师（Teacher）
+    - 学号          - 教师工号
+    - 年级          - 院系
+    - 最大借书数=5   - 最大借书数=10
+\end{verbatim}
+\end{block}
+
+\begin{block}{图书管理系统核心对象（第一版）}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux6838ux5fc3ux5bf9ux8c61ux7b2cux4e00ux7248}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+对象 & 类型 & 核心责任 \\
+\midrule\noalign{}
+\endhead
+User（用户） & 抽象类 & 登录、查看个人信息 \\
+Student（学生） & 具体类 & 借书、还书、查询（限制5本） \\
+Teacher（教师） & 具体类 & 借书、还书、查询（限制10本） \\
+Book（图书） & 具体类 & 记录状态（可借/已借出）、验证ISBN \\
+BorrowRecord（借阅记录） & 具体类 & 记录借阅信息、计算逾期罚款 \\
+Librarian（图书管理员） & 具体类 & 管理图书信息 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}{第16页：识别对象关系}
+\protect\phantomsection\label{ux7b2c16ux9875ux8bc6ux522bux5bf9ux8c61ux5173ux7cfb}
+\begin{block}{关系类型说明}
+\protect\phantomsection\label{ux5173ux7cfbux7c7bux578bux8bf4ux660e}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.1765}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3529}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.4706}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+关系
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+含义
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+图书管理系统示例
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{关联} & 对象之间的结构连接 & 用户创建借阅记录 \\
+\textbf{聚合} & 整体-部分，可独立存在 &
+图书管理系统包含用户（可分离） \\
+\textbf{组合} & 整体-部分，生命周期依赖 &
+借阅记录包含逾期罚款（不可分离） \\
+\textbf{依赖} & 使用关系 & 借阅记录依赖图书获取信息 \\
+\textbf{继承} & is-a关系 & 学生是用户，教师是用户 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第17页：图书管理系统关系图（概念版）}
+\protect\phantomsection\label{ux7b2c17ux9875ux56feux4e66ux7ba1ux7406ux7cfbux7edfux5173ux7cfbux56feux6982ux5ff5ux7248}
+\begin{verbatim}
+┌─────────────────────────────────────────┐
+│           图书管理系统                   │
+│  ┌─────────┐    创建    ┌───────────┐  │
+│  │  用户   │◄───────────│ 借阅记录  │  │
+│  │ (抽象)  │   1    *   │           │  │
+│  └────┬────┘            └─────┬─────┘  │
+│       │ 继承                   │ 涉及   │
+│   ┌───┴───┐                   │        │
+│   ▼       ▼                   ▼        │
+│ ┌─────┐ ┌─────┐            ┌─────┐    │
+│ │学生 │ │教师 │            │ 图书 │    │
+│ └─────┘ └─────┘            └─────┘    │
+│                               ▲        │
+│                               │ 管理    │
+│                          ┌────┴────┐   │
+│                          │ 管理员  │   │
+│                          └─────────┘   │
+└─────────────────────────────────────────┘
+\end{verbatim}
+\end{frame}
+
+\begin{frame}{第18页：确定对象属性（初步）}
+\protect\phantomsection\label{ux7b2c18ux9875ux786eux5b9aux5bf9ux8c61ux5c5eux6027ux521dux6b65}
+\begin{block}{属性识别原则}
+\protect\phantomsection\label{ux5c5eux6027ux8bc6ux522bux539fux5219}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{特征信息}：描述对象的静态特征
+\item
+  \textbf{状态信息}：描述对象的动态状态（会变化）
+\item
+  \textbf{避免冗余}：可通过计算获得的不要存储
+\end{itemize}
+\end{block}
+
+\begin{block}{图书管理系统对象属性}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux5bf9ux8c61ux5c5eux6027}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.1481}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.6296}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2222}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+对象
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+属性
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+说明
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+User & userId, name, password, email & 基础信息 \\
+Student & studentNo, grade, major & 特有信息 \\
+Teacher & teacherNo, department, title & 特有信息 \\
+Book & isbn, title, author, publisher, publishDate, status &
+status表示可借/已借出/下架 \\
+BorrowRecord & recordId, borrowDate, dueDate, returnDate, status &
+status表示借阅中/已归还/逾期 \\
+Librarian & workNo, name, role & 简化处理，可与User合并 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}{第19页：课堂练习：完善对象模型}
+\protect\phantomsection\label{ux7b2c19ux9875ux8bfeux5802ux7ec3ux4e60ux5b8cux5584ux5bf9ux8c61ux6a21ux578b}
+\begin{block}{任务}
+\protect\phantomsection\label{ux4efbux52a1}
+基于以下补充需求，完善图书管理系统的OOA模型：
+
+\begin{quote}
+\textbf{补充需求}：
+
+\begin{enumerate}
+\tightlist
+\item
+  图书可以预约，当图书归还时通知预约者
+\item
+  图书馆有多个分馆，图书属于特定分馆
+\item
+  学生可以续借一次，教师可以续借两次
+\end{enumerate}
+\end{quote}
+\end{block}
+
+\begin{block}{思考要点}
+\protect\phantomsection\label{ux601dux8003ux8981ux70b9}
+\begin{enumerate}
+\tightlist
+\item
+  需要增加哪些新对象？
+\item
+  预约与借阅记录是什么关系？
+\item
+  分馆与图书是什么关系（聚合还是关联）？
+\item
+  续借功能如何体现（修改记录还是创建新记录）？
+\end{enumerate}
+
+\textbf{时间：10分钟 \textbar{} 小组讨论后分享}
+\end{block}
+\end{frame}
+
+\begin{frame}{第20页：练习点评与优化}
+\protect\phantomsection\label{ux7b2c20ux9875ux7ec3ux4e60ux70b9ux8bc4ux4e0eux4f18ux5316}
+\begin{block}{典型问题与解决方案}
+\protect\phantomsection\label{ux5178ux578bux95eeux9898ux4e0eux89e3ux51b3ux65b9ux6848}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.3182}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.6818}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+问题
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+优化建议
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+将''预约''作为借阅记录的属性 &
+预约是独立业务概念，应作为独立对象（Reservation） \\
+分馆作为图书的属性 & 分馆有独立管理责任，应作为对象（LibraryBranch） \\
+忽略续借历史记录 & 续借应创建新的借阅记录或记录续借历史，便于追溯 \\
+所有用户都继承User & 管理员也是用户，应统一继承体系 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{优化后的对象列表}
+\protect\phantomsection\label{ux4f18ux5316ux540eux7684ux5bf9ux8c61ux5217ux8868}
+\begin{itemize}
+\tightlist
+\item
+  User（用户）← Student, Teacher, Librarian
+\item
+  Book（图书）
+\item
+  LibraryBranch（分馆）
+\item
+  BorrowRecord（借阅记录）
+\item
+  Reservation（预约记录）
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第21页：OOA阶段产出：概念类图}
+\protect\phantomsection\label{ux7b2c21ux9875ooaux9636ux6bb5ux4ea7ux51faux6982ux5ff5ux7c7bux56fe}
+\begin{block}{概念类图规范}
+\protect\phantomsection\label{ux6982ux5ff5ux7c7bux56feux89c4ux8303}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{类名}：业务概念名称（中文或英文）
+\item
+  \textbf{属性}：只写名称，不写类型和可见性（分析阶段不关心）
+\item
+  \textbf{方法}：不写或只写关键业务方法
+\item
+  \textbf{关系}：关联、继承、聚合、组合
+\end{itemize}
+\end{block}
+
+\begin{block}{图书管理系统概念类图（简化）}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux6982ux5ff5ux7c7bux56feux7b80ux5316}
+\begin{verbatim}
+┌─────────────┐         ┌─────────────┐
+│    User     │         │     Book    │
+├─────────────┤         ├─────────────┤
+│ userId      │◄───────│ isbn        │
+│ name        │   借阅   │ title       │
+│ email       │         │ author      │
+└─────────────┘         │ status      │
+     △                  └─────────────┘
+    /|\\                        ▲
+   / | \\                       │ 属于
+┌──┐┌──┐┌────┐           ┌─────────────┐
+│学││教││管理│           │LibraryBranch│
+│生││师││员  │           │ branchId    │
+└──┘└──┘└────┘           │ name        │
+                         └─────────────┘
+\end{verbatim}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\end{frame}
+
+\section{课间休息（5分钟）}\label{ux8bfeux95f4ux4f11ux606f5ux5206ux949f}
+
+\begin{frame}
+\end{frame}
+
+\section{第三部分：从OOA到OOD}\label{ux7b2cux4e09ux90e8ux5206ux4eceooaux5230ood}
+
+\begin{frame}{第三部分：从OOA到OOD}
+\emph{本部分回答：如何将分析模型转化为设计模型？}
+\end{frame}
+
+\begin{frame}[fragile]{第22页：OOA vs OOD：关键区别}
+\protect\phantomsection\label{ux7b2c22ux9875ooa-vs-oodux5173ux952eux533aux522b}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+维度 & OOA（分析） & OOD（设计） \\
+\midrule\noalign{}
+\endhead
+\textbf{关注点} & 问题域（What） & 解决方案（How） \\
+\textbf{抽象层次} & 概念层（业务概念） & 逻辑层（软件组件） \\
+\textbf{技术细节} & 不涉及 & 涉及（数据库、接口、框架） \\
+\textbf{属性定义} & 名称即可 & 名称+类型+可见性+约束 \\
+\textbf{方法定义} & 业务责任 & 具体方法签名+算法 \\
+\textbf{关系实现} & 概念关联 & 具体实现（引用、集合、外键） \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+
+\begin{block}{映射关系示例}
+\protect\phantomsection\label{ux6620ux5c04ux5173ux7cfbux793aux4f8b}
+\begin{verbatim}
+OOA: 用户 ──借阅──► 图书  （概念关联）
+        ↓
+OOD: User类持有BorrowRecord列表引用
+     Book类持有BorrowRecord列表引用
+     BorrowRecord持有User和Book的引用
+\end{verbatim}
+\end{block}
+\end{frame}
+
+\begin{frame}{第23页：OOD的核心任务}
+\protect\phantomsection\label{ux7b2c23ux9875oodux7684ux6838ux5fc3ux4efbux52a1}
+\begin{block}{设计阶段任务清单}
+\protect\phantomsection\label{ux8bbeux8ba1ux9636ux6bb5ux4efbux52a1ux6e05ux5355}
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{细化类设计}
+
+  \begin{itemize}
+  \tightlist
+  \item
+    确定属性和方法的完整签名
+  \item
+    确定可见性（public/private/protected）
+  \item
+    确定数据类型和约束
+  \end{itemize}
+\item
+  \textbf{设计关系实现}
+
+  \begin{itemize}
+  \tightlist
+  \item
+    关联→引用或集合
+  \item
+    继承→ extends/implements
+  \item
+    依赖→参数传递或局部变量
+  \end{itemize}
+\item
+  \textbf{应用设计原则}
+
+  \begin{itemize}
+  \tightlist
+  \item
+    SOLID原则指导类设计
+  \item
+    设计模式解决常见问题
+  \end{itemize}
+\item
+  \textbf{设计交互}
+
+  \begin{itemize}
+  \tightlist
+  \item
+    用顺序图描述对象协作
+  \item
+    用状态图描述对象生命周期
+  \end{itemize}
+\end{enumerate}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第24页：图书管理系统：从分析到设计}
+\protect\phantomsection\label{ux7b2c24ux9875ux56feux4e66ux7ba1ux7406ux7cfbux7edfux4eceux5206ux6790ux5230ux8bbeux8ba1}
+\begin{block}{分析类 → 设计类转换示例}
+\protect\phantomsection\label{ux5206ux6790ux7c7b-ux8bbeux8ba1ux7c7bux8f6cux6362ux793aux4f8b}
+\textbf{OOA阶段：User类}
+
+\begin{verbatim}
+User
+- userId
+- name
+- email
+- 借书()
+- 还书()
+\end{verbatim}
+
+\textbf{OOD阶段：User类}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{public} \KeywordTok{abstract} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ userId}\OperatorTok{;}          \CommentTok{// 私有，通过getter访问}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ name}\OperatorTok{;}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ email}\OperatorTok{;}
+    \KeywordTok{private} \BuiltInTok{List}\OperatorTok{\textless{}}\NormalTok{BorrowRecord}\OperatorTok{\textgreater{}}\NormalTok{ borrowRecords}\OperatorTok{;}  \CommentTok{// 关联实现}
+    
+    \KeywordTok{public} \DataTypeTok{boolean} \FunctionTok{canBorrow}\OperatorTok{()} \OperatorTok{\{}    \CommentTok{// 业务规则封装}
+        \ControlFlowTok{return}\NormalTok{ borrowRecords}\OperatorTok{.}\FunctionTok{stream}\OperatorTok{()}
+               \OperatorTok{.}\FunctionTok{filter}\OperatorTok{(}\NormalTok{r }\OperatorTok{{-}\textgreater{}}\NormalTok{ r}\OperatorTok{.}\FunctionTok{getStatus}\OperatorTok{()} \OperatorTok{==}\NormalTok{ BorrowStatus}\OperatorTok{.}\FunctionTok{BORROWED}\OperatorTok{)}
+               \OperatorTok{.}\FunctionTok{count}\OperatorTok{()} \OperatorTok{\textless{}} \FunctionTok{getMaxBooks}\OperatorTok{();}
+    \OperatorTok{\}}
+    
+    \KeywordTok{public} \KeywordTok{abstract} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{();}  \CommentTok{// 子类实现不同限额}
+    
+    \KeywordTok{public}\NormalTok{ BorrowRecord }\FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \KeywordTok{throws}\NormalTok{ BorrowException }\OperatorTok{\{}
+        \ControlFlowTok{if} \OperatorTok{(!}\FunctionTok{canBorrow}\OperatorTok{())} \ControlFlowTok{throw} \KeywordTok{new} \FunctionTok{BorrowException}\OperatorTok{(}\StringTok{"超出借书限额"}\OperatorTok{);}
+        \ControlFlowTok{if} \OperatorTok{(!}\NormalTok{book}\OperatorTok{.}\FunctionTok{isAvailable}\OperatorTok{())} \ControlFlowTok{throw} \KeywordTok{new} \FunctionTok{BorrowException}\OperatorTok{(}\StringTok{"图书不可借"}\OperatorTok{);}
+        
+\NormalTok{        BorrowRecord }\KeywordTok{record} \OperatorTok{=} \KeywordTok{new} \FunctionTok{BorrowRecord}\OperatorTok{(}\KeywordTok{this}\OperatorTok{,}\NormalTok{ book}\OperatorTok{);}
+\NormalTok{        borrowRecords}\OperatorTok{.}\FunctionTok{add}\OperatorTok{(}\KeywordTok{record}\OperatorTok{);}
+\NormalTok{        book}\OperatorTok{.}\FunctionTok{setStatus}\OperatorTok{(}\NormalTok{BookStatus}\OperatorTok{.}\FunctionTok{BORROWED}\OperatorTok{);}
+        \ControlFlowTok{return} \KeywordTok{record}\OperatorTok{;}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第25页：关联关系的实现设计}
+\protect\phantomsection\label{ux7b2c25ux9875ux5173ux8054ux5173ux7cfbux7684ux5b9eux73b0ux8bbeux8ba1}
+\begin{block}{1对多关联的实现}
+\protect\phantomsection\label{ux5bf9ux591aux5173ux8054ux7684ux5b9eux73b0}
+\textbf{场景}：一个用户有多个借阅记录
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{List}\OperatorTok{\textless{}}\NormalTok{BorrowRecord}\OperatorTok{\textgreater{}}\NormalTok{ borrowRecords }\OperatorTok{=} \KeywordTok{new} \BuiltInTok{ArrayList}\OperatorTok{\textless{}\textgreater{}();}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{addBorrowRecord}\OperatorTok{(}\NormalTok{BorrowRecord }\KeywordTok{record}\OperatorTok{)} \OperatorTok{\{}
+\NormalTok{        borrowRecords}\OperatorTok{.}\FunctionTok{add}\OperatorTok{(}\KeywordTok{record}\OperatorTok{);}
+        \KeywordTok{record}\OperatorTok{.}\FunctionTok{setUser}\OperatorTok{(}\KeywordTok{this}\OperatorTok{);}  \CommentTok{// 维护双向关联}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ BorrowRecord }\OperatorTok{\{}
+    \KeywordTok{private}\NormalTok{ User user}\OperatorTok{;}  \CommentTok{// 外键引用}
+    \KeywordTok{private} \BuiltInTok{Book}\NormalTok{ book}\OperatorTok{;}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{setUser}\OperatorTok{(}\NormalTok{User user}\OperatorTok{)} \OperatorTok{\{}
+        \KeywordTok{this}\OperatorTok{.}\FunctionTok{user} \OperatorTok{=}\NormalTok{ user}\OperatorTok{;}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+
+\begin{block}{设计决策}
+\protect\phantomsection\label{ux8bbeux8ba1ux51b3ux7b56}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+决策 & 选择 & 理由 \\
+\midrule\noalign{}
+\endhead
+双向关联 & 是 & 需要从记录查找用户，也需要从用户查找记录 \\
+集合类型 & ArrayList & 有序，支持快速遍历 \\
+级联操作 & 添加记录时双向设置 & 保持数据一致性 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第26页：继承关系的实现设计}
+\protect\phantomsection\label{ux7b2c26ux9875ux7ee7ux627fux5173ux7cfbux7684ux5b9eux73b0ux8bbeux8ba1}
+\begin{block}{User继承体系设计}
+\protect\phantomsection\label{userux7ee7ux627fux4f53ux7cfbux8bbeux8ba1}
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{public} \KeywordTok{abstract} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{protected} \BuiltInTok{String}\NormalTok{ userId}\OperatorTok{;}    \CommentTok{// protected：子类可访问}
+    \KeywordTok{protected} \BuiltInTok{String}\NormalTok{ name}\OperatorTok{;}
+    
+    \KeywordTok{public} \KeywordTok{abstract} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{();}  \CommentTok{// 抽象方法}
+    \KeywordTok{public} \KeywordTok{abstract} \DataTypeTok{int} \FunctionTok{getBorrowDays}\OperatorTok{();} \CommentTok{// 借书期限}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ Student }\KeywordTok{extends}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ studentNo}\OperatorTok{;}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ grade}\OperatorTok{;}
+    
+    \AttributeTok{@Override}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{5}\OperatorTok{;} \OperatorTok{\}}
+    
+    \AttributeTok{@Override}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getBorrowDays}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{30}\OperatorTok{;} \OperatorTok{\}}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ Teacher }\KeywordTok{extends}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ teacherNo}\OperatorTok{;}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ department}\OperatorTok{;}
+    
+    \AttributeTok{@Override}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{10}\OperatorTok{;} \OperatorTok{\}}
+    
+    \AttributeTok{@Override}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getBorrowDays}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{60}\OperatorTok{;} \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第27页：方法设计的细节}
+\protect\phantomsection\label{ux7b2c27ux9875ux65b9ux6cd5ux8bbeux8ba1ux7684ux7ec6ux8282}
+\begin{block}{方法设计检查清单}
+\protect\phantomsection\label{ux65b9ux6cd5ux8bbeux8ba1ux68c0ux67e5ux6e05ux5355}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+检查项 & 图书管理系统示例 \\
+\midrule\noalign{}
+\endhead
+\textbf{方法名} & 动词+名词，如\texttt{borrowBook}而非\texttt{borrow} \\
+\textbf{参数} & 最小化，优先使用对象而非多个参数 \\
+\textbf{返回值} & 明确成功/失败，使用异常或结果对象 \\
+\textbf{可见性} & 对外接口public，内部辅助private \\
+\textbf{单一职责} & 一个方法只做一件事 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{反例与正例}
+\protect\phantomsection\label{ux53cdux4f8bux4e0eux6b63ux4f8b}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ❌ 反例：方法职责过多，参数混乱}
+\KeywordTok{public} \DataTypeTok{void} \FunctionTok{handleBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ userId}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ bookId}\OperatorTok{,} 
+                      \DataTypeTok{boolean}\NormalTok{ isBorrow}\OperatorTok{,} \BuiltInTok{Date}\NormalTok{ date}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+
+\CommentTok{// ✅ 正例：职责单一，参数清晰}
+\KeywordTok{public}\NormalTok{ BorrowRecord }\FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \KeywordTok{throws}\NormalTok{ BorrowException }\OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\KeywordTok{public} \DataTypeTok{void} \FunctionTok{returnBook}\OperatorTok{(}\NormalTok{BorrowRecord }\KeywordTok{record}\OperatorTok{)} \KeywordTok{throws}\NormalTok{ ReturnException }\OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第28页：设计类图（详细版）}
+\protect\phantomsection\label{ux7b2c28ux9875ux8bbeux8ba1ux7c7bux56feux8be6ux7ec6ux7248}
+\begin{block}{图书管理系统设计类图（简化）}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux8bbeux8ba1ux7c7bux56feux7b80ux5316}
+\begin{verbatim}
+┌─────────────────────────────────────────────────────────┐
+│                      User (abstract)                     │
+│  - userId: String                                        │
+│  - name: String                                          │
+│  - email: String                                         │
+│  - borrowRecords: List<BorrowRecord>                     │
+│  + canBorrow(): boolean                                  │
+│  + borrowBook(Book): BorrowRecord                        │
+│  + getMaxBooks(): int {abstract}                         │
+└─────────────────────────────────────────────────────────┘
+     △
+    /|\\
+┌───┐ ┌───┐
+│Student│ │Teacher│
+│-studentNo│ │-teacherNo│
+│-grade: String│ │-department: String│
+│+getMaxBooks(): 5│ │+getMaxBooks(): 10│
+└───┘ └───┘
+
+┌─────────────┐         ┌──────────────────┐
+│     Book    │         │  BorrowRecord    │
+│ - isbn: String│◄──────│  - recordId: String│
+│ - title: String│  1 * │  - borrowDate: Date│
+│ - author: String│      │  - dueDate: Date   │
+│ - status: Enum │      │  - returnDate: Date│
+│ + isAvailable(): boolean│ - status: Enum    │
+│ + borrow(): void        │  + isOverdue(): boolean│
+└─────────────┘         │  + calculateFine(): double│
+                        └──────────────────┘
+\end{verbatim}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\end{frame}
+
+\section{第四部分：SOLID设计原则}\label{ux7b2cux56dbux90e8ux5206solidux8bbeux8ba1ux539fux5219}
+
+\begin{frame}{第四部分：SOLID设计原则}
+\emph{本部分回答：如何评判设计的好坏？}
+\end{frame}
+
+\begin{frame}{第29页：什么是好的OO设计？}
+\protect\phantomsection\label{ux7b2c29ux9875ux4ec0ux4e48ux662fux597dux7684ooux8bbeux8ba1}
+\begin{block}{设计质量评估标准}
+\protect\phantomsection\label{ux8bbeux8ba1ux8d28ux91cfux8bc4ux4f30ux6807ux51c6}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+标准 & 含义 & 反面（坏味道） \\
+\midrule\noalign{}
+\endhead
+\textbf{可维护性} & 易于修改bug & 修改一处，到处报错 \\
+\textbf{可扩展性} & 易于添加功能 & 新增功能需要修改大量现有代码 \\
+\textbf{可复用性} & 组件可在其他系统使用 & 代码高度耦合，无法单独提取 \\
+\textbf{可读性} & 易于理解设计意图 & 命名混乱，结构复杂 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{SOLID原则的作用}
+\protect\phantomsection\label{solidux539fux5219ux7684ux4f5cux7528}
+\begin{quote}
+\textbf{SOLID = 5个原则的首字母缩写，指导高内聚、低耦合的设计}
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{S}ingle Responsibility Principle（单一职责）
+\item
+  \textbf{O}pen/Closed Principle（开闭原则）
+\item
+  \textbf{L}iskov Substitution Principle（里氏替换）
+\item
+  \textbf{I}nterface Segregation Principle（接口隔离）
+\item
+  \textbf{D}ependency Inversion Principle（依赖倒置）
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第30页：S - 单一职责原则（SRP）}
+\protect\phantomsection\label{ux7b2c30ux9875s---ux5355ux4e00ux804cux8d23ux539fux5219srp}
+\begin{block}{定义}
+\protect\phantomsection\label{ux5b9aux4e49}
+\begin{quote}
+\textbf{一个类应该只有一个引起它变化的原因}
+\end{quote}
+\end{block}
+
+\begin{block}{图书管理系统反例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux53cdux4f8b}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ❌ 违反SRP：User类同时处理业务逻辑和数据库操作}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ userId}\OperatorTok{;}
+    \KeywordTok{private} \BuiltInTok{String}\NormalTok{ name}\OperatorTok{;}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}  \CommentTok{// 业务逻辑}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{saveToDatabase}\OperatorTok{()} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}        \CommentTok{// 持久化逻辑}
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{sendEmailNotification}\OperatorTok{()} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}} \CommentTok{// 通知逻辑}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+
+\begin{block}{正例：职责分离}
+\protect\phantomsection\label{ux6b63ux4f8bux804cux8d23ux5206ux79bb}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ✅ 业务逻辑}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{public}\NormalTok{ BorrowRecord }\FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// ✅ 持久化职责}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ UserRepository }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{save}\OperatorTok{(}\NormalTok{User user}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+    \KeywordTok{public}\NormalTok{ User }\FunctionTok{findById}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ id}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// ✅ 通知职责}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ NotificationService }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{sendEmail}\OperatorTok{(}\NormalTok{User user}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ message}\OperatorTok{)} \OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第31页：O - 开闭原则（OCP）}
+\protect\phantomsection\label{ux7b2c31ux9875o---ux5f00ux95edux539fux5219ocp}
+\begin{block}{定义}
+\protect\phantomsection\label{ux5b9aux4e49-1}
+\begin{quote}
+\textbf{对扩展开放，对修改关闭}
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{扩展开放}：新增功能时，可以添加新代码
+\item
+  \textbf{修改关闭}：不修改已有正常工作的代码
+\end{itemize}
+\end{block}
+
+\begin{block}{图书管理系统场景：逾期罚款计算}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux573aux666fux903eux671fux7f5aux6b3eux8ba1ux7b97}
+\textbf{需求变化}：平时罚款0.5元/天，寒暑假期间0.3元/天
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ❌ 违反OCP：每次变化都要修改现有代码}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ BorrowRecord }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{double} \FunctionTok{calculateFine}\OperatorTok{()} \OperatorTok{\{}
+        \ControlFlowTok{if} \OperatorTok{(}\FunctionTok{isHolidayPeriod}\OperatorTok{())} \OperatorTok{\{}  \CommentTok{// 新增判断，修改了原有方法}
+            \ControlFlowTok{return}\NormalTok{ overdueDays }\OperatorTok{*} \FloatTok{0.3}\OperatorTok{;}
+        \OperatorTok{\}}
+        \ControlFlowTok{return}\NormalTok{ overdueDays }\OperatorTok{*} \FloatTok{0.5}\OperatorTok{;}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// ✅ 遵循OCP：通过扩展实现变化}
+\KeywordTok{public} \KeywordTok{interface}\NormalTok{ FineCalculator }\OperatorTok{\{}
+    \DataTypeTok{double} \FunctionTok{calculate}\OperatorTok{(}\DataTypeTok{int}\NormalTok{ overdueDays}\OperatorTok{);}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ DefaultFineCalculator }\KeywordTok{implements}\NormalTok{ FineCalculator }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{double} \FunctionTok{calculate}\OperatorTok{(}\DataTypeTok{int}\NormalTok{ days}\OperatorTok{)} \OperatorTok{\{} \ControlFlowTok{return}\NormalTok{ days }\OperatorTok{*} \FloatTok{0.5}\OperatorTok{;} \OperatorTok{\}}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ HolidayFineCalculator }\KeywordTok{implements}\NormalTok{ FineCalculator }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{double} \FunctionTok{calculate}\OperatorTok{(}\DataTypeTok{int}\NormalTok{ days}\OperatorTok{)} \OperatorTok{\{} \ControlFlowTok{return}\NormalTok{ days }\OperatorTok{*} \FloatTok{0.3}\OperatorTok{;} \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// 使用}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ BorrowRecord }\OperatorTok{\{}
+    \KeywordTok{private}\NormalTok{ FineCalculator calculator}\OperatorTok{;}  \CommentTok{// 依赖抽象，可替换实现}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第32页：L - 里氏替换原则（LSP）}
+\protect\phantomsection\label{ux7b2c32ux9875l---ux91ccux6c0fux66ffux6362ux539fux5219lsp}
+\begin{block}{定义}
+\protect\phantomsection\label{ux5b9aux4e49-2}
+\begin{quote}
+\textbf{子类必须能够替换父类，且程序行为不变}
+\end{quote}
+\end{block}
+
+\begin{block}{图书管理系统示例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux793aux4f8b-1}
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{public} \KeywordTok{abstract} \KeywordTok{class}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{public} \KeywordTok{abstract} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{();}  \CommentTok{// 子类决定借书限额}
+    \KeywordTok{public} \KeywordTok{abstract} \DataTypeTok{boolean} \FunctionTok{canBorrow}\OperatorTok{();} \CommentTok{// 子类决定借书资格}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ Student }\KeywordTok{extends}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{5}\OperatorTok{;} \OperatorTok{\}}
+    \KeywordTok{public} \DataTypeTok{boolean} \FunctionTok{canBorrow}\OperatorTok{()} \OperatorTok{\{} 
+        \ControlFlowTok{return}\NormalTok{ 当前借书数 }\OperatorTok{\textless{}} \DecValTok{5} \OperatorTok{\&\&}\NormalTok{ 无逾期记录}\OperatorTok{;} 
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ Teacher }\KeywordTok{extends}\NormalTok{ User }\OperatorTok{\{}
+    \KeywordTok{public} \DataTypeTok{int} \FunctionTok{getMaxBooks}\OperatorTok{()} \OperatorTok{\{} \ControlFlowTok{return} \DecValTok{10}\OperatorTok{;} \OperatorTok{\}}
+    \KeywordTok{public} \DataTypeTok{boolean} \FunctionTok{canBorrow}\OperatorTok{()} \OperatorTok{\{} 
+        \ControlFlowTok{return}\NormalTok{ 当前借书数 }\OperatorTok{\textless{}} \DecValTok{10}\OperatorTok{;}  \CommentTok{// 教师不受逾期限制}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// 使用：任何User子类都可以替换}
+\KeywordTok{public} \DataTypeTok{void} \FunctionTok{processBorrow}\OperatorTok{(}\NormalTok{User user}\OperatorTok{,} \BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \OperatorTok{\{}
+    \ControlFlowTok{if} \OperatorTok{(}\NormalTok{user}\OperatorTok{.}\FunctionTok{canBorrow}\OperatorTok{())} \OperatorTok{\{}  \CommentTok{// 无需知道具体类型}
+\NormalTok{        user}\OperatorTok{.}\FunctionTok{borrowBook}\OperatorTok{(}\NormalTok{book}\OperatorTok{);}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+
+\begin{block}{违反LSP的危险}
+\protect\phantomsection\label{ux8fddux53cdlspux7684ux5371ux9669}
+\begin{itemize}
+\tightlist
+\item
+  如果Student子类抛出异常或返回意外结果，替换后程序崩溃
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第33页：I - 接口隔离原则（ISP）}
+\protect\phantomsection\label{ux7b2c33ux9875i---ux63a5ux53e3ux9694ux79bbux539fux5219isp}
+\begin{block}{定义}
+\protect\phantomsection\label{ux5b9aux4e49-3}
+\begin{quote}
+\textbf{客户端不应该依赖它不需要的接口}
+\end{quote}
+\end{block}
+
+\begin{block}{图书管理系统反例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux53cdux4f8b-1}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ❌ 胖接口：强迫实现不需要的方法}
+\KeywordTok{public} \KeywordTok{interface}\NormalTok{ LibraryService }\OperatorTok{\{}
+    \DataTypeTok{void} \FunctionTok{addBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{);}           \CommentTok{// 管理员需要}
+    \DataTypeTok{void} \FunctionTok{deleteBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{);}      \CommentTok{// 管理员需要}
+\NormalTok{    BorrowRecord }\FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ userId}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{);}  \CommentTok{// 用户需要}
+    \DataTypeTok{void} \FunctionTok{returnBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ recordId}\OperatorTok{);}  \CommentTok{// 用户需要}
+    \DataTypeTok{double} \FunctionTok{calculateFine}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ recordId}\OperatorTok{);}  \CommentTok{// 系统需要}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ StudentService }\KeywordTok{implements}\NormalTok{ LibraryService }\OperatorTok{\{}
+    \CommentTok{// 学生被迫实现addBook、deleteBook，抛出异常}
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{addBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{)} \OperatorTok{\{} 
+        \ControlFlowTok{throw} \KeywordTok{new} \BuiltInTok{UnsupportedOperationException}\OperatorTok{();} 
+    \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+
+\begin{block}{正例：接口拆分}
+\protect\phantomsection\label{ux6b63ux4f8bux63a5ux53e3ux62c6ux5206}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ✅ 小接口，职责单一}
+\KeywordTok{public} \KeywordTok{interface}\NormalTok{ BookManagementService }\OperatorTok{\{}
+    \DataTypeTok{void} \FunctionTok{addBook}\OperatorTok{(}\BuiltInTok{Book}\NormalTok{ book}\OperatorTok{);}
+    \DataTypeTok{void} \FunctionTok{deleteBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{);}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{interface}\NormalTok{ BorrowService }\OperatorTok{\{}
+\NormalTok{    BorrowRecord }\FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ userId}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{);}
+    \DataTypeTok{void} \FunctionTok{returnBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ recordId}\OperatorTok{);}
+\OperatorTok{\}}
+
+\KeywordTok{public} \KeywordTok{interface}\NormalTok{ FineCalculationService }\OperatorTok{\{}
+    \DataTypeTok{double} \FunctionTok{calculateFine}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ recordId}\OperatorTok{);}
+\OperatorTok{\}}
+
+\CommentTok{// 学生只需实现BorrowService}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ StudentBorrowService }\KeywordTok{implements}\NormalTok{ BorrowService }\OperatorTok{\{} \KeywordTok{...} \OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第34页：D - 依赖倒置原则（DIP）}
+\protect\phantomsection\label{ux7b2c34ux9875d---ux4f9dux8d56ux5012ux7f6eux539fux5219dip}
+\begin{block}{定义}
+\protect\phantomsection\label{ux5b9aux4e49-4}
+\begin{quote}
+\textbf{高层模块不应该依赖低层模块，两者都应该依赖抽象}
+\end{quote}
+\end{block}
+
+\begin{block}{图书管理系统示例}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux793aux4f8b-2}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{// ❌ 违反DIP：BorrowService直接依赖具体实现}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ BorrowService }\OperatorTok{\{}
+    \KeywordTok{private}\NormalTok{ MySQLUserRepository userRepo}\OperatorTok{;}  \CommentTok{// 依赖具体数据库}
+    \KeywordTok{private}\NormalTok{ MySQLBookRepository bookRepo}\OperatorTok{;}  \CommentTok{// 依赖具体数据库}
+    
+    \KeywordTok{public} \FunctionTok{BorrowService}\OperatorTok{()} \OperatorTok{\{}
+        \KeywordTok{this}\OperatorTok{.}\FunctionTok{userRepo} \OperatorTok{=} \KeywordTok{new} \FunctionTok{MySQLUserRepository}\OperatorTok{();}  \CommentTok{// 硬编码}
+        \KeywordTok{this}\OperatorTok{.}\FunctionTok{bookRepo} \OperatorTok{=} \KeywordTok{new} \FunctionTok{MySQLBookRepository}\OperatorTok{();}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// ✅ 遵循DIP：依赖抽象接口}
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ BorrowService }\OperatorTok{\{}
+    \KeywordTok{private}\NormalTok{ UserRepository userRepo}\OperatorTok{;}  \CommentTok{// 依赖接口}
+    \KeywordTok{private}\NormalTok{ BookRepository bookRepo}\OperatorTok{;}  \CommentTok{// 依赖接口}
+    
+    \KeywordTok{public} \FunctionTok{BorrowService}\OperatorTok{(}\NormalTok{UserRepository userRepo}\OperatorTok{,} 
+\NormalTok{                        BookRepository bookRepo}\OperatorTok{)} \OperatorTok{\{}
+        \KeywordTok{this}\OperatorTok{.}\FunctionTok{userRepo} \OperatorTok{=}\NormalTok{ userRepo}\OperatorTok{;}  \CommentTok{// 通过构造器注入}
+        \KeywordTok{this}\OperatorTok{.}\FunctionTok{book\_repo} \OperatorTok{=}\NormalTok{ book\_repo}\OperatorTok{;}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+
+\CommentTok{// 可以注入MySQL实现、MongoDB实现、内存实现（测试用）}
+\end{Highlighting}
+\end{Shaded}
+\end{block}
+\end{frame}
+
+\begin{frame}{第35页：SOLID原则应用总结}
+\protect\phantomsection\label{ux7b2c35ux9875solidux539fux5219ux5e94ux7528ux603bux7ed3}
+\begin{block}{图书管理系统设计检查}
+\protect\phantomsection\label{ux56feux4e66ux7ba1ux7406ux7cfbux7edfux8bbeux8ba1ux68c0ux67e5}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.1061}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3939}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+原则
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+应用点
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+验证问题
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{SRP} & User管业务，Repository管持久化，Service管流程 &
+User类是否只处理用户相关逻辑？ \\
+\textbf{OCP} & FineCalculator接口支持不同罚款策略 &
+新增节假日策略是否无需修改BorrowRecord？ \\
+\textbf{LSP} & Student/Teacher替换User &
+替换后canBorrow()行为是否符合预期？ \\
+\textbf{ISP} & 拆分ManagementService/BorrowService &
+Student是否被迫实现管理方法？ \\
+\textbf{DIP} & Service依赖Repository接口 &
+更换数据库是否需要修改Service？ \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{设计评审清单}
+\protect\phantomsection\label{ux8bbeux8ba1ux8bc4ux5ba1ux6e05ux5355}
+\begin{itemize}
+\tightlist
+\item
+  每个类只有一个明确的职责
+\item
+  新增功能主要通过扩展实现
+\item
+  子类可以完全替换父类
+\item
+  接口小而专，没有强迫实现的方法
+\item
+  具体类依赖抽象，而非具体实现
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第36页：课堂练习：应用SOLID优化设计}
+\protect\phantomsection\label{ux7b2c36ux9875ux8bfeux5802ux7ec3ux4e60ux5e94ux7528solidux4f18ux5316ux8bbeux8ba1}
+\begin{block}{任务描述}
+\protect\phantomsection\label{ux4efbux52a1ux63cfux8ff0}
+以下代码存在哪些SOLID违反？如何优化？
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{public} \KeywordTok{class}\NormalTok{ LibrarySystem }\OperatorTok{\{}
+    \KeywordTok{private} \BuiltInTok{List}\OperatorTok{\textless{}}\BuiltInTok{Book}\OperatorTok{\textgreater{}}\NormalTok{ books }\OperatorTok{=} \KeywordTok{new} \BuiltInTok{ArrayList}\OperatorTok{\textless{}\textgreater{}();}
+    \KeywordTok{private} \BuiltInTok{List}\OperatorTok{\textless{}}\NormalTok{User}\OperatorTok{\textgreater{}}\NormalTok{ users }\OperatorTok{=} \KeywordTok{new} \BuiltInTok{ArrayList}\OperatorTok{\textless{}\textgreater{}();}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{addBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ title}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ author}\OperatorTok{)} \OperatorTok{\{}
+\NormalTok{        books}\OperatorTok{.}\FunctionTok{add}\OperatorTok{(}\KeywordTok{new} \BuiltInTok{Book}\OperatorTok{(}\NormalTok{isbn}\OperatorTok{,}\NormalTok{ title}\OperatorTok{,}\NormalTok{ author}\OperatorTok{));}
+    \OperatorTok{\}}
+    
+    \KeywordTok{public} \DataTypeTok{void} \FunctionTok{borrowBook}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ userId}\OperatorTok{,} \BuiltInTok{String}\NormalTok{ isbn}\OperatorTok{)} \OperatorTok{\{}
+\NormalTok{        User user }\OperatorTok{=} \FunctionTok{findUser}\OperatorTok{(}\NormalTok{userId}\OperatorTok{);}
+        \BuiltInTok{Book}\NormalTok{ book }\OperatorTok{=} \FunctionTok{findBook}\OperatorTok{(}\NormalTok{isbn}\OperatorTok{);}
+        
+        \ControlFlowTok{if} \OperatorTok{(}\NormalTok{user}\OperatorTok{.}\FunctionTok{getBorrowedCount}\OperatorTok{()} \OperatorTok{\textless{}} \DecValTok{5} \OperatorTok{\&\&}\NormalTok{ book}\OperatorTok{.}\FunctionTok{isAvailable}\OperatorTok{())} \OperatorTok{\{}
+\NormalTok{            BorrowRecord }\KeywordTok{record} \OperatorTok{=} \KeywordTok{new} \FunctionTok{BorrowRecord}\OperatorTok{(}\NormalTok{user}\OperatorTok{,}\NormalTok{ book}\OperatorTok{);}
+\NormalTok{            user}\OperatorTok{.}\FunctionTok{addRecord}\OperatorTok{(}\KeywordTok{record}\OperatorTok{);}
+\NormalTok{            book}\OperatorTok{.}\FunctionTok{setAvailable}\OperatorTok{(}\KeywordTok{false}\OperatorTok{);}
+            
+            \CommentTok{// 发送邮件通知}
+\NormalTok{            EmailSender sender }\OperatorTok{=} \KeywordTok{new} \FunctionTok{EmailSender}\OperatorTok{();}
+\NormalTok{            sender}\OperatorTok{.}\FunctionTok{send}\OperatorTok{(}\NormalTok{user}\OperatorTok{.}\FunctionTok{getEmail}\OperatorTok{(),} \StringTok{"借书成功"}\OperatorTok{);}
+        \OperatorTok{\}}
+    \OperatorTok{\}}
+    
+    \KeywordTok{public} \DataTypeTok{double} \FunctionTok{calculateFine}\OperatorTok{(}\BuiltInTok{String}\NormalTok{ recordId}\OperatorTok{)} \OperatorTok{\{}
+\NormalTok{        BorrowRecord }\KeywordTok{record} \OperatorTok{=} \FunctionTok{findRecord}\OperatorTok{(}\NormalTok{recordId}\OperatorTok{);}
+        \DataTypeTok{long}\NormalTok{ days }\OperatorTok{=}\NormalTok{ ChronoUnit}\OperatorTok{.}\FunctionTok{DAYS}\OperatorTok{.}\FunctionTok{between}\OperatorTok{(}\KeywordTok{record}\OperatorTok{.}\FunctionTok{getDueDate}\OperatorTok{(),}\NormalTok{ LocalDate}\OperatorTok{.}\FunctionTok{now}\OperatorTok{());}
+        \ControlFlowTok{return}\NormalTok{ days }\OperatorTok{*} \FloatTok{0.5}\OperatorTok{;}
+    \OperatorTok{\}}
+\OperatorTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{时间：10分钟 \textbar{} 识别问题并提出优化方案}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第37页：练习点评}
+\protect\phantomsection\label{ux7b2c37ux9875ux7ec3ux4e60ux70b9ux8bc4}
+\begin{block}{识别的SOLID违反}
+\protect\phantomsection\label{ux8bc6ux522bux7684solidux8fddux53cd}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2676}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.0563}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.6761}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+问题
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+违反原则
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+解决方案
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+LibrarySystem处理所有逻辑 & SRP &
+拆分为BookService、BorrowService、NotificationService \\
+硬编码EmailSender & DIP & 依赖Notification接口，注入实现 \\
+罚款计算固定0.5元 & OCP & 提取FineCalculator接口 \\
+借书限额固定为5 & OCP & 移到User类，子类重写 \\
+直接操作Book状态 & 封装 & Book自己处理借出逻辑 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{优化后的结构}
+\protect\phantomsection\label{ux4f18ux5316ux540eux7684ux7ed3ux6784}
+\begin{verbatim}
+LibrarySystem
+├── BookService (addBook, queryBook)
+├── BorrowService (依赖UserRepository, BookRepository)
+│   └── 依赖Notification接口（而非EmailSender）
+├── NotificationService (实现Notification接口)
+└── FineCalculator (接口，支持多种计算策略)
+\end{verbatim}
+\end{block}
+\end{frame}
+
+\begin{frame}{第38页：OOD阶段产出物}
+\protect\phantomsection\label{ux7b2c38ux9875oodux9636ux6bb5ux4ea7ux51faux7269}
+\begin{block}{完整设计文档清单}
+\protect\phantomsection\label{ux5b8cux6574ux8bbeux8ba1ux6587ux6863ux6e05ux5355}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+文档 & 内容 & 工具 \\
+\midrule\noalign{}
+\endhead
+\textbf{设计类图} & 完整类结构、属性、方法、关系 & UML工具、Mermaid \\
+\textbf{顺序图} & 关键用例的对象交互时序 & UML工具 \\
+\textbf{状态图} & 对象生命周期（如图书状态） & UML工具 \\
+\textbf{数据库设计} & 表结构、外键、索引 & ERD工具 \\
+\textbf{接口设计} & API签名、参数、返回值 & Markdown、Swagger \\
+\textbf{设计说明} & 关键决策、模式应用、约束 & Word/Markdown \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}{第39页：设计评审检查表}
+\protect\phantomsection\label{ux7b2c39ux9875ux8bbeux8ba1ux8bc4ux5ba1ux68c0ux67e5ux8868}
+\begin{block}{评审维度}
+\protect\phantomsection\label{ux8bc4ux5ba1ux7ef4ux5ea6}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2222}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.4444}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+维度
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+检查项
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+图书管理系统示例
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{完整性} & 是否覆盖所有需求用例？ &
+借书、还书、预约、管理都涉及？ \\
+\textbf{正确性} & 类关系是否符合业务规则？ &
+借阅记录是否正确关联用户和图书？ \\
+\textbf{一致性} & 类图与顺序图是否一致？ &
+类图中的方法是否在顺序图中使用？ \\
+\textbf{可实现性} & 设计能否在技术上实现？ &
+多对多关系是否有解决方案？ \\
+\textbf{设计质量} & SOLID原则遵循程度？ & 是否存在明显违反？ \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{第40页：本讲总结}
+\protect\phantomsection\label{ux7b2c40ux9875ux672cux8bb2ux603bux7ed3}
+\begin{block}{核心知识点回顾}
+\protect\phantomsection\label{ux6838ux5fc3ux77e5ux8bc6ux70b9ux56deux987e}
+\begin{verbatim}
+OOA（分析）                OOD（设计）               OOP（实现）
+───────                   ─────────                 ─────────
+理解问题域                 设计解决方案               编码实现
+发现对象                   细化类设计                 编写代码
+识别关系                   应用设计原则               单元测试
+建立概念模型               设计交互与状态             集成测试
+\end{verbatim}
+\end{block}
+
+\begin{block}{关键技能}
+\protect\phantomsection\label{ux5173ux952eux6280ux80fd}
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{名词分析法}：从需求文本中提取对象
+\item
+  \textbf{责任分配}：将行为分配到合适对象
+\item
+  \textbf{SOLID原则}：指导高质量设计
+\item
+  \textbf{设计文档}：类图、顺序图、状态图
+\end{enumerate}
+\end{block}
+\end{frame}
+
+\begin{frame}{第41页：课后作业}
+\protect\phantomsection\label{ux7b2c41ux9875ux8bfeux540eux4f5cux4e1a}
+\begin{block}{作业内容}
+\protect\phantomsection\label{ux4f5cux4e1aux5185ux5bb9}
+基于本讲内容，完成图书管理系统的详细OOD设计：
+
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{完善类图}：包含所有属性（含类型、可见性）和方法（含参数、返回值）
+\item
+  \textbf{绘制顺序图}：选择''借书''或''还书''用例，绘制对象交互顺序图
+\item
+  \textbf{应用SOLID}：说明设计中如何应用至少3个SOLID原则
+\item
+  \textbf{设计说明}：200字左右，说明关键设计决策
+\end{enumerate}
+\end{block}
+
+\begin{block}{提交要求}
+\protect\phantomsection\label{ux63d0ux4ea4ux8981ux6c42}
+\begin{itemize}
+\tightlist
+\item
+  格式：Markdown或图片（手绘拍照也可）
+\item
+  截止时间：下次课前
+\item
+  评价标准：完整性、正确性、SOLID应用
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第42页：下节预告}
+\protect\phantomsection\label{ux7b2c42ux9875ux4e0bux8282ux9884ux544a}
+\begin{block}{第四讲：UML规范与建模实践}
+\protect\phantomsection\label{ux7b2cux56dbux8bb2umlux89c4ux8303ux4e0eux5efaux6a21ux5b9eux8df5}
+\textbf{主要内容}：
+
+\begin{itemize}
+\tightlist
+\item
+  UML图的历史与分类
+\item
+  用例图、类图、顺序图的规范画法
+\item
+  状态图与活动图的应用场景
+\item
+  图书管理系统的完整UML建模
+\end{itemize}
+
+\textbf{预习要求}：
+
+\begin{itemize}
+\tightlist
+\item
+  回顾本讲设计的类图，思考如何用标准UML表示
+\item
+  了解Mermaid或其他UML绘图工具
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第43页：扩展阅读}
+\protect\phantomsection\label{ux7b2c43ux9875ux6269ux5c55ux9605ux8bfb}
+\begin{block}{推荐书籍}
+\protect\phantomsection\label{ux63a8ux8350ux4e66ux7c4d}
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+书名 & 作者 & 说明 \\
+\midrule\noalign{}
+\endhead
+《面向对象分析与设计》 & Grady Booch & UML创始人经典著作 \\
+《设计模式》 & GoF & 23种经典设计模式 \\
+《敏捷软件开发》 & Robert C. Martin & SOLID原则详细讲解 \\
+《UML用户指南》 & Booch等 & UML官方指南 \\
+\bottomrule\noalign{}
+\end{longtable}
+}
+\end{block}
+
+\begin{block}{推荐资源}
+\protect\phantomsection\label{ux63a8ux8350ux8d44ux6e90}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{PlantUML}：开源UML绘图工具
+\item
+  \textbf{Mermaid}：Markdown风格的UML图
+\item
+  \textbf{StarUML}：专业UML建模工具
+\item
+  \textbf{Visual Paradigm}：企业级建模平台
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{第44页：常见问题解答}
+\protect\phantomsection\label{ux7b2c44ux9875ux5e38ux89c1ux95eeux9898ux89e3ux7b54}
+\begin{block}{Q1：OOA和OOD的界限在哪里？}
+\protect\phantomsection\label{q1ooaux548coodux7684ux754cux9650ux5728ux54eaux91cc}
+\textbf{A}：OOA关注''做什么''（业务概念），OOD关注''怎么做''（技术实现）。界限不是绝对的，是渐进细化的过程。
+\end{block}
+
+\begin{block}{Q2：如何判断一个名词是否应该成为对象？}
+\protect\phantomsection\label{q2ux5982ux4f55ux5224ux65adux4e00ux4e2aux540dux8bcdux662fux5426ux5e94ux8be5ux6210ux4e3aux5bf9ux8c61}
+\textbf{A}：看它是否有明确的责任（行为）。如果只是数据容器，可能是属性；如果有业务规则需要封装，应该是对象。
+\end{block}
+
+\begin{block}{Q3：SOLID原则必须全部遵循吗？}
+\protect\phantomsection\label{q3solidux539fux5219ux5fc5ux987bux5168ux90e8ux9075ux5faaux5417}
+\textbf{A}：不是教条，是指导原则。实际项目中需要权衡，但SRP和OCP建议优先遵循。
+\end{block}
+
+\begin{block}{Q4：设计模式什么时候用？}
+\protect\phantomsection\label{q4ux8bbeux8ba1ux6a21ux5f0fux4ec0ux4e48ux65f6ux5019ux7528}
+\textbf{A}：不要过早使用。当代码出现坏味道（重复、难以扩展）时，再考虑重构为设计模式。
+\end{block}
+\end{frame}
+
+\begin{frame}{第45页：结束页}
+\protect\phantomsection\label{ux7b2c45ux9875ux7ed3ux675fux9875}
+\end{frame}
+
+\section{谢谢！}\label{ux8c22ux8c22}
+
+\begin{frame}{Q\&A}
+\protect\phantomsection\label{qa}
+\textbf{联系方式：\href{mailto:xxx@xxx.edu.cn}{1820393151@qq.com}}
+
+\textbf{办公时间}：周一、周二 08:00-20:00
+
+\textbf{课程网站}：\url{https://gitee.com/yinglichina/sqlrustgo}
+\end{frame}

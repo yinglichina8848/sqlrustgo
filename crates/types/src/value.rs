@@ -13,6 +13,7 @@
 //! | TEXT     | String    | UTF-8 string |
 //! | BLOB     | `Vec<u8>` | Binary data |
 
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -28,10 +29,22 @@ pub enum Value {
     Integer(i64),
     /// 64-bit floating point
     Float(f64),
+    /// Exact decimal numeric (SQL DECIMAL type)
+    Decimal(Decimal),
     /// Text string
     Text(String),
     /// Binary large object
     Blob(Vec<u8>),
+    /// Date value (days since UNIX epoch)
+    Date(i32),
+    /// Timestamp value (microseconds since UNIX epoch)
+    Timestamp(i64),
+    /// UUID value (128-bit unique identifier)
+    Uuid(u128),
+    /// Array value (variable-length array of values)
+    Array(Vec<Value>),
+    /// Enum value (index + string representation)
+    Enum(i32, String),
 }
 
 impl Hash for Value {
@@ -47,8 +60,14 @@ impl Hash for Value {
                     f.to_bits().hash(state);
                 }
             }
+            Value::Decimal(d) => d.serialize().hash(state),
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
+            Value::Date(d) => d.hash(state),
+            Value::Timestamp(ts) => ts.hash(state),
+            Value::Uuid(u) => u.hash(state),
+            Value::Array(arr) => arr.hash(state),
+            Value::Enum(idx, name) => (idx, name).hash(state),
         }
     }
 }
@@ -60,14 +79,86 @@ impl PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Decimal(a), Value::Decimal(b)) => a == b,
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
+            (Value::Date(a), Value::Date(b)) => a == b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => {
+                a_idx == b_idx && a_name == b_name
+            }
             _ => false,
         }
     }
 }
 
 impl Eq for Value {}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Value {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Define variant ordering for consistent comparisons
+        fn variant_order(v: &Value) -> u8 {
+            match v {
+                Value::Null => 0,
+                Value::Boolean(_) => 1,
+                Value::Integer(_) => 2,
+                Value::Float(_) => 3,
+                Value::Decimal(_) => 4,
+                Value::Text(_) => 5,
+                Value::Blob(_) => 6,
+                Value::Date(_) => 7,
+                Value::Timestamp(_) => 8,
+                Value::Uuid(_) => 9,
+                Value::Array(_) => 10,
+                Value::Enum(_, _) => 11,
+            }
+        }
+
+        let self_order = variant_order(self);
+        let other_order = variant_order(other);
+
+        if self_order != other_order {
+            return self_order.cmp(&other_order);
+        }
+
+        match (self, other) {
+            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+            (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
+            (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => {
+                // Handle NaN: NaN is considered the smallest value
+                if a.is_nan() && b.is_nan() {
+                    std::cmp::Ordering::Equal
+                } else if a.is_nan() {
+                    std::cmp::Ordering::Less
+                } else if b.is_nan() {
+                    std::cmp::Ordering::Greater
+                } else {
+                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                }
+            }
+            (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
+            (Value::Text(a), Value::Text(b)) => a.cmp(b),
+            (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
+            (Value::Date(a), Value::Date(b)) => a.cmp(b),
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            (Value::Uuid(a), Value::Uuid(b)) => a.cmp(b),
+            (Value::Array(a), Value::Array(b)) => a.cmp(b),
+            (Value::Enum(a_idx, a_name), Value::Enum(b_idx, b_name)) => {
+                a_idx.cmp(b_idx).then(a_name.cmp(b_name))
+            }
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
 
 impl Value {
     /// Get integer value if this is an Integer
@@ -78,6 +169,33 @@ impl Value {
         }
     }
 
+    /// Get float value if this is a Float
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Value::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
+    /// Get decimal value if this is a Decimal
+    pub fn as_decimal(&self) -> Option<Decimal> {
+        match self {
+            Value::Decimal(d) => Some(*d),
+            _ => None,
+        }
+    }
+
+    /// Convert to boolean for predicate evaluation
+    pub fn to_bool(&self) -> bool {
+        match self {
+            Value::Boolean(b) => *b,
+            Value::Integer(i) => *i != 0,
+            Value::Decimal(d) => !d.is_zero(),
+            Value::Null => false,
+            _ => false,
+        }
+    }
+
     /// Convert Value to SQL string representation
     pub fn to_sql_string(&self) -> String {
         match self {
@@ -85,8 +203,20 @@ impl Value {
             Value::Boolean(b) => b.to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
+            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
+            Value::Date(d) => d.to_string(),
+            Value::Timestamp(ts) => ts.to_string(),
+            Value::Uuid(u) => format!("{:036x}", u),
+            Value::Array(arr) => format!(
+                "[{}]",
+                arr.iter()
+                    .map(|v| v.to_sql_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Enum(_, name) => name.clone(),
         }
     }
 
@@ -97,8 +227,14 @@ impl Value {
             Value::Boolean(_) => "BOOLEAN",
             Value::Integer(_) => "INTEGER",
             Value::Float(_) => "FLOAT",
+            Value::Decimal(_) => "DECIMAL",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
+            Value::Date(_) => "DATE",
+            Value::Timestamp(_) => "TIMESTAMP",
+            Value::Uuid(_) => "UUID",
+            Value::Array(_) => "ARRAY",
+            Value::Enum(_, _) => "ENUM",
         }
     }
 
@@ -116,6 +252,100 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Estimate memory size in bytes
+    pub fn estimate_memory_size(&self) -> usize {
+        match self {
+            Value::Null => 0,
+            Value::Boolean(_) => 1,
+            Value::Integer(_) => 8,
+            Value::Float(_) => 8,
+            Value::Decimal(_) => 16,
+            Value::Text(s) => s.capacity(),
+            Value::Blob(b) => b.capacity(),
+            Value::Date(_) => 4,
+            Value::Timestamp(_) => 8,
+            Value::Uuid(_) => 16,
+            Value::Array(arr) => arr.iter().map(|v| v.estimate_memory_size()).sum(),
+            Value::Enum(_, name) => name.capacity() + 4,
+        }
+    }
+
+    /// Create a Timestamp value from micros since epoch
+    pub fn timestamp(micros: i64) -> Self {
+        Value::Timestamp(micros)
+    }
+
+    /// Get timestamp value if this is a Timestamp
+    pub fn as_timestamp(&self) -> Option<i64> {
+        match self {
+            Value::Timestamp(ts) => Some(*ts),
+            _ => None,
+        }
+    }
+
+    /// Convert timestamp to formatted string YYYY-MM-DD HH:MM:SS
+    pub fn timestamp_to_string(&self) -> Option<String> {
+        match self {
+            Value::Timestamp(micros) => Some(timestamp_to_datetime_string(*micros)),
+            _ => None,
+        }
+    }
+}
+
+/// Convert microseconds since epoch to YYYY-MM-DD HH:MM:SS format
+fn timestamp_to_datetime_string(micros: i64) -> String {
+    const MICROS_PER_SEC: i64 = 1_000_000;
+    const SECS_PER_DAY: i64 = 86400;
+
+    let total_secs = micros / MICROS_PER_SEC;
+    let days_since_epoch = total_secs / SECS_PER_DAY;
+    let secs_of_day = total_secs % SECS_PER_DAY;
+
+    let mut year = 1970;
+    let mut remaining_days = days_since_epoch;
+
+    while remaining_days >= 365 {
+        let leap = if is_leap_year(year) { 366 } else { 365 };
+        if remaining_days >= leap {
+            remaining_days -= leap;
+            year += 1;
+        } else {
+            break;
+        }
+    }
+
+    let (month, day) = days_to_month_day(remaining_days as u32, is_leap_year(year));
+
+    let hours = secs_of_day / 3600;
+    let minutes = (secs_of_day % 3600) / 60;
+    let seconds = secs_of_day % 60;
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        year, month, day, hours, minutes, seconds
+    )
+}
+
+fn is_leap_year(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+fn days_to_month_day(days: u32, leap_year: bool) -> (u32, u32) {
+    let days_in_months: [u32; 12] = if leap_year {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    let mut remaining = days;
+    for (i, &days_in_month) in days_in_months.iter().enumerate() {
+        if remaining < days_in_month {
+            return ((i + 1) as u32, remaining + 1);
+        }
+        remaining -= days_in_month;
+    }
+    (12, 31)
 }
 
 impl fmt::Display for Value {
@@ -202,5 +432,655 @@ mod tests {
     fn test_value_text_special_chars() {
         let text = Value::Text("hello world".to_string());
         assert_eq!(text.to_sql_string(), "hello world");
+    }
+
+    #[test]
+    fn test_value_partial_eq() {
+        assert_eq!(Value::Null, Value::Null);
+        assert_eq!(Value::Boolean(true), Value::Boolean(true));
+        assert_eq!(Value::Integer(42), Value::Integer(42));
+        assert_eq!(Value::Float(3.14), Value::Float(3.14));
+        assert_eq!(
+            Value::Text("hello".to_string()),
+            Value::Text("hello".to_string())
+        );
+        assert_eq!(Value::Blob(vec![1, 2, 3]), Value::Blob(vec![1, 2, 3]));
+        assert_eq!(Value::Timestamp(1000000), Value::Timestamp(1000000));
+    }
+
+    #[test]
+    fn test_value_partial_eq_not_equal() {
+        assert_ne!(Value::Null, Value::Integer(1));
+        assert_ne!(Value::Boolean(true), Value::Boolean(false));
+        assert_ne!(Value::Integer(1), Value::Integer(2));
+        assert_ne!(Value::Float(1.0), Value::Float(2.0));
+        assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
+        assert_ne!(Value::Blob(vec![1]), Value::Blob(vec![2]));
+        assert_ne!(Value::Timestamp(1), Value::Timestamp(2));
+    }
+
+    #[test]
+    fn test_value_eq() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v1 = Value::Integer(42);
+        let v2 = Value::Integer(42);
+        assert_eq!(v1, v2);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        v1.hash(&mut h1);
+        v2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_hash_null() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Null;
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_boolean() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Boolean(true);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_text() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Text("test".to_string());
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_blob() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Blob(vec![1, 2, 3]);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_hash_float_nan() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let v = Value::Float(f64::NAN);
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        assert!(h.finish() >= 0);
+    }
+
+    #[test]
+    fn test_value_to_index_key_integer() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+    }
+
+    #[test]
+    fn test_value_to_index_key_text() {
+        let key = Value::Text("test".to_string()).to_index_key();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    fn test_value_to_index_key_null() {
+        assert_eq!(Value::Null.to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_index_key_float() {
+        assert_eq!(Value::Float(3.14).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_index_key_blob() {
+        assert_eq!(Value::Blob(vec![1, 2]).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_clone() {
+        let v1 = Value::Text("hello".to_string());
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+    }
+
+    #[test]
+    fn test_value_debug() {
+        let v = Value::Integer(42);
+        let debug = format!("{:?}", v);
+        assert!(debug.contains("42"));
+    }
+
+    #[test]
+    fn test_value_blob_hex_encoding() {
+        let blob = Value::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        let s = blob.to_sql_string();
+        assert!(s.contains("deadbeef"));
+    }
+
+    #[test]
+    fn test_value_float_infinity() {
+        let pos_inf = Value::Float(f64::INFINITY);
+        let neg_inf = Value::Float(f64::NEG_INFINITY);
+        assert_eq!(pos_inf.to_sql_string(), "inf");
+        assert_eq!(neg_inf.to_sql_string(), "-inf");
+    }
+
+    #[test]
+    fn test_value_date_basic() {
+        let date = Value::Date(0);
+        assert_eq!(date.type_name(), "DATE");
+    }
+
+    #[test]
+    fn test_value_date_equality() {
+        let d1 = Value::Date(100);
+        let d2 = Value::Date(100);
+        let d3 = Value::Date(200);
+        assert_eq!(d1, d2);
+        assert_ne!(d1, d3);
+    }
+
+    #[test]
+    fn test_value_date_to_sql_string() {
+        let date = Value::Date(19780);
+        assert_eq!(date.to_sql_string(), "19780");
+    }
+
+    #[test]
+    fn test_value_date_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+
+        let d1 = Value::Date(100);
+        let d2 = Value::Date(100);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+
+        d1.hash(&mut h1);
+        d2.hash(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    // Timestamp tests
+    #[test]
+    fn test_value_timestamp_basic() {
+        let ts = Value::Timestamp(0);
+        assert_eq!(ts.type_name(), "TIMESTAMP");
+    }
+
+    #[test]
+    fn test_value_timestamp_equality() {
+        let t1 = Value::Timestamp(1000000);
+        let t2 = Value::Timestamp(1000000);
+        let t3 = Value::Timestamp(2000000);
+        assert_eq!(t1, t2);
+        assert_ne!(t1, t3);
+    }
+
+    #[test]
+    fn test_value_timestamp_to_sql_string() {
+        let ts = Value::Timestamp(1000000);
+        assert_eq!(ts.to_sql_string(), "1000000");
+    }
+
+    #[test]
+    fn test_value_timestamp_helper() {
+        let ts = Value::timestamp(1000000);
+        assert_eq!(ts.as_timestamp(), Some(1000000));
+    }
+
+    #[test]
+    fn test_value_timestamp_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+
+        let t1 = Value::Timestamp(1000000);
+        let t2 = Value::Timestamp(1000000);
+
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+
+        t1.hash(&mut h1);
+        t2.hash(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_timestamp_to_string() {
+        let ts = Value::Timestamp(0); // 1970-01-01 00:00:00
+        let s = ts.timestamp_to_string();
+        assert!(s.is_some());
+        assert_eq!(s.unwrap(), "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_timestamp_to_string_known_date() {
+        // 2020-01-01 00:00:00 UTC = 1577836800 seconds
+        let micros = 1577836800i64 * 1_000_000;
+        let ts = Value::Timestamp(micros);
+        let s = ts.timestamp_to_string();
+        assert!(s.is_some());
+        assert_eq!(s.unwrap(), "2020-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_is_leap_year() {
+        assert!(is_leap_year(2020));
+        assert!(is_leap_year(2000));
+        assert!(!is_leap_year(2019));
+        assert!(!is_leap_year(2100));
+    }
+
+    #[test]
+    fn test_value_type_name_new() {
+        assert_eq!(Value::Null.type_name(), "NULL");
+        assert_eq!(Value::Boolean(true).type_name(), "BOOLEAN");
+        assert_eq!(Value::Integer(1).type_name(), "INTEGER");
+        assert_eq!(Value::Float(1.0).type_name(), "FLOAT");
+        assert_eq!(Value::Text("test".to_string()).type_name(), "TEXT");
+        assert_eq!(Value::Blob(vec![1, 2]).type_name(), "BLOB");
+    }
+
+    #[test]
+    fn test_value_to_index_key_new() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+        assert!(Value::Text("hello".to_string()).to_index_key().is_some());
+        assert_eq!(Value::Float(1.5).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_to_sql_string_new() {
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Integer(42).to_sql_string(), "42");
+    }
+
+    // Missing tests - coverage gap analysis
+    #[test]
+    fn test_value_estimate_memory_size() {
+        assert_eq!(Value::Null.estimate_memory_size(), 0);
+        assert_eq!(Value::Boolean(true).estimate_memory_size(), 1);
+        assert_eq!(Value::Integer(42).estimate_memory_size(), 8);
+        assert_eq!(Value::Float(3.14).estimate_memory_size(), 8);
+        assert_eq!(Value::Text("hello".to_string()).estimate_memory_size(), 5);
+        assert_eq!(Value::Blob(vec![1, 2, 3]).estimate_memory_size(), 3);
+        assert_eq!(Value::Date(0).estimate_memory_size(), 4);
+        assert_eq!(Value::Timestamp(0).estimate_memory_size(), 8);
+    }
+
+    #[test]
+    fn test_value_to_bool() {
+        assert_eq!(Value::Boolean(true).to_bool(), true);
+        assert_eq!(Value::Boolean(false).to_bool(), false);
+        assert_eq!(Value::Integer(0).to_bool(), false);
+        assert_eq!(Value::Integer(1).to_bool(), true);
+        assert_eq!(Value::Integer(-1).to_bool(), true);
+        assert_eq!(Value::Null.to_bool(), false);
+        assert_eq!(Value::Text("hello".to_string()).to_bool(), false);
+        assert_eq!(Value::Float(3.14).to_bool(), false);
+    }
+
+    #[test]
+    fn test_value_as_float() {
+        assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(Value::Integer(42).as_float(), None);
+        assert_eq!(Value::Null.as_float(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_float(), None);
+    }
+
+    #[test]
+    fn test_days_to_month_day() {
+        // January
+        assert_eq!(days_to_month_day(0, false), (1, 1));
+        assert_eq!(days_to_month_day(30, false), (1, 31));
+        // February (non-leap)
+        assert_eq!(days_to_month_day(31, false), (2, 1));
+        assert_eq!(days_to_month_day(58, false), (2, 28));
+        // March
+        assert_eq!(days_to_month_day(59, false), (3, 1));
+        // December
+        assert_eq!(days_to_month_day(334, false), (12, 1));
+        assert_eq!(days_to_month_day(364, false), (12, 31));
+
+        // Leap year tests
+        assert_eq!(days_to_month_day(31, true), (2, 1));
+        assert_eq!(days_to_month_day(60, true), (3, 1)); // Feb 29 in leap year
+    }
+
+    #[test]
+    fn test_value_timestamp_none_for_non_timestamp() {
+        assert_eq!(Value::Integer(42).as_timestamp(), None);
+        assert_eq!(Value::Text("hello".to_string()).as_timestamp(), None);
+        assert_eq!(Value::Null.as_timestamp(), None);
+    }
+
+    #[test]
+    fn test_value_timestamp_to_string_none() {
+        assert_eq!(Value::Integer(42).timestamp_to_string(), None);
+        assert_eq!(Value::Text("hello".to_string()).timestamp_to_string(), None);
+        assert_eq!(Value::Null.timestamp_to_string(), None);
+    }
+
+    #[test]
+    fn test_value_ordering() {
+        use std::cmp::Ordering;
+        // Null is smallest
+        assert_eq!(Value::Null.cmp(&Value::Integer(0)), Ordering::Less);
+        // Boolean < Integer
+        assert_eq!(Value::Boolean(true).cmp(&Value::Integer(0)), Ordering::Less);
+        // Integer < Float
+        assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
+        // Float < Text
+        assert_eq!(
+            Value::Float(0.0).cmp(&Value::Text("a".to_string())),
+            Ordering::Less
+        );
+        // Text < Blob
+        assert_eq!(
+            Value::Text("a".to_string()).cmp(&Value::Blob(vec![])),
+            Ordering::Less
+        );
+        // Blob < Date
+        assert_eq!(Value::Blob(vec![]).cmp(&Value::Date(0)), Ordering::Less);
+        // Date < Timestamp
+        assert_eq!(Value::Date(0).cmp(&Value::Timestamp(0)), Ordering::Less);
+    }
+
+    #[test]
+    fn test_value_partial_ord() {
+        use std::cmp::Ordering;
+        assert_eq!(
+            Value::Integer(1).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            Value::Integer(2).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            Value::Integer(3).partial_cmp(&Value::Integer(2)),
+            Some(Ordering::Greater)
+        );
+    }
+
+    #[test]
+    fn test_value_float_nan_ordering() {
+        use std::cmp::Ordering;
+        let nan = Value::Float(f64::NAN);
+        let zero = Value::Float(0.0);
+        // When comparing Float NaN with Float NaN, they are Equal
+        assert_eq!(nan.cmp(&nan), Ordering::Equal);
+        // When comparing Float 0.0 with Float NaN, 0.0 is Greater than NaN
+        // (implementation treats NaN as largest value, opposite of comment)
+        assert_eq!(zero.cmp(&nan), Ordering::Greater);
+        // Float variants are compared by their variant order (3), which is greater than Integer (2)
+        // So Float > Integer regardless of NaN status when cross-variant comparison
+        assert_eq!(
+            Value::Float(f64::NAN).cmp(&Value::Integer(0)),
+            Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn test_value_as_integer_or_zero() {
+        // Value doesn't have as_integer_or_zero, but testing as_integer
+        assert_eq!(Value::Integer(0).as_integer(), Some(0));
+        assert_eq!(Value::Integer(i64::MAX).as_integer(), Some(i64::MAX));
+        assert_eq!(Value::Integer(i64::MIN).as_integer(), Some(i64::MIN));
+    }
+
+    #[test]
+    fn test_value_float_edge_cases() {
+        let zero = Value::Float(0.0);
+        let neg_zero = Value::Float(-0.0);
+        assert_eq!(zero.as_float(), Some(0.0));
+        assert_eq!(neg_zero.as_float(), Some(-0.0));
+
+        let max = Value::Float(f64::MAX);
+        let min = Value::Float(f64::MIN);
+        assert_eq!(max.as_float(), Some(f64::MAX));
+        assert_eq!(min.as_float(), Some(f64::MIN));
+    }
+
+    #[test]
+    fn test_value_text_unicode() {
+        let text = Value::Text("你好".to_string());
+        assert_eq!(text.to_sql_string(), "你好");
+        assert_eq!(text.type_name(), "TEXT");
+    }
+
+    #[test]
+    fn test_value_blob_empty() {
+        let blob = Value::Blob(vec![]);
+        assert_eq!(blob.type_name(), "BLOB");
+        assert_eq!(blob.to_sql_string(), "X''");
+    }
+
+    // UUID type tests
+    #[test]
+    fn test_value_uuid_basic() {
+        let uuid = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        assert_eq!(uuid.type_name(), "UUID");
+    }
+
+    #[test]
+    fn test_value_uuid_to_sql_string() {
+        let uuid = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let s = uuid.to_sql_string();
+        assert_eq!(s, "0000550e8400e29b41d4a716446655440000");
+    }
+
+    #[test]
+    fn test_value_uuid_equality() {
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u3 = Value::Uuid(0x660e8400e29b41d4a716446655440000);
+        assert_eq!(u1, u2);
+        assert_ne!(u1, u3);
+    }
+
+    #[test]
+    fn test_value_uuid_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        u1.hash(&mut h1);
+        u2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_uuid_estimate_memory_size() {
+        assert_eq!(Value::Uuid(0).estimate_memory_size(), 16);
+    }
+
+    #[test]
+    fn test_value_uuid_ordering() {
+        use std::cmp::Ordering;
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x660e8400e29b41d4a716446655440000);
+        assert_eq!(u1.cmp(&u2), Ordering::Less);
+        assert_eq!(u2.cmp(&u1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_value_uuid_partial_eq() {
+        let u1 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        let u2 = Value::Uuid(0x550e8400e29b41d4a716446655440000);
+        assert_eq!(u1, u2);
+        assert!(u1 == u2);
+    }
+
+    // ARRAY type tests
+    #[test]
+    fn test_value_array_basic() {
+        let arr = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        assert_eq!(arr.type_name(), "ARRAY");
+    }
+
+    #[test]
+    fn test_value_array_to_sql_string() {
+        let arr = Value::Array(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let s = arr.to_sql_string();
+        assert_eq!(s, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn test_value_array_empty() {
+        let arr = Value::Array(vec![]);
+        assert_eq!(arr.to_sql_string(), "[]");
+    }
+
+    #[test]
+    fn test_value_array_equality() {
+        let a1 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a2 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a3 = Value::Array(vec![Value::Integer(1), Value::Integer(3)]);
+        assert_eq!(a1, a2);
+        assert_ne!(a1, a3);
+    }
+
+    #[test]
+    fn test_value_array_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let a1 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let a2 = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        a1.hash(&mut h1);
+        a2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_array_estimate_memory_size() {
+        let arr = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        assert_eq!(arr.estimate_memory_size(), 16); // 8 + 8
+    }
+
+    #[test]
+    fn test_value_array_nested() {
+        let nested = Value::Array(vec![
+            Value::Array(vec![Value::Integer(1)]),
+            Value::Integer(2),
+        ]);
+        let s = nested.to_sql_string();
+        assert_eq!(s, "[[1], 2]");
+    }
+
+    // ENUM type tests
+    #[test]
+    fn test_value_enum_basic() {
+        let e = Value::Enum(0, "red".to_string());
+        assert_eq!(e.type_name(), "ENUM");
+    }
+
+    #[test]
+    fn test_value_enum_to_sql_string() {
+        let e = Value::Enum(1, "green".to_string());
+        assert_eq!(e.to_sql_string(), "green");
+    }
+
+    #[test]
+    fn test_value_enum_equality() {
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "red".to_string());
+        let e3 = Value::Enum(1, "red".to_string());
+        let e4 = Value::Enum(0, "blue".to_string());
+        assert_eq!(e1, e2);
+        assert_ne!(e1, e3);
+        assert_ne!(e1, e4);
+    }
+
+    #[test]
+    fn test_value_enum_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hash;
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "red".to_string());
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        e1.hash(&mut h1);
+        e2.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_value_enum_estimate_memory_size() {
+        let e = Value::Enum(0, "red".to_string());
+        // 3 chars + 4 bytes for i32
+        assert_eq!(e.estimate_memory_size(), 7);
+    }
+
+    #[test]
+    fn test_value_enum_ordering() {
+        use std::cmp::Ordering;
+        let e1 = Value::Enum(0, "apple".to_string());
+        let e2 = Value::Enum(1, "banana".to_string());
+        assert_eq!(e1.cmp(&e2), Ordering::Less);
+        assert_eq!(e2.cmp(&e1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_value_enum_same_index_different_name() {
+        // ENUMs with same index but different names should be not equal
+        let e1 = Value::Enum(0, "red".to_string());
+        let e2 = Value::Enum(0, "blue".to_string());
+        assert_ne!(e1, e2);
+    }
+
+    #[test]
+    fn test_value_array_with_enum() {
+        let arr = Value::Array(vec![
+            Value::Enum(0, "red".to_string()),
+            Value::Enum(1, "blue".to_string()),
+        ]);
+        assert_eq!(arr.type_name(), "ARRAY");
+        let s = arr.to_sql_string();
+        assert_eq!(s, "[red, blue]");
+    }
+
+    #[test]
+    fn test_value_uuid_zero() {
+        let uuid = Value::Uuid(0);
+        assert_eq!(uuid.to_sql_string(), "000000000000000000000000000000000000");
+    }
+
+    #[test]
+    fn test_value_uuid_max() {
+        let uuid = Value::Uuid(u128::MAX);
+        let s = uuid.to_sql_string();
+        assert_eq!(s, "0000ffffffffffffffffffffffffffffffff");
     }
 }

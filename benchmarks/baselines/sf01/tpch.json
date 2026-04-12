@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-03-20T15:25:58.965910+00:00",
+  "version": "1.6.0",
+  "workload": "tpch",
+  "config": {
+    "iterations": 3,
+    "queries": "Q1,Q3,Q6,Q10",
+    "scale": 0.1
+  },
+  "metrics": {
+    "total_time_ms": 0,
+    "iterations": 3,
+    "avg_latency_ms": 0.0,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "min_ms": 0.0,
+    "max_ms": 0.0,
+    "qps": null
+  },
+  "queries": [
+    {
+      "name": "Q1",
+      "avg_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "iterations": 3
+    },
+    {
+      "name": "Q3",
+      "avg_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "iterations": 3
+    },
+    {
+      "name": "Q6",
+      "avg_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "iterations": 3
+    },
+    {
+      "name": "Q10",
+      "avg_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "iterations": 3
+    }
+  ]
+}

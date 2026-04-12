@@ -8,9 +8,12 @@ license.workspace = true
 [dependencies]
 sqlrustgo-common.workspace = true
 sqlrustgo-storage.workspace = true
+sqlrustgo-network.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+tokio.workspace = true
+tonic.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

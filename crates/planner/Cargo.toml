@@ -9,9 +9,11 @@ license.workspace = true
 sqlrustgo-common.workspace = true
 sqlrustgo-types.workspace = true
 sqlrustgo-parser.workspace = true
+sqlrustgo-storage.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tempfile.workspace = true

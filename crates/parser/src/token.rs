@@ -7,6 +7,9 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
+    Add,
+    Modify,
+    Column,
     Select,
     From,
     Where,
@@ -19,25 +22,170 @@ pub enum Token {
     Create,
     Table,
     Drop,
+    To,
     Alter,
+    Unique,
     Index,
     On,
+    As,
     Primary,
     Key,
+    Duplicate,
+    Replace,
+    Ignore,
+    Use,
+    Force,
     Begin,
     Commit,
     Rollback,
+    Savepoint,
+    Release,
     Grant,
     Revoke,
     Analyze,
+    Explain,
+    Union,
+    Intersect,
+    Except,
+    Trigger,
+    Do,
+    Before,
+    After,
+    Each,
+    Row,
+    New,
+    Old,
+    Referencing,
+    Procedure,
+    Call,
+    Return,
+    If,
+    Then,
+    Else,
+    Elsif,
+    EndIf,
+    While,
+    Loop,
+    EndLoop,
+    Leave,
+    Iterate,
+    Signal,
+    Declare,
+    Delimiter,
+    View,
+    All,
+    Limit,
+    Offset,
+    Distinct,
+
+    // SHOW keywords (运维监控)
+    Show,
+    Status,
+    Processlist,
+
+    // KILL command keywords
+    Kill,
+    Connection,
+    Query,
+
+    // COPY keywords
+    Copy,
+    Format,
+    Parquet,
+
+    // Prepared Statements
+    Prepare,
+    Execute,
+    Deallocate,
+    Using,
+
+    // Group By / Order By keywords
+    Group,
+    By,
+    Having,
+    User,
+    Identified,
+    Order,
+    Asc,
+    Desc,
+    Nulls,
+    First,
+    Last,
+
+    // Window Functions
+    RowNumber,
+    Rank,
+    DenseRank,
+    Lead,
+    Lag,
+    FirstValue,
+    LastValue,
+    NthValue,
+    Over,
+    Partition,
+    Within,
+    Rows,
+    Range,
+    Groups,
+    Unbounded,
+    Preceding,
+    Following,
+    Exclude,
+    Current,
+    Ties,
+    NoOthers,
+    Between,
+    In,
+    Like,
+    Case,
+    End,
+
+    // CTE (Common Table Expression) - SQL-99
+    With,
+    Recursive,
+
+    // MERGE and TRUNCATE - SQL-2003
+    Merge,
+    Truncate,
+    When,
+    Matched,
+
+    // Aggregate Functions
+    Length,
+    Upper,
+    Lower,
+    Substr,
+    Substring,
+    Trim,
+    Now,
+    Curdate,
+    Curtime,
+    DateAdd,
+    DateFormat,
+    Extract,
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
 
     // Data Types
     Integer,
     Text,
     Float,
+    For,
+    Decimal,
     Boolean,
     Blob,
-    Null,
+    Json,
+    Date,
+    Timestamp,
+    Uuid,
+    Array,
+    Enum,
+    Year,
+    Month,
+    Day,
 
     // Operators
     Equal,
@@ -62,7 +210,13 @@ pub enum Token {
     Dot,
     Semicolon,
     Colon,
+    At,
     SingleQuote,
+    QuestionMark,
+
+    // Column constraints
+    AutoIncrement,
+    References,
 
     // Wildcard
     Star, // * for SELECT *
@@ -72,6 +226,8 @@ pub enum Token {
     StringLiteral(String),
     NumberLiteral(String),
     BooleanLiteral(bool),
+    DateLiteral(String),
+    TimestampLiteral(String),
 
     // Special
     Eof,
@@ -84,7 +240,12 @@ impl fmt::Display for Token {
             Token::StringLiteral(s) => write!(f, "'{}'", s),
             Token::NumberLiteral(s) => write!(f, "{}", s),
             Token::BooleanLiteral(b) => write!(f, "{}", b),
+            Token::DateLiteral(s) => write!(f, "DATE '{}'", s),
+            Token::TimestampLiteral(s) => write!(f, "TIMESTAMP '{}'", s),
             // Keywords and data types - uppercase
+            Token::Add => write!(f, "ADD"),
+            Token::Modify => write!(f, "MODIFY"),
+            Token::Column => write!(f, "COLUMN"),
             Token::Select => write!(f, "SELECT"),
             Token::From => write!(f, "FROM"),
             Token::Where => write!(f, "WHERE"),
@@ -98,22 +259,140 @@ impl fmt::Display for Token {
             Token::Table => write!(f, "TABLE"),
             Token::Drop => write!(f, "DROP"),
             Token::Alter => write!(f, "ALTER"),
+            Token::To => write!(f, "TO"),
+            Token::Unique => write!(f, "UNIQUE"),
             Token::Index => write!(f, "INDEX"),
             Token::On => write!(f, "ON"),
+            Token::As => write!(f, "AS"),
             Token::Primary => write!(f, "PRIMARY"),
             Token::Key => write!(f, "KEY"),
+            Token::Duplicate => write!(f, "DUPLICATE"),
+            Token::Replace => write!(f, "REPLACE"),
+            Token::Ignore => write!(f, "IGNORE"),
+            Token::Use => write!(f, "USE"),
+            Token::Force => write!(f, "FORCE"),
             Token::Begin => write!(f, "BEGIN"),
             Token::Commit => write!(f, "COMMIT"),
             Token::Rollback => write!(f, "ROLLBACK"),
+            Token::Savepoint => write!(f, "SAVEPOINT"),
+            Token::Release => write!(f, "RELEASE"),
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            Token::Explain => write!(f, "EXPLAIN"),
+            Token::Union => write!(f, "UNION"),
+            Token::Intersect => write!(f, "INTERSECT"),
+            Token::Except => write!(f, "EXCEPT"),
+            Token::Trigger => write!(f, "TRIGGER"),
+            Token::Do => write!(f, "DO"),
+            Token::Before => write!(f, "BEFORE"),
+            Token::After => write!(f, "AFTER"),
+
+            Token::Each => write!(f, "EACH"),
+            Token::Row => write!(f, "ROW"),
+            Token::New => write!(f, "NEW"),
+            Token::Old => write!(f, "OLD"),
+            Token::Referencing => write!(f, "REFERENCING"),
+            Token::Procedure => write!(f, "PROCEDURE"),
+            Token::Call => write!(f, "CALL"),
+            Token::Return => write!(f, "RETURN"),
+            Token::If => write!(f, "IF"),
+            Token::Then => write!(f, "THEN"),
+            Token::Else => write!(f, "ELSE"),
+            Token::Elsif => write!(f, "ELSIF"),
+            Token::EndIf => write!(f, "END IF"),
+            Token::While => write!(f, "WHILE"),
+            Token::Loop => write!(f, "LOOP"),
+            Token::EndLoop => write!(f, "END LOOP"),
+            Token::Leave => write!(f, "LEAVE"),
+            Token::Iterate => write!(f, "ITERATE"),
+            Token::Signal => write!(f, "SIGNAL"),
+            Token::Declare => write!(f, "DECLARE"),
+            Token::Delimiter => write!(f, "DELIMITER"),
+            Token::View => write!(f, "VIEW"),
+            Token::All => write!(f, "ALL"),
+            Token::Limit => write!(f, "LIMIT"),
+            Token::Offset => write!(f, "OFFSET"),
+            // Group By / Order By keywords
+            Token::Group => write!(f, "GROUP"),
+            Token::By => write!(f, "BY"),
+            Token::Having => write!(f, "HAVING"),
+            Token::User => write!(f, "USER"),
+            Token::Identified => write!(f, "IDENTIFIED"),
+            Token::Order => write!(f, "ORDER"),
+            Token::Asc => write!(f, "ASC"),
+            Token::Desc => write!(f, "DESC"),
+            Token::Nulls => write!(f, "NULLS"),
+            Token::First => write!(f, "FIRST"),
+            Token::Last => write!(f, "LAST"),
+            // Window Functions
+            Token::RowNumber => write!(f, "ROW_NUMBER"),
+            Token::Rank => write!(f, "RANK"),
+            Token::DenseRank => write!(f, "DENSE_RANK"),
+            Token::Lead => write!(f, "LEAD"),
+            Token::Lag => write!(f, "LAG"),
+            Token::FirstValue => write!(f, "FIRST_VALUE"),
+            Token::LastValue => write!(f, "LAST_VALUE"),
+            Token::NthValue => write!(f, "NTH_VALUE"),
+            Token::Over => write!(f, "OVER"),
+            Token::Partition => write!(f, "PARTITION"),
+            Token::Within => write!(f, "WITHIN"),
+            Token::Rows => write!(f, "ROWS"),
+            Token::Range => write!(f, "RANGE"),
+            Token::Groups => write!(f, "GROUPS"),
+            Token::Unbounded => write!(f, "UNBOUNDED"),
+            Token::Preceding => write!(f, "PRECEDING"),
+            Token::Following => write!(f, "FOLLOWING"),
+            Token::Exclude => write!(f, "EXCLUDE"),
+            Token::Current => write!(f, "CURRENT"),
+            Token::Ties => write!(f, "TIES"),
+            Token::NoOthers => write!(f, "NO OTHERS"),
+            Token::Distinct => write!(f, "DISTINCT"),
+            Token::Between => write!(f, "BETWEEN"),
+            Token::In => write!(f, "IN"),
+            Token::Like => write!(f, "LIKE"),
+            Token::Case => write!(f, "CASE"),
+            Token::End => write!(f, "END"),
+            Token::When => write!(f, "WHEN"),
+            Token::With => write!(f, "WITH"),
+            Token::Recursive => write!(f, "RECURSIVE"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Truncate => write!(f, "TRUNCATE"),
+            Token::Matched => write!(f, "MATCHED"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
+            Token::For => write!(f, "FOR"),
+            Token::Decimal => write!(f, "DECIMAL"),
             Token::Boolean => write!(f, "BOOLEAN"),
             Token::Blob => write!(f, "BLOB"),
-            Token::Null => write!(f, "NULL"),
+            Token::Json => write!(f, "JSON"),
+            Token::Date => write!(f, "DATE"),
+            Token::Timestamp => write!(f, "TIMESTAMP"),
+            Token::Uuid => write!(f, "UUID"),
+            Token::Array => write!(f, "ARRAY"),
+            Token::Enum => write!(f, "ENUM"),
+            Token::Year => write!(f, "YEAR"),
+            Token::Month => write!(f, "MONTH"),
+            Token::Day => write!(f, "DAY"),
+            // Aggregate Functions
+            Token::Length => write!(f, "LENGTH"),
+            Token::Upper => write!(f, "UPPER"),
+            Token::Lower => write!(f, "LOWER"),
+            Token::Substr => write!(f, "SUBSTR"),
+            Token::Substring => write!(f, "SUBSTRING"),
+            Token::Trim => write!(f, "TRIM"),
+            Token::Now => write!(f, "NOW"),
+            Token::Curdate => write!(f, "CURDATE"),
+            Token::Curtime => write!(f, "CURTIME"),
+            Token::DateAdd => write!(f, "DATE_ADD"),
+            Token::DateFormat => write!(f, "DATE_FORMAT"),
+            Token::Extract => write!(f, "EXTRACT"),
+            Token::Count => write!(f, "COUNT"),
+            Token::Sum => write!(f, "SUM"),
+            Token::Avg => write!(f, "AVG"),
+            Token::Min => write!(f, "MIN"),
+            Token::Max => write!(f, "MAX"),
             // Operators - uppercase
             Token::Equal => write!(f, "="),
             Token::NotEqual => write!(f, "<>"),
@@ -129,6 +408,9 @@ impl fmt::Display for Token {
             Token::Asterisk => write!(f, "*"),
             Token::Slash => write!(f, "/"),
             Token::Percent => write!(f, "%"),
+            // Column constraints
+            Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
+            Token::References => write!(f, "REFERENCES"),
             // Syntax
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
@@ -136,9 +418,28 @@ impl fmt::Display for Token {
             Token::Dot => write!(f, "."),
             Token::Semicolon => write!(f, ";"),
             Token::Colon => write!(f, ":"),
+            Token::At => write!(f, "@"),
             Token::SingleQuote => write!(f, "'"),
+            Token::QuestionMark => write!(f, "?"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
+            // SHOW keywords
+            Token::Show => write!(f, "SHOW"),
+            Token::Status => write!(f, "STATUS"),
+            Token::Processlist => write!(f, "PROCESSLIST"),
+            // KILL keywords
+            Token::Kill => write!(f, "KILL"),
+            Token::Connection => write!(f, "CONNECTION"),
+            Token::Query => write!(f, "QUERY"),
+            // COPY keywords
+            Token::Copy => write!(f, "COPY"),
+            Token::Format => write!(f, "FORMAT"),
+            Token::Parquet => write!(f, "PARQUET"),
+            // Prepared Statements
+            Token::Prepare => write!(f, "PREPARE"),
+            Token::Execute => write!(f, "EXECUTE"),
+            Token::Deallocate => write!(f, "DEALLOCATE"),
+            Token::Using => write!(f, "USING"),
         }
     }
 }
@@ -161,7 +462,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "DROP"
             | "ALTER"
             | "INDEX"
+            | "VIEW"
+            | "EXPLAIN"
             | "ON"
+            | "AS"
             | "PRIMARY"
             | "KEY"
             | "BEGIN"
@@ -175,11 +479,49 @@ pub fn is_keyword(s: &str) -> bool {
             | "BOOLEAN"
             | "BLOB"
             | "NULL"
+            | "DATE"
+            | "TIMESTAMP"
+            | "UUID"
+            | "ARRAY"
+            | "ENUM"
             | "TRUE"
             | "FALSE"
             | "AND"
             | "OR"
             | "NOT"
+            | "OVER"
+            | "PARTITION"
+            | "ROW_NUMBER"
+            | "RANK"
+            | "DENSE_RANK"
+            | "LEAD"
+            | "LAG"
+            | "FIRST_VALUE"
+            | "LAST_VALUE"
+            | "NTH_VALUE"
+            | "UNBOUNDED"
+            | "PRECEDING"
+            | "FOLLOWING"
+            | "EXCLUDE"
+            | "CURRENT ROW"
+            | "TIES"
+            | "NO OTHERS"
+            | "BETWEEN"
+            | "IN"
+            | "CASE"
+            | "WHEN"
+            | "THEN"
+            | "ELSE"
+            | "PREPARE"
+            | "EXECUTE"
+            | "DEALLOCATE"
+            | "USING"
+            | "COPY"
+            | "FORMAT"
+            | "PARQUET"
+            | "KILL"
+            | "CONNECTION"
+            | "QUERY"
     )
 }
 
@@ -200,25 +542,82 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DROP" => Some(Token::Drop),
         "ALTER" => Some(Token::Alter),
         "INDEX" => Some(Token::Index),
+        "TO" => Some(Token::To),
         "ON" => Some(Token::On),
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),
+        "DUPLICATE" => Some(Token::Duplicate),
+        "REPLACE" => Some(Token::Replace),
+        "IGNORE" => Some(Token::Ignore),
+        "USE" => Some(Token::Use),
+        "FORCE" => Some(Token::Force),
         "BEGIN" => Some(Token::Begin),
         "COMMIT" => Some(Token::Commit),
         "ROLLBACK" => Some(Token::Rollback),
+        "SAVEPOINT" => Some(Token::Savepoint),
+        "RELEASE" => Some(Token::Release),
         "GRANT" => Some(Token::Grant),
         "REVOKE" => Some(Token::Revoke),
+        "ALL" => Some(Token::All),
         "INTEGER" => Some(Token::Integer),
         "TEXT" => Some(Token::Text),
         "FLOAT" => Some(Token::Float),
         "BOOLEAN" => Some(Token::Boolean),
         "BLOB" => Some(Token::Blob),
-        "NULL" => Some(Token::Null),
+        "DATE" => Some(Token::Date),
+        "TIMESTAMP" => Some(Token::Timestamp),
+        "UUID" => Some(Token::Uuid),
+        "ARRAY" => Some(Token::Array),
+        "ENUM" => Some(Token::Enum),
+        "AUTO_INCREMENT" | "AUTOINCREMENT" => Some(Token::AutoIncrement),
+        "REFERENCES" => Some(Token::References),
         "TRUE" => Some(Token::BooleanLiteral(true)),
         "FALSE" => Some(Token::BooleanLiteral(false)),
         "AND" => Some(Token::And),
         "OR" => Some(Token::Or),
         "NOT" => Some(Token::Not),
+        "OVER" => Some(Token::Over),
+        "PARTITION" => Some(Token::Partition),
+        "ROW_NUMBER" => Some(Token::RowNumber),
+        "RANK" => Some(Token::Rank),
+        "DENSE_RANK" => Some(Token::DenseRank),
+        "LEAD" => Some(Token::Lead),
+        "LAG" => Some(Token::Lag),
+        "FIRST_VALUE" => Some(Token::FirstValue),
+        "LAST_VALUE" => Some(Token::LastValue),
+        "NTH_VALUE" => Some(Token::NthValue),
+        "UNBOUNDED" => Some(Token::Unbounded),
+        "PRECEDING" => Some(Token::Preceding),
+        "FOLLOWING" => Some(Token::Following),
+        "EXCLUDE" => Some(Token::Exclude),
+        "CURRENT ROW" => Some(Token::Current),
+        "TIES" => Some(Token::Ties),
+        "NO OTHERS" => Some(Token::NoOthers),
+        "DISTINCT" => Some(Token::Distinct),
+        "BETWEEN" => Some(Token::Between),
+        "IN" => Some(Token::In),
+        "LIKE" => Some(Token::Like),
+        "CASE" => Some(Token::Case),
+        "END" => Some(Token::End),
+        "WHEN" => Some(Token::When),
+        "THEN" => Some(Token::Then),
+        "ELSE" => Some(Token::Else),
+        "VIEW" => Some(Token::View),
+        "AS" => Some(Token::As),
+        "EXPLAIN" => Some(Token::Explain),
+        "SHOW" => Some(Token::Show),
+        "STATUS" => Some(Token::Status),
+        "PROCESSLIST" => Some(Token::Processlist),
+        "PREPARE" => Some(Token::Prepare),
+        "EXECUTE" => Some(Token::Execute),
+        "DEALLOCATE" => Some(Token::Deallocate),
+        "USING" => Some(Token::Using),
+        "COPY" => Some(Token::Copy),
+        "FORMAT" => Some(Token::Format),
+        "PARQUET" => Some(Token::Parquet),
+        "KILL" => Some(Token::Kill),
+        "CONNECTION" => Some(Token::Connection),
+        "QUERY" => Some(Token::Query),
         _ => None,
     }
 }
@@ -296,7 +695,6 @@ mod tests {
         assert_eq!(Token::Float.to_string(), "FLOAT");
         assert_eq!(Token::Boolean.to_string(), "BOOLEAN");
         assert_eq!(Token::Blob.to_string(), "BLOB");
-        assert_eq!(Token::Null.to_string(), "NULL");
     }
 
     #[test]
@@ -397,7 +795,8 @@ mod tests {
         assert_eq!(from_keyword("FLOAT"), Some(Token::Float));
         assert_eq!(from_keyword("BOOLEAN"), Some(Token::Boolean));
         assert_eq!(from_keyword("BLOB"), Some(Token::Blob));
-        assert_eq!(from_keyword("NULL"), Some(Token::Null));
+        assert_eq!(from_keyword("DATE"), Some(Token::Date));
+        assert_eq!(from_keyword("TIMESTAMP"), Some(Token::Timestamp));
 
         // Boolean literals
         assert_eq!(from_keyword("FALSE"), Some(Token::BooleanLiteral(false)));
@@ -410,6 +809,8 @@ mod tests {
         // Case insensitive
         assert_eq!(from_keyword("Select"), Some(Token::Select));
         assert_eq!(from_keyword("FROM"), Some(Token::From));
+        assert_eq!(from_keyword("date"), Some(Token::Date));
+        assert_eq!(from_keyword("Timestamp"), Some(Token::Timestamp));
 
         // Non-keywords return None
         assert_eq!(from_keyword("users"), None);

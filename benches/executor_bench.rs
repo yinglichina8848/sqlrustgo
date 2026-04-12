@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use std::sync::Arc;
 
 fn bench_executor_select_where(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE users (id INTEGER, name TEXT, age INTEGER)").unwrap())
         .unwrap();
@@ -52,7 +53,7 @@ fn bench_executor_select_where(c: &mut Criterion) {
 }
 
 fn bench_executor_insert(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE bench_insert (id INTEGER, value TEXT)").unwrap())
         .unwrap();
@@ -81,7 +82,7 @@ fn bench_executor_insert(c: &mut Criterion) {
 }
 
 fn bench_executor_update(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE bench_update (id INTEGER, value INTEGER)").unwrap())
         .unwrap();
@@ -114,7 +115,7 @@ fn bench_executor_update(c: &mut Criterion) {
 }
 
 fn bench_executor_delete(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE bench_delete (id INTEGER)").unwrap())
         .unwrap();
@@ -147,7 +148,7 @@ fn bench_executor_delete(c: &mut Criterion) {
 }
 
 fn bench_executor_aggregate(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE orders (id INTEGER, amount INTEGER, category TEXT)").unwrap())
         .unwrap();
@@ -204,7 +205,7 @@ fn bench_executor_aggregate(c: &mut Criterion) {
 }
 
 fn bench_executor_join(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
     engine
         .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
         .unwrap();
