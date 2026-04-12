@@ -350,6 +350,10 @@ name = "tpch_sf10_benchmark"
 path = "tests/integration/tpch_sf10_benchmark.rs"
 
 [[test]]
+name = "tpch_sf1_benchmark"
+path = "tests/integration/tpch_sf1_benchmark.rs"
+
+[[test]]
 name = "mvcc_concurrency_test"
 path = "tests/anomaly/mvcc_concurrency_test.rs"
 
