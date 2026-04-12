@@ -1280,15 +1280,7 @@ impl Parser {
                     self.next(); // consume ON
 
                     // Parse join condition
-                    eprintln!(
-                        "DEBUG JOIN: Before parse_expression, current: {:?}",
-                        self.current()
-                    );
                     let condition = self.parse_expression()?;
-                    eprintln!(
-                        "DEBUG JOIN: After parse_expression, current: {:?}",
-                        self.current()
-                    );
                     join_conditions.push((join_table, condition));
                     continue;
                 }
