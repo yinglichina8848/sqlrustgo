@@ -51,6 +51,7 @@ pub mod compliance;
 pub mod document;
 pub mod embedding;
 pub mod report;
+pub mod semantic_embedding;
 pub mod sql_api;
 pub mod vector_search;
 
@@ -90,4 +91,8 @@ pub use report::{
     ReportType, TableActivity, UserActivity,
 };
 
+pub use semantic_embedding::{
+    EmbeddingProvider, EmbeddingProviderConfig, HashConfig, OpenAIConfig, OllamaConfig,
+    ProviderFactory,
+};
 pub use sql_api::{sql, GmpExecutor};
