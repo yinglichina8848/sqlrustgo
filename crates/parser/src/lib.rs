@@ -1,6 +1,7 @@
 // SQLRustGo Parser Module
 pub use sqlrustgo_common::{SqlError, SqlResult};
 
+pub mod expression;
 pub mod lexer;
 pub mod parser;
 pub mod token;
@@ -9,12 +10,14 @@ pub use lexer::Lexer;
 pub use parser::Parser;
 pub use token::Token;
 
+// expression module - for incremental refactoring
+// Expression types re-exported from parser.rs to maintain API compatibility
+pub use expression::{FrameBoundInfo, OrderByItem, WindowFrameInfo};
 pub use parser::parse;
 pub use parser::CreateViewStatement;
 pub use parser::Expression;
 pub use parser::ForeignKeyAction;
 pub use parser::ForeignKeyRef;
-pub use parser::FrameBoundInfo;
 pub use parser::GrantStatement;
 pub use parser::IndexHint;
 pub use parser::IndexHintType;
@@ -27,7 +30,6 @@ pub use parser::SetOperationType;
 pub use parser::Statement;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
-pub use parser::WindowFrameInfo;
 
 #[cfg(test)]
 mod tests {
