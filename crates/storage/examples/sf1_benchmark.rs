@@ -123,7 +123,7 @@ fn main() {
                     },
                 ],
             },
-            rows: batch,
+            rows: batch.clone(),
         };
         storage
             .insert_table("lineitem".to_string(), table_data)
