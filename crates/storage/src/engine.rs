@@ -265,6 +265,21 @@ pub trait StorageEngine: Send + Sync {
         Ok(filtered)
     }
 
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &Predicate,
+        limit: usize,
+    ) -> SqlResult<Vec<Record>> {
+        let all_records = self.scan(table)?;
+        let filtered = all_records
+            .into_iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .take(limit)
+            .collect();
+        Ok(filtered)
+    }
+
     fn eval_predicate_for_scan(&self, _table: &str, _row: &Record, _predicate: &Predicate) -> bool {
         true
     }
@@ -572,6 +587,25 @@ impl StorageEngine for MemoryStorage {
         let filtered: Vec<Record> = table_records
             .into_iter()
             .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .collect();
+
+        Ok(filtered)
+    }
+
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &Predicate,
+        limit: usize,
+    ) -> SqlResult<Vec<Record>> {
+        self.check_cancelled()?;
+        let table_records = self.tables.get(table).cloned().unwrap_or_default();
+        self.check_cancelled()?;
+
+        let filtered: Vec<Record> = table_records
+            .into_iter()
+            .filter(|row| self.eval_predicate_for_scan(table, row, predicate))
+            .take(limit)
             .collect();
 
         Ok(filtered)

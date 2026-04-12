@@ -68,6 +68,7 @@ pub struct SeqScanExec {
     schema: Schema,
     projection: Option<Vec<usize>>,
     predicate: Option<Expr>,
+    limit: Option<usize>,
 }
 
 impl SeqScanExec {
@@ -77,6 +78,7 @@ impl SeqScanExec {
             schema: schema.clone(),
             projection: None,
             predicate: None,
+            limit: None,
         }
     }
 
@@ -90,6 +92,11 @@ impl SeqScanExec {
         self
     }
 
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
     pub fn table_name(&self) -> &str {
         &self.table_name
     }
@@ -100,6 +107,10 @@ impl SeqScanExec {
 
     pub fn predicate(&self) -> Option<&Expr> {
         self.predicate.as_ref()
+    }
+
+    pub fn limit(&self) -> Option<usize> {
+        self.limit
     }
 }
 

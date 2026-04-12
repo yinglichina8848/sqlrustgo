@@ -425,6 +425,31 @@ impl StorageEngine for ColumnarStorage {
         Ok(filtered)
     }
 
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+        limit: usize,
+    ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
+        let store = match self.tables.get(table) {
+            Some(s) => s,
+            None => return Ok(vec![]),
+        };
+
+        let mut filtered = Vec::with_capacity(limit);
+        for i in 0..store.row_count() {
+            if filtered.len() >= limit {
+                break;
+            }
+            if let Some(row) = store.get_row(i) {
+                if self.eval_predicate_for_scan(table, &row, predicate) {
+                    filtered.push(row);
+                }
+            }
+        }
+        Ok(filtered)
+    }
+
     fn eval_predicate_for_scan(
         &self,
         table: &str,
