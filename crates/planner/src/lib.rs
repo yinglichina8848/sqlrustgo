@@ -2,6 +2,7 @@
 //!
 //! This module provides query planning and optimization interfaces.
 
+pub mod converter;
 pub mod logical_plan;
 pub mod optimizer;
 pub mod physical_plan;
@@ -364,6 +365,43 @@ impl Expr {
             value.to_bool()
         } else {
             false
+        }
+    }
+
+    pub fn contains_subquery(&self) -> bool {
+        match self {
+            Expr::ScalarSubquery(_) => true,
+            Expr::InSubquery { .. } => true,
+            Expr::Exists(_) => true,
+            Expr::AnyAll { .. } => true,
+            Expr::BinaryExpr { left, right, .. } => {
+                left.contains_subquery() || right.contains_subquery()
+            }
+            Expr::UnaryExpr { expr, .. } => expr.contains_subquery(),
+            Expr::AggregateFunction { args, .. } => args.iter().any(|e| e.contains_subquery()),
+            Expr::WindowFunction {
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                args.iter().any(|e| e.contains_subquery())
+                    || partition_by.iter().any(|e| e.contains_subquery())
+                    || order_by.iter().any(|e| e.expr.contains_subquery())
+            }
+            Expr::Alias { expr, .. } => expr.contains_subquery(),
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                conditions
+                    .iter()
+                    .any(|(c, r)| c.contains_subquery() || r.contains_subquery())
+                    || else_result
+                        .as_ref()
+                        .map_or(false, |e| e.contains_subquery())
+            }
+            _ => false,
         }
     }
 }

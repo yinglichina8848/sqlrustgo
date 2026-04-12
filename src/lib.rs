@@ -348,6 +348,33 @@ fn handle_foreign_key_update(
     Ok((total_cascade_updates, total_set_null_updates))
 }
 
+/// Check if an expression contains a subquery
+fn contains_subquery(expr: &sqlrustgo_parser::Expression) -> bool {
+    match expr {
+        sqlrustgo_parser::Expression::Subquery(_) => true,
+        sqlrustgo_parser::Expression::InSubquery { .. } => true,
+        sqlrustgo_parser::Expression::BinaryOp(left, _, right) => {
+            contains_subquery(left) || contains_subquery(right)
+        }
+        sqlrustgo_parser::Expression::Between { expr, low, high } => {
+            contains_subquery(expr) || contains_subquery(low) || contains_subquery(high)
+        }
+        sqlrustgo_parser::Expression::InList { expr, values } => {
+            contains_subquery(expr) || values.iter().any(|v| contains_subquery(v))
+        }
+        sqlrustgo_parser::Expression::CaseWhen {
+            conditions,
+            else_result,
+        } => {
+            conditions
+                .iter()
+                .any(|(c, r)| contains_subquery(c) || contains_subquery(r))
+                || else_result.as_ref().map_or(false, |e| contains_subquery(e))
+        }
+        _ => false,
+    }
+}
+
 /// Extract index usage info from a WHERE clause
 /// Returns (column_name, op, value) if the WHERE can use an index
 /// For TEXT columns, value is the hash of the string
@@ -555,6 +582,9 @@ fn evaluate_where_clause(
         }
         sqlrustgo_parser::Expression::Extract { .. } => false,
         sqlrustgo_parser::Expression::Substring { .. } => false,
+        sqlrustgo_parser::Expression::InSubquery { .. } => false,
+        sqlrustgo_parser::Expression::Exists(_) => false,
+        sqlrustgo_parser::Expression::AnyAll { .. } => false,
     }
 }
 
@@ -832,6 +862,9 @@ fn evaluate_expr(
             };
             result.map_or(Value::Null, Value::Text)
         }
+        sqlrustgo_parser::Expression::InSubquery { .. } => Value::Null,
+        sqlrustgo_parser::Expression::Exists(_) => Value::Null,
+        sqlrustgo_parser::Expression::AnyAll { .. } => Value::Null,
     }
 }
 
@@ -2492,6 +2525,13 @@ impl ExecutionEngine {
                     }
 
                     return Ok(result);
+                }
+
+                // Check if WHERE clause contains subquery - simplified path doesn't support it
+                if let Some(ref where_clause) = select.where_clause {
+                    if contains_subquery(where_clause) {
+                        eprintln!("WARNING: WHERE clause contains subquery - simplified execution path may not execute subqueries correctly");
+                    }
                 }
 
                 let storage = self.storage.read().unwrap();
