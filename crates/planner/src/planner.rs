@@ -202,6 +202,37 @@ impl DefaultPlanner {
                 limit,
                 offset,
             } => {
+                if offset.is_none() {
+                    if let LogicalPlan::Filter { predicate, input } = input.as_ref() {
+                        if let LogicalPlan::TableScan {
+                            table_name,
+                            schema,
+                            projection,
+                        } = input.as_ref()
+                        {
+                            let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
+                            exec = exec.with_predicate(predicate.clone());
+                            exec = exec.with_limit(*limit);
+                            if let Some(proj) = projection {
+                                exec = exec.with_projection(proj.clone());
+                            }
+                            return Ok(Box::new(exec));
+                        }
+                    }
+                    if let LogicalPlan::TableScan {
+                        table_name,
+                        schema,
+                        projection,
+                    } = input.as_ref()
+                    {
+                        let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
+                        exec = exec.with_limit(*limit);
+                        if let Some(proj) = projection {
+                            exec = exec.with_projection(proj.clone());
+                        }
+                        return Ok(Box::new(exec));
+                    }
+                }
                 let input_plan = self.create_physical_plan_internal(input)?;
                 Ok(Box::new(LimitExec::new(input_plan, *limit, *offset)))
             }
@@ -571,7 +602,7 @@ mod tests {
         let planner = DefaultPlanner::new();
         let result = planner.create_physical_plan(&limit_plan);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().name(), "Limit");
+        assert_eq!(result.unwrap().name(), "SeqScan");
     }
 
     #[test]
