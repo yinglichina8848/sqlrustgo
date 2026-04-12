@@ -1446,6 +1446,219 @@ impl ExecutionEngine {
         self.current_session_id
     }
 
+    fn execute_subquery_for_derived(
+        &self,
+        subquery: &sqlrustgo_parser::parser::SelectStatement,
+        storage: &mut dyn StorageEngine,
+    ) -> Result<Option<(Vec<sqlrustgo_storage::ColumnDefinition>, Vec<Vec<Value>>)>, SqlError> {
+        let tables = if subquery.tables.is_empty() {
+            vec![subquery.table.clone()]
+        } else {
+            subquery.tables.clone()
+        };
+
+        for table_name in &tables {
+            if !storage.has_table(table_name) {
+                return Err(SqlError::ExecutionError(format!(
+                    "Table '{}' not found in subquery",
+                    table_name
+                )));
+            }
+        }
+
+        let mut all_columns: Vec<sqlrustgo_storage::ColumnDefinition> = Vec::new();
+        let mut all_rows: Vec<Vec<Value>> = vec![vec![]];
+
+        for table_name in &tables {
+            if let Some(info) = storage.get_table_info(table_name).ok() {
+                for col in &info.columns {
+                    all_columns.push(col.clone());
+                }
+            }
+            let rows = storage.scan(table_name).unwrap_or_default();
+            let new_all_rows: Vec<Vec<Value>> = all_rows
+                .iter()
+                .flat_map(|existing_row| {
+                    rows.iter()
+                        .map(|row| {
+                            let mut combined = existing_row.clone();
+                            combined.extend(row.clone());
+                            combined
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            all_rows = new_all_rows;
+        }
+
+        let columns = all_columns.clone();
+
+        let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_clause) = subquery.where_clause {
+            all_rows
+                .into_iter()
+                .filter(|row| evaluate_where_clause(where_clause, row, &columns))
+                .collect()
+        } else {
+            all_rows
+        };
+
+        let result_rows = if !subquery.aggregates.is_empty() {
+            if let Some(ref group_by) = subquery.group_by {
+                use std::collections::HashMap;
+                let mut grouped: HashMap<Vec<Value>, Vec<&Vec<Value>>> = HashMap::new();
+                for row in &filtered_rows {
+                    if let Some(group_key) = evaluate_group_by_key(group_by, row, &columns) {
+                        grouped.entry(group_key).or_default().push(row);
+                    }
+                }
+                let mut result_rows: Vec<Vec<Value>> = Vec::new();
+                for (group_key, group_rows) in grouped {
+                    let mut result_row = group_key;
+                    for agg in &subquery.aggregates {
+                        let rows_owned: Vec<Vec<Value>> =
+                            group_rows.iter().map(|r| (*r).clone()).collect();
+                        let agg_result = compute_aggregate(agg, &rows_owned, &columns);
+                        result_row.push(agg_result);
+                    }
+                    result_rows.push(result_row);
+                }
+                result_rows
+            } else {
+                let mut result_row = vec![];
+                for agg in &subquery.aggregates {
+                    let agg_result = compute_aggregate(agg, &filtered_rows, &columns);
+                    result_row.push(agg_result);
+                }
+                vec![result_row]
+            }
+        } else {
+            filtered_rows
+        };
+
+        Ok(Some((columns, result_rows)))
+    }
+
+    fn execute_select_with_derived_support(
+        &self,
+        tables: &[String],
+        select: &sqlrustgo_parser::parser::SelectStatement,
+        storage: &mut dyn StorageEngine,
+    ) -> Result<ExecutorResult, SqlError> {
+        let mut all_columns: Vec<sqlrustgo_storage::ColumnDefinition> = Vec::new();
+        let mut all_rows: Vec<Vec<Value>> = vec![vec![]];
+
+        for table_name in tables {
+            if let Some(info) = storage.get_table_info(table_name).ok() {
+                for col in &info.columns {
+                    all_columns.push(col.clone());
+                }
+            }
+            let rows = storage.scan(table_name).unwrap_or_default();
+            let new_all_rows: Vec<Vec<Value>> = all_rows
+                .iter()
+                .flat_map(|existing_row| {
+                    rows.iter()
+                        .map(|row| {
+                            let mut combined = existing_row.clone();
+                            combined.extend(row.clone());
+                            combined
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            all_rows = new_all_rows;
+        }
+
+        let columns = all_columns.clone();
+
+        let filtered_rows: Vec<Vec<Value>> = if let Some(ref where_clause) = select.where_clause {
+            all_rows
+                .into_iter()
+                .filter(|row| evaluate_where_clause(where_clause, row, &columns))
+                .collect()
+        } else {
+            all_rows
+        };
+
+        if !select.aggregates.is_empty() {
+            if let Some(ref group_by) = select.group_by {
+                use std::collections::HashMap;
+                let mut grouped: HashMap<Vec<Value>, Vec<&Vec<Value>>> = HashMap::new();
+                for row in &filtered_rows {
+                    if let Some(group_key) = evaluate_group_by_key(group_by, row, &columns) {
+                        grouped.entry(group_key).or_default().push(row);
+                    }
+                }
+                let mut result_rows: Vec<Vec<Value>> = Vec::new();
+                for (group_key, group_rows) in grouped {
+                    let mut result_row = group_key;
+                    for agg in &select.aggregates {
+                        let rows_owned: Vec<Vec<Value>> =
+                            group_rows.iter().map(|r| (*r).clone()).collect();
+                        let agg_result = compute_aggregate(agg, &rows_owned, &columns);
+                        result_row.push(agg_result);
+                    }
+                    if let Some(ref having) = select.having {
+                        let rows_owned: Vec<Vec<Value>> =
+                            group_rows.iter().map(|r| (*r).clone()).collect();
+                        if !evaluate_having_expr(having, &rows_owned, &select.aggregates, &columns)
+                        {
+                            continue;
+                        }
+                    }
+                    result_rows.push(result_row);
+                }
+                let final_rows = if let Some(ref order_by) = select.order_by {
+                    sort_rows_by_order_by(result_rows, order_by, &columns)
+                } else {
+                    result_rows
+                };
+                return Ok(ExecutorResult::new(final_rows, 0));
+            } else {
+                let mut result_row = vec![];
+                for agg in &select.aggregates {
+                    let agg_result = compute_aggregate(agg, &filtered_rows, &columns);
+                    result_row.push(agg_result);
+                }
+                if let Some(ref order_by) = select.order_by {
+                    let sorted = sort_rows_by_order_by(vec![result_row], order_by, &columns);
+                    return Ok(ExecutorResult::new(sorted, 0));
+                }
+                return Ok(ExecutorResult::new(vec![result_row], 0));
+            }
+        }
+
+        let result_rows = filtered_rows;
+        let final_rows = if let Some(ref order_by) = select.order_by {
+            sort_rows_by_order_by(result_rows, order_by, &columns)
+        } else {
+            result_rows
+        };
+
+        let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
+        let projected_rows: Vec<Vec<Value>> = if is_select_star || select.columns.is_empty() {
+            final_rows
+        } else {
+            final_rows
+                .into_iter()
+                .map(|row| {
+                    select
+                        .columns
+                        .iter()
+                        .filter_map(|col| {
+                            columns
+                                .iter()
+                                .position(|c| c.name.eq_ignore_ascii_case(&col.name))
+                                .and_then(|idx| row.get(idx).cloned())
+                        })
+                        .collect()
+                })
+                .collect()
+        };
+
+        Ok(ExecutorResult::new(projected_rows, 0))
+    }
+
     pub fn execute(&mut self, statement: Statement) -> Result<ExecutorResult, SqlError> {
         match statement {
             Statement::Insert(insert) => {
@@ -2203,6 +2416,84 @@ impl ExecutionEngine {
                 Ok(ExecutorResult::new(vec![], updated_count))
             }
             Statement::Select(select) => {
+                // Check if we have derived tables (inline views)
+                if !select.derived_tables.is_empty() {
+                    // For derived tables, we need write lock to create temp tables
+                    let mut storage = self.storage.write().unwrap();
+                    let mut temp_table_names: Vec<(String, String)> = Vec::new();
+                    let mut temp_counter = 0;
+
+                    // Execute each subquery and create a temp table
+                    for derived in &select.derived_tables {
+                        // Execute the subquery to get results
+                        let subquery_columns =
+                            self.execute_subquery_for_derived(&derived.subquery, &mut *storage)?;
+
+                        if let Some((columns, rows)) = subquery_columns {
+                            let temp_name = format!("__derived_{}", temp_counter);
+                            temp_counter += 1;
+
+                            // Create temp table with subquery results
+                            let table_info = sqlrustgo_storage::TableInfo {
+                                name: temp_name.clone(),
+                                columns: columns,
+                            };
+
+                            storage.create_table(&table_info)?;
+                            storage.insert(&temp_name, rows)?;
+                            temp_table_names.push((derived.alias.clone(), temp_name));
+                        }
+                    }
+
+                    // Create a modified copy of select with temp table names
+                    let mut modified_select = select.clone();
+
+                    // Replace derived table aliases with temp table names in tables
+                    for (alias, temp_name) in &temp_table_names {
+                        for table in &mut modified_select.tables {
+                            if table == alias {
+                                *table = temp_name.clone();
+                            }
+                        }
+                        // Also check if select.table needs replacement
+                        if modified_select.table == *alias {
+                            modified_select.table = temp_name.clone();
+                        }
+                    }
+
+                    let tables = if !modified_select.tables.is_empty() {
+                        modified_select.tables.clone()
+                    } else if !modified_select.table.is_empty() {
+                        vec![modified_select.table.clone()]
+                    } else {
+                        temp_table_names.iter().map(|(_, t)| t.clone()).collect()
+                    };
+
+                    for table_name in &tables {
+                        if !storage.has_table(table_name) {
+                            return Err(SqlError::ExecutionError(format!(
+                                "Table '{}' not found",
+                                table_name
+                            )));
+                        }
+                    }
+
+                    // Now execute the modified SELECT using the existing logic
+                    // We need to use the write-locked storage, so we'll call a helper
+                    let result = self.execute_select_with_derived_support(
+                        &tables,
+                        &modified_select,
+                        &mut *storage,
+                    )?;
+
+                    // Clean up temp tables
+                    for (_, temp_name) in &temp_table_names {
+                        let _ = storage.drop_table(temp_name);
+                    }
+
+                    return Ok(result);
+                }
+
                 let storage = self.storage.read().unwrap();
 
                 let tables = if select.tables.is_empty() {
