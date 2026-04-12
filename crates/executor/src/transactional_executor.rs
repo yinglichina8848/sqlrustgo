@@ -415,4 +415,86 @@ mod wal_transactional_executor_tests {
         let entries = exec.recover();
         assert!(entries.is_ok());
     }
+
+    #[test]
+    fn test_wal_transactional_executor_insert_logging() {
+        let dir = TempDir::new().unwrap();
+        let storage = MemoryStorage::new();
+        let wal_path = dir.path().join("test.wal");
+        let manager = sqlrustgo_storage::WalManager::new(wal_path.clone());
+
+        manager.log_begin(1).unwrap();
+        manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+        manager.log_commit(1).unwrap();
+
+        let storage2 = MemoryStorage::new();
+        let _exec2 = WalTransactionalExecutor::new(storage2, wal_path).unwrap();
+    }
+
+    #[test]
+    fn test_wal_transactional_executor_multiple_tx_commits() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test.wal");
+        let manager = sqlrustgo_storage::WalManager::new(wal_path.clone());
+
+        for i in 1..=5 {
+            manager.log_begin(i).unwrap();
+            manager
+                .log_insert(i, 1, vec![i as u8], vec![i as u8])
+                .unwrap();
+            manager.log_commit(i).unwrap();
+        }
+
+        let storage = MemoryStorage::new();
+        let exec = WalTransactionalExecutor::new(storage, wal_path).unwrap();
+        let entries = exec.recover().unwrap();
+        let commits: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entry_type == sqlrustgo_storage::WalEntryType::Commit)
+            .collect();
+        assert_eq!(commits.len(), 5);
+    }
+
+    #[test]
+    fn test_wal_transactional_executor_recovery_order_preserved() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("test.wal");
+        let manager = sqlrustgo_storage::WalManager::new(wal_path.clone());
+
+        for i in 1..=3 {
+            manager.log_begin(i).unwrap();
+            manager
+                .log_insert(i, 1, vec![i as u8], vec![i as u8])
+                .unwrap();
+            manager.log_commit(i).unwrap();
+        }
+
+        let storage = MemoryStorage::new();
+        let exec = WalTransactionalExecutor::new(storage, wal_path).unwrap();
+        let entries = exec.recover().unwrap();
+        assert_eq!(entries.len(), 9);
+    }
+
+    #[test]
+    fn test_wal_transactional_executor_performance() {
+        let dir = TempDir::new().unwrap();
+        let wal_path = dir.path().join("perf.wal");
+        let manager = sqlrustgo_storage::WalManager::new(wal_path.clone());
+
+        let start = std::time::Instant::now();
+        for i in 1..=100 {
+            manager.log_begin(i).unwrap();
+            manager
+                .log_insert(i, 1, vec![i as u8], vec![i as u8])
+                .unwrap();
+            manager.log_commit(i).unwrap();
+        }
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_secs_f64() < 10.0,
+            "WAL performance too slow: {:?}",
+            elapsed
+        );
+    }
 }
