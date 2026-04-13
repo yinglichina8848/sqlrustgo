@@ -239,6 +239,31 @@ fn get_test_categories() -> Vec<TestCategory> {
             ],
             description: "向量存储集成测试: Flat/HNSW/IVF/IVFPQ索引, 混合搜索 (40+ tests)",
         },
+        // Graph 图存储测试
+        TestCategory {
+            name: "图存储测试 (Graph)",
+            test_files: vec!["PKG:sqlrustgo-graph:graph_tests"],
+            description: "Graph crate tests: GMP traceability, BFS/DFS, DiskGraphStore with WAL",
+        },
+        // GMP 语义搜索测试
+        TestCategory {
+            name: "GMP 语义搜索测试 (GMP)",
+            test_files: vec!["PKG:sqlrustgo-gmp:test"],
+            description:
+                "GMP crate tests: semantic embedding, Ollama/OpenAI providers, hybrid search",
+        },
+        // TPC-H SF=10 性能测试
+        TestCategory {
+            name: "TPC-H SF=10 性能测试 (TPC-H SF=10)",
+            test_files: vec!["tpch_sf10_benchmark"],
+            description: "TPC-H SF=10 (60M rows) benchmark: Q1-Q22 full query set",
+        },
+        // WAL 事务集成测试
+        TestCategory {
+            name: "WAL 事务集成测试 (WAL Transaction)",
+            test_files: vec!["wal_transaction_integration_test"],
+            description: "WAL-integrated transaction tests: atomicity, durability, crash recovery",
+        },
         // 工具测试
         TestCategory {
             name: "工具测试 (Tools)",
