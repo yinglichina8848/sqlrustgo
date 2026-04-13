@@ -1,7 +1,7 @@
 use crossbeam_channel::{bounded, Receiver, Sender};
 pub use sqlrustgo_common::connection_pool::PoolConfig;
 use sqlrustgo_executor::LocalExecutor;
-use sqlrustgo_storage::MemoryStorage;
+use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use std::sync::Arc;
 
 pub struct PooledSession {
@@ -35,6 +35,19 @@ impl PooledSession {
 
     pub fn is_available(&self) -> bool {
         !self.in_use
+    }
+
+    pub fn mark_in_use(&mut self) {
+        self.in_use = true;
+    }
+
+    pub fn mark_available(&mut self) {
+        self.in_use = false;
+        self.transaction_id = None;
+    }
+
+    pub fn health_check(&self) -> bool {
+        self.storage.health_check()
     }
 }
 
@@ -70,12 +83,10 @@ pub struct ConnectionPool {
 impl ConnectionPool {
     pub fn new(config: PoolConfig) -> Self {
         let (available, received) = bounded(config.size);
-        let mut sessions = Vec::with_capacity(config.size);
+        let sessions: Vec<PooledSession> = (0..config.size).map(|_| PooledSession::new()).collect();
 
-        for _ in 0..config.size {
-            let session = PooledSession::new();
-            let _ = available.send(session);
-            sessions.push(PooledSession::new());
+        for session in sessions.iter() {
+            let _ = available.send(session.clone());
         }
 
         Self {
@@ -87,11 +98,23 @@ impl ConnectionPool {
     }
 
     pub fn acquire(&self) -> PooledConnection {
-        let session = self.received.recv().unwrap();
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+        let session = self.received.recv_timeout(timeout).unwrap();
         PooledConnection {
             session,
             pool: self.clone(),
         }
+    }
+
+    pub fn acquire_with_timeout(&self, timeout_ms: u64) -> Option<PooledConnection> {
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        self.received
+            .recv_timeout(timeout)
+            .ok()
+            .map(|session| PooledConnection {
+                session,
+                pool: self.clone(),
+            })
     }
 
     pub fn try_acquire(&self) -> Option<PooledConnection> {
@@ -112,9 +135,33 @@ impl ConnectionPool {
         self.config.size
     }
 
+    pub fn health_check(&self) -> Vec<(usize, bool)> {
+        self.sessions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, s.health_check()))
+            .collect()
+    }
+
+    pub fn stats(&self) -> PoolStats {
+        let available_count = self.available.len();
+        let total = self.config.size;
+        PoolStats {
+            total,
+            available: available_count,
+            in_use: total - available_count,
+        }
+    }
+
     fn release(&self, session: PooledSession) {
         let _ = self.available.send(session);
     }
+}
+
+pub struct PoolStats {
+    pub total: usize,
+    pub available: usize,
+    pub in_use: usize,
 }
 
 pub struct PooledConnection {
@@ -130,6 +177,7 @@ impl PooledConnection {
 
 impl Drop for PooledConnection {
     fn drop(&mut self) {
+        self.session.mark_available();
         self.pool.release(self.session.clone());
     }
 }
@@ -318,6 +366,89 @@ mod tests {
     #[test]
     fn test_pooled_session_transaction_id() {
         let session = PooledSession::new();
+        assert!(session.transaction_id.is_none());
+    }
+
+    #[test]
+    fn test_connection_pool_acquire_with_timeout_success() {
+        let config = PoolConfig {
+            size: 2,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn = pool.acquire_with_timeout(1000);
+        assert!(conn.is_some());
+        drop(conn);
+
+        let conn2 = pool.acquire_with_timeout(1000);
+        assert!(conn2.is_some());
+    }
+
+    #[test]
+    fn test_connection_pool_acquire_with_timeout_failure() {
+        let config = PoolConfig {
+            size: 1,
+            timeout_ms: 100,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn1 = pool.acquire_with_timeout(1000);
+        assert!(conn1.is_some());
+
+        let conn2 = pool.acquire_with_timeout(50);
+        assert!(conn2.is_none());
+    }
+
+    #[test]
+    fn test_connection_pool_stats() {
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let stats = pool.stats();
+        assert_eq!(stats.total, 5);
+        assert_eq!(stats.available, 5);
+        assert_eq!(stats.in_use, 0);
+
+        let conn1 = pool.acquire();
+        let stats = pool.stats();
+        assert_eq!(stats.available, 4);
+        assert_eq!(stats.in_use, 1);
+
+        drop(conn1);
+        let stats = pool.stats();
+        assert_eq!(stats.available, 5);
+        assert_eq!(stats.in_use, 0);
+    }
+
+    #[test]
+    fn test_connection_pool_health_check() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let results = pool.health_check();
+        assert_eq!(results.len(), 3);
+        for (_, healthy) in results {
+            assert!(healthy);
+        }
+    }
+
+    #[test]
+    fn test_pooled_session_mark_in_use() {
+        let mut session = PooledSession::new();
+        assert!(!session.in_use);
+
+        session.mark_in_use();
+        assert!(session.in_use);
+
+        session.mark_available();
+        assert!(!session.in_use);
         assert!(session.transaction_id.is_none());
     }
 }
