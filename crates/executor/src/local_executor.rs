@@ -5,7 +5,7 @@
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
     AggregateExec, AggregateFunction, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType,
-    Operator, PhysicalPlan, ProjectionExec, SortMergeJoinExec,
+    Operator, PhysicalPlan, PreparedStatementManager, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -32,6 +32,8 @@ pub struct LocalExecutor<'a> {
     slow_query_log: StdRwLock<Option<query_stats::SlowQueryLog>>,
     /// SQL text for slow query logging (set when executing with cache)
     current_sql: StdRwLock<String>,
+    /// Prepared statement cache
+    prepared_statements: StdRwLock<PreparedStatementManager>,
 }
 
 impl<'a> LocalExecutor<'a> {
@@ -43,6 +45,7 @@ impl<'a> LocalExecutor<'a> {
             cache_config: QueryCacheConfig::default(),
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
+            prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
         }
     }
 
@@ -54,6 +57,7 @@ impl<'a> LocalExecutor<'a> {
             cache_config: config,
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
+            prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
         }
     }
 
