@@ -642,6 +642,15 @@ pub enum Expression {
         expr: Box<Expression>,
         subquery: Box<Statement>,
     },
+    /// EXISTS subquery: EXISTS (SELECT ...)
+    Exists(Box<Statement>),
+    /// ANY/ALL subquery: expr OP ANY/ALL (SELECT ...)
+    AnyAll {
+        expr: Box<Expression>,
+        op: String,
+        subquery: Box<Statement>,
+        is_any: bool,
+    },
     /// CASE WHEN expression: CASE WHEN cond THEN val ELSE default END
     CaseWhen {
         conditions: Vec<(Expression, Expression)>,
