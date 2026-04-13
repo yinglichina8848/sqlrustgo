@@ -28,7 +28,7 @@ pub mod vector_executor;
 pub mod vector_scan;
 pub mod vectorization;
 
-pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor};
+pub use executor::{execute_collect, SortMergeJoinVolcanoExecutor, VolExecutorBuilder};
 pub use executor::{Executor, ExecutorResult, Storage, VolIterator, VolcanoExecutor};
 pub use executor_metrics::ExecutorMetrics;
 pub use explain::{
