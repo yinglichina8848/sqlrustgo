@@ -1531,6 +1531,7 @@ pub struct InSubqueryVolcanoExecutor {
     initialized: bool,
     subquery_results: Vec<Value>,
     current_idx: usize,
+    outer_row: Option<Vec<Value>>,
 }
 
 impl InSubqueryVolcanoExecutor {
@@ -1542,7 +1543,12 @@ impl InSubqueryVolcanoExecutor {
             initialized: false,
             subquery_results: Vec::new(),
             current_idx: 0,
+            outer_row: None,
         }
+    }
+
+    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
+        self.outer_row = row;
     }
 }
 
@@ -1565,9 +1571,25 @@ impl VolcanoExecutor for InSubqueryVolcanoExecutor {
             return Ok(None);
         }
         self.current_idx = 1;
-        eprintln!("WARNING: InSubqueryVolcanoExecutor::next() is Phase 1 placeholder - always returns false");
-        eprintln!("         Proper implementation requires outer row context integration");
-        let result = Value::Boolean(false);
+
+        let outer_expr_value = match &self.outer_row {
+            Some(row) => self.expr.evaluate(row, &self.schema),
+            None => {
+                eprintln!(
+                    "WARNING: InSubqueryVolcanoExecutor::next() called without outer row set"
+                );
+                return Ok(Some(vec![Value::Boolean(false)]));
+            }
+        };
+
+        let result = match outer_expr_value {
+            Some(val) => {
+                let found = self.subquery_results.iter().any(|r| r == &val);
+                Value::Boolean(found)
+            }
+            None => Value::Boolean(false),
+        };
+
         Ok(Some(vec![result]))
     }
 
@@ -1660,6 +1682,7 @@ pub struct AnyAllVolcanoExecutor {
     initialized: bool,
     subquery_results: Vec<Value>,
     consumed: bool,
+    outer_row: Option<Vec<Value>>,
 }
 
 impl AnyAllVolcanoExecutor {
@@ -1679,6 +1702,30 @@ impl AnyAllVolcanoExecutor {
             initialized: false,
             subquery_results: Vec::new(),
             consumed: false,
+            outer_row: None,
+        }
+    }
+
+    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
+        self.outer_row = row;
+    }
+
+    fn compare_values(left: &Value, op: &Operator, right: &Value) -> Option<bool> {
+        use Value::*;
+        match (left, op, right) {
+            (Integer(l), Operator::Eq, Integer(r)) => Some(l == r),
+            (Integer(l), Operator::NotEq, Integer(r)) => Some(l != r),
+            (Integer(l), Operator::Lt, Integer(r)) => Some(l < r),
+            (Integer(l), Operator::LtEq, Integer(r)) => Some(l <= r),
+            (Integer(l), Operator::Gt, Integer(r)) => Some(l > r),
+            (Integer(l), Operator::GtEq, Integer(r)) => Some(l >= r),
+            (Text(l), Operator::Eq, Text(r)) => Some(l == r),
+            (Text(l), Operator::NotEq, Text(r)) => Some(l != r),
+            (Text(l), Operator::Lt, Text(r)) => Some(l < r),
+            (Text(l), Operator::LtEq, Text(r)) => Some(l <= r),
+            (Text(l), Operator::Gt, Text(r)) => Some(l > r),
+            (Text(l), Operator::GtEq, Text(r)) => Some(l >= r),
+            _ => None,
         }
     }
 }
@@ -1702,11 +1749,41 @@ impl VolcanoExecutor for AnyAllVolcanoExecutor {
             return Ok(None);
         }
         self.consumed = true;
-        eprintln!(
-            "WARNING: AnyAllVolcanoExecutor::next() is Phase 1 placeholder - always returns false"
-        );
-        eprintln!("         Proper implementation requires outer row context integration");
-        let result = Value::Boolean(false);
+
+        let outer_expr_value = match &self.outer_row {
+            Some(row) => self.expr.evaluate(row, &self.schema),
+            None => {
+                eprintln!("WARNING: AnyAllVolcanoExecutor::next() called without outer row set");
+                return Ok(Some(vec![Value::Boolean(false)]));
+            }
+        };
+
+        let result = match outer_expr_value {
+            Some(val) => {
+                use sqlrustgo_planner::Operator;
+                let any_all = self.any_all.clone();
+                let op = self.op.clone();
+
+                let mut results: Vec<bool> = Vec::new();
+                for subquery_val in &self.subquery_results {
+                    if let Some(comp_result) = Self::compare_values(&val, &op, subquery_val) {
+                        results.push(comp_result);
+                    }
+                }
+
+                match any_all {
+                    sqlrustgo_planner::SubqueryType::Any => {
+                        Value::Boolean(!results.is_empty() && results.iter().any(|&r| r))
+                    }
+                    sqlrustgo_planner::SubqueryType::All => Value::Boolean(
+                        results.len() == self.subquery_results.len() && results.iter().all(|&r| r),
+                    ),
+                    _ => Value::Boolean(false),
+                }
+            }
+            None => Value::Boolean(false),
+        };
+
         Ok(Some(vec![result]))
     }
 
