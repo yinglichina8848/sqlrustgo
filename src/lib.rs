@@ -353,6 +353,8 @@ fn contains_subquery(expr: &sqlrustgo_parser::Expression) -> bool {
     match expr {
         sqlrustgo_parser::Expression::Subquery(_) => true,
         sqlrustgo_parser::Expression::InSubquery { .. } => true,
+        sqlrustgo_parser::Expression::Exists(_) => true,
+        sqlrustgo_parser::Expression::AnyAll { .. } => true,
         sqlrustgo_parser::Expression::BinaryOp(left, _, right) => {
             contains_subquery(left) || contains_subquery(right)
         }
