@@ -12,6 +12,7 @@ pub use sqlrustgo_parser::{
     parse, Expression, GrantStatement, KillStatement, KillType, Lexer, Privilege, RevokeStatement,
     SetOperation, Statement, Token, TransactionCommand,
 };
+pub use sqlrustgo_planner::converter::StatementConverter;
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::predicate;
 pub use sqlrustgo_storage::{
@@ -2876,6 +2877,36 @@ impl ExecutionEngine {
             }
             Statement::Kill(kill) => self.execute_kill(&kill),
             _ => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    /// Execute a query via the Planner path (for queries with subqueries)
+    fn execute_via_planner(&self, stmt: &Statement) -> Result<ExecutorResult, SqlError> {
+        use sqlrustgo_planner::converter::StatementConverter;
+
+        match stmt {
+            Statement::Select(select) => {
+                if let Some(ref where_clause) = select.where_clause {
+                    if contains_subquery(where_clause) {
+                        eprintln!("WARNING: Planner path for subqueries is under development");
+                    }
+                }
+
+                let converter = StatementConverter::new();
+                let logical_plan = converter
+                    .convert(stmt)
+                    .map_err(|e| SqlError::ExecutionError(format!("Conversion error: {}", e)))?;
+
+                let mut planner = sqlrustgo_planner::DefaultPlanner::new();
+                let physical_plan = planner
+                    .optimize(logical_plan)
+                    .map_err(|e| SqlError::ExecutionError(format!("Planning error: {}", e)))?;
+
+                self.execute_plan(physical_plan.as_ref())
+            }
+            _ => Err(SqlError::ExecutionError(
+                "Planner path only supports SELECT statements".to_string(),
+            )),
         }
     }
 
