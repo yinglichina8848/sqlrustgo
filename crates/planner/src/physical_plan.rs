@@ -683,6 +683,14 @@ impl AnyAllSubqueryExec {
     pub fn any_all(&self) -> crate::SubqueryType {
         self.any_all.clone()
     }
+
+    pub fn expr(&self) -> &Expr {
+        &self.expr
+    }
+
+    pub fn op(&self) -> &Operator {
+        &self.op
+    }
 }
 
 impl PhysicalPlan for AnyAllSubqueryExec {
