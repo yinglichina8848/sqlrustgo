@@ -252,6 +252,36 @@ fn get_test_categories() -> Vec<TestCategory> {
             description:
                 "GMP crate tests: semantic embedding, Ollama/OpenAI providers, hybrid search",
         },
+        // AgentSQL 集成测试
+        TestCategory {
+            name: "AgentSQL 集成测试 (AgentSQL)",
+            test_files: vec!["agentsql_test"],
+            description: "AgentSQL NL2SQL 集成测试",
+        },
+        // MySQL TPC-H 对比测试
+        TestCategory {
+            name: "MySQL TPC-H 对比测试 (MySQL TPC-H)",
+            test_files: vec!["mysql_tpch_test"],
+            description: "MySQL vs SQLRustGo TPC-H 查询对比",
+        },
+        // SQL CLI 测试
+        TestCategory {
+            name: "SQL CLI 测试 (SQL CLI)",
+            test_files: vec!["sql_cli_test"],
+            description: "SQL 命令行工具测试",
+        },
+        // TPC-H Q-Query 测试
+        TestCategory {
+            name: "TPC-H Q-Query 测试 (TPC-H Q-Query)",
+            test_files: vec!["tpch_qtest"],
+            description: "TPC-H Q-Query 特定查询测试",
+        },
+        // Page IO 基准测试
+        TestCategory {
+            name: "Page IO 基准测试 (Page IO)",
+            test_files: vec!["page_io_benchmark_test"],
+            description: "Page IO 性能基准测试",
+        },
         // TPC-H SF=10 性能测试
         TestCategory {
             name: "TPC-H SF=10 性能测试 (TPC-H SF=10)",
@@ -263,12 +293,6 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "WAL 事务集成测试 (WAL Transaction)",
             test_files: vec!["wal_transaction_integration_test"],
             description: "WAL-integrated transaction tests: atomicity, durability, crash recovery",
-        },
-        // 工具测试
-        TestCategory {
-            name: "工具测试 (Tools)",
-            test_files: vec!["physical_backup_test"],
-            description: "物理备份、mysqldump 等工具集成测试",
         },
     ]
 }
