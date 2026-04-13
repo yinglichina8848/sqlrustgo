@@ -304,6 +304,10 @@ pub trait StorageEngine: Send + Sync {
         }
         Ok(())
     }
+
+    fn health_check(&self) -> bool {
+        true
+    }
 }
 
 /// VectorStorage trait - abstraction for columnar vectorized storage access
