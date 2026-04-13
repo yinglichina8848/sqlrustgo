@@ -2,7 +2,7 @@
 
 use crate::filter::FilterVolcanoExecutor;
 use crate::window_executor::WindowVolcanoExecutor;
-use sqlrustgo_planner::{PhysicalPlan, Schema};
+use sqlrustgo_planner::{Expr, Operator, PhysicalPlan, Schema};
 use sqlrustgo_types::{encode_row, RowRef, SqlError, SqlResult, Value};
 use std::any::Any;
 
@@ -1524,6 +1524,195 @@ impl SortMergeJoinExecutor {
     }
 }
 
+pub struct InSubqueryVolcanoExecutor {
+    subquery: Box<dyn VolcanoExecutor>,
+    expr: Expr,
+    schema: Schema,
+    initialized: bool,
+    subquery_results: Vec<Value>,
+    current_idx: usize,
+}
+
+impl InSubqueryVolcanoExecutor {
+    pub fn new(subquery: Box<dyn VolcanoExecutor>, expr: Expr, schema: Schema) -> Self {
+        Self {
+            subquery,
+            expr,
+            schema,
+            initialized: false,
+            subquery_results: Vec::new(),
+            current_idx: 0,
+        }
+    }
+}
+
+impl VolcanoExecutor for InSubqueryVolcanoExecutor {
+    fn init(&mut self) -> SqlResult<()> {
+        self.subquery.init()?;
+        self.initialized = true;
+        self.subquery_results.clear();
+        while let Some(row) = self.subquery.next()? {
+            if let Some(val) = row.first().cloned() {
+                self.subquery_results.push(val);
+            }
+        }
+        self.current_idx = 0;
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        Ok(None)
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.subquery.close()?;
+        self.initialized = false;
+        Ok(())
+    }
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+    fn name(&self) -> &str {
+        "InSubquery"
+    }
+    fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub struct ExistsVolcanoExecutor {
+    subquery: Box<dyn VolcanoExecutor>,
+    schema: Schema,
+    initialized: bool,
+    result: Option<bool>,
+    consumed: bool,
+}
+
+impl ExistsVolcanoExecutor {
+    pub fn new(subquery: Box<dyn VolcanoExecutor>, schema: Schema) -> Self {
+        Self {
+            subquery,
+            schema,
+            initialized: false,
+            result: None,
+            consumed: false,
+        }
+    }
+}
+
+impl VolcanoExecutor for ExistsVolcanoExecutor {
+    fn init(&mut self) -> SqlResult<()> {
+        self.subquery.init()?;
+        self.initialized = true;
+        let mut has_rows = false;
+        while let Some(_row) = self.subquery.next()? {
+            has_rows = true;
+            break;
+        }
+        self.result = Some(has_rows);
+        self.consumed = false;
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if self.consumed {
+            return Ok(None);
+        }
+        self.consumed = true;
+        Ok(Some(vec![Value::Boolean(self.result.unwrap_or(false))]))
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.subquery.close()?;
+        self.initialized = false;
+        Ok(())
+    }
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+    fn name(&self) -> &str {
+        "Exists"
+    }
+    fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub struct AnyAllVolcanoExecutor {
+    subquery: Box<dyn VolcanoExecutor>,
+    expr: Expr,
+    op: Operator,
+    any_all: sqlrustgo_planner::SubqueryType,
+    schema: Schema,
+    initialized: bool,
+    subquery_results: Vec<Value>,
+    consumed: bool,
+}
+
+impl AnyAllVolcanoExecutor {
+    pub fn new(
+        subquery: Box<dyn VolcanoExecutor>,
+        expr: Expr,
+        op: Operator,
+        any_all: sqlrustgo_planner::SubqueryType,
+        schema: Schema,
+    ) -> Self {
+        Self {
+            subquery,
+            expr,
+            op,
+            any_all,
+            schema,
+            initialized: false,
+            subquery_results: Vec::new(),
+            consumed: false,
+        }
+    }
+}
+
+impl VolcanoExecutor for AnyAllVolcanoExecutor {
+    fn init(&mut self) -> SqlResult<()> {
+        self.subquery.init()?;
+        self.initialized = true;
+        self.subquery_results.clear();
+        while let Some(row) = self.subquery.next()? {
+            if let Some(val) = row.first().cloned() {
+                self.subquery_results.push(val);
+            }
+        }
+        self.consumed = false;
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        Ok(None)
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.subquery.close()?;
+        self.initialized = false;
+        Ok(())
+    }
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+    fn name(&self) -> &str {
+        "AnyAll"
+    }
+    fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 pub struct LimitVolcanoExecutor {
     child: Box<dyn VolcanoExecutor>,
     limit: usize,
@@ -1617,11 +1806,72 @@ impl VolExecutorBuilder {
             "Sort" => self.build_sort(plan),
             "Limit" => self.build_limit(plan),
             "Window" => self.build_window(plan),
+            "InSubquery" => self.build_in_subquery(plan),
+            "Exists" => self.build_exists(plan),
+            "Any" | "All" => self.build_any_all(plan),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported plan type: {}",
                 plan.name()
             ))),
         }
+    }
+
+    fn build_in_subquery(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
+        let children = plan.children();
+        if children.is_empty() {
+            return Err(SqlError::ExecutionError(
+                "InSubquery has no children".to_string(),
+            ));
+        }
+        let subquery = self.build(children[0])?;
+        let in_subquery_exec = plan
+            .as_any()
+            .downcast_ref::<sqlrustgo_planner::physical_plan::InSubqueryExec>()
+            .ok_or_else(|| {
+                SqlError::ExecutionError("Failed to cast to InSubqueryExec".to_string())
+            })?;
+        Ok(Box::new(InSubqueryVolcanoExecutor::new(
+            subquery,
+            in_subquery_exec.expr().clone(),
+            plan.schema().clone(),
+        )))
+    }
+
+    fn build_exists(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
+        let children = plan.children();
+        if children.is_empty() {
+            return Err(SqlError::ExecutionError(
+                "Exists has no children".to_string(),
+            ));
+        }
+        let subquery = self.build(children[0])?;
+        Ok(Box::new(ExistsVolcanoExecutor::new(
+            subquery,
+            plan.schema().clone(),
+        )))
+    }
+
+    fn build_any_all(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
+        let children = plan.children();
+        if children.is_empty() {
+            return Err(SqlError::ExecutionError(
+                "AnyAll has no children".to_string(),
+            ));
+        }
+        let subquery = self.build(children[0])?;
+        let any_all_exec = plan
+            .as_any()
+            .downcast_ref::<sqlrustgo_planner::physical_plan::AnyAllSubqueryExec>()
+            .ok_or_else(|| {
+                SqlError::ExecutionError("Failed to cast to AnyAllSubqueryExec".to_string())
+            })?;
+        Ok(Box::new(AnyAllVolcanoExecutor::new(
+            subquery,
+            any_all_exec.expr().clone(),
+            any_all_exec.op().clone(),
+            any_all_exec.any_all().clone(),
+            plan.schema().clone(),
+        )))
     }
 
     fn build_hash_join(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
