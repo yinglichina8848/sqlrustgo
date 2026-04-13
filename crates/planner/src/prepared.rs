@@ -13,17 +13,15 @@
 use crate::{DataType, PhysicalPlan};
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// A prepared statement with cached execution plan
-#[derive(Clone)]
 pub struct PreparedStatement {
     /// Unique identifier for this prepared statement
     pub id: String,
     /// Original SQL text
     pub sql: String,
     /// Cached physical execution plan
-    pub plan: Arc<dyn PhysicalPlan>,
+    pub plan: Box<dyn PhysicalPlan>,
     /// Inferred parameter types
     pub param_types: Vec<DataType>,
     /// When this statement was created
@@ -39,7 +37,7 @@ impl PreparedStatement {
     pub fn new(
         id: String,
         sql: String,
-        plan: Arc<dyn PhysicalPlan>,
+        plan: Box<dyn PhysicalPlan>,
         param_types: Vec<DataType>,
     ) -> Self {
         let now = Utc::now();
@@ -106,7 +104,7 @@ impl PreparedStatementManager {
         &mut self,
         id: String,
         sql: String,
-        plan: Arc<dyn PhysicalPlan>,
+        plan: Box<dyn PhysicalPlan>,
         param_types: Vec<DataType>,
     ) -> String {
         // If at capacity, evict least recently used
@@ -133,7 +131,7 @@ impl PreparedStatementManager {
     ///
     /// Note: This returns the plan and parameters; actual execution
     /// is done by the executor with parameter binding
-    pub fn execute(&self, id: &str) -> Option<(&Arc<dyn PhysicalPlan>, &Vec<DataType>)> {
+    pub fn execute(&self, id: &str) -> Option<(&Box<dyn PhysicalPlan>, &Vec<DataType>)> {
         self.statements
             .get(id)
             .map(|stmt| (&stmt.plan, &stmt.param_types))
@@ -250,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_prepared_statement_creation() {
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
         let stmt = PreparedStatement::new(
             "test_stmt".to_string(),
             "SELECT * FROM users WHERE id = ?".to_string(),
@@ -266,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_prepared_statement_record_use() {
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
         let mut stmt = PreparedStatement::new(
             "test_stmt".to_string(),
             "SELECT * FROM users".to_string(),
@@ -282,7 +280,7 @@ mod tests {
     #[test]
     fn test_manager_prepare() {
         let mut manager = PreparedStatementManager::new(10);
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
 
         let id = manager.prepare(
             "stmt1".to_string(),
@@ -299,7 +297,7 @@ mod tests {
     #[test]
     fn test_manager_get() {
         let mut manager = PreparedStatementManager::new(10);
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
 
         manager.prepare(
             "stmt1".to_string(),
@@ -316,7 +314,7 @@ mod tests {
     #[test]
     fn test_manager_deallocate() {
         let mut manager = PreparedStatementManager::new(10);
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
 
         manager.prepare(
             "stmt1".to_string(),
@@ -333,23 +331,15 @@ mod tests {
     #[test]
     fn test_manager_eviction() {
         let mut manager = PreparedStatementManager::new(2);
-        let plan = Arc::new(MockPhysicalPlan::new()) as Arc<dyn PhysicalPlan>;
+        let plan = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
 
-        manager.prepare(
-            "stmt1".to_string(),
-            "SELECT 1".to_string(),
-            plan.clone(),
-            vec![],
-        );
-        manager.prepare(
-            "stmt2".to_string(),
-            "SELECT 2".to_string(),
-            plan.clone(),
-            vec![],
-        );
+        manager.prepare("stmt1".to_string(), "SELECT 1".to_string(), plan, vec![]);
+        let plan2 = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
+        manager.prepare("stmt2".to_string(), "SELECT 2".to_string(), plan2, vec![]);
 
         // Adding a third should evict one
-        manager.prepare("stmt3".to_string(), "SELECT 3".to_string(), plan, vec![]);
+        let plan3 = Box::new(MockPhysicalPlan::new()) as Box<dyn PhysicalPlan>;
+        manager.prepare("stmt3".to_string(), "SELECT 3".to_string(), plan3, vec![]);
 
         // At least one of the first two should be evicted
         let remaining: Vec<_> = ["stmt1", "stmt2", "stmt3"]
