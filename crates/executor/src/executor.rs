@@ -1561,7 +1561,14 @@ impl VolcanoExecutor for InSubqueryVolcanoExecutor {
     }
 
     fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
-        Ok(None)
+        if self.current_idx > 0 {
+            return Ok(None);
+        }
+        self.current_idx = 1;
+        eprintln!("WARNING: InSubqueryVolcanoExecutor::next() is Phase 1 placeholder - always returns false");
+        eprintln!("         Proper implementation requires outer row context integration");
+        let result = Value::Boolean(false);
+        Ok(Some(vec![result]))
     }
 
     fn close(&mut self) -> SqlResult<()> {
@@ -1691,7 +1698,16 @@ impl VolcanoExecutor for AnyAllVolcanoExecutor {
     }
 
     fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
-        Ok(None)
+        if self.consumed {
+            return Ok(None);
+        }
+        self.consumed = true;
+        eprintln!(
+            "WARNING: AnyAllVolcanoExecutor::next() is Phase 1 placeholder - always returns false"
+        );
+        eprintln!("         Proper implementation requires outer row context integration");
+        let result = Value::Boolean(false);
+        Ok(Some(vec![result]))
     }
 
     fn close(&mut self) -> SqlResult<()> {
