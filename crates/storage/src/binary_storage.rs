@@ -209,6 +209,7 @@ mod tests {
             info: TableInfo {
                 name: "test".to_string(),
                 columns: cols,
+                ..Default::default()
             },
             rows,
         };

@@ -504,6 +504,7 @@ mod tests {
                             compression: None,
                         },
                     ],
+                    ..Default::default()
                 },
                 rows: vec![
                     vec![Value::Integer(1), Value::Integer(100)],
@@ -569,6 +570,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -614,6 +616,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -654,6 +657,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -706,6 +710,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             },
             rows: vec![
                 vec![Value::Integer(1), Value::Integer(100)],
@@ -784,6 +789,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -833,6 +839,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -873,6 +880,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
         };
@@ -943,6 +951,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -981,6 +990,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -1057,6 +1067,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -1095,6 +1106,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -1114,6 +1126,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -1149,6 +1162,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -1689,6 +1703,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1716,6 +1731,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "users".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1742,6 +1758,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "users".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1749,6 +1766,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "orders".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1784,6 +1802,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
             };
@@ -1821,6 +1840,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![vec![Value::Integer(1)]],
             };

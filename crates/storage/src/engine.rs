@@ -100,6 +100,16 @@ pub struct TableInfo {
     pub table_foreign_keys: Option<Vec<TableForeignKey>>,
 }
 
+impl Default for TableInfo {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            columns: Vec::new(),
+            table_foreign_keys: None,
+        }
+    }
+}
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ColumnDefinition {
@@ -1995,6 +2005,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));
@@ -2023,6 +2034,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         let result = storage.get_table_info("users").unwrap();
@@ -2061,6 +2073,7 @@ mod tests {
                     compression: None,
                     references: None,
                 }],
+                ..Default::default()
             },
         );
         let count = storage
@@ -2089,6 +2102,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         assert_eq!(info.name, "users");
     }
@@ -2099,6 +2113,7 @@ mod tests {
             info: TableInfo {
                 name: "users".to_string(),
                 columns: vec![],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -2228,6 +2243,7 @@ fn test_table_info_new() {
                 references: None,
             },
         ],
+        ..Default::default()
     };
     assert_eq!(info.name, "users");
     assert_eq!(info.columns.len(), 2);
@@ -2269,6 +2285,7 @@ fn test_table_data_new() {
         info: TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         },
         rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
     };
@@ -2305,6 +2322,7 @@ fn test_table_info_serialize() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     let json = serde_json::to_string(&info).unwrap();
     assert!(json.contains("users"));
@@ -2318,6 +2336,7 @@ fn test_view_info_new() {
         schema: TableInfo {
             name: "user_view".to_string(),
             columns: vec![],
+            ..Default::default()
         },
         records: vec![],
     };
@@ -2333,6 +2352,7 @@ fn test_memory_storage_views() {
         schema: TableInfo {
             name: "user_view".to_string(),
             columns: vec![],
+            ..Default::default()
         },
         records: vec![],
     };
@@ -2350,6 +2370,7 @@ fn test_memory_storage_get_view() {
         schema: TableInfo {
             name: "v1".to_string(),
             columns: vec![],
+            ..Default::default()
         },
         records: vec![],
     };
@@ -2381,6 +2402,7 @@ fn test_memory_storage_insert_with_info() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage
@@ -2405,6 +2427,7 @@ fn test_memory_storage_duplicate_key() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage
@@ -2429,6 +2452,7 @@ fn test_memory_storage_get_table_info() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     let retrieved = storage.get_table_info("users").unwrap();
@@ -2475,10 +2499,12 @@ fn test_memory_storage_list_tables() {
     let info1 = TableInfo {
         name: "users".to_string(),
         columns: vec![],
+        ..Default::default()
     };
     let info2 = TableInfo {
         name: "orders".to_string(),
         columns: vec![],
+        ..Default::default()
     };
     storage.create_table(&info1).unwrap();
     storage.create_table(&info2).unwrap();
@@ -2504,6 +2530,7 @@ fn test_memory_storage_create_index() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage
@@ -2529,6 +2556,7 @@ fn test_memory_storage_drop_index() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage
@@ -2555,6 +2583,7 @@ fn test_memory_storage_search_index() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage
@@ -2584,6 +2613,7 @@ fn test_memory_storage_range_index() {
             compression: None,
             references: None,
         }],
+        ..Default::default()
     };
     storage.create_table(&info).unwrap();
     storage

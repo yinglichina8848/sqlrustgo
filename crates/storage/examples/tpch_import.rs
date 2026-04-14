@@ -110,6 +110,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("n_regionkey", "INTEGER"),
                 col_def("n_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -122,6 +123,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("r_name", "TEXT"),
                 col_def("r_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -138,6 +140,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("s_acctbal", "REAL"),
                 col_def("s_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -156,6 +159,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("p_retailprice", "REAL"),
                 col_def("p_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -170,6 +174,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("ps_supplycost", "REAL"),
                 col_def("ps_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -187,6 +192,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("c_mktsegment", "TEXT"),
                 col_def("c_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -205,6 +211,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("o_shippriority", "INTEGER"),
                 col_def("o_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 
@@ -230,6 +237,7 @@ fn create_tables(storage: &mut FileStorage) {
                 col_def("l_shipmode", "TEXT"),
                 col_def("l_comment", "TEXT"),
             ],
+            ..Default::default()
         })
         .unwrap();
 }
