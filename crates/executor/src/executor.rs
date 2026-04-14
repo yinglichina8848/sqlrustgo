@@ -1964,6 +1964,13 @@ impl VolExecutorBuilder {
         }
     }
 
+    pub fn set_outer_row_on_executor(
+        executor: &mut Box<dyn VolcanoExecutor>,
+        outer_row: Option<&[Value]>,
+    ) {
+        executor.set_outer_row(outer_row);
+    }
+
     fn build_in_subquery(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
         let children = plan.children();
         if children.is_empty() {
