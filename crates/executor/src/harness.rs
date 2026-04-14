@@ -268,6 +268,7 @@ pub mod fixtures {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(
@@ -308,6 +309,7 @@ pub mod fixtures {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(
@@ -367,6 +369,7 @@ pub mod fixtures {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(

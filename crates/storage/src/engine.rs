@@ -53,6 +53,53 @@ pub struct ForeignKeyConstraint {
     pub on_update: Option<ForeignKeyAction>,
 }
 
+/// Referencing foreign key info (for CASCADE queries)
+#[derive(Debug, Clone)]
+pub struct ReferencingForeignKey {
+    pub constraint_name: Option<String>,
+    pub child_table: String,
+    pub child_columns: Vec<String>,
+    pub parent_table: String,
+    pub parent_columns: Vec<String>,
+    pub on_delete: Option<ForeignKeyAction>,
+    pub on_update: Option<ForeignKeyAction>,
+}
+
+/// Table-level foreign key constraint (stored in TableInfo)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableForeignKey {
+    pub name: Option<String>,
+    pub child_columns: Vec<String>,
+    pub parent_table: String,
+    pub parent_columns: Vec<String>,
+    pub on_delete: Option<ForeignKeyAction>,
+    pub on_update: Option<ForeignKeyAction>,
+}
+
+impl From<TableForeignKey> for ReferencingForeignKey {
+    fn from(fk: TableForeignKey) -> Self {
+        ReferencingForeignKey {
+            constraint_name: fk.name,
+            child_table: String::new(), // Will be set by caller
+            child_columns: fk.child_columns,
+            parent_table: fk.parent_table,
+            parent_columns: fk.parent_columns,
+            on_delete: fk.on_delete,
+            on_update: fk.on_update,
+        }
+    }
+}
+
+/// Table metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableInfo {
+    pub name: String,
+    pub columns: Vec<ColumnDefinition>,
+    /// Table-level foreign key constraints (None = empty for backward compatibility)
+    #[serde(default)]
+    pub table_foreign_keys: Option<Vec<TableForeignKey>>,
+}
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ColumnDefinition {
@@ -80,13 +127,6 @@ impl ColumnDefinition {
             compression: None, // Default: auto-select compression
         }
     }
-}
-
-/// Table metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TableInfo {
-    pub name: String,
-    pub columns: Vec<ColumnDefinition>,
 }
 
 /// Table data - combines metadata and rows
@@ -138,6 +178,9 @@ pub trait StorageEngine: Send + Sync {
 
     /// Delete rows matching a filter
     fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
+
+    /// Get all foreign keys that reference a given table
+    fn get_referencing_foreign_keys(&self, table: &str) -> Vec<ReferencingForeignKey>;
 
     /// Update rows matching a filter
     fn update(
@@ -541,6 +584,20 @@ impl MemoryStorage {
             }
         }
         result
+    }
+
+    /// Get column indices for given column names in a table
+    pub fn get_column_indices(&self, table: &str, columns: &[String]) -> Option<Vec<usize>> {
+        let table_info = self.table_infos.get(table)?;
+        let indices: Vec<usize> = columns
+            .iter()
+            .filter_map(|col_name| table_info.columns.iter().position(|c| &c.name == col_name))
+            .collect();
+        if indices.len() == columns.len() {
+            Some(indices)
+        } else {
+            None
+        }
     }
 }
 
@@ -952,6 +1009,41 @@ impl StorageEngine for MemoryStorage {
 
         self.on_write_complete(table);
         Ok(deleted_count)
+    }
+
+    fn get_referencing_foreign_keys(&self, table: &str) -> Vec<ReferencingForeignKey> {
+        let mut result = Vec::new();
+        for (table_name, table_info) in &self.table_infos {
+            for col_def in &table_info.columns {
+                if let Some(ref fk) = col_def.references {
+                    if fk.referenced_table == table {
+                        result.push(ReferencingForeignKey {
+                            constraint_name: None,
+                            child_table: table_name.clone(),
+                            child_columns: vec![col_def.name.clone()],
+                            parent_table: fk.referenced_table.clone(),
+                            parent_columns: vec![fk.referenced_column.clone()],
+                            on_delete: fk.on_delete,
+                            on_update: fk.on_update,
+                        });
+                    }
+                }
+            }
+            for table_fk in table_info.table_foreign_keys.iter().flatten() {
+                if table_fk.parent_table == table {
+                    result.push(ReferencingForeignKey {
+                        constraint_name: table_fk.name.clone(),
+                        child_table: table_name.clone(),
+                        child_columns: table_fk.child_columns.clone(),
+                        parent_table: table_fk.parent_table.clone(),
+                        parent_columns: table_fk.parent_columns.clone(),
+                        on_delete: table_fk.on_delete,
+                        on_update: table_fk.on_update,
+                    });
+                }
+            }
+        }
+        result
     }
 
     fn update(

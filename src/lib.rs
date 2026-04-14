@@ -2238,6 +2238,7 @@ impl ExecutionEngine {
                 let table_info = sqlrustgo_storage::TableInfo {
                     name: create.name.clone(),
                     columns,
+                    table_foreign_keys: None,
                 };
 
                 storage.create_table(&table_info)?;
@@ -2251,6 +2252,7 @@ impl ExecutionEngine {
                     schema: sqlrustgo_storage::TableInfo {
                         name: create.name.clone(),
                         columns: vec![],
+                        table_foreign_keys: None,
                     },
                     records: vec![],
                 };
@@ -2581,6 +2583,7 @@ impl ExecutionEngine {
                             let table_info = sqlrustgo_storage::TableInfo {
                                 name: temp_name.clone(),
                                 columns: columns,
+                                table_foreign_keys: None,
                             };
 
                             storage.create_table(&table_info)?;
