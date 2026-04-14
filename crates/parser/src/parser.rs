@@ -601,6 +601,23 @@ pub enum ForeignKeyAction {
     Restrict,
 }
 
+/// Table-level constraints for CREATE TABLE
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TableConstraint {
+    /// PRIMARY KEY (col1, col2, ...)
+    PrimaryKey { columns: Vec<String> },
+    /// FOREIGN KEY (col1, col2, ...) REFERENCES table(col1, col2, ...)
+    ForeignKey {
+        columns: Vec<String>,
+        reference_table: String,
+        reference_columns: Vec<String>,
+        on_delete: Option<ForeignKeyAction>,
+        on_update: Option<ForeignKeyAction>,
+    },
+    /// UNIQUE (col1, col2, ...)
+    Unique { columns: Vec<String> },
+}
+
 /// Expression
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
