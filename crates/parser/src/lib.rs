@@ -31,6 +31,7 @@ pub use parser::RevokeStatement;
 pub use parser::SetOperation;
 pub use parser::SetOperationType;
 pub use parser::Statement;
+pub use parser::TableConstraint;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
 
