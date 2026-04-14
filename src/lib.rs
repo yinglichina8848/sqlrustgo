@@ -13,6 +13,10 @@ pub use sqlrustgo_parser::{
     SetOperation, Statement, Token, TransactionCommand,
 };
 pub use sqlrustgo_planner::converter::StatementConverter;
+use sqlrustgo_planner::PreparedStatementManager;
+pub use sqlrustgo_planner::{
+    Column, Expr, Field, LogicalPlan, Optimizer, PhysicalPlan, Planner, Schema, SetOperationType,
+};
 pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::predicate;
 pub use sqlrustgo_storage::{
@@ -59,6 +63,97 @@ fn convert_expr_to_predicate(expr: &sqlrustgo_planner::Expr) -> Option<predicate
         sqlrustgo_planner::Operator::GtEq => Some(predicate::Predicate::gte(col_name, value)),
         _ => None,
     }
+}
+
+/// Helper function to execute a parsed statement
+/// This breaks the recursive call chain that confuses the type inferencer
+fn execute_parsed_statement(
+    engine: &mut ExecutionEngine,
+    statement: Statement,
+) -> Result<ExecutorResult, SqlError> {
+    engine.execute(statement)
+}
+
+/// Convert SelectStatement to LogicalPlan
+/// This is a simplified conversion that handles basic SELECT queries
+#[allow(dead_code)]
+fn select_to_logical_plan(
+    select: &sqlrustgo_parser::parser::SelectStatement,
+    storage: &dyn StorageEngine,
+) -> Result<LogicalPlan, SqlError> {
+    use sqlrustgo_planner::{Column, DataType, Expr, Field};
+
+    let tables = if select.tables.is_empty() {
+        vec![select.table.clone()]
+    } else {
+        select.tables.clone()
+    };
+
+    let table_name = tables
+        .first()
+        .ok_or_else(|| SqlError::ExecutionError("No table specified in SELECT".to_string()))?;
+
+    let table_info = storage
+        .get_table_info(table_name)
+        .map_err(|_| SqlError::ExecutionError(format!("Table '{}' not found", table_name)))?;
+
+    let mut proj_exprs = Vec::new();
+    let mut proj_fields = Vec::new();
+
+    if select.columns.is_empty() || (select.columns.len() == 1 && select.columns[0].name == "*") {
+        for col in &table_info.columns {
+            proj_exprs.push(Expr::Column(Column::new_qualified(
+                table_name.clone(),
+                col.name.clone(),
+            )));
+            proj_fields.push(Field::new(
+                col.name.clone(),
+                DataType::from_sql_type(&col.data_type),
+            ));
+        }
+    } else {
+        for select_col in &select.columns {
+            let col_name = &select_col.name;
+            let field = table_info
+                .columns
+                .iter()
+                .find(|c| &c.name == col_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Column '{}' not found", col_name))
+                })?;
+            proj_exprs.push(Expr::Column(Column::new_qualified(
+                table_name.clone(),
+                col_name.clone(),
+            )));
+            proj_fields.push(Field::new(
+                col_name.clone(),
+                DataType::from_sql_type(&field.data_type),
+            ));
+        }
+    }
+
+    let table_schema = Schema::new(
+        table_info
+            .columns
+            .iter()
+            .map(|c| Field::new(c.name.clone(), DataType::from_sql_type(&c.data_type)))
+            .collect(),
+    );
+
+    // Build logical plan: TableScan -> Projection
+    let table_scan = LogicalPlan::TableScan {
+        table_name: table_name.clone(),
+        schema: table_schema,
+        projection: None,
+    };
+
+    let projection = LogicalPlan::Projection {
+        input: Box::new(table_scan),
+        expr: proj_exprs,
+        schema: Schema::new(proj_fields),
+    };
+
+    Ok(projection)
 }
 
 /// Format EXPLAIN output with cost information
@@ -1455,6 +1550,7 @@ pub struct ExecutionEngine {
     pub storage: Arc<RwLock<dyn StorageEngine>>,
     session_manager: Option<Arc<sqlrustgo_security::SessionManager>>,
     current_session_id: Option<u64>,
+    prepared_statements: PreparedStatementManager,
 }
 
 impl ExecutionEngine {
@@ -1463,6 +1559,7 @@ impl ExecutionEngine {
             storage,
             session_manager: None,
             current_session_id: None,
+            prepared_statements: PreparedStatementManager::new(100),
         }
     }
 
@@ -1475,6 +1572,7 @@ impl ExecutionEngine {
             storage,
             session_manager: Some(session_manager),
             current_session_id: Some(session_id),
+            prepared_statements: PreparedStatementManager::new(100),
         }
     }
 
@@ -2790,6 +2888,104 @@ impl ExecutionEngine {
                     ))
                 }
             },
+            Statement::Prepare(prepare) => {
+                let sql = &prepare.sql;
+                let stmt_name = &prepare.name;
+
+                let statement = parse(sql).map_err(|e| SqlError::ExecutionError(e))?;
+
+                let physical_plan: Box<dyn sqlrustgo_planner::PhysicalPlan>;
+                let param_types = Vec::new();
+
+                match statement {
+                    Statement::Select(ref select) => {
+                        let storage = self.storage.read().unwrap();
+                        match select_to_logical_plan(select, &*storage) {
+                            Ok(logical_plan) => {
+                                let mut planner = sqlrustgo_planner::DefaultPlanner::new();
+                                match planner.optimize(logical_plan) {
+                                    Ok(plan) => {
+                                        physical_plan = plan;
+                                    }
+                                    Err(e) => {
+                                        return Err(SqlError::ExecutionError(format!(
+                                            "Failed to optimize plan: {}",
+                                            e
+                                        )));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                return Err(SqlError::ExecutionError(format!(
+                                    "Failed to create logical plan: {}",
+                                    e
+                                )));
+                            }
+                        }
+                    }
+                    _ => {
+                        let dummy_schema = sqlrustgo_planner::Schema::empty();
+                        let dummy_plan = sqlrustgo_planner::SeqScanExec::new(
+                            "__dummy__".to_string(),
+                            dummy_schema,
+                        );
+                        physical_plan = Box::new(dummy_plan);
+                    }
+                }
+
+                self.prepared_statements.prepare(
+                    stmt_name.clone(),
+                    sql.clone(),
+                    physical_plan,
+                    param_types,
+                );
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Text(format!(
+                        "Prepared statement '{}' created",
+                        stmt_name
+                    ))]],
+                    0,
+                ))
+            }
+            Statement::Execute(execute) => {
+                let stmt_name_str = execute.name.clone();
+
+                let plan_box = {
+                    let stmt = self.prepared_statements.get(&stmt_name_str);
+                    match stmt {
+                        Some(s) => s.plan.as_ref(),
+                        None => {
+                            return Err(sqlrustgo_types::SqlError::ExecutionError(format!(
+                                "Prepared statement '{}' not found",
+                                stmt_name_str
+                            )));
+                        }
+                    }
+                };
+
+                let result = self.execute_plan(plan_box);
+
+                self.prepared_statements.record_use(&stmt_name_str);
+
+                return result;
+            }
+            Statement::DeallocatePrepare(dealloc) => {
+                let stmt_name = &dealloc.name;
+                if self.prepared_statements.deallocate(stmt_name) {
+                    Ok(ExecutorResult::new(
+                        vec![vec![Value::Text(format!(
+                            "Deallocated prepared statement '{}'",
+                            stmt_name
+                        ))]],
+                        0,
+                    ))
+                } else {
+                    Err(SqlError::ExecutionError(format!(
+                        "Prepared statement '{}' not found",
+                        stmt_name
+                    )))
+                }
+            }
             Statement::Copy(copy) => {
                 use sqlrustgo_storage::parquet::{export_to_parquet, import_from_parquet};
 
@@ -3224,6 +3420,7 @@ impl Default for ExecutionEngine {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
             session_manager: None,
             current_session_id: None,
+            prepared_statements: PreparedStatementManager::new(100),
         }
     }
 }
