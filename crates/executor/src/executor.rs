@@ -1574,8 +1574,22 @@ impl InSubqueryVolcanoExecutor {
         }
     }
 
-    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
-        self.outer_row = row;
+    pub fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    pub fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
+    }
+}
+
+impl OuterRowAwareExecutor for InSubqueryVolcanoExecutor {
+    fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 }
 
