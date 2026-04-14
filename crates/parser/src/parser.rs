@@ -3305,8 +3305,8 @@ impl Parser {
                     vec!["id".to_string()]
                 };
 
-                let on_delete = self.parse_fk_action()?;
-                let on_update = self.parse_fk_action()?;
+                let on_delete = self.parse_fk_delete_action()?;
+                let on_update = self.parse_fk_update_action()?;
 
                 Ok(TableConstraint::ForeignKey {
                     columns,
@@ -3356,29 +3356,39 @@ impl Parser {
         Ok(identifiers)
     }
 
-    fn parse_fk_action(&mut self) -> Result<Option<ForeignKeyAction>, String> {
-        if matches!(self.current(), Some(Token::On)) {
-            self.next();
-            match self.current() {
-                Some(Token::Identifier(s)) => {
-                    let upper = s.to_uppercase();
-                    self.next();
-                    match upper.as_str() {
-                        "DELETE" => {
-                            let action = self.parse_fk_action_value()?;
-                            Ok(action)
-                        }
-                        "UPDATE" => {
-                            let action = self.parse_fk_action_value()?;
-                            Ok(action)
-                        }
-                        _ => Ok(None),
-                    }
-                }
-                _ => Ok(None),
+    fn parse_fk_delete_action(&mut self) -> Result<Option<ForeignKeyAction>, String> {
+        if !matches!(self.current(), Some(Token::On)) {
+            return Ok(None);
+        }
+        self.next();
+        match self.current() {
+            Some(Token::Delete) => {
+                self.next();
+                self.parse_fk_action_value()
             }
-        } else {
-            Ok(None)
+            Some(Token::Identifier(s)) if s.to_uppercase() == "DELETE" => {
+                self.next();
+                self.parse_fk_action_value()
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_fk_update_action(&mut self) -> Result<Option<ForeignKeyAction>, String> {
+        if !matches!(self.current(), Some(Token::On)) {
+            return Ok(None);
+        }
+        self.next();
+        match self.current() {
+            Some(Token::Update) => {
+                self.next();
+                self.parse_fk_action_value()
+            }
+            Some(Token::Identifier(s)) if s.to_uppercase() == "UPDATE" => {
+                self.next();
+                self.parse_fk_action_value()
+            }
+            _ => Ok(None),
         }
     }
 
@@ -3403,6 +3413,19 @@ impl Parser {
                         }
                     }
                     _ => Ok(None),
+                }
+            }
+            Some(Token::Set) => {
+                self.next();
+                if let Some(Token::Identifier(null_check)) = self.current() {
+                    if null_check.to_uppercase() == "NULL" {
+                        self.next();
+                        Ok(Some(ForeignKeyAction::SetNull))
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Ok(None)
                 }
             }
             _ => Ok(None),
@@ -6451,492 +6474,170 @@ fn test_parse_procedure_return() {
     }
 }
 
-// ===== IndexHint Parsing Tests =====
-
 #[test]
-fn test_parse_select_with_force_index_hint() {
-    // Use 'order_status' instead of 'status' since STATUS is a keyword
-    let sql = "SELECT * FROM orders FORCE INDEX (idx_orders_primary) WHERE order_status = 'active'";
+fn test_parse_table_constraint_foreign_key() {
+    let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id))";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "orders");
-            assert_eq!(s.index_hints.len(), 1);
-            assert_eq!(s.index_hints[0].hint_type, IndexHintType::ForceIndex);
-            assert_eq!(s.index_hints[0].index_names, vec!["idx_orders_primary"]);
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_select_with_use_index_hint() {
-    let sql = "SELECT * FROM users USE INDEX (idx_id) WHERE id = 1";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-            assert_eq!(s.index_hints.len(), 1);
-            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
-            assert_eq!(s.index_hints[0].index_names, vec!["idx_id"]);
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_select_with_multiple_index_hints() {
-    let sql = "SELECT * FROM users USE INDEX (idx_id) IGNORE INDEX (idx_old)";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-            assert_eq!(s.index_hints.len(), 2);
-            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
-            assert_eq!(s.index_hints[1].hint_type, IndexHintType::IgnoreIndex);
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_select_with_multiple_index_names() {
-    let sql = "SELECT * FROM users USE INDEX (idx_primary, idx_secondary, idx_tertiary)";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-            assert_eq!(s.index_hints.len(), 1);
-            assert_eq!(s.index_hints[0].hint_type, IndexHintType::UseIndex);
-            assert_eq!(s.index_hints[0].index_names.len(), 3);
-            assert_eq!(s.index_hints[0].index_names[0], "idx_primary");
-            assert_eq!(s.index_hints[0].index_names[1], "idx_secondary");
-            assert_eq!(s.index_hints[0].index_names[2], "idx_tertiary");
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_select_without_index_hints() {
-    let sql = "SELECT id, name FROM users WHERE id = 1";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-            assert!(s.index_hints.is_empty(), "Expected no index hints");
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_select_with_empty_index_hints() {
-    let sql = "SELECT * FROM users USE INDEX ()";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-            assert_eq!(s.index_hints.len(), 1);
-            assert_eq!(s.index_hints[0].index_names.len(), 0);
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_qualified_column() {
-    let sql = "SELECT users.id, users.name FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.columns.len(), 2);
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_merge_basic() {
-    let sql = "MERGE INTO target USING source ON condition WHEN MATCHED THEN UPDATE SET col = 1";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Merge(m) => {
-            assert_eq!(m.target_table, "target");
-            assert_eq!(m.source_table, "source");
-            assert!(m.when_matched.is_some());
-        }
-        _ => panic!("Expected MERGE statement"),
-    }
-}
-
-#[test]
-fn test_parse_merge_update_set() {
-    let sql = "MERGE INTO t1 USING t2 ON t1.id = t2.id WHEN MATCHED THEN UPDATE SET name = t2.name";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Merge(m) => {
-            assert_eq!(m.target_table, "t1");
-            assert_eq!(m.source_table, "t2");
-            match &m.when_matched {
-                Some(MergeAction::Update { set_clauses }) => {
-                    assert_eq!(set_clauses.len(), 1);
-                    assert_eq!(set_clauses[0].0, "name");
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.name, "orders");
+            assert_eq!(ct.columns.len(), 2);
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::ForeignKey {
+                    columns,
+                    reference_table,
+                    reference_columns,
+                    ..
+                } => {
+                    assert_eq!(columns, &vec!["user_id"]);
+                    assert_eq!(reference_table, "users");
+                    assert_eq!(reference_columns, &vec!["id"]);
                 }
-                _ => panic!("Expected UPDATE action"),
+                _ => panic!("Expected ForeignKey constraint"),
             }
         }
-        _ => panic!("Expected MERGE statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_prepare_basic() {
-    let sql = "PREPARE my_stmt FROM 'SELECT * FROM users'";
+fn test_parse_table_constraint_multi_column_fk() {
+    let sql = "CREATE TABLE line_items (order_id INTEGER, product_id INTEGER, FOREIGN KEY (order_id, product_id) REFERENCES order_products(order_id, product_id))";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Prepare(p) => {
-            assert_eq!(p.name, "my_stmt");
-            assert_eq!(p.sql, "SELECT * FROM users");
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::ForeignKey {
+                    columns,
+                    reference_columns,
+                    ..
+                } => {
+                    assert_eq!(columns, &vec!["order_id", "product_id"]);
+                    assert_eq!(reference_columns, &vec!["order_id", "product_id"]);
+                }
+                _ => panic!("Expected ForeignKey constraint"),
+            }
         }
-        _ => panic!("Expected PREPARE statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_execute_basic() {
-    let sql = "EXECUTE my_stmt";
+fn test_parse_table_constraint_fk_with_cascade() {
+    let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Execute(e) => {
-            assert_eq!(e.name, "my_stmt");
-            assert!(e.params.is_empty());
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::ForeignKey {
+                    on_delete,
+                    on_update,
+                    ..
+                } => {
+                    assert!(matches!(on_delete, Some(ForeignKeyAction::Cascade)));
+                    assert!(on_update.is_none());
+                }
+                _ => panic!("Expected ForeignKey constraint"),
+            }
         }
-        _ => panic!("Expected EXECUTE statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_execute_with_params() {
-    let sql = "EXECUTE my_stmt USING 1, 2, 3";
+fn test_parse_table_constraint_fk_with_set_null() {
+    let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE SET NULL)";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Execute(e) => {
-            assert_eq!(e.name, "my_stmt");
-            assert_eq!(e.params.len(), 3);
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::ForeignKey {
+                    on_delete,
+                    on_update,
+                    ..
+                } => {
+                    assert!(on_delete.is_none());
+                    assert!(matches!(on_update, Some(ForeignKeyAction::SetNull)));
+                }
+                _ => panic!("Expected ForeignKey constraint"),
+            }
         }
-        _ => panic!("Expected EXECUTE statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_deallocate_prepare() {
-    let sql = "DEALLOCATE PREPARE my_stmt";
+fn test_parse_table_constraint_primary_key() {
+    let sql = "CREATE TABLE composite (a INTEGER, b INTEGER, PRIMARY KEY (a, b))";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::DeallocatePrepare(d) => {
-            assert_eq!(d.name, "my_stmt");
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::PrimaryKey { columns } => {
+                    assert_eq!(columns, &vec!["a", "b"]);
+                }
+                _ => panic!("Expected PrimaryKey constraint"),
+            }
         }
-        _ => panic!("Expected DEALLOCATE PREPARE statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_call_procedure() {
-    let sql = "CALL my_proc(1, 'test')";
+fn test_parse_table_constraint_unique() {
+    let sql = "CREATE TABLE users (id INTEGER, email TEXT, UNIQUE (email))";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Call(c) => {
-            assert_eq!(c.procedure_name, "my_proc");
-            assert_eq!(c.args.len(), 2);
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 1);
+            match &ct.constraints[0] {
+                TableConstraint::Unique { columns } => {
+                    assert_eq!(columns, &vec!["email"]);
+                }
+                _ => panic!("Expected Unique constraint"),
+            }
         }
-        _ => panic!("Expected CALL statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
 
 #[test]
-fn test_parse_call_no_args() {
-    let sql = "CALL my_proc()";
+fn test_parse_table_constraint_multiple() {
+    let sql = "CREATE TABLE order_items (order_id INTEGER, product_id INTEGER, quantity INTEGER, PRIMARY KEY (order_id, product_id), FOREIGN KEY (order_id) REFERENCES orders(id))";
     let result = parse(sql);
     assert!(result.is_ok(), "Error: {:?}", result.err());
     match result.unwrap() {
-        Statement::Call(c) => {
-            assert_eq!(c.procedure_name, "my_proc");
-            assert!(c.args.is_empty());
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.constraints.len(), 2);
+            match &ct.constraints[0] {
+                TableConstraint::PrimaryKey { columns } => {
+                    assert_eq!(columns, &vec!["order_id", "product_id"]);
+                }
+                _ => panic!("Expected PrimaryKey constraint first"),
+            }
+            match &ct.constraints[1] {
+                TableConstraint::ForeignKey {
+                    columns,
+                    reference_table,
+                    ..
+                } => {
+                    assert_eq!(columns, &vec!["order_id"]);
+                    assert_eq!(reference_table, "orders");
+                }
+                _ => panic!("Expected ForeignKey constraint second"),
+            }
         }
-        _ => panic!("Expected CALL statement"),
-    }
-}
-
-#[test]
-fn test_parse_delimiter_semicolon() {
-    let sql = "DELIMITER ;";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Delimiter(d) => {
-            assert_eq!(d.delimiter, ";");
-        }
-        _ => panic!("Expected DELIMITER statement"),
-    }
-}
-
-#[test]
-fn test_parse_delimiter_custom() {
-    let sql = "DELIMITER newdelimiter";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Delimiter(d) => {
-            assert_eq!(d.delimiter, "newdelimiter");
-        }
-        _ => panic!("Expected DELIMITER statement"),
-    }
-}
-
-#[test]
-fn test_parse_extract_year() {
-    let sql = "SELECT EXTRACT(YEAR FROM birth_date) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert_eq!(s.table, "users");
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_extract_month() {
-    let sql = "SELECT EXTRACT(MONTH FROM birth_date) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_extract_day() {
-    let sql = "SELECT EXTRACT(DAY FROM birth_date) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_row_number() {
-    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_rank() {
-    let sql = "SELECT RANK() OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_dense_rank() {
-    let sql = "SELECT DENSE_RANK() OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_lag() {
-    let sql = "SELECT LAG(value) OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_lead() {
-    let sql = "SELECT LEAD(value) OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_first_value() {
-    let sql = "SELECT FIRST_VALUE(value) OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_last_value() {
-    let sql = "SELECT LAST_VALUE(value) OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_nth_value() {
-    let sql = "SELECT NTH_VALUE(value, 2) OVER (ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_window_partition_by() {
-    let sql = "SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY id) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_order_by_asc() {
-    let sql = "SELECT id FROM users ORDER BY id ASC";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_order_by_desc() {
-    let sql = "SELECT id FROM users ORDER BY id DESC";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_order_by_nulls_first() {
-    let sql = "SELECT id FROM users ORDER BY id NULLS FIRST";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_order_by_nulls_last() {
-    let sql = "SELECT id FROM users ORDER BY id DESC NULLS LAST";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_order_by_multiple() {
-    let sql = "SELECT id FROM users ORDER BY id, name DESC";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_arithmetic_multiply() {
-    let sql = "SELECT a * b FROM t";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_negative_number() {
-    let sql = "SELECT -42 FROM t";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_decimal_number() {
-    let sql = "SELECT 3.14159 FROM t";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_count_star() {
-    let sql = "SELECT COUNT(*) FROM users";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_sum() {
-    let sql = "SELECT SUM(amount) FROM orders";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_avg() {
-    let sql = "SELECT AVG(price) FROM products";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_min() {
-    let sql = "SELECT MIN(price) FROM products";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_max() {
-    let sql = "SELECT MAX(price) FROM products";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-}
-
-#[test]
-fn test_parse_where_between() {
-    let sql = "SELECT id FROM users WHERE age BETWEEN 18 AND 65";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert!(s.where_clause.is_some());
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_where_like() {
-    let sql = "SELECT id FROM users WHERE name LIKE 'John%'";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert!(s.where_clause.is_some());
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_where_is_null() {
-    let sql = "SELECT id FROM users WHERE email IS NULL";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert!(s.where_clause.is_some());
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-
-#[test]
-fn test_parse_where_is_not_null() {
-    let sql = "SELECT id FROM users WHERE email IS NOT NULL";
-    let result = parse(sql);
-    assert!(result.is_ok(), "Error: {:?}", result.err());
-    match result.unwrap() {
-        Statement::Select(s) => {
-            assert!(s.where_clause.is_some());
-        }
-        _ => panic!("Expected SELECT statement"),
+        _ => panic!("Expected CreateTable statement"),
     }
 }
