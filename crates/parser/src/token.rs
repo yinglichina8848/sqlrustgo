@@ -56,6 +56,10 @@ pub enum Token {
     New,
     Old,
     Referencing,
+    Foreign,
+    Constraint,
+    Cascade,
+    Restrict,
     Procedure,
     Call,
     Return,
@@ -218,11 +222,6 @@ pub enum Token {
     // Column constraints
     AutoIncrement,
     References,
-    // Table constraints
-    Foreign,
-    Constraint,
-    Cascade,
-    Restrict,
 
     // Wildcard
     Star, // * for SELECT *
@@ -299,6 +298,7 @@ impl fmt::Display for Token {
             Token::New => write!(f, "NEW"),
             Token::Old => write!(f, "OLD"),
             Token::Referencing => write!(f, "REFERENCING"),
+            Token::Foreign => write!(f, "FOREIGN"),
             Token::Procedure => write!(f, "PROCEDURE"),
             Token::Call => write!(f, "CALL"),
             Token::Return => write!(f, "RETURN"),
@@ -418,7 +418,7 @@ impl fmt::Display for Token {
             // Column constraints
             Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
             Token::References => write!(f, "REFERENCES"),
-            Token::Foreign => write!(f, "FOREIGN"),
+            // Table constraints
             Token::Constraint => write!(f, "CONSTRAINT"),
             Token::Cascade => write!(f, "CASCADE"),
             Token::Restrict => write!(f, "RESTRICT"),
