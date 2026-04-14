@@ -404,6 +404,44 @@ impl Expr {
             _ => false,
         }
     }
+
+    pub fn contains_outer_reference(&self) -> bool {
+        match self {
+            Expr::Column(col) => col.relation.is_some(),
+            Expr::InSubquery { expr, .. } => expr.contains_outer_reference(),
+            Expr::AnyAll { expr, .. } => expr.contains_outer_reference(),
+            Expr::BinaryExpr { left, right, .. } => {
+                left.contains_outer_reference() || right.contains_outer_reference()
+            }
+            Expr::UnaryExpr { expr, .. } => expr.contains_outer_reference(),
+            Expr::AggregateFunction { args, .. } => {
+                args.iter().any(|e| e.contains_outer_reference())
+            }
+            Expr::WindowFunction {
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                args.iter().any(|e| e.contains_outer_reference())
+                    || partition_by.iter().any(|e| e.contains_outer_reference())
+                    || order_by.iter().any(|e| e.expr.contains_outer_reference())
+            }
+            Expr::Alias { expr, .. } => expr.contains_outer_reference(),
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                conditions
+                    .iter()
+                    .any(|(c, r)| c.contains_outer_reference() || r.contains_outer_reference())
+                    || else_result
+                        .as_ref()
+                        .map_or(false, |e| e.contains_outer_reference())
+            }
+            _ => false,
+        }
+    }
 }
 
 fn evaluate_binary_op(left: &Value, op: &Operator, right: &Value) -> Option<Value> {

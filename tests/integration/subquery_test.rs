@@ -172,4 +172,103 @@ mod tests {
             result
         );
     }
+
+    #[test]
+    fn test_correlated_in_subquery() {
+        let mut engine = create_engine();
+        engine
+            .execute(parse("CREATE TABLE t1 (id INTEGER, t2_id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("CREATE TABLE t2 (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t1 VALUES (1, 10)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t1 VALUES (2, 20)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t1 VALUES (3, 30)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t2 VALUES (10, 'ten')").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t2 VALUES (20, 'twenty')").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO t2 VALUES (40, 'forty')").unwrap())
+            .unwrap();
+
+        let sql = "SELECT * FROM t1 WHERE t2_id IN (SELECT id FROM t2 WHERE id < 25)";
+        let result = engine.execute(parse(sql).unwrap());
+        assert!(
+            result.is_ok(),
+            "Correlated IN subquery should succeed: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_correlated_any_all() {
+        let mut engine = create_engine();
+        engine
+            .execute(parse("CREATE TABLE outer_tbl (id INTEGER, val INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("CREATE TABLE inner_tbl (id INTEGER, val INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO outer_tbl VALUES (1, 10)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO outer_tbl VALUES (2, 25)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO inner_tbl VALUES (1, 15)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO inner_tbl VALUES (2, 20)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO inner_tbl VALUES (3, 30)").unwrap())
+            .unwrap();
+
+        let sql = "SELECT * FROM outer_tbl o WHERE o.val > ANY (SELECT i.val FROM inner_tbl i WHERE i.id = o.id)";
+        let result = engine.execute(parse(sql).unwrap());
+        assert!(
+            result.is_ok(),
+            "Correlated ANY subquery should succeed: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_non_correlated_exists() {
+        let mut engine = create_engine();
+        engine
+            .execute(parse("CREATE TABLE products (id INTEGER, name TEXT)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("CREATE TABLE categories (id INTEGER)").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO products VALUES (1, 'Product1')").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO products VALUES (2, 'Product2')").unwrap())
+            .unwrap();
+        engine
+            .execute(parse("INSERT INTO categories VALUES (1)").unwrap())
+            .unwrap();
+
+        let sql = "SELECT * FROM products WHERE EXISTS (SELECT * FROM categories)";
+        let result = engine.execute(parse(sql).unwrap());
+        assert!(
+            result.is_ok(),
+            "Non-correlated EXISTS should succeed: {:?}",
+            result
+        );
+    }
 }
