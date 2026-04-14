@@ -560,6 +560,7 @@ pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
     pub if_not_exists: bool,
+    pub constraints: Vec<TableConstraint>,
 }
 
 /// DROP TABLE statement
@@ -3253,6 +3254,7 @@ impl Parser {
             name,
             columns,
             if_not_exists,
+            constraints: Vec::new(),
         }))
     }
 
