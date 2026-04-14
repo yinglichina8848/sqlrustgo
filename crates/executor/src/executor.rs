@@ -43,6 +43,33 @@ pub trait VolcanoExecutor: Send + Sync {
     fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
         Ok(None)
     }
+
+    /// Set outer row context for correlated subquery evaluation
+    /// Default implementation does nothing (for executors that don't need outer row)
+    fn set_outer_row(&mut self, _row: Option<&[Value]>) {}
+
+    /// Check if this executor type requires outer row context
+    /// Override to return true for InSubquery, AnyAll executors
+    fn requires_outer_row(&self) -> bool {
+        false
+    }
+}
+
+/// Trait for executors that require external row context
+/// Used for correlated subquery evaluation
+///
+/// Examples:
+/// - `InSubqueryVolcanoExecutor` needs outer row to evaluate `expr IN (subquery)`
+/// - `AnyAllVolcanoExecutor` needs outer row to evaluate `expr OP (subquery)`
+pub trait OuterRowAwareExecutor: Send {
+    /// Set the outer row context for correlated subquery evaluation
+    ///
+    /// # Arguments
+    /// * `row` - The current row from the outer query, or None if at the beginning
+    fn set_outer_row(&mut self, row: Option<&[Value]>);
+
+    /// Check if outer row has been set
+    fn has_outer_row(&self) -> bool;
 }
 
 pub type VolIterator = Box<dyn VolcanoExecutor>;
