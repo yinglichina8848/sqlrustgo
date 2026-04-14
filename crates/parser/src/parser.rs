@@ -3258,6 +3258,138 @@ impl Parser {
         }))
     }
 
+    fn parse_table_constraint(&mut self) -> Result<TableConstraint, String> {
+        match self.current() {
+            Some(Token::Foreign) => {
+                self.next();
+                self.expect(Token::Key)?;
+                self.expect(Token::LParen)?;
+                let columns = self.parse_identifier_list()?;
+                self.expect(Token::RParen)?;
+                self.expect(Token::References)?;
+
+                let reference_table = match self.current() {
+                    Some(Token::Identifier(s)) => {
+                        let t = s.clone();
+                        self.next();
+                        t
+                    }
+                    _ => return Err("Expected reference table name".to_string()),
+                };
+
+                let reference_columns = if matches!(self.current(), Some(Token::LParen)) {
+                    self.next();
+                    let cols = self.parse_identifier_list()?;
+                    self.expect(Token::RParen)?;
+                    cols
+                } else {
+                    vec!["id".to_string()]
+                };
+
+                let on_delete = self.parse_fk_action()?;
+                let on_update = self.parse_fk_action()?;
+
+                Ok(TableConstraint::ForeignKey {
+                    columns,
+                    reference_table,
+                    reference_columns,
+                    on_delete,
+                    on_update,
+                })
+            }
+            Some(Token::Primary) => {
+                self.next();
+                self.expect(Token::Key)?;
+                self.expect(Token::LParen)?;
+                let columns = self.parse_identifier_list()?;
+                self.expect(Token::RParen)?;
+                Ok(TableConstraint::PrimaryKey { columns })
+            }
+            Some(Token::Unique) => {
+                self.next();
+                self.expect(Token::LParen)?;
+                let columns = self.parse_identifier_list()?;
+                self.expect(Token::RParen)?;
+                Ok(TableConstraint::Unique { columns })
+            }
+            _ => Err("Expected FOREIGN KEY, PRIMARY KEY, or UNIQUE".to_string()),
+        }
+    }
+
+    fn parse_identifier_list(&mut self) -> Result<Vec<String>, String> {
+        let mut identifiers = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(s)) => {
+                    identifiers.push(s.clone());
+                    self.next();
+                }
+                _ => return Err("Expected identifier".to_string()),
+            }
+            match self.current() {
+                Some(Token::Comma) => {
+                    self.next();
+                    continue;
+                }
+                _ => break,
+            }
+        }
+        Ok(identifiers)
+    }
+
+    fn parse_fk_action(&mut self) -> Result<Option<ForeignKeyAction>, String> {
+        if matches!(self.current(), Some(Token::On)) {
+            self.next();
+            match self.current() {
+                Some(Token::Identifier(s)) => {
+                    let upper = s.to_uppercase();
+                    self.next();
+                    match upper.as_str() {
+                        "DELETE" => {
+                            let action = self.parse_fk_action_value()?;
+                            Ok(action)
+                        }
+                        "UPDATE" => {
+                            let action = self.parse_fk_action_value()?;
+                            Ok(action)
+                        }
+                        _ => Ok(None),
+                    }
+                }
+                _ => Ok(None),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_fk_action_value(&mut self) -> Result<Option<ForeignKeyAction>, String> {
+        match self.current() {
+            Some(Token::Identifier(s)) => {
+                let upper = s.to_uppercase();
+                self.next();
+                match upper.as_str() {
+                    "CASCADE" => Ok(Some(ForeignKeyAction::Cascade)),
+                    "RESTRICT" => Ok(Some(ForeignKeyAction::Restrict)),
+                    "SET" => {
+                        if let Some(Token::Identifier(null_check)) = self.current() {
+                            if null_check.to_uppercase() == "NULL" {
+                                self.next();
+                                Ok(Some(ForeignKeyAction::SetNull))
+                            } else {
+                                Ok(None)
+                            }
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    _ => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
         let mut pos = self.position;
         let mut is_user = false;
