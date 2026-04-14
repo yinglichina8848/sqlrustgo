@@ -74,6 +74,7 @@ pub enum Token {
     Delimiter,
     View,
     All,
+    Any,
     Limit,
     Offset,
     Distinct,
@@ -311,6 +312,7 @@ impl fmt::Display for Token {
             Token::Delimiter => write!(f, "DELIMITER"),
             Token::View => write!(f, "VIEW"),
             Token::All => write!(f, "ALL"),
+            Token::Any => write!(f, "ANY"),
             Token::Limit => write!(f, "LIMIT"),
             Token::Offset => write!(f, "OFFSET"),
             // Group By / Order By keywords
@@ -559,6 +561,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "GRANT" => Some(Token::Grant),
         "REVOKE" => Some(Token::Revoke),
         "ALL" => Some(Token::All),
+        "ANY" => Some(Token::Any),
         "INTEGER" => Some(Token::Integer),
         "TEXT" => Some(Token::Text),
         "FLOAT" => Some(Token::Float),
