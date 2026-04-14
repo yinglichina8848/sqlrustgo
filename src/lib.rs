@@ -17,7 +17,6 @@ use sqlrustgo_planner::PreparedStatementManager;
 pub use sqlrustgo_planner::{
     Column, Expr, Field, LogicalPlan, Optimizer, PhysicalPlan, Planner, Schema, SetOperationType,
 };
-pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner, SetOperationType};
 pub use sqlrustgo_storage::predicate;
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine, ViewInfo,
