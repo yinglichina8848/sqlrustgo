@@ -75,6 +75,7 @@ fn main() {
                                 compression: None,
                             },
                         ],
+                        ..Default::default()
                     },
                     rows,
                 };
@@ -122,6 +123,7 @@ fn main() {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             },
             rows: batch.clone(),
         };

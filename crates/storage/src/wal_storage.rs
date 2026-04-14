@@ -583,6 +583,7 @@ mod tests {
                     ColumnDefinition::new("id", "INTEGER"),
                     ColumnDefinition::new("value", "INTEGER"),
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -601,6 +602,7 @@ mod tests {
             .create_table(&TableInfo {
                 name: "t1".to_string(),
                 columns: vec![ColumnDefinition::new("id", "INTEGER")],
+                ..Default::default()
             })
             .unwrap();
 
@@ -678,6 +680,7 @@ mod tests {
                     ColumnDefinition::new("id", "INTEGER"),
                     ColumnDefinition::new("value", "INTEGER"),
                 ],
+                ..Default::default()
             })
             .unwrap();
 
