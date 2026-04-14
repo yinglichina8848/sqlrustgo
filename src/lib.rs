@@ -1550,6 +1550,7 @@ pub struct ExecutionEngine {
     session_manager: Option<Arc<sqlrustgo_security::SessionManager>>,
     current_session_id: Option<u64>,
     prepared_statements: PreparedStatementManager,
+    current_outer_row: Option<Vec<Value>>,
 }
 
 impl ExecutionEngine {
@@ -1559,6 +1560,7 @@ impl ExecutionEngine {
             session_manager: None,
             current_session_id: None,
             prepared_statements: PreparedStatementManager::new(100),
+            current_outer_row: None,
         }
     }
 
@@ -1572,11 +1574,20 @@ impl ExecutionEngine {
             session_manager: Some(session_manager),
             current_session_id: Some(session_id),
             prepared_statements: PreparedStatementManager::new(100),
+            current_outer_row: None,
         }
     }
 
     pub fn session_id(&self) -> Option<u64> {
         self.current_session_id
+    }
+
+    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
+        self.current_outer_row = row;
+    }
+
+    pub fn get_outer_row(&self) -> Option<&Vec<Value>> {
+        self.current_outer_row.as_ref()
     }
 
     fn execute_subquery_for_derived(
@@ -3422,8 +3433,14 @@ impl ExecutionEngine {
                         "InSubquery has no children".to_string(),
                     ));
                 }
-                let _subquery_result = self.execute_plan(children[0])?;
-                Ok(ExecutorResult::new(vec![vec![Value::Boolean(false)]], 0))
+
+                // Execute subquery to get results
+                let subquery_result = self.execute_plan(children[0])?;
+
+                // For proper IN evaluation, we would need outer row context here.
+                // For now, return the subquery results for caller to use.
+                // The outer row context is only available in the Volcano path.
+                Ok(ExecutorResult::new(subquery_result.rows, 0))
             }
             "Exists" => {
                 let exists_plan = plan
@@ -3474,6 +3491,7 @@ impl Default for ExecutionEngine {
             session_manager: None,
             current_session_id: None,
             prepared_statements: PreparedStatementManager::new(100),
+            current_outer_row: None,
         }
     }
 }
