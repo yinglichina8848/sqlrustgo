@@ -2267,6 +2267,37 @@ impl Parser {
         };
         self.next(); // consume operator
 
+        if matches!(self.current(), Some(Token::Any)) {
+            self.next();
+            self.expect(Token::LParen)?;
+            if matches!(self.current(), Some(Token::Select)) {
+                let select_stmt = self.parse_select()?;
+                self.expect(Token::RParen)?;
+                return Ok(Expression::AnyAll {
+                    expr: Box::new(left),
+                    op: op.to_string(),
+                    subquery: Box::new(select_stmt),
+                    is_any: true,
+                });
+            }
+            return Err("Expected SELECT after ANY".to_string());
+        }
+        if matches!(self.current(), Some(Token::All)) {
+            self.next();
+            self.expect(Token::LParen)?;
+            if matches!(self.current(), Some(Token::Select)) {
+                let select_stmt = self.parse_select()?;
+                self.expect(Token::RParen)?;
+                return Ok(Expression::AnyAll {
+                    expr: Box::new(left),
+                    op: op.to_string(),
+                    subquery: Box::new(select_stmt),
+                    is_any: false,
+                });
+            }
+            return Err("Expected SELECT after ALL".to_string());
+        }
+
         let right = self.parse_arithmetic_expression()?;
 
         Ok(Expression::BinaryOp(
