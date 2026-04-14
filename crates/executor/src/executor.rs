@@ -1747,8 +1747,12 @@ impl AnyAllVolcanoExecutor {
         }
     }
 
-    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
-        self.outer_row = row;
+    pub fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    pub fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 
     fn compare_values(left: &Value, op: &Operator, right: &Value) -> Option<bool> {
@@ -1844,6 +1848,16 @@ impl VolcanoExecutor for AnyAllVolcanoExecutor {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl OuterRowAwareExecutor for AnyAllVolcanoExecutor {
+    fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 }
 
