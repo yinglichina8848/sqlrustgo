@@ -288,6 +288,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["tpch_sf10_benchmark"],
             description: "TPC-H SF=10 (60M rows) benchmark: Q1-Q22 full query set",
         },
+        // TPC-H SF=1 性能测试
+        TestCategory {
+            name: "TPC-H SF=1 性能测试 (TPC-H SF=1)",
+            test_files: vec!["tpch_sf1_benchmark"],
+            description: "TPC-H SF=1 (1.5M rows) benchmark: Q1-Q22 full query set",
+        },
         // WAL 事务集成测试
         TestCategory {
             name: "WAL 事务集成测试 (WAL Transaction)",
