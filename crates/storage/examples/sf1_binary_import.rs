@@ -116,6 +116,7 @@ fn main() {
     let info = TableInfo {
         name: "lineitem".to_string(),
         columns: cols,
+        ..Default::default()
     };
     let data = TableData {
         info,

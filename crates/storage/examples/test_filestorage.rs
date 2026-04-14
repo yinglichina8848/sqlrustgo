@@ -47,6 +47,7 @@ fn main() {
                 compression: None,
             },
         ],
+        ..Default::default()
     };
 
     let start = Instant::now();

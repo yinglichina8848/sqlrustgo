@@ -972,6 +972,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         }
     }
 
