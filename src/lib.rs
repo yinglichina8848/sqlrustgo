@@ -3409,6 +3409,60 @@ impl ExecutionEngine {
 
                 Ok(ExecutorResult::new(result_rows, 0))
             }
+            "InSubquery" => {
+                let in_subquery_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::physical_plan::InSubqueryExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast InSubqueryExec".to_string())
+                    })?;
+
+                let children = in_subquery_plan.children();
+                if children.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "InSubquery has no children".to_string(),
+                    ));
+                }
+                let _subquery_result = self.execute_plan(children[0])?;
+                Ok(ExecutorResult::new(vec![vec![Value::Boolean(false)]], 0))
+            }
+            "Exists" => {
+                let exists_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::physical_plan::ExistsExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError("Failed to downcast ExistsExec".to_string())
+                    })?;
+
+                let children = exists_plan.children();
+                if children.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "Exists has no children".to_string(),
+                    ));
+                }
+                let subquery_result = self.execute_plan(children[0])?;
+                let exists = !subquery_result.rows.is_empty();
+                Ok(ExecutorResult::new(vec![vec![Value::Boolean(exists)]], 0))
+            }
+            "Any" | "All" => {
+                let any_all_plan = plan
+                    .as_any()
+                    .downcast_ref::<sqlrustgo_planner::physical_plan::AnyAllSubqueryExec>()
+                    .ok_or_else(|| {
+                        SqlError::ExecutionError(
+                            "Failed to downcast AnyAllSubqueryExec".to_string(),
+                        )
+                    })?;
+
+                let children = any_all_plan.children();
+                if children.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "AnyAll has no children".to_string(),
+                    ));
+                }
+                let _subquery_result = self.execute_plan(children[0])?;
+                Ok(ExecutorResult::new(vec![vec![Value::Boolean(false)]], 0))
+            }
             _ => Ok(ExecutorResult::empty()),
         }
     }
