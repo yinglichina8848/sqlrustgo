@@ -248,6 +248,10 @@ path = "tests/integration/mysql_compatibility_test.rs"
 name = "planner_test"
 path = "tests/integration/planner_test.rs"
 
+[[test]]
+name = "prepared_statement_test"
+path = "tests/integration/prepared_statement_test.rs"
+
 
 [[test]]
 name = "binary_format_test"
