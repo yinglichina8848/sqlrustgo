@@ -559,6 +559,7 @@ pub struct DeleteStatement {
 pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    pub table_constraints: Vec<TableConstraint>,
     pub if_not_exists: bool,
 }
 
@@ -599,6 +600,32 @@ pub enum ForeignKeyAction {
     Cascade,
     SetNull,
     Restrict,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintType {
+    PrimaryKey {
+        columns: Vec<String>,
+    },
+    Unique {
+        columns: Vec<String>,
+    },
+    ForeignKey {
+        columns: Vec<String>,
+        reference_table: String,
+        reference_columns: Vec<String>,
+        on_delete: Option<ForeignKeyAction>,
+        on_update: Option<ForeignKeyAction>,
+    },
+    Check {
+        condition: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableConstraint {
+    pub name: Option<String>,
+    pub constraint_type: ConstraintType,
 }
 
 /// Expression
@@ -3235,6 +3262,7 @@ impl Parser {
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
+            table_constraints: vec![],
             if_not_exists,
         }))
     }
