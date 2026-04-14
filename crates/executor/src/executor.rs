@@ -43,6 +43,33 @@ pub trait VolcanoExecutor: Send + Sync {
     fn next_ref(&mut self) -> SqlResult<Option<RowRef<'_>>> {
         Ok(None)
     }
+
+    /// Set outer row context for correlated subquery evaluation
+    /// Default implementation does nothing (for executors that don't need outer row)
+    fn set_outer_row(&mut self, _row: Option<&[Value]>) {}
+
+    /// Check if this executor type requires outer row context
+    /// Override to return true for InSubquery, AnyAll executors
+    fn requires_outer_row(&self) -> bool {
+        false
+    }
+}
+
+/// Trait for executors that require external row context
+/// Used for correlated subquery evaluation
+///
+/// Examples:
+/// - `InSubqueryVolcanoExecutor` needs outer row to evaluate `expr IN (subquery)`
+/// - `AnyAllVolcanoExecutor` needs outer row to evaluate `expr OP (subquery)`
+pub trait OuterRowAwareExecutor: Send {
+    /// Set the outer row context for correlated subquery evaluation
+    ///
+    /// # Arguments
+    /// * `row` - The current row from the outer query, or None if at the beginning
+    fn set_outer_row(&mut self, row: Option<&[Value]>);
+
+    /// Check if outer row has been set
+    fn has_outer_row(&self) -> bool;
 }
 
 pub type VolIterator = Box<dyn VolcanoExecutor>;
@@ -1547,8 +1574,22 @@ impl InSubqueryVolcanoExecutor {
         }
     }
 
-    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
-        self.outer_row = row;
+    pub fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    pub fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
+    }
+}
+
+impl OuterRowAwareExecutor for InSubqueryVolcanoExecutor {
+    fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 }
 
@@ -1706,8 +1747,12 @@ impl AnyAllVolcanoExecutor {
         }
     }
 
-    pub fn set_outer_row(&mut self, row: Option<Vec<Value>>) {
-        self.outer_row = row;
+    pub fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    pub fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 
     fn compare_values(left: &Value, op: &Operator, right: &Value) -> Option<bool> {
@@ -1803,6 +1848,16 @@ impl VolcanoExecutor for AnyAllVolcanoExecutor {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl OuterRowAwareExecutor for AnyAllVolcanoExecutor {
+    fn set_outer_row(&mut self, row: Option<&[Value]>) {
+        self.outer_row = row.map(|r| r.to_vec());
+    }
+
+    fn has_outer_row(&self) -> bool {
+        self.outer_row.is_some()
     }
 }
 
@@ -1907,6 +1962,13 @@ impl VolExecutorBuilder {
                 plan.name()
             ))),
         }
+    }
+
+    pub fn set_outer_row_on_executor(
+        executor: &mut Box<dyn VolcanoExecutor>,
+        outer_row: Option<&[Value]>,
+    ) {
+        executor.set_outer_row(outer_row);
     }
 
     fn build_in_subquery(&self, plan: &dyn PhysicalPlan) -> SqlResult<Box<dyn VolcanoExecutor>> {
