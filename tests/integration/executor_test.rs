@@ -384,3 +384,76 @@ fn test_upsert_no_conflict() {
     assert_eq!(result.rows[1][0], Value::Integer(2));
     assert_eq!(result.rows[1][1], Value::Text("Product2".to_string()));
 }
+
+#[test]
+fn test_exists_subquery() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE products (id INTEGER, price INTEGER)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("CREATE TABLE competitor (id INTEGER, price INTEGER)").unwrap())
+        .unwrap();
+
+    engine
+        .execute(parse("INSERT INTO products VALUES (1, 100), (2, 200), (3, 300)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("INSERT INTO competitor VALUES (1, 150), (2, 250)").unwrap())
+        .unwrap();
+
+    let result = engine.execute(parse("SELECT * FROM products WHERE EXISTS (SELECT * FROM competitor WHERE competitor.price < products.price)").unwrap());
+    assert!(result.is_ok(), "EXISTS query should succeed: {:?}", result);
+}
+
+#[test]
+fn test_any_all_subquery() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE products (id INTEGER, price INTEGER)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("CREATE TABLE competitor (id INTEGER, price INTEGER)").unwrap())
+        .unwrap();
+
+    engine
+        .execute(parse("INSERT INTO products VALUES (1, 100), (2, 200), (3, 300)").unwrap())
+        .unwrap();
+    engine
+        .execute(parse("INSERT INTO competitor VALUES (1, 150), (2, 250)").unwrap())
+        .unwrap();
+
+    let result = engine.execute(
+        parse("SELECT * FROM products WHERE price > ANY (SELECT price FROM competitor)").unwrap(),
+    );
+    assert!(result.is_ok(), "ANY subquery should succeed: {:?}", result);
+
+    let result2 = engine.execute(
+        parse("SELECT * FROM products WHERE price > ALL (SELECT price FROM competitor)").unwrap(),
+    );
+    assert!(
+        result2.is_ok(),
+        "ALL subquery should succeed: {:?}",
+        result2
+    );
+}
+
+#[test]
+fn test_in_subquery() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE products (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+
+    engine
+        .execute(parse("INSERT INTO products VALUES (1, 'A'), (2, 'B'), (3, 'C')").unwrap())
+        .unwrap();
+
+    let result = engine.execute(
+        parse("SELECT * FROM products WHERE id IN (SELECT id FROM products WHERE id > 1)").unwrap(),
+    );
+    assert!(result.is_ok(), "IN subquery should succeed: {:?}", result);
+}
