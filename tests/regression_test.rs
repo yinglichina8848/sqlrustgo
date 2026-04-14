@@ -65,9 +65,10 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "savepoint_test",
                 "session_config_test",
                 "openclaw_api_test",
+                "subquery_test",
             ],
             description:
-                "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)、保存点、OpenClaw API",
+                "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)、保存点、OpenClaw API、子查询(EXISTS/IN/ANY/ALL)",
         },
         // 集成测试 - 存储
         TestCategory {
