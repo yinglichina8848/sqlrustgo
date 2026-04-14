@@ -3422,8 +3422,14 @@ impl ExecutionEngine {
                         "InSubquery has no children".to_string(),
                     ));
                 }
-                let _subquery_result = self.execute_plan(children[0])?;
-                Ok(ExecutorResult::new(vec![vec![Value::Boolean(false)]], 0))
+
+                // Execute subquery to get results
+                let subquery_result = self.execute_plan(children[0])?;
+
+                // For proper IN evaluation, we would need outer row context here.
+                // For now, return the subquery results for caller to use.
+                // The outer row context is only available in the Volcano path.
+                Ok(ExecutorResult::new(subquery_result.rows, 0))
             }
             "Exists" => {
                 let exists_plan = plan
