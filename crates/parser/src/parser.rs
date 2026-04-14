@@ -3305,8 +3305,52 @@ impl Parser {
                     vec!["id".to_string()]
                 };
 
-                let on_delete = self.parse_fk_delete_action()?;
-                let on_update = self.parse_fk_update_action()?;
+                let mut on_delete = None;
+                let mut on_update = None;
+
+                loop {
+                    match self.current() {
+                        Some(Token::On) => {
+                            let pos_before = self.position;
+                            self.next();
+                            match self.current() {
+                                Some(Token::Delete) => {
+                                    self.next();
+                                    let action = self.parse_fk_action_value()?;
+                                    if on_delete.is_none() {
+                                        on_delete = action;
+                                    }
+                                }
+                                Some(Token::Identifier(s)) if s.to_uppercase() == "DELETE" => {
+                                    self.next();
+                                    let action = self.parse_fk_action_value()?;
+                                    if on_delete.is_none() {
+                                        on_delete = action;
+                                    }
+                                }
+                                Some(Token::Update) => {
+                                    self.next();
+                                    let action = self.parse_fk_action_value()?;
+                                    if on_update.is_none() {
+                                        on_update = action;
+                                    }
+                                }
+                                Some(Token::Identifier(s)) if s.to_uppercase() == "UPDATE" => {
+                                    self.next();
+                                    let action = self.parse_fk_action_value()?;
+                                    if on_update.is_none() {
+                                        on_update = action;
+                                    }
+                                }
+                                _ => {
+                                    self.position = pos_before;
+                                    break;
+                                }
+                            }
+                        }
+                        _ => break,
+                    }
+                }
 
                 Ok(TableConstraint::ForeignKey {
                     columns,
@@ -6564,8 +6608,16 @@ fn test_parse_table_constraint_fk_with_set_null() {
                     on_update,
                     ..
                 } => {
-                    assert!(on_delete.is_none());
-                    assert!(matches!(on_update, Some(ForeignKeyAction::SetNull)));
+                    assert!(
+                        on_delete.is_none(),
+                        "on_delete should be None, got: {:?}",
+                        on_delete
+                    );
+                    assert!(
+                        matches!(on_update, Some(ForeignKeyAction::SetNull)),
+                        "on_update should be SetNull, got: {:?}",
+                        on_update
+                    );
                 }
                 _ => panic!("Expected ForeignKey constraint"),
             }
