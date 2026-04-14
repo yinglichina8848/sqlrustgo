@@ -45,8 +45,13 @@ fn get_test_categories() -> Vec<TestCategory> {
         // 集成测试 - 核心
         TestCategory {
             name: "集成测试 - 核心 (Core Integration)",
-            test_files: vec!["executor_test", "planner_test", "page_test"],
-            description: "测试执行器、规划器、页面管理",
+            test_files: vec![
+                "executor_test",
+                "planner_test",
+                "page_test",
+                "prepared_statement_test",
+            ],
+            description: "测试执行器、规划器、页面管理、Prepared Statement",
         },
         // 集成测试 - SQL功能
         TestCategory {
