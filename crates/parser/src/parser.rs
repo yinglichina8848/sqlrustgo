@@ -3259,12 +3259,239 @@ impl Parser {
             }
         }
 
+        let mut table_constraints = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Constraint) => {
+                    self.next();
+                    let name = match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            let n = s.clone();
+                            self.next();
+                            n
+                        }
+                        _ => return Err("Expected constraint name".to_string()),
+                    };
+                    if let Some(tc) = self.parse_table_constraint(Some(name))? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Foreign) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Unique) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Primary) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                _ => break,
+            }
+        }
+
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
-            table_constraints: vec![],
+            table_constraints,
             if_not_exists,
         }))
+    }
+
+    fn parse_table_constraint(
+        &mut self,
+        name: Option<String>,
+    ) -> Result<Option<TableConstraint>, String> {
+        match self.current() {
+            Some(Token::Foreign) => {
+                self.next();
+                if let Some(Token::Key) = self.current() {
+                    self.next();
+                }
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
+                            self.next();
+                        }
+                        _ => break,
+                    }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                if let Some(Token::References) = self.current() {
+                    self.next();
+                }
+                let reference_table = match self.current() {
+                    Some(Token::Identifier(s)) => {
+                        let n = s.clone();
+                        self.next();
+                        n
+                    }
+                    _ => return Err("Expected table name".to_string()),
+                };
+                let mut reference_columns = Vec::new();
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                    loop {
+                        match self.current() {
+                            Some(Token::Identifier(s)) => {
+                                reference_columns.push(s.clone());
+                                self.next();
+                            }
+                            _ => break,
+                        }
+                        if let Some(Token::Comma) = self.current() {
+                            self.next();
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+                    if let Some(Token::RParen) = self.current() {
+                        self.next();
+                    }
+                }
+                let (on_delete, on_update) = self.parse_fk_referential_actions()?;
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::ForeignKey {
+                        columns,
+                        reference_table,
+                        reference_columns,
+                        on_delete,
+                        on_update,
+                    },
+                }))
+            }
+            Some(Token::Unique) => {
+                self.next();
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
+                            self.next();
+                        }
+                        _ => break,
+                    }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::Unique { columns },
+                }))
+            }
+            Some(Token::Primary) => {
+                self.next();
+                if let Some(Token::Key) = self.current() {
+                    self.next();
+                }
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
+                            self.next();
+                        }
+                        _ => break,
+                    }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::PrimaryKey { columns },
+                }))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_fk_referential_actions(
+        &mut self,
+    ) -> Result<(Option<ForeignKeyAction>, Option<ForeignKeyAction>), String> {
+        let mut on_delete = None;
+        let mut on_update = None;
+        loop {
+            if let Some(Token::On) = self.current() {
+                self.next();
+                if let Some(Token::Delete) = self.current() {
+                    self.next();
+                    on_delete = Some(self.parse_fk_action()?);
+                } else if let Some(Token::Update) = self.current() {
+                    self.next();
+                    on_update = Some(self.parse_fk_action()?);
+                }
+            } else {
+                break;
+            }
+        }
+        Ok((on_delete, on_update))
+    }
+
+    fn parse_fk_action(&mut self) -> Result<ForeignKeyAction, String> {
+        if let Some(Token::Cascade) = self.current() {
+            self.next();
+            Ok(ForeignKeyAction::Cascade)
+        } else if let Some(Token::Restrict) = self.current() {
+            self.next();
+            Ok(ForeignKeyAction::Restrict)
+        } else if let Some(Token::Set) = self.current() {
+            self.next();
+            if let Some(Token::Identifier(s)) = self.current() {
+                if s.to_uppercase() == "NULL" {
+                    self.next();
+                    Ok(ForeignKeyAction::SetNull)
+                } else {
+                    Err("Expected NULL after SET".to_string())
+                }
+            } else {
+                Err("Expected NULL after SET".to_string())
+            }
+        } else {
+            Err("Expected CASCADE, RESTRICT, or SET NULL".to_string())
+        }
     }
 
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
