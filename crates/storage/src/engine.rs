@@ -599,6 +599,75 @@ impl MemoryStorage {
             None
         }
     }
+
+    /// Check if there are child records referencing the parent via given FK columns
+    /// For single column FK (column-level): checks if any child row has the matching value
+    /// For multi-column FK (table-level): checks if ALL child columns match the corresponding parent values
+    pub fn has_referencing_records(
+        &self,
+        child_table: &str,
+        child_columns: &[usize],
+        parent_values: &[&Value],
+    ) -> bool {
+        if child_columns.len() != parent_values.len() {
+            return false;
+        }
+        if let Some(records) = self.tables.get(child_table) {
+            for row in records {
+                let all_match =
+                    child_columns
+                        .iter()
+                        .zip(parent_values.iter())
+                        .all(|(col_idx, expected)| {
+                            row.get(*col_idx).map(|v| v == *expected).unwrap_or(false)
+                        });
+                if all_match {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Set foreign key columns to NULL for records matching the given values
+    /// Works for both single-column and multi-column FKs
+    pub fn set_foreign_key_columns_null(
+        &mut self,
+        table: &str,
+        col_indices: &[usize],
+        match_values: &[Value],
+    ) -> SqlResult<()> {
+        if col_indices.len() != match_values.len() {
+            return Err(SqlError::ExecutionError(
+                "Column indices and match values length mismatch".to_string(),
+            ));
+        }
+        let records = self
+            .tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::TableNotFound {
+                table: table.to_string(),
+            })?;
+
+        for row in records.iter_mut() {
+            let all_match =
+                col_indices
+                    .iter()
+                    .zip(match_values.iter())
+                    .all(|(col_idx, expected)| {
+                        row.get(*col_idx).map(|v| v == expected).unwrap_or(false)
+                    });
+            if all_match {
+                for col_idx in col_indices {
+                    if *col_idx < row.len() {
+                        row[*col_idx] = Value::Null;
+                    }
+                }
+            }
+        }
+        self.on_write_complete(table);
+        Ok(())
+    }
 }
 
 impl Default for MemoryStorage {
@@ -863,43 +932,59 @@ impl StorageEngine for MemoryStorage {
         // to handle transitive dependencies (e.g., CEO -> Manager -> Worker)
         if needs_fk_check && !records_to_delete.is_empty() {
             let mut restrict_error: Option<String> = None;
-            let referenced_by = self.get_tables_referencing(table);
+            let referencing_fks = self.get_referencing_foreign_keys(table);
 
             // For handling transitive CASCADE deletions, we need to track values that were deleted
             // so we can find records that reference THOSE deleted records
             let mut values_to_check: Vec<Value> = vec![match_value.clone()];
             let mut processed_values: Vec<Value> = Vec::new(); // Track already processed to avoid infinite loops
 
-            // First pass: check RESTRICT on the original values
-            // Skip self-referencing tables - their CASCADE will be processed separately
-            for child_table in &referenced_by {
-                // Skip self-referencing tables - CASCADE will handle them
-                if child_table == table {
+            for fk in &referencing_fks {
+                if fk.child_table == table {
                     continue;
                 }
-                let referencing_cols = self.get_referencing_columns(child_table, table);
-                for (child_col_idx, fk) in referencing_cols {
-                    match fk.on_delete {
-                        Some(ForeignKeyAction::Restrict) => {
-                            if let Some(child_records) = self.tables.get(child_table) {
-                                for child_row in child_records {
-                                    if let Some(fk_value) = child_row.get(child_col_idx) {
-                                        if fk_value == match_value {
-                                            restrict_error = Some(format!(
-                                                "Foreign key constraint violation: ON DELETE RESTRICT - child table '{}' has references to the parent",
-                                                child_table
-                                            ));
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+
+                let child_col_indices: Vec<usize> = fk
+                    .child_columns
+                    .iter()
+                    .filter_map(|col_name| {
+                        self.table_infos
+                            .get(&fk.child_table)?
+                            .columns
+                            .iter()
+                            .position(|c| &c.name == col_name)
+                    })
+                    .collect();
+
+                if child_col_indices.len() != fk.child_columns.len() {
+                    continue;
+                }
+
+                match fk.on_delete {
+                    Some(ForeignKeyAction::Restrict) => {
+                        let parent_values: Vec<&Value> = vec![match_value; fk.child_columns.len()];
+                        if self.has_referencing_records(
+                            &fk.child_table,
+                            &child_col_indices,
+                            &parent_values,
+                        ) {
+                            restrict_error = Some(format!(
+                                "Foreign key constraint violation: ON DELETE RESTRICT - child table '{}' has references to the parent",
+                                fk.child_table
+                            ));
+                            break;
                         }
-                        Some(ForeignKeyAction::SetNull) => {
-                            self.set_foreign_key_null(child_table, child_col_idx, match_value)?;
-                        }
-                        Some(ForeignKeyAction::Cascade) | None => {}
                     }
+                    Some(ForeignKeyAction::SetNull) => {
+                        let parent_values: Vec<Value> =
+                            vec![match_value.clone(); fk.child_columns.len()];
+                        self.set_foreign_key_columns_null(
+                            &fk.child_table,
+                            &child_col_indices,
+                            &parent_values,
+                        )?;
+                    }
+                    Some(ForeignKeyAction::Cascade) | None => {}
                 }
             }
 
@@ -923,48 +1008,68 @@ impl StorageEngine for MemoryStorage {
                     processed_values.push(current_value.clone());
 
                     // Find and delete child records that reference this value
-                    for child_table in &referenced_by {
-                        let referencing_cols = self.get_referencing_columns(child_table, table);
-                        for (child_col_idx, fk) in referencing_cols {
-                            if fk.on_delete == Some(ForeignKeyAction::Cascade) {
-                                // Get records that will be deleted to collect their PK values for next pass
-                                let records_to_delete: Vec<Vec<Value>> =
-                                    if let Some(child_records) = self.tables.get(child_table) {
-                                        child_records
-                                            .iter()
-                                            .filter(|row| {
-                                                row.get(child_col_idx)
-                                                    .map(|v| v == current_value)
-                                                    .unwrap_or(false)
-                                            })
-                                            .cloned()
-                                            .collect()
-                                    } else {
-                                        vec![]
-                                    };
+                    for fk in &referencing_fks {
+                        if fk.on_delete == Some(ForeignKeyAction::Cascade) {
+                            let child_col_indices: Vec<usize> = fk
+                                .child_columns
+                                .iter()
+                                .filter_map(|col_name| {
+                                    self.table_infos
+                                        .get(&fk.child_table)?
+                                        .columns
+                                        .iter()
+                                        .position(|c| &c.name == col_name)
+                                })
+                                .collect();
 
-                                // Only propagate cascade if the child table is the SAME as the parent table
-                                // (self-referencing FK). For non-self-referencing tables, cascade stops here.
-                                // This is because orders referencing users doesn't mean records referencing orders should be deleted.
-                                if child_table == table {
-                                    // Self-referencing: collect PK of deleted records to find more children
-                                    let child_pk_col_idx = 0; // Assume first column is PK
+                            if child_col_indices.len() != fk.child_columns.len() {
+                                continue;
+                            }
 
-                                    // Collect the PK values from records being deleted
-                                    // These become the next set of values to check for cascade
-                                    for record in &records_to_delete {
-                                        if let Some(pk_value) = record.get(child_pk_col_idx) {
-                                            if !next_values_to_check.contains(pk_value) {
-                                                next_values_to_check.push(pk_value.clone());
-                                            }
+                            // Get records that will be deleted to collect their PK values for next pass
+                            let parent_values: Vec<&Value> =
+                                vec![current_value; fk.child_columns.len()];
+                            let records_to_delete: Vec<Vec<Value>> =
+                                if let Some(child_records) = self.tables.get(&fk.child_table) {
+                                    child_records
+                                        .iter()
+                                        .filter(|row| {
+                                            child_col_indices.iter().zip(parent_values.iter()).all(
+                                                |(col_idx, expected)| {
+                                                    row.get(*col_idx)
+                                                        .map(|v| v == *expected)
+                                                        .unwrap_or(false)
+                                                },
+                                            )
+                                        })
+                                        .cloned()
+                                        .collect()
+                                } else {
+                                    vec![]
+                                };
+
+                            // Only propagate cascade if the child table is the SAME as the parent table
+                            // (self-referencing FK). For non-self-referencing tables, cascade stops here.
+                            // This is because orders referencing users doesn't mean records referencing orders should be deleted.
+                            if fk.child_table == table {
+                                // Self-referencing: collect PK of deleted records to find more children
+                                let child_pk_col_idx = 0; // Assume first column is PK
+
+                                // Collect the PK values from records being deleted
+                                // These become the next set of values to check for cascade
+                                for record in &records_to_delete {
+                                    if let Some(pk_value) = record.get(child_pk_col_idx) {
+                                        if !next_values_to_check.contains(pk_value) {
+                                            next_values_to_check.push(pk_value.clone());
                                         }
                                     }
                                 }
+                            }
 
-                                // Delete the child records
+                            if let Some(first_col_idx) = child_col_indices.first() {
                                 let _deleted = self.delete_internal(
-                                    child_table,
-                                    &[Value::Integer(child_col_idx as i64), current_value.clone()],
+                                    &fk.child_table,
+                                    &[Value::Integer(*first_col_idx as i64), current_value.clone()],
                                 )?;
                             }
                         }
