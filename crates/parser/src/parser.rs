@@ -3035,6 +3035,7 @@ impl Parser {
 
         // Parse optional column definitions: (col1 type, col2 type, ...)
         let mut columns = Vec::new();
+        let mut constraints = Vec::new();
         if matches!(self.current(), Some(Token::LParen)) {
             self.next(); // consume '('
             loop {
@@ -3245,6 +3246,24 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
+                    // If we see FOREIGN/PRIMARY/UNIQUE after a comma, it's a table constraint
+                    Some(Token::Foreign) | Some(Token::Primary) | Some(Token::Unique) => {
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+
+            // Parse table-level constraints
+            loop {
+                match self.current() {
+                    Some(Token::Foreign) | Some(Token::Primary) | Some(Token::Unique) => {
+                        let constraint = self.parse_table_constraint()?;
+                        constraints.push(constraint);
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
                     _ => break,
                 }
             }
@@ -3254,7 +3273,7 @@ impl Parser {
             name,
             columns,
             if_not_exists,
-            constraints: Vec::new(),
+            constraints,
         }))
     }
 
