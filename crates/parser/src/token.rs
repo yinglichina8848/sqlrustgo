@@ -218,6 +218,11 @@ pub enum Token {
     // Column constraints
     AutoIncrement,
     References,
+    // Table constraints
+    Foreign,
+    Constraint,
+    Cascade,
+    Restrict,
 
     // Wildcard
     Star, // * for SELECT *
@@ -413,6 +418,10 @@ impl fmt::Display for Token {
             // Column constraints
             Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
             Token::References => write!(f, "REFERENCES"),
+            Token::Foreign => write!(f, "FOREIGN"),
+            Token::Constraint => write!(f, "CONSTRAINT"),
+            Token::Cascade => write!(f, "CASCADE"),
+            Token::Restrict => write!(f, "RESTRICT"),
             // Syntax
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
