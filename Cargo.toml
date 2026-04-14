@@ -398,6 +398,10 @@ name = "join_test"
 path = "tests/anomaly/join_test.rs"
 
 [[test]]
+name = "outer_join_test"
+path = "tests/anomaly/outer_join_test.rs"
+
+[[test]]
 name = "fk_constraint_test"
 path = "tests/anomaly/fk_constraint_test.rs"
 
