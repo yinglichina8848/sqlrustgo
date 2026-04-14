@@ -137,6 +137,7 @@ impl BinaryTableStorage {
         let info = TableInfo {
             name: table.to_string(),
             columns,
+            table_foreign_keys: None,
         };
 
         // Read rows

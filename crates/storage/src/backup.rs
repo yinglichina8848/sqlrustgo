@@ -287,6 +287,7 @@ impl DataRestorer {
                     compression: None,
                 })
                 .collect(),
+            table_foreign_keys: None,
         };
 
         let count = rows.len();
@@ -355,6 +356,7 @@ impl DataRestorer {
                     compression: None,
                 })
                 .collect(),
+            table_foreign_keys: None,
         };
 
         let count = rows.len();
@@ -398,6 +400,7 @@ impl DataRestorer {
                     let table_info = TableInfo {
                         name: table_name.clone(),
                         columns: vec![],
+                        table_foreign_keys: None,
                     };
                     storage.create_table(&table_info)?;
                 }

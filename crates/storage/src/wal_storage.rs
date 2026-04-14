@@ -442,6 +442,13 @@ impl<S: StorageEngine> StorageEngine for WalStorage<S> {
     fn check_cancelled(&self) -> SqlResult<()> {
         self.inner.check_cancelled()
     }
+
+    fn get_referencing_foreign_keys(
+        &self,
+        table: &str,
+    ) -> Vec<crate::engine::ReferencingForeignKey> {
+        self.inner.get_referencing_foreign_keys(table)
+    }
 }
 
 #[cfg(test)]
