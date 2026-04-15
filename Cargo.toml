@@ -35,6 +35,7 @@ members = [
     "crates/graph",
     "crates/unified-query",
     "crates/unified-storage",
+    "crates/sql-corpus",
     "test/sql92",
 ]
 
