@@ -20,6 +20,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "test_concurrent".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.lock().unwrap().create_table(&info).unwrap();
 
@@ -58,6 +59,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "test_read".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.lock().unwrap().create_table(&info).unwrap();
 
@@ -104,6 +106,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "deadlock_test".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage1.lock().unwrap().create_table(&info).unwrap();
         storage1
@@ -149,6 +152,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "large_data".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.lock().unwrap().create_table(&info).unwrap();
 
@@ -204,6 +208,7 @@ mod tests {
                 let info = sqlrustgo_storage::TableInfo {
                     name: table_name.clone(),
                     columns: vec![],
+                    table_foreign_keys: None,
                 };
 
                 s.create_table(&info).ok();
@@ -229,6 +234,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "mixed_ops".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.lock().unwrap().create_table(&info).unwrap();
 

@@ -226,6 +226,7 @@ jobs:
       - name: Run Anomaly Tests
         run: |
           cargo test --test mvcc_concurrency_test
+          cargo test --test mvcc_snapshot_isolation_test
           cargo test --test crash_injection_test
           cargo test --test catalog_consistency_test
           cargo test --test long_run_stability_test
