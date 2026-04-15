@@ -58,19 +58,57 @@ fn main() {
 
     std::fs::create_dir_all("benchmark_results").ok();
 
+    // Performance test scale: 10x, 100x, 1000x, 10000x
+    // Base: 100, 1000, 10000
+    // 10x: 1K, 10K, 100K
+    // 100x: 10K, 100K, 1M
+    // 1000x: 100K, 1M, 10M
+    // 10000x: 1M, 10M, 100M
     let test_cases = vec![
+        // Baseline (1x)
         ("BFS_100", 100, "bfs"),
         ("BFS_1000", 1000, "bfs"),
         ("BFS_10000", 10000, "bfs"),
         ("DFS_100", 100, "dfs"),
         ("DFS_1000", 1000, "dfs"),
         ("DFS_10000", 10000, "dfs"),
+        // 10x scale
+        ("BFS_1K", 1_000, "bfs"),
+        ("BFS_10K", 10_000, "bfs"),
+        ("BFS_100K", 100_000, "bfs"),
+        ("DFS_1K", 1_000, "dfs"),
+        ("DFS_10K", 10_000, "dfs"),
+        ("DFS_100K", 100_000, "dfs"),
+        // 100x scale
+        ("BFS_10K_100x", 10_000, "bfs"),
+        ("BFS_100K_100x", 100_000, "bfs"),
+        ("BFS_1M", 1_000_000, "bfs"),
+        ("DFS_10K_100x", 10_000, "dfs"),
+        ("DFS_100K_100x", 100_000, "dfs"),
+        ("DFS_1M", 1_000_000, "dfs"),
+        // 1000x scale
+        ("BFS_100K_1Kx", 100_000, "bfs"),
+        ("BFS_1M_1Kx", 1_000_000, "bfs"),
+        ("BFS_10M", 10_000_000, "bfs"),
+        ("DFS_100K_1Kx", 100_000, "dfs"),
+        ("DFS_1M_1Kx", 1_000_000, "dfs"),
+        ("DFS_10M", 10_000_000, "dfs"),
+        // Multi-hop tests at various scales
         ("2HOP_100", 100, "2hop"),
-        ("2HOP_1000", 1000, "2hop"),
+        ("2HOP_1K", 1_000, "2hop"),
+        ("2HOP_10K", 10_000, "2hop"),
+        ("2HOP_100K", 100_000, "2hop"),
+        ("2HOP_1M", 1_000_000, "2hop"),
         ("3HOP_100", 100, "3hop"),
-        ("3HOP_1000", 1000, "3hop"),
+        ("3HOP_1K", 1_000, "3hop"),
+        ("3HOP_10K", 10_000, "3hop"),
+        ("3HOP_100K", 100_000, "3hop"),
+        ("3HOP_1M", 1_000_000, "3hop"),
         ("4HOP_100", 100, "4hop"),
-        ("4HOP_1000", 1000, "4hop"),
+        ("4HOP_1K", 1_000, "4hop"),
+        ("4HOP_10K", 10_000, "4hop"),
+        ("4HOP_100K", 100_000, "4hop"),
+        ("4HOP_1M", 1_000_000, "4hop"),
     ];
 
     let mut results: Vec<BenchmarkResult> = Vec::new();
@@ -84,20 +122,29 @@ fn main() {
 
         let start_node = NodeId(0);
 
+        // Adjust iterations based on scale to keep runtime reasonable
+        let iterations = if nodes <= 100_000 {
+            100
+        } else if nodes <= 1_000_000 {
+            50
+        } else {
+            10
+        };
+
         let result = match query_type {
-            "bfs" => run_benchmark(name, 100, || {
+            "bfs" => run_benchmark(name, iterations, || {
                 let _ = bfs_with_distances(&get_neighbors, start_node);
             }),
-            "dfs" => run_benchmark(name, 100, || {
+            "dfs" => run_benchmark(name, iterations, || {
                 let _ = dfs_collect(&get_neighbors, start_node);
             }),
-            "2hop" => run_benchmark(name, 100, || {
+            "2hop" => run_benchmark(name, iterations, || {
                 let _ = multi_hop(get_neighbors, start_node, 2);
             }),
-            "3hop" => run_benchmark(name, 100, || {
+            "3hop" => run_benchmark(name, iterations, || {
                 let _ = multi_hop(get_neighbors, start_node, 3);
             }),
-            "4hop" => run_benchmark(name, 100, || {
+            "4hop" => run_benchmark(name, iterations, || {
                 let _ = multi_hop(get_neighbors, start_node, 4);
             }),
             _ => continue,
