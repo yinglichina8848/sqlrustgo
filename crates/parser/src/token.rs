@@ -57,6 +57,9 @@ pub enum Token {
     Old,
     Referencing,
     Foreign,
+    Constraint,
+    Cascade,
+    Restrict,
     Procedure,
     Call,
     Return,
@@ -415,6 +418,10 @@ impl fmt::Display for Token {
             // Column constraints
             Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
             Token::References => write!(f, "REFERENCES"),
+            // Table constraints
+            Token::Constraint => write!(f, "CONSTRAINT"),
+            Token::Cascade => write!(f, "CASCADE"),
+            Token::Restrict => write!(f, "RESTRICT"),
             // Syntax
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),

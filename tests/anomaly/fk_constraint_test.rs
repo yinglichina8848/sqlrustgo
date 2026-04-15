@@ -27,6 +27,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child = TableInfo {
@@ -58,6 +59,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&parent).unwrap();
@@ -88,6 +90,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child = TableInfo {
@@ -119,6 +122,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&parent).unwrap();
@@ -160,6 +164,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child = TableInfo {
@@ -191,6 +196,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&parent).unwrap();
@@ -225,6 +231,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child = TableInfo {
@@ -256,6 +263,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         let parent = TableInfo {
@@ -270,6 +278,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child2 = TableInfo {
@@ -316,6 +325,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&parent).unwrap();
@@ -367,6 +377,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).unwrap();
@@ -399,6 +410,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let table2 = TableInfo {
@@ -413,6 +425,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let table3 = TableInfo {
@@ -459,6 +472,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&table1).unwrap();
@@ -500,6 +514,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         let child = TableInfo {
@@ -531,6 +546,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&parent).unwrap();
@@ -579,6 +595,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&child).unwrap();

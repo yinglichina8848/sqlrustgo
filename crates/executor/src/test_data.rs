@@ -194,6 +194,7 @@ impl TestTableBuilder {
         sqlrustgo_storage::TableInfo {
             name: self.name.clone(),
             columns,
+            table_foreign_keys: None,
         }
     }
 }

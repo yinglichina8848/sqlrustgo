@@ -287,6 +287,7 @@ impl DataRestorer {
                     compression: None,
                 })
                 .collect(),
+            table_foreign_keys: None,
         };
 
         let count = rows.len();
@@ -355,6 +356,7 @@ impl DataRestorer {
                     compression: None,
                 })
                 .collect(),
+            table_foreign_keys: None,
         };
 
         let count = rows.len();
@@ -398,6 +400,7 @@ impl DataRestorer {
                     let table_info = TableInfo {
                         name: table_name.clone(),
                         columns: vec![],
+                        table_foreign_keys: None,
                     };
                     storage.create_table(&table_info)?;
                 }
@@ -505,6 +508,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -557,6 +561,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -645,6 +650,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -745,6 +751,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -771,6 +778,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -803,6 +811,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
