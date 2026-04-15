@@ -106,8 +106,8 @@ v2.5.0 是 SQLRustGo 的**全面集成版本**，在 v2.4.0 基础上实现：
 
 | 功能 | 说明 | PR |
 |------|------|-----|
-| LeftSemi JOIN | 左半连接 | #1435 |
-| LeftAnti JOIN | 左反连接 | #1435 |
+| LeftSemi JOIN | 左半连接 | #1448 |
+| LeftAnti JOIN | 左反连接 | #1448 |
 | RIGHT JOIN | 右连接支持 | - |
 
 ---
@@ -176,12 +176,14 @@ cargo test -p sqlrustgo-parser
 
 | Issue | 说明 | 状态 |
 |-------|------|------|
+| #1377 | 事务系统集成 (MVCC+WAL) | ✅ CLOSED |
 | #1379 | FOREIGN KEY 约束 | ✅ CLOSED |
-| #1380 | JOIN 完整实现 | ⏳ 进行中 |
+| #1380 | JOIN 完整实现 | ⏳ LEFT/RIGHT 待完成 |
+| #1381 | Cypher Graph 查询 | ✅ CLOSED |
 | #1382 | 子查询优化 | ✅ CLOSED |
 | #1383 | 连接池 | ✅ CLOSED |
 | #1384 | Prepared Statement | ✅ CLOSED |
-| #1389 | MVCC 并发控制 | ⏳ 进行中 |
+| #1389 | MVCC 并发控制 | ⏳ Phase 1/3 完成 |
 | #1390 | PITR 备份恢复 | 📋 待开发 |
 
 ---
@@ -199,8 +201,9 @@ cargo test -p sqlrustgo-parser
 
 | 问题 | 说明 | 优先级 |
 |------|------|--------|
-| MVCC 快照隔离 | Phase 1/3 完成 | P0 |
-| JOIN 完整实现 | LEFT/RIGHT JOIN | P1 |
+| MVCC Serializable | Phase 2/3 | P0 |
+| MVCC Index | 索引集成 | P0 |
+| JOIN FULL OUTER | 完整 JOIN | P1 |
 
 ---
 
@@ -212,5 +215,28 @@ cargo test -p sqlrustgo-parser
 
 ---
 
+## 九、v2.5.0 更新 (2026-04-16)
+
+### 新增功能
+
+| 功能 | PR | 说明 |
+|------|-----|------|
+| MVCC Snapshot Isolation Phase 1 | #1447 | VersionChainMap, MVCCStorage |
+| MVCC GC/Vacuum | #1449 | 版本链垃圾回收 |
+| MVCC+WAL 集成 | #1450 | SQL 执行路径集成 |
+| Cypher Phase-1 | #1445 | Graph MATCH/WHERE/RETURN |
+| Semi/Anti JOIN | #1448 | LEFT SEMI/ANTI JOIN |
+
+### Issue 状态更新
+
+| Issue | 之前状态 | 当前状态 |
+|-------|----------|----------|
+| #1377 事务系统集成 | ⏳ 进行中 | ✅ CLOSED |
+| #1381 Cypher | ⏳ 进行中 | ✅ CLOSED |
+| #1389 MVCC | ⏳ Phase 1/3 | ✅ Phase 1 完成 |
+| #1380 JOIN | ⏳ LEFT/RIGHT | ✅ SEMI/ANTI 完成 |
+
+---
+
 *本文档由 SQLRustGo Team 维护*
-*更新日期: 2026-04-15*
+*更新日期: 2026-04-16*
