@@ -104,6 +104,7 @@ impl CompressionType {
     pub fn magic_bytes(&self) -> [u8; 4] {
         match self {
             CompressionType::None => *b"NONE",
+            CompressionType::Lz4 => *b"LZ4F",
             CompressionType::Snappy => *b"SNAP",
             CompressionType::Zstd => *b"ZSTD",
             CompressionType::Lz4 => *b"LZ4 ",

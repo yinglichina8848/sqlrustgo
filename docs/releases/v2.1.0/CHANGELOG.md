@@ -1,5 +1,20 @@
 # SQLRustGo v2.1.0 Changelog
 
+## [v2.1.0] - 2026-04-05
+
+### 正式发布 (GA)
+
+#### 合并更新
+- **develop/v2.1.0** 合并到 **release/v2.1.0**
+- 最新修复: cargo fmt, search_index assertion, WHERE filter fallback
+
+#### 测试状态
+- 单元测试: 35/35 ✅ 100%
+- 集成测试: 1035/1039 ✅ 99.6%
+- 覆盖率: 80%+ ✅ 已验证
+
+---
+
 ## [v2.1.0-rc] - 2026-04-03
 
 ### RC 阶段变更

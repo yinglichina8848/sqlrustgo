@@ -1,4 +1,4 @@
-# SQLRustGo v1.6.1
+# SQLRustGo v2.1.0
 
 [workspace]
 members = [
@@ -39,7 +39,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.6.1"
+version = "2.1.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -69,7 +69,7 @@ sqlrustgo-unified-storage = { path = "crates/unified-storage" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
-tonic = "0.12"
+tonic = "0.14"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
@@ -95,7 +95,7 @@ hmac = "0.12"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 fnv = "1.0"
 proptest = "1.1"
-arrow = { version = "53" }
+arrow = { version = "58" }
 parquet = { version = "53" }
 rust_decimal = "1.0"
 
