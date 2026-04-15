@@ -485,4 +485,77 @@ mod tests {
 
         assert!(result.rows.len() >= 0, "Join should complete without error");
     }
+
+    #[test]
+    fn test_left_semi_join() {
+        let mut storage = MemoryStorage::new();
+
+        let left_info = sqlrustgo_storage::TableInfo {
+            name: "left_table".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "key".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
+                compression: None,
+            }],
+        };
+
+        storage.create_table(&left_info).ok();
+        storage
+            .insert("left_table", vec![vec![Value::Integer(1)]])
+            .ok();
+        storage
+            .insert("left_table", vec![vec![Value::Integer(2)]])
+            .ok();
+
+        let right_info = sqlrustgo_storage::TableInfo {
+            name: "right_table".to_string(),
+            columns: vec![sqlrustgo_storage::ColumnDefinition {
+                name: "key".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: false,
+                auto_increment: false,
+                references: None,
+                compression: None,
+            }],
+        };
+
+        storage.create_table(&right_info).ok();
+        storage
+            .insert("right_table", vec![vec![Value::Integer(1)]])
+            .ok();
+
+        let engine = ExecutionEngine::new(Arc::new(RwLock::new(storage)));
+
+        let left_schema = Schema::new(vec![Field::new("key".to_string(), DataType::Integer)]);
+        let right_schema = Schema::new(vec![Field::new("key".to_string(), DataType::Integer)]);
+
+        let left_scan = Box::new(SeqScanExec::new("left_table".to_string(), left_schema));
+        let right_scan = Box::new(SeqScanExec::new("right_table".to_string(), right_schema));
+
+        let join_schema = Schema::new(vec![Field::new("key".to_string(), DataType::Integer)]);
+
+        let join = HashJoinExec::new(
+            left_scan,
+            right_scan,
+            JoinType::LeftSemi,
+            Some(Expr::binary_expr(
+                Expr::column("key"),
+                Operator::Eq,
+                Expr::column("key"),
+            )),
+            join_schema,
+        );
+
+        let result = engine.execute_plan(&join).unwrap();
+
+        assert_eq!(result.rows.len(), 1, "Only key=1 has a match");
+        assert_eq!(result.rows[0][0], Value::Integer(1));
+    }
 }
