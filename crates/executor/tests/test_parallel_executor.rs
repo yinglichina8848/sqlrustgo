@@ -32,6 +32,7 @@ fn create_test_table(storage: &mut dyn StorageEngine, name: &str, rows: usize) {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -108,6 +109,7 @@ fn test_parallel_hash_join_basic() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -124,6 +126,7 @@ fn test_parallel_hash_join_basic() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -165,6 +168,7 @@ fn create_int_table(storage: &mut dyn StorageEngine, name: &str, rows: usize) {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -659,6 +663,7 @@ fn create_value_table(storage: &mut dyn StorageEngine, name: &str, rows: usize, 
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -1385,6 +1390,7 @@ fn test_parallel_sum_with_group_by() {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
 
