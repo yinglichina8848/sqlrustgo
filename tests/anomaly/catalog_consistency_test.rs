@@ -47,6 +47,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         }
     }
 
@@ -90,6 +91,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         }
     }
 
@@ -144,6 +146,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             },
         ];
 
@@ -341,6 +344,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -428,6 +432,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -453,6 +458,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         let table2 = TableInfo {
@@ -467,6 +473,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&table1).unwrap();

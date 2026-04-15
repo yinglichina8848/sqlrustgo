@@ -281,6 +281,7 @@ fn test_memory_storage_scan_with_cancel() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -321,6 +322,7 @@ fn test_memory_storage_scan_batch_with_cancel() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
