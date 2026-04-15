@@ -12,6 +12,11 @@ dashmap = "5.5"
 
 [dev-dependencies]
 tempfile = "3.10"
+chrono = "0.4"
+
+[[bench]]
+name = "graph_benchmark"
+harness = false
 
 [[test]]
 name = "graph_tests"
