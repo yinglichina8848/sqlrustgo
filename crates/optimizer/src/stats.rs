@@ -905,6 +905,7 @@ mod tests {
             let info = TableInfo {
                 name: table.to_string(),
                 columns,
+                table_foreign_keys: None,
             };
             self.table_infos.insert(table.to_string(), info);
             self
@@ -1078,6 +1079,13 @@ mod tests {
             _end: &sqlrustgo_storage::bplus_tree::index::CompositeKey,
         ) -> SqlResult<Vec<u32>> {
             Ok(vec![])
+        }
+
+        fn get_referencing_foreign_keys(
+            &self,
+            _table: &str,
+        ) -> Vec<sqlrustgo_storage::engine::ReferencingForeignKey> {
+            Vec::new()
         }
     }
 
