@@ -123,6 +123,7 @@ fn test_hash_join_with_condition() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage
@@ -149,6 +150,7 @@ fn test_hash_join_with_condition() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage
@@ -466,6 +468,7 @@ fn test_multiple_joins() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage
@@ -488,6 +491,7 @@ fn test_multiple_joins() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage
@@ -732,6 +736,7 @@ fn test_teaching_join_inner() {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage
@@ -779,6 +784,7 @@ fn test_teaching_join_inner() {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
     storage

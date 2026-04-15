@@ -279,6 +279,7 @@ fn import_table(
         .create_table(&TableInfo {
             name: table_name.to_string(),
             columns: col_defs.clone(),
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -307,6 +308,7 @@ fn import_table(
                 info: TableInfo {
                     name: table_name.to_string(),
                     columns: col_defs.clone(),
+                    table_foreign_keys: None,
                 },
                 rows: std::mem::take(&mut batch),
             };
@@ -322,6 +324,7 @@ fn import_table(
             info: TableInfo {
                 name: table_name.to_string(),
                 columns: col_defs,
+                table_foreign_keys: None,
             },
             rows: batch,
         };

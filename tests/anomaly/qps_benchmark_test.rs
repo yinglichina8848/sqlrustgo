@@ -41,6 +41,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         }
     }
 
@@ -144,6 +145,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.lock().unwrap().create_table(&info).unwrap();
@@ -433,6 +435,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                table_foreign_keys: None,
             };
             storage.lock().unwrap().create_table(&info).unwrap();
         }
