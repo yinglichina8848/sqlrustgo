@@ -748,6 +748,76 @@ impl HashJoinVolcanoExecutor {
         }
         Ok(None)
     }
+
+    fn next_left_semi(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.left_idx < self.current_left_rows.len() {
+            let left_row = &self.current_left_rows[self.left_idx];
+            let key = if !left_row.is_empty() {
+                vec![left_row[0].clone()]
+            } else {
+                vec![Value::Null]
+            };
+            self.left_idx += 1;
+
+            if self.right_hash.contains_key(&key) {
+                return Ok(Some(left_row.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_right_semi(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.right_idx < self.right_hash.len() {
+            let (key, _) = self.right_hash.iter().nth(0).unwrap();
+            if let Some(rows) = self.right_hash.get(key) {
+                if !rows.is_empty() {
+                    self.right_idx += 1;
+                    return Ok(Some(rows[0].clone()));
+                }
+            }
+            self.right_idx += 1;
+        }
+        Ok(None)
+    }
+
+    fn next_left_anti(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.left_idx < self.current_left_rows.len() {
+            let left_row = &self.current_left_rows[self.left_idx];
+            let key = if !left_row.is_empty() {
+                vec![left_row[0].clone()]
+            } else {
+                vec![Value::Null]
+            };
+            self.left_idx += 1;
+
+            if !self.right_hash.contains_key(&key) {
+                return Ok(Some(left_row.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_right_anti(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.right_idx < self.right_hash.len() {
+            let (key, rows) = self.right_hash.iter().nth(0).unwrap();
+            self.right_idx += 1;
+
+            if !self.current_left_rows.iter().any(
+                |r| {
+                    if r.is_empty() {
+                        false
+                    } else {
+                        r[0] == key[0]
+                    }
+                },
+            ) {
+                if !rows.is_empty() {
+                    return Ok(Some(rows[0].clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 impl VolcanoExecutor for HashJoinVolcanoExecutor {
@@ -781,7 +851,10 @@ impl VolcanoExecutor for HashJoinVolcanoExecutor {
             sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
-            _ => Ok(None),
+            sqlrustgo_planner::JoinType::LeftSemi => self.next_left_semi(),
+            sqlrustgo_planner::JoinType::RightSemi => self.next_right_semi(),
+            sqlrustgo_planner::JoinType::LeftAnti => self.next_left_anti(),
+            sqlrustgo_planner::JoinType::RightAnti => self.next_right_anti(),
         }
     }
 
@@ -1162,7 +1235,10 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
             sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
-            _ => Ok(None),
+            sqlrustgo_planner::JoinType::LeftSemi => Ok(None),
+            sqlrustgo_planner::JoinType::RightSemi => Ok(None),
+            sqlrustgo_planner::JoinType::LeftAnti => Ok(None),
+            sqlrustgo_planner::JoinType::RightAnti => Ok(None),
         }
     }
 
