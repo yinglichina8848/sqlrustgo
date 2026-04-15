@@ -60,6 +60,17 @@ pub enum StoredProcStatement {
     },
     /// LOOP statements END LOOP (with optional LEAVE to exit)
     Loop { body: Vec<StoredProcStatement> },
+    /// CASE case_value WHEN value1 THEN result1 ... ELSE result END
+    Case {
+        case_value: Option<String>,
+        when_clauses: Vec<(String, String)>,
+        else_result: Option<String>,
+    },
+    /// CASE WHEN condition1 THEN result1 ... ELSE result END
+    CaseWhen {
+        when_clauses: Vec<(String, String)>,
+        else_result: Option<String>,
+    },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
