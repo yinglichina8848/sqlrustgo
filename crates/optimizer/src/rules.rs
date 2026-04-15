@@ -732,12 +732,24 @@ impl Default for ExpressionSimplification {
 }
 
 /// JoinReordering rule - reorders join operations for optimal performance
-pub struct JoinReordering;
+pub struct JoinReordering {
+    cost_model: crate::SimpleCostModel,
+    stats_provider: Option<Box<dyn crate::StatisticsProvider>>,
+}
 
 impl JoinReordering {
     /// Create a new JoinReordering rule
     pub fn new() -> Self {
-        Self
+        Self {
+            cost_model: crate::SimpleCostModel::default_model(),
+            stats_provider: None,
+        }
+    }
+
+    /// Create with a statistics provider for cost-based reordering
+    pub fn with_stats_provider(mut self, provider: Box<dyn crate::StatisticsProvider>) -> Self {
+        self.stats_provider = Some(provider);
+        self
     }
 
     /// Reorder join operations
@@ -780,69 +792,126 @@ impl JoinReordering {
         join_type: &JoinType,
         condition: &Option<Expr>,
     ) -> Option<Plan> {
-        // Get estimated sizes for left and right
-        let left_size = self.estimate_size(left);
-        let right_size = self.estimate_size(right);
+        // Get estimated sizes for left and right using statistics
+        let left_rows = self.estimate_rows(left);
+        let right_rows = self.estimate_rows(right);
 
-        // For inner joins, prefer smaller table on the right (broadcast join)
-        // This is a simple heuristic: put smaller table on the right side
-        if matches!(join_type, JoinType::Inner) && left_size > right_size {
-            // Try commutativity: swap left and right
-            if self.can_commute(condition) {
-                return Some(Plan::Join {
-                    left: right.clone(),
-                    right: left.clone(),
-                    join_type: join_type.clone(),
-                    condition: condition.clone(),
-                });
-            }
+        // Calculate costs for different join orderings
+        let current_cost = self.estimate_join_cost(left_rows, right_rows, join_type);
+
+        // Try swapping left and right
+        let swapped_cost = self.estimate_join_cost(right_rows, left_rows, join_type);
+
+        // For inner joins, prefer swapping when:
+        // 1. Swapped cost is lower, OR
+        // 2. Left is significantly larger than right (size heuristic for broadcast join)
+        let should_swap = if matches!(join_type, JoinType::Inner) {
+            swapped_cost < current_cost
+                || (left_rows > right_rows * 2 && swapped_cost <= current_cost)
+        } else {
+            false
+        };
+
+        if should_swap && self.can_commute(condition) {
+            return Some(Plan::Join {
+                left: right.clone(),
+                right: left.clone(),
+                join_type: join_type.clone(),
+                condition: condition.clone(),
+            });
         }
 
         None
     }
 
-    /// Estimate the size of a plan (number of rows)
-    fn estimate_size(&self, plan: &Plan) -> usize {
+    /// Estimate the number of rows from a plan using statistics
+    fn estimate_rows(&self, plan: &Plan) -> u64 {
         match plan {
-            Plan::TableScan { .. } => 1000, // Default estimate
-            Plan::IndexScan { .. } => 100,  // Index scan typically returns fewer rows
+            Plan::TableScan { table_name, .. } => {
+                // Use statistics if available
+                if let Some(ref provider) = self.stats_provider {
+                    if let Some(stats) = provider.table_stats(table_name) {
+                        return stats.row_count();
+                    }
+                }
+                1000 // Default estimate
+            }
+            Plan::IndexScan { table_name, .. } => {
+                // Index scans typically return fewer rows
+                if let Some(ref provider) = self.stats_provider {
+                    if let Some(stats) = provider.table_stats(table_name) {
+                        return (stats.row_count() as f64 * 0.1) as u64;
+                    }
+                }
+                100
+            }
             Plan::Filter { input, .. } => {
                 // Filter typically reduces size by 50%
-                self.estimate_size(input) / 2
+                (self.estimate_rows(input) as f64 * 0.5) as u64
             }
-            Plan::Projection { input, .. } => self.estimate_size(input),
+            Plan::Projection { input, .. } => self.estimate_rows(input),
             Plan::Join {
                 left,
                 right,
                 join_type,
-                condition: _,
+                ..
             } => {
+                let left_rows = self.estimate_rows(left);
+                let right_rows = self.estimate_rows(right);
                 match join_type {
                     JoinType::Inner => {
-                        let left_size = self.estimate_size(left);
-                        let right_size = self.estimate_size(right);
                         // Estimate: inner join produces ~10% of cross product
-                        (left_size * right_size) / 10
+                        ((left_rows * right_rows) as f64 * 0.1) as u64
                     }
-                    JoinType::Left => self.estimate_size(left),
-                    JoinType::Right => self.estimate_size(right),
-                    JoinType::Full => {
-                        let left_size = self.estimate_size(left);
-                        let right_size = self.estimate_size(right);
-                        left_size + right_size
-                    }
+                    JoinType::Left => left_rows,
+                    JoinType::Right => right_rows,
+                    JoinType::Full => left_rows + right_rows,
                 }
             }
             Plan::Aggregate { input, .. } => {
                 // Aggregation reduces rows significantly
-                self.estimate_size(input) / 10
+                (self.estimate_rows(input) as f64 * 0.1) as u64
             }
-            Plan::Sort { input, .. } => self.estimate_size(input),
-            Plan::Limit { input: _, .. } => {
-                // Assume limit reduces to ~100 rows
-                100
-            }
+            Plan::Sort { input, .. } => self.estimate_rows(input),
+            Plan::Limit { .. } => 100,
             Plan::EmptyRelation => 0,
+        }
+    }
+
+    /// Estimate the size of a plan (number of rows) - backward compatible alias
+    #[allow(dead_code)]
+    fn estimate_size(&self, plan: &Plan) -> usize {
+        self.estimate_rows(plan) as usize
+    }
+
+    /// Estimate cost for a join operation
+    fn estimate_join_cost(&self, left_rows: u64, right_rows: u64, join_type: &JoinType) -> f64 {
+        // Use the cost model to estimate join cost
+        let join_method = self.select_join_method(left_rows, right_rows);
+        let cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, join_method);
+
+        // Add penalty for outer joins (they are more expensive)
+        match join_type {
+            JoinType::Inner => cost,
+            JoinType::Left | JoinType::Right => cost * 1.5,
+            JoinType::Full => cost * 2.0,
+        }
+    }
+
+    /// Select the best join method based on table sizes
+    fn select_join_method(&self, left_rows: u64, right_rows: u64) -> &str {
+        // Heuristic: use hash join for large tables, nested loop for small tables
+        let total_rows = left_rows + right_rows;
+        let smaller = left_rows.min(right_rows);
+
+        if smaller < 100 && total_rows < 10000 {
+            "nested_loop"
+        } else if total_rows < 100000 {
+            "hash_join"
+        } else {
+            "sort_merge"
         }
     }
 
