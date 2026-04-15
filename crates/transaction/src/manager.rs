@@ -4,6 +4,7 @@
 //! transaction lifecycle: BEGIN, COMMIT, ROLLBACK.
 
 use crate::mvcc::{MvccEngine, Snapshot, TxId};
+use crate::mvcc_storage::MVCCStorage;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -206,6 +207,67 @@ impl TransactionManager {
                 self.isolation_level,
             )),
         }
+    }
+}
+
+impl TransactionManager {
+    pub fn mvcc_read<S: MVCCStorage>(
+        &self,
+        storage: &S,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, TransactionError> {
+        let ctx = self.get_transaction_context_for_query()?;
+        Ok(storage.read(key, &ctx.snapshot))
+    }
+
+    pub fn mvcc_write<S: MVCCStorage>(
+        &mut self,
+        storage: &mut S,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), TransactionError> {
+        let tx_id = self.current_tx.ok_or(TransactionError::NoTransaction)?;
+        storage.write_version(key, value, tx_id);
+        Ok(())
+    }
+
+    pub fn mvcc_commit<S: MVCCStorage>(
+        &mut self,
+        storage: &mut S,
+    ) -> Result<Option<u64>, TransactionError> {
+        let tx_id = self
+            .current_tx
+            .take()
+            .ok_or(TransactionError::NoTransaction)?;
+
+        let commit_ts = {
+            let mut mvcc = self.mvcc.write().map_err(|_| TransactionError::LockError)?;
+            mvcc.commit_transaction(tx_id)
+        }
+        .ok_or(TransactionError::InvalidTransaction)?;
+
+        storage.commit_versions(tx_id, commit_ts)?;
+        Ok(Some(commit_ts))
+    }
+
+    pub fn mvcc_rollback<S: MVCCStorage>(
+        &mut self,
+        storage: &mut S,
+    ) -> Result<(), TransactionError> {
+        let tx_id = self
+            .current_tx
+            .take()
+            .ok_or(TransactionError::NoTransaction)?;
+
+        {
+            let mut mvcc = self.mvcc.write().map_err(|_| TransactionError::LockError)?;
+            if !mvcc.abort_transaction(tx_id) {
+                return Err(TransactionError::InvalidTransaction);
+            }
+        }
+
+        storage.rollback_versions(tx_id)?;
+        Ok(())
     }
 }
 

@@ -159,30 +159,66 @@ pub struct VersionChain {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowVersion {
-    pub tx_id: TxId,
-    pub commit_timestamp: Option<u64>,
-    pub data: Vec<u8>,
-    pub next_version: Option<Box<RowVersion>>,
-    pub is_deleted: bool,
+    pub value: Vec<u8>,
+    pub created_by: TxId,
+    pub created_commit_ts: Option<u64>,
+    pub deleted_by: Option<TxId>,
+    pub deleted_commit_ts: Option<u64>,
 }
 
 impl RowVersion {
-    pub fn new(tx_id: TxId, data: Vec<u8>) -> Self {
+    pub fn new(tx_id: TxId, value: Vec<u8>) -> Self {
         Self {
-            tx_id,
-            commit_timestamp: None,
-            data,
-            next_version: None,
-            is_deleted: false,
+            value,
+            created_by: tx_id,
+            created_commit_ts: None,
+            deleted_by: None,
+            deleted_commit_ts: None,
         }
     }
 
-    pub fn mark_deleted(&mut self) {
-        self.is_deleted = true;
+    pub fn new_deleted(tx_id: TxId) -> Self {
+        Self {
+            value: Vec::new(),
+            created_by: tx_id,
+            created_commit_ts: None,
+            deleted_by: Some(tx_id),
+            deleted_commit_ts: None,
+        }
     }
 
     pub fn commit(&mut self, timestamp: u64) {
-        self.commit_timestamp = Some(timestamp);
+        self.created_commit_ts = Some(timestamp);
+    }
+
+    pub fn mark_deleted(&mut self, tx_id: TxId, timestamp: u64) {
+        self.deleted_by = Some(tx_id);
+        self.deleted_commit_ts = Some(timestamp);
+    }
+
+    pub fn is_visible(&self, snapshot: &Snapshot) -> bool {
+        if self.created_by == snapshot.tx_id {
+            return true;
+        }
+        let created_ts = match self.created_commit_ts {
+            Some(ts) => ts,
+            None => return false,
+        };
+        if created_ts > snapshot.snapshot_timestamp {
+            return false;
+        }
+        // For delete markers (empty value), the deleted_commit_ts is the same as
+        // created_commit_ts and represents when the deletion was committed.
+        // A delete marker is visible if created_ts < snapshot_ts.
+        // For regular versions, check if deleted_ts > snapshot_ts.
+        if !self.value.is_empty() {
+            if let Some(deleted_ts) = self.deleted_commit_ts {
+                if deleted_ts <= snapshot.snapshot_timestamp {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
@@ -307,9 +343,57 @@ mod tests {
     #[test]
     fn test_row_version_commit() {
         let mut version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
-        assert!(version.commit_timestamp.is_none());
+        assert!(version.created_commit_ts.is_none());
 
         version.commit(100);
-        assert_eq!(version.commit_timestamp, Some(100));
+        assert_eq!(version.created_commit_ts, Some(100));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_own_uncommitted() {
+        let version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        let snapshot = Snapshot::new(TxId::new(1), 100, vec![TxId::new(1)]);
+        assert!(version.is_visible(&snapshot));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_other_uncommitted() {
+        let version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        let snapshot = Snapshot::new(TxId::new(2), 100, vec![TxId::new(1)]);
+        assert!(!version.is_visible(&snapshot));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_committed_before_snapshot() {
+        let mut version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        version.commit(50);
+        let snapshot = Snapshot::new(TxId::new(2), 100, vec![]);
+        assert!(version.is_visible(&snapshot));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_committed_after_snapshot() {
+        let mut version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        version.commit(150);
+        let snapshot = Snapshot::new(TxId::new(2), 100, vec![]);
+        assert!(!version.is_visible(&snapshot));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_deleted_after_snapshot() {
+        let mut version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        version.commit(50);
+        version.mark_deleted(TxId::new(2), 125);
+        let snapshot = Snapshot::new(TxId::new(3), 100, vec![]);
+        assert!(version.is_visible(&snapshot));
+    }
+
+    #[test]
+    fn test_row_version_is_visible_deleted_before_snapshot() {
+        let mut version = RowVersion::new(TxId::new(1), vec![1, 2, 3]);
+        version.commit(50);
+        version.mark_deleted(TxId::new(2), 75);
+        let snapshot = Snapshot::new(TxId::new(3), 100, vec![]);
+        assert!(!version.is_visible(&snapshot));
     }
 }
