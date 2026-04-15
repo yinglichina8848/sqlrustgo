@@ -51,9 +51,7 @@ pub struct HashConfig {
 
 impl Default for HashConfig {
     fn default() -> Self {
-        Self {
-            dimension: 256,
-        }
+        Self { dimension: 256 }
     }
 }
 
@@ -62,7 +60,10 @@ pub trait EmbeddingProvider: Send + Sync {
     fn name(&self) -> &str;
     fn dimension(&self) -> usize;
     fn is_local(&self) -> bool;
-    async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>>;
+    async fn generate(
+        &self,
+        texts: Vec<String>,
+    ) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>>;
     fn supports_batch(&self) -> bool {
         true
     }
@@ -104,7 +105,10 @@ pub mod ollama {
             true
         }
 
-        async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
+        async fn generate(
+            &self,
+            texts: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
             let url = format!("{}/api/embeddings", self.config.base_url);
             let mut results = Vec::with_capacity(texts.len());
 
@@ -114,11 +118,7 @@ pub mod ollama {
                     "prompt": text,
                 });
 
-                let response = self.client
-                    .post(&url)
-                    .json(&body)
-                    .send()
-                    .await?;
+                let response = self.client.post(&url).json(&body).send().await?;
 
                 if !response.status().is_success() {
                     return Err(format!("Ollama API error: {}", response.status()).into());
@@ -180,10 +180,14 @@ pub mod openai {
             false
         }
 
-        async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
+        async fn generate(
+            &self,
+            texts: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
             let url = format!("{}/embeddings", self.config.base_url);
-            
-            let response = self.client
+
+            let response = self
+                .client
                 .post(&url)
                 .header("Authorization", format!("Bearer {}", self.config.api_key))
                 .json(&serde_json::json!({
@@ -247,8 +251,14 @@ pub mod hash {
             true
         }
 
-        async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
-            Ok(texts.iter().map(|t| self.model.generate_embedding(t)).collect())
+        async fn generate(
+            &self,
+            texts: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, Box<dyn Error + Send + Sync>> {
+            Ok(texts
+                .iter()
+                .map(|t| self.model.generate_embedding(t))
+                .collect())
         }
 
         fn supports_batch(&self) -> bool {
@@ -288,12 +298,15 @@ mod tests {
     #[tokio::test]
     async fn test_hash_provider_basic() {
         let provider = ProviderFactory::create_hash();
-        
+
         assert_eq!(provider.name(), "hash");
         assert_eq!(provider.dimension(), 256);
         assert!(provider.is_local());
-        
-        let embeddings = provider.generate(vec!["hello world".to_string()]).await.unwrap();
+
+        let embeddings = provider
+            .generate(vec!["hello world".to_string()])
+            .await
+            .unwrap();
         assert_eq!(embeddings.len(), 1);
         assert_eq!(embeddings[0].len(), 256);
     }
@@ -301,17 +314,23 @@ mod tests {
     #[tokio::test]
     async fn test_hash_provider_deterministic() {
         let provider = ProviderFactory::create_hash();
-        
-        let emb1 = provider.generate(vec!["test text".to_string()]).await.unwrap();
-        let emb2 = provider.generate(vec!["test text".to_string()]).await.unwrap();
-        
+
+        let emb1 = provider
+            .generate(vec!["test text".to_string()])
+            .await
+            .unwrap();
+        let emb2 = provider
+            .generate(vec!["test text".to_string()])
+            .await
+            .unwrap();
+
         assert_eq!(emb1, emb2);
     }
 
     #[tokio::test]
     async fn test_hash_provider_batch() {
         let provider = ProviderFactory::create_hash();
-        
+
         let embeddings = provider
             .generate(vec![
                 "first text".to_string(),
@@ -320,7 +339,7 @@ mod tests {
             ])
             .await
             .unwrap();
-        
+
         assert_eq!(embeddings.len(), 3);
         for emb in &embeddings {
             assert_eq!(emb.len(), 256);
@@ -329,9 +348,8 @@ mod tests {
 
     #[test]
     fn test_provider_factory_create() {
-        let hash_provider = ProviderFactory::create(EmbeddingProviderConfig::Hash(HashConfig {
-            dimension: 128,
-        }));
+        let hash_provider =
+            ProviderFactory::create(EmbeddingProviderConfig::Hash(HashConfig { dimension: 128 }));
         assert_eq!(hash_provider.dimension(), 128);
     }
 
