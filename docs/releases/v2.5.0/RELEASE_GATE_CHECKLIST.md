@@ -34,20 +34,25 @@
 | FK 集成测试 | #1379 | #1428 | ✅ MERGED |
 | 回归测试集成 | - | #1419 | ✅ MERGED |
 | TPC-H Q13/Q22 修复 | - | #1415 | ✅ MERGED |
+| Cypher Phase-1 | #1381 | #1445 | ✅ MERGED |
+| MVCC Snapshot Isolation Phase 1 | #1389 | #1447 | ✅ MERGED |
+| MVCC GC/Vacuum | #1389 | #1449 | ✅ MERGED |
+| MVCC+WAL 集成 | #1377 | #1450 | ✅ MERGED |
+| LEFT/RIGHT/SEMI/ANTI JOIN | #1380 | #1448 | ✅ MERGED |
 
 ### ⏳ 进行中
 
 | 功能 | Issue | 状态 | 负责人 |
 |------|-------|------|--------|
-| MVCC 并发控制 | #1389 | ⏳ Phase 1/3 | @sonaheartopen |
-| 完整 JOIN 实现 | #1380 | ⏳ LEFT/RIGHT | - |
+| MVCC 并发控制 | #1389 | ✅ Phase 1 完成 | @sonaheartopen |
+| 完整 JOIN 实现 | #1380 | ✅ LEFT/RIGHT/SEMI/ANTI | - |
 
 ### 📋 待开发
 
 | 功能 | Issue | 优先级 |
 |------|-------|--------|
-| MVCC 快照隔离 | #1389 | P0 |
-| JOIN 完整实现 | #1380 | P1 |
+| MVCC Phase 2/3 (Serializable, Index MVCC) | #1389 | P0 |
+| JOIN 完整实现 (FULL OUTER JOIN) | #1380 | P1 |
 | 子查询优化 EXISTS/IN | #1382 | P1 |
 | PITR 备份恢复 | #1390 | P2 |
 | CBO 优化器 | #1385 | P2 |
@@ -237,9 +242,11 @@ git push origin v2.5.0
 ## 7. 相关 Issue
 
 - #1080: v2.1-v2.5 开发总控
+- #1377: 事务系统集成 (MVCC+WAL)
 - #1378: Graph 持久化
 - #1379: FOREIGN KEY
 - #1380: JOIN 完整实现
+- #1381: Cypher Graph 查询
 - #1382: 子查询优化
 - #1383: 连接池
 - #1384: Prepared Statement
@@ -254,6 +261,8 @@ git push origin v2.5.0
 ---
 
 **门禁状态**: 🚧 进行中  
-**完成度**: ~75% (主要功能已完成，MVCC 和 JOIN 待完成)  
+**完成度**: ~85% (MVCC Phase 1, Semi/Anti JOIN 已完成)  
 **预计 RC**: 2026-04-21  
 **预计 GA**: 2026-04-28
+
+**最后更新**: 2026-04-16
