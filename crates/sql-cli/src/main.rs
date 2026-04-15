@@ -361,8 +361,8 @@ fn execute_create_table(
             let references = col.references.as_ref().map(|fk| ForeignKeyConstraint {
                 referenced_table: fk.table.clone(),
                 referenced_column: fk.column.clone(),
-                on_delete: convert_fk_action(fk.on_delete),
-                on_update: convert_fk_action(fk.on_update),
+                on_delete: convert_fk_action(fk.on_delete.clone()),
+                on_update: convert_fk_action(fk.on_update.clone()),
             });
             ColumnDefinition {
                 name: col.name.clone(),
