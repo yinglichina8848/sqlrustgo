@@ -3177,6 +3177,14 @@ impl Parser {
                                                         None
                                                     }
                                                 }
+                                                Some(Token::Cascade) => {
+                                                    self.next();
+                                                    Some(ForeignKeyAction::Cascade)
+                                                }
+                                                Some(Token::Restrict) => {
+                                                    self.next();
+                                                    Some(ForeignKeyAction::Restrict)
+                                                }
                                                 Some(Token::Identifier(action)) => {
                                                     let action_upper = action.to_uppercase();
                                                     self.next();
@@ -3214,6 +3222,14 @@ impl Parser {
                                                     } else {
                                                         None
                                                     }
+                                                }
+                                                Some(Token::Cascade) => {
+                                                    self.next();
+                                                    Some(ForeignKeyAction::Cascade)
+                                                }
+                                                Some(Token::Restrict) => {
+                                                    self.next();
+                                                    Some(ForeignKeyAction::Restrict)
                                                 }
                                                 Some(Token::Identifier(action)) => {
                                                     let action_upper = action.to_uppercase();
