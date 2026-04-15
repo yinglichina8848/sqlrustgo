@@ -92,7 +92,7 @@ pub use report::{
 };
 
 pub use semantic_embedding::{
-    EmbeddingProvider, EmbeddingProviderConfig, HashConfig, OpenAIConfig, OllamaConfig,
+    EmbeddingProvider, EmbeddingProviderConfig, HashConfig, OllamaConfig, OpenAIConfig,
     ProviderFactory,
 };
 pub use sql_api::{sql, GmpExecutor};
