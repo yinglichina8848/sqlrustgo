@@ -583,6 +583,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -602,6 +603,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -656,6 +658,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -681,6 +684,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -736,6 +740,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -755,6 +760,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -828,6 +834,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -868,6 +875,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -941,6 +949,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -961,6 +970,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1038,6 +1048,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).ok();
@@ -1147,6 +1158,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1215,6 +1227,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1300,6 +1313,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1322,6 +1336,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1372,6 +1387,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1394,6 +1410,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1444,6 +1461,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1466,6 +1484,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1522,6 +1541,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1541,6 +1561,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1588,6 +1609,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1607,6 +1629,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1666,6 +1689,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1688,6 +1712,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
@@ -1747,6 +1772,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&left_info).ok();
@@ -1772,6 +1798,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&right_info).ok();
