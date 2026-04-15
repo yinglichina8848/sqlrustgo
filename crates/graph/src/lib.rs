@@ -15,6 +15,7 @@
 
 pub mod cypher;
 pub mod error;
+pub mod graph_generator;
 pub mod model;
 pub mod store;
 pub mod traversal;
