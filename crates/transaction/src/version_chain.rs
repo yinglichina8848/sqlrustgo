@@ -20,6 +20,12 @@ pub struct VersionChainStats {
     pub max_versions_per_key: usize,
 }
 
+impl Default for VersionChainMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VersionChainMap {
     /// Creates a new empty VersionChainMap
     pub fn new() -> Self {
@@ -50,7 +56,7 @@ impl VersionChainMap {
     /// Appends a new version to the chain for the given key.
     pub fn append(&mut self, key: Vec<u8>, version: RowVersion) {
         let mut chains = self.chains.write().unwrap();
-        chains.entry(key).or_insert_with(Vec::new).push(version);
+        chains.entry(key).or_default().push(version);
     }
 
     /// Gets a clone of the version chain for a key.
