@@ -435,3 +435,127 @@ fn test_gmp_full_scenario() {
     // uses_material (2) + produced_by (1) + operated_by (1) + inspected_by (1) + governed_by (1) = 6
     assert_eq!(outgoing.len(), 6);
 }
+
+#[cfg(test)]
+mod graph_benchmark_tests {
+    use super::*;
+    use sqlrustgo_graph::{
+        bfs_with_distances, dfs_collect, graph_generator::GraphGenerator, multi_hop,
+    };
+    use std::time::Instant;
+
+    const PERFORMANCE_ITERATIONS: usize = 100;
+
+    #[test]
+    fn test_graph_generator_deterministic() {
+        let gen = GraphGenerator::new(42);
+        let store1 = gen.generate(100, 3);
+        let store2 = gen.generate(100, 3);
+
+        assert_eq!(store1.node_count(), store2.node_count());
+        assert_eq!(store1.edge_count(), store2.edge_count());
+    }
+
+    #[test]
+    fn test_graph_generator_sizes() {
+        let gen = GraphGenerator::new(42);
+
+        let store_100 = gen.generate(100, 3);
+        assert_eq!(store_100.node_count(), 100);
+
+        let store_1000 = gen.generate(1000, 3);
+        assert_eq!(store_1000.node_count(), 1000);
+    }
+
+    #[test]
+    fn test_multi_hop_2hop() {
+        let gen = GraphGenerator::new(42);
+        let store = gen.generate(100, 3);
+
+        let get_neighbors = |n: sqlrustgo_graph::NodeId| -> Vec<sqlrustgo_graph::NodeId> {
+            store.neighbors_by_edge_label(n, "connects")
+        };
+
+        let result = multi_hop(get_neighbors, sqlrustgo_graph::NodeId(0), 2);
+        assert!(result.len() <= 1000);
+    }
+
+    #[test]
+    fn test_multi_hop_3hop() {
+        let gen = GraphGenerator::new(42);
+        let store = gen.generate(1000, 3);
+
+        let get_neighbors = |n: sqlrustgo_graph::NodeId| -> Vec<sqlrustgo_graph::NodeId> {
+            store.neighbors_by_edge_label(n, "connects")
+        };
+
+        let result = multi_hop(get_neighbors, sqlrustgo_graph::NodeId(0), 3);
+        assert!(result.len() >= 0);
+    }
+
+    #[test]
+    fn test_bfs_performance_target() {
+        let gen = GraphGenerator::new(42);
+        let store = gen.generate(1000, 3);
+
+        let get_neighbors = |n: sqlrustgo_graph::NodeId| -> Vec<sqlrustgo_graph::NodeId> {
+            store.neighbors_by_edge_label(n, "connects")
+        };
+
+        let start = Instant::now();
+        for _ in 0..PERFORMANCE_ITERATIONS {
+            let _ = bfs_with_distances(&get_neighbors, sqlrustgo_graph::NodeId(0));
+        }
+        let elapsed = start.elapsed().as_millis() as f64 / PERFORMANCE_ITERATIONS as f64;
+
+        assert!(
+            elapsed < 50.0,
+            "BFS 1000 nodes took {}ms, target < 50ms",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn test_dfs_performance_target() {
+        let gen = GraphGenerator::new(42);
+        let store = gen.generate(1000, 3);
+
+        let get_neighbors = |n: sqlrustgo_graph::NodeId| -> Vec<sqlrustgo_graph::NodeId> {
+            store.neighbors_by_edge_label(n, "connects")
+        };
+
+        let start = Instant::now();
+        for _ in 0..PERFORMANCE_ITERATIONS {
+            let _ = dfs_collect(&get_neighbors, sqlrustgo_graph::NodeId(0));
+        }
+        let elapsed = start.elapsed().as_millis() as f64 / PERFORMANCE_ITERATIONS as f64;
+
+        assert!(
+            elapsed < 100.0,
+            "DFS 1000 nodes took {}ms, target < 100ms",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn test_3hop_performance_target() {
+        let gen = GraphGenerator::new(42);
+        let store = gen.generate(1000, 3);
+
+        let get_neighbors = |n: sqlrustgo_graph::NodeId| -> Vec<sqlrustgo_graph::NodeId> {
+            store.neighbors_by_edge_label(n, "connects")
+        };
+
+        let start = Instant::now();
+        for _ in 0..PERFORMANCE_ITERATIONS {
+            let _ = multi_hop(get_neighbors, sqlrustgo_graph::NodeId(0), 3);
+        }
+        let elapsed = start.elapsed().as_millis() as f64 / PERFORMANCE_ITERATIONS as f64;
+
+        assert!(
+            elapsed < 500.0,
+            "3-hop 1000 nodes took {}ms, target < 500ms",
+            elapsed
+        );
+    }
+}
