@@ -759,7 +759,7 @@ impl HashJoinVolcanoExecutor {
             };
             self.left_idx += 1;
 
-            if self.right_hash.contains_key(&key) {
+            if !self.right_hash.contains_key(&key) {
                 return Ok(Some(left_row.clone()));
             }
         }
@@ -767,15 +767,26 @@ impl HashJoinVolcanoExecutor {
     }
 
     fn next_right_semi(&mut self) -> SqlResult<Option<Vec<Value>>> {
-        while self.right_idx < self.right_hash.len() {
-            let (key, _) = self.right_hash.iter().nth(0).unwrap();
-            if let Some(rows) = self.right_hash.get(key) {
-                if !rows.is_empty() {
-                    self.right_idx += 1;
-                    return Ok(Some(rows[0].clone()));
+        let keys: Vec<_> = self.right_hash.keys().cloned().collect();
+        while self.right_idx < keys.len() {
+            let key = &keys[self.right_idx];
+            self.right_idx += 1;
+
+            if self.current_left_rows.iter().any(
+                |r| {
+                    if r.is_empty() {
+                        false
+                    } else {
+                        r[0] == key[0]
+                    }
+                },
+            ) {
+                if let Some(rows) = self.right_hash.get(key) {
+                    if !rows.is_empty() {
+                        return Ok(Some(rows[0].clone()));
+                    }
                 }
             }
-            self.right_idx += 1;
         }
         Ok(None)
     }
@@ -798,21 +809,24 @@ impl HashJoinVolcanoExecutor {
     }
 
     fn next_right_anti(&mut self) -> SqlResult<Option<Vec<Value>>> {
-        while self.right_idx < self.right_hash.len() {
-            let (key, rows) = self.right_hash.iter().nth(0).unwrap();
+        let keys: Vec<_> = self.right_hash.keys().cloned().collect();
+        while self.right_idx < keys.len() {
+            let key = &keys[self.right_idx];
             self.right_idx += 1;
 
-            if !self.current_left_rows.iter().any(
-                |r| {
-                    if r.is_empty() {
-                        false
-                    } else {
-                        r[0] == key[0]
+            let has_match = self.current_left_rows.iter().any(|r| {
+                if r.is_empty() {
+                    false
+                } else {
+                    r[0] == key[0]
+                }
+            });
+
+            if !has_match {
+                if let Some(rows) = self.right_hash.get(key) {
+                    if !rows.is_empty() {
+                        return Ok(Some(rows[0].clone()));
                     }
-                },
-            ) {
-                if !rows.is_empty() {
-                    return Ok(Some(rows[0].clone()));
                 }
             }
         }
@@ -964,6 +978,10 @@ fn compare_join_keys(left_row: &[Value], right_row: &[Value]) -> std::cmp::Order
 }
 
 impl SortMergeJoinVolcanoExecutor {
+    fn sort_key(row: &[Value], key_idx: usize) -> Value {
+        row.get(key_idx).cloned().unwrap_or(Value::Null)
+    }
+
     fn next_inner(&mut self) -> SqlResult<Option<Vec<Value>>> {
         loop {
             // If we have cached matches, return them
@@ -1188,6 +1206,86 @@ impl SortMergeJoinVolcanoExecutor {
         }
         Ok(None)
     }
+
+    fn next_left_semi(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.left_idx < self.left_sorted.len() {
+            let left_row = &self.left_sorted[self.left_idx];
+            let left_key = Self::sort_key(left_row, 0);
+
+            self.left_idx += 1;
+
+            for right_row in &self.right_sorted {
+                let right_key = Self::sort_key(right_row, 0);
+                if left_key == right_key {
+                    return Ok(Some(left_row.clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_right_semi(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.right_idx < self.right_sorted.len() {
+            let right_row = &self.right_sorted[self.right_idx];
+            let right_key = Self::sort_key(right_row, 0);
+
+            self.right_idx += 1;
+
+            for left_row in &self.left_sorted {
+                let left_key = Self::sort_key(left_row, 0);
+                if left_key == right_key {
+                    return Ok(Some(right_row.clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_left_anti(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.left_idx < self.left_sorted.len() {
+            let left_row = &self.left_sorted[self.left_idx];
+            let left_key = Self::sort_key(left_row, 0);
+
+            self.left_idx += 1;
+
+            let mut found = false;
+            for right_row in &self.right_sorted {
+                let right_key = Self::sort_key(right_row, 0);
+                if left_key == right_key {
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Ok(Some(left_row.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_right_anti(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        while self.right_idx < self.right_sorted.len() {
+            let right_row = &self.right_sorted[self.right_idx];
+            let right_key = Self::sort_key(right_row, 0);
+
+            self.right_idx += 1;
+
+            let mut found = false;
+            for left_row in &self.left_sorted {
+                let left_key = Self::sort_key(left_row, 0);
+                if left_key == right_key {
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Ok(Some(right_row.clone()));
+            }
+        }
+        Ok(None)
+    }
 }
 
 impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
@@ -1235,10 +1333,10 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
             sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
-            sqlrustgo_planner::JoinType::LeftSemi => Ok(None),
-            sqlrustgo_planner::JoinType::RightSemi => Ok(None),
-            sqlrustgo_planner::JoinType::LeftAnti => Ok(None),
-            sqlrustgo_planner::JoinType::RightAnti => Ok(None),
+            sqlrustgo_planner::JoinType::LeftSemi => self.next_left_semi(),
+            sqlrustgo_planner::JoinType::RightSemi => self.next_right_semi(),
+            sqlrustgo_planner::JoinType::LeftAnti => self.next_left_anti(),
+            sqlrustgo_planner::JoinType::RightAnti => self.next_right_anti(),
         }
     }
 

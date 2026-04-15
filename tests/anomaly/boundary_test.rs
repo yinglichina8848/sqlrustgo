@@ -25,6 +25,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -50,6 +51,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -80,6 +82,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -112,6 +115,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -142,6 +146,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -171,6 +176,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -202,6 +208,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -238,6 +245,7 @@ mod tests {
         let info = TableInfo {
             name: "many_cols".to_string(),
             columns,
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -266,6 +274,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -304,6 +313,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).unwrap();

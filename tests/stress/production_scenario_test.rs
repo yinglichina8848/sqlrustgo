@@ -81,6 +81,7 @@ mod tests {
                             compression: None,
                         },
                     ],
+                    table_foreign_keys: None,
                 })
                 .unwrap();
 
@@ -119,6 +120,7 @@ mod tests {
                             compression: None,
                         },
                     ],
+                    table_foreign_keys: None,
                 })
                 .unwrap();
 
@@ -199,6 +201,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
 
@@ -300,6 +303,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
 
@@ -373,6 +377,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
 

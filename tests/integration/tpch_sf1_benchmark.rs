@@ -129,7 +129,7 @@ fn import_tpch_data(storage_path: &PathBuf) -> std::io::Result<ExecutionEngine> 
     fs::create_dir_all(storage_path)?;
 
     let mut storage = FileStorage::new(storage_path.clone()).expect("Failed to create FileStorage");
-    let data_dir = PathBuf::from("/Users/liying/workspace/dev/openheart/sqlrustgo/data/tpch-sf01");
+    let data_dir = PathBuf::from("/home/openclaw/dev/yinglichina163/sqlrustgo/data/tpch-sf01");
 
     let start = Instant::now();
 
@@ -279,6 +279,7 @@ fn import_table(
         .create_table(&TableInfo {
             name: table_name.to_string(),
             columns: col_defs.clone(),
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -307,6 +308,7 @@ fn import_table(
                 info: TableInfo {
                     name: table_name.to_string(),
                     columns: col_defs.clone(),
+                    table_foreign_keys: None,
                 },
                 rows: std::mem::take(&mut batch),
             };
@@ -322,6 +324,7 @@ fn import_table(
             info: TableInfo {
                 name: table_name.to_string(),
                 columns: col_defs,
+                table_foreign_keys: None,
             },
             rows: batch,
         };
@@ -344,12 +347,27 @@ fn run_tpch_queries(engine: &mut ExecutionEngine, iterations: usize) -> Vec<Quer
     println!("Running TPC-H benchmark ({} iterations)...", iterations);
 
     let queries = vec![
+        ("Q1", "SELECT l_returnflag, SUM(l_quantity) FROM lineitem WHERE l_shipdate <= '1995-12-01' GROUP BY l_returnflag"),
+        ("Q2", "SELECT s_acctbal, s_name, n_name, p_partkey FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' ORDER BY s_acctbal DESC LIMIT 10"),
+        ("Q3", "SELECT o_orderkey, SUM(l_extendedprice) FROM orders JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate < '1995-03-15' GROUP BY o_orderkey"),
         ("Q4", "SELECT o_orderpriority, COUNT(*) FROM orders WHERE o_orderdate >= '1993-07-01' AND o_orderdate < '1993-10-01' GROUP BY o_orderpriority"),
+        ("Q5", "SELECT n_name, SUM(l_extendedprice) FROM customer, orders, lineitem, supplier, nation, region WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey AND l_suppkey = s_suppkey AND c_nationkey = s_nationkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'ASIA' GROUP BY n_name"),
+        ("Q6", "SELECT SUM(l_extendedprice) FROM lineitem WHERE l_quantity < 24 AND l_shipdate >= '1994-01-01'"),
+        ("Q7", "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation, SUM(l_extendedprice) FROM supplier, lineitem, orders, customer, nation n1, nation n2 WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey GROUP BY n1.n_name, n2.n_name"),
+        ("Q8", "SELECT o_orderyear, SUM(o_totalprice) FROM orders WHERE o_orderpriority = '1-URGENT' GROUP BY o_orderyear"),
+        ("Q9", "SELECT p_name, SUM(l_extendedprice) FROM part, lineitem, orders, supplier WHERE p_partkey = l_partkey AND l_orderkey = o_orderkey AND s_suppkey = l_suppkey AND p_type LIKE '%COPPER%' GROUP BY p_name"),
         ("Q10", "SELECT c_custkey, COUNT(*) FROM customer GROUP BY c_custkey"),
+        ("Q11", "SELECT ps_partkey, SUM(ps_supplycost) FROM partsupp, supplier, nation WHERE s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY' GROUP BY ps_partkey"),
+        ("Q12", "SELECT l_shipmode, SUM(l_quantity) FROM lineitem WHERE l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate GROUP BY l_shipmode"),
         ("Q13", "SELECT c_mktsegment, COUNT(*) FROM customer GROUP BY c_mktsegment"),
         ("Q14", "SELECT p_type, COUNT(*) FROM part GROUP BY p_type"),
+        ("Q15", "SELECT s_suppkey, s_name, s_address FROM supplier WHERE s_suppkey IN (SELECT l_suppkey FROM lineitem WHERE l_shipdate >= '1996-01-01')"),
+        ("Q16", "SELECT p_brand, p_type, COUNT(*) FROM part GROUP BY p_brand, p_type"),
+        ("Q17", "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_container = 'MED BOX' AND l_quantity < (SELECT 0.2 * AVG(l_quantity) FROM lineitem WHERE l_partkey = p_partkey)"),
+        ("Q18", "SELECT c_name, c_custkey, o_orderkey, o_totalprice FROM customer, orders WHERE c_custkey = o_custkey AND o_totalprice > 30000"),
         ("Q19", "SELECT p_brand, SUM(p_retailprice) FROM part GROUP BY p_brand"),
         ("Q20", "SELECT s_nationkey, COUNT(*) FROM supplier GROUP BY s_nationkey"),
+        ("Q21", "SELECT s_name, COUNT(*) FROM supplier, lineitem orders WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND o_orderstatus = 'F' GROUP BY s_name"),
         ("Q22", "SELECT c_nationkey, COUNT(*) FROM customer WHERE c_acctbal > 0 GROUP BY c_nationkey"),
     ];
 

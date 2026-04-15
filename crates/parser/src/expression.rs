@@ -1,20 +1,21 @@
+use crate::parser::Expression;
 use crate::token::Token;
 
 /// ORDER BY single item
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderByItem {
     pub expr: Expression,
-    pub asc: bool,         // true = ASC, false = DESC
-    pub nulls_first: bool, // true = NULLS FIRST, false = NULLS LAST
+    pub asc: bool,
+    pub nulls_first: bool,
 }
 
 /// Window frame info parsed from SQL
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowFrameInfo {
-    pub mode: String, // ROWS, RANGE, or GROUPS
+    pub mode: String,
     pub start: FrameBoundInfo,
     pub end: FrameBoundInfo,
-    pub exclude: Option<String>, // NO OTHERS, CURRENT ROW, GROUP, or TIES
+    pub exclude: Option<String>,
 }
 
 /// Frame bound for window frame
@@ -27,59 +28,7 @@ pub enum FrameBoundInfo {
     UnboundedFollowing,
 }
 
-/// Expression
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
-    Literal(String),
-    Identifier(String),
-    BinaryOp(Box<Expression>, String, Box<Expression>),
-    Wildcard,
-    /// Function call expression (for HAVING clause aggregates like COUNT(*), SUM(col))
-    FunctionCall(String, Vec<Expression>),
-    /// Subquery expression: (SELECT ...)
-    Subquery(Box<crate::Statement>),
-    /// Qualified column: table.column
-    QualifiedColumn(String, String),
-    /// Window function expression: ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)
-    WindowFunction {
-        func: String,          // Function name: ROW_NUMBER, RANK, LEAD, etc.
-        args: Vec<Expression>, // Arguments for LEAD/LAG/NTH_VALUE
-        partition_by: Vec<Expression>,
-        order_by: Vec<OrderByItem>,
-        frame: Option<WindowFrameInfo>,
-    },
-    /// Parameter placeholder for prepared statements (?)
-    Placeholder,
-    /// BETWEEN expression: expr BETWEEN low AND high
-    Between {
-        expr: Box<Expression>,
-        low: Box<Expression>,
-        high: Box<Expression>,
-    },
-    /// IN value list expression: expr IN (value1, value2, ...)
-    InList {
-        expr: Box<Expression>,
-        values: Vec<Expression>,
-    },
-    /// CASE WHEN expression: CASE WHEN cond THEN val ELSE default END
-    CaseWhen {
-        conditions: Vec<(Expression, Expression)>,
-        else_result: Option<Box<Expression>>,
-    },
-    /// EXTRACT expression: EXTRACT(field FROM date)
-    Extract {
-        field: String,
-        expr: Box<Expression>,
-    },
-    /// SUBSTRING expression: SUBSTRING(expr FROM start FOR len)
-    Substring {
-        expr: Box<Expression>,
-        start: Box<Expression>,
-        len: Option<Box<Expression>>,
-    },
-}
-
-/// Expression parser
+/// Expression parser for standalone expression parsing
 #[derive(Debug, Clone)]
 pub struct ExpressionParser {
     tokens: Vec<Token>,
@@ -133,7 +82,6 @@ impl ExpressionParser {
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_arithmetic_expression()?;
 
-        // Check for comparison operator
         let op = match self.current() {
             Some(Token::Equal) => "=",
             Some(Token::NotEqual) => "!=",
@@ -142,7 +90,6 @@ impl ExpressionParser {
             Some(Token::GreaterEqual) => ">=",
             Some(Token::LessEqual) => "<=",
             _ => {
-                // Check for BETWEEN
                 if matches!(self.current(), Some(Token::Between)) {
                     self.next();
                     let low = self.parse_arithmetic_expression()?;
@@ -154,7 +101,6 @@ impl ExpressionParser {
                         high: Box::new(high),
                     });
                 }
-                // Check for IN
                 if matches!(self.current(), Some(Token::In)) {
                     self.next();
                     self.expect(Token::LParen)?;
@@ -179,7 +125,6 @@ impl ExpressionParser {
                         values,
                     });
                 }
-                // Check for LIKE
                 if matches!(self.current(), Some(Token::Like)) {
                     self.next();
                     let pattern = self.parse_arithmetic_expression()?;
@@ -193,7 +138,7 @@ impl ExpressionParser {
             }
         };
 
-        self.next(); // consume operator
+        self.next();
         let right = self.parse_arithmetic_expression()?;
 
         Ok(Expression::BinaryOp(
@@ -206,7 +151,6 @@ impl ExpressionParser {
     fn parse_arithmetic_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_primary_expression()?;
 
-        // Check for arithmetic operator
         let op = match self.current() {
             Some(Token::Plus) => "+",
             Some(Token::Minus) => "-",
@@ -215,7 +159,7 @@ impl ExpressionParser {
             _ => return Ok(left),
         };
 
-        self.next(); // consume operator
+        self.next();
         let right = self.parse_arithmetic_expression()?;
 
         Ok(Expression::BinaryOp(
@@ -235,7 +179,6 @@ impl ExpressionParser {
                 }
                 self.next();
 
-                // Check for qualified column name: table.column
                 if matches!(self.current(), Some(Token::Dot)) {
                     self.next();
                     match self.current() {
