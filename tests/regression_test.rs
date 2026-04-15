@@ -311,6 +311,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["wal_transaction_integration_test"],
             description: "WAL-integrated transaction tests: atomicity, durability, crash recovery",
         },
+        // 统一查询集成测试
+        TestCategory {
+            name: "统一查询集成测试 (Unified Query)",
+            test_files: vec!["unified_query_integration_test"],
+            description: "SQL+Vector+Graph unified query tests: T1-T7 hybrid workloads (22 tests)",
+        },
     ]
 }
 
