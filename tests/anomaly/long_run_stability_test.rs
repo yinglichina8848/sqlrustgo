@@ -40,6 +40,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         }
     }
 
@@ -218,6 +219,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                table_foreign_keys: None,
             };
 
             let result = storage.create_table(&info);
@@ -256,6 +258,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.lock().unwrap().create_table(&info).unwrap();
@@ -326,6 +329,7 @@ mod tests {
             let info = TableInfo {
                 name: format!("table_{}", i),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
         }
@@ -448,6 +452,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                table_foreign_keys: None,
             };
 
             storage.create_table(&info).unwrap();

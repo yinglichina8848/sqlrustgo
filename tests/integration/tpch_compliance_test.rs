@@ -61,6 +61,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -108,6 +109,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -195,6 +197,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -272,6 +275,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -369,6 +373,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -426,6 +431,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -523,6 +529,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
         storage
@@ -690,6 +697,7 @@ fn setup_sqlrustgo_engine() -> ExecutionEngine {
                         compression: None,
                     },
                 ],
+                table_foreign_keys: None,
             })
             .unwrap();
 

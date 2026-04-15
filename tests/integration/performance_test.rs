@@ -294,6 +294,7 @@ fn test_index_scan_performance_vs_seqscan() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -354,6 +355,7 @@ fn test_join_performance_hash_join() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -376,6 +378,7 @@ fn test_join_performance_hash_join() {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -700,6 +703,7 @@ fn test_composite_index() {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
 
@@ -754,6 +758,7 @@ fn test_covering_index() {
                     auto_increment: false,
                 },
             ],
+            table_foreign_keys: None,
         })
         .unwrap();
 
