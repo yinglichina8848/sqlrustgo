@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 
 use crate::db::Database;
 
