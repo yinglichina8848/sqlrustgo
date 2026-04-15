@@ -18,6 +18,10 @@ chrono = "0.4"
 name = "graph_benchmark"
 harness = false
 
+[[bench]]
+name = "graph_benchmark_extended"
+harness = false
+
 [[test]]
 name = "graph_tests"
 path = "tests/graph_tests.rs"

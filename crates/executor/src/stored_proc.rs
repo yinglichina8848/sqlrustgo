@@ -621,6 +621,82 @@ impl StoredProcExecutor {
                 }
                 Ok(())
             }
+            StoredProcStatement::Case {
+                case_value,
+                when_clauses,
+                else_result,
+            } => {
+                let case_val = if let Some(ref cv) = case_value {
+                    self.evaluate_expression(cv, ctx)?
+                } else {
+                    Value::Null
+                };
+
+                for (when_val, result) in when_clauses {
+                    let when_expr_val = self.evaluate_expression(when_val, ctx)?;
+                    if case_val == when_expr_val {
+                        return self.evaluate_expression(result, ctx).map(|v| {
+                            ctx.set_return(v);
+                            ()
+                        });
+                    }
+                }
+
+                if let Some(else_val) = else_result {
+                    return self.evaluate_expression(else_val, ctx).map(|v| {
+                        ctx.set_return(v);
+                        ()
+                    });
+                }
+
+                Ok(())
+            }
+            StoredProcStatement::CaseWhen {
+                when_clauses,
+                else_result,
+            } => {
+                for (condition, result) in when_clauses {
+                    if self.evaluate_condition(condition, ctx)? {
+                        return self.evaluate_expression(result, ctx).map(|v| {
+                            ctx.set_return(v);
+                            ()
+                        });
+                    }
+                }
+
+                if let Some(else_val) = else_result {
+                    return self.evaluate_expression(else_val, ctx).map(|v| {
+                        ctx.set_return(v);
+                        ()
+                    });
+                }
+
+                Ok(())
+            }
+            StoredProcStatement::Repeat { body, condition } => {
+                loop {
+                    if ctx.should_leave() {
+                        ctx.reset_leave();
+                        break;
+                    }
+                    if ctx.get_return().is_some() {
+                        break;
+                    }
+
+                    ctx.reset_iterate();
+                    self.execute_body(body, ctx)?;
+
+                    if ctx.should_iterate() {
+                        ctx.reset_iterate();
+                        continue;
+                    }
+
+                    if self.evaluate_condition(&condition, ctx)? {
+                        break;
+                    }
+                }
+                Ok(())
+            }
             StoredProcStatement::Leave { .. } => {
                 // LEAVE - signal exit
                 ctx.set_leave();
