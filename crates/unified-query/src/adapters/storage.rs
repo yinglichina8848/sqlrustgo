@@ -37,9 +37,7 @@ impl StorageAdapter {
                     Ok((records, _total, _has_more)) => {
                         let json_records: Vec<Vec<Value>> = records
                             .into_iter()
-                            .map(|record| {
-                                record.into_iter().map(sql_value_to_json).collect()
-                            })
+                            .map(|record| record.into_iter().map(sql_value_to_json).collect())
                             .collect();
 
                         if json_records.is_empty() {
@@ -62,8 +60,7 @@ impl StorageAdapter {
                         self.storage.scan_batch(&table, 0, plan.top_k as usize)
                     {
                         for record in records {
-                            all_records
-                                .push(record.into_iter().map(sql_value_to_json).collect());
+                            all_records.push(record.into_iter().map(sql_value_to_json).collect());
                         }
                     }
                 }
