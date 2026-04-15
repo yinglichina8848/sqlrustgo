@@ -91,23 +91,15 @@ impl From<TableForeignKey> for ReferencingForeignKey {
 }
 
 /// Table metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableInfo {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub columns: Vec<ColumnDefinition>,
     /// Table-level foreign key constraints (None = empty for backward compatibility)
     #[serde(default)]
     pub table_foreign_keys: Option<Vec<TableForeignKey>>,
-}
-
-impl Default for TableInfo {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            columns: Vec::new(),
-            table_foreign_keys: None,
-        }
-    }
 }
 
 /// Column definition for table schema
