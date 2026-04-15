@@ -1,9 +1,16 @@
 //! Workload generators for benchmark tests
 
+pub mod oltp_delete;
 pub mod oltp_index_scan;
+pub mod oltp_mixed;
 pub mod oltp_point_select;
 pub mod oltp_read_only;
 pub mod oltp_read_write;
+pub mod oltp_update_index;
+pub mod oltp_update_non_index;
+pub mod oltp_insert;
+pub mod oltp_range_scan;
+pub mod oltp_write_only;
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
@@ -40,10 +47,17 @@ pub trait Workload: Send + Sync {
 /// Create a workload by name
 pub fn create_workload(name: &str, _scale: usize) -> Arc<dyn Workload> {
     match name.to_lowercase().as_str() {
+        "oltp_delete" => Arc::new(oltp_delete::OltpDelete::new()),
         "oltp_index_scan" => Arc::new(oltp_index_scan::OltpIndexScan::new()),
+        "oltp_mixed" => Arc::new(oltp_mixed::OltpMixed::new()),
         "oltp_point_select" => Arc::new(oltp_point_select::OltpPointSelect::new()),
         "oltp_read_only" => Arc::new(oltp_read_only::OltpReadOnly::new()),
         "oltp_read_write" => Arc::new(oltp_read_write::OltpReadWrite::new()),
+        "oltp_update_index" => Arc::new(oltp_update_index::OltpUpdateIndex::new()),
+        "oltp_update_non_index" => Arc::new(oltp_update_non_index::OltpUpdateNonIndex::new()),
+        "oltp_insert" => Arc::new(oltp_insert::OltpInsert::new()),
+        "oltp_range_scan" => Arc::new(oltp_range_scan::OltpRangeScan::new()),
+        "oltp_write_only" => Arc::new(oltp_write_only::OltpWriteOnly::new()),
         _ => panic!("Unknown workload: {}", name),
     }
 }
@@ -60,6 +74,10 @@ mod tests {
             create_workload("oltp_point_select", 1),
             create_workload("oltp_read_only", 1),
             create_workload("oltp_read_write", 1),
+            create_workload("oltp_update_index", 1),
+            create_workload("oltp_update_non_index", 1),
+            create_workload("oltp_insert", 1),
+            create_workload("oltp_range_scan", 1),
         ];
 
         for workload in workloads {
