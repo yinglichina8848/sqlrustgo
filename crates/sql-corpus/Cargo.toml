@@ -1,0 +1,17 @@
+[package]
+name = "sqlrustgo-sql-corpus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+sqlrustgo = { path = "../.." }
+sqlrustgo-parser.workspace = true
+sqlrustgo-executor.workspace = true
+sqlrustgo-storage.workspace = true
+sqlrustgo-types.workspace = true
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+tempfile.workspace = true
