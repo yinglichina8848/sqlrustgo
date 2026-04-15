@@ -241,6 +241,10 @@ name = "foreign_key_test"
 path = "tests/integration/foreign_key_test.rs"
 
 [[test]]
+name = "foreign_key_table_constraint_test"
+path = "tests/integration/foreign_key_table_constraint_test.rs"
+
+[[test]]
 name = "mysql_compatibility_test"
 path = "tests/integration/mysql_compatibility_test.rs"
 
@@ -396,6 +400,10 @@ path = "tests/anomaly/transaction_isolation_test.rs"
 [[test]]
 name = "join_test"
 path = "tests/anomaly/join_test.rs"
+
+[[test]]
+name = "outer_join_test"
+path = "tests/anomaly/outer_join_test.rs"
 
 [[test]]
 name = "fk_constraint_test"

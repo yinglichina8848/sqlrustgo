@@ -6735,8 +6735,16 @@ fn test_parse_table_constraint_fk_with_set_null() {
                         },
                     ..
                 } => {
-                    assert!(on_delete.is_none());
-                    assert!(matches!(on_update, Some(ForeignKeyAction::SetNull)));
+                    assert!(
+                        on_delete.is_none(),
+                        "on_delete should be None, got: {:?}",
+                        on_delete
+                    );
+                    assert!(
+                        matches!(on_update, Some(ForeignKeyAction::SetNull)),
+                        "on_update should be SetNull, got: {:?}",
+                        on_update
+                    );
                 }
                 _ => panic!("Expected ForeignKey constraint"),
             }
