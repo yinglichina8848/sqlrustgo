@@ -13,6 +13,7 @@ use sqlrustgo_optimizer::{
     IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
 };
 use sqlrustgo_parser::parse;
+use sqlrustgo_parser::{Statement, TransactionCommand};
 use sqlrustgo_rag::{Document, OpenClawClient};
 use sqlrustgo_storage::engine::StorageEngine;
 use std::collections::HashMap;
@@ -1713,6 +1714,44 @@ fn execute_sql(
     storage: &Arc<RwLock<dyn StorageEngine>>,
 ) -> Result<SqlExecResult, String> {
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
+
+    // Handle transaction commands first (using storage's transaction support)
+    if let Statement::Transaction(ref tx_stmt) = statement {
+        let mut storage = storage.write().map_err(|e| e.to_string())?;
+        match tx_stmt.command {
+            TransactionCommand::Begin => {
+                storage.begin_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Commit => {
+                storage.commit_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Rollback => {
+                storage.rollback_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            _ => {
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+        }
+    }
 
     let mut storage = storage
         .write()

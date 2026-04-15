@@ -152,6 +152,32 @@ pub type Record = Vec<Value>;
 /// StorageEngine trait - abstraction for table storage
 /// Enables multiple storage backends (FileStorage, MemoryStorage, etc.)
 pub trait StorageEngine: Send + Sync {
+    /// Begin a transaction
+    /// Returns transaction ID (default: no-op, returns 0)
+    fn begin_transaction(&mut self) -> SqlResult<u64> {
+        Ok(0)
+    }
+
+    /// Commit the current transaction (default: no-op)
+    fn commit_transaction(&mut self) -> SqlResult<()> {
+        Ok(())
+    }
+
+    /// Rollback the current transaction (default: no-op)
+    fn rollback_transaction(&mut self) -> SqlResult<()> {
+        Ok(())
+    }
+
+    /// Check if currently in a transaction (default: false)
+    fn in_transaction(&self) -> bool {
+        false
+    }
+
+    /// Get current transaction ID (default: 0)
+    fn current_tx_id(&self) -> u64 {
+        0
+    }
+
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
