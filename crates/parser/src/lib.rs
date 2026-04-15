@@ -2,7 +2,7 @@
 pub use sqlrustgo_common::{SqlError, SqlResult};
 
 pub mod error;
-pub mod expression;
+// expression module removed - types unified with parser.rs
 pub mod lexer;
 pub mod parser;
 pub mod token;
@@ -15,7 +15,6 @@ pub use token::Token;
 
 // expression module - for incremental refactoring
 // Expression types re-exported from parser.rs to maintain API compatibility
-pub use expression::{FrameBoundInfo, OrderByItem, WindowFrameInfo};
 pub use parser::parse;
 pub use parser::CreateViewStatement;
 pub use parser::Expression;
@@ -34,6 +33,7 @@ pub use parser::Statement;
 pub use parser::TableConstraint;
 pub use parser::TransactionCommand;
 pub use parser::TransactionStatement;
+pub use parser::{FrameBoundInfo, OrderByItem, WindowFrameInfo};
 
 #[cfg(test)]
 mod tests {
