@@ -115,6 +115,7 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "异常测试 - 并发 (Anomaly - Concurrency)",
             test_files: vec![
                 "mvcc_concurrency_test",
+                "mvcc_snapshot_isolation_test",
                 "snapshot_isolation_test",
                 "concurrency_stress_test",
             ],
