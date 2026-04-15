@@ -789,3 +789,119 @@ fn test_issue_1164_cursor_with_loop() {
     let executor = create_executor_with_proc(proc);
     assert!(executor.execute_call("process_cursor", vec![]).is_ok());
 }
+
+// ============================================================================
+// CASE Statement Tests
+// ============================================================================
+
+#[test]
+fn test_case_simple_value() {
+    let proc = StoredProcedure::new(
+        "test_case".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Declare {
+                name: "x".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("2".to_string()),
+            },
+            StoredProcStatement::Case {
+                case_value: Some("@x".to_string()),
+                when_clauses: vec![
+                    ("1".to_string(), "'one'".to_string()),
+                    ("2".to_string(), "'two'".to_string()),
+                    ("3".to_string(), "'three'".to_string()),
+                ],
+                else_result: Some("'other'".to_string()),
+            },
+        ],
+    );
+    let executor = create_executor_with_proc(proc);
+    assert!(executor.execute_call("test_case", vec![]).is_ok());
+}
+
+#[test]
+fn test_case_when_conditional() {
+    let proc = StoredProcedure::new(
+        "test_case_when".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Declare {
+                name: "x".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("15".to_string()),
+            },
+            StoredProcStatement::CaseWhen {
+                when_clauses: vec![
+                    ("@x > 10".to_string(), "'big'".to_string()),
+                    ("@x > 5".to_string(), "'medium'".to_string()),
+                ],
+                else_result: Some("'small'".to_string()),
+            },
+        ],
+    );
+    let executor = create_executor_with_proc(proc);
+    assert!(executor.execute_call("test_case_when", vec![]).is_ok());
+}
+
+// ============================================================================
+// REPEAT Loop Tests
+// ============================================================================
+
+#[test]
+fn test_repeat_until() {
+    let proc = StoredProcedure::new(
+        "test_repeat".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Declare {
+                name: "counter".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("0".to_string()),
+            },
+            StoredProcStatement::Repeat {
+                body: vec![StoredProcStatement::Set {
+                    variable: "counter".to_string(),
+                    value: "@counter + 1".to_string(),
+                }],
+                condition: "@counter >= 10".to_string(),
+            },
+        ],
+    );
+    let executor = create_executor_with_proc(proc);
+    assert!(executor.execute_call("test_repeat", vec![]).is_ok());
+}
+
+#[test]
+fn test_repeat_with_leave() {
+    let proc = StoredProcedure::new(
+        "test_repeat_leave".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Declare {
+                name: "x".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("0".to_string()),
+            },
+            StoredProcStatement::Repeat {
+                body: vec![
+                    StoredProcStatement::Set {
+                        variable: "x".to_string(),
+                        value: "@x + 1".to_string(),
+                    },
+                    StoredProcStatement::If {
+                        condition: "@x >= 5".to_string(),
+                        then_body: vec![StoredProcStatement::Leave {
+                            label: String::new(),
+                        }],
+                        elseif_body: vec![],
+                        else_body: vec![],
+                    },
+                ],
+                condition: "FALSE".to_string(),
+            },
+        ],
+    );
+    let executor = create_executor_with_proc(proc);
+    assert!(executor.execute_call("test_repeat_leave", vec![]).is_ok());
+}
