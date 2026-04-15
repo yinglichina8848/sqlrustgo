@@ -3740,6 +3740,7 @@ mod tests {
                     auto_increment: false,
                     compression: None,
                 }],
+                ..Default::default()
             })
             .unwrap();
         storage
@@ -3782,6 +3783,7 @@ mod tests {
                     auto_increment: false,
                     compression: None,
                 }],
+                ..Default::default()
             })
             .unwrap();
         storage
@@ -3804,6 +3806,7 @@ mod tests {
                     auto_increment: false,
                     compression: None,
                 }],
+                ..Default::default()
             })
             .unwrap();
         storage
