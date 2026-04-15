@@ -49,6 +49,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -90,6 +91,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -232,6 +234,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -254,6 +257,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -344,6 +348,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -390,6 +395,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         storage.create_table(&info).ok();
@@ -502,6 +508,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         storage.create_table(&left_info).ok();
@@ -524,6 +531,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
 
         storage.create_table(&right_info).ok();
