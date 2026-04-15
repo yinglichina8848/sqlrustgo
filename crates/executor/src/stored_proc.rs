@@ -673,6 +673,30 @@ impl StoredProcExecutor {
 
                 Ok(())
             }
+            StoredProcStatement::Repeat { body, condition } => {
+                loop {
+                    if ctx.should_leave() {
+                        ctx.reset_leave();
+                        break;
+                    }
+                    if ctx.get_return().is_some() {
+                        break;
+                    }
+
+                    ctx.reset_iterate();
+                    self.execute_body(body, ctx)?;
+
+                    if ctx.should_iterate() {
+                        ctx.reset_iterate();
+                        continue;
+                    }
+
+                    if self.evaluate_condition(&condition, ctx)? {
+                        break;
+                    }
+                }
+                Ok(())
+            }
             StoredProcStatement::Leave { .. } => {
                 // LEAVE - signal exit
                 ctx.set_leave();
