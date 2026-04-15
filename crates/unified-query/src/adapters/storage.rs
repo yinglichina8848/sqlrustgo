@@ -118,6 +118,7 @@ impl StorageAdapter {
                 .into_iter()
                 .map(|(name, dtype)| ColumnDefinition::new(name, dtype))
                 .collect(),
+            table_foreign_keys: None,
         };
 
         // Create table schema
