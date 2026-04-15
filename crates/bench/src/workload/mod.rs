@@ -78,6 +78,9 @@ mod tests {
             create_workload("oltp_update_non_index", 1),
             create_workload("oltp_insert", 1),
             create_workload("oltp_range_scan", 1),
+            create_workload("oltp_delete", 1),
+            create_workload("oltp_mixed", 1),
+            create_workload("oltp_write_only", 1),
         ];
 
         for workload in workloads {
