@@ -157,6 +157,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         let orders_info = TableInfo {
             name: "orders".to_string(),
@@ -187,6 +188,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&users_info).unwrap();
         storage.create_table(&orders_info).unwrap();
@@ -245,6 +247,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         let result = rebuild_from_storage(&storage);
@@ -278,6 +281,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         let catalog = rebuild_from_storage(&storage).unwrap();
@@ -323,6 +327,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         let catalog = rebuild_from_storage(&storage).unwrap();
