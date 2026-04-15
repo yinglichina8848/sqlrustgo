@@ -115,6 +115,8 @@ sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
 sqlrustgo-vector = { path = "crates/vector" }
+sqlrustgo-graph = { path = "crates/graph" }
+sqlrustgo-unified-query = { path = "crates/unified-query" }
 
 [package]
 name = "sqlrustgo"
@@ -580,6 +582,10 @@ path = "tests/integration/hybrid_search_integration_test.rs"
 [[test]]
 name = "wal_transaction_integration_test"
 path = "tests/integration/wal_transaction_integration_test.rs"
+
+[[test]]
+name = "unified_query_integration_test"
+path = "tests/integration/unified_query_integration_test.rs"
 
 [[test]]
 name = "scheduler_integration_test"
