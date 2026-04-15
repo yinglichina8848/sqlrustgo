@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use std::fmt;
 
 /// Property value types
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum PropertyValue {
+    Null,
     String(String),
     Int(i64),
     Float(f64),
@@ -47,6 +48,7 @@ impl PropertyValue {
 impl fmt::Display for PropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            PropertyValue::Null => write!(f, "null"),
             PropertyValue::String(s) => write!(f, "\"{}\"", s),
             PropertyValue::Int(i) => write!(f, "{}", i),
             PropertyValue::Float(fl) => write!(f, "{}", fl),

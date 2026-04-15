@@ -22,4 +22,7 @@ pub enum GraphError {
 
     #[error("Storage error: {0}")]
     StorageError(String),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
