@@ -24,6 +24,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).ok();
@@ -49,6 +50,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).ok();
@@ -126,6 +128,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
         storage.create_table(&info).ok();
         storage
@@ -182,6 +185,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).ok();
             let table_name = format!("t{}", i);
