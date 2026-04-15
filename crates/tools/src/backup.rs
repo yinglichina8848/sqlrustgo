@@ -1078,6 +1078,7 @@ pub fn restore_backup(dir: &Path, target: &Path, clean: bool) -> Result<()> {
         let table_schema = TableInfo {
             name: table_info.name.clone(),
             columns,
+            ..Default::default()
         };
 
         storage.create_table(&table_schema)?;
@@ -1312,6 +1313,7 @@ fn create_demo_storage() -> MemoryStorage {
                 compression: None,
             },
         ],
+        ..Default::default()
     };
     storage.create_table(&users_table).unwrap();
 
@@ -1392,6 +1394,7 @@ fn create_demo_storage() -> MemoryStorage {
                 compression: None,
             },
         ],
+        ..Default::default()
     };
     storage.create_table(&orders_table).unwrap();
 
@@ -1457,6 +1460,7 @@ fn create_demo_storage() -> MemoryStorage {
                 compression: None,
             },
         ],
+        ..Default::default()
     };
     storage.create_table(&products_table).unwrap();
 
@@ -1555,6 +1559,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
 
         let sql = generate_create_table_sql(&table);
