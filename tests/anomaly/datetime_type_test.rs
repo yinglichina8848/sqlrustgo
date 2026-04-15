@@ -106,6 +106,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).ok();
@@ -144,6 +145,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
 
         storage.create_table(&info).ok();
