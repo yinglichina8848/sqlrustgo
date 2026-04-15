@@ -11,6 +11,7 @@ pub mod mvcc;
 pub mod participant;
 pub mod recovery;
 pub mod router;
+pub mod mvcc_storage;
 pub mod version_chain;
 
 pub use coordinator::{CommitResult, Coordinator, PrepareResult};
@@ -33,3 +34,4 @@ pub use mvcc::{
 };
 
 pub use version_chain::VersionChainMap;
+pub use mvcc_storage::{MVCCStorage, MVCCStorageEngine};
