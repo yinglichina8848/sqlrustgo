@@ -54,7 +54,8 @@ pub use columnar::{
 pub use checkpoint::{CheckpointConfig, CheckpointManager, CheckpointMetadata};
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, IndexId, MemoryStorage, Record,
-    StorageEngine, TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming, ViewInfo,
+    StorageEngine, TableData, TableForeignKey, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming,
+    ViewInfo,
 };
 pub use failover_manager::{FailoverConfig, FailoverManager, FailoverState, NodeInfo, NodeType};
 pub use file_storage::FileStorage;
