@@ -1073,6 +1073,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1186,6 +1187,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1323,6 +1325,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1370,7 +1373,7 @@ mod tests {
                         compression: None,
                     },
                     sqlrustgo_storage::ColumnDefinition {
-                        name: "dept_name".to_string(),
+                        name: "value".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
                         is_unique: false,
@@ -1380,6 +1383,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1508,6 +1512,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1589,6 +1594,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1664,6 +1670,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             })
             .unwrap();
 
