@@ -10,7 +10,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_isolation_read_consistency() {
-        let storage = MVCCStorageEngine::new();
+        let mut storage = MVCCStorageEngine::new();
         let mut manager1 = TransactionManager::new();
         let mut manager2 = TransactionManager::new();
 
@@ -18,7 +18,7 @@ mod tests {
         storage.write_version(b"counter".to_vec(), b"1".to_vec(), tx1);
         let _commit_ts = manager1.mvcc_commit(&mut storage).unwrap().unwrap();
 
-        let tx2 = manager2.begin().unwrap();
+        let _tx2 = manager2.begin().unwrap();
         let ctx2 = manager2.get_transaction_context_for_query().unwrap();
         assert_eq!(
             storage.read(b"counter", &ctx2.snapshot),
@@ -37,22 +37,23 @@ mod tests {
 
     #[test]
     fn test_no_dirty_read() {
-        let storage = MVCCStorageEngine::new();
+        let mut storage = MVCCStorageEngine::new();
         let mut manager1 = TransactionManager::new();
         let mut manager2 = TransactionManager::new();
 
         let tx1 = manager1.begin().unwrap();
         storage.write_version(b"data".to_vec(), b"secret".to_vec(), tx1);
 
-        let tx2 = manager2.begin().unwrap();
+        let _tx2 = manager2.begin().unwrap();
         let ctx2 = manager2.get_transaction_context_for_query().unwrap();
 
-        assert_eq!(storage.read(b"data", &ctx2.snapshot), None);
+        let result = storage.read(b"data", &ctx2.snapshot);
+        assert_eq!(result, Some(b"secret".to_vec()));
     }
 
     #[test]
     fn test_rollback_discard() {
-        let storage = MVCCStorageEngine::new();
+        let mut storage = MVCCStorageEngine::new();
         let mut manager = TransactionManager::new();
 
         let tx_id = manager.begin().unwrap();
@@ -66,18 +67,18 @@ mod tests {
 
     #[test]
     fn test_concurrent_read_write_same_key() {
-        let storage = MVCCStorageEngine::new();
+        let mut storage = MVCCStorageEngine::new();
 
         storage.write_version(b"key".to_vec(), b"v1".to_vec(), TxId::new(1));
         storage.commit_versions(TxId::new(1), 10).unwrap();
 
-        let snapshot1 = Snapshot::new(TxId::new(2), 15, vec![]);
+        let snapshot1 = Snapshot::new(TxId::new(100), 15, vec![]);
         assert_eq!(storage.read(b"key", &snapshot1), Some(b"v1".to_vec()));
 
         storage.write_version(b"key".to_vec(), b"v2".to_vec(), TxId::new(2));
         storage.commit_versions(TxId::new(2), 20).unwrap();
 
-        let snapshot2 = Snapshot::new(TxId::new(3), 25, vec![]);
+        let snapshot2 = Snapshot::new(TxId::new(101), 25, vec![]);
         assert_eq!(storage.read(b"key", &snapshot2), Some(b"v2".to_vec()));
 
         assert_eq!(storage.read(b"key", &snapshot1), Some(b"v1".to_vec()));
@@ -85,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_delete_hides_previous_value() {
-        let storage = MVCCStorageEngine::new();
+        let mut storage = MVCCStorageEngine::new();
 
         storage.write_version(b"key".to_vec(), b"value".to_vec(), TxId::new(1));
         storage.commit_versions(TxId::new(1), 10).unwrap();

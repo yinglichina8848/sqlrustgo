@@ -19,6 +19,12 @@ pub struct MVCCStorageEngine {
     chains: RwLock<VersionChainMap>,
 }
 
+impl Default for MVCCStorageEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MVCCStorageEngine {
     pub fn new() -> Self {
         Self {
