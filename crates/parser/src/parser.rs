@@ -3256,8 +3256,11 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
-                    // If we see FOREIGN/PRIMARY/UNIQUE after a comma, it's a table constraint
-                    Some(Token::Foreign) | Some(Token::Primary) | Some(Token::Unique) => {
+                    // If we see FOREIGN/PRIMARY/UNIQUE/CONSTRAINT after a comma, it's a table constraint
+                    Some(Token::Foreign)
+                    | Some(Token::Primary)
+                    | Some(Token::Unique)
+                    | Some(Token::Constraint) => {
                         break;
                     }
                     _ => break,
@@ -6675,6 +6678,35 @@ fn test_parse_table_constraint_fk_with_cascade() {
                         },
                     ..
                 } => {
+                    assert!(matches!(on_delete, Some(ForeignKeyAction::Cascade)));
+                    assert!(on_update.is_none());
+                }
+                _ => panic!("Expected ForeignKey constraint"),
+            }
+        }
+        _ => panic!("Expected CreateTable statement"),
+    }
+}
+
+#[test]
+fn test_parse_table_constraint_fk_with_constraint_name() {
+    let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER, CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.table_constraints.len(), 1);
+            match &ct.table_constraints[0] {
+                TableConstraint {
+                    name,
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            on_delete,
+                            on_update,
+                            ..
+                        },
+                } => {
+                    assert_eq!(name, &Some("fk_user".to_string()));
                     assert!(matches!(on_delete, Some(ForeignKeyAction::Cascade)));
                     assert!(on_update.is_none());
                 }
