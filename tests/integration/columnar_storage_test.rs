@@ -63,6 +63,7 @@ fn create_test_table_info() -> TableInfo {
                 compression: None,
             },
         ],
+        table_foreign_keys: None,
     }
 }
 

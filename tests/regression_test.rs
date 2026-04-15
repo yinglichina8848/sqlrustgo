@@ -116,6 +116,7 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "异常测试 - 并发 (Anomaly - Concurrency)",
             test_files: vec![
                 "mvcc_concurrency_test",
+                "mvcc_snapshot_isolation_test",
                 "snapshot_isolation_test",
                 "concurrency_stress_test",
             ],
@@ -310,6 +311,12 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "WAL 事务集成测试 (WAL Transaction)",
             test_files: vec!["wal_transaction_integration_test"],
             description: "WAL-integrated transaction tests: atomicity, durability, crash recovery",
+        },
+        // 统一查询集成测试
+        TestCategory {
+            name: "统一查询集成测试 (Unified Query)",
+            test_files: vec!["unified_query_integration_test"],
+            description: "SQL+Vector+Graph unified query tests: T1-T7 hybrid workloads (22 tests)",
         },
     ]
 }

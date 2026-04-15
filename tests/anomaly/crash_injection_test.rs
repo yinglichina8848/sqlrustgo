@@ -30,6 +30,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "test_crash".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
 
@@ -70,6 +71,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "checkpoint_test".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
 
@@ -105,6 +107,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "index_test".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
 
@@ -140,6 +143,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "schema_test".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
         }
@@ -167,6 +171,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "power_fail".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
 
@@ -199,6 +204,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "disk_full_test".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.create_table(&info).unwrap();
 
@@ -231,6 +237,7 @@ mod tests {
             let info = sqlrustgo_storage::TableInfo {
                 name: "partial_write".to_string(),
                 columns: vec![],
+                table_foreign_keys: None,
             };
             storage.create_table(&info).unwrap();
 
@@ -261,6 +268,7 @@ mod tests {
         let info = sqlrustgo_storage::TableInfo {
             name: "concurrent_crash".to_string(),
             columns: vec![],
+            table_foreign_keys: None,
         };
         storage.lock().unwrap().create_table(&info).unwrap();
 

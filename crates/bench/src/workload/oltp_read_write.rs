@@ -52,10 +52,7 @@ impl OltpReadWrite {
     fn generate_write_sql(&self, rng: &mut SmallRng) -> String {
         let id = rng.gen_range(1..self.max_id);
         let k = rng.gen_range(1..100000);
-        format!(
-            "UPDATE sbtest1 SET k = {} WHERE id = {}",
-            k, id
-        )
+        format!("UPDATE sbtest1 SET k = {} WHERE id = {}", k, id)
     }
 }
 
