@@ -71,6 +71,11 @@ pub enum StoredProcStatement {
         when_clauses: Vec<(String, String)>,
         else_result: Option<String>,
     },
+    /// REPEAT statements UNTIL condition END REPEAT
+    Repeat {
+        body: Vec<StoredProcStatement>,
+        condition: String,
+    },
     /// RETURN expression
     Return { value: String },
     /// LEAVE label - exit a loop
