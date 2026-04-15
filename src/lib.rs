@@ -2562,6 +2562,40 @@ impl ExecutionEngine {
                 Ok(ExecutorResult::new(vec![], updated_count))
             }
             Statement::Select(select) => {
+                // Check if we have multiple tables - use planner path for proper JOIN execution
+                let table_count = if select.tables.is_empty() {
+                    1
+                } else {
+                    select.tables.len()
+                };
+
+                if table_count > 1 {
+                    // Use planner path for multi-table queries to avoid cross product
+                    let converter = StatementConverter::new();
+                    match converter.convert(&Statement::Select(select.clone())) {
+                        Ok(logical_plan) => {
+                            let mut planner = sqlrustgo_planner::DefaultPlanner::new();
+                            match planner.optimize(logical_plan) {
+                                Ok(physical_plan) => {
+                                    return self.execute_plan(physical_plan.as_ref());
+                                }
+                                Err(e) => {
+                                    return Err(SqlError::ExecutionError(format!(
+                                        "Planning error: {}",
+                                        e
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(SqlError::ExecutionError(format!(
+                                "Conversion error: {}",
+                                e
+                            )));
+                        }
+                    }
+                }
+
                 // Check if we have derived tables (inline views)
                 if !select.derived_tables.is_empty() {
                     // For derived tables, we need write lock to create temp tables
