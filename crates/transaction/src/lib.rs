@@ -11,6 +11,8 @@ pub mod mvcc;
 pub mod participant;
 pub mod recovery;
 pub mod router;
+pub mod mvcc_storage;
+pub mod version_chain;
 
 pub use coordinator::{CommitResult, Coordinator, PrepareResult};
 pub use deadlock::DeadlockDetector;
@@ -30,3 +32,6 @@ pub use router::Router;
 pub use mvcc::{
     MvccEngine, RowVersion, Snapshot, Transaction, TransactionStatus, TxId, INVALID_TX_ID,
 };
+
+pub use version_chain::VersionChainMap;
+pub use mvcc_storage::{MVCCStorage, MVCCStorageEngine};
