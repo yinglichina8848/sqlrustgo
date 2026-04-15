@@ -778,6 +778,7 @@ impl VolcanoExecutor for HashJoinVolcanoExecutor {
         match self.join_type {
             sqlrustgo_planner::JoinType::Inner => self.next_inner(),
             sqlrustgo_planner::JoinType::Left => self.next_left(),
+            sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
             _ => Ok(None),
@@ -1161,6 +1162,7 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
             sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
+            _ => Ok(None),
         }
     }
 
@@ -1643,6 +1645,7 @@ impl VolcanoExecutor for SortMergeJoinExecutor {
             sqlrustgo_planner::JoinType::Right => self.next_right(),
             sqlrustgo_planner::JoinType::Full => self.next_full(),
             sqlrustgo_planner::JoinType::Cross => self.next_cross(),
+            _ => Ok(None), // LeftSemi, RightSemi, LeftAnti, RightAnti not yet implemented
         }
     }
 
