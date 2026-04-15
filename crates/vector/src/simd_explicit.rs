@@ -19,7 +19,7 @@ pub fn detect_simd_lanes() -> usize {
     {
         if is_x86_feature_detected!("avx512f") {
             return 16;
-        } else if is_x86_feature_detected!("avx2") {
+        } else if is_x86_feature_detected!("avx2") && !is_x86_feature_detected!("avx512f") {
             return 8;
         }
     }
@@ -36,7 +36,7 @@ pub fn dot_product_simd(a: &[f32], b: &[f32]) -> f32 {
     let mut i = 0usize;
 
     #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && !is_x86_feature_detected!("avx512f") {
         unsafe {
             let mut acc = _mm256_setzero_ps();
 
@@ -90,7 +90,7 @@ pub fn euclidean_distance_simd(a: &[f32], b: &[f32]) -> f32 {
     let mut i = 0usize;
 
     #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && !is_x86_feature_detected!("avx512f") {
         unsafe {
             let mut acc = _mm256_setzero_ps();
 
@@ -160,7 +160,7 @@ pub fn manhattan_distance_simd(a: &[f32], b: &[f32]) -> f32 {
     let mut i = 0usize;
 
     #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && !is_x86_feature_detected!("avx512f") {
         unsafe {
             let mut acc = _mm256_setzero_ps();
 
@@ -168,7 +168,7 @@ pub fn manhattan_distance_simd(a: &[f32], b: &[f32]) -> f32 {
                 let a_vec = _mm256_loadu_ps(a.as_ptr().add(i));
                 let b_vec = _mm256_loadu_ps(b.as_ptr().add(i));
                 let diff = _mm256_sub_ps(a_vec, b_vec);
-                let abs_diff = _mm256_abs_ps(diff);
+                let abs_diff = _mm256_andnot_ps(_mm256_set1_ps(-0.0), diff);
                 acc = _mm256_add_ps(acc, abs_diff);
                 i += 8;
             }
