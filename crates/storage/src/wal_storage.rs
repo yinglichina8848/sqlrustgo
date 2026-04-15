@@ -249,6 +249,26 @@ impl<S: StorageEngine> WalStorage<S> {
 }
 
 impl<S: StorageEngine> StorageEngine for WalStorage<S> {
+    fn begin_transaction(&mut self) -> SqlResult<u64> {
+        WalStorage::begin_transaction(self)
+    }
+
+    fn commit_transaction(&mut self) -> SqlResult<()> {
+        WalStorage::commit_transaction(self)
+    }
+
+    fn rollback_transaction(&mut self) -> SqlResult<()> {
+        WalStorage::rollback_transaction(self)
+    }
+
+    fn in_transaction(&self) -> bool {
+        WalStorage::in_transaction(self)
+    }
+
+    fn current_tx_id(&self) -> u64 {
+        WalStorage::current_tx_id(self)
+    }
+
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
         self.inner.scan(table)
     }
