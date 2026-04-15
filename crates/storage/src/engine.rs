@@ -1106,11 +1106,9 @@ impl StorageEngine for MemoryStorage {
 
         let mut deleted_count = 0;
         if filters.is_empty() {
-            // Delete all records
             deleted_count = records.len();
             records.clear();
-        } else if filters.len() >= 2 {
-            // Delete matching records
+        } else {
             let original_len = records.len();
             records.retain(|row| {
                 if let Some(value) = row.get(col_idx) {
@@ -2662,4 +2660,347 @@ fn test_column_definition_with_foreign_key() {
         compression: None,
     };
     assert!(col.references.is_some());
+}
+
+#[cfg(test)]
+mod foreign_key_tests {
+    use super::*;
+
+    fn create_users_with_fk_table() -> MemoryStorage {
+        let mut storage = MemoryStorage::new();
+
+        let users_info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: true,
+                references: None,
+                auto_increment: false,
+                compression: None,
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&users_info).unwrap();
+
+        let orders_info = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "user_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: true,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            table_foreign_keys: Some(vec![TableForeignKey {
+                name: Some("fk_user".to_string()),
+                child_columns: vec!["user_id".to_string()],
+                parent_table: "users".to_string(),
+                parent_columns: vec!["id".to_string()],
+                on_delete: Some(ForeignKeyAction::Cascade),
+                on_update: Some(ForeignKeyAction::Restrict),
+            }]),
+        };
+        storage.create_table(&orders_info).unwrap();
+
+        storage
+    }
+
+    #[test]
+    fn test_cascade_delete() {
+        let mut storage = create_users_with_fk_table();
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("users", vec![vec![Value::Integer(2)]])
+            .unwrap();
+
+        storage
+            .insert("orders", vec![vec![Value::Integer(100), Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(101), Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(200), Value::Integer(2)]])
+            .unwrap();
+
+        assert_eq!(storage.scan("users").unwrap().len(), 2);
+        assert_eq!(storage.scan("orders").unwrap().len(), 3);
+
+        let deleted = storage.delete("users", &[Value::Integer(1)]).unwrap();
+        assert_eq!(deleted, 1);
+
+        assert_eq!(storage.scan("users").unwrap().len(), 1);
+        assert_eq!(storage.scan("orders").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_restrict_delete() {
+        let mut storage = MemoryStorage::new();
+
+        let users_info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: true,
+                references: None,
+                auto_increment: false,
+                compression: None,
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&users_info).unwrap();
+
+        let orders_info = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "user_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: true,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            table_foreign_keys: Some(vec![TableForeignKey {
+                name: Some("fk_user".to_string()),
+                child_columns: vec!["user_id".to_string()],
+                parent_table: "users".to_string(),
+                parent_columns: vec!["id".to_string()],
+                on_delete: Some(ForeignKeyAction::Restrict),
+                on_update: None,
+            }]),
+        };
+        storage.create_table(&orders_info).unwrap();
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(100), Value::Integer(1)]])
+            .unwrap();
+
+        let result = storage.delete("users", &[Value::Integer(1)]);
+        assert!(result.is_err(), "Expected error due to RESTRICT constraint");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("ON DELETE RESTRICT") && err_msg.contains("orders"),
+            "Expected RESTRICT error message, got: {}",
+            err_msg
+        );
+
+        assert_eq!(storage.scan("users").unwrap().len(), 1);
+        assert_eq!(storage.scan("orders").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_set_null_delete() {
+        let mut storage = MemoryStorage::new();
+
+        let users_info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: true,
+                references: None,
+                auto_increment: false,
+                compression: None,
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&users_info).unwrap();
+
+        let orders_info = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "user_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: true,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            table_foreign_keys: Some(vec![TableForeignKey {
+                name: Some("fk_user".to_string()),
+                child_columns: vec!["user_id".to_string()],
+                parent_table: "users".to_string(),
+                parent_columns: vec!["id".to_string()],
+                on_delete: Some(ForeignKeyAction::SetNull),
+                on_update: None,
+            }]),
+        };
+        storage.create_table(&orders_info).unwrap();
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(100), Value::Integer(1)]])
+            .unwrap();
+        storage
+            .insert("orders", vec![vec![Value::Integer(101), Value::Integer(1)]])
+            .unwrap();
+
+        let deleted = storage.delete("users", &[Value::Integer(1)]).unwrap();
+        assert_eq!(deleted, 1);
+
+        assert_eq!(storage.scan("users").unwrap().len(), 0);
+        assert_eq!(storage.scan("orders").unwrap().len(), 2);
+
+        let orders = storage.scan("orders").unwrap();
+        for order in orders {
+            assert_eq!(order[1], Value::Null);
+        }
+    }
+
+    #[test]
+    fn test_self_referencing_cascade() {
+        let mut storage = MemoryStorage::new();
+
+        let employees_info = TableInfo {
+            name: "employees".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "manager_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: true,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            table_foreign_keys: Some(vec![TableForeignKey {
+                name: Some("fk_manager".to_string()),
+                child_columns: vec!["manager_id".to_string()],
+                parent_table: "employees".to_string(),
+                parent_columns: vec!["id".to_string()],
+                on_delete: Some(ForeignKeyAction::Cascade),
+                on_update: None,
+            }]),
+        };
+        storage.create_table(&employees_info).unwrap();
+
+        storage
+            .insert(
+                "employees",
+                vec![vec![
+                    Value::Integer(1),
+                    Value::Text("CEO".to_string()),
+                    Value::Null,
+                ]],
+            )
+            .unwrap();
+        storage
+            .insert(
+                "employees",
+                vec![vec![
+                    Value::Integer(2),
+                    Value::Text("VP".to_string()),
+                    Value::Integer(1),
+                ]],
+            )
+            .unwrap();
+        storage
+            .insert(
+                "employees",
+                vec![vec![
+                    Value::Integer(3),
+                    Value::Text("Manager".to_string()),
+                    Value::Integer(2),
+                ]],
+            )
+            .unwrap();
+        storage
+            .insert(
+                "employees",
+                vec![vec![
+                    Value::Integer(4),
+                    Value::Text("Employee".to_string()),
+                    Value::Integer(3),
+                ]],
+            )
+            .unwrap();
+
+        assert_eq!(storage.scan("employees").unwrap().len(), 4);
+
+        let deleted = storage.delete("employees", &[Value::Integer(1)]).unwrap();
+        assert_eq!(deleted, 1);
+
+        assert_eq!(storage.scan("employees").unwrap().len(), 0);
+    }
 }
