@@ -307,6 +307,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_DOCUMENTS.to_string(),
             columns,
+            table_foreign_keys: None,
         })?;
     }
 
@@ -347,6 +348,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_DOCUMENT_CONTENTS.to_string(),
             columns,
+            table_foreign_keys: None,
         })?;
     }
 
@@ -377,6 +379,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_DOCUMENT_KEYWORDS.to_string(),
             columns,
+            table_foreign_keys: None,
         })?;
     }
 

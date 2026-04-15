@@ -13,7 +13,9 @@ use sqlrustgo_parser::parser::{
     SelectStatement,
 };
 use sqlrustgo_security::SessionManager;
-use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
+use sqlrustgo_storage::{
+    ColumnDefinition, ForeignKeyConstraint, StorageEngine, TableForeignKey, TableInfo,
+};
 use sqlrustgo_types::Value;
 use std::env;
 use std::sync::{Arc, RwLock};
@@ -341,24 +343,77 @@ fn execute_create_table(
     create: &CreateTableStatement,
     storage: &mut dyn StorageEngine,
 ) -> Result<ExecutorResult, String> {
+    use sqlrustgo_parser::parser::{ConstraintType, ForeignKeyAction as ParserFKAction};
+    use sqlrustgo_storage::ForeignKeyAction as StorageFKAction;
+
+    fn convert_fk_action(action: Option<ParserFKAction>) -> Option<StorageFKAction> {
+        action.map(|a| match a {
+            ParserFKAction::Cascade => StorageFKAction::Cascade,
+            ParserFKAction::SetNull => StorageFKAction::SetNull,
+            ParserFKAction::Restrict => StorageFKAction::Restrict,
+        })
+    }
+
     let columns: Vec<ColumnDefinition> = create
         .columns
         .iter()
-        .map(|col| ColumnDefinition {
-            name: col.name.clone(),
-            data_type: col.data_type.clone(),
-            nullable: col.nullable,
-            is_unique: false,
-            is_primary_key: false,
-            references: None,
-            auto_increment: false,
-            compression: None,
+        .map(|col| {
+            let references = col.references.as_ref().map(|fk| ForeignKeyConstraint {
+                referenced_table: fk.table.clone(),
+                referenced_column: fk.column.clone(),
+                on_delete: convert_fk_action(fk.on_delete),
+                on_update: convert_fk_action(fk.on_update),
+            });
+            ColumnDefinition {
+                name: col.name.clone(),
+                data_type: col.data_type.clone(),
+                nullable: col.nullable,
+                is_unique: false,
+                is_primary_key: false,
+                references,
+                auto_increment: false,
+                compression: None,
+            }
         })
         .collect();
+
+    let table_foreign_keys: Option<Vec<TableForeignKey>> = {
+        let fks: Vec<TableForeignKey> = create
+            .table_constraints
+            .iter()
+            .filter_map(|tc| {
+                if let ConstraintType::ForeignKey {
+                    columns,
+                    reference_table,
+                    reference_columns,
+                    on_delete,
+                    on_update,
+                } = &tc.constraint_type
+                {
+                    Some(TableForeignKey {
+                        name: tc.name.clone(),
+                        child_columns: columns.clone(),
+                        parent_table: reference_table.clone(),
+                        parent_columns: reference_columns.clone(),
+                        on_delete: convert_fk_action(on_delete.clone()),
+                        on_update: convert_fk_action(on_update.clone()),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if fks.is_empty() {
+            None
+        } else {
+            Some(fks)
+        }
+    };
 
     let table_info = TableInfo {
         name: create.name.clone(),
         columns,
+        table_foreign_keys,
     };
 
     storage

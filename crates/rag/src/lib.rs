@@ -960,6 +960,7 @@ mod sqlrustgo_integration {
                             compression: None,
                         },
                     ],
+                    ..Default::default()
                 };
                 storage
                     .create_table(&table_info)
@@ -1268,6 +1269,7 @@ pub mod storage_helpers {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&table_info).map_err(|e| e.to_string())
     }

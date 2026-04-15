@@ -12,6 +12,7 @@ fn create_test_table() -> (MemoryStorage, TableInfo) {
             ColumnDefinition::new("name", "TEXT"),
             ColumnDefinition::new("age", "INTEGER"),
         ],
+        ..Default::default()
     };
 
     storage.create_table(&table_info).unwrap();

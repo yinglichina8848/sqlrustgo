@@ -1863,6 +1863,7 @@ fn execute_sql(
             let table_info = sqlrustgo_storage::engine::TableInfo {
                 name: create.name.clone(),
                 columns,
+                ..Default::default()
             };
 
             storage

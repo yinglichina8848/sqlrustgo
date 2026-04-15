@@ -57,6 +57,7 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_EMBEDDINGS.to_string(),
             columns,
+            table_foreign_keys: None,
         })?;
     }
     Ok(())
