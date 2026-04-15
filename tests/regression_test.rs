@@ -222,8 +222,11 @@ fn get_test_categories() -> Vec<TestCategory> {
         // Executor 内部测试
         TestCategory {
             name: "执行器测试 (Executor)",
-            test_files: vec!["PKG:sqlrustgo-executor:test_stored_proc"],
-            description: "executor crate 内部测试: 存储过程 (36 tests)",
+            test_files: vec![
+                "PKG:sqlrustgo-executor:test_stored_proc",
+                "PKG:sqlrustgo-executor:test_trigger",
+            ],
+            description: "executor crate 内部测试: 存储过程 (40 tests), 触发器 (7 tests)",
         },
         // 并行执行测试
         TestCategory {
