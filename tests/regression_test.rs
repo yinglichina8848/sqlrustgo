@@ -143,6 +143,7 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "异常测试 - 查询 (Anomaly - Query)",
             test_files: vec![
                 "join_test",
+                "outer_join_test",
                 "set_operations_test",
                 "view_test",
                 "window_function_test",
