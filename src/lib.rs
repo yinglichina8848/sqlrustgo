@@ -3372,6 +3372,17 @@ impl ExecutionEngine {
                 let mut result_rows = Vec::new();
                 let mut left_matched: Vec<bool> = vec![false; left_rows.len()];
 
+                // Determine if this is a SEMI, ANTI, or CROSS join (needs special handling)
+                let is_semi_or_anti = matches!(
+                    join_type,
+                    sqlrustgo_planner::JoinType::LeftSemi
+                        | sqlrustgo_planner::JoinType::RightSemi
+                        | sqlrustgo_planner::JoinType::LeftAnti
+                        | sqlrustgo_planner::JoinType::RightAnti
+                );
+
+                let is_cross = join_type == sqlrustgo_planner::JoinType::Cross;
+
                 // Probe with left rows
                 for (lidx, lrow) in left_rows.iter().enumerate() {
                     let key = if let Some(ref col_name) = left_key_col {
@@ -3397,12 +3408,19 @@ impl ExecutionEngine {
                         vec![Value::Null]
                     };
 
-                    if let Some(matched_right_rows) = right_hash.get(&key) {
-                        left_matched[lidx] = true;
-                        for rrow in matched_right_rows {
-                            let mut combined = lrow.clone();
-                            combined.extend(rrow.clone());
-                            result_rows.push(combined);
+                    // Skip NULL keys - NULL never matches in SQL
+                    let key_is_null = key.iter().any(|v| matches!(v, Value::Null));
+                    if !key_is_null {
+                        if let Some(matched_right_rows) = right_hash.get(&key) {
+                            left_matched[lidx] = true;
+                            // Only add combined rows for regular joins, not SEMI/ANTI/CROSS
+                            if !is_semi_or_anti && !is_cross {
+                                for rrow in matched_right_rows {
+                                    let mut combined = lrow.clone();
+                                    combined.extend(rrow.clone());
+                                    result_rows.push(combined);
+                                }
+                            }
                         }
                     }
                 }
@@ -3415,6 +3433,175 @@ impl ExecutionEngine {
                             for _ in 0..right_schema_len {
                                 combined.push(Value::Null);
                             }
+                            result_rows.push(combined);
+                        }
+                    }
+                }
+
+                // For LEFT SEMI join, emit left rows that have a match
+                if join_type == sqlrustgo_planner::JoinType::LeftSemi {
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if left_matched[lidx] {
+                            result_rows.push(lrow.clone());
+                        }
+                    }
+                }
+
+                // For LEFT ANTI join, emit left rows that do NOT have a match
+                if join_type == sqlrustgo_planner::JoinType::LeftAnti {
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if !left_matched[lidx] {
+                            result_rows.push(lrow.clone());
+                        }
+                    }
+                }
+
+                // For RIGHT SEMI join, emit right rows that have a match
+                if join_type == sqlrustgo_planner::JoinType::RightSemi {
+                    let mut right_matched: Vec<bool> = vec![false; right_rows.len()];
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if left_matched[lidx] {
+                            let key = if let Some(ref col_name) = left_key_col {
+                                if let Some(idx) = left
+                                    .schema()
+                                    .fields
+                                    .iter()
+                                    .position(|f| &f.name == col_name)
+                                {
+                                    if idx < lrow.len() {
+                                        vec![lrow[idx].clone()]
+                                    } else {
+                                        vec![Value::Null]
+                                    }
+                                } else if !lrow.is_empty() {
+                                    vec![lrow[0].clone()]
+                                } else {
+                                    vec![Value::Null]
+                                }
+                            } else if !lrow.is_empty() {
+                                vec![lrow[0].clone()]
+                            } else {
+                                vec![Value::Null]
+                            };
+                            if let Some(matched_right_rows) = right_hash.get(&key) {
+                                for rrow in matched_right_rows {
+                                    if let Some(pos) = right_rows.iter().position(|r| r == rrow) {
+                                        right_matched[pos] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (ridx, rrow) in right_rows.iter().enumerate() {
+                        if right_matched[ridx] {
+                            result_rows.push(rrow.clone());
+                        }
+                    }
+                }
+
+                // For RIGHT ANTI join, emit right rows that do NOT have a match
+                if join_type == sqlrustgo_planner::JoinType::RightAnti {
+                    let mut right_matched: Vec<bool> = vec![false; right_rows.len()];
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if left_matched[lidx] {
+                            let key = if let Some(ref col_name) = left_key_col {
+                                if let Some(idx) = left
+                                    .schema()
+                                    .fields
+                                    .iter()
+                                    .position(|f| &f.name == col_name)
+                                {
+                                    if idx < lrow.len() {
+                                        vec![lrow[idx].clone()]
+                                    } else {
+                                        vec![Value::Null]
+                                    }
+                                } else if !lrow.is_empty() {
+                                    vec![lrow[0].clone()]
+                                } else {
+                                    vec![Value::Null]
+                                }
+                            } else if !lrow.is_empty() {
+                                vec![lrow[0].clone()]
+                            } else {
+                                vec![Value::Null]
+                            };
+                            if let Some(matched_right_rows) = right_hash.get(&key) {
+                                for rrow in matched_right_rows {
+                                    if let Some(pos) = right_rows.iter().position(|r| r == rrow) {
+                                        right_matched[pos] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (ridx, rrow) in right_rows.iter().enumerate() {
+                        if !right_matched[ridx] {
+                            result_rows.push(rrow.clone());
+                        }
+                    }
+                }
+
+                // For CROSS join, emit Cartesian product
+                if join_type == sqlrustgo_planner::JoinType::Cross {
+                    for lrow in &left_rows {
+                        for rrow in &right_rows {
+                            let mut combined = lrow.clone();
+                            combined.extend(rrow.clone());
+                            result_rows.push(combined);
+                        }
+                    }
+                }
+
+                // For FULL outer join, emit unmatched left rows with NULLs, then unmatched right rows
+                if join_type == sqlrustgo_planner::JoinType::Full {
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if !left_matched[lidx] {
+                            let mut combined = lrow.clone();
+                            for _ in 0..right_schema_len {
+                                combined.push(Value::Null);
+                            }
+                            result_rows.push(combined);
+                        }
+                    }
+                    let mut right_matched: Vec<bool> = vec![false; right_rows.len()];
+                    for (lidx, lrow) in left_rows.iter().enumerate() {
+                        if left_matched[lidx] {
+                            let key = if let Some(ref col_name) = left_key_col {
+                                if let Some(idx) = left
+                                    .schema()
+                                    .fields
+                                    .iter()
+                                    .position(|f| &f.name == col_name)
+                                {
+                                    if idx < lrow.len() {
+                                        vec![lrow[idx].clone()]
+                                    } else {
+                                        vec![Value::Null]
+                                    }
+                                } else if !lrow.is_empty() {
+                                    vec![lrow[0].clone()]
+                                } else {
+                                    vec![Value::Null]
+                                }
+                            } else if !lrow.is_empty() {
+                                vec![lrow[0].clone()]
+                            } else {
+                                vec![Value::Null]
+                            };
+                            if let Some(matched_right_rows) = right_hash.get(&key) {
+                                for rrow in matched_right_rows {
+                                    if let Some(pos) = right_rows.iter().position(|r| r == rrow) {
+                                        right_matched[pos] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (ridx, rrow) in right_rows.iter().enumerate() {
+                        if !right_matched[ridx] {
+                            let mut combined = vec![Value::Null; left.schema().fields.len()];
+                            combined.extend(rrow.clone());
                             result_rows.push(combined);
                         }
                     }
