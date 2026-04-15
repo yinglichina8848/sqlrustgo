@@ -19,6 +19,9 @@ pub mod model;
 pub mod store;
 pub mod traversal;
 
+pub mod sharded_graph;
+pub use sharded_graph::{CrossShardTraversal, GraphShardId, MultiShardGraphStore};
+
 pub use cypher::*;
 pub use error::*;
 pub use model::*;
