@@ -609,6 +609,10 @@ pub struct HashJoinVolcanoExecutor {
     current_left_rows: Vec<Vec<Value>>,
     left_idx: usize,
     right_idx: usize,
+    full_phase_two_started: bool,
+    matched_right_indices: std::collections::HashSet<(Vec<Value>, usize)>,
+    cross_left_idx: usize,
+    cross_right_idx: usize,
 }
 
 impl HashJoinVolcanoExecutor {
@@ -632,6 +636,10 @@ impl HashJoinVolcanoExecutor {
             current_left_rows: Vec::new(),
             left_idx: 0,
             right_idx: 0,
+            full_phase_two_started: false,
+            matched_right_indices: std::collections::HashSet::new(),
+            cross_left_idx: 0,
+            cross_right_idx: 0,
         }
     }
 
@@ -667,6 +675,8 @@ impl HashJoinVolcanoExecutor {
             };
             if let Some(right_rows) = self.right_hash.get(&key) {
                 if self.right_idx < right_rows.len() {
+                    self.matched_right_indices
+                        .insert((key.clone(), self.right_idx));
                     let mut result = left_row.clone();
                     result.extend(right_rows[self.right_idx].clone());
                     self.right_idx += 1;
@@ -683,6 +693,58 @@ impl HashJoinVolcanoExecutor {
             }
             self.left_idx += 1;
             self.right_idx = 0;
+        }
+        Ok(None)
+    }
+
+    fn next_right(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        for (key, rows) in &self.right_hash {
+            for (idx, _row) in rows.iter().enumerate() {
+                if !self.matched_right_indices.contains(&(key.clone(), idx)) {
+                    let mut result = vec![Value::Null; self.left_schema.fields.len()];
+                    result.extend(rows[idx].clone());
+                    return Ok(Some(result));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn next_full(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if let Some(row) = self.next_left()? {
+            return Ok(Some(row));
+        }
+        if !self.full_phase_two_started {
+            self.full_phase_two_started = true;
+        }
+        self.next_right()
+    }
+
+    fn next_cross(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if self.right_hash.is_empty() {
+            return Ok(None);
+        }
+
+        while self.cross_left_idx < self.current_left_rows.len() {
+            let left_row = &self.current_left_rows[self.cross_left_idx];
+
+            let total_right_rows: usize = self.right_hash.values().map(|v| v.len()).sum();
+
+            if self.cross_right_idx < total_right_rows {
+                let mut count = self.cross_right_idx;
+                for right_rows in self.right_hash.values() {
+                    if count < right_rows.len() {
+                        let mut result = left_row.clone();
+                        result.extend(right_rows[count].clone());
+                        self.cross_right_idx += 1;
+                        return Ok(Some(result));
+                    }
+                    count -= right_rows.len();
+                }
+            }
+
+            self.cross_left_idx += 1;
+            self.cross_right_idx = 0;
         }
         Ok(None)
     }
@@ -716,6 +778,9 @@ impl VolcanoExecutor for HashJoinVolcanoExecutor {
         match self.join_type {
             sqlrustgo_planner::JoinType::Inner => self.next_inner(),
             sqlrustgo_planner::JoinType::Left => self.next_left(),
+            sqlrustgo_planner::JoinType::Right => self.next_right(),
+            sqlrustgo_planner::JoinType::Full => self.next_full(),
+            sqlrustgo_planner::JoinType::Cross => self.next_cross(),
             _ => Ok(None),
         }
     }
@@ -726,6 +791,12 @@ impl VolcanoExecutor for HashJoinVolcanoExecutor {
         self.right_hash.clear();
         self.current_left_rows.clear();
         self.initialized = false;
+        self.left_idx = 0;
+        self.right_idx = 0;
+        self.full_phase_two_started = false;
+        self.matched_right_indices.clear();
+        self.cross_left_idx = 0;
+        self.cross_right_idx = 0;
         Ok(())
     }
     fn schema(&self) -> &Schema {
@@ -759,9 +830,12 @@ pub struct SortMergeJoinVolcanoExecutor {
     // Current positions in merge
     left_idx: usize,
     right_idx: usize,
-    // For handling multiple matches
     left_matches: Vec<Vec<Value>>,
     left_match_idx: usize,
+    matched_right: Vec<bool>,
+    right_outer_started: bool,
+    cross_left_idx: usize,
+    cross_right_idx: usize,
 }
 
 impl SortMergeJoinVolcanoExecutor {
@@ -787,6 +861,10 @@ impl SortMergeJoinVolcanoExecutor {
             right_idx: 0,
             left_matches: Vec::new(),
             left_match_idx: 0,
+            matched_right: Vec::new(),
+            right_outer_started: false,
+            cross_left_idx: 0,
+            cross_right_idx: 0,
         }
     }
 }
@@ -933,10 +1011,109 @@ impl SortMergeJoinVolcanoExecutor {
                 self.right_idx = 0;
                 return Ok(Some(result));
             } else {
-                // Right key is smaller, advance right
                 self.right_idx += 1;
             }
         }
+    }
+
+    fn next_right(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        loop {
+            if self.right_outer_started {
+                for (i, matched) in self.matched_right.iter().enumerate() {
+                    if !*matched {
+                        let nulls = vec![Value::Null; self.left_schema.fields.len()];
+                        let mut result = nulls;
+                        result.extend(self.right_sorted[i].clone());
+                        return Ok(Some(result));
+                    }
+                }
+                return Ok(None);
+            }
+
+            if self.left_idx >= self.left_sorted.len() {
+                self.right_outer_started = true;
+                continue;
+            }
+
+            if self.left_match_idx < self.left_matches.len() {
+                let left_row = &self.left_matches[self.left_match_idx];
+                let right_row_idx = self.right_idx;
+                self.matched_right[right_row_idx] = true;
+                let mut result = left_row.clone();
+                result.extend(self.right_sorted[right_row_idx].clone());
+                self.left_match_idx += 1;
+                self.right_idx += 1;
+                return Ok(Some(result));
+            }
+
+            self.left_matches.clear();
+            self.left_match_idx = 0;
+
+            if self.right_idx >= self.right_sorted.len() {
+                self.left_idx += 1;
+                self.right_idx = 0;
+                continue;
+            }
+
+            let left_row = &self.left_sorted[self.left_idx];
+            let right_row = &self.right_sorted[self.right_idx];
+            let cmp = compare_join_keys(left_row, right_row);
+
+            if cmp == std::cmp::Ordering::Equal {
+                while self.right_idx < self.right_sorted.len()
+                    && compare_join_keys(left_row, &self.right_sorted[self.right_idx])
+                        == std::cmp::Ordering::Equal
+                {
+                    self.left_matches.push(left_row.clone());
+                    self.right_idx += 1;
+                }
+                if !self.left_matches.is_empty() {
+                    self.left_match_idx = 1;
+                    self.matched_right[self.right_idx - 1] = true;
+                    let mut result = self.left_matches[0].clone();
+                    result.extend(self.right_sorted[self.right_idx - 1].clone());
+                    return Ok(Some(result));
+                }
+            } else if cmp == std::cmp::Ordering::Less {
+                self.left_idx += 1;
+                self.right_idx = 0;
+            } else {
+                self.right_idx += 1;
+            }
+        }
+    }
+
+    fn next_full(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if let Some(row) = self.next_left()? {
+            return Ok(Some(row));
+        }
+        if !self.right_outer_started {
+            self.right_outer_started = true;
+        }
+        self.next_right()
+    }
+
+    fn next_cross(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if self.right_sorted.is_empty() {
+            return Ok(None);
+        }
+
+        let total_right = self.right_sorted.len();
+
+        while self.cross_left_idx < self.left_sorted.len() {
+            let left_row = &self.left_sorted[self.cross_left_idx];
+
+            if self.cross_right_idx < total_right {
+                let mut result = left_row.clone();
+                result.extend(self.right_sorted[self.cross_right_idx].clone());
+                self.cross_right_idx += 1;
+                return Ok(Some(result));
+            }
+
+            self.cross_left_idx += 1;
+            self.cross_right_idx = 0;
+        }
+        Ok(None)
     }
 }
 
@@ -965,6 +1142,10 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
         self.right_idx = 0;
         self.left_matches.clear();
         self.left_match_idx = 0;
+        self.matched_right = vec![false; self.right_sorted.len()];
+        self.right_outer_started = false;
+        self.cross_left_idx = 0;
+        self.cross_right_idx = 0;
         self.initialized = true;
 
         Ok(())
@@ -978,6 +1159,9 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
         match self.join_type {
             sqlrustgo_planner::JoinType::Inner => self.next_inner(),
             sqlrustgo_planner::JoinType::Left => self.next_left(),
+            sqlrustgo_planner::JoinType::Right => self.next_right(),
+            sqlrustgo_planner::JoinType::Full => self.next_full(),
+            sqlrustgo_planner::JoinType::Cross => self.next_cross(),
             _ => Ok(None),
         }
     }
@@ -989,6 +1173,7 @@ impl VolcanoExecutor for SortMergeJoinVolcanoExecutor {
         self.left_idx = 0;
         self.right_idx = 0;
         self.left_match_idx = 0;
+        self.matched_right.clear();
         self.initialized = false;
         Ok(())
     }
@@ -1372,6 +1557,9 @@ pub struct SortMergeJoinExecutor {
     in_match: bool,
     matched_right: Vec<bool>,
     left_row_matched: bool,
+    right_outer_started: bool,
+    cross_left_idx: usize,
+    cross_right_idx: usize,
 }
 
 impl SortMergeJoinExecutor {
@@ -1398,6 +1586,9 @@ impl SortMergeJoinExecutor {
             in_match: false,
             matched_right: Vec::new(),
             left_row_matched: false,
+            right_outer_started: false,
+            cross_left_idx: 0,
+            cross_right_idx: 0,
         }
     }
 
@@ -1436,6 +1627,9 @@ impl VolcanoExecutor for SortMergeJoinExecutor {
         self.right_idx = 0;
         self.in_match = false;
         self.left_row_matched = false;
+        self.right_outer_started = false;
+        self.cross_left_idx = 0;
+        self.cross_right_idx = 0;
         self.initialized = true;
         Ok(())
     }
@@ -1448,7 +1642,10 @@ impl VolcanoExecutor for SortMergeJoinExecutor {
         match self.join_type {
             sqlrustgo_planner::JoinType::Inner => self.next_inner(),
             sqlrustgo_planner::JoinType::Left => self.next_left(),
-            _ => Ok(None),
+            sqlrustgo_planner::JoinType::Right => self.next_right(),
+            sqlrustgo_planner::JoinType::Full => self.next_full(),
+            sqlrustgo_planner::JoinType::Cross => self.next_cross(),
+            _ => Ok(None), // LeftSemi, RightSemi, LeftAnti, RightAnti not yet implemented
         }
     }
 
@@ -1546,6 +1743,95 @@ impl SortMergeJoinExecutor {
             self.left_idx += 1;
             self.right_idx = 0;
             self.left_row_matched = false;
+        }
+        Ok(None)
+    }
+
+    fn next_right(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        loop {
+            if self.right_outer_started {
+                for (i, matched) in self.matched_right.iter().enumerate() {
+                    if !*matched {
+                        let nulls = vec![Value::Null; self.left_schema.fields.len()];
+                        let mut result = nulls;
+                        result.extend(self.right_sorted[i].clone());
+                        return Ok(Some(result));
+                    }
+                }
+                return Ok(None);
+            }
+
+            while self.left_idx < self.left_sorted.len() {
+                let left_row = &self.left_sorted[self.left_idx];
+                let left_key = Self::sort_key(left_row, 0);
+
+                while self.right_idx < self.right_sorted.len() {
+                    let right_row = &self.right_sorted[self.right_idx];
+                    let right_key = Self::sort_key(right_row, 0);
+
+                    match Self::compare_keys(&left_key, &right_key) {
+                        std::cmp::Ordering::Equal => {
+                            let mut result = left_row.clone();
+                            result.extend(right_row.clone());
+                            self.matched_right[self.right_idx] = true;
+                            self.right_idx += 1;
+                            self.left_row_matched = true;
+                            return Ok(Some(result));
+                        }
+                        std::cmp::Ordering::Less => {
+                            break;
+                        }
+                        std::cmp::Ordering::Greater => {
+                            self.right_idx += 1;
+                        }
+                    }
+                }
+
+                if !self.left_row_matched {
+                    self.left_idx += 1;
+                    self.right_idx = 0;
+                    self.left_row_matched = false;
+                    continue;
+                }
+
+                self.left_idx += 1;
+                self.right_idx = 0;
+                self.left_row_matched = false;
+            }
+
+            self.right_outer_started = true;
+        }
+    }
+
+    fn next_full(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if let Some(row) = self.next_left()? {
+            return Ok(Some(row));
+        }
+        if !self.right_outer_started {
+            self.right_outer_started = true;
+        }
+        self.next_right()
+    }
+
+    fn next_cross(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if self.right_sorted.is_empty() {
+            return Ok(None);
+        }
+
+        let total_right = self.right_sorted.len();
+
+        while self.cross_left_idx < self.left_sorted.len() {
+            let left_row = &self.left_sorted[self.cross_left_idx];
+
+            if self.cross_right_idx < total_right {
+                let mut result = left_row.clone();
+                result.extend(self.right_sorted[self.cross_right_idx].clone());
+                self.cross_right_idx += 1;
+                return Ok(Some(result));
+            }
+
+            self.cross_left_idx += 1;
+            self.cross_right_idx = 0;
         }
         Ok(None)
     }
