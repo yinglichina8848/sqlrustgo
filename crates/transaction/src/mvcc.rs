@@ -207,9 +207,15 @@ impl RowVersion {
         if created_ts > snapshot.snapshot_timestamp {
             return false;
         }
-        if let Some(deleted_ts) = self.deleted_commit_ts {
-            if deleted_ts <= snapshot.snapshot_timestamp {
-                return false;
+        // For delete markers (empty value), the deleted_commit_ts is the same as
+        // created_commit_ts and represents when the deletion was committed.
+        // A delete marker is visible if created_ts < snapshot_ts.
+        // For regular versions, check if deleted_ts > snapshot_ts.
+        if !self.value.is_empty() {
+            if let Some(deleted_ts) = self.deleted_commit_ts {
+                if deleted_ts <= snapshot.snapshot_timestamp {
+                    return false;
+                }
             }
         }
         true
