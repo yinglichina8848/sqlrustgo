@@ -91,8 +91,9 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "batch_insert_test",
                 "autoinc_test",
                 "index_integration_test",
+                "oltp_workload_test",
             ],
-            description: "性能测试：批量插入、索引扫描、JOIN、缓存、向量化",
+            description: "性能测试：批量插入、索引扫描、JOIN、缓存、向量化、OLTP工作负载",
         },
         // TPC-H 测试
         TestCategory {

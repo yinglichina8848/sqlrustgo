@@ -544,6 +544,10 @@ name = "sql_cli_test"
 path = "tests/integration/sql_cli_test.rs"
 
 [[test]]
+name = "oltp_workload_test"
+path = "tests/integration/oltp_workload_test.rs"
+
+[[test]]
 name = "tpch_compliance_test"
 path = "tests/integration/tpch_compliance_test.rs"
 
