@@ -1024,6 +1024,7 @@ mod tests {
             .create_table(&sqlrustgo_storage::TableInfo {
                 name: "users".to_string(),
                 columns: vec![],
+                ..Default::default()
             })
             .unwrap();
 

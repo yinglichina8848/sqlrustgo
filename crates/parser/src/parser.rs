@@ -559,6 +559,7 @@ pub struct DeleteStatement {
 pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    pub table_constraints: Vec<TableConstraint>,
     pub if_not_exists: bool,
     pub constraints: Vec<TableConstraint>,
 }
@@ -602,12 +603,14 @@ pub enum ForeignKeyAction {
     Restrict,
 }
 
-/// Table-level constraints for CREATE TABLE
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum TableConstraint {
-    /// PRIMARY KEY (col1, col2, ...)
-    PrimaryKey { columns: Vec<String> },
-    /// FOREIGN KEY (col1, col2, ...) REFERENCES table(col1, col2, ...)
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintType {
+    PrimaryKey {
+        columns: Vec<String>,
+    },
+    Unique {
+        columns: Vec<String>,
+    },
     ForeignKey {
         columns: Vec<String>,
         reference_table: String,
@@ -615,8 +618,15 @@ pub enum TableConstraint {
         on_delete: Option<ForeignKeyAction>,
         on_update: Option<ForeignKeyAction>,
     },
-    /// UNIQUE (col1, col2, ...)
-    Unique { columns: Vec<String> },
+    Check {
+        condition: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableConstraint {
+    pub name: Option<String>,
+    pub constraint_type: ConstraintType,
 }
 
 /// Expression
@@ -3246,8 +3256,11 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
-                    // If we see FOREIGN/PRIMARY/UNIQUE after a comma, it's a table constraint
-                    Some(Token::Foreign) | Some(Token::Primary) | Some(Token::Unique) => {
+                    // If we see FOREIGN/PRIMARY/UNIQUE/CONSTRAINT after a comma, it's a table constraint
+                    Some(Token::Foreign)
+                    | Some(Token::Primary)
+                    | Some(Token::Unique)
+                    | Some(Token::Constraint) => {
                         break;
                     }
                     _ => break,
@@ -3258,8 +3271,9 @@ impl Parser {
             loop {
                 match self.current() {
                     Some(Token::Foreign) | Some(Token::Primary) | Some(Token::Unique) => {
-                        let constraint = self.parse_table_constraint()?;
-                        constraints.push(constraint);
+                        if let Some(constraint) = self.parse_table_constraint(None)? {
+                            constraints.push(constraint);
+                        }
                     }
                     Some(Token::Comma) => {
                         self.next();
@@ -3269,113 +3283,193 @@ impl Parser {
             }
         }
 
+        let mut table_constraints = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Constraint) => {
+                    self.next();
+                    let name = match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            let n = s.clone();
+                            self.next();
+                            n
+                        }
+                        _ => return Err("Expected constraint name".to_string()),
+                    };
+                    if let Some(tc) = self.parse_table_constraint(Some(name))? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Foreign) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Unique) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                Some(Token::Primary) => {
+                    self.next();
+                    if let Some(tc) = self.parse_table_constraint(None)? {
+                        table_constraints.push(tc);
+                    }
+                }
+                _ => break,
+            }
+        }
+
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
+            table_constraints,
             if_not_exists,
             constraints,
         }))
     }
 
-    fn parse_table_constraint(&mut self) -> Result<TableConstraint, String> {
+    fn parse_table_constraint(
+        &mut self,
+        name: Option<String>,
+    ) -> Result<Option<TableConstraint>, String> {
         match self.current() {
             Some(Token::Foreign) => {
                 self.next();
-                self.expect(Token::Key)?;
-                self.expect(Token::LParen)?;
-                let columns = self.parse_identifier_list()?;
-                self.expect(Token::RParen)?;
-                self.expect(Token::References)?;
-
-                let reference_table = match self.current() {
-                    Some(Token::Identifier(s)) => {
-                        let t = s.clone();
-                        self.next();
-                        t
-                    }
-                    _ => return Err("Expected reference table name".to_string()),
-                };
-
-                let reference_columns = if matches!(self.current(), Some(Token::LParen)) {
+                if let Some(Token::Key) = self.current() {
                     self.next();
-                    let cols = self.parse_identifier_list()?;
-                    self.expect(Token::RParen)?;
-                    cols
-                } else {
-                    vec!["id".to_string()]
-                };
-
-                let mut on_delete = None;
-                let mut on_update = None;
-
+                }
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
                 loop {
                     match self.current() {
-                        Some(Token::On) => {
-                            let pos_before = self.position;
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
                             self.next();
-                            match self.current() {
-                                Some(Token::Delete) => {
-                                    self.next();
-                                    let action = self.parse_fk_action_value()?;
-                                    if on_delete.is_none() {
-                                        on_delete = action;
-                                    }
-                                }
-                                Some(Token::Identifier(s)) if s.to_uppercase() == "DELETE" => {
-                                    self.next();
-                                    let action = self.parse_fk_action_value()?;
-                                    if on_delete.is_none() {
-                                        on_delete = action;
-                                    }
-                                }
-                                Some(Token::Update) => {
-                                    self.next();
-                                    let action = self.parse_fk_action_value()?;
-                                    if on_update.is_none() {
-                                        on_update = action;
-                                    }
-                                }
-                                Some(Token::Identifier(s)) if s.to_uppercase() == "UPDATE" => {
-                                    self.next();
-                                    let action = self.parse_fk_action_value()?;
-                                    if on_update.is_none() {
-                                        on_update = action;
-                                    }
-                                }
-                                _ => {
-                                    self.position = pos_before;
-                                    break;
-                                }
-                            }
                         }
                         _ => break,
                     }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
-
-                Ok(TableConstraint::ForeignKey {
-                    columns,
-                    reference_table,
-                    reference_columns,
-                    on_delete,
-                    on_update,
-                })
-            }
-            Some(Token::Primary) => {
-                self.next();
-                self.expect(Token::Key)?;
-                self.expect(Token::LParen)?;
-                let columns = self.parse_identifier_list()?;
-                self.expect(Token::RParen)?;
-                Ok(TableConstraint::PrimaryKey { columns })
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                if let Some(Token::References) = self.current() {
+                    self.next();
+                }
+                let reference_table = match self.current() {
+                    Some(Token::Identifier(s)) => {
+                        let n = s.clone();
+                        self.next();
+                        n
+                    }
+                    _ => return Err("Expected table name".to_string()),
+                };
+                let mut reference_columns = Vec::new();
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                    loop {
+                        match self.current() {
+                            Some(Token::Identifier(s)) => {
+                                reference_columns.push(s.clone());
+                                self.next();
+                            }
+                            _ => break,
+                        }
+                        if let Some(Token::Comma) = self.current() {
+                            self.next();
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+                    if let Some(Token::RParen) = self.current() {
+                        self.next();
+                    }
+                }
+                let (on_delete, on_update) = self.parse_fk_referential_actions()?;
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::ForeignKey {
+                        columns,
+                        reference_table,
+                        reference_columns,
+                        on_delete,
+                        on_update,
+                    },
+                }))
             }
             Some(Token::Unique) => {
                 self.next();
-                self.expect(Token::LParen)?;
-                let columns = self.parse_identifier_list()?;
-                self.expect(Token::RParen)?;
-                Ok(TableConstraint::Unique { columns })
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
+                            self.next();
+                        }
+                        _ => break,
+                    }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::Unique { columns },
+                }))
             }
-            _ => Err("Expected FOREIGN KEY, PRIMARY KEY, or UNIQUE".to_string()),
+            Some(Token::Primary) => {
+                self.next();
+                if let Some(Token::Key) = self.current() {
+                    self.next();
+                }
+                if let Some(Token::LParen) = self.current() {
+                    self.next();
+                }
+                let mut columns = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(s)) => {
+                            columns.push(s.clone());
+                            self.next();
+                        }
+                        _ => break,
+                    }
+                    if let Some(Token::Comma) = self.current() {
+                        self.next();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(Token::RParen) = self.current() {
+                    self.next();
+                }
+                Ok(Some(TableConstraint {
+                    name,
+                    constraint_type: ConstraintType::PrimaryKey { columns },
+                }))
+            }
+            _ => Ok(None),
         }
     }
 
@@ -3408,71 +3502,59 @@ impl Parser {
         match self.current() {
             Some(Token::Delete) => {
                 self.next();
-                self.parse_fk_action_value()
+                self.parse_fk_action().map(Some)
             }
             Some(Token::Identifier(s)) if s.to_uppercase() == "DELETE" => {
                 self.next();
-                self.parse_fk_action_value()
+                self.parse_fk_action().map(Some)
             }
             _ => Ok(None),
         }
     }
 
-    fn parse_fk_update_action(&mut self) -> Result<Option<ForeignKeyAction>, String> {
-        if !matches!(self.current(), Some(Token::On)) {
-            return Ok(None);
-        }
-        self.next();
-        match self.current() {
-            Some(Token::Update) => {
+    fn parse_fk_referential_actions(
+        &mut self,
+    ) -> Result<(Option<ForeignKeyAction>, Option<ForeignKeyAction>), String> {
+        let mut on_delete = None;
+        let mut on_update = None;
+        loop {
+            if let Some(Token::On) = self.current() {
                 self.next();
-                self.parse_fk_action_value()
-            }
-            Some(Token::Identifier(s)) if s.to_uppercase() == "UPDATE" => {
-                self.next();
-                self.parse_fk_action_value()
-            }
-            _ => Ok(None),
-        }
-    }
-
-    fn parse_fk_action_value(&mut self) -> Result<Option<ForeignKeyAction>, String> {
-        match self.current() {
-            Some(Token::Identifier(s)) => {
-                let upper = s.to_uppercase();
-                self.next();
-                match upper.as_str() {
-                    "CASCADE" => Ok(Some(ForeignKeyAction::Cascade)),
-                    "RESTRICT" => Ok(Some(ForeignKeyAction::Restrict)),
-                    "SET" => {
-                        if let Some(Token::Identifier(null_check)) = self.current() {
-                            if null_check.to_uppercase() == "NULL" {
-                                self.next();
-                                Ok(Some(ForeignKeyAction::SetNull))
-                            } else {
-                                Ok(None)
-                            }
-                        } else {
-                            Ok(None)
-                        }
-                    }
-                    _ => Ok(None),
+                if let Some(Token::Delete) = self.current() {
+                    self.next();
+                    on_delete = Some(self.parse_fk_action()?);
+                } else if let Some(Token::Update) = self.current() {
+                    self.next();
+                    on_update = Some(self.parse_fk_action()?);
                 }
+            } else {
+                break;
             }
-            Some(Token::Set) => {
-                self.next();
-                if let Some(Token::Identifier(null_check)) = self.current() {
-                    if null_check.to_uppercase() == "NULL" {
-                        self.next();
-                        Ok(Some(ForeignKeyAction::SetNull))
-                    } else {
-                        Ok(None)
-                    }
+        }
+        Ok((on_delete, on_update))
+    }
+
+    fn parse_fk_action(&mut self) -> Result<ForeignKeyAction, String> {
+        if let Some(Token::Cascade) = self.current() {
+            self.next();
+            Ok(ForeignKeyAction::Cascade)
+        } else if let Some(Token::Restrict) = self.current() {
+            self.next();
+            Ok(ForeignKeyAction::Restrict)
+        } else if let Some(Token::Set) = self.current() {
+            self.next();
+            if let Some(Token::Identifier(s)) = self.current() {
+                if s.to_uppercase() == "NULL" {
+                    self.next();
+                    Ok(ForeignKeyAction::SetNull)
                 } else {
-                    Ok(None)
+                    Err("Expected NULL after SET".to_string())
                 }
+            } else {
+                Err("Expected NULL after SET".to_string())
             }
-            _ => Ok(None),
+        } else {
+            Err("Expected CASCADE, RESTRICT, or SET NULL".to_string())
         }
     }
 
@@ -6529,10 +6611,14 @@ fn test_parse_table_constraint_foreign_key() {
             assert_eq!(ct.columns.len(), 2);
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::ForeignKey {
-                    columns,
-                    reference_table,
-                    reference_columns,
+                TableConstraint {
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            columns,
+                            reference_table,
+                            reference_columns,
+                            ..
+                        },
                     ..
                 } => {
                     assert_eq!(columns, &vec!["user_id"]);
@@ -6555,9 +6641,13 @@ fn test_parse_table_constraint_multi_column_fk() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::ForeignKey {
-                    columns,
-                    reference_columns,
+                TableConstraint {
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            columns,
+                            reference_columns,
+                            ..
+                        },
                     ..
                 } => {
                     assert_eq!(columns, &vec!["order_id", "product_id"]);
@@ -6579,11 +6669,44 @@ fn test_parse_table_constraint_fk_with_cascade() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::ForeignKey {
-                    on_delete,
-                    on_update,
+                TableConstraint {
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            on_delete,
+                            on_update,
+                            ..
+                        },
                     ..
                 } => {
+                    assert!(matches!(on_delete, Some(ForeignKeyAction::Cascade)));
+                    assert!(on_update.is_none());
+                }
+                _ => panic!("Expected ForeignKey constraint"),
+            }
+        }
+        _ => panic!("Expected CreateTable statement"),
+    }
+}
+
+#[test]
+fn test_parse_table_constraint_fk_with_constraint_name() {
+    let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER, CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Error: {:?}", result.err());
+    match result.unwrap() {
+        Statement::CreateTable(ct) => {
+            assert_eq!(ct.table_constraints.len(), 1);
+            match &ct.table_constraints[0] {
+                TableConstraint {
+                    name,
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            on_delete,
+                            on_update,
+                            ..
+                        },
+                } => {
+                    assert_eq!(name, &Some("fk_user".to_string()));
                     assert!(matches!(on_delete, Some(ForeignKeyAction::Cascade)));
                     assert!(on_update.is_none());
                 }
@@ -6603,9 +6726,13 @@ fn test_parse_table_constraint_fk_with_set_null() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::ForeignKey {
-                    on_delete,
-                    on_update,
+                TableConstraint {
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            on_delete,
+                            on_update,
+                            ..
+                        },
                     ..
                 } => {
                     assert!(
@@ -6635,7 +6762,10 @@ fn test_parse_table_constraint_primary_key() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::PrimaryKey { columns } => {
+                TableConstraint {
+                    constraint_type: ConstraintType::PrimaryKey { columns },
+                    ..
+                } => {
                     assert_eq!(columns, &vec!["a", "b"]);
                 }
                 _ => panic!("Expected PrimaryKey constraint"),
@@ -6654,7 +6784,10 @@ fn test_parse_table_constraint_unique() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 1);
             match &ct.constraints[0] {
-                TableConstraint::Unique { columns } => {
+                TableConstraint {
+                    constraint_type: ConstraintType::Unique { columns },
+                    ..
+                } => {
                     assert_eq!(columns, &vec!["email"]);
                 }
                 _ => panic!("Expected Unique constraint"),
@@ -6673,15 +6806,22 @@ fn test_parse_table_constraint_multiple() {
         Statement::CreateTable(ct) => {
             assert_eq!(ct.constraints.len(), 2);
             match &ct.constraints[0] {
-                TableConstraint::PrimaryKey { columns } => {
+                TableConstraint {
+                    constraint_type: ConstraintType::PrimaryKey { columns },
+                    ..
+                } => {
                     assert_eq!(columns, &vec!["order_id", "product_id"]);
                 }
                 _ => panic!("Expected PrimaryKey constraint first"),
             }
             match &ct.constraints[1] {
-                TableConstraint::ForeignKey {
-                    columns,
-                    reference_table,
+                TableConstraint {
+                    constraint_type:
+                        ConstraintType::ForeignKey {
+                            columns,
+                            reference_table,
+                            ..
+                        },
                     ..
                 } => {
                     assert_eq!(columns, &vec!["order_id"]);

@@ -437,6 +437,7 @@ mod tests {
                 ColumnDefinition::new("quantity", "INTEGER"),
                 ColumnDefinition::new("total", "FLOAT"),
             ],
+            ..Default::default()
         };
         storage.create_table(&table_info).unwrap();
 

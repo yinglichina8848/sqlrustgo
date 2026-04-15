@@ -322,6 +322,7 @@ pub fn create_audit_log_table(storage: &mut dyn StorageEngine) -> SqlResult<()> 
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_AUDIT_LOG.to_string(),
             columns,
+            table_foreign_keys: None,
         })?;
     }
     Ok(())

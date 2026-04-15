@@ -223,6 +223,7 @@ impl FileStorage {
             info: TableInfo {
                 name: stored.name,
                 columns: stored.columns,
+                table_foreign_keys: None,
             },
             rows: stored.rows,
         })
@@ -503,6 +504,7 @@ mod tests {
                             compression: None,
                         },
                     ],
+                    ..Default::default()
                 },
                 rows: vec![
                     vec![Value::Integer(1), Value::Integer(100)],
@@ -568,6 +570,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -613,6 +616,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -653,6 +657,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -705,6 +710,7 @@ mod tests {
                         compression: None,
                     },
                 ],
+                ..Default::default()
             },
             rows: vec![
                 vec![Value::Integer(1), Value::Integer(100)],
@@ -783,6 +789,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -832,6 +839,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -872,6 +880,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
         };
@@ -942,6 +951,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -980,6 +990,7 @@ mod tests {
                     references: None,
                     compression: None,
                 }],
+                ..Default::default()
             },
             rows: vec![],
         };
@@ -1056,6 +1067,7 @@ mod tests {
                 references: None,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -1094,6 +1106,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -1113,6 +1126,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -1148,6 +1162,7 @@ mod tests {
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
         storage
@@ -1616,6 +1631,46 @@ impl StorageEngine for FileStorage {
             "Composite index not yet implemented for FileStorage".to_string(),
         ))
     }
+
+    fn get_referencing_foreign_keys(
+        &self,
+        table: &str,
+    ) -> Vec<crate::engine::ReferencingForeignKey> {
+        use crate::engine::ReferencingForeignKey;
+        let mut result = Vec::new();
+        for (table_name, table_data) in &self.tables {
+            let table_info = &table_data.info;
+            for col_def in &table_info.columns {
+                if let Some(ref fk) = col_def.references {
+                    if fk.referenced_table == table {
+                        result.push(ReferencingForeignKey {
+                            constraint_name: None,
+                            child_table: table_name.clone(),
+                            child_columns: vec![col_def.name.clone()],
+                            parent_table: fk.referenced_table.clone(),
+                            parent_columns: vec![fk.referenced_column.clone()],
+                            on_delete: fk.on_delete,
+                            on_update: fk.on_update,
+                        });
+                    }
+                }
+            }
+            for table_fk in table_info.table_foreign_keys.iter().flatten() {
+                if table_fk.parent_table == table {
+                    result.push(ReferencingForeignKey {
+                        constraint_name: table_fk.name.clone(),
+                        child_table: table_name.clone(),
+                        child_columns: table_fk.child_columns.clone(),
+                        parent_table: table_fk.parent_table.clone(),
+                        parent_columns: table_fk.parent_columns.clone(),
+                        on_delete: table_fk.on_delete,
+                        on_update: table_fk.on_update,
+                    });
+                }
+            }
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -1648,6 +1703,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1675,6 +1731,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "users".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1701,6 +1758,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "users".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1708,6 +1766,7 @@ mod storage_engine_tests {
                 info: TableInfo {
                     name: "orders".to_string(),
                     columns: vec![],
+                    ..Default::default()
                 },
                 rows: vec![],
             };
@@ -1743,6 +1802,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
             };
@@ -1780,6 +1840,7 @@ mod storage_engine_tests {
                         references: None,
                         compression: None,
                     }],
+                    ..Default::default()
                 },
                 rows: vec![vec![Value::Integer(1)]],
             };
