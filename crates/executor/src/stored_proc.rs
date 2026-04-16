@@ -5,7 +5,7 @@
 use crate::ExecutorResult;
 use sqlrustgo_catalog::HandlerCondition;
 use sqlrustgo_catalog::StoredProcStatement;
-use sqlrustgo_storage::{ForeignKeyConstraint, StorageEngine};
+use sqlrustgo_storage::{ColumnDefinition, ForeignKeyConstraint, StorageEngine};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -1131,6 +1131,35 @@ impl StoredProcExecutor {
                     .map_err(|e| format!("Failed to delete: {}", e))?;
 
                 ctx.set_session_var("__last_delete_count", Value::Integer(count as i64));
+                Ok(())
+            }
+            sqlrustgo_parser::Statement::AlterTable(alter_table) => {
+                let table_name = &alter_table.table_name;
+                let mut storage = self.storage.write().unwrap();
+
+                match &alter_table.operation {
+                    sqlrustgo_parser::AlterTableOperation::AddColumn {
+                        name,
+                        data_type,
+                        nullable,
+                        default_value: _,
+                    } => {
+                        let column = ColumnDefinition {
+                            name: name.clone(),
+                            data_type: data_type.clone(),
+                            nullable: *nullable,
+                            primary_key: false,
+                        };
+                        storage
+                            .add_column(table_name, column)
+                            .map_err(|e| format!("Failed to add column: {}", e))?;
+                    }
+                    sqlrustgo_parser::AlterTableOperation::RenameTo { new_name } => {
+                        storage
+                            .rename_table(table_name, new_name)
+                            .map_err(|e| format!("Failed to rename table: {}", e))?;
+                    }
+                }
                 Ok(())
             }
             _ => Ok(()),
