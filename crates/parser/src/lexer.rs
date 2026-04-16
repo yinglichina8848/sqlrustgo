@@ -259,6 +259,8 @@ impl<'a> Lexer<'a> {
                     "ALL" => Token::All,
                     "ANY" => Token::Any,
                     "SOME" => Token::Some,
+                    "WITH" => Token::With,
+                    "RECURSIVE" => Token::Recursive,
                     _ => Token::Identifier(ident),
                 }
             }

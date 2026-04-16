@@ -27,6 +27,29 @@ pub enum Statement {
     CreateTable(CreateTableStatement),
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
+    WithSelect(WithSelect),
+}
+
+/// Common Table Expression (CTE)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommonTableExpression {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub subquery: Box<SelectStatement>,
+}
+
+/// WITH clause for CTEs
+#[derive(Debug, Clone, PartialEq)]
+pub struct WithClause {
+    pub recursive: bool,
+    pub ctes: Vec<CommonTableExpression>,
+}
+
+/// SELECT with optional WITH clause
+#[derive(Debug, Clone, PartialEq)]
+pub struct WithSelect {
+    pub with_clause: Option<WithClause>,
+    pub select: SelectStatement,
 }
 
 /// ANALYZE statement for collecting statistics
@@ -242,61 +265,81 @@ impl Parser {
             Some(Token::Create) => self.parse_create_table(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
+            Some(Token::With) => self.parse_with_select(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
     }
 
     fn parse_select(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Select)?;
+        let select = self.parse_select_statement()?;
+        Ok(Statement::Select(select))
+    }
 
-        let mut columns = Vec::new();
+    fn parse_with_select(&mut self) -> Result<Statement, String> {
+        self.expect(Token::With)?;
+
+        let recursive = if matches!(self.current(), Some(Token::Recursive)) {
+            self.next();
+            true
+        } else {
+            false
+        };
+
+        let mut ctes = Vec::new();
         loop {
-            match self.current() {
-                Some(Token::From) => break,
-                Some(Token::Star) => {
-                    columns.push(SelectColumn {
-                        name: "*".to_string(),
-                        alias: None,
-                    });
-                    self.next();
-                }
-                Some(Token::Identifier(_)) => {
-                    if let Some(Token::Identifier(name)) = self.next() {
-                        columns.push(SelectColumn { name, alias: None });
+            let cte_name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                _ => return Err("Expected CTE name".to_string()),
+            };
+
+            let columns = if matches!(self.current(), Some(Token::LParen)) {
+                self.next();
+                let mut cols = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(name)) => {
+                            cols.push(name.clone());
+                            self.next();
+                        }
+                        Some(Token::Comma) => {
+                            self.next();
+                        }
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        _ => return Err("Expected column name".to_string()),
                     }
                 }
-                Some(Token::Comma) => {
-                    self.next();
-                }
-                _ => {
-                    return Err("Expected FROM or column name".to_string());
-                }
+                cols
+            } else {
+                Vec::new()
+            };
+
+            self.expect(Token::As)?;
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_statement()?;
+            self.expect(Token::RParen)?;
+
+            ctes.push(CommonTableExpression {
+                name: cte_name,
+                columns,
+                subquery: Box::new(subquery),
+            });
+
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+                continue;
             }
+            break;
         }
 
-        self.expect(Token::From)?;
+        let select = self.parse_select_statement()?;
 
-        let table = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
-            None => return Err("Expected table name".to_string()),
-        };
-
-        // Parse WHERE clause (optional)
-        let where_clause = if matches!(self.current(), Some(Token::Where)) {
-            self.next(); // consume WHERE
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
-
-        Ok(Statement::Select(SelectStatement {
-            columns,
-            table,
-            where_clause,
-            join_clause: None,
-            aggregates: vec![],
+        Ok(Statement::WithSelect(WithSelect {
+            with_clause: Some(WithClause { recursive, ctes }),
+            select,
         }))
     }
 
