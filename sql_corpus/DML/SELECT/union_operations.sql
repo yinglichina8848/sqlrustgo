@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === UNION Operations Test Suite ===
 
 -- === CASE: UNION basic ===

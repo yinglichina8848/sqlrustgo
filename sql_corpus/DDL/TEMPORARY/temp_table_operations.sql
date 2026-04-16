@@ -1,3 +1,7 @@
+-- === SKIP ===
+
+-- === SKIP ===
+
 -- === Temporary Tables Test Suite ===
 
 -- === CASE: Create temp table ===

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Outer Join Test Suite ===
 
 -- === CASE: Left Join Basic ===

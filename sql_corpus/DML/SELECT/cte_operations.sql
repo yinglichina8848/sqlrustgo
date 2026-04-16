@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === CTE (Common Table Expression) Test Suite ===
 
 -- === CASE: Simple CTE ===

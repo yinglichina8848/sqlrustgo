@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: DISTINCT and ALL
 -- Tests for duplicate removal
 

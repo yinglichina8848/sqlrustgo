@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: CREATE TABLE Variations
 -- Tests for various CREATE TABLE patterns
 

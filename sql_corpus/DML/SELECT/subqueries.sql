@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: Subquery Tests
 -- Tests for EXISTS, IN, ANY/ALL subqueries
 

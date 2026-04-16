@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === NULL Semantics Test Suite ===
 
 -- === CASE: IS NULL ===

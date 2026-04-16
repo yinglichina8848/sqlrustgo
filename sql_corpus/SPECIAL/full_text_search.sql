@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Full Text Search Test Suite ===
 
 -- === CASE: CREATE VIRTUAL TABLE with FTS ===

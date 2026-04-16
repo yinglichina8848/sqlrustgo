@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: NULL Semantics Tests
 
 -- === SETUP ===

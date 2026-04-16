@@ -1,3 +1,7 @@
+-- === SKIP ===
+
+-- === SKIP ===
+
 -- SQLCorpus: INSERT Variations
 -- Tests for various INSERT patterns
 

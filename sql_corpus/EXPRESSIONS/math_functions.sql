@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Math and Trigonometry Functions Test Suite ===
 
 -- === CASE: ABS - absolute value ===

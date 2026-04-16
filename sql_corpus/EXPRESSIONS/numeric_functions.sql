@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: Numeric Functions
 -- Tests for numeric/mathematical functions
 

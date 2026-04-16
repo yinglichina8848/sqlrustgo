@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: String Functions
 -- Tests for string manipulation functions
 

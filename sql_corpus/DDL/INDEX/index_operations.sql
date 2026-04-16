@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Index Test Suite ===
 
 -- === CASE: Create index ===

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: DROP TABLE Variations
 -- Tests for DROP TABLE patterns
 

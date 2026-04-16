@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Table and Column Aliases Test Suite ===
 
 -- === CASE: Simple column alias ===

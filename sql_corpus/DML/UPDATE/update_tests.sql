@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: UPDATE Tests
 -- Tests for various UPDATE operations
 

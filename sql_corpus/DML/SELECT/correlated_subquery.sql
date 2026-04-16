@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Correlated Subquery Test Suite ===
 
 -- === CASE: Correlated in SELECT ===

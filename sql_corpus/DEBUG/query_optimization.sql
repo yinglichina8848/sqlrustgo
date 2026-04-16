@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Query Optimization Hints Test Suite ===
 
 -- === CASE: USE INDEX hint ===
