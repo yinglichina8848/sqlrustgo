@@ -296,4 +296,40 @@ mod tests {
         assert!(debug.contains("Sql"));
         assert!(debug.contains("id"));
     }
+
+    #[test]
+    fn test_document_table_with_description() {
+        let table = DocumentTable::new("products").with_description("Product catalog table");
+
+        assert_eq!(table.description(), Some("Product catalog table"));
+    }
+
+    #[test]
+    fn test_document_table_empty_columns() {
+        let table = DocumentTable::new("empty_table");
+
+        assert_eq!(table.column_count(), 0);
+        assert_eq!(table.sql_column_count(), 0);
+        assert_eq!(table.vector_column_count(), 0);
+    }
+
+    #[test]
+    fn test_has_column() {
+        let mut table = DocumentTable::new("test");
+        table.add_sql_column("id", "INTEGER");
+
+        assert!(table.has_column("id"));
+        assert!(!table.has_column("nonexistent"));
+    }
+
+    #[test]
+    fn test_vector_column_metric_variants() {
+        let col_cosine = VectorColumn::new("emb1", 128, DistanceMetric::Cosine);
+        let col_euclidean = VectorColumn::new("emb2", 128, DistanceMetric::Euclidean);
+        let col_dot = VectorColumn::new("emb3", 128, DistanceMetric::DotProduct);
+
+        assert_eq!(col_cosine.metric, DistanceMetric::Cosine);
+        assert_eq!(col_euclidean.metric, DistanceMetric::Euclidean);
+        assert_eq!(col_dot.metric, DistanceMetric::DotProduct);
+    }
 }
