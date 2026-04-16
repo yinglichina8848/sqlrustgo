@@ -31,6 +31,18 @@ pub enum Token {
     Revoke,
     Analyze,
 
+    // Constraint keywords
+    Foreign,
+    References,
+    Unique,
+    Check,
+    Constraint,
+    Cascade,
+    Restrict,
+    No,
+    Action,
+    Default,
+
     // Data Types
     Integer,
     Text,
@@ -108,6 +120,17 @@ impl fmt::Display for Token {
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            // Constraint keywords
+            Token::Foreign => write!(f, "FOREIGN"),
+            Token::References => write!(f, "REFERENCES"),
+            Token::Unique => write!(f, "UNIQUE"),
+            Token::Check => write!(f, "CHECK"),
+            Token::Constraint => write!(f, "CONSTRAINT"),
+            Token::Cascade => write!(f, "CASCADE"),
+            Token::Restrict => write!(f, "RESTRICT"),
+            Token::No => write!(f, "NO"),
+            Token::Action => write!(f, "ACTION"),
+            Token::Default => write!(f, "DEFAULT"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -219,6 +242,16 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "AND" => Some(Token::And),
         "OR" => Some(Token::Or),
         "NOT" => Some(Token::Not),
+        "FOREIGN" => Some(Token::Foreign),
+        "REFERENCES" => Some(Token::References),
+        "UNIQUE" => Some(Token::Unique),
+        "CHECK" => Some(Token::Check),
+        "CONSTRAINT" => Some(Token::Constraint),
+        "CASCADE" => Some(Token::Cascade),
+        "RESTRICT" => Some(Token::Restrict),
+        "NO" => Some(Token::No),
+        "ACTION" => Some(Token::Action),
+        "DEFAULT" => Some(Token::Default),
         _ => None,
     }
 }

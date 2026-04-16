@@ -100,3 +100,30 @@ harness = false
 [[bench]]
 name = "bench_insert"
 harness = false
+[[bench]]
+name = "bench_v130"
+harness = false
+
+[[bench]]
+name = "bench_v140"
+harness = false
+
+[[bench]]
+name = "bench_cbo"
+harness = false
+
+[[bench]]
+name = "tpch_bench"
+harness = false
+
+[[bench]]
+name = "bench_columnar"
+harness = false
+
+[[test]]
+name = "prometheus_test"
+path = "tests/unit/prometheus_test.rs"
+
+[[test]]
+name = "slow_query_log_test"
+path = "tests/unit/slow_query_log_test.rs"
