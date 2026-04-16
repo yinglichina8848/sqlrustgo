@@ -177,4 +177,50 @@ mod tests {
         assert_eq!(h1, h2); // same string = same hash
         assert_ne!(h1, h3); // different string = different hash
     }
+
+    #[test]
+    fn test_partition_value_from_i64() {
+        let value = PartitionValue::from_i64(42);
+        assert!(matches!(value, PartitionValue::Integer(42)));
+    }
+
+    #[test]
+    fn test_partition_value_from_text() {
+        let value = PartitionValue::from_text("hello");
+        assert!(matches!(value, PartitionValue::Text(_)));
+    }
+
+    #[test]
+    fn test_partition_value_abs_value() {
+        let int_pos = PartitionValue::Integer(10);
+        assert_eq!(int_pos.abs_value(), 10);
+
+        let int_neg = PartitionValue::Integer(-10);
+        assert_eq!(int_neg.abs_value(), 10);
+
+        let text = PartitionValue::Text(42);
+        assert_eq!(text.abs_value(), 42);
+    }
+
+    #[test]
+    fn test_range_partition_text_returns_none() {
+        let value = PartitionValue::Text(42);
+        assert_eq!(range_partition(&value, &[10, 20]), None);
+    }
+
+    #[test]
+    fn test_partition_strategy_default() {
+        let strategy = PartitionStrategy::default();
+        assert!(matches!(
+            strategy,
+            PartitionStrategy::Hash { num_shards: 4 }
+        ));
+    }
+
+    #[test]
+    fn test_partition_key_debug() {
+        let key = PartitionKey::new_hash("id", 4);
+        let debug = format!("{:?}", key);
+        assert!(debug.contains("Hash"));
+    }
 }
