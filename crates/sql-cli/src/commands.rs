@@ -273,9 +273,9 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
-
         let result = execute_command(".tables", &storage);
 
         match result {
@@ -313,6 +313,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -357,6 +358,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
