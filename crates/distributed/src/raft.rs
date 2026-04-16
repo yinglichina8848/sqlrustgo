@@ -193,6 +193,20 @@ impl RaftNode {
         self.voted_for = Some(self.node_id);
     }
 
+    pub fn become_leader_on_votes(&mut self, votes: usize) -> bool {
+        let quorum = self.peers.len() / 2 + 1;
+        if votes >= quorum {
+            self.become_leader();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn append_entry(&mut self, entry: RaftEntry) {
+        self.log.append(entry);
+    }
+
     pub fn handle_message(&mut self, msg: RaftMessage) -> Vec<(NodeId, RaftMessage)> {
         match msg {
             RaftMessage::RequestVote(args) => self.handle_request_vote(args),
@@ -245,8 +259,12 @@ impl RaftNode {
         vec![]
     }
 
-    fn count_votes(&self) -> usize {
+    pub fn count_votes(&self) -> usize {
         1 + self.peers.iter().filter(|_| true).count()
+    }
+
+    pub fn last_index(&self) -> u64 {
+        self.log.last_index()
     }
 
     fn handle_append_entries(&mut self, args: AppendEntriesArgs) -> Vec<(NodeId, RaftMessage)> {
