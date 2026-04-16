@@ -1106,7 +1106,85 @@ impl StoredProcExecutor {
             sqlrustgo_parser::Expression::FunctionCall(name, args) => {
                 self.evaluate_function(name, args, ctx)
             }
+            sqlrustgo_parser::Expression::Subquery(select) => {
+                let rows = self.execute_subquery(select);
+                if let Some(first_row) = rows.first() {
+                    first_row.first().cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            sqlrustgo_parser::Expression::In(left, select) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let rows = self.execute_subquery(select);
+                let in_result = rows
+                    .iter()
+                    .any(|row| row.first().map(|v| v == &left_val).unwrap_or(false));
+                Value::Boolean(in_result)
+            }
+            sqlrustgo_parser::Expression::NotIn(left, select) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let rows = self.execute_subquery(select);
+                let not_in_result = rows
+                    .iter()
+                    .all(|row| row.first().map(|v| v != &left_val).unwrap_or(true));
+                Value::Boolean(not_in_result)
+            }
+            sqlrustgo_parser::Expression::Exists(select) => {
+                let rows = self.execute_subquery(select);
+                Value::Boolean(!rows.is_empty())
+            }
+            sqlrustgo_parser::Expression::NotExists(select) => {
+                let rows = self.execute_subquery(select);
+                Value::Boolean(rows.is_empty())
+            }
+            sqlrustgo_parser::Expression::QuantifiedOp(expr, quantifier, select) => {
+                let rows = self.execute_subquery(select);
+                let expr_val = self.expression_to_value(expr, ctx);
+                match quantifier.as_str() {
+                    "ALL" => {
+                        let all_match = rows
+                            .iter()
+                            .all(|row| row.first().map(|v| v == &expr_val).unwrap_or(false));
+                        Value::Boolean(all_match)
+                    }
+                    "ANY" | "SOME" => {
+                        let any_match = rows
+                            .iter()
+                            .any(|row| row.first().map(|v| v == &expr_val).unwrap_or(false));
+                        Value::Boolean(any_match)
+                    }
+                    _ => Value::Null,
+                }
+            }
             _ => Value::Null,
+        }
+    }
+
+    /// Execute a SELECT statement and return rows
+    fn execute_subquery(&self, select: &sqlrustgo_parser::SelectStatement) -> Vec<Vec<Value>> {
+        let storage = match self.storage.read() {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        let records = match storage.scan(&select.table) {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        if let Some(ref where_expr) = select.where_clause {
+            records
+                .into_iter()
+                .filter(|row| {
+                    let where_val = self.expression_to_value(where_expr, &ProcedureContext::new());
+                    if let Value::Boolean(b) = where_val {
+                        b
+                    } else {
+                        where_val != Value::Null
+                    }
+                })
+                .collect()
+        } else {
+            records
         }
     }
 
