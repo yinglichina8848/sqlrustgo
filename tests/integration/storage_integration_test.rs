@@ -362,3 +362,38 @@ fn test_bplus_tree_mixed_operations() {
 
     println!("✓ B+Tree mixed operations");
 }
+
+#[test]
+fn test_bplus_tree_empty() {
+    let tree = BPlusTree::new();
+    assert_eq!(tree.len(), 0);
+    assert!(tree.search(0).is_none());
+
+    let range = tree.range_query(0, 100);
+    assert!(range.is_empty());
+}
+
+#[test]
+fn test_bplus_tree_single_insert() {
+    let mut tree = BPlusTree::new();
+    tree.insert(1, 100);
+    assert_eq!(tree.len(), 1);
+    assert!(tree.search(1).is_some());
+}
+
+#[test]
+fn test_buffer_pool_pin_eviction() {
+    let pool = Arc::new(BufferPool::new(2));
+
+    pool.insert(Arc::new(Page::new(1)));
+    pool.insert(Arc::new(Page::new(2)));
+
+    pool.pin(1);
+    assert!(pool.is_pinned(1));
+
+    pool.insert(Arc::new(Page::new(3)));
+    assert!(pool.get(1).is_some()); // Pinned page should remain
+    assert!(pool.get(2).is_none()); // Page 2 should be evicted
+
+    pool.unpin(1);
+}
