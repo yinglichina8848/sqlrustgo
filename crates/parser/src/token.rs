@@ -24,6 +24,10 @@ pub enum Token {
     On,
     Primary,
     Key,
+    Add,
+    Column,
+    Rename,
+    To,
     Begin,
     Commit,
     Rollback,
@@ -126,6 +130,10 @@ impl fmt::Display for Token {
             Token::On => write!(f, "ON"),
             Token::Primary => write!(f, "PRIMARY"),
             Token::Key => write!(f, "KEY"),
+            Token::Add => write!(f, "ADD"),
+            Token::Column => write!(f, "COLUMN"),
+            Token::Rename => write!(f, "RENAME"),
+            Token::To => write!(f, "TO"),
             Token::Begin => write!(f, "BEGIN"),
             Token::Commit => write!(f, "COMMIT"),
             Token::Rollback => write!(f, "ROLLBACK"),
@@ -207,6 +215,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "ON"
             | "PRIMARY"
             | "KEY"
+            | "ADD"
+            | "COLUMN"
+            | "RENAME"
+            | "TO"
             | "BEGIN"
             | "COMMIT"
             | "ROLLBACK"
@@ -254,6 +266,10 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ON" => Some(Token::On),
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),
+        "ADD" => Some(Token::Add),
+        "COLUMN" => Some(Token::Column),
+        "RENAME" => Some(Token::Rename),
+        "TO" => Some(Token::To),
         "BEGIN" => Some(Token::Begin),
         "COMMIT" => Some(Token::Commit),
         "ROLLBACK" => Some(Token::Rollback),
