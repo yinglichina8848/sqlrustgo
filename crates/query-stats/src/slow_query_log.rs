@@ -329,4 +329,63 @@ mod tests {
         let records = log.read_logs();
         assert!(records.is_empty());
     }
+
+    #[test]
+    fn test_slow_query_log_default() {
+        let log = SlowQueryLog::default();
+        assert_eq!(log.threshold_ms(), 1000);
+    }
+
+    #[test]
+    fn test_slow_query_config_debug() {
+        let config = SlowQueryConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("SlowQueryConfig"));
+    }
+
+    #[test]
+    fn test_slow_query_record_debug() {
+        let record = SlowQueryRecord {
+            timestamp: Utc::now(),
+            query: "SELECT 1".to_string(),
+            duration_ms: 100,
+            rows: 10,
+            lock_time_ms: 0.5,
+            rows_examined: 100,
+        };
+        let debug = format!("{:?}", record);
+        assert!(debug.contains("SELECT 1"));
+    }
+
+    #[test]
+    fn test_maybe_log_just_below_threshold() {
+        let log_path = temp_dir().join("test_below.log");
+        let log = SlowQueryLog::new(100, log_path.clone());
+
+        // Just below threshold - should not log
+        log.maybe_log("SELECT 1", 99, 1);
+
+        let recent = log.get_recent();
+        assert!(recent.is_empty());
+
+        std::fs::remove_file(log_path).ok();
+    }
+
+    #[test]
+    fn test_slow_query_log_multiple_records() {
+        let log_path = temp_dir().join("test_multiple.log");
+        let log = SlowQueryLog::new(10, log_path.clone());
+
+        log.maybe_log("SELECT 1", 100, 1);
+        log.maybe_log("SELECT 2", 200, 2);
+        log.maybe_log("SELECT 3", 300, 3);
+
+        let recent = log.get_recent();
+        assert_eq!(recent.len(), 3);
+        assert_eq!(recent[0].query, "SELECT 1");
+        assert_eq!(recent[1].query, "SELECT 2");
+        assert_eq!(recent[2].query, "SELECT 3");
+
+        std::fs::remove_file(log_path).ok();
+    }
 }
