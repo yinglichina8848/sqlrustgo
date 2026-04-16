@@ -122,58 +122,58 @@
 | ID | 任务 | 负责人 | 预估时间 | 优先级 | 依赖 |
 |----|------|--------|----------|--------|------|
 | **插件系统** |||||||
-| P-001 | Plugin trait 定义 | openheart | 4h | P0 | - |
-| P-002 | 插件加载器实现 | openheart | 6h | P0 | P-001 |
-| P-003 | 存储插件接口 | openheart | 8h | P1 | P-002 |
-| P-004 | 执行器插件接口 | heartopen | 8h | P1 | P-002 |
-| P-005 | 插件生命周期管理 | openheart | 6h | P1 | P-003, P-004 |
+| P-001 |Plugin trait 定义|开放的心| 4h | P0 | - |
+| P-002 | 插件加载器实现 |开放的心| 6h | P0 | P-001 |
+| P-003 | 存储插件接口 |开放的心| 8h | P1 | P-002 |
+| P-004 | 执行器插件接口 |敞开心扉| 8h | P1 | P-002 |
+| P-005 | 插件生命周期管理 |开放的心| 6h | P1 | P-003, P-004 |
 | **CBO 完善** |||||||
-| C-001 | 成本模型完善 | openheart | 6h | P0 | v1.2.0 S-006 |
-| C-002 | 统计信息集成 | openheart | 4h | P0 | C-001 |
-| C-003 | Join 顺序优化 | heartopen | 8h | P1 | C-002 |
-| C-004 | 索引选择优化 | heartopen | 6h | P1 | C-002 |
-| C-005 | 代价估算测试 | maintainer | 4h | P1 | C-003, C-004 |
+| C-001 | 成本模型完善 |开放的心| 6h | P0 | v1.2.0 S-006 |
+| C-002 | 统计信息集成 |开放的心| 4h | P0 | C-001 |
+| C-003 | Join 顺序优化 |敞开心扉| 8h | P1 | C-002 |
+| C-004 | 索引选择优化 |敞开心扉| 6h | P1 | C-002 |
+| C-005 | 代价估算测试 |维护者| 4h | P1 | C-003, C-004 |
 | **Join 算法** |||||||
-| J-001 | SortMergeJoin 实现 | heartopen | 12h | P0 | - |
-| J-002 | NestedLoopJoin 优化 | heartopen | 6h | P1 | J-001 |
-| J-003 | Join 选择策略 | openheart | 4h | P1 | J-001, J-002 |
-| J-004 | Join 性能测试 | maintainer | 4h | P1 | J-003 |
+| J-001 |SortMergeJoin 实现|敞开心扉| 12h | P0 | - |
+| J-002 |NestedLoopJoin 优化|敞开心扉| 6h | P1 | J-001 |
+| J-003 | Join 选择策略 |开放的心| 4h | P1 | J-001, J-002 |
+| J-004 | Join 性能测试 |维护者| 4h | P1 | J-003 |
 | **事务增强** |||||||
-| T-001 | 事务隔离级别 | openheart | 8h | P0 | - |
-| T-002 | MVCC 基础实现 | openheart | 16h | P0 | T-001 |
-| T-003 | 锁管理器 | heartopen | 8h | P0 | T-001 |
-| T-004 | 死锁检测 | heartopen | 6h | P1 | T-003 |
+| T-001 | 事务隔离级别 |开放的心| 8h | P0 | - |
+| T-002 | MVCC 基础实现 |开放的心| 16h | P0 | T-001 |
+| T-003 | 锁管理器 |敞开心扉| 8h | P0 | T-001 |
+| T-004 | 死锁检测 |敞开心扉| 6h | P1 | T-003 |
 | **性能监控** |||||||
-| M-001 | Metrics trait 定义 | openheart | 4h | P0 | - |
-| M-002 | BufferPoolMetrics 实现 | heartopen | 4h | P0 | M-001 |
-| M-003 | ExecutorMetrics 实现 | heartopen | 4h | P0 | M-001 |
-| M-004 | NetworkMetrics 实现 | heartopen | 4h | P1 | M-001 |
-| M-005 | 指标聚合器 | openheart | 4h | P1 | M-002, M-003, M-004 |
+| M-001 |Metrics trait 定义|开放的心| 4h | P0 | - |
+| M-002 |BufferPoolMetrics 实现|敞开心扉| 4h | P0 | M-001 |
+| M-003 |ExecutorMetrics 实现|敞开心扉| 4h | P0 | M-001 |
+| M-004 |NetworkMetrics 实现|敞开心扉| 4h | P1 | M-001 |
+| M-005 | 指标聚合器 |开放的心| 4h | P1 | M-002, M-003, M-004 |
 | **健康检查** |||||||
-| H-001 | HealthChecker 实现 | heartopen | 4h | P0 | M-005 |
-| H-002 | /health/live 端点 | heartopen | 2h | P0 | H-001 |
-| H-003 | /health/ready 端点 | heartopen | 2h | P0 | H-001 |
-| H-004 | /health 综合端点 | heartopen | 4h | P1 | H-002, H-003 |
-| H-005 | 组件健康检查器 | heartopen | 4h | P1 | H-001 |
+| H-001 |HealthChecker 实现|敞开心扉| 4h | P0 | M-005 |
+| H-002 |/health/live 端点|敞开心扉| 2h | P0 | H-001 |
+| H-003 |/health/ready 端点|敞开心扉| 2h | P0 | H-001 |
+| H-004 | /health 综合端点 |敞开心扉| 4h | P1 | H-002, H-003 |
+| H-005 | 组件健康检查器 |敞开心扉| 4h | P1 | H-001 |
 | **指标暴露** |||||||
-| E-001 | Prometheus 格式暴露 | openheart | 4h | P1 | M-005 |
-| E-002 | /metrics 端点 | heartopen | 2h | P1 | E-001 |
-| E-003 | Grafana Dashboard 模板 | maintainer | 4h | P2 | E-002 |
-| E-004 | 告警规则示例 | maintainer | 2h | P2 | E-002 |
+| E-001 |Prometheus 格式暴露|开放的心| 4h | P1 | M-005 |
+| E-002 |/metrics 端点|敞开心扉| 2h | P1 | E-001 |
+| E-003 |Grafana Dashboard 模板|维护者| 4h | P2 | E-002 |
+| E-004 | 告警规则示例 |维护者| 2h | P2 | E-002 |
 | **文档** |||||||
-| D-001 | 可观测性指南 | maintainer | 4h | P1 | E-002 |
-| D-002 | API 文档更新 | maintainer | 4h | P1 | - |
-| D-003 | 升级指南 | maintainer | 4h | P2 | - |
-| D-004 | Release Notes | yinglichina8848 | 2h | P0 | - |
+| D-001 | 可观测性指南 |维护者| 4h | P1 | E-002 |
+| D-002 | API 文档更新 |维护者| 4h | P1 | - |
+| D-003 | 升级指南 |维护者| 4h | P2 | - |
+| D-004 |发行说明|英利china8848| 2h | P0 | - |
 
 ### 3.2 负责人分工
 
 | 负责人 | 角色 | 任务范围 |
 |--------|------|----------|
-| **openheart** | 架构开发 | 插件系统、CBO、事务、Metrics 设计 |
-| **heartopen** | 功能开发 | Join 算法、健康检查、指标实现 |
-| **maintainer** | 审核 | 测试、文档、Dashboard、告警规则 |
-| **yinglichina8848** | 调度 | 计划制定、发布控制 |
+|**敞开心扉**| 架构开发 | 插件系统、CBO、事务、Metrics 设计 |
+|**心敞开**| 功能开发 | Join 算法、健康检查、指标实现 |
+|**维护者**| 审核 | 测试、文档、Dashboard、告警规则 |
+|**英利中国8848**| 调度 | 计划制定、发布控制 |
 
 ---
 
@@ -329,7 +329,7 @@ sqlrustgo_query_duration_seconds_count 1000
 |--------|------|
 | 插件系统 | Plugin trait + 加载器完整实现 |
 | CBO | 成本优化生效，查询计划可验证 |
-| Join 算法 | SortMergeJoin + NestedLoopJoin 可用 |
+| Join 算法 |SortMergeJoin + NestedLoopJoin 可用|
 | 事务增强 | 隔离级别 + MVCC 基础实现 |
 | 性能监控 | 指标收集 + Prometheus 暴露 |
 | 健康检查 | 三个端点全部可用 |
@@ -338,10 +338,10 @@ sqlrustgo_query_duration_seconds_count 1000
 
 | 指标 | 目标 |
 |------|------|
-| /health/live | 返回 200 + {"status": "alive"} |
-| /health/ready | 检查所有组件状态 |
-| /health | 返回详细健康报告 |
-| /metrics | Prometheus 格式指标 |
+|/健康/生活|返回 200 + {"status": "alive"}|
+|/健康/准备好| 检查所有组件状态 |
+|/健康| 返回详细健康报告 |
+|/指标|Prometheus 格式指标|
 | 指标数量 | ≥ 20 个核心指标 |
 
 ### 6.3 质量验收
@@ -349,7 +349,7 @@ sqlrustgo_query_duration_seconds_count 1000
 | 指标 | 目标 |
 |------|------|
 | 测试覆盖率 | ≥ 90% |
-| Clippy | 无警告 |
+|剪辑| 无警告 |
 | 文档 | 完整 |
 
 ---
@@ -359,7 +359,7 @@ sqlrustgo_query_duration_seconds_count 1000
 | 风险 | 影响 | 概率 | 缓解措施 |
 |------|------|------|----------|
 | MVCC 实现复杂度超预期 | 高 | 中 | 简化初始版本，仅实现快照隔离 |
-| 插件系统设计变更 | 中 | 低 | 参考 Apache Arrow DataFusion |
+| 插件系统设计变更 | 中 | 低 |参考 Apache Arrow DataFusion|
 | 健康检查与现有代码冲突 | 低 | 低 | 独立模块，最小侵入 |
 
 ---
@@ -376,8 +376,8 @@ v1.3.0-draft → v1.3.0-alpha → v1.3.0-beta → v1.3.0-rc → v1.3.0
 
 | 版本 | 预计时间 | 说明 |
 |------|----------|------|
-| v1.3.0-draft | Week 2 | 插件系统 + 监控基础 |
-| v1.3.0-alpha | Week 4 | CBO + 健康检查 |
+|v1.3.0-草案| Week 2 | 插件系统 + 监控基础 |
+|v1.3.0-alpha| Week 4 | CBO + 健康检查 |
 | v1.3.0-beta | Week 6 | Join 算法 + 指标暴露 |
 | v1.3.0-rc | Week 8 | 事务增强完成 |
 | v1.3.0 | Week 10 | 正式发布 |

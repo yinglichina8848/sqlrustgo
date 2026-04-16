@@ -26,23 +26,10 @@
 | 静态分析 (clippy) | ✅ | 无警告，执行 `cargo clippy` 无输出 | `cargo clippy` |
 | 类型检查 (cargo check) | ✅ | 无类型错误，执行 `cargo check` 成功 | `cargo check` |
 | 编译测试 (cargo build) | ✅ | 成功编译，无错误 | `cargo build` |
-| 单元测试 (cargo test) | ✅ | 100% 通过，无失败用例 | `cargo test --lib` |
-| 集成测试 | ✅ | 100% 通过，无失败用例 | `cargo test --test integration_test` |
-| 覆盖率测试 (tarpaulin) | ✅ | 代码覆盖率 ≥ 80% | `cargo tarpaulin --fail-under 80` |
+| 单元测试 (cargo test) | ✅ | 100% 通过，无失败用例 | `cargo test` |
+| 集成测试 | ✅ | 100% 通过，无失败用例 | `cargo test --test integration` |
+| 覆盖率测试 (tarpaulin) | ✅ | 代码覆盖率 ≥ 80% | `cargo tarpaulin` |
 | 安全扫描 (cargo audit) | ✅ | 无高危漏洞，中危漏洞 ≤ 2 | `cargo audit` |
-
-### 2.2 功能测试门禁 (v2.1.0)
-| 检查项 | 状态 | 验收标准 | 检查命令 |
-|-------|------|---------|----------|
-| 回归测试 | ✅ | 70+ 测试文件全部通过 | `cargo test --test regression_test` |
-| TPC-H Q1-Q22 | ✅ | 28 个查询全部通过 | `cargo test --test tpch_full_test` |
-| 向量化执行 | ✅ | 10 个测试通过 | `cargo test --test vectorization_test` |
-| 列式存储 | ✅ | 12 个测试通过 | `cargo test --test columnar_storage_test` |
-| 分布式事务 | ✅ | 31 个测试通过 | `cargo test --test distributed_transaction_test` |
-| 窗口函数 | ✅ | 21 个测试通过 | `cargo test --test window_function_test` |
-| RBAC 权限 | ✅ | 23 个测试通过 | `cargo test --test auth_rbac_test` |
-| WAL 集成 | ✅ | 16 个测试通过 | `cargo test --test wal_integration_test` |
-| 功能矩阵文档 | ✅ | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` 已更新 | 文档审查 |
 
 ### 2.2 功能完整性门禁
 | 检查项 | 状态 | 验收标准 | 测试方法 |

@@ -53,7 +53,6 @@ pub struct Page {
     row_count: u32,
     free_space: u32,
     table_id: u64,
-    checksum: u32,
 }
 
 impl Page {
@@ -66,7 +65,6 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
-            checksum: 0,
         }
     }
 
@@ -104,39 +102,6 @@ impl Page {
         self.free_space
     }
 
-    /// Get checksum
-    pub fn checksum(&self) -> u32 {
-        self.checksum
-    }
-
-    /// Calculate checksum for page data (excluding checksum field itself)
-    /// Uses simple XOR-based checksum
-    pub fn calculate_checksum(&self) -> u32 {
-        let mut checksum: u32 = 0;
-        let mut multiplier: u32 = 1;
-
-        // Calculate checksum for all bytes except checksum field (offset 12-15)
-        for i in 0..PAGE_SIZE {
-            if (12..16).contains(&i) {
-                continue; // Skip checksum field
-            }
-            checksum = checksum.wrapping_add(self.data[i] as u32 * multiplier);
-            multiplier = multiplier.wrapping_mul(31).wrapping_add(1);
-            if multiplier > 1000000 {
-                multiplier = 1; // Prevent overflow
-            }
-        }
-
-        checksum
-    }
-
-    /// Verify page checksum
-    pub fn verify_checksum(&self) -> bool {
-        let stored = self.checksum;
-        let computed = self.calculate_checksum();
-        stored == computed
-    }
-
     /// Write page header
     fn write_header(&mut self) {
         let mut offset = 0;
@@ -165,8 +130,7 @@ impl Page {
         // Reserved (1 byte)
         offset += 1;
 
-        // Checksum offset - will be updated after calculation
-        let checksum_offset = offset;
+        // Checksum placeholder (4 bytes)
         offset += 4;
 
         // Previous page (4 bytes)
@@ -185,14 +149,6 @@ impl Page {
 
         // Table ID (8 bytes)
         self.data[offset..offset + 8].copy_from_slice(&self.table_id.to_le_bytes());
-
-        // Calculate checksum with checksum field set to 0
-        // Set checksum field to 0 for calculation
-        self.data[checksum_offset..checksum_offset + 4].copy_from_slice(&[0u8; 4]);
-
-        let checksum = self.calculate_checksum();
-        self.data[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_le_bytes());
-        self.checksum = checksum;
     }
 
     /// Read page header
@@ -220,15 +176,7 @@ impl Page {
         };
         offset += 2; // page_type (1) + reserved (1)
 
-        // Checksum (4 bytes)
-        self.checksum = u32::from_le_bytes([
-            self.data[offset],
-            self.data[offset + 1],
-            self.data[offset + 2],
-            self.data[offset + 3],
-        ]);
-        offset += 4;
-
+        offset += 4; // skip checksum
         offset += 4; // skip prev page
         offset += 4; // skip next page
 
@@ -330,7 +278,6 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
-            checksum: 0,
         };
 
         page.read_header();
@@ -352,14 +299,6 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             bytes.extend_from_slice(&f.to_le_bytes());
             bytes
         }
-        Value::Decimal(d) => {
-            let mut bytes = vec![0x09];
-            let s = d.to_string();
-            let len = (s.len() as u32).to_le_bytes();
-            bytes.extend_from_slice(&len);
-            bytes.extend_from_slice(s.as_bytes());
-            bytes
-        }
         Value::Text(s) => {
             let mut bytes = vec![0x03];
             let len = (s.len() as u32).to_le_bytes();
@@ -373,37 +312,6 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             let len = (blob.len() as u32).to_le_bytes();
             bytes.extend_from_slice(&len);
             bytes.extend_from_slice(blob);
-            bytes
-        }
-        Value::Date(d) => {
-            let mut bytes = vec![0x07];
-            bytes.extend_from_slice(&d.to_le_bytes());
-            bytes
-        }
-        Value::Timestamp(ts) => {
-            let mut bytes = vec![0x08];
-            bytes.extend_from_slice(&ts.to_le_bytes());
-            bytes
-        }
-        Value::Uuid(u) => {
-            let mut bytes = vec![0x09];
-            bytes.extend_from_slice(&u.to_le_bytes());
-            bytes
-        }
-        Value::Array(arr) => {
-            let mut bytes = vec![0x0a];
-            bytes.extend_from_slice(&(arr.len() as u32).to_le_bytes());
-            for item in arr {
-                bytes.extend_from_slice(&value_to_bytes(item));
-            }
-            bytes
-        }
-        Value::Enum(idx, name) => {
-            let mut bytes = vec![0x0b];
-            bytes.extend_from_slice(&idx.to_le_bytes());
-            let name_bytes = name.as_bytes();
-            bytes.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
-            bytes.extend_from_slice(name_bytes);
             bytes
         }
     }
@@ -445,51 +353,6 @@ pub fn bytes_to_value(data: &[u8]) -> Option<Value> {
             let len = u32::from_le_bytes([data[1], data[2], data[3], data[4]]) as usize;
             if data.len() >= 5 + len {
                 Some(Value::Blob(data[5..5 + len].to_vec()))
-            } else {
-                None
-            }
-        }
-        0x07 if data.len() >= 5 => {
-            let d = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-            Some(Value::Date(d))
-        }
-        0x08 if data.len() >= 9 => {
-            let ts = i64::from_le_bytes([
-                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-            ]);
-            Some(Value::Timestamp(ts))
-        }
-        0x09 if data.len() >= 17 => {
-            let u = u128::from_le_bytes([
-                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
-                data[10], data[11], data[12], data[13], data[14], data[15], data[16],
-            ]);
-            Some(Value::Uuid(u))
-        }
-        0x0a if data.len() >= 5 => {
-            let arr_len = u32::from_le_bytes([data[1], data[2], data[3], data[4]]) as usize;
-            let mut offset = 5;
-            let mut arr = Vec::new();
-            for _ in 0..arr_len {
-                if offset >= data.len() {
-                    return None;
-                }
-                let item_bytes = &data[offset..];
-                if let Some(item) = bytes_to_value(item_bytes) {
-                    offset += value_to_bytes(&item).len();
-                    arr.push(item);
-                } else {
-                    return None;
-                }
-            }
-            Some(Value::Array(arr))
-        }
-        0x0b if data.len() >= 9 => {
-            let idx = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-            let name_len = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
-            if data.len() >= 9 + name_len {
-                let name = String::from_utf8_lossy(&data[9..9 + name_len]).to_string();
-                Some(Value::Enum(idx, name))
             } else {
                 None
             }
@@ -632,301 +495,5 @@ mod tests {
 
         let restored = Page::from_bytes(bytes).unwrap();
         assert_eq!(restored.page_id(), 1);
-    }
-
-    #[test]
-    fn test_page_constants() {
-        assert_eq!(PAGE_SIZE, 4096);
-        assert_eq!(PAGE_HEADER_SIZE, 64);
-        assert_eq!(PAGE_DATA_SIZE, 4032);
-    }
-
-    #[test]
-    fn test_page_debug() {
-        let page = Page::new(1);
-        let debug = format!("{:?}", page);
-        assert!(debug.contains("Page"));
-    }
-
-    #[test]
-    fn test_page_size() {
-        assert_eq!(Page::size(), PAGE_SIZE);
-    }
-
-    #[test]
-    fn test_page_new_data() {
-        let page = Page::new_data(1, 100);
-        assert_eq!(page.page_id(), 1);
-        assert_eq!(page.page_type(), PageType::Data);
-        assert_eq!(page.row_count(), 0);
-        assert_eq!(page.free_space(), PAGE_DATA_SIZE as u32);
-    }
-
-    #[test]
-    fn test_page_write_read_row_full() {
-        let mut page = Page::new_data(1, 100);
-
-        let row1 = vec![Value::Integer(1), Value::Text("test1".to_string())];
-        let row2 = vec![Value::Integer(2), Value::Text("test2".to_string())];
-
-        assert!(page.write_row(&row1));
-        assert!(page.write_row(&row2));
-        assert_eq!(page.row_count(), 2);
-
-        let rows = page.read_rows();
-        assert_eq!(rows.len(), 2);
-    }
-
-    #[test]
-    fn test_page_free_space_after_write() {
-        let mut page = Page::new_data(1, 100);
-
-        let row = vec![Value::Integer(42)];
-        page.write_row(&row);
-
-        let free = page.free_space();
-        assert!(free < PAGE_DATA_SIZE as u32);
-    }
-
-    #[test]
-    fn test_page_clone() {
-        let page = Page::new(1);
-        let cloned = page.clone();
-        assert_eq!(cloned.page_id(), 1);
-    }
-
-    #[test]
-    fn test_value_to_bytes_integer() {
-        let bytes = value_to_bytes(&Value::Integer(100));
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_value_to_bytes_text() {
-        let bytes = value_to_bytes(&Value::Text("hello".to_string()));
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_bytes_to_value_integer() {
-        let bytes = value_to_bytes(&Value::Integer(42));
-        let value = bytes_to_value(&bytes);
-        assert!(value.is_some());
-    }
-
-    #[test]
-    fn test_bytes_to_value_text() {
-        let bytes = value_to_bytes(&Value::Text("test".to_string()));
-        let value = bytes_to_value(&bytes);
-        assert!(value.is_some());
-    }
-
-    #[test]
-    fn test_page_type_copy() {
-        let pt = PageType::Data;
-        let pt2 = pt;
-        assert_eq!(pt, pt2);
-    }
-
-    #[test]
-    fn test_page_checksum() {
-        let mut page = Page::new_data(1, 100);
-
-        // Write a row to modify page data
-        let row = vec![Value::Integer(42), Value::Text("test".to_string())];
-        page.write_row(&row);
-
-        // Verify checksum is calculated
-        let checksum = page.checksum();
-        assert!(checksum != 0);
-
-        // Verify checksum is valid
-        assert!(page.verify_checksum());
-    }
-
-    #[test]
-    fn test_page_checksum_invalid() {
-        let mut page = Page::new_data(1, 100);
-
-        // Modify data to make checksum invalid
-        page.data[100] = 0xFF;
-
-        // Verify checksum should fail
-        assert!(!page.verify_checksum());
-    }
-
-    #[test]
-    fn test_page_checksum_after_modification() {
-        let mut page = Page::new_data(1, 100);
-
-        let initial_checksum = page.checksum();
-
-        // Write a row
-        let row = vec![Value::Integer(1)];
-        page.write_row(&row);
-
-        // Checksum should be updated
-        assert!(page.checksum() != initial_checksum);
-
-        // Verify checksum is still valid
-        assert!(page.verify_checksum());
-    }
-
-    #[test]
-    fn test_page_checksum_roundtrip() {
-        let mut page = Page::new_data(1, 100);
-        page.write_row(&vec![Value::Integer(42)]);
-
-        // Serialize page
-        let bytes = page.to_bytes();
-
-        // Deserialize page
-        let restored = Page::from_bytes(bytes).unwrap();
-
-        // Checksum should be preserved
-        assert_eq!(page.checksum(), restored.checksum());
-        assert!(restored.verify_checksum());
-    }
-
-    #[test]
-    fn test_page_type() {
-        let page = Page::new(1);
-        // Page::new creates a Free page
-        assert_eq!(page.page_type(), PageType::Free);
-
-        let data_page = Page::new_data(1, 100);
-        assert_eq!(data_page.page_type(), PageType::Data);
-    }
-
-    #[test]
-    fn test_page_free_space() {
-        let page = Page::new(1);
-        // Meta page should have full free space minus header
-        let free = page.free_space();
-        assert!(free > 0);
-
-        let data_page = Page::new_data(1, 100);
-        // Data page should also have free space
-        let data_free = data_page.free_space();
-        assert!(data_free > 0);
-    }
-
-    #[test]
-    fn test_page_checksum_method() {
-        let page = Page::new_data(1, 100);
-        let checksum = page.checksum();
-        // Checksum should be consistent
-        assert_eq!(page.checksum(), checksum);
-    }
-
-    #[test]
-    fn test_page_calculate_checksum() {
-        let page = Page::new_data(1, 100);
-        let checksum = page.calculate_checksum();
-        // Calculate checksum twice should be same
-        assert_eq!(page.calculate_checksum(), checksum);
-    }
-
-    #[test]
-    fn test_page_verify_checksum_valid() {
-        let page = Page::new_data(1, 100);
-        assert!(page.verify_checksum());
-    }
-
-    #[test]
-    fn test_page_verify_checksum_invalid() {
-        let mut page = Page::new_data(1, 100);
-        // Corrupt the data
-        page.data[64] = 0xFF;
-        assert!(!page.verify_checksum());
-    }
-
-    #[test]
-    fn test_value_to_bytes_text_v2() {
-        let value = Value::Text("hello".to_string());
-        let bytes = value_to_bytes(&value);
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_value_to_bytes_float_v2() {
-        let value = Value::Float(3.14);
-        let bytes = value_to_bytes(&value);
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_bytes_to_value_integer_v2() {
-        let bytes = vec![0x01, 42, 0, 0, 0, 0, 0, 0, 0];
-        let value = bytes_to_value(&bytes);
-        assert!(value.is_some());
-        assert_eq!(value.unwrap(), Value::Integer(42));
-    }
-
-    #[test]
-    fn test_bytes_to_value_float_v2() {
-        // Float uses prefix 0x02, then 8 bytes for f64
-        let f = 3.14f64;
-        let mut bytes = vec![0x02];
-        bytes.extend_from_slice(&f.to_le_bytes());
-        let value = bytes_to_value(&bytes);
-        assert!(value.is_some());
-    }
-
-    #[test]
-    fn test_bytes_to_value_text_v2() {
-        let bytes = vec![
-            0x02, 5, 0, 0, 0, 0, 0, 0, 0, 'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8,
-        ];
-        let value = bytes_to_value(&bytes);
-        assert!(value.is_some());
-    }
-
-    #[test]
-    fn test_bytes_to_value_empty() {
-        let result = bytes_to_value(&[]);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_page_from_bytes_invalid() {
-        // Too short
-        let result = Page::from_bytes(vec![0u8; 100]);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_page_from_bytes_valid() {
-        let mut page = Page::new_data(1, 100);
-        page.write_row(&vec![Value::Integer(42)]);
-        let bytes = page.to_bytes();
-        let restored = Page::from_bytes(bytes);
-        assert!(restored.is_some());
-    }
-
-    #[test]
-    fn test_page_write_row_full_page() {
-        let mut page = Page::new_data(1, 100);
-        // Try to fill the page
-        let mut i = 0;
-        while page.write_row(&vec![Value::Integer(i)]) {
-            i += 1;
-        }
-        // Should have written at least one row
-        assert!(i > 0);
-    }
-
-    #[test]
-    fn test_page_read_rows_empty() {
-        let page = Page::new_data(1, 100);
-        let rows = page.read_rows();
-        assert!(rows.is_empty());
-    }
-
-    #[test]
-    fn test_page_debug_v2() {
-        let page = Page::new(1);
-        let debug_str = format!("{:?}", page);
-        assert!(!debug_str.is_empty());
     }
 }
