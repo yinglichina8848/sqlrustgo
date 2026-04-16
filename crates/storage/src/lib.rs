@@ -12,7 +12,7 @@ pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use engine::{
     ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
-    TableData, TableInfo,
+    TableData, TableInfo, UniqueConstraint,
 };
 pub use file_storage::FileStorage;
 pub use page::Page;

@@ -25,13 +25,10 @@ pub struct ForeignKeyConstraint {
     pub on_update: Option<ForeignKeyAction>,
 }
 
-/// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColumnDefinition {
-    pub name: String,
-    pub data_type: String,
-    pub nullable: bool,
-    pub primary_key: bool,
+pub struct UniqueConstraint {
+    pub name: Option<String>,
+    pub columns: Vec<String>,
 }
 
 /// Table metadata
@@ -40,6 +37,16 @@ pub struct TableInfo {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
     pub foreign_keys: Vec<ForeignKeyConstraint>,
+    pub unique_constraints: Vec<UniqueConstraint>,
+}
+
+/// Column definition for table schema
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnDefinition {
+    pub name: String,
+    pub data_type: String,
+    pub nullable: bool,
+    pub primary_key: bool,
 }
 
 /// Table data - combines metadata and rows

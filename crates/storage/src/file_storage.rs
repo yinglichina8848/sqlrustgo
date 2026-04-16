@@ -4,6 +4,7 @@
 use crate::bplus_tree::BPlusTree;
 use crate::engine::{
     ColumnDefinition, ForeignKeyConstraint, Record, StorageEngine, TableData, TableInfo,
+    UniqueConstraint,
 };
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
@@ -154,6 +155,7 @@ impl FileStorage {
                 name: stored.name,
                 columns: stored.columns,
                 foreign_keys: stored.foreign_keys,
+                unique_constraints: stored.unique_constraints,
             },
             rows: stored.rows,
         })
@@ -169,6 +171,7 @@ impl FileStorage {
             name: table_data.info.name.clone(),
             columns: table_data.info.columns.clone(),
             foreign_keys: table_data.info.foreign_keys.clone(),
+            unique_constraints: table_data.info.unique_constraints.clone(),
             rows: table_data.rows.clone(),
         };
 
@@ -389,6 +392,7 @@ struct StoredTableData {
     name: String,
     columns: Vec<ColumnDefinition>,
     foreign_keys: Vec<ForeignKeyConstraint>,
+    unique_constraints: Vec<UniqueConstraint>,
     rows: Vec<Vec<Value>>,
 }
 
