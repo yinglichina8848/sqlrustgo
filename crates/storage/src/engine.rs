@@ -99,6 +99,12 @@ pub trait StorageEngine: Send + Sync {
 
     /// Drop an index from a table
     fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
+
+    /// Add a column to an existing table
+    fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()>;
+
+    /// Rename a table
+    fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -185,6 +191,25 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn drop_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()> {
+        if let Some(info) = self.table_infos.get_mut(table) {
+            info.columns.push(column);
+        }
+        Ok(())
+    }
+
+    fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()> {
+        if let Some(info) = self.table_infos.remove(table) {
+            let mut new_info = info;
+            new_info.name = new_name.to_string();
+            self.table_infos.insert(new_name.to_string(), new_info);
+            if let Some(records) = self.tables.remove(table) {
+                self.tables.insert(new_name.to_string(), records);
+            }
+        }
         Ok(())
     }
 }
