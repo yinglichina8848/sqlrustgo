@@ -577,4 +577,42 @@ mod tests {
         let parsed = AuditRecord::from_json(&json).unwrap();
         assert_eq!(parsed.user, "alice");
     }
+
+    #[test]
+    fn test_audit_record_builder_pattern() {
+        let record = AuditRecord::new("EXECUTE_SQL", "alice", "127.0.0.1", "SELECT 1")
+            .with_session(123)
+            .with_duration(50)
+            .with_rows(10);
+
+        assert_eq!(record.session_id, 123);
+        assert_eq!(record.duration_ms, Some(50));
+        assert_eq!(record.rows, Some(10));
+    }
+
+    #[test]
+    fn test_audit_record_from_json_invalid() {
+        let result = AuditRecord::from_json("invalid json");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_audit_filter_empty() {
+        let filter = AuditFilter::new();
+        let record = AuditRecord::new("LOGIN", "alice", "127.0.0.1", "");
+
+        assert!(filter.matches(&record));
+    }
+
+    #[test]
+    fn test_audit_filter_multiple_users() {
+        let filter = AuditFilter::new().with_users(vec!["alice", "bob"]);
+        let record1 = AuditRecord::new("LOGIN", "alice", "127.0.0.1", "");
+        let record2 = AuditRecord::new("LOGIN", "bob", "127.0.0.1", "");
+        let record3 = AuditRecord::new("LOGIN", "charlie", "127.0.0.1", "");
+
+        assert!(filter.matches(&record1));
+        assert!(filter.matches(&record2));
+        assert!(!filter.matches(&record3));
+    }
 }
