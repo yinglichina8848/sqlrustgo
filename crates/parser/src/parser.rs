@@ -28,6 +28,28 @@ pub enum Statement {
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
+    AlterTable(AlterTableStatement),
+}
+
+/// ALTER TABLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTableStatement {
+    pub table_name: String,
+    pub operation: AlterTableOperation,
+}
+
+/// ALTER TABLE operation types
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTableOperation {
+    AddColumn {
+        name: String,
+        data_type: String,
+        nullable: bool,
+        default_value: Option<String>,
+    },
+    RenameTo {
+        new_name: String,
+    },
 }
 
 /// Common Table Expression (CTE)
@@ -266,6 +288,7 @@ impl Parser {
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::With) => self.parse_with_select(),
+            Some(Token::Alter) => self.parse_alter_table(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1121,6 +1144,64 @@ impl Parser {
         };
 
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+    }
+
+    fn parse_alter_table(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Alter)?;
+        self.expect(Token::Table)?;
+
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        match self.current() {
+            Some(Token::Add) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Column)) {
+                    self.next();
+                }
+                let col_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected column name".to_string()),
+                };
+
+                let data_type = match self.next() {
+                    Some(Token::Identifier(typename)) => typename,
+                    Some(Token::Integer) => "INTEGER".to_string(),
+                    Some(Token::Text) => "TEXT".to_string(),
+                    Some(Token::Float) => "FLOAT".to_string(),
+                    Some(Token::Boolean) => "BOOLEAN".to_string(),
+                    _ => return Err("Expected data type".to_string()),
+                };
+
+                let nullable = true;
+                let default_value = None;
+
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::AddColumn {
+                        name: col_name,
+                        data_type,
+                        nullable,
+                        default_value,
+                    },
+                }))
+            }
+            Some(Token::Rename) => {
+                self.next();
+                self.expect(Token::To)?;
+                let new_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected new table name".to_string()),
+                };
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::RenameTo { new_name },
+                }))
+            }
+            _ => Err("Expected ADD or RENAME".to_string()),
+        }
     }
 }
 
