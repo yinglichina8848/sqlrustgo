@@ -207,4 +207,44 @@ mod tests {
         let product_links = schema.find_links_for_table("products");
         assert_eq!(product_links.len(), 1);
     }
+
+    #[test]
+    fn test_graph_link_with_node_key() {
+        let link = GraphLink::new("users", "email", "user_node")
+            .with_node_key("user@example.com")
+            .with_description("Link users to their graph nodes");
+
+        assert!(link.node_ref().is_specific());
+        assert_eq!(link.node_ref().key, Some("user@example.com".to_string()));
+        assert_eq!(link.description(), Some("Link users to their graph nodes"));
+    }
+
+    #[test]
+    fn test_graph_schema_find_links_for_column() {
+        let mut schema = GraphSchema::new();
+        schema.add_link(GraphLink::new("products", "id", "product_node"));
+
+        let link = schema.find_links_for_column("products", "id");
+        assert!(link.is_some());
+        assert_eq!(link.unwrap().node_ref().label, "product_node");
+
+        let not_found = schema.find_links_for_column("products", "nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_node_ref_debug() {
+        let node_ref = NodeRef::by_id("user", 42);
+        let debug = format!("{:?}", node_ref);
+        assert!(debug.contains("user"));
+        assert!(debug.contains("42"));
+    }
+
+    #[test]
+    fn test_graph_link_debug() {
+        let link = GraphLink::new("products", "id", "product_node");
+        let debug = format!("{:?}", link);
+        assert!(debug.contains("products"));
+        assert!(debug.contains("id"));
+    }
 }

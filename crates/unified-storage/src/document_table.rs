@@ -221,4 +221,79 @@ mod tests {
         let none = table.find_column("nonexistent");
         assert!(none.is_none());
     }
+
+    #[test]
+    fn test_document_column_name() {
+        let sql_col = DocumentColumn::Sql {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+        };
+        assert_eq!(sql_col.name(), "id");
+        assert!(!sql_col.is_vector());
+
+        let vec_col = DocumentColumn::Vector(VectorColumn::new(
+            "embedding",
+            128,
+            DistanceMetric::Euclidean,
+        ));
+        assert_eq!(vec_col.name(), "embedding");
+        assert!(vec_col.is_vector());
+    }
+
+    #[test]
+    fn test_document_table_get_column() {
+        let mut table = DocumentTable::new("test");
+        table.add_sql_column("id", "INTEGER");
+        table.add_sql_column("name", "TEXT");
+
+        let cols = table.columns();
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols[0].name(), "id");
+        assert_eq!(cols[1].name(), "name");
+    }
+
+    #[test]
+    fn test_document_table_sql_columns_iter() {
+        let mut table = DocumentTable::new("test");
+        table.add_sql_column("id", "INTEGER");
+        table.add_sql_column("name", "TEXT");
+        table.add_vector_column("emb", 128, DistanceMetric::Cosine);
+
+        let sql_cols: Vec<_> = table.sql_columns().collect();
+        assert_eq!(sql_cols.len(), 2);
+        assert_eq!(sql_cols[0].name(), "id");
+        assert_eq!(sql_cols[1].name(), "name");
+    }
+
+    #[test]
+    fn test_document_table_vector_columns_iter() {
+        let mut table = DocumentTable::new("test");
+        table.add_sql_column("id", "INTEGER");
+        table.add_vector_column("emb1", 128, DistanceMetric::Cosine);
+        table.add_vector_column("emb2", 256, DistanceMetric::Euclidean);
+
+        let vec_cols: Vec<_> = table.vector_columns().collect();
+        assert_eq!(vec_cols.len(), 2);
+        assert_eq!(vec_cols[0].dimension, 128);
+        assert_eq!(vec_cols[1].dimension, 256);
+    }
+
+    #[test]
+    fn test_vector_column_debug() {
+        let col = VectorColumn::new("embedding", 384, DistanceMetric::Cosine);
+        let debug = format!("{:?}", col);
+        assert!(debug.contains("embedding"));
+        assert!(debug.contains("384"));
+    }
+
+    #[test]
+    fn test_document_column_debug() {
+        let sql_col = DocumentColumn::Sql {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+        };
+        let debug = format!("{:?}", sql_col);
+        assert!(debug.contains("Sql"));
+        assert!(debug.contains("id"));
+    }
 }
