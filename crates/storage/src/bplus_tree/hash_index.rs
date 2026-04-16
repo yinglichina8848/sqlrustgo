@@ -248,4 +248,23 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert!(entries.contains(&(1, "one".to_string())));
     }
+
+    #[test]
+    fn test_hash_index_is_empty() {
+        let index = HashIndex::new();
+        assert!(index.is_empty());
+
+        index.insert(1, "one".to_string());
+        assert!(!index.is_empty());
+    }
+
+    #[test]
+    fn test_hash_index_remove_nonexistent() {
+        let index = HashIndex::new();
+
+        index.insert(1, "one".to_string());
+        let removed = index.remove(&999);
+        assert!(removed.is_none());
+        assert_eq!(index.len(), 1);
+    }
 }
