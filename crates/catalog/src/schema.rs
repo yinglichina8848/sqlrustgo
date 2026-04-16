@@ -208,4 +208,23 @@ mod tests {
         assert!(schema.has_table("t1"));
         assert!(schema.has_table("t2"));
     }
+
+    #[test]
+    fn test_schema_validate() {
+        let schema = create_test_schema();
+        assert!(schema.validate().is_ok());
+    }
+
+    #[test]
+    fn test_table_count() {
+        let schema = create_test_schema();
+        assert_eq!(schema.table_count(), 1);
+        let schema = schema
+            .add_table(Table::new(
+                "orders",
+                vec![ColumnDefinition::new("id", DataType::Integer)],
+            ))
+            .unwrap();
+        assert_eq!(schema.table_count(), 2);
+    }
 }
