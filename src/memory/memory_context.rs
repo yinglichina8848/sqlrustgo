@@ -31,8 +31,8 @@
 //! refactor the execution engine when Columnar Storage is implemented.
 //! This follows the DuckDB/TiDB approach of shared allocator infrastructure.
 
+use super::{BatchArena, GlobalArena, QueryArena};
 use std::sync::Arc;
-use super::{GlobalArena, QueryArena, BatchArena};
 
 /// Unified memory management entry point for SQLRustGo
 ///
@@ -79,9 +79,9 @@ impl MemoryContext {
     /// * `batch_size` - Expected rows per batch (e.g., 1024 or 2048)
     pub fn with_batch_size(batch_size: usize) -> Self {
         Self::with_capacities(
-            batch_size * 64,      // batch: ~64 bytes per row estimate
-            1024 * 1024,            // query: 1MB
-            4 * 1024 * 1024,        // global: 4MB
+            batch_size * 64, // batch: ~64 bytes per row estimate
+            1024 * 1024,     // query: 1MB
+            4 * 1024 * 1024, // global: 4MB
         )
     }
 
