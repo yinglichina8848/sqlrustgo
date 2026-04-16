@@ -3021,4 +3021,219 @@ mod foreign_key_tests {
 
         assert_eq!(storage.scan("employees").unwrap().len(), 0);
     }
+
+    #[test]
+    fn test_trigger_create_and_get() {
+        let mut storage = MemoryStorage::new();
+
+        let trigger = TriggerInfo {
+            name: "trg_insert".to_string(),
+            table_name: "users".to_string(),
+            timing: TriggerTiming::Before,
+            event: TriggerEvent::Insert,
+            body: "BEGIN INSERT INTO audit_log VALUES ('insert'); END".to_string(),
+        };
+
+        storage.create_trigger(trigger.clone()).unwrap();
+
+        let retrieved = storage.get_trigger("trg_insert").unwrap();
+        assert_eq!(retrieved.name, "trg_insert");
+        assert_eq!(retrieved.table_name, "users");
+    }
+
+    #[test]
+    fn test_trigger_list() {
+        let mut storage = MemoryStorage::new();
+
+        storage
+            .create_trigger(TriggerInfo {
+                name: "trg1".to_string(),
+                table_name: "users".to_string(),
+                timing: TriggerTiming::Before,
+                event: TriggerEvent::Insert,
+                body: "".to_string(),
+            })
+            .unwrap();
+        storage
+            .create_trigger(TriggerInfo {
+                name: "trg2".to_string(),
+                table_name: "users".to_string(),
+                timing: TriggerTiming::After,
+                event: TriggerEvent::Update,
+                body: "".to_string(),
+            })
+            .unwrap();
+        storage
+            .create_trigger(TriggerInfo {
+                name: "trg3".to_string(),
+                table_name: "orders".to_string(),
+                timing: TriggerTiming::Before,
+                event: TriggerEvent::Delete,
+                body: "".to_string(),
+            })
+            .unwrap();
+
+        let user_triggers = storage.list_triggers("users");
+        assert_eq!(user_triggers.len(), 2);
+
+        let order_triggers = storage.list_triggers("orders");
+        assert_eq!(order_triggers.len(), 1);
+
+        let none_triggers = storage.list_triggers("nonexistent");
+        assert_eq!(none_triggers.len(), 0);
+    }
+
+    #[test]
+    fn test_trigger_drop() {
+        let mut storage = MemoryStorage::new();
+
+        storage
+            .create_trigger(TriggerInfo {
+                name: "trg_to_drop".to_string(),
+                table_name: "users".to_string(),
+                timing: TriggerTiming::Before,
+                event: TriggerEvent::Insert,
+                body: "".to_string(),
+            })
+            .unwrap();
+
+        assert!(storage.get_trigger("trg_to_drop").is_some());
+
+        storage.drop_trigger("trg_to_drop").unwrap();
+
+        assert!(storage.get_trigger("trg_to_drop").is_none());
+    }
+
+    #[test]
+    fn test_trigger_drop_not_found() {
+        let mut storage = MemoryStorage::new();
+
+        let result = storage.drop_trigger("nonexistent_trigger");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cancel_flag_operations() {
+        let mut storage = MemoryStorage::new();
+        let flag = Arc::new(AtomicBool::new(false));
+
+        storage.set_cancel_flag(Arc::clone(&flag));
+
+        storage.clear_cancel_flag();
+
+        assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_get_tables_referencing() {
+        let mut storage = MemoryStorage::new();
+
+        let parent_info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                is_unique: false,
+                is_primary_key: true,
+                references: None,
+                auto_increment: false,
+                compression: None,
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&parent_info).unwrap();
+
+        let child_info = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: true,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "user_id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: Some(ForeignKeyConstraint {
+                        referenced_table: "users".to_string(),
+                        referenced_column: "id".to_string(),
+                        on_delete: Some(ForeignKeyAction::Cascade),
+                        on_update: None,
+                    }),
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            ..Default::default()
+        };
+        storage.create_table(&child_info).unwrap();
+
+        let referencing = storage.get_tables_referencing("users");
+        assert!(referencing.contains(&"orders".to_string()));
+
+        let not_referencing = storage.get_tables_referencing("nonexistent");
+        assert!(not_referencing.is_empty());
+    }
+
+    #[test]
+    fn test_get_column_indices() {
+        let mut storage = MemoryStorage::new();
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+                ColumnDefinition {
+                    name: "email".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    is_unique: false,
+                    is_primary_key: false,
+                    references: None,
+                    auto_increment: false,
+                    compression: None,
+                },
+            ],
+            ..Default::default()
+        };
+        storage.create_table(&info).unwrap();
+
+        let indices =
+            storage.get_column_indices("users", &["name".to_string(), "email".to_string()]);
+        assert_eq!(indices, Some(vec![1, 2]));
+
+        let none_indices = storage.get_column_indices("users", &["nonexistent".to_string()]);
+        assert_eq!(none_indices, None);
+
+        let not_exist_table = storage.get_column_indices("nonexistent", &["id".to_string()]);
+        assert_eq!(not_exist_table, None);
+    }
 }
