@@ -10,11 +10,7 @@ use sqlrustgo_distributed::{
     error::DistributedError,
     grpc_server::{start_server, GraphStorage, ShardServerConfig, VectorStorage},
     proto::distributed::SearchResult,
-    ShardManager, ShardReplicaManager,
 };
-use tokio::net::TcpListener;
-use tokio::sync::RwLock;
-use tonic::transport::Server;
 
 // Simple in-memory vector storage for testing
 #[derive(Clone)]
@@ -47,27 +43,29 @@ impl VectorStorage for TestVectorStorage {
         query: &[f32],
         top_k: usize,
     ) -> Result<Vec<SearchResult>, DistributedError> {
-        let mut results: Vec<(u64, f32)> = self
+        let mut results: Vec<(u64, f32, Vec<f32>)> = self
             .vectors
             .iter()
             .map(|(id, v)| {
-                let similarity = v
-                    .iter()
-                    .zip(query.iter())
-                    .map(|(a, b)| a * b)
-                    .sum::<f32>()
-                    .sqrt();
-                (*id, similarity)
+                let dot = v.iter().zip(query.iter()).map(|(a, b)| a * b).sum::<f32>();
+                let norm_v = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                let norm_q = query.iter().map(|x| x * x).sum::<f32>().sqrt();
+                let similarity = if norm_v > 0.0 && norm_q > 0.0 { dot / (norm_v * norm_q) } else { 0.0 };
+                (*id, similarity, v.clone())
             })
             .collect();
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         Ok(results
             .into_iter()
             .take(top_k)
-            .map(|(id, score)| SearchResult {
+            .map(|(id, score, vector)| SearchResult {
                 id,
                 score,
-                shard_id: 0,
+                record: Some(sqlrustgo_distributed::proto::distributed::VectorRecord {
+                    id,
+                    vector,
+                    metadata: std::collections::HashMap::new(),
+                }),
             })
             .collect())
     }
