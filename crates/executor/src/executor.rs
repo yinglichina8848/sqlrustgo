@@ -2138,9 +2138,8 @@ impl VolcanoExecutor for ExistsVolcanoExecutor {
         self.subquery.init()?;
         self.initialized = true;
         let mut has_rows = false;
-        while let Some(_row) = self.subquery.next()? {
+        if let Some(_row) = self.subquery.next()? {
             has_rows = true;
-            break;
         }
         self.result = Some(has_rows);
         self.consumed = false;
