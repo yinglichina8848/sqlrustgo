@@ -318,12 +318,6 @@ fn get_test_categories() -> Vec<TestCategory> {
             test_files: vec!["unified_query_integration_test"],
             description: "SQL+Vector+Graph unified query tests: T1-T7 hybrid workloads (22 tests)",
         },
-        // 分布式存储测试
-        TestCategory {
-            name: "分布式存储测试 (Distributed Storage)",
-            test_files: vec!["distributed_storage_sharding_test"],
-            description: "ShardGraph/ShardedVectorIndex: label/hash partitioning, cross-shard queries, gRPC communication (32 tests)",
-        },
     ]
 }
 

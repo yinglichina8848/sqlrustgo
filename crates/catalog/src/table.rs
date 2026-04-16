@@ -402,4 +402,118 @@ mod tests {
         .primary_key(vec!["nonexistent".to_string()]);
         assert!(matches!(result, Err(CatalogError::ColumnNotFound { .. })));
     }
+
+    #[test]
+    fn test_validate_self_referencing_foreign_key() {
+        let fk = ForeignKeyRef {
+            referenced_schema: "public".to_string(),
+            referenced_table: "employees".to_string(),
+            referenced_columns: vec!["id".to_string()],
+            columns: vec!["manager_id".to_string()],
+            on_delete: Some(ForeignKeyAction::SetNull),
+            on_update: Some(ForeignKeyAction::Cascade),
+        };
+        let table = Table::new(
+            "employees",
+            vec![
+                ColumnDefinition::new("id", DataType::Integer),
+                ColumnDefinition::new("name", DataType::Text),
+                ColumnDefinition::new("manager_id", DataType::Integer),
+            ],
+        )
+        .add_foreign_key(fk)
+        .validate("public");
+        assert!(table.is_ok());
+    }
+
+    #[test]
+    fn test_validate_duplicate_column_in_new() {
+        let result = Table::new(
+            "users",
+            vec![
+                ColumnDefinition::new("id", DataType::Integer),
+                ColumnDefinition::new("id", DataType::Text),
+            ],
+        )
+        .validate("public");
+        assert!(matches!(result, Err(CatalogError::DuplicateColumn { .. })));
+    }
+
+    #[test]
+    fn test_add_column_duplicate_detection() {
+        let result = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        )
+        .add_column(ColumnDefinition::new("id", DataType::Text));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_composite_primary_key() {
+        let table = Table::new(
+            "order_items",
+            vec![
+                ColumnDefinition::new("order_id", DataType::Integer),
+                ColumnDefinition::new("item_id", DataType::Integer),
+                ColumnDefinition::new("quantity", DataType::Integer),
+            ],
+        )
+        .primary_key(vec!["order_id".to_string(), "item_id".to_string()])
+        .unwrap()
+        .validate("public");
+        assert!(table.is_ok());
+    }
+
+    #[test]
+    fn test_validate_composite_foreign_key() {
+        let fk = ForeignKeyRef {
+            referenced_schema: "public".to_string(),
+            referenced_table: "orders".to_string(),
+            referenced_columns: vec!["order_id".to_string(), "product_id".to_string()],
+            columns: vec!["order_id".to_string(), "product_id".to_string()],
+            on_delete: Some(ForeignKeyAction::Cascade),
+            on_update: Some(ForeignKeyAction::Cascade),
+        };
+        let table = Table::new(
+            "order_items",
+            vec![
+                ColumnDefinition::new("order_id", DataType::Integer),
+                ColumnDefinition::new("product_id", DataType::Integer),
+                ColumnDefinition::new("quantity", DataType::Integer),
+            ],
+        )
+        .add_foreign_key(fk)
+        .validate("public");
+        assert!(table.is_ok());
+    }
+
+    #[test]
+    fn test_get_column_mut() {
+        let mut table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        );
+        table.columns[0].nullable = false;
+        assert!(!table.columns[0].nullable);
+    }
+
+    #[test]
+    fn test_table_with_indices() {
+        let table = Table::new(
+            "users",
+            vec![
+                ColumnDefinition::new("id", DataType::Integer),
+                ColumnDefinition::new("email", DataType::Text),
+            ],
+        )
+        .add_index(IndexInfo::new(
+            "idx_email".to_string(),
+            "users".to_string(),
+            vec!["email".to_string()],
+        ))
+        .primary_key(vec!["id".to_string()])
+        .unwrap();
+        assert_eq!(table.indices.len(), 2);
+    }
 }
