@@ -330,4 +330,67 @@ mod tests {
         assert!(UnifiedIndexType::Graph.is_graph());
         assert!(!UnifiedIndexType::Graph.is_vector());
     }
+
+    #[test]
+    fn test_unified_index_id() {
+        let id = UnifiedIndexId::new(42);
+        assert_eq!(id.0, 42);
+
+        let id2 = id;
+        assert_eq!(id2.0, 42);
+    }
+
+    #[test]
+    fn test_unified_index_meta() {
+        let meta = UnifiedIndexMeta::new(
+            UnifiedIndexId::new(1),
+            "idx_name",
+            UnifiedIndexType::BTree,
+            vec!["col1".to_string(), "col2".to_string()],
+        );
+
+        assert_eq!(meta.name, "idx_name");
+        assert_eq!(meta.column_names.len(), 2);
+        assert!(meta.config.is_none());
+
+        let meta_with_config = meta.with_config(r#"{"level": 10}"#);
+        assert!(meta_with_config.config.is_some());
+    }
+
+    #[test]
+    fn test_unified_index_find_methods() {
+        let mut index = UnifiedIndex::new("test");
+
+        let btree_id = index.add_btree_index(vec!["col1".to_string()]);
+        let hash_id = index.add_hash_index(vec!["col2".to_string()]);
+
+        assert!(index.find_by_name("btree_test_col1").is_some());
+        assert!(index.find_by_name("nonexistent").is_none());
+
+        // Find by id
+        assert!(index.find_by_id(btree_id).is_some());
+        assert!(index.find_by_id(hash_id).is_some());
+        let invalid_id = UnifiedIndexId::new(9999);
+        assert!(index.find_by_id(invalid_id).is_none());
+    }
+
+    #[test]
+    fn test_unified_index_type_display() {
+        assert_eq!(format!("{:?}", UnifiedIndexType::BTree), "BTree");
+        assert_eq!(format!("{:?}", UnifiedIndexType::VectorHnsw), "VectorHnsw");
+        assert_eq!(format!("{:?}", UnifiedIndexType::Graph), "Graph");
+    }
+
+    #[test]
+    fn test_unified_index_meta_debug() {
+        let meta = UnifiedIndexMeta::new(
+            UnifiedIndexId::new(1),
+            "test_idx",
+            UnifiedIndexType::Hash,
+            vec!["id".to_string()],
+        );
+        let debug = format!("{:?}", meta);
+        assert!(debug.contains("test_idx"));
+        assert!(debug.contains("Hash"));
+    }
 }
