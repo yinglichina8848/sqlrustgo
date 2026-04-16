@@ -99,6 +99,7 @@ proptest = "1.1"
 arrow = { version = "53" }
 parquet = { version = "53" }
 rust_decimal = "1.0"
+bumpalo = "3"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -151,6 +152,7 @@ serde_json.workspace = true
 sqlrustgo-agentsql.workspace = true
 sqlrustgo-gmp.workspace = true
 rust_decimal.workspace = true
+bumpalo.workspace = true
 
 [[test]]
 name = "ci_test"
