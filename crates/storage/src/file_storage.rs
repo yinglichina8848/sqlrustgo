@@ -419,13 +419,17 @@ mod tests {
                             name: "id".to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
+                            primary_key: true,
                         },
                         ColumnDefinition {
                             name: "name".to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: true,
+                            primary_key: false,
                         },
                     ],
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
                 },
                 rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
             };
@@ -458,7 +462,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -498,7 +505,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -533,7 +543,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -569,13 +582,17 @@ mod tests {
                         name: "id".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        ..Default::default()
                     },
                     ColumnDefinition {
                         name: "value".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        ..Default::default()
                     },
                 ],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![
                 vec![Value::Integer(1), Value::Integer(100)],
@@ -629,7 +646,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -673,7 +693,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -708,7 +731,10 @@ mod tests {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
         };
@@ -773,7 +799,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };
@@ -806,7 +835,10 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
+                    ..Default::default()
                 }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
             },
             rows: vec![],
         };

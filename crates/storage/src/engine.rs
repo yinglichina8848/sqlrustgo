@@ -32,11 +32,13 @@ pub struct UniqueConstraint {
 }
 
 /// Table metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableInfo {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    #[serde(default)]
     pub foreign_keys: Vec<ForeignKeyConstraint>,
+    #[serde(default)]
     pub unique_constraints: Vec<UniqueConstraint>,
 }
 
@@ -45,8 +47,21 @@ pub struct TableInfo {
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
+    #[serde(default)]
     pub nullable: bool,
+    #[serde(default)]
     pub primary_key: bool,
+}
+
+impl Default for ColumnDefinition {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            data_type: String::new(),
+            nullable: false,
+            primary_key: false,
+        }
+    }
 }
 
 /// Table data - combines metadata and rows

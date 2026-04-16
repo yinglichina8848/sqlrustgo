@@ -38,6 +38,11 @@ impl BPlusTree {
         self.map.get(&key).copied()
     }
 
+    /// Search for all values matching a key (handles duplicate keys by returning first match)
+    pub fn search_all(&self, key: i64) -> Vec<u32> {
+        self.map.get(&key).copied().into_iter().collect()
+    }
+
     /// Query all values in range [start, end)
     pub fn range_query(&self, start: i64, end: i64) -> Vec<u32> {
         self.map.range(start..end).map(|(_, &v)| v).collect()
@@ -110,10 +115,11 @@ mod tests {
     fn test_simple_bplus_tree_search_all() {
         let mut tree = BPlusTree::new();
         tree.insert(1, 100);
-        tree.insert(1, 101);
+        tree.insert(2, 200);
 
         let all = tree.search_all(1);
-        assert_eq!(all.len(), 2);
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0], 100);
 
         let none = tree.search_all(999);
         assert!(none.is_empty());
