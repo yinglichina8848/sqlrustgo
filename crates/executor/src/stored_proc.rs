@@ -911,41 +911,99 @@ impl StoredProcExecutor {
 
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
                 let mut new_rows: Vec<Vec<Value>> = Vec::new();
+                let mut insert_count = 0;
 
-                for row in &insert.values {
-                    let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
+                if let Some(ref select) = insert.select {
+                    let storage = self.storage.read().unwrap();
+                    let records = storage
+                        .scan(&select.table)
+                        .map_err(|e| format!("Failed to scan table: {}", e))?;
 
-                    if insert_columns.is_empty() {
-                        for (col_idx, expr) in row.iter().enumerate() {
-                            if col_idx < num_columns {
-                                new_row[col_idx] = self.expression_to_value(expr, ctx);
+                    let selected_rows: Vec<Vec<Value>> =
+                        if let Some(ref where_expr) = select.where_clause {
+                            records
+                                .into_iter()
+                                .filter(|_row| {
+                                    let where_val = self.expression_to_value(where_expr, ctx);
+                                    if let Value::Boolean(b) = where_val {
+                                        b
+                                    } else {
+                                        where_val != Value::Null
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            records
+                        };
+
+                    for row in selected_rows {
+                        let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
+                        if insert_columns.is_empty() {
+                            for (col_idx, val) in row.iter().enumerate() {
+                                if col_idx < num_columns {
+                                    new_row[col_idx] = val.clone();
+                                }
                             }
-                        }
-                    } else {
-                        for (value_idx, col_name) in insert_columns.iter().enumerate() {
-                            if value_idx < row.len() {
-                                if let Some(ref info) = table_info {
-                                    if let Some(target_idx) = info
-                                        .columns
-                                        .iter()
-                                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                                    {
-                                        new_row[target_idx] =
-                                            self.expression_to_value(&row[value_idx], ctx);
+                        } else {
+                            for (col_idx, col_name) in insert_columns.iter().enumerate() {
+                                if col_idx < row.len() {
+                                    if let Some(ref info) = table_info {
+                                        if let Some(target_idx) = info
+                                            .columns
+                                            .iter()
+                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                        {
+                                            new_row[target_idx] = row[col_idx].clone();
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-
-                    if let Some(ref info) = table_info {
-                        if !info.foreign_keys.is_empty() {
-                            let cols = insert_columns.clone();
-                            self.validate_foreign_keys(&table_name, &new_row, &cols)?;
+                        if let Some(ref info) = table_info {
+                            if !info.foreign_keys.is_empty() {
+                                self.validate_foreign_keys(&table_name, &new_row, &insert_columns)?;
+                            }
                         }
+                        new_rows.push(new_row);
                     }
+                    insert_count = new_rows.len();
+                } else {
+                    for row in &insert.values {
+                        let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
 
-                    new_rows.push(new_row);
+                        if insert_columns.is_empty() {
+                            for (col_idx, expr) in row.iter().enumerate() {
+                                if col_idx < num_columns {
+                                    new_row[col_idx] = self.expression_to_value(expr, ctx);
+                                }
+                            }
+                        } else {
+                            for (value_idx, col_name) in insert_columns.iter().enumerate() {
+                                if value_idx < row.len() {
+                                    if let Some(ref info) = table_info {
+                                        if let Some(target_idx) = info
+                                            .columns
+                                            .iter()
+                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                        {
+                                            new_row[target_idx] =
+                                                self.expression_to_value(&row[value_idx], ctx);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(ref info) = table_info {
+                            if !info.foreign_keys.is_empty() {
+                                let cols = insert_columns.clone();
+                                self.validate_foreign_keys(&table_name, &new_row, &cols)?;
+                            }
+                        }
+
+                        new_rows.push(new_row);
+                    }
+                    insert_count = insert.values.len();
                 }
 
                 {
@@ -957,10 +1015,7 @@ impl StoredProcExecutor {
                     }
                 }
 
-                ctx.set_session_var(
-                    "__last_insert_count",
-                    Value::Integer(insert.values.len() as i64),
-                );
+                ctx.set_session_var("__last_insert_count", Value::Integer(insert_count as i64));
                 Ok(())
             }
             sqlrustgo_parser::Statement::Update(update) => {
