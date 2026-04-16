@@ -116,6 +116,7 @@ pub struct DeleteStatement {
 pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    pub constraints: Vec<TableConstraint>,
 }
 
 /// DROP TABLE statement
@@ -130,6 +131,49 @@ pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
+    pub primary_key: bool,
+    pub default_value: Option<String>,
+    pub references: Option<ForeignKeyRef>,
+}
+
+/// Foreign key referential action
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ReferentialAction {
+    Cascade,
+    SetNull,
+    Restrict,
+    NoAction,
+}
+
+/// Foreign key reference (for REFERENCES clause)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ForeignKeyRef {
+    pub columns: Vec<String>,
+    pub referenced_table: String,
+    pub referenced_columns: Vec<String>,
+    pub on_delete: Option<ReferentialAction>,
+    pub on_update: Option<ReferentialAction>,
+}
+
+/// Table-level constraint
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TableConstraint {
+    PrimaryKey {
+        columns: Vec<String>,
+    },
+    ForeignKey {
+        columns: Vec<String>,
+        referenced_table: String,
+        referenced_columns: Vec<String>,
+        on_delete: Option<ReferentialAction>,
+        on_update: Option<ReferentialAction>,
+    },
+    Unique {
+        columns: Vec<String>,
+    },
+    Check {
+        expression: String,
+    },
 }
 
 /// Expression
@@ -572,37 +616,73 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
-        // Parse optional column definitions: (col1 type, col2 type, ...)
         let mut columns = Vec::new();
+        let mut constraints = Vec::new();
+
         if matches!(self.current(), Some(Token::LParen)) {
-            self.next(); // consume '('
+            self.next();
             loop {
                 match self.current() {
-                    Some(Token::Identifier(name)) => {
-                        let col_name = name.clone();
+                    Some(Token::Identifier(_)) => {
+                        let col_def = self.parse_column_definition()?;
+                        columns.push(col_def);
+                    }
+                    Some(Token::Primary) => {
                         self.next();
-                        // Parse data type
-                        let data_type = match self.current() {
-                            Some(Token::Identifier(type_name)) => {
-                                let t = type_name.to_uppercase();
-                                self.next();
-                                t
-                            }
-                            Some(Token::Integer) => {
-                                self.next();
-                                "INTEGER".to_string()
-                            }
-                            Some(Token::Text) => {
-                                self.next();
-                                "TEXT".to_string()
-                            }
-                            _ => "INTEGER".to_string(), // default
-                        };
-                        columns.push(ColumnDefinition {
-                            name: col_name,
-                            data_type,
-                            nullable: true,
+                        self.expect(Token::Key)?;
+                        let columns = self.parse_column_list()?;
+                        constraints.push(TableConstraint::PrimaryKey { columns });
+                    }
+                    Some(Token::Foreign) => {
+                        let fk = self.parse_foreign_key_constraint()?;
+                        constraints.push(fk);
+                    }
+                    Some(Token::Unique) => {
+                        self.next();
+                        let columns = self.parse_column_list()?;
+                        constraints.push(TableConstraint::Unique { columns });
+                    }
+                    Some(Token::Check) => {
+                        self.next();
+                        self.expect(Token::LParen)?;
+                        let expr = self.parse_expression()?;
+                        self.expect(Token::RParen)?;
+                        constraints.push(TableConstraint::Check {
+                            expression: format!("{:?}", expr),
                         });
+                    }
+                    Some(Token::Constraint) => {
+                        self.next();
+                        if let Some(Token::Identifier(_name)) = self.next() {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Primary) => {
+                                    self.next();
+                                    self.expect(Token::Key)?;
+                                    let cols = self.parse_column_list()?;
+                                    constraints.push(TableConstraint::PrimaryKey { columns: cols });
+                                }
+                                Some(Token::Foreign) => {
+                                    let fk = self.parse_foreign_key_constraint()?;
+                                    constraints.push(fk);
+                                }
+                                Some(Token::Unique) => {
+                                    self.next();
+                                    let cols = self.parse_column_list()?;
+                                    constraints.push(TableConstraint::Unique { columns: cols });
+                                }
+                                Some(Token::Check) => {
+                                    self.next();
+                                    self.expect(Token::LParen)?;
+                                    let expr = self.parse_expression()?;
+                                    self.expect(Token::RParen)?;
+                                    constraints.push(TableConstraint::Check {
+                                        expression: format!("{:?}", expr),
+                                    });
+                                }
+                                _ => return Err("Expected constraint type".to_string()),
+                            }
+                        }
                     }
                     Some(Token::RParen) => {
                         self.next();
@@ -619,7 +699,215 @@ impl Parser {
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
+            constraints,
         }))
+    }
+
+    fn parse_column_definition(&mut self) -> Result<ColumnDefinition, String> {
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected column name".to_string()),
+        };
+
+        let data_type = match self.current() {
+            Some(Token::Identifier(type_name)) => {
+                let t = type_name.to_uppercase();
+                self.next();
+                t
+            }
+            Some(Token::Integer) => {
+                self.next();
+                "INTEGER".to_string()
+            }
+            Some(Token::Text) => {
+                self.next();
+                "TEXT".to_string()
+            }
+            _ => "INTEGER".to_string(),
+        };
+
+        let mut nullable = true;
+        let mut primary_key = false;
+        let mut default_value = None;
+        let mut references = None;
+
+        loop {
+            match self.current() {
+                Some(Token::Not) => {
+                    self.next();
+                    if let Some(Token::Null) = self.current() {
+                        self.next();
+                        nullable = false;
+                    }
+                }
+                Some(Token::Null) => {
+                    self.next();
+                    nullable = true;
+                }
+                Some(Token::Primary) => {
+                    self.next();
+                    self.expect(Token::Key)?;
+                    primary_key = true;
+                    nullable = false;
+                }
+                Some(Token::Default) => {
+                    self.next();
+                    default_value = Some(self.parse_simple_value()?);
+                }
+                Some(Token::References) => {
+                    self.next();
+                    let ref_table = match self.next() {
+                        Some(Token::Identifier(name)) => name,
+                        _ => return Err("Expected referenced table name".to_string()),
+                    };
+                    let ref_columns = self.parse_column_list()?;
+                    let (on_delete, on_update) = self.parse_referential_actions()?;
+                    references = Some(ForeignKeyRef {
+                        columns: vec![name.clone()],
+                        referenced_table: ref_table,
+                        referenced_columns: ref_columns,
+                        on_delete,
+                        on_update,
+                    });
+                }
+                _ => break,
+            }
+        }
+
+        Ok(ColumnDefinition {
+            name,
+            data_type,
+            nullable,
+            primary_key,
+            default_value,
+            references,
+        })
+    }
+
+    fn parse_foreign_key_constraint(&mut self) -> Result<TableConstraint, String> {
+        self.expect(Token::Foreign)?;
+        self.expect(Token::Key)?;
+        let columns = self.parse_column_list()?;
+        self.expect(Token::References)?;
+        let referenced_table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected referenced table name".to_string()),
+        };
+        let referenced_columns = self.parse_column_list()?;
+        let (on_delete, on_update) = self.parse_referential_actions()?;
+        Ok(TableConstraint::ForeignKey {
+            columns,
+            referenced_table,
+            referenced_columns,
+            on_delete,
+            on_update,
+        })
+    }
+
+    fn parse_referential_actions(
+        &mut self,
+    ) -> Result<(Option<ReferentialAction>, Option<ReferentialAction>), String> {
+        let mut on_delete = None;
+        let mut on_update = None;
+        loop {
+            match self.current() {
+                Some(Token::On) => {
+                    self.next();
+                    match self.current() {
+                        Some(Token::Delete) => {
+                            self.next();
+                            on_delete = Some(self.parse_referential_action()?);
+                        }
+                        Some(Token::Update) => {
+                            self.next();
+                            on_update = Some(self.parse_referential_action()?);
+                        }
+                        _ => break,
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok((on_delete, on_update))
+    }
+
+    fn parse_referential_action(&mut self) -> Result<ReferentialAction, String> {
+        match self.current() {
+            Some(Token::Cascade) => {
+                self.next();
+                Ok(ReferentialAction::Cascade)
+            }
+            Some(Token::Set) => {
+                self.next();
+                if let Some(Token::Null) = self.current() {
+                    self.next();
+                    Ok(ReferentialAction::SetNull)
+                } else {
+                    Err("Expected NULL after SET".to_string())
+                }
+            }
+            Some(Token::Restrict) => {
+                self.next();
+                Ok(ReferentialAction::Restrict)
+            }
+            Some(Token::No) => {
+                self.next();
+                if let Some(Token::Action) = self.current() {
+                    self.next();
+                    Ok(ReferentialAction::NoAction)
+                } else {
+                    Err("Expected ACTION after NO".to_string())
+                }
+            }
+            _ => Err(
+                "Expected referential action (CASCADE, SET NULL, RESTRICT, NO ACTION)".to_string(),
+            ),
+        }
+    }
+
+    fn parse_simple_value(&mut self) -> Result<String, String> {
+        let token = self.current().cloned();
+        match token {
+            Some(Token::NumberLiteral(n)) => {
+                self.next();
+                Ok(n)
+            }
+            Some(Token::StringLiteral(s)) => {
+                self.next();
+                Ok(format!("'{}'", s))
+            }
+            Some(Token::Identifier(name)) => {
+                self.next();
+                Ok(name)
+            }
+            Some(Token::Null) => {
+                self.next();
+                Ok("NULL".to_string())
+            }
+            _ => Err("Expected a value".to_string()),
+        }
+    }
+
+    fn parse_column_list(&mut self) -> Result<Vec<String>, String> {
+        let mut columns = Vec::new();
+        self.expect(Token::LParen)?;
+        loop {
+            match self.current() {
+                Some(Token::Identifier(name)) => {
+                    columns.push(name.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => break,
+            }
+        }
+        Ok(columns)
     }
 
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
@@ -787,12 +1075,17 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_create() {
-        let result = parse("CREATE TABLE users");
-        assert!(result.is_ok());
+    fn test_parse_create_with_foreign_key() {
+        let result = parse("CREATE TABLE t (a INTEGER REFERENCES u(b))");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::CreateTable(c) => {
-                assert_eq!(c.name, "users");
+                assert_eq!(c.name, "t");
+                assert_eq!(c.columns.len(), 1, "Actual columns: {:?}", c.columns);
+                assert!(c.columns[0].references.is_some(), "No FK ref found");
+                let fk = c.columns[0].references.as_ref().unwrap();
+                assert_eq!(fk.referenced_table, "u");
+                assert_eq!(fk.referenced_columns, vec!["b".to_string()]);
             }
             _ => panic!("Expected CREATE TABLE statement"),
         }
@@ -822,6 +1115,61 @@ mod tests {
                 assert_eq!(d.name, "users");
             }
             _ => panic!("Expected DROP TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_with_table_constraint_fk() {
+        let result = parse("CREATE TABLE orders (id INTEGER, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id))");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(c) => {
+                assert_eq!(c.name, "orders");
+                assert_eq!(c.columns.len(), 2);
+                assert_eq!(c.constraints.len(), 1);
+                match &c.constraints[0] {
+                    TableConstraint::ForeignKey {
+                        columns,
+                        referenced_table,
+                        referenced_columns,
+                        ..
+                    } => {
+                        assert_eq!(columns, &vec!["user_id".to_string()]);
+                        assert_eq!(referenced_table, "users");
+                        assert_eq!(referenced_columns, &vec!["id".to_string()]);
+                    }
+                    _ => panic!("Expected ForeignKey constraint"),
+                }
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_with_primary_key() {
+        let result = parse("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(c) => {
+                assert_eq!(c.name, "users");
+                assert!(!c.columns[0].nullable);
+                assert!(c.columns[0].primary_key);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_with_not_null() {
+        let result = parse("CREATE TABLE users (id INTEGER NOT NULL, name TEXT)");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(c) => {
+                assert_eq!(c.name, "users");
+                assert!(!c.columns[0].nullable);
+                assert!(!c.columns[0].primary_key);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
         }
     }
 }
