@@ -340,4 +340,41 @@ mod tests {
         assert!(!manager.is_locked("key2"));
         assert!(manager.is_locked("key3"));
     }
+
+    #[test]
+    fn test_lock_entry_new() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100);
+        assert_eq!(entry.key, "key1");
+        assert_eq!(entry.owner, 1);
+        assert_eq!(entry.tx_id, 100);
+        assert!(entry.expires_at.is_none());
+        assert!(!entry.is_expired());
+    }
+
+    #[test]
+    fn test_lock_entry_with_expiry() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100).with_expiry(1000);
+        assert!(entry.expires_at.is_some());
+    }
+
+    #[test]
+    fn test_lock_entry_is_expired() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100).with_expiry(0);
+        std::thread::sleep(Duration::from_millis(1));
+        assert!(entry.is_expired());
+    }
+
+    #[test]
+    fn test_lock_entry_no_expiry() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100);
+        assert!(!entry.is_expired());
+    }
+
+    #[test]
+    fn test_try_lock_same_owner_reentrant() {
+        let mut manager = DistributedLockManager::new();
+
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+    }
 }
