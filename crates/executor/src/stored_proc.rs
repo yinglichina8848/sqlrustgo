@@ -52,6 +52,8 @@ pub struct ProcedureContext {
     current_exception: Option<StoredProcError>,
     /// Cursors declared in the procedure
     cursors: HashMap<String, Cursor>,
+    /// CTE (Common Table Expression) results: CTE name -> rows
+    cte_tables: HashMap<String, Vec<Vec<Value>>>,
 }
 
 /// Exception handler registered by DECLARE HANDLER
@@ -88,6 +90,7 @@ impl ProcedureContext {
             exception_handling: false,
             current_exception: None,
             cursors: HashMap::new(),
+            cte_tables: HashMap::new(),
         }
     }
 
@@ -867,12 +870,59 @@ impl StoredProcExecutor {
         ctx: &mut ProcedureContext,
     ) -> Result<(), String> {
         match statement {
+            sqlrustgo_parser::Statement::WithSelect(with_select) => {
+                if let Some(ref with_clause) = with_select.with_clause {
+                    for cte in &with_clause.ctes {
+                        let cte_records = self.execute_cte_subquery(&cte.subquery, ctx)?;
+                        ctx.cte_tables.insert(cte.name.clone(), cte_records);
+                    }
+                }
+                let select = &with_select.select;
+                let table_name = &select.table;
+
+                let records = if ctx.cte_tables.contains_key(table_name) {
+                    ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
+                } else {
+                    let storage = self.storage.read().unwrap();
+                    storage
+                        .scan(table_name)
+                        .map_err(|e| format!("Failed to scan table: {}", e))?
+                };
+
+                let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
+                    records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect()
+                } else {
+                    records
+                };
+
+                ctx.set_session_var(
+                    "__last_select_result",
+                    Value::Text(serde_json::to_string(&filtered).unwrap_or_default()),
+                );
+                ctx.set_session_var("__found_rows", Value::Integer(filtered.len() as i64));
+                Ok(())
+            }
             sqlrustgo_parser::Statement::Select(select) => {
                 let table_name = &select.table;
-                let storage = self.storage.read().unwrap();
-                let records = storage
-                    .scan(table_name)
-                    .map_err(|e| format!("Failed to scan table: {}", e))?;
+
+                let records = if ctx.cte_tables.contains_key(table_name) {
+                    ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
+                } else {
+                    let storage = self.storage.read().unwrap();
+                    storage
+                        .scan(table_name)
+                        .map_err(|e| format!("Failed to scan table: {}", e))?
+                };
 
                 let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
                     records
@@ -1185,6 +1235,36 @@ impl StoredProcExecutor {
                 .collect()
         } else {
             records
+        }
+    }
+
+    /// Execute CTE subquery and return rows
+    fn execute_cte_subquery(
+        &self,
+        select: &sqlrustgo_parser::SelectStatement,
+        ctx: &mut ProcedureContext,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let table_name = &select.table;
+        let storage = self.storage.read().unwrap();
+        let records = storage
+            .scan(table_name)
+            .map_err(|e| format!("Failed to scan CTE table: {}", e))?;
+
+        if let Some(ref where_expr) = select.where_clause {
+            let filtered: Vec<Vec<Value>> = records
+                .into_iter()
+                .filter(|_row| {
+                    let where_val = self.expression_to_value(where_expr, ctx);
+                    if let Value::Boolean(b) = where_val {
+                        b
+                    } else {
+                        where_val != Value::Null
+                    }
+                })
+                .collect();
+            Ok(filtered)
+        } else {
+            Ok(records)
         }
     }
 
