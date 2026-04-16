@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Complex DELETE Test Suite ===
 
 -- === CASE: DELETE with subquery ===

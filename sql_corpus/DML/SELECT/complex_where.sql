@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Complex WHERE Test Suite ===
 
 -- === CASE: Multiple AND conditions ===

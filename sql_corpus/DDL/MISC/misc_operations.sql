@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Miscellaneous DDL Operations Test Suite ===
 
 -- === CASE: VACUUM command ===

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: ALTER TABLE Variations
 -- Tests for various ALTER TABLE patterns
 

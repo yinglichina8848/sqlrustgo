@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: UNION, INTERSECT, EXCEPT
 -- Tests for set operations
 

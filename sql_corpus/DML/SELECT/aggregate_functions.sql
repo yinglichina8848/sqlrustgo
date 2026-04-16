@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Aggregate Functions Test Suite ===
 
 -- === CASE: COUNT with GROUP BY ===

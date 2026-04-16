@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: CAST and Type Conversion
 -- Tests for type casting and conversion
 

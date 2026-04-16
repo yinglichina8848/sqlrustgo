@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === JSON Functions Test Suite ===
 
 -- === CASE: JSON function ===

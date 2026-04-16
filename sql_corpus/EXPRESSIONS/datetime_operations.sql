@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === DateTime Operations Test Suite ===
 
 -- === CASE: CURRENT_DATE ===

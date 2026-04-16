@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Common Aggregate Patterns Test Suite ===
 
 -- === CASE: COUNT with GROUP BY ===

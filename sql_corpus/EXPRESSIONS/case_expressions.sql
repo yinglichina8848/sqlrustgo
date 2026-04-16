@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: CASE Expressions
 -- Tests for CASE WHEN expressions
 

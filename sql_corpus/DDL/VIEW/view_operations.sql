@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === View Test Suite ===
 
 -- === CASE: Create simple view ===

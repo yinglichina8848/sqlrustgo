@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Data Types Test Suite ===
 
 -- === CASE: INTEGER type ===

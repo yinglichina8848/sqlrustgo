@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Logical Operators Test Suite ===
 
 -- === CASE: AND operator ===

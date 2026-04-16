@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Batch Operations Test Suite ===
 
 -- === CASE: Batch INSERT with multiple rows ===

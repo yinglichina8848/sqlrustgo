@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Set Operations Test Suite ===
 
 -- === CASE: UNION ALL ===

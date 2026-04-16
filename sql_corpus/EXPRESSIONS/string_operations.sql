@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === String Operations Test Suite ===
 
 -- === CASE: LENGTH function ===

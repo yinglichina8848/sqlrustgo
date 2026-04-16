@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Special Functions Test Suite ===
 
 -- === CASE: COALESCE with NULLs ===

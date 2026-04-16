@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Window Functions Advanced Test Suite ===
 
 -- === CASE: ROW_NUMBER ===

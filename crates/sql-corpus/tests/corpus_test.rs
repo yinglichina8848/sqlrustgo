@@ -7,10 +7,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 fn get_corpus_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("sql_corpus")
+    // CARGO_MANIFEST_DIR = crates/sql-corpus
+    // We need to join "sql_corpus" to get crates/sql-corpus/sql_corpus
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sql_corpus")
 }
 
 fn run_corpus_test() -> HashMap<String, CorpusFileResult> {

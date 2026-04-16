@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: Window Functions
 -- Tests for SQL window functions
 

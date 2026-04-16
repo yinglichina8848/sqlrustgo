@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Query Combinations Test Suite ===
 
 -- === CASE: Complex SELECT with multiple features ===

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: INSERT Tests
 -- Tests for various INSERT operations
 

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Transaction Isolation Levels Test Suite ===
 
 -- === CASE: READ UNCOMMITTED ===

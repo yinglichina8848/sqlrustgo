@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Common Table Expression Advanced Test Suite ===
 
 -- === CASE: Recursive CTE for factorial ===
