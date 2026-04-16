@@ -273,6 +273,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
         storage.create_table(&info).unwrap();
 
@@ -313,6 +314,7 @@ mod tests {
                     compression: None,
                 },
             ],
+            table_foreign_keys: None,
         };
         storage.create_table(&info).unwrap();
 
@@ -357,6 +359,7 @@ mod tests {
                 auto_increment: false,
                 compression: None,
             }],
+            table_foreign_keys: None,
         };
         storage.create_table(&info).unwrap();
 

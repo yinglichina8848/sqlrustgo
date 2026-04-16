@@ -173,6 +173,13 @@ impl StatementConverter {
                 })
             }
             Expression::Placeholder => Ok(Expr::Parameter { index: 0 }),
+            Expression::Not(expr) => {
+                let expr_box = Box::new(self.convert_expression(expr)?);
+                Ok(Expr::UnaryExpr {
+                    op: crate::Operator::Not,
+                    expr: expr_box,
+                })
+            }
             Expression::FunctionCall(name, args) => {
                 let args_exprs: Result<Vec<Expr>, _> =
                     args.iter().map(|a| self.convert_expression(a)).collect();
