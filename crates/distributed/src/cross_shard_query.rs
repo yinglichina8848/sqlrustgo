@@ -1,5 +1,5 @@
 use crate::error::DistributedError;
-use crate::grpc_client::{ClientPool, NodeId, ShardClient, ShardId};
+use crate::grpc_client::{ClientPool, NodeId, ShardId};
 use crate::proto::distributed::SearchResult as ProtoSearchResult;
 use futures::future::join_all;
 use std::collections::HashMap;

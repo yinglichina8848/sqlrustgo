@@ -5,12 +5,12 @@ use crate::proto::distributed::{
     DeleteNodeRequest, DeleteNodeResponse, DeleteVectorRequest, DeleteVectorResponse,
     EdgeInfo, GetEdgesRequest, GetEdgesResponse, GetNodeRequest, GetNodeResponse,
     HealthCheckResponse, InsertVectorRequest, InsertVectorResponse, PropertyMap, SearchResult,
-    SearchVectorsRequest, SearchVectorsResponse, VectorRecord,
+    SearchVectorsRequest, SearchVectorsResponse,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, Instant};
+use tokio::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub type NodeId = u64;
