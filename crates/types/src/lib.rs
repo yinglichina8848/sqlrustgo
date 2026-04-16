@@ -2,11 +2,9 @@
 // Core data types for SQLRustGo
 
 pub mod error;
-pub mod row_ref;
 pub mod value;
 
 pub use error::{SqlError, SqlResult};
-pub use row_ref::{encode_row, ColumnType, RowRef, RowSchema};
 pub use value::Value;
 
 /// Convert a SQL literal string to Value
