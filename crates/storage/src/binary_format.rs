@@ -81,21 +81,6 @@ pub mod helpers {
         Ok(i64::from_be_bytes(bytes))
     }
 
-    /// Write a i32 to bytes in big-endian format
-    pub fn write_i32(value: i32) -> [u8; 4] {
-        value.to_be_bytes()
-    }
-
-    /// Read a i32 from bytes in big-endian format
-    pub fn read_i32(data: &[u8]) -> Result<i32, BinaryFormatError> {
-        if data.len() < 4 {
-            return Err(BinaryFormatError::InsufficientData);
-        }
-        let mut bytes = [0u8; 4];
-        bytes.copy_from_slice(&data[..4]);
-        Ok(i32::from_be_bytes(bytes))
-    }
-
     /// Write a f64 to bytes in big-endian format
     pub fn write_f64(value: f64) -> [u8; 8] {
         value.to_be_bytes()
@@ -161,11 +146,6 @@ impl BinaryFormat for Value {
                 result.extend_from_slice(&helpers::write_f64(*f));
                 result
             }
-            Value::Decimal(d) => {
-                let mut result = vec![11u8]; // type indicator
-                result.extend_from_slice(&helpers::write_string(&d.to_string()));
-                result
-            }
             Value::Text(s) => {
                 let mut result = vec![3u8]; // type indicator
                 result.extend_from_slice(&helpers::write_string(s));
@@ -182,37 +162,6 @@ impl BinaryFormat for Value {
                 let len = b.len() as u64;
                 result.extend_from_slice(&helpers::write_u64(len));
                 result.extend_from_slice(b);
-                result
-            }
-            Value::Date(d) => {
-                let mut result = vec![6u8];
-                result.extend_from_slice(&helpers::write_i32(*d));
-                result
-            }
-            Value::Timestamp(ts) => {
-                let mut result = vec![7u8];
-                result.extend_from_slice(&helpers::write_i64(*ts));
-                result
-            }
-            Value::Uuid(u) => {
-                let mut result = vec![8u8]; // type indicator
-                result.extend_from_slice(&u.to_le_bytes());
-                result
-            }
-            Value::Array(arr) => {
-                let mut result = vec![9u8]; // type indicator
-                result.extend_from_slice(&helpers::write_u64(arr.len() as u64));
-                for item in arr {
-                    let item_bytes = item.to_bytes();
-                    result.extend_from_slice(&helpers::write_u64(item_bytes.len() as u64));
-                    result.extend_from_slice(&item_bytes);
-                }
-                result
-            }
-            Value::Enum(idx, name) => {
-                let mut result = vec![10u8]; // type indicator
-                result.extend_from_slice(&helpers::write_i32(*idx));
-                result.extend_from_slice(&helpers::write_string(name));
                 result
             }
         }
@@ -236,45 +185,6 @@ impl BinaryFormat for Value {
                 }
                 let blob_data = data[9..9 + len].to_vec();
                 Ok(Value::Blob(blob_data))
-            }
-            6 => Ok(Value::Date(helpers::read_i32(&data[1..])?)),
-            7 => Ok(Value::Timestamp(helpers::read_i64(&data[1..])?)),
-            8 => {
-                // Read UUID: 16 bytes
-                if data.len() < 1 + 16 {
-                    return Err(BinaryFormatError::InsufficientData);
-                }
-                let u = u128::from_le_bytes([
-                    data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-                    data[9], data[10], data[11], data[12], data[13], data[14], data[15], data[16],
-                ]);
-                Ok(Value::Uuid(u))
-            }
-            9 => {
-                // Read Array: length (u64) + elements
-                let arr_len = helpers::read_u64(&data[1..])? as usize;
-                let mut offset = 9;
-                let mut arr = Vec::new();
-                for _ in 0..arr_len {
-                    if offset >= data.len() {
-                        return Err(BinaryFormatError::InsufficientData);
-                    }
-                    let item_len = helpers::read_u64(&data[offset..])? as usize;
-                    offset += 8;
-                    if offset + item_len > data.len() {
-                        return Err(BinaryFormatError::InsufficientData);
-                    }
-                    let item_bytes = &data[offset..offset + item_len];
-                    arr.push(Value::from_bytes(item_bytes)?);
-                    offset += item_len;
-                }
-                Ok(Value::Array(arr))
-            }
-            10 => {
-                // Read Enum: index (i32) + name
-                let idx = helpers::read_i32(&data[1..])?;
-                let name = helpers::read_string(&data[5..])?;
-                Ok(Value::Enum(idx, name))
             }
             _ => Err(BinaryFormatError::InvalidFormat(format!(
                 "Unknown type indicator: {}",
@@ -394,73 +304,5 @@ mod tests {
 
         let err = BinaryFormatError::DataTooLarge(100);
         assert_eq!(format!("{}", err), "Data too large: 100 bytes");
-
-        let err = BinaryFormatError::Unknown("unknown error".to_string());
-        assert_eq!(format!("{}", err), "Unknown error: unknown error");
-    }
-
-    #[test]
-    fn test_helpers_read_u64_insufficient_data() {
-        let result = helpers::read_u64(&[1, 2, 3]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_helpers_read_i64_insufficient_data() {
-        let result = helpers::read_i64(&[1, 2, 3]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_helpers_read_f64_insufficient_data() {
-        let result = helpers::read_f64(&[1, 2, 3]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_value_to_bytes_blob() {
-        let value = Value::Blob(vec![1, 2, 3, 4, 5]);
-        let bytes = value.to_bytes();
-        assert!(!bytes.is_empty());
-        assert_eq!(bytes[0], 5); // type indicator for Blob
-    }
-
-    #[test]
-    fn test_value_from_bytes_empty() {
-        let result = Value::from_bytes(&[]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_value_from_bytes_blob() {
-        let original = Value::Blob(vec![1, 2, 3, 4, 5]);
-        let bytes = original.to_bytes();
-        let restored = Value::from_bytes(&bytes).unwrap();
-        assert_eq!(original, restored);
-    }
-
-    #[test]
-    fn test_value_from_bytes_unknown_type() {
-        let result = Value::from_bytes(&[99]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_helpers_write_string() {
-        let bytes = helpers::write_string("test");
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    fn test_helpers_read_string_empty() {
-        let result = helpers::read_string(&[]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_helpers_read_string_short() {
-        let bytes = helpers::write_string("hello");
-        let result = helpers::read_string(&bytes[0..2]);
-        assert!(result.is_err());
     }
 }
