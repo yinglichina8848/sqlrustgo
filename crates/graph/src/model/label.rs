@@ -137,4 +137,47 @@ mod tests {
         // Check GMP labels are in there
         assert!(items.iter().any(|(id, label)| *label == "Batch"));
     }
+
+    #[test]
+    fn test_label_registry_contains_id() {
+        let mut registry = LabelRegistry::new();
+
+        let batch_id = registry.get("Batch").unwrap();
+        assert!(registry.contains_id(batch_id));
+        assert!(!registry.contains_id(LabelId(9999)));
+    }
+
+    #[test]
+    fn test_label_registry_labels_iterator() {
+        let registry = LabelRegistry::new();
+        let labels: Vec<_> = registry.labels().collect();
+        assert!(labels.len() >= 10);
+        assert!(labels.contains(&"Batch"));
+        assert!(labels.contains(&"Device"));
+    }
+
+    #[test]
+    fn test_label_registry_get_label() {
+        let mut registry = LabelRegistry::new();
+
+        let custom_id = registry.register("Custom".to_string());
+        assert_eq!(registry.get_label(custom_id), Some("Custom"));
+
+        let nonexistent = registry.get_label(LabelId(9999));
+        assert_eq!(nonexistent, None);
+    }
+
+    #[test]
+    fn test_label_registry_id_exhausted() {
+        let mut registry = LabelRegistry::new();
+
+        // Register many labels to approach LabelId max
+        for i in 0..100 {
+            let label = format!("Label{}", i);
+            let _ = registry.register(label);
+        }
+
+        assert!(registry.len() > 100);
+        assert!(registry.contains("Label50"));
+    }
 }
