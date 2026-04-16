@@ -3,7 +3,7 @@
 //! Handles SQL routing based on partition keys.
 
 use crate::partition::PartitionValue;
-use crate::shard_manager::{NodeId, ShardId, ShardInfo, ShardManager};
+use crate::shard_manager::{NodeId, ShardId, ShardManager};
 
 #[derive(Debug, Clone)]
 pub struct RoutedQuery {
@@ -284,10 +284,6 @@ impl ShardRouter {
 
     pub fn get_local_node_id(&self) -> NodeId {
         self.local_node_id
-    }
-
-    pub fn get_shard(&self, shard_id: ShardId) -> Option<&ShardInfo> {
-        self.shard_manager.get_shard(shard_id)
     }
 }
 

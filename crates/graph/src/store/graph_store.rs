@@ -101,13 +101,6 @@ impl InMemoryGraphStore {
         }
     }
 
-    pub fn create_node_with_id(&mut self, label: &str, props: PropertyMap, node_id: NodeId) {
-        let label_id = self.labels.get_or_register(label);
-        let node = Node::new(node_id, label_id, props);
-        self.nodes.insert(node);
-        self.label_index.add_node(node_id, label_id);
-    }
-
     fn next_node_id(&mut self) -> NodeId {
         let id = self.next_node_id;
         self.next_node_id = self.next_node_id.next();

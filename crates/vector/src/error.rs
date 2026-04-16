@@ -27,9 +27,6 @@ pub enum VectorError {
 
     #[error("K-means error: {0}")]
     KMeansError(String),
-
-    #[error("Shard not found: {0}")]
-    ShardNotFound(u64),
 }
 
 pub type VectorResult<T> = Result<T, VectorError>;
