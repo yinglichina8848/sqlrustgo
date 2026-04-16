@@ -50,6 +50,11 @@ pub enum Token {
     Any,
     Some,
 
+    // CTE keywords
+    With,
+    Recursive,
+    As,
+
     // Data Types
     Integer,
     Text,
@@ -143,6 +148,9 @@ impl fmt::Display for Token {
             Token::All => write!(f, "ALL"),
             Token::Any => write!(f, "ANY"),
             Token::Some => write!(f, "SOME"),
+            Token::With => write!(f, "WITH"),
+            Token::Recursive => write!(f, "RECURSIVE"),
+            Token::As => write!(f, "AS"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -220,6 +228,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "ALL"
             | "ANY"
             | "SOME"
+            | "WITH"
+            | "RECURSIVE"
+            | "AS"
     )
 }
 
@@ -274,6 +285,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ALL" => Some(Token::All),
         "ANY" => Some(Token::Any),
         "SOME" => Some(Token::Some),
+        "WITH" => Some(Token::With),
+        "RECURSIVE" => Some(Token::Recursive),
+        "AS" => Some(Token::As),
         _ => None,
     }
 }
