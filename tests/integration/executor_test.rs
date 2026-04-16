@@ -457,3 +457,55 @@ fn test_in_subquery() {
     );
     assert!(result.is_ok(), "IN subquery should succeed: {:?}", result);
 }
+
+#[test]
+fn test_executor_empty_table() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE empty_table (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+
+    let result = engine
+        .execute(parse("SELECT * FROM empty_table").unwrap())
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 0);
+}
+
+#[test]
+fn test_executor_nonexistent_table() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    let result = engine.execute(parse("SELECT * FROM nonexistent_table").unwrap());
+
+    assert!(result.is_err(), "Query on nonexistent table should fail");
+}
+
+#[test]
+fn test_executor_delete_nonexistent() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+        .unwrap();
+
+    let result = engine.execute(parse("DELETE FROM users WHERE id = 999").unwrap());
+
+    assert!(result.is_ok(), "DELETE from empty table should succeed");
+    assert_eq!(result.unwrap().affected_rows, 0);
+}
+
+#[test]
+fn test_executor_update_nonexistent() {
+    let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(MemoryStorage::new())));
+
+    engine
+        .execute(parse("CREATE TABLE users (id INTEGER, name TEXT)").unwrap())
+        .unwrap();
+
+    let result = engine.execute(parse("UPDATE users SET name = 'Bob' WHERE id = 999").unwrap());
+
+    assert!(result.is_ok(), "UPDATE on empty table should succeed");
+    assert_eq!(result.unwrap().affected_rows, 0);
+}
