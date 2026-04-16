@@ -14,7 +14,7 @@ fn get_corpus_root() -> PathBuf {
 
 fn run_corpus_test() -> HashMap<String, CorpusFileResult> {
     let corpus_root = get_corpus_root();
-    let corpus = SqlCorpus::new(corpus_root);
+    let mut corpus = SqlCorpus::new(corpus_root);
     corpus.execute_all()
 }
 
@@ -80,7 +80,7 @@ fn test_sql_corpus_all() {
 #[test]
 fn test_sql_corpus_joins() {
     let corpus_root = get_corpus_root();
-    let corpus = SqlCorpus::new(corpus_root.join("DML/SELECT/joins.sql"));
+    let mut corpus = SqlCorpus::new(corpus_root.join("DML/SELECT/joins.sql"));
 
     let results = corpus.execute_file(&corpus_root.join("DML/SELECT/joins.sql"));
 
