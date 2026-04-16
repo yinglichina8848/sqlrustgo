@@ -43,6 +43,13 @@ pub enum Token {
     Action,
     Default,
 
+    // Subquery keywords
+    Exists,
+    In,
+    All,
+    Any,
+    Some,
+
     // Data Types
     Integer,
     Text,
@@ -131,6 +138,11 @@ impl fmt::Display for Token {
             Token::No => write!(f, "NO"),
             Token::Action => write!(f, "ACTION"),
             Token::Default => write!(f, "DEFAULT"),
+            Token::Exists => write!(f, "EXISTS"),
+            Token::In => write!(f, "IN"),
+            Token::All => write!(f, "ALL"),
+            Token::Any => write!(f, "ANY"),
+            Token::Some => write!(f, "SOME"),
             Token::Integer => write!(f, "INTEGER"),
             Token::Text => write!(f, "TEXT"),
             Token::Float => write!(f, "FLOAT"),
@@ -203,6 +215,11 @@ pub fn is_keyword(s: &str) -> bool {
             | "AND"
             | "OR"
             | "NOT"
+            | "EXISTS"
+            | "IN"
+            | "ALL"
+            | "ANY"
+            | "SOME"
     )
 }
 
@@ -252,6 +269,11 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "NO" => Some(Token::No),
         "ACTION" => Some(Token::Action),
         "DEFAULT" => Some(Token::Default),
+        "EXISTS" => Some(Token::Exists),
+        "IN" => Some(Token::In),
+        "ALL" => Some(Token::All),
+        "ANY" => Some(Token::Any),
+        "SOME" => Some(Token::Some),
         _ => None,
     }
 }

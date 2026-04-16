@@ -183,6 +183,12 @@ pub enum Expression {
     Literal(String),
     Identifier(String),
     BinaryOp(Box<Expression>, String, Box<Expression>),
+    Subquery(Box<SelectStatement>),
+    In(Box<Expression>, Box<SelectStatement>),
+    NotIn(Box<Expression>, Box<SelectStatement>),
+    Exists(Box<SelectStatement>),
+    NotExists(Box<SelectStatement>),
+    QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
 }
 
 /// SQL Parser
@@ -292,6 +298,58 @@ impl Parser {
             join_clause: None,
             aggregates: vec![],
         }))
+    }
+
+    fn parse_select_statement(&mut self) -> Result<SelectStatement, String> {
+        self.expect(Token::Select)?;
+
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::From) => break,
+                Some(Token::Star) => {
+                    columns.push(SelectColumn {
+                        name: "*".to_string(),
+                        alias: None,
+                    });
+                    self.next();
+                }
+                Some(Token::Identifier(_)) => {
+                    if let Some(Token::Identifier(name)) = self.next() {
+                        columns.push(SelectColumn { name, alias: None });
+                    }
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                _ => {
+                    return Err("Expected FROM or column name".to_string());
+                }
+            }
+        }
+
+        self.expect(Token::From)?;
+
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+            None => return Err("Expected table name".to_string()),
+        };
+
+        let where_clause = if matches!(self.current(), Some(Token::Where)) {
+            self.next();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        Ok(SelectStatement {
+            columns,
+            table,
+            where_clause,
+            join_clause: None,
+            aggregates: vec![],
+        })
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
@@ -526,11 +584,29 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse comparison expression (=, !=, >, <, >=, <=)
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_primary_expression()?;
 
-        // Check for binary operator
+        if matches!(self.current(), Some(Token::In)) {
+            self.next();
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_statement()?;
+            self.expect(Token::RParen)?;
+            return Ok(Expression::In(Box::new(left), Box::new(subquery)));
+        }
+
+        if matches!(self.current(), Some(Token::Not)) {
+            self.next();
+            if matches!(self.current(), Some(Token::In)) {
+                self.next();
+                self.expect(Token::LParen)?;
+                let subquery = self.parse_select_statement()?;
+                self.expect(Token::RParen)?;
+                return Ok(Expression::NotIn(Box::new(left), Box::new(subquery)));
+            }
+            return Err("NOT must be followed by IN or EXISTS".to_string());
+        }
+
         let op = match self.current() {
             Some(Token::Equal) => "=",
             Some(Token::NotEqual) => "!=",
@@ -538,17 +614,48 @@ impl Parser {
             Some(Token::Less) => "<",
             Some(Token::GreaterEqual) => ">=",
             Some(Token::LessEqual) => "<=",
-            _ => return Ok(left), // No operator, return simple expression
+            _ => return Ok(left),
         };
-        self.next(); // consume operator
+        self.next();
 
         let right = self.parse_primary_expression()?;
 
-        Ok(Expression::BinaryOp(
-            Box::new(left),
-            op.to_string(),
-            Box::new(right),
-        ))
+        if matches!(
+            self.current(),
+            Some(Token::All) | Some(Token::Any) | Some(Token::Some)
+        ) {
+            let quantifier = match self.current() {
+                Some(Token::All) => "ALL",
+                Some(Token::Any) => "ANY",
+                Some(Token::Some) => "SOME",
+                _ => {
+                    return Ok(Expression::BinaryOp(
+                        Box::new(left),
+                        op.to_string(),
+                        Box::new(right),
+                    ))
+                }
+            };
+            self.next();
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_statement()?;
+            self.expect(Token::RParen)?;
+            Ok(Expression::QuantifiedOp(
+                Box::new(Expression::BinaryOp(
+                    Box::new(left),
+                    op.to_string(),
+                    Box::new(right),
+                )),
+                quantifier.to_string(),
+                Box::new(subquery),
+            ))
+        } else {
+            Ok(Expression::BinaryOp(
+                Box::new(left),
+                op.to_string(),
+                Box::new(right),
+            ))
+        }
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
@@ -585,11 +692,38 @@ impl Parser {
                 }
             }
             Some(Token::LParen) => {
-                // Parenthesized expression
-                self.next(); // consume '('
-                let expr = self.parse_or_expression()?;
+                self.next();
+                match self.current() {
+                    Some(Token::Select) => {
+                        let subquery = self.parse_select_statement()?;
+                        self.expect(Token::RParen)?;
+                        Ok(Expression::Subquery(Box::new(subquery)))
+                    }
+                    _ => {
+                        let expr = self.parse_or_expression()?;
+                        self.expect(Token::RParen)?;
+                        Ok(expr)
+                    }
+                }
+            }
+            Some(Token::Exists) => {
+                self.next();
+                self.expect(Token::LParen)?;
+                let subquery = self.parse_select_statement()?;
                 self.expect(Token::RParen)?;
-                Ok(expr)
+                Ok(Expression::Exists(Box::new(subquery)))
+            }
+            Some(Token::Not) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Exists)) {
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let subquery = self.parse_select_statement()?;
+                    self.expect(Token::RParen)?;
+                    Ok(Expression::NotExists(Box::new(subquery)))
+                } else {
+                    Err("NOT without EXISTS".to_string())
+                }
             }
             _ => Err("Expected expression".to_string()),
         }
