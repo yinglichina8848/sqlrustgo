@@ -304,10 +304,10 @@ mod tests {
     fn test_lock_expiry() {
         let mut manager = DistributedLockManager::new();
 
-        manager.try_lock_with_ttl("key1", 1, 100, 1);
+        manager.try_lock_with_ttl("key1", 1, 100, 50);
         assert!(manager.is_locked("key1"));
 
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(100));
 
         assert!(!manager.is_locked("key1"));
     }
@@ -316,9 +316,9 @@ mod tests {
     fn test_extend_lock() {
         let mut manager = DistributedLockManager::new();
 
-        manager.try_lock_with_ttl("key1", 1, 100, 1);
+        manager.try_lock_with_ttl("key1", 1, 100, 50);
 
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(100));
 
         assert!(!manager.is_locked("key1"));
 
