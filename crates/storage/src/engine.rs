@@ -5,12 +5,33 @@ use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 
+/// Referential action for foreign key constraints
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ForeignKeyAction {
+    Cascade,
+    SetNull,
+    Restrict,
+    NoAction,
+}
+
+/// Foreign key constraint definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForeignKeyConstraint {
+    pub name: Option<String>,
+    pub columns: Vec<String>,
+    pub referenced_table: String,
+    pub referenced_columns: Vec<String>,
+    pub on_delete: Option<ForeignKeyAction>,
+    pub on_update: Option<ForeignKeyAction>,
+}
+
 /// Column definition for table schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
+    pub primary_key: bool,
 }
 
 /// Table metadata
@@ -18,6 +39,7 @@ pub struct ColumnDefinition {
 pub struct TableInfo {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
+    pub foreign_keys: Vec<ForeignKeyConstraint>,
 }
 
 /// Table data - combines metadata and rows
