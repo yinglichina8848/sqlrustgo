@@ -1,0 +1,1 @@
+SELECT s_suppkey, s_name, s_address, s_phone, s_total_revenue FROM supplier, (SELECT l_suppkey, SUM(l_extendedprice * (1 - l_discount)) AS s_total_revenue FROM lineitem WHERE l_shipdate >= '1995-01-01' AND l_shipdate < '1995-04-01' GROUP BY l_suppkey) AS revenue WHERE s_suppkey = revenue.l_suppkey ORDER BY s_total_revenue DESC;
