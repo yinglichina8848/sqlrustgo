@@ -31,6 +31,7 @@ pub mod ivfpq;
 pub mod metrics;
 pub mod parallel_knn;
 pub mod pq;
+pub mod sharded_index;
 pub mod simd_explicit;
 pub mod sql_vector_hybrid;
 
@@ -47,6 +48,7 @@ pub use hnsw::HnswIndex;
 pub use ivf::IvfIndex;
 pub use metrics::DistanceMetric;
 pub use parallel_knn::{ParallelKnn, ParallelKnnConfig, ParallelKnnIndex, ParallelSearchResult};
+pub use sharded_index::{HashPartitioner, ShardStats, ShardedVectorIndex, VectorShardId};
 pub use simd_explicit::{
     batch_compute_distances, compute_similarity_simd, cosine_similarity_simd, detect_simd_lanes,
     dot_product_simd, euclidean_distance_simd, manhattan_distance_simd,

@@ -1,6 +1,6 @@
 use crate::consensus::ShardReplicaManager;
 use crate::error::DistributedError;
-use crate::shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
+use crate::shard_manager::{NodeId, ShardId, ShardManager};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
