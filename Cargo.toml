@@ -104,6 +104,9 @@ sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
 sqlrustgo-vector = { path = "crates/vector" }
+sqlrustgo-graph = { path = "crates/graph" }
+sqlrustgo-unified-query = { path = "crates/unified-query" }
+sqlrustgo-distributed = { path = "crates/distributed" }
 
 [package]
 name = "sqlrustgo"
@@ -518,6 +521,28 @@ path = "tests/integration/agentsql_test.rs"
 name = "vector_storage_integration_test"
 path = "tests/integration/vector_storage_integration_test.rs"
 
+[[test]]
+name = "hybrid_search_integration_test"
+path = "tests/integration/hybrid_search_integration_test.rs"
+
+[[test]]
+name = "wal_transaction_integration_test"
+path = "tests/integration/wal_transaction_integration_test.rs"
+
+[[test]]
+name = "unified_query_integration_test"
+path = "tests/integration/unified_query_integration_test.rs"
+
+[[test]]
+name = "distributed_storage_sharding_test"
+path = "tests/integration/distributed_storage_sharding_test.rs"
+
+[[test]]
+name = "scheduler_integration_test"
+path = "crates/server/tests/scheduler_integration_test.rs"
+
+# Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
+# This prevents any single test from consuming excessive memory
 [profile.test]
 opt-level = 0
 debug = 1
