@@ -628,16 +628,11 @@ TestCategory {
 }
 ```
 
-### 真实分布式环境测试 (TODO)
+### 真实分布式环境测试
 
-**当前状态**: 单机模拟测试已完成，真实多节点测试需要部署环境
+**当前状态**: 单机单元测试完成，多节点部署受网络限制
 
-**环境要求:**
-- 3 节点集群: 192.168.0.252, 192.168.0.250, 192.168.0.251
-- 每个节点安装 sqlrustgo 二进制
-- gRPC 端口: 50051
-
-**单机模拟测试覆盖内容:**
+**已完成测试:**
 
 | 测试类型 | 测试数 | 状态 |
 |---------|--------|------|
@@ -645,11 +640,30 @@ TestCategory {
 | 集成测试 (distributed_storage_sharding_test) | 32 | ✅ PASS |
 | 基准测试 (sharding_benchmark) | 3 | ✅ PASS |
 
-**TODO - 真实分布式测试:**
+**部署脚本:** `scripts/deploy_distributed_cluster.sh`
+
+**环境要求:**
+- 3 节点: localhost (node 1), 192.168.0.250 (node 2), 192.168.0.252 (node 3)
+- 每个节点需要 Rust 1.94+
+- gRPC 端口: 50051
+
+**启动命令:**
+```bash
+# Node 1 (localhost)
+cargo run --example distributed_test_server -- --node-id 1 --listen-addr 127.0.0.1:50051
+
+# Node 2 (192.168.0.250)
+ssh 192.168.0.250 "cd /path/to/sqlrustgo && cargo run --example distributed_test_server -- --node-id 2 --listen-addr 0.0.0.0:50051 --peers 127.0.0.1:50051,192.168.0.252:50051"
+
+# Node 3 (192.168.0.252)
+ssh 192.168.0.252 "cd /path/to/sqlrustgo && cargo run --example distributed_test_server -- --node-id 3 --listen-addr 0.0.0.0:50051 --peers 127.0.0.1:50051,192.168.0.250:50051"
+```
+
+**TODO - 待网络恢复后执行:**
 1. 部署 3 节点集群
-2. 测试跨节点故障转移
-3. 测试副本数据同步
-4. 测试 Raft 领导者选举
+2. 测试跨节点 gRPC 通信
+3. 测试跨节点故障转移
+4. 测试副本数据同步
 5. 性能基准测试 (1000万向量跨3节点)
 
 ---
