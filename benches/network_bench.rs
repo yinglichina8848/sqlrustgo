@@ -1,8 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::MemoryStorage;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -49,7 +47,7 @@ fn bench_tcp_send_receive(c: &mut Criterion) {
 }
 
 fn bench_query_latency(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::new();
     engine
         .execute(sqlrustgo::parse("CREATE TABLE latency_test (id INTEGER, value TEXT)").unwrap())
         .unwrap();
@@ -76,7 +74,7 @@ fn bench_query_latency(c: &mut Criterion) {
 }
 
 fn bench_query_throughput(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::new();
     engine
         .execute(sqlrustgo::parse("CREATE TABLE throughput_test (id INTEGER)").unwrap())
         .unwrap();
@@ -101,7 +99,7 @@ fn bench_query_throughput(c: &mut Criterion) {
 }
 
 fn bench_concurrent_queries(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::new();
     engine
         .execute(sqlrustgo::parse("CREATE TABLE concurrent_test (id INTEGER)").unwrap())
         .unwrap();
@@ -119,8 +117,7 @@ fn bench_concurrent_queries(c: &mut Criterion) {
             let handles: Vec<_> = (0..10)
                 .map(|_| {
                     thread::spawn(|| {
-                        let mut eng =
-                            sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+                        let mut eng = sqlrustgo::ExecutionEngine::new();
                         for _ in 0..10 {
                             let _ = eng.execute(
                                 sqlrustgo::parse("SELECT * FROM concurrent_test").unwrap(),
