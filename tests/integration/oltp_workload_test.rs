@@ -158,7 +158,7 @@ fn test_oltp_delete() {
     let mut engine = setup_engine();
     let mut rng = SmallRng::seed_from_u64(42);
 
-    let ids_to_delete: Vec<i64> = (0..10).map(|_| rng.gen_range(200..300i64)).collect();
+    let ids_to_delete: Vec<i64> = (0..10).map(|_| rng.gen_range(1..101i64)).collect();
 
     for id in ids_to_delete {
         let sql = format!("DELETE FROM sbtest WHERE id = {}", id);
@@ -261,7 +261,7 @@ fn test_oltp_all_workloads_execute() {
         let sql = format!("SELECT * FROM sbtest WHERE id = {}", id);
         engine.execute(parse(&sql).unwrap()).unwrap();
 
-        let insert_id = 5000 + rng.gen_range(1..100i64);
+        let insert_id = 5000 + rng.gen_range(1..1000i64);
         let sql = format!(
             "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, 1, 'x', 'x')",
             insert_id
@@ -272,7 +272,7 @@ fn test_oltp_all_workloads_execute() {
         let sql = format!("UPDATE sbtest SET k = k + 1 WHERE id = {}", id);
         engine.execute(parse(&sql).unwrap()).unwrap();
 
-        let id = 6000 + rng.gen_range(1..100i64);
+        let id = 6000 + rng.gen_range(1..1000i64);
         let sql = format!("DELETE FROM sbtest WHERE id = {}", id);
         engine.execute(parse(&sql).unwrap()).unwrap();
     }
