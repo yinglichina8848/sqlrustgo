@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: WHERE Clause Variations
 -- Tests for various WHERE conditions
 

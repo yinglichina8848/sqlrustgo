@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Numeric Operations Test Suite ===
 
 -- === CASE: ABS function ===

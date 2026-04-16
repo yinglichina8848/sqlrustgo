@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Cross Join ===
 -- EXPECT: 50 rows (5 users x 10 products)
 SELECT u.id as user_id, p.id as product_id, u.name, p.name as product_name

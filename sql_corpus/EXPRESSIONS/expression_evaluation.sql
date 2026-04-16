@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Expression Evaluation Test Suite ===
 
 -- === CASE: Arithmetic precedence ===

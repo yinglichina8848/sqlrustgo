@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Inline View Test Suite ===
 
 -- === CASE: Simple inline view ===

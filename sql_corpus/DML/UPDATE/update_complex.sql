@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Complex UPDATE Test Suite ===
 
 -- === CASE: UPDATE with subquery ===

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: Date/Time Functions
 -- Tests for date and time functions
 

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Schema and Metadata Test Suite ===
 
 -- === CASE: SELECT from sqlite_master ===

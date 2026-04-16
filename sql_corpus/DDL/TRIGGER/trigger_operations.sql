@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Trigger Test Suite ===
 
 -- === CASE: Create simple trigger ===

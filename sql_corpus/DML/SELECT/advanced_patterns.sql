@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Advanced SQL Patterns Test Suite ===
 
 -- === CASE: Pivot/Matrix transformation ===

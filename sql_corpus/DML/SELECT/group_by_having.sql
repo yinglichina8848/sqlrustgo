@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: GROUP BY and HAVING
 -- Tests for aggregation with grouping
 

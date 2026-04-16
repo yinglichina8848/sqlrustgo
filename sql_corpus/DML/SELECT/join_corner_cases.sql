@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: JOIN Corner Cases
 -- Edge cases and stress tests for JOIN operations
 

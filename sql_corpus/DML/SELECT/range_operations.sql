@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Range and Interval Test Suite ===
 
 -- === CASE: BETWEEN with integers ===

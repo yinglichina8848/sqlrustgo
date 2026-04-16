@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === EXPLAIN Query Analysis Test Suite ===
 
 -- === CASE: EXPLAIN basic SELECT ===

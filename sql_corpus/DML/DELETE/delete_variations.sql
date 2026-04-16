@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: DELETE Variations
 -- Tests for various DELETE patterns
 

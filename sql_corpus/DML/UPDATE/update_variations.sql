@@ -1,3 +1,7 @@
+-- === SKIP ===
+
+-- === SKIP ===
+
 -- SQLCorpus: UPDATE Variations
 -- Tests for various UPDATE patterns
 

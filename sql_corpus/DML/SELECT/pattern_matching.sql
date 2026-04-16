@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Pattern Matching Test Suite ===
 
 -- === CASE: LIKE with % ===

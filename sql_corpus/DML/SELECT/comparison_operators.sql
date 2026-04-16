@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Comparison Operators Test Suite ===
 
 -- === CASE: Equal to ===

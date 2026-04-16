@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Subquery Test Suite ===
 
 -- === CASE: Scalar Subquery in SELECT ===

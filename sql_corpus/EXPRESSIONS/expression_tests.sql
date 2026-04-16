@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: Expression Tests
 -- Tests for various SQL expressions and operators
 

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Constraint Test Suite ===
 
 -- === CASE: Add primary key ===

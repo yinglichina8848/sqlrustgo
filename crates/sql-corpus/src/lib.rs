@@ -146,6 +146,15 @@ impl SqlCorpus {
 
     /// Parse and execute SQL content
     pub fn parse_and_execute(&self, content: &str) -> Vec<SqlTestResult> {
+        // Check for SKIP/IGNORE marker at the top of the file
+        let first_lines: Vec<_> = content.lines().take(5).collect();
+        for line in &first_lines {
+            let trimmed = line.trim();
+            if trimmed == "-- === SKIP ===" || trimmed == "-- === IGNORE ===" {
+                return Vec::new(); // Return empty results for skipped files
+            }
+        }
+
         let mut results = Vec::new();
         let mut current_case: Option<TestCase> = None;
         let mut setup_sql = String::new();

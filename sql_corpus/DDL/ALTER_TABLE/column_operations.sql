@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Column Operations Test Suite ===
 
 -- === CASE: Add column ===

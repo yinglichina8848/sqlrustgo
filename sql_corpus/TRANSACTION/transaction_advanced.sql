@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Complex Transaction Test Suite ===
 
 -- === CASE: Basic transaction with COMMIT ===

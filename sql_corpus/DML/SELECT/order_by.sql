@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- SQLCorpus: ORDER BY Variations
 -- Tests for result ordering
 

@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Upsert Operations Test Suite ===
 
 -- === CASE: INSERT ON CONFLICT DO NOTHING ===

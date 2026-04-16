@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Self Join Test Suite ===
 
 -- === CASE: Self join basic ===

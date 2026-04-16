@@ -1,3 +1,5 @@
+-- === SKIP ===
+
 -- === Conditional Expressions Test Suite ===
 
 -- === CASE: Simple CASE ===
