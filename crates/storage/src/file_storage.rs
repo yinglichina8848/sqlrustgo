@@ -2,7 +2,9 @@
 //! Persists table data to JSON files
 
 use crate::bplus_tree::BPlusTree;
-use crate::engine::{ColumnDefinition, Record, StorageEngine, TableData, TableInfo};
+use crate::engine::{
+    ColumnDefinition, ForeignKeyConstraint, Record, StorageEngine, TableData, TableInfo,
+};
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -151,6 +153,7 @@ impl FileStorage {
             info: TableInfo {
                 name: stored.name,
                 columns: stored.columns,
+                foreign_keys: stored.foreign_keys,
             },
             rows: stored.rows,
         })
@@ -165,6 +168,7 @@ impl FileStorage {
         let stored = StoredTableData {
             name: table_data.info.name.clone(),
             columns: table_data.info.columns.clone(),
+            foreign_keys: table_data.info.foreign_keys.clone(),
             rows: table_data.rows.clone(),
         };
 
@@ -384,6 +388,7 @@ impl FileStorage {
 struct StoredTableData {
     name: String,
     columns: Vec<ColumnDefinition>,
+    foreign_keys: Vec<ForeignKeyConstraint>,
     rows: Vec<Vec<Value>>,
 }
 
@@ -926,7 +931,10 @@ impl StorageEngine for FileStorage {
     fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
         // Inline the implementation to avoid potential recursion issues
         // Get table from tables
-        let table_data = self.tables.get(table).cloned()
+        let table_data = self
+            .tables
+            .get(table)
+            .cloned()
             .ok_or_else(|| SqlError::TableNotFound(table.to_string()))?;
 
         // Build B+ Tree from existing rows
@@ -940,7 +948,8 @@ impl StorageEngine for FileStorage {
         }
 
         // Save to disk
-        self.save_index(table, column, &index).map_err(SqlError::from)?;
+        self.save_index(table, column, &index)
+            .map_err(SqlError::from)?;
 
         // Store in memory
         let mut indexes = self.indexes.write().unwrap();

@@ -5,7 +5,7 @@
 use crate::ExecutorResult;
 use sqlrustgo_catalog::HandlerCondition;
 use sqlrustgo_catalog::StoredProcStatement;
-use sqlrustgo_storage::StorageEngine;
+use sqlrustgo_storage::{ForeignKeyConstraint, StorageEngine};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -898,27 +898,31 @@ impl StoredProcExecutor {
                 Ok(())
             }
             sqlrustgo_parser::Statement::Insert(insert) => {
-                let table_name = &insert.table;
-                let mut storage = self.storage.write().unwrap();
+                let table_name = &insert.table.clone();
+                let insert_columns = insert.columns.clone();
 
-                if !storage.has_table(table_name) {
-                    return Err(format!("Table '{}' not found", table_name));
-                }
+                let table_info = {
+                    let storage = self.storage.read().unwrap();
+                    if !storage.has_table(&table_name) {
+                        return Err(format!("Table '{}' not found", table_name));
+                    }
+                    storage.get_table_info(&table_name).ok()
+                };
 
-                let table_info = storage.get_table_info(table_name).ok();
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
+                let mut new_rows: Vec<Vec<Value>> = Vec::new();
 
                 for row in &insert.values {
                     let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
 
-                    if insert.columns.is_empty() {
+                    if insert_columns.is_empty() {
                         for (col_idx, expr) in row.iter().enumerate() {
                             if col_idx < num_columns {
                                 new_row[col_idx] = self.expression_to_value(expr, ctx);
                             }
                         }
                     } else {
-                        for (value_idx, col_name) in insert.columns.iter().enumerate() {
+                        for (value_idx, col_name) in insert_columns.iter().enumerate() {
                             if value_idx < row.len() {
                                 if let Some(ref info) = table_info {
                                     if let Some(target_idx) = info
@@ -934,9 +938,23 @@ impl StoredProcExecutor {
                         }
                     }
 
-                    storage
-                        .insert(table_name, vec![new_row])
-                        .map_err(|e| format!("Failed to insert: {}", e))?;
+                    if let Some(ref info) = table_info {
+                        if !info.foreign_keys.is_empty() {
+                            let cols = insert_columns.clone();
+                            self.validate_foreign_keys(&table_name, &new_row, &cols)?;
+                        }
+                    }
+
+                    new_rows.push(new_row);
+                }
+
+                {
+                    let mut storage = self.storage.write().unwrap();
+                    for new_row in new_rows {
+                        storage
+                            .insert(&table_name, vec![new_row])
+                            .map_err(|e| format!("Failed to insert: {}", e))?;
+                    }
                 }
 
                 ctx.set_session_var(
@@ -1035,6 +1053,72 @@ impl StoredProcExecutor {
             }
             _ => Value::Null,
         }
+    }
+
+    /// Validate foreign key constraints for a row being inserted
+    fn validate_foreign_keys(
+        &self,
+        table_name: &str,
+        row: &[Value],
+        columns: &[sqlrustgo_parser::ColumnDefinition],
+    ) -> Result<(), String> {
+        let storage = self.storage.read().unwrap();
+        let table_info = storage
+            .get_table_info(table_name)
+            .map_err(|e| format!("Failed to get table info: {}", e))?;
+
+        for fk in &table_info.foreign_keys {
+            let parent_values: Vec<Value> = fk
+                .columns
+                .iter()
+                .filter_map(|col_name| {
+                    columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                        .and_then(|idx| row.get(idx).cloned())
+                })
+                .collect();
+
+            if parent_values.iter().any(|v| matches!(v, Value::Null)) {
+                continue;
+            }
+
+            let parent_rows = storage
+                .scan(&fk.referenced_table)
+                .map_err(|e| format!("Failed to scan parent table: {}", e))?;
+
+            let ref_col_indices: Vec<usize> = fk
+                .referenced_columns
+                .iter()
+                .filter_map(|col_name| {
+                    storage
+                        .get_table_info(&fk.referenced_table)
+                        .ok()?
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                })
+                .collect();
+
+            let parent_has_match = parent_rows.iter().any(|parent_row| {
+                ref_col_indices
+                    .iter()
+                    .enumerate()
+                    .all(|(i, &col_idx)| parent_row.get(col_idx) == parent_values.get(i))
+            });
+
+            if !parent_has_match {
+                return Err(format!(
+                    "Foreign key constraint failed: {} ({}) references {} ({}) which does not exist",
+                    table_name,
+                    fk.columns.join(", "),
+                    fk.referenced_table,
+                    fk.referenced_columns.join(", ")
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// Evaluate a binary operation and return a boolean Value
