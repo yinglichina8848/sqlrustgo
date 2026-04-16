@@ -146,23 +146,89 @@ cargo tarpaulin --workspace --exclude-dir crates/tpch
 
 ## 文档导航
 
+### 版本文档
+
+| 文档 | 说明 |
+|------|------|
+| [CHANGELOG](CHANGELOG.md) | 变更日志 |
+| [VERSION](VERSION) | 当前版本号 |
+| [RELEASE_NOTES](RELEASE_NOTES.md) | 发布说明 |
+| [CHANGELOG (详细)](releases/v2.5.0/CHANGELOG.md) | v2.5.0 详细变更 |
+| [发布说明](releases/v2.5.0/RELEASE_NOTES.md) | v2.5.0 发布说明 |
+| [版本路线图](docs/releases/VERSION_ROADMAP.md) | 所有版本历史 |
+
+### 文档总览
+
+| 文档 | 说明 |
+|------|------|
+| [文档总索引](docs/README.md) | 所有文档索引 |
+| [架构设计](docs/architecture.md) | 系统架构 |
+| [SQL92 合规性](docs/SQL92_COMPLIANCE.md) | SQL-92 支持情况 |
+
 ### 当前版本
 
-- [v2.5.0 发布说明](docs/releases/v2.5.0/)
+- [v2.5.0 发布说明](releases/v2.5.0/)
 - [v2.6.0 开发计划](issues/1501)
 
 ### 历史版本
 
-- [v2.4.0 文档](docs/releases/v2.4.0/)
-- [v2.3.0 文档](docs/releases/v2.3.0/)
-- [v2.2.0 文档](docs/releases/v2.2.0/)
-- [v2.1.0 文档](docs/releases/v2.1.0/)
-- [v2.0.0 文档](docs/releases/v2.0.0/)
+| 版本 | 文档 |
+|------|------|
+| v2.4.0 | [文档](docs/releases/v2.4.0/) |
+| v2.3.0 | [文档](docs/releases/v2.3/) |
+| v2.2.0 | [文档](docs/releases/v2.2.0/) |
+| v2.1.0 | [文档](docs/releases/v2.1.0/) |
+| v2.0.0 | [文档](docs/releases/v2.0.0/) |
 
 ### 长期规划
 
-- [长期路线图](docs/releases/LONG_TERM_ROADMAP.md)
-- [v2.0 路线图](docs/v2.0/SQLRUSTGO_2_0_ROADMAP.md)
+| 文档 | 说明 |
+|------|------|
+| [长期路线图](docs/releases/LONG_TERM_ROADMAP.md) | 版本演进规划 |
+| [v2.0 路线图](docs/v2.0/SQLRUSTGO_2_0_ROADMAP.md) | 2.0 详细规划 |
+
+---
+
+## 教学资源
+
+### 教学计划 (教师材料)
+
+| 文档 | 说明 |
+|------|------|
+| [教学进度计划](docs/教学计划/AI增强软件工程-教学进度计划.md) | 教学进度安排 |
+| [上机实验指导书](docs/教学计划/上机实验指导书.md) | 实验指导 |
+| [实验报告模版](docs/教学计划/实验报告模版.md) | 报告模板 |
+
+### PPT 讲义
+
+| 讲次 | 主题 | 链接 |
+|------|------|------|
+| 第1讲 | 软件工程概述与项目导论 | [PPT](docs/教学计划/PPT/第1讲-软件工程概述与项目导论.md) |
+| 第2讲 | 结构化设计与UML基础 | [PPT](docs/教学计划/PPT/第2讲-结构化设计与UML基础.md) |
+| 第3讲 | 面向对象设计与类图 | [PPT](docs/教学计划/PPT/第3讲-面向对象设计与类图.md) |
+| 第4讲 | 顺序图状态图与架构设计 | [PPT](docs/教学计划/PPT/第4讲-顺序图状态图与架构设计.md) |
+| 第5讲 | 架构设计原理与SQLRustGo架构 | [PPT](docs/教学计划/PPT/第5讲-架构设计原理与SQLRustGo架构.md) |
+| 第6讲 | 功能模块划分与接口设计 | [PPT](docs/教学计划/PPT/第6讲-功能模块划分与接口设计.md) |
+| 第7讲 | AI辅助核心模块实现 | [PPT](docs/教学计划/PPT/第7讲-AI辅助核心模块实现.md) |
+| 第8讲 | 测试驱动开发与Alpha版本 | [PPT](docs/教学计划/PPT/第8讲-测试驱动开发与Alpha版本.md) |
+| 第9讲 | 软件治理与分支策略 | [PPT](docs/教学计划/PPT/第9讲-软件治理与分支策略.md) |
+| 第10讲 | PR工作流与项目成熟度评估 | [PPT](docs/教学计划/PPT/第10讲-PR工作流与项目成熟度评估.md) |
+
+### 教学实践 (学生材料)
+
+| 文档 | 说明 |
+|------|------|
+| [教学实践索引](docs/教学实践/README.md) | 学生实践材料索引 |
+| [学生执行手册](docs/教学实践/v1.1.0-beta/handbook-student.md) | 学生可复现步骤 |
+| [助教执行手册](docs/教学实践/v1.1.0-beta/handbook-ta.md) | PR 证据链示例 |
+
+### 教程
+
+| 文档 | 说明 |
+|------|------|
+| [连接池指南](docs/tutorials/connection-pool-guide.md) | 连接池配置 |
+| [物理备份指南](docs/tutorials/physical-backup-guide.md) | 备份操作 |
+| [配置热重载指南](docs/tutorials/config-hot-reload-guide.md) | 热重载配置 |
 
 ---
 
