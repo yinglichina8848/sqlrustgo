@@ -50,6 +50,17 @@ impl ShardInfo {
     pub fn primary_node(&self) -> Option<NodeId> {
         self.replica_nodes.first().copied()
     }
+
+    pub fn replicas(&self) -> &[NodeId] {
+        &self.replica_nodes
+    }
+
+    pub fn promote_replica(&mut self, node: NodeId) {
+        if let Some(pos) = self.replica_nodes.iter().position(|&n| n == node) {
+            self.replica_nodes.remove(pos);
+            self.replica_nodes.insert(0, node);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
