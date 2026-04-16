@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package distributed;
+
+message Empty {}
+
+service ShardService {
+    rpc InsertVector(InsertVectorRequest) returns (InsertVectorResponse);
+    rpc SearchVectors(SearchVectorsRequest) returns (SearchVectorsResponse);
+    rpc DeleteVector(DeleteVectorRequest) returns (DeleteVectorResponse);
+
+    rpc CreateNode(CreateNodeRequest) returns (CreateNodeResponse);
+    rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+    rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+
+    rpc CreateEdge(CreateEdgeRequest) returns (CreateEdgeResponse);
+    rpc GetEdges(GetEdgesRequest) returns (GetEdgesResponse);
+
+    rpc HealthCheck(Empty) returns (HealthCheckResponse);
+}
+
+message VectorRecord {
+    uint64 id = 1;
+    repeated float vector = 2;
+    map<string, string> metadata = 3;
+}
+
+message InsertVectorRequest {
+    uint64 shard_id = 1;
+    VectorRecord record = 2;
+}
+
+message InsertVectorResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message SearchVectorsRequest {
+    uint64 shard_id = 1;
+    repeated float query = 2;
+    uint32 top_k = 3;
+}
+
+message SearchResult {
+    uint64 id = 1;
+    float score = 2;
+    VectorRecord record = 3;
+}
+
+message SearchVectorsResponse {
+    repeated SearchResult results = 1;
+    string error = 2;
+}
+
+message DeleteVectorRequest {
+    uint64 shard_id = 1;
+    uint64 vector_id = 2;
+}
+
+message DeleteVectorResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message PropertyMap {
+    map<string, string> properties = 1;
+}
+
+message CreateNodeRequest {
+    uint64 shard_id = 1;
+    string label = 2;
+    PropertyMap properties = 3;
+}
+
+message CreateNodeResponse {
+    uint64 node_id = 1;
+    bool success = 2;
+    string error = 3;
+}
+
+message GetNodeRequest {
+    uint64 node_id = 1;
+}
+
+message GetNodeResponse {
+    uint64 node_id = 1;
+    string label = 2;
+    PropertyMap properties = 3;
+    bool found = 4;
+}
+
+message DeleteNodeRequest {
+    uint64 node_id = 1;
+}
+
+message DeleteNodeResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message CreateEdgeRequest {
+    uint64 from_node = 1;
+    uint64 to_node = 2;
+    string label = 3;
+    PropertyMap properties = 4;
+}
+
+message CreateEdgeResponse {
+    uint64 edge_id = 1;
+    bool success = 2;
+    string error = 3;
+}
+
+message GetEdgesRequest {
+    uint64 node_id = 1;
+}
+
+message EdgeInfo {
+    uint64 edge_id = 1;
+    uint64 from = 2;
+    uint64 to = 3;
+    string label = 4;
+}
+
+message GetEdgesResponse {
+    repeated EdgeInfo edges = 1;
+    string error = 2;
+}
+
+message HealthCheckResponse {
+    bool healthy = 1;
+    uint64 node_id = 2;
+    uint64 uptime_ms = 3;
+}
