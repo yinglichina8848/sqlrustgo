@@ -976,4 +976,54 @@ impl StorageEngine for FileStorage {
 
         Ok(())
     }
+
+    fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()> {
+        if let Some(data) = self.tables.get_mut(table) {
+            data.info.columns.push(column);
+            let table_data = data.clone();
+            self.save_table(table, &table_data)?;
+        }
+        Ok(())
+    }
+
+    fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()> {
+        if let Some(mut table_data) = self.tables.remove(table) {
+            table_data.info.name = new_name.to_string();
+            let old_path = self.table_path(table);
+            let new_path = self.table_path(new_name);
+
+            self.save_table(new_name, &table_data)?;
+
+            if old_path.exists() {
+                std::fs::rename(&old_path, &new_path).map_err(SqlError::from)?;
+            }
+
+            self.tables.insert(new_name.to_string(), table_data);
+
+            if let Ok(mut indexes) = self.indexes.write() {
+                let keys: Vec<_> = indexes.keys().cloned().collect();
+                for key in keys {
+                    if key.0 == table {
+                        let new_key = (new_name.to_string(), key.1.clone());
+                        if let Some(idx) = indexes.remove(&key) {
+                            indexes.insert(new_key, idx);
+                        }
+                    }
+                }
+            }
+
+            if let Ok(indexes) = self.indexes.read() {
+                for key in indexes.keys() {
+                    if key.0 == new_name {
+                        let old_idx_path = self.index_path(table, &key.1);
+                        let new_idx_path = self.index_path(new_name, &key.1);
+                        if old_idx_path.exists() {
+                            std::fs::rename(&old_idx_path, &new_idx_path).ok();
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
