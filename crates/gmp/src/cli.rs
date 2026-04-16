@@ -6,6 +6,7 @@
 //!           graph_neighbors, list_nodes, list_edge_types
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo_gmp::embedding;
 use sqlrustgo_gmp::{GmpExecutor, SearchResult};
 use sqlrustgo_graph::store::{GraphStore, InMemoryGraphStore};
 use sqlrustgo_graph::{EdgeId, NodeId, PropertyMap, PropertyValue};
@@ -14,6 +15,11 @@ use sqlrustgo_types::SqlResult;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+
+use sqlrustgo_gmp::persist_sqlite::{
+    DocumentRecord,
+    EdgeUpsertRecord, EmbeddingRecord, NodeRecord, SqliteBackend, StorageBackend,
+};
 
 // ============================================================================
 // Request / Response
@@ -92,19 +98,160 @@ pub struct GmpCliState {
     gmp: GmpExecutor,
     /// Maps "node_type:name" -> NodeId (u64) for name-based access
     name_to_id: Arc<RwLock<HashMap<String, NodeId>>>,
+    /// SQLite persistence backend (Stage 1 → Stage 3 migration contract)
+    backend: Arc<SqliteBackend>,
 }
 
 impl GmpCliState {
+    /// Open SQLite backend and reload all data from disk.
+    /// This is the Stage 1 persistence entry point.
     fn new() -> Self {
+        let backend = Arc::new(
+            SqliteBackend::open().expect("failed to open SQLite backend"),
+        );
+
+        // Initialize tables if they don't exist
+        if let Err(e) = backend.as_trait().init() {
+            eprintln!("WARN: backend init error: {}", e);
+        }
+
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let graph = Arc::new(RwLock::new(InMemoryGraphStore::new()));
         let gmp = GmpExecutor::new(storage.clone());
+        let name_to_id = Arc::new(RwLock::new(HashMap::new()));
+
+        // Reload persisted data into in-memory structures
+        Self::reload_from_backend(&backend, &storage, &graph, &name_to_id, &gmp);
+
         Self {
             storage,
             graph,
             gmp,
-            name_to_id: Arc::new(RwLock::new(HashMap::new())),
+            name_to_id,
+            backend,
         }
+    }
+
+    /// Reload documents, embeddings, nodes, and edges from SQLite into memory
+    fn reload_from_backend(
+        backend: &Arc<SqliteBackend>,
+        storage: &Arc<RwLock<MemoryStorage>>,
+        graph: &Arc<RwLock<InMemoryGraphStore>>,
+        name_to_id: &Arc<RwLock<HashMap<String, NodeId>>>,
+        gmp: &GmpExecutor,
+    ) {
+        // Build sqlite_node_id -> (mem_id, name, type) mapping while loading nodes
+        let mut sqlite_to_mem: std::collections::HashMap<
+            i64,
+            (sqlrustgo_graph::NodeId, String, String),
+        > = std::collections::HashMap::new();
+
+        // Load graph nodes first (needed to resolve edge references)
+        if let Ok(nodes) = backend.as_trait().load_nodes() {
+            let mut g = graph.write().unwrap();
+            let mut n2id = name_to_id.write().unwrap();
+            for node in nodes {
+                let label = node.node_type.clone();
+                let mut pm = sqlrustgo_graph::PropertyMap::new();
+                pm.insert(
+                    "name".to_string(),
+                    sqlrustgo_graph::PropertyValue::String(node.name.clone()),
+                );
+                if let Ok(props_map) =
+                    serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(
+                        node.properties.clone(),
+                    )
+                {
+                    for (k, v) in props_map {
+                        let pv = match v {
+                            serde_json::Value::String(s) => {
+                                sqlrustgo_graph::PropertyValue::String(s)
+                            }
+                            serde_json::Value::Number(n) => {
+                                sqlrustgo_graph::PropertyValue::Float(n.as_f64().unwrap_or(0.0))
+                            }
+                            serde_json::Value::Bool(b) => {
+                                sqlrustgo_graph::PropertyValue::Int(if b { 1 } else { 0 })
+                            }
+                            _ => sqlrustgo_graph::PropertyValue::String(v.to_string()),
+                        };
+                        pm.insert(k, pv);
+                    }
+                }
+                let id = g.create_node(&label, pm);
+                let key = format!("{}:{}", node.node_type, node.name);
+                n2id.insert(key, id);
+                // Track sqlite_id -> (mem_id, name, type)
+                sqlite_to_mem.insert(node.id, (id, node.name, node.node_type));
+            }
+        }
+
+        // Load edges using sqlite_id -> mem_id mapping
+        if let Ok(edges) = backend.as_trait().load_edges() {
+            let mut g = graph.write().unwrap();
+            for edge in edges {
+                // Map sqlite IDs to in-memory IDs
+                let src_mem_id = match sqlite_to_mem.get(&edge.src) {
+                    Some((id, _, _)) => *id,
+                    None => continue, // skip edges with unresolved src
+                };
+                let dst_mem_id = match sqlite_to_mem.get(&edge.dst) {
+                    Some((id, _, _)) => *id,
+                    None => continue, // skip edges with unresolved dst
+                };
+
+                let mut pm = sqlrustgo_graph::PropertyMap::new();
+                if let Ok(props_map) =
+                    serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(
+                        edge.properties.clone(),
+                    )
+                {
+                    for (k, v) in props_map {
+                        let pv = match v {
+                            serde_json::Value::Number(n) => {
+                                sqlrustgo_graph::PropertyValue::Float(n.as_f64().unwrap_or(0.0))
+                            }
+                            _ => sqlrustgo_graph::PropertyValue::String(v.to_string()),
+                        };
+                        pm.insert(k, pv);
+                    }
+                }
+                let _ = g.create_edge(src_mem_id, dst_mem_id, &edge.edge_type, pm);
+            }
+        }
+
+        // Reload documents + embeddings from SQLite into MemoryStorage
+        // This makes vector_search work after process restart
+        if let (Ok(docs), Ok(embs)) = (
+            backend.as_trait().load_documents(),
+            backend.as_trait().load_embeddings(),
+        ) {
+            // Build a map: doc_id → embedding
+            let emb_map: std::collections::HashMap<i64, Vec<f32>> = embs
+                .into_iter()
+                .map(|e| (e.doc_id, e.embedding))
+                .collect();
+
+            for doc in docs {
+                let kw: Vec<&str> = doc.keywords.iter().map(|s| s.as_str()).collect();
+                // Check if we have an embedding for this doc
+                if let Some(emb) = emb_map.get(&doc.id) {
+                    // Import into MemoryStorage and then patch the embedding
+                    if let Ok(doc_id) = gmp.import_document(
+                        &doc.title, &doc.doc_type, &doc.content, &kw,
+                    ) {
+                        Self::patch_embedding(storage, doc_id, emb.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Patch an embedding directly in MemoryStorage (for reload from SQLite)
+    fn patch_embedding(storage: &Arc<RwLock<MemoryStorage>>, doc_id: i64, embedding: Vec<f32>) -> SqlResult<()> {
+        use sqlrustgo_gmp::vector_search::upsert_embedding;
+        let mut s = storage.write().unwrap();
+        upsert_embedding(&mut *s, doc_id, &embedding)
     }
 
     fn init(&self) -> SqlResult<()> {
@@ -121,7 +268,40 @@ impl GmpCliState {
 
     fn import_doc(&self, title: &str, doc_type: &str, content: &str, keywords: &[String]) -> SqlResult<i64> {
         let kw: Vec<&str> = keywords.iter().map(|s| s.as_str()).collect();
-        self.gmp.import_document(title, doc_type, content, &kw)
+
+        // Write to MemoryStorage (existing path)
+        let doc_id = self.gmp.import_document(title, doc_type, content, &kw)?;
+
+        // Also write to SQLite (dual-write for persistence)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        let doc_rec = DocumentRecord {
+            id: doc_id,
+            title: title.to_string(),
+            doc_type: doc_type.to_string(),
+            content: content.to_string(),
+            keywords: keywords.to_vec(),
+            version: 1,
+            created_at: now,
+            updated_at: now,
+            effective_date: None,
+            status: "ACTIVE".to_string(),
+        };
+        let _ = self.backend.as_trait().save_document(&doc_rec);
+
+        // Generate embedding and write BLOB to SQLite
+        let emb = embedding::generate_embedding(content);
+        let emb_rec = EmbeddingRecord {
+            doc_id,
+            embedding: emb,
+            updated_at: now,
+        };
+        let _ = self.backend.as_trait().save_embedding(&emb_rec);
+
+        Ok(doc_id)
     }
 
     fn upsert_node(&self, node_type: &str, name: &str, code: Option<&str>, props: Option<serde_json::Value>) -> Result<String, String> {
@@ -137,7 +317,25 @@ impl GmpCliState {
         let _node_id = match nid {
             Some(id) => id,
             None => {
-                // Create new node
+                // Build properties JSON for SQLite persistence
+                let mut props_map = serde_json::Map::new();
+                props_map.insert("name".to_string(), serde_json::json!(name));
+                if let Some(c) = code {
+                    props_map.insert("code".to_string(), serde_json::json!(c));
+                }
+                if let Some(p) = props.clone() {
+                    if let serde_json::Value::Object(map) = p {
+                        for (k, v) in map {
+                            props_map.insert(k, v);
+                        }
+                    }
+                }
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+
+                // Create new node in-memory
                 let mut graph = self.graph.write().map_err(|e| e.to_string())?;
                 let mut pm = PropertyMap::new();
                 pm.insert("name".to_string(), PropertyValue::String(name.to_string()));
@@ -158,9 +356,22 @@ impl GmpCliState {
                     }
                 }
                 let id = graph.create_node(&label, pm);
+
                 // Register in name map
                 let mut n2id = self.name_to_id.write().map_err(|e| e.to_string())?;
                 n2id.insert(key.clone(), id);
+
+                // Also write to SQLite (dual-write)
+                let node_rec = NodeRecord {
+                    id: id.0 as i64,
+                    name: name.to_string(),
+                    node_type: node_type.to_string(),
+                    properties: serde_json::Value::Object(props_map),
+                    created_at: now,
+                    updated_at: now,
+                };
+                let _ = self.backend.as_trait().save_node(&node_rec);
+
                 id
             }
         };
@@ -185,6 +396,23 @@ impl GmpCliState {
             pm.insert("weight".to_string(), PropertyValue::Float(w));
         }
         graph.create_edge(from_id, to_id, rel_type, pm).map_err(|e| e.to_string())?;
+
+        // Also write to SQLite (dual-write: resolve from/to names to ids via backend)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let edge_rec = EdgeUpsertRecord {
+            from_name: from_name.to_string(),
+            from_type: from_type.to_string(),
+            to_name: to_name.to_string(),
+            to_type: to_type.to_string(),
+            rel_type: rel_type.to_string(),
+            weight,
+            created_at: now,
+        };
+        let _ = self.backend.as_trait().upsert_edge_by_names(&edge_rec);
+
         Ok(())
     }
 

@@ -1,0 +1,42 @@
+# SUPERPOWERS Reference Guide
+
+You are an autonomous agent with access to the `superpowers-agent` system. Reference documentation is in the `AGENTS.md` and the detailed reference guide below.
+
+> This is detailed reference documentation for the superpowers-agent system.
+> Load this file only when you need specific information not covered in AGENTS.md.
+
+**Bootstrapped Version:** `^^SAV:8.4.1^^`
+
+---
+
+## Installation
+
+If `superpowers-agent` is not available, install it:
+
+```bash
+npm install -g @complexthings/superpowers-agent
+```
+
+---
+
+## Version Check
+
+At conversation start:
+1. Run a superpowers-agent command and note the version string `^^SAV:X.Y.Z^^` in output
+2. Compare against bootstrapped version `^^SAV:8.4.1^^`
+3. If they differ, notify the user:
+   Your superpowers-agent may have updates. Run:
+   ```sh
+   superpowers-agent update && superpowers-agent bootstrap && superpowers-agent setup-skills
+   ```
+
+---
+
+## Skill Loading Rules
+
+- Load skills **JIT only** — never preload to "understand" them
+- Follow skill instructions **exactly as written** — no skimming, no shortcuts
+- If a skill has a checklist, create a todo for **each item** — no mental tracking
+- Simple tasks benefit from skills as much as complex ones
+
+**Skill priority (highest to lowest):** Project → Personal → Superpowers
