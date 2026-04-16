@@ -1013,6 +1013,9 @@ impl StoredProcExecutor {
                             if !info.foreign_keys.is_empty() {
                                 self.validate_foreign_keys(&table_name, &new_row, &insert_columns)?;
                             }
+                            if info.columns.iter().any(|c| c.primary_key) {
+                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                            }
                         }
                         new_rows.push(new_row);
                     }
@@ -1048,6 +1051,9 @@ impl StoredProcExecutor {
                             if !info.foreign_keys.is_empty() {
                                 let cols = insert_columns.clone();
                                 self.validate_foreign_keys(&table_name, &new_row, &cols)?;
+                            }
+                            if info.columns.iter().any(|c| c.primary_key) {
+                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
                             }
                         }
 
@@ -1327,6 +1333,68 @@ impl StoredProcExecutor {
                     fk.columns.join(", "),
                     fk.referenced_table,
                     fk.referenced_columns.join(", ")
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate PRIMARY KEY uniqueness for a row being inserted
+    fn validate_primary_key(
+        &self,
+        table_name: &str,
+        row: &[Value],
+        columns: &[sqlrustgo_parser::ColumnDefinition],
+    ) -> Result<(), String> {
+        let storage = self.storage.read().unwrap();
+        let table_info = storage
+            .get_table_info(table_name)
+            .map_err(|e| format!("Failed to get table info: {}", e))?;
+
+        let pk_indices: Vec<usize> = table_info
+            .columns
+            .iter()
+            .enumerate()
+            .filter(|(_, col)| col.primary_key)
+            .map(|(idx, _)| idx)
+            .collect();
+
+        if pk_indices.is_empty() {
+            return Ok(());
+        }
+
+        let pk_values: Vec<Value> = pk_indices
+            .iter()
+            .filter_map(|&i| row.get(i).cloned())
+            .collect();
+
+        if pk_values.iter().any(|v| matches!(v, Value::Null)) {
+            return Ok(());
+        }
+
+        let existing_rows = storage
+            .scan(table_name)
+            .map_err(|e| format!("Failed to scan table: {}", e))?;
+
+        for existing_row in existing_rows {
+            let existing_pk_values: Vec<Value> = pk_indices
+                .iter()
+                .filter_map(|&i| existing_row.get(i).cloned())
+                .collect();
+            if existing_pk_values == pk_values {
+                let pk_col_names: Vec<String> = pk_indices
+                    .iter()
+                    .filter_map(|&i| table_info.columns.get(i).map(|c| c.name.clone()))
+                    .collect();
+                return Err(format!(
+                    "Duplicate primary key: ({}) values ({}) already exist",
+                    pk_col_names.join(", "),
+                    pk_values
+                        .iter()
+                        .map(|v| format!("{:?}", v))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ));
             }
         }
