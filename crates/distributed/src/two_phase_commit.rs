@@ -549,4 +549,118 @@ mod tests {
 
         assert!(tx.all_voted_yes());
     }
+
+    #[test]
+    fn test_any_voted_no() {
+        let mut participants = vec![Participant::new(2, 0), Participant::new(3, 1)];
+        participants[0].vote_yes();
+        participants[1].vote_no("Network timeout");
+        let tx = DistributedTransaction::new(1, 1, participants);
+
+        assert!(tx.any_voted_no());
+    }
+
+    #[test]
+    fn test_set_aborted() {
+        let mut participants = vec![Participant::new(2, 0)];
+        let tx = DistributedTransaction::new(1, 1, participants);
+        assert_eq!(tx.state, TransactionState::Init);
+
+        let mut tx = tx;
+        tx.set_aborted("User cancelled");
+        assert_eq!(tx.state, TransactionState::Aborted);
+        assert!(tx.error_reason.is_some());
+    }
+
+    #[test]
+    fn test_set_committed() {
+        let participants = vec![Participant::new(2, 0)];
+        let mut tx = DistributedTransaction::new(1, 1, participants);
+        tx.set_committed();
+        assert_eq!(tx.state, TransactionState::Committed);
+    }
+
+    #[test]
+    fn test_force_abort_timed_out() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+
+        let tx_id = tpc.begin_transaction(participants);
+        // Set last_update_ms to the past so transaction is timed out
+        if let Some(tx) = tpc.get_transaction_mut(tx_id) {
+            tx.last_update_ms = 0; // Set to epoch, way in the past
+        }
+
+        let abort_commands = tpc.force_abort_timed_out();
+        assert_eq!(abort_commands.len(), 1);
+        assert_eq!(abort_commands[0].tx_id, tx_id);
+    }
+
+    #[test]
+    fn test_cleanup_completed() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+
+        let tx_id = tpc.begin_transaction(participants);
+
+        // Set transaction to committed
+        if let Some(tx) = tpc.get_transaction_mut(tx_id) {
+            tx.set_committed();
+        }
+
+        assert_eq!(tpc.num_active_transactions(), 1);
+        tpc.cleanup_completed();
+        assert_eq!(tpc.num_active_transactions(), 0);
+    }
+
+    #[test]
+    fn test_num_active_transactions() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+
+        assert_eq!(tpc.num_active_transactions(), 0);
+
+        let participants1 = vec![Participant::new(2, 0)];
+        tpc.begin_transaction(participants1);
+        assert_eq!(tpc.num_active_transactions(), 1);
+
+        let participants2 = vec![Participant::new(3, 0)];
+        tpc.begin_transaction(participants2);
+        assert_eq!(tpc.num_active_transactions(), 2);
+    }
+
+    #[test]
+    fn test_get_transaction() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+
+        let tx_id = tpc.begin_transaction(participants);
+
+        let tx = tpc.get_transaction(tx_id);
+        assert!(tx.is_some());
+
+        let tx = tpc.get_transaction(999);
+        assert!(tx.is_none());
+    }
+
+    #[test]
+    fn test_prepare_transaction_not_found() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let result = tpc.prepare(999);
+        assert!(matches!(result, Err(TwoPCError::TransactionNotFound(_))));
+    }
+
+    #[test]
+    fn test_participant_vote() {
+        let mut p = Participant::new(2, 0);
+        assert!(p.vote.is_none());
+
+        p.vote_yes();
+        assert!(p.prepared);
+        assert_eq!(p.vote, Some(Vote::Yes));
+
+        let mut p2 = Participant::new(3, 1);
+        p2.vote_no("Error");
+        assert_eq!(p2.vote, Some(Vote::No));
+        assert_eq!(p2.error, Some("Error".to_string()));
+    }
 }

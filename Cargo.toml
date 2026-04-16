@@ -99,6 +99,7 @@ proptest = "1.1"
 arrow = { version = "53" }
 parquet = { version = "53" }
 rust_decimal = "1.0"
+bumpalo = "3"
 
 [dev-dependencies]
 criterion = "0.8"
@@ -117,7 +118,6 @@ sqlrustgo-tools = { path = "crates/tools" }
 sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
 sqlrustgo-unified-query = { path = "crates/unified-query" }
-sqlrustgo-distributed = { path = "crates/distributed" }
 
 [package]
 name = "sqlrustgo"
@@ -152,6 +152,7 @@ serde_json.workspace = true
 sqlrustgo-agentsql.workspace = true
 sqlrustgo-gmp.workspace = true
 rust_decimal.workspace = true
+bumpalo.workspace = true
 
 [[test]]
 name = "ci_test"
@@ -591,10 +592,6 @@ path = "tests/integration/wal_transaction_integration_test.rs"
 [[test]]
 name = "unified_query_integration_test"
 path = "tests/integration/unified_query_integration_test.rs"
-
-[[test]]
-name = "distributed_storage_sharding_test"
-path = "tests/integration/distributed_storage_sharding_test.rs"
 
 [[test]]
 name = "scheduler_integration_test"

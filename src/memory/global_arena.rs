@@ -42,7 +42,8 @@ impl GlobalArena {
 
     /// Get total allocated bytes
     pub fn total_allocated(&self) -> usize {
-        self.total_allocated.load(std::sync::atomic::Ordering::Relaxed)
+        self.total_allocated
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get peak memory usage
@@ -55,7 +56,8 @@ impl GlobalArena {
     pub fn reset(&mut self) {
         // Recreate the bump allocator with a fresh allocation
         self.bump = bumpalo::Bump::new();
-        self.total_allocated.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.total_allocated
+            .store(0, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
