@@ -144,4 +144,95 @@ mod tests {
         );
         assert!(matches!(pred, Predicate::Or(_, _)));
     }
+
+    #[test]
+    fn test_predicate_lt() {
+        let pred = Predicate::lt("age", Value::Integer(18));
+        assert!(matches!(pred, Predicate::Lt(_, _)));
+    }
+
+    #[test]
+    fn test_predicate_lte() {
+        let pred = Predicate::lte("age", Value::Integer(18));
+        assert!(matches!(pred, Predicate::Lte(_, _)));
+    }
+
+    #[test]
+    fn test_predicate_gt() {
+        let pred = Predicate::gt("age", Value::Integer(65));
+        assert!(matches!(pred, Predicate::Gt(_, _)));
+    }
+
+    #[test]
+    fn test_predicate_gte() {
+        let pred = Predicate::gte("age", Value::Integer(65));
+        assert!(matches!(pred, Predicate::Gte(_, _)));
+    }
+
+    #[test]
+    fn test_predicate_not() {
+        let pred = Predicate::not(Predicate::eq("active", Value::Boolean(true)));
+        assert!(matches!(pred, Predicate::Not(_)));
+    }
+
+    #[test]
+    fn test_predicate_is_null() {
+        let pred = Predicate::IsNull(Box::new(Expr::Column("email".to_string())));
+        assert!(matches!(pred, Predicate::IsNull(_)));
+    }
+
+    #[test]
+    fn test_predicate_is_not_null() {
+        let pred = Predicate::IsNotNull(Box::new(Expr::Column("email".to_string())));
+        assert!(matches!(pred, Predicate::IsNotNull(_)));
+    }
+
+    #[test]
+    fn test_predicate_in() {
+        let pred = Predicate::In(
+            Box::new(Expr::Column("status".to_string())),
+            vec![
+                Expr::Value(Value::Text("active".to_string())),
+                Expr::Value(Value::Text("pending".to_string())),
+            ],
+        );
+        assert!(matches!(pred, Predicate::In(_, _)));
+    }
+
+    #[test]
+    fn test_expr_value() {
+        let expr = Expr::Value(Value::Integer(42));
+        assert!(matches!(expr, Expr::Value(_)));
+    }
+
+    #[test]
+    fn test_expr_column() {
+        let expr = Expr::Column("name".to_string());
+        assert!(matches!(expr, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expr_parameter() {
+        let expr = Expr::Parameter(1);
+        assert!(matches!(expr, Expr::Parameter(1)));
+    }
+
+    #[test]
+    fn test_index_op_eq() {
+        let op = IndexOp::Eq(42);
+        assert!(matches!(op, IndexOp::Eq(42)));
+    }
+
+    #[test]
+    fn test_index_op_range() {
+        let op = IndexOp::Range(1, 100);
+        assert!(matches!(op, IndexOp::Range(1, 100)));
+    }
+
+    #[test]
+    fn test_predicate_debug() {
+        let pred = Predicate::eq("id", Value::Integer(42));
+        let debug = format!("{:?}", pred);
+        assert!(debug.contains("Eq"));
+    }
 }
