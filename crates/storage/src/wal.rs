@@ -307,7 +307,11 @@ impl WalReader {
 
             // Read entry data
             let mut data = vec![0u8; len];
-            self.reader.read_exact(&mut data)?;
+            match self.reader.read_exact(&mut data) {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
+            }
 
             // Deserialize entry
             if let Some(entry) = WalEntry::from_bytes(&data) {
@@ -1766,5 +1770,131 @@ mod tests {
 
         let info = archiver.get_recovery_info().unwrap();
         assert!(info.is_valid() || !info.is_valid()); // Just verify it runs
+    }
+
+    #[test]
+    fn test_wal_recovery_from_corrupted_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("corrupted.wal");
+
+        // Write valid entries first
+        {
+            let manager = WalManager::new(wal_path.clone());
+            let _ = manager.log_begin(1).unwrap();
+            let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+            let _ = manager.log_commit(1).unwrap();
+        }
+
+        // Corrupt the WAL file by overwriting with invalid entry data
+        // This simulates disk corruption
+        {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(&wal_path)
+                .unwrap();
+            // Write a valid entry header followed by valid Begin entry
+            let entry = WalEntry {
+                tx_id: 0,
+                entry_type: WalEntryType::Begin,
+                table_id: 0,
+                key: None,
+                data: None,
+                lsn: 0,
+                timestamp: 0,
+            };
+            let bytes = entry.to_bytes();
+            let len = bytes.len() as u32;
+            file.write_all(&len.to_le_bytes()).unwrap();
+            file.write_all(&bytes).unwrap();
+            // Now append some corrupted garbage bytes after the valid entry
+            file.write_all(&[0xFF, 0xFE, 0xFD, 0xFC, 0x00]).unwrap();
+        }
+
+        // Recovery should skip the corrupted data and return the valid entry
+        let manager = WalManager::new(wal_path);
+        let entries = manager.recover().unwrap();
+        // Only the valid entry should be recovered
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].entry_type, WalEntryType::Begin);
+    }
+
+    #[test]
+    fn test_wal_recovery_with_partially_written_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("partial.wal");
+
+        // Write valid entries
+        {
+            let manager = WalManager::new(wal_path.clone());
+            let _ = manager.log_begin(1).unwrap();
+            let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+            let _ = manager.log_commit(1).unwrap();
+        }
+
+        // Append a partial entry - write length but not all data
+        {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&wal_path)
+                .unwrap();
+            // Write a length for a large entry but only write partial data
+            let fake_len: u32 = 1000; // Large fake length
+            file.write_all(&fake_len.to_le_bytes()).unwrap();
+            // Write only a few bytes instead of the full entry
+            file.write_all(&[1, 2, 3, 4, 5]).unwrap();
+        }
+
+        // Recovery should return valid entries and stop at the partial one
+        let manager = WalManager::new(wal_path);
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 3); // Begin, Insert, Commit from first transaction
+    }
+
+    #[test]
+    fn test_wal_recovery_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("empty.wal");
+
+        // Create an empty file
+        std::fs::write(&wal_path, b"").unwrap();
+
+        let manager = WalManager::new(wal_path);
+        let entries = manager.recover().unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_wal_recovery_with_corrupted_length_prefix() {
+        use std::fs::File;
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("bad_len.wal");
+
+        // Write valid entries
+        {
+            let manager = WalManager::new(wal_path.clone());
+            let _ = manager.log_begin(1).unwrap();
+            let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
+            let _ = manager.log_commit(1).unwrap();
+        }
+
+        // Append corrupted data - valid length prefix but garbage bytes
+        {
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&wal_path)
+                .unwrap();
+            let garbage_len: u32 = 16; // Valid length
+            file.write_all(&garbage_len.to_le_bytes()).unwrap();
+            file.write_all(&[0xFF; 16]).unwrap(); // Garbage data
+        }
+
+        let manager = WalManager::new(wal_path);
+        let entries = manager.recover().unwrap();
+        assert_eq!(entries.len(), 3); // Valid entries only
     }
 }
