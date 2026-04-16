@@ -31,6 +31,8 @@ use std::sync::{Arc, RwLock};
 use sqlrustgo_executor::OperatorProfile;
 use sqlrustgo_storage::ForeignKeyAction;
 
+mod memory;
+
 fn convert_expr_to_predicate(expr: &sqlrustgo_planner::Expr) -> Option<predicate::Predicate> {
     let sqlrustgo_planner::Expr::BinaryExpr { left, op, right } = expr else {
         return None;

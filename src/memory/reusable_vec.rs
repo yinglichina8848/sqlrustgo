@@ -54,9 +54,7 @@ pub struct ReusableVec<T> {
 impl<T> ReusableVec<T> {
     /// Create a new ReusableVec with default capacity
     pub fn new() -> Self {
-        Self {
-            inner: Vec::new(),
-        }
+        Self { inner: Vec::new() }
     }
 
     /// Create with initial capacity
@@ -329,5 +327,25 @@ mod tests {
 
         assert!(pool.rows.is_empty());
         assert!(pool.indices.is_empty());
+    }
+
+    #[test]
+    fn test_reusable_vec_capacity_growth() {
+        let mut vec = ReusableVec::new();
+        for i in 0..1000 {
+            vec.push(i);
+        }
+        assert_eq!(vec.len(), 1000);
+        assert!(vec.capacity() >= 1000);
+    }
+
+    #[test]
+    fn test_reusable_vec_clear_and_reuse() {
+        let mut vec = ReusableVec::new();
+        vec.push(1);
+        vec.clear();
+        vec.push(2);
+        assert_eq!(vec.len(), 1);
+        assert_eq!(vec[0], 2);
     }
 }
