@@ -1016,6 +1016,13 @@ impl StoredProcExecutor {
                             if info.columns.iter().any(|c| c.primary_key) {
                                 self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
                             }
+                            if !info.unique_constraints.is_empty() {
+                                self.validate_unique_constraints(
+                                    &table_name,
+                                    &new_row,
+                                    &insert_columns,
+                                )?;
+                            }
                         }
                         new_rows.push(new_row);
                     }
@@ -1054,6 +1061,13 @@ impl StoredProcExecutor {
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
                                 self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                            }
+                            if !info.unique_constraints.is_empty() {
+                                self.validate_unique_constraints(
+                                    &table_name,
+                                    &new_row,
+                                    &insert_columns,
+                                )?;
                             }
                         }
 
@@ -1334,6 +1348,68 @@ impl StoredProcExecutor {
                     fk.referenced_table,
                     fk.referenced_columns.join(", ")
                 ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_unique_constraints(
+        &self,
+        table_name: &str,
+        row: &[Value],
+        columns: &[sqlrustgo_parser::ColumnDefinition],
+    ) -> Result<(), String> {
+        let storage = self.storage.read().unwrap();
+        let table_info = storage
+            .get_table_info(table_name)
+            .map_err(|e| format!("Failed to get table info: {}", e))?;
+
+        for unique_constraint in &table_info.unique_constraints {
+            let col_indices: Vec<usize> = unique_constraint
+                .columns
+                .iter()
+                .filter_map(|col_name| {
+                    columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                })
+                .collect();
+
+            if col_indices.is_empty() {
+                continue;
+            }
+
+            let values: Vec<Value> = col_indices
+                .iter()
+                .filter_map(|&i| row.get(i).cloned())
+                .collect();
+
+            if values.iter().any(|v| matches!(v, Value::Null)) {
+                continue;
+            }
+
+            let existing_rows = storage
+                .scan(table_name)
+                .map_err(|e| format!("Failed to scan table: {}", e))?;
+
+            for existing_row in existing_rows {
+                let existing_values: Vec<Value> = col_indices
+                    .iter()
+                    .filter_map(|&i| existing_row.get(i).cloned())
+                    .collect();
+                if existing_values == values {
+                    return Err(format!(
+                        "Duplicate unique key '{}': ({}) values ({}) already exist",
+                        unique_constraint.name.as_deref().unwrap_or("unnamed"),
+                        unique_constraint.columns.join(", "),
+                        values
+                            .iter()
+                            .map(|v| format!("{:?}", v))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
             }
         }
 
