@@ -254,6 +254,11 @@ impl<'a> Lexer<'a> {
                     "AND" => Token::And,
                     "OR" => Token::Or,
                     "NOT" => Token::Not,
+                    "EXISTS" => Token::Exists,
+                    "IN" => Token::In,
+                    "ALL" => Token::All,
+                    "ANY" => Token::Any,
+                    "SOME" => Token::Some,
                     _ => Token::Identifier(ident),
                 }
             }

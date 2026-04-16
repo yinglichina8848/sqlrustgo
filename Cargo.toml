@@ -87,6 +87,7 @@ proptest = "1.1"
 arrow = { version = "58.1.0" }
 parquet = { version = "58.1.0" }
 rust_decimal = "1.0"
+parking_lot = "0.12"
 
 [dev-dependencies]
 criterion = "0.5"
