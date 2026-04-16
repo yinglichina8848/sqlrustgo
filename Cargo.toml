@@ -1,4 +1,4 @@
-# SQLRustGo v1.6.1
+# SQLRustGo v2.1.0
 
 [workspace]
 members = [
@@ -28,19 +28,14 @@ members = [
     "crates/test-runner",
     "crates/test-results",
     "crates/test-reporter",
-    "crates/mysql-server",
     "crates/gmp",
     "crates/vector",
     "crates/rag",
     "crates/graph",
-    "crates/unified-query",
-    "crates/unified-storage",
-    "crates/sql-corpus",
-    "test/sql92",
 ]
 
 [workspace.package]
-version = "1.6.1"
+version = "2.1.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -65,12 +60,10 @@ sqlrustgo-gmp = { path = "crates/gmp" }
 sqlrustgo-agentsql = { path = "crates/agentsql" }
 sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
-sqlrustgo-unified-query = { path = "crates/unified-query" }
-sqlrustgo-unified-storage = { path = "crates/unified-storage" }
 
 # External dependencies
 tokio = { version = "1.0", features = ["full"] }
-tonic = "0.12"
+tonic = "0.14"
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
@@ -96,8 +89,8 @@ hmac = "0.12"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 fnv = "1.0"
 proptest = "1.1"
-arrow = { version = "53" }
-parquet = { version = "53" }
+arrow = { version = "58.1.0" }
+parquet = { version = "58.1.0" }
 rust_decimal = "1.0"
 
 [dev-dependencies]
@@ -115,9 +108,6 @@ sqlrustgo-gmp = { path = "crates/gmp" }
 query-stats = { path = "crates/query-stats" }
 sqlrustgo-tools = { path = "crates/tools" }
 sqlrustgo-vector = { path = "crates/vector" }
-sqlrustgo-graph = { path = "crates/graph" }
-sqlrustgo-unified-query = { path = "crates/unified-query" }
-sqlrustgo-distributed = { path = "crates/distributed" }
 
 [package]
 name = "sqlrustgo"
@@ -197,11 +187,6 @@ harness = false
 name = "bench_columnar"
 harness = false
 
-[[bench]]
-name = "scheduler_bench"
-harness = false
-path = "crates/server/benches/scheduler_bench.rs"
-
 # [[bin]]
 # name = "tpch_benchmark"
 # path = "benches/tpch_comprehensive_main.rs"
@@ -237,16 +222,8 @@ name = "executor_test"
 path = "tests/integration/executor_test.rs"
 
 [[test]]
-name = "subquery_test"
-path = "tests/integration/subquery_test.rs"
-
-[[test]]
 name = "foreign_key_test"
 path = "tests/integration/foreign_key_test.rs"
-
-[[test]]
-name = "foreign_key_table_constraint_test"
-path = "tests/integration/foreign_key_table_constraint_test.rs"
 
 [[test]]
 name = "mysql_compatibility_test"
@@ -255,10 +232,6 @@ path = "tests/integration/mysql_compatibility_test.rs"
 [[test]]
 name = "planner_test"
 path = "tests/integration/planner_test.rs"
-
-[[test]]
-name = "prepared_statement_test"
-path = "tests/integration/prepared_statement_test.rs"
 
 
 [[test]]
@@ -362,20 +335,8 @@ name = "tpch_full_test"
 path = "tests/integration/tpch_full_test.rs"
 
 [[test]]
-name = "tpch_sf10_benchmark"
-path = "tests/integration/tpch_sf10_benchmark.rs"
-
-[[test]]
-name = "tpch_sf1_benchmark"
-path = "tests/integration/tpch_sf1_benchmark.rs"
-
-[[test]]
 name = "mvcc_concurrency_test"
 path = "tests/anomaly/mvcc_concurrency_test.rs"
-
-[[test]]
-name = "mvcc_snapshot_isolation_test"
-path = "tests/anomaly/mvcc_snapshot_isolation_test.rs"
 
 [[test]]
 name = "snapshot_isolation_test"
@@ -408,10 +369,6 @@ path = "tests/anomaly/transaction_isolation_test.rs"
 [[test]]
 name = "join_test"
 path = "tests/anomaly/join_test.rs"
-
-[[test]]
-name = "outer_join_test"
-path = "tests/anomaly/outer_join_test.rs"
 
 [[test]]
 name = "fk_constraint_test"
@@ -545,10 +502,6 @@ name = "sql_cli_test"
 path = "tests/integration/sql_cli_test.rs"
 
 [[test]]
-name = "oltp_workload_test"
-path = "tests/integration/oltp_workload_test.rs"
-
-[[test]]
 name = "tpch_compliance_test"
 path = "tests/integration/tpch_compliance_test.rs"
 
@@ -579,26 +532,6 @@ path = "tests/integration/agentsql_test.rs"
 [[test]]
 name = "vector_storage_integration_test"
 path = "tests/integration/vector_storage_integration_test.rs"
-
-[[test]]
-name = "hybrid_search_integration_test"
-path = "tests/integration/hybrid_search_integration_test.rs"
-
-[[test]]
-name = "wal_transaction_integration_test"
-path = "tests/integration/wal_transaction_integration_test.rs"
-
-[[test]]
-name = "unified_query_integration_test"
-path = "tests/integration/unified_query_integration_test.rs"
-
-[[test]]
-name = "distributed_storage_sharding_test"
-path = "tests/integration/distributed_storage_sharding_test.rs"
-
-[[test]]
-name = "scheduler_integration_test"
-path = "crates/server/tests/scheduler_integration_test.rs"
 
 # Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
 # This prevents any single test from consuming excessive memory
