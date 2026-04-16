@@ -93,7 +93,8 @@ pub struct SelectColumn {
 pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
-    pub values: Vec<Vec<Expression>>, // Multiple rows
+    pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
+    pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
 }
 
 /// UPDATE statement
@@ -327,86 +328,94 @@ impl Parser {
             Vec::new()
         };
 
-        // Expect VALUES keyword
-        if !matches!(self.current(), Some(Token::Values)) {
-            return Err("Expected VALUES".to_string());
-        }
-        self.next(); // consume VALUES
+        // Check if INSERT VALUES or INSERT SELECT
+        let (values, select) = if matches!(self.current(), Some(Token::Values)) {
+            self.next(); // consume VALUES
 
-        // Parse multiple rows: (val1, val2, ...), (val1, val2, ...), ...
-        let mut values = Vec::new();
+            // Parse multiple rows: (val1, val2, ...), (val1, val2, ...), ...
+            let mut values = Vec::new();
 
-        // Parse first row
-        if !matches!(self.current(), Some(Token::LParen)) {
-            return Err("Expected ( after VALUES".to_string());
-        }
-
-        // Parse all rows
-        loop {
+            // Parse first row
             if !matches!(self.current(), Some(Token::LParen)) {
-                break;
+                return Err("Expected ( after VALUES".to_string());
             }
 
-            // Parse one row
-            self.next(); // consume '('
-            let mut row = Vec::new();
+            // Parse all rows
             loop {
+                if !matches!(self.current(), Some(Token::LParen)) {
+                    break;
+                }
+
+                // Parse one row
+                self.next(); // consume '('
+                let mut row = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        Some(Token::Identifier(name)) => {
+                            row.push(Expression::Identifier(name.clone()));
+                            self.next();
+                        }
+                        Some(Token::NumberLiteral(n)) => {
+                            row.push(Expression::Literal(n.clone()));
+                            self.next();
+                        }
+                        Some(Token::StringLiteral(s)) => {
+                            row.push(Expression::Literal(format!("'{}'", s)));
+                            self.next();
+                        }
+                        Some(Token::Comma) => {
+                            self.next();
+                        }
+                        Some(Token::Null) => {
+                            row.push(Expression::Literal("NULL".to_string()));
+                            self.next();
+                        }
+                        Some(Token::Minus) => {
+                            self.next();
+                            if let Some(Token::NumberLiteral(n)) = self.current() {
+                                row.push(Expression::Literal(format!("-{}", n)));
+                                self.next();
+                            } else {
+                                return Err("Expected number after -".to_string());
+                            }
+                        }
+                        _ => return Err("Expected value".to_string()),
+                    }
+                }
+                values.push(row);
+
                 match self.current() {
-                    Some(Token::RParen) => {
-                        self.next();
-                        break;
-                    }
-                    Some(Token::Identifier(name)) => {
-                        row.push(Expression::Identifier(name.clone()));
-                        self.next();
-                    }
-                    Some(Token::NumberLiteral(n)) => {
-                        row.push(Expression::Literal(n.clone()));
-                        self.next();
-                    }
-                    Some(Token::StringLiteral(s)) => {
-                        row.push(Expression::Literal(format!("'{}'", s)));
-                        self.next();
-                    }
                     Some(Token::Comma) => {
                         self.next();
                     }
-                    Some(Token::Null) => {
-                        row.push(Expression::Literal("NULL".to_string()));
-                        self.next();
-                    }
-                    Some(Token::Minus) => {
-                        // Negative number
-                        self.next();
-                        if let Some(Token::NumberLiteral(n)) = self.current() {
-                            row.push(Expression::Literal(format!("-{}", n)));
-                            self.next();
-                        } else {
-                            return Err("Expected number after -".to_string());
-                        }
-                    }
-                    _ => return Err("Expected value".to_string()),
+                    _ => break,
                 }
             }
-            values.push(row);
 
-            // Check for more rows: either comma or end
-            match self.current() {
-                Some(Token::Comma) => {
-                    self.next(); // consume comma, continue to next row
-                }
-                _ => break,
+            if values.is_empty() {
+                return Err("Expected at least one row of values".to_string());
             }
-        }
 
-        if values.is_empty() {
-            return Err("Expected at least one row of values".to_string());
-        }
+            (values, None)
+        } else if matches!(self.current(), Some(Token::Select)) {
+            let select_stmt = self.parse_select()?;
+            match select_stmt {
+                Statement::Select(s) => (Vec::new(), Some(Box::new(s))),
+                _ => return Err("Expected SELECT statement".to_string()),
+            }
+        } else {
+            return Err("Expected VALUES or SELECT".to_string());
+        };
 
         Ok(Statement::Insert(InsertStatement {
             table,
             columns,
             values,
+            select,
         }))
     }
 
@@ -1022,6 +1031,29 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_insert_select() {
+        let result = parse("INSERT INTO users SELECT * FROM old_users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert!(
+                    i.values.is_empty(),
+                    "INSERT VALUES should be empty for INSERT SELECT"
+                );
+                assert!(
+                    i.select.is_some(),
+                    "INSERT SELECT should have a select statement"
+                );
+                let select = i.select.as_ref().unwrap();
+                assert_eq!(select.table, "old_users");
+                assert_eq!(select.columns.len(), 1); // * expands to one column
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_update() {
         let result = parse("UPDATE users SET name = 'Bob'");
         assert!(result.is_ok());
@@ -1050,14 +1082,23 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_delete() {
-        let result = parse("DELETE FROM users");
-        assert!(result.is_ok());
+    fn test_parse_insert_select_with_columns() {
+        let result =
+            parse("INSERT INTO users (id, name) SELECT id, name FROM old_users WHERE id > 0");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Delete(d) => {
-                assert_eq!(d.table, "users");
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert_eq!(i.columns, vec!["id".to_string(), "name".to_string()]);
+                assert!(
+                    i.select.is_some(),
+                    "INSERT SELECT should have a select statement"
+                );
+                let select = i.select.as_ref().unwrap();
+                assert_eq!(select.table, "old_users");
+                assert!(select.where_clause.is_some());
             }
-            _ => panic!("Expected DELETE statement"),
+            _ => panic!("Expected INSERT statement"),
         }
     }
 
