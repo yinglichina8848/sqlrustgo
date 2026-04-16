@@ -79,4 +79,43 @@ mod tests {
         assert!(results.contains(&200));
         assert!(results.contains(&300));
     }
+
+    #[test]
+    fn test_simple_bplus_tree_keys() {
+        let mut tree = BPlusTree::new();
+        tree.insert(3, 300);
+        tree.insert(1, 100);
+        tree.insert(2, 200);
+
+        let keys = tree.keys();
+        assert_eq!(keys.len(), 3);
+        assert!(keys.contains(&1));
+        assert!(keys.contains(&2));
+        assert!(keys.contains(&3));
+    }
+
+    #[test]
+    fn test_simple_bplus_tree_is_empty() {
+        let tree = BPlusTree::new();
+        assert!(tree.is_empty());
+        assert_eq!(tree.len(), 0);
+
+        let mut tree = BPlusTree::new();
+        tree.insert(1, 100);
+        assert!(!tree.is_empty());
+        assert_eq!(tree.len(), 1);
+    }
+
+    #[test]
+    fn test_simple_bplus_tree_search_all() {
+        let mut tree = BPlusTree::new();
+        tree.insert(1, 100);
+        tree.insert(1, 101);
+
+        let all = tree.search_all(1);
+        assert_eq!(all.len(), 2);
+
+        let none = tree.search_all(999);
+        assert!(none.is_empty());
+    }
 }
