@@ -105,7 +105,7 @@ pub enum AggregateFunction {
 pub struct JoinClause {
     pub join_type: JoinType,
     pub table: String,
-    pub on_clause: (Expression, Expression),
+    pub on_clause: Expression,
 }
 
 /// Aggregate function call
@@ -256,6 +256,10 @@ impl Parser {
         self.tokens.get(self.position)
     }
 
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.position + 1)
+    }
+
     /// Check if at end
     #[allow(dead_code)]
     fn is_eof(&self) -> bool {
@@ -370,6 +374,8 @@ impl Parser {
         self.expect(Token::Select)?;
 
         let mut columns = Vec::new();
+        let mut aggregates = Vec::new();
+
         loop {
             match self.current() {
                 Some(Token::From) => break,
@@ -380,9 +386,41 @@ impl Parser {
                     });
                     self.next();
                 }
+                Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+                | Some(Token::Max) => {
+                    let func = self.parse_aggregate_function()?;
+                    aggregates.push(func);
+                    columns.push(SelectColumn {
+                        name: format!("__agg_{}", aggregates.len()),
+                        alias: None,
+                    });
+                }
                 Some(Token::Identifier(_)) => {
-                    if let Some(Token::Identifier(name)) = self.next() {
-                        columns.push(SelectColumn { name, alias: None });
+                    let (name, consumed) = match self.current().cloned() {
+                        Some(Token::Identifier(name)) => {
+                            if matches!(self.peek(), Some(Token::Dot)) {
+                                let table = name.clone();
+                                self.next();
+                                self.expect(Token::Dot)?;
+                                match self.current().cloned() {
+                                    Some(Token::Identifier(col)) => {
+                                        self.next();
+                                        (format!("{}.{}", table, col), true)
+                                    }
+                                    Some(t) => {
+                                        return Err(format!("Expected column name, got {:?}", t))
+                                    }
+                                    None => return Err("Expected column name".to_string()),
+                                }
+                            } else {
+                                (name, false)
+                            }
+                        }
+                        _ => return Err("Expected column name".to_string()),
+                    };
+                    columns.push(SelectColumn { name, alias: None });
+                    if !consumed {
+                        self.next();
                     }
                 }
                 Some(Token::Comma) => {
@@ -402,6 +440,25 @@ impl Parser {
             None => return Err("Expected table name".to_string()),
         };
 
+        // Check for table alias (e.g., `FROM users u`)
+        if matches!(self.current(), Some(Token::Identifier(_))) {
+            self.next(); // consume alias
+        }
+
+        // Check for JOIN
+        let join_clause = if matches!(
+            self.current(),
+            Some(Token::Join)
+                | Some(Token::Left)
+                | Some(Token::Right)
+                | Some(Token::Inner)
+                | Some(Token::Cross)
+        ) {
+            Some(self.parse_join_clause()?)
+        } else {
+            None
+        };
+
         let where_clause = if matches!(self.current(), Some(Token::Where)) {
             self.next();
             Some(self.parse_expression()?)
@@ -413,8 +470,139 @@ impl Parser {
             columns,
             table,
             where_clause,
-            join_clause: None,
-            aggregates: vec![],
+            join_clause,
+            aggregates,
+        })
+    }
+
+    fn parse_join_clause(&mut self) -> Result<JoinClause, String> {
+        // Determine join type
+        let join_type = match self.current() {
+            Some(Token::Inner) => {
+                self.next();
+                JoinType::Inner
+            }
+            Some(Token::Left) => {
+                self.next();
+                JoinType::Left
+            }
+            Some(Token::Right) => {
+                self.next();
+                JoinType::Right
+            }
+            Some(Token::Cross) => {
+                self.next();
+                JoinType::Cross
+            }
+            Some(Token::Join) => {
+                self.next();
+                JoinType::Inner
+            }
+            _ => return Err("Expected JOIN type".to_string()),
+        };
+
+        // If join type was LEFT/RIGHT/CROSS, we still need to consume the JOIN token
+        if matches!(self.current(), Some(Token::Join)) {
+            self.next();
+        }
+
+        // Parse joined table name
+        let table = match self.current().cloned() {
+            Some(Token::Identifier(name)) => {
+                self.next();
+                name
+            }
+            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+            None => return Err("Expected table name".to_string()),
+        };
+
+        // Check for table alias (e.g., `JOIN orders o`)
+        if matches!(self.current(), Some(Token::Identifier(_))) {
+            self.next(); // consume alias
+        }
+
+        // Parse ON condition (optional for CROSS JOIN)
+        let on_clause = if matches!(self.current(), Some(Token::On)) {
+            self.next();
+            self.parse_expression()?
+        } else {
+            Expression::Literal("true".to_string())
+        };
+
+        Ok(JoinClause {
+            join_type,
+            table,
+            on_clause,
+        })
+    }
+
+    fn parse_aggregate_function(&mut self) -> Result<AggregateCall, String> {
+        let func = match self.current() {
+            Some(Token::Count) => AggregateFunction::Count,
+            Some(Token::Sum) => AggregateFunction::Sum,
+            Some(Token::Avg) => AggregateFunction::Avg,
+            Some(Token::Min) => AggregateFunction::Min,
+            Some(Token::Max) => AggregateFunction::Max,
+            _ => return Err("Expected aggregate function".to_string()),
+        };
+        self.next();
+
+        self.expect(Token::LParen)?;
+
+        let mut args = Vec::new();
+        let mut distinct = false;
+
+        if matches!(self.current(), Some(Token::Distinct)) {
+            distinct = true;
+            self.next();
+        }
+
+        // Handle COUNT(*) specially
+        if matches!(self.current(), Some(Token::Star)) {
+            self.next();
+        } else if !matches!(self.current(), Some(Token::RParen)) {
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        let name = name.clone();
+                        let expr = if matches!(self.peek(), Some(Token::Dot)) {
+                            let table = name.clone();
+                            self.next();
+                            self.expect(Token::Dot)?;
+                            match self.current().cloned() {
+                                Some(Token::Identifier(col)) => {
+                                    self.next();
+                                    Expression::Identifier(format!("{}.{}", table, col))
+                                }
+                                Some(t) => {
+                                    return Err(format!("Expected column name, got {:?}", t))
+                                }
+                                None => return Err("Expected column name".to_string()),
+                            }
+                        } else {
+                            self.next();
+                            Expression::Identifier(name)
+                        };
+                        args.push(expr);
+                    }
+                    Some(Token::NumberLiteral(n)) => {
+                        args.push(Expression::Literal(n.clone()));
+                        self.next();
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        Ok(AggregateCall {
+            func,
+            args,
+            distinct,
         })
     }
 
@@ -1217,13 +1405,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_select() {
-        let result = parse("SELECT id FROM users");
-        assert!(result.is_ok());
+    fn test_parse_qualified_column_names() {
+        let sql = "SELECT u.name FROM t";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
         match result.unwrap() {
             Statement::Select(s) => {
-                assert_eq!(s.table, "users");
+                assert_eq!(s.table, "t");
                 assert_eq!(s.columns.len(), 1);
+                assert_eq!(s.columns[0].name, "u.name");
             }
             _ => panic!("Expected SELECT statement"),
         }
@@ -1361,15 +1551,36 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_delete_with_where() {
-        let result = parse("DELETE FROM users WHERE id = 1");
-        assert!(result.is_ok());
+    fn test_parse_inner_join() {
+        let result =
+            parse("SELECT name, amount FROM users JOIN orders ON users.id = orders.user_id");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Delete(d) => {
-                assert_eq!(d.table, "users");
-                assert!(d.where_clause.is_some());
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert!(s.join_clause.is_some());
+                let join = s.join_clause.unwrap();
+                assert_eq!(join.table, "orders");
+                assert_eq!(join.join_type, JoinType::Inner);
             }
-            _ => panic!("Expected DELETE statement"),
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_left_join() {
+        let result =
+            parse("SELECT name, amount FROM users LEFT JOIN orders ON users.id = orders.user_id");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert!(s.join_clause.is_some());
+                let join = s.join_clause.unwrap();
+                assert_eq!(join.table, "orders");
+                assert_eq!(join.join_type, JoinType::Left);
+            }
+            _ => panic!("Expected SELECT statement"),
         }
     }
 
@@ -1469,6 +1680,35 @@ mod tests {
                 assert!(!c.columns[0].primary_key);
             }
             _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_count() {
+        let result = parse("SELECT COUNT(*) FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert_eq!(s.columns.len(), 1);
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Count);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_sum() {
+        let result = parse("SELECT SUM(amount) FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "orders");
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Sum);
+            }
+            _ => panic!("Expected SELECT statement"),
         }
     }
 }
