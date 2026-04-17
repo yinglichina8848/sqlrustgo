@@ -432,10 +432,10 @@ mod tests {
         let table_info = TableInfo {
             name: "orders".to_string(),
             columns: vec![
-                ColumnDefinition::new("id", "INTEGER"),
-                ColumnDefinition::new("price", "FLOAT"),
-                ColumnDefinition::new("quantity", "INTEGER"),
-                ColumnDefinition::new("total", "FLOAT"),
+                ColumnDefinition { name: "id".to_string(), data_type: "INTEGER".to_string(), ..Default::default() },
+                ColumnDefinition { name: "price".to_string(), data_type: "FLOAT".to_string(), ..Default::default() },
+                ColumnDefinition { name: "quantity".to_string(), data_type: "INTEGER".to_string(), ..Default::default() },
+                ColumnDefinition { name: "total".to_string(), data_type: "FLOAT".to_string(), ..Default::default() },
             ],
             ..Default::default()
         };
