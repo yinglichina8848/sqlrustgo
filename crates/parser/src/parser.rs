@@ -1803,4 +1803,147 @@ mod tests {
             _ => panic!("Expected SELECT statement"),
         }
     }
+
+    #[test]
+    fn test_parse_delete() {
+        let result = parse("DELETE FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_none());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_delete_with_where() {
+        let result = parse("DELETE FROM users WHERE id = 1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_some());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze() {
+        let result = parse("ANALYZE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_name, Some("users".to_string()));
+            }
+            _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_add_column() {
+        let result = parse("ALTER TABLE users ADD COLUMN age INTEGER");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match a.operation {
+                    AlterTableOperation::AddColumn {
+                        name, data_type, ..
+                    } => {
+                        assert_eq!(name, "age");
+                        assert_eq!(data_type, "INTEGER");
+                    }
+                    _ => panic!("Expected AddColumn operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_rename_to() {
+        let result = parse("ALTER TABLE users RENAME TO old_users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match a.operation {
+                    AlterTableOperation::RenameTo { new_name } => {
+                        assert_eq!(new_name, "old_users");
+                    }
+                    _ => panic!("Expected RenameTo operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_right_join() {
+        let result = parse("SELECT * FROM users RIGHT JOIN orders ON users.id = orders.user_id");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.join_clause.is_some());
+                assert_eq!(s.join_clause.unwrap().join_type, JoinType::Right);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_expression() {
+        let result = parse("SELECT * FROM t WHERE a > b AND c < d");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_like_expression() {
+        let result = parse("SELECT * FROM t WHERE name LIKE '%test%'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_avg() {
+        let result = parse("SELECT AVG(price) FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "orders");
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Avg);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_min_max() {
+        let result = parse("SELECT MIN(id), MAX(id) FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert_eq!(s.aggregates.len(), 2);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Min);
+                assert_eq!(s.aggregates[1].func, AggregateFunction::Max);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
 }
