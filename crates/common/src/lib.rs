@@ -23,6 +23,21 @@ impl SqlError {
 
 pub type SqlResult<T> = Result<T, SqlError>;
 
+#[derive(Debug, Clone)]
+pub struct PoolConfig {
+    pub size: usize,
+    pub timeout_ms: u64,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            size: 4, // default pool size
+            timeout_ms: 5000,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,5 +93,37 @@ mod tests {
         let err: SqlError = SqlError::new("test");
         let result: SqlResult<i32> = Err(err);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pool_config_default() {
+        let config = PoolConfig::default();
+        assert!(config.size > 0);
+        assert_eq!(config.timeout_ms, 5000);
+    }
+
+    #[test]
+    fn test_pool_config_custom() {
+        let config = PoolConfig {
+            size: 10,
+            timeout_ms: 10000,
+        };
+        assert_eq!(config.size, 10);
+        assert_eq!(config.timeout_ms, 10000);
+    }
+
+    #[test]
+    fn test_pool_config_clone() {
+        let config = PoolConfig::default();
+        let cloned = config.clone();
+        assert_eq!(cloned.size, config.size);
+        assert_eq!(cloned.timeout_ms, config.timeout_ms);
+    }
+
+    #[test]
+    fn test_pool_config_debug() {
+        let config = PoolConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("PoolConfig"));
     }
 }
