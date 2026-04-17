@@ -53,11 +53,29 @@
 | - 内存使用 | ⏳ | 空闲状态 ≤ 50MB，峰值 ≤ 500MB | 内存监控工具 |
 | - 启动时间 | ⏳ | 冷启动 ≤ 1s，热启动 ≤ 0.1s | 启动时间测试 |
 | - 资源消耗 | ⏳ | CPU 使用率 ≤ 20%（单查询），磁盘 I/O 正常 | 资源监控工具 |
+| **Sysbench 测试** | ⏳ | 使用 sysbench 工具进行 MySQL 协议兼容性测试 | 见下方详细检查项 |
 | **稳定性** | ⏳ | 全部稳定性测试通过 | 稳定性测试套件 |
 | - 长时间运行 | ⏳ | 连续运行 72 小时无崩溃，性能无明显下降 | 长时间运行测试 |
 | - 异常恢复 | ⏳ | 网络中断后自动恢复，数据无丢失 | 异常注入测试 |
 | - 负载测试 | ⏳ | 支持 100 QPS 持续 1 小时，成功率 ≥ 99.9% | 负载测试工具 |
 | - 兼容性 | ⏳ | 兼容 Rust 1.60+，支持主流操作系统 | 多环境测试 |
+
+#### 2.3.1 Sysbench 门禁检查项
+> 参考: [ISSUE #1521 - SQLRustGo Sysbench 兼容性测试计划](../issues/v2.6.0/SYSBENCH_TEST_PLAN.md)
+
+| # | 检查项 | 阈值 | 状态 | 验证命令 |
+|---|--------|------|------|----------|
+| 1 | oltp_point_select QPS | ≥ 1000 | ⬜ | sysbench oltp_point_select --threads=50 run |
+| 2 | oltp_read_only QPS | ≥ 800 | ⬜ | sysbench oltp_read_only --threads=50 run |
+| 3 | oltp_read_write QPS | ≥ 500 | ⬜ | sysbench oltp_read_write --threads=50 run |
+| 4 | oltp_write_only QPS | ≥ 300 | ⬜ | sysbench oltp_write_only --threads=50 run |
+| 5 | Latency P50 | < 50ms | ⬜ | sysbench run 输出 |
+| 6 | Latency P95 | < 100ms | ⬜ | sysbench run 输出 |
+| 7 | Latency P99 | < 200ms | ⬜ | sysbench run 输出 |
+| 8 | 并发 50 线程稳定 | 无崩溃 | ⬜ | sysbench --threads=50 run |
+| 9 | 并发 100 线程稳定 | 无崩溃 | ⬜ | sysbench --threads=100 run |
+| 10 | 数据一致性 | ACID 验证通过 | ⬜ | 事务测试 |
+| 11 | 11 种工作负载全部通过 | 100% | ⬜ | 全量测试 |
 
 ### 2.4 文档门禁
 | 检查项 | 状态 | 验收标准 | 检查方法 |
