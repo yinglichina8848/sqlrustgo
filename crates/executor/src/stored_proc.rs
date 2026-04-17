@@ -1014,7 +1014,7 @@ impl StoredProcExecutor {
                                 self.validate_foreign_keys(&table_name, &new_row, &insert_columns)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(&table_name, &new_row)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
@@ -1060,7 +1060,7 @@ impl StoredProcExecutor {
                                 self.validate_foreign_keys(&table_name, &new_row, &cols)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(&table_name, &new_row)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
@@ -1250,7 +1250,6 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
-            _ => Value::Null,
         }
     }
 
@@ -1440,12 +1439,7 @@ impl StoredProcExecutor {
     }
 
     /// Validate PRIMARY KEY uniqueness for a row being inserted
-    fn validate_primary_key(
-        &self,
-        table_name: &str,
-        row: &[Value],
-        columns: &[String],
-    ) -> Result<(), String> {
+    fn validate_primary_key(&self, table_name: &str, row: &[Value]) -> Result<(), String> {
         let storage = self.storage.read().unwrap();
         let table_info = storage
             .get_table_info(table_name)
