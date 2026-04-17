@@ -1109,4 +1109,13 @@ impl StorageEngine for FileStorage {
         let _ = name;
         false
     }
+
+    fn list_indexes(&self, table: &str) -> Vec<(String, String)> {
+        let indexes = self.indexes.read().unwrap();
+        indexes
+            .iter()
+            .filter(|((t, _c), _idx)| t == table)
+            .map(|((t, c), _idx)| (c.clone(), format!("{}_idx_{}", t, c)))
+            .collect()
+    }
 }
