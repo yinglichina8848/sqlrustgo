@@ -283,9 +283,8 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     // Connection ID (4 bytes)
     p.write_u32::<LittleEndian>(1).unwrap();
 
-    // Auth plugin data (random nonce) - for mysql_native_password with SECURE_CONNECTION it's 20 bytes
+    // Auth plugin data (random nonce) - for mysql_native_password with SECURE_CONNECTION it's 20 bytes + 1 null
     p.extend_from_slice(seed);
-
     // Null terminator of auth plugin data (1 byte)
     p.push(0x00);
 
@@ -306,9 +305,9 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     tracing::debug!("handshake: capability upper = 0x{:04x}", cap_upper);
     tracing::debug!("handshake: full capability = 0x{:08x}", capability::DEFAULT);
 
-    // Auth plugin data length (1 byte) - 20 for mysql_native_password with SECURE_CONNECTION
-    p.push(seed.len() as u8);
-    tracing::debug!("DEBUG: auth_len byte = 0x{:02x}", seed.len() as u8);
+    // Auth plugin data length (1 byte) - seed.len() + 1 for null terminator
+    p.push((seed.len() + 1) as u8);
+    tracing::debug!("DEBUG: auth_len byte = 0x{:02x}", (seed.len() + 1) as u8);
 
     // Reserved (10 bytes)
     p.extend_from_slice(&[0u8; 10]);
@@ -645,14 +644,31 @@ fn handle_connection(
     let auth_packet = Packet::read_from(&mut stream)?;
     tracing::info!("Client packet seq: {}", auth_packet.sequence);
 
-    let auth_ok = if auth_packet.payload.len() >= 9 {
-        let response = &auth_packet.payload[1..9];
-        tracing::info!("Received auth response: {:02x?}", response);
-        true
-    } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
-        true
+    let auth_ok = if auth_packet.payload.len() >= 1 {
+        // Check if client sent empty password (0x00 byte)
+        if auth_packet.payload.len() == 1 && auth_packet.payload[0] == 0x00 {
+            // Empty password - accept
+            tracing::info!("Client sent empty password - accepting");
+            true
+        } else if auth_packet.payload.len() >= 20 {
+            // mysql_native_password response: SHA1(password) XOR SHA1(seed + SHA1(SHA1(password)))
+            // For now, accept any non-empty response (allow any password)
+            // TODO: Implement full verification
+            tracing::info!(
+                "Client sent auth response (len={}), accepting",
+                auth_packet.payload.len()
+            );
+            true
+        } else {
+            tracing::warn!(
+                "Invalid auth response length: {}",
+                auth_packet.payload.len()
+            );
+            false
+        }
     } else {
-        false
+        tracing::info!("Empty auth packet - accepting");
+        true
     };
 
     // After handshake, use our own server sequence counter
