@@ -39,4 +39,64 @@ mod tests {
             Value::Text("hello".to_string())
         );
     }
+
+    #[test]
+    fn test_parse_sql_literal_case_insensitive() {
+        assert_eq!(parse_sql_literal("null"), Value::Null);
+        assert_eq!(parse_sql_literal("true"), Value::Boolean(true));
+        assert_eq!(parse_sql_literal("false"), Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_negative() {
+        assert_eq!(parse_sql_literal("-42"), Value::Integer(-42));
+        assert_eq!(parse_sql_literal("-3.14"), Value::Float(-3.14));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_whitespace() {
+        assert_eq!(parse_sql_literal("  NULL  "), Value::Null);
+        assert_eq!(parse_sql_literal("  42  "), Value::Integer(42));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_string_with_quotes() {
+        assert_eq!(
+            parse_sql_literal("'hello world'"),
+            Value::Text("hello world".to_string())
+        );
+        assert_eq!(
+            parse_sql_literal("'test''s'"),
+            Value::Text("test''s".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sql_literal_unquoted_text() {
+        assert_eq!(parse_sql_literal("abc"), Value::Text("abc".to_string()));
+        assert_eq!(
+            parse_sql_literal("unknown"),
+            Value::Text("unknown".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sql_literal_float_edge_cases() {
+        assert_eq!(parse_sql_literal("0.0"), Value::Float(0.0));
+        assert_eq!(parse_sql_literal("-0.001"), Value::Float(-0.001));
+        assert_eq!(parse_sql_literal("1e10"), Value::Float(10000000000.0));
+    }
+
+    #[test]
+    fn test_parse_sql_literal_large_integer() {
+        assert_eq!(
+            parse_sql_literal("9223372036854775807"),
+            Value::Integer(9223372036854775807i64)
+        );
+    }
+
+    #[test]
+    fn test_parse_sql_literal_zero() {
+        assert_eq!(parse_sql_literal("0"), Value::Integer(0));
+    }
 }
