@@ -145,6 +145,7 @@ impl SimpleExecutor {
                 }
                 Ok(ExecutorResult::new(vec![], 0))
             }
+            Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
             _ => Err("Unsupported statement type".to_string()),
         }
     }
