@@ -1954,4 +1954,162 @@ mod tests {
         // Note: This test requires the condition to reference the variable properly
         // In practice, we'd need proper variable expansion
     }
+
+    #[test]
+    fn test_cursor_operations() {
+        let mut ctx = ProcedureContext::new();
+
+        ctx.declare_cursor("cur1".to_string(), "SELECT * FROM t".to_string());
+        assert!(ctx.has_cursor("cur1"));
+
+        let result = ctx.open_cursor("cur1");
+        assert!(result.is_ok());
+
+        ctx.set_cursor_records(
+            "cur1",
+            vec![
+                vec![Value::Integer(1), Value::Text("a".to_string())],
+                vec![Value::Integer(2), Value::Text("b".to_string())],
+            ],
+        );
+
+        let has_rows1 = ctx.fetch_cursor("cur1", &["v1".to_string(), "v2".to_string()]);
+        assert!(has_rows1.is_ok());
+        assert!(has_rows1.unwrap());
+        assert_eq!(ctx.get_var("v1"), Some(&Value::Integer(1)));
+        assert_eq!(ctx.get_var("v2"), Some(&Value::Text("a".to_string())));
+
+        let has_rows2 = ctx.fetch_cursor("cur1", &["v1".to_string(), "v2".to_string()]);
+        assert!(has_rows2.is_ok());
+        assert!(has_rows2.unwrap());
+        assert_eq!(ctx.get_var("v1"), Some(&Value::Integer(2)));
+        assert_eq!(ctx.get_var("v2"), Some(&Value::Text("b".to_string())));
+
+        let has_rows3 = ctx.fetch_cursor("cur1", &["v1".to_string()]);
+        assert!(has_rows3.is_ok());
+        assert!(!has_rows3.unwrap());
+
+        let close_result = ctx.close_cursor("cur1");
+        assert!(close_result.is_ok());
+
+        let not_found = ctx.open_cursor("nonexistent");
+        assert!(not_found.is_err());
+    }
+
+    #[test]
+    fn test_exception_handlers() {
+        use sqlrustgo_catalog::HandlerCondition;
+
+        let mut ctx = ProcedureContext::new();
+
+        ctx.push_handler(
+            HandlerCondition::SqlException,
+            vec![StoredProcStatement::Return {
+                value: "1".to_string(),
+            }],
+        );
+        ctx.push_handler(
+            HandlerCondition::SqlWarning,
+            vec![StoredProcStatement::Return {
+                value: "2".to_string(),
+            }],
+        );
+
+        assert_eq!(ctx.handler_stack.len(), 2);
+
+        let exc_sqlexception = StoredProcError {
+            sqlstate: "45000".to_string(),
+            message: "test error".to_string(),
+        };
+        let handler = ctx.find_matching_handler(&exc_sqlexception);
+        assert!(handler.is_some());
+
+        ctx.pop_handler();
+        assert_eq!(ctx.handler_stack.len(), 1);
+
+        ctx.clear_exception();
+        assert!(ctx.get_exception().is_none());
+    }
+
+    #[test]
+    fn test_exception_handling_flow() {
+        let mut ctx = ProcedureContext::new();
+        assert!(!ctx.is_handling_exception());
+
+        ctx.set_exception_handling(true);
+        assert!(ctx.is_handling_exception());
+
+        ctx.set_exception("45000".to_string(), "test".to_string());
+        let exc = ctx.get_exception();
+        assert!(exc.is_some());
+        assert_eq!(exc.unwrap().sqlstate, "45000");
+
+        ctx.clear_exception();
+        ctx.set_exception_handling(false);
+        assert!(!ctx.is_handling_exception());
+    }
+
+    #[test]
+    fn test_label_operations() {
+        let mut ctx = ProcedureContext::new();
+
+        ctx.enter_label("loop1".to_string());
+        assert!(ctx.has_label("loop1"));
+
+        ctx.exit_label();
+        assert!(!ctx.has_label("loop1"));
+    }
+
+    #[test]
+    fn test_scope_operations() {
+        let mut ctx = ProcedureContext::new();
+
+        ctx.set_local_var("x", Value::Integer(10));
+        assert_eq!(ctx.get_local_var("x"), Some(&Value::Integer(10)));
+
+        ctx.enter_scope();
+        ctx.set_local_var("y", Value::Text("hello".to_string()));
+        assert_eq!(
+            ctx.get_local_var("y"),
+            Some(&Value::Text("hello".to_string()))
+        );
+
+        ctx.exit_scope();
+        assert!(ctx.get_local_var("y").is_none());
+        assert_eq!(ctx.get_local_var("x"), Some(&Value::Integer(10)));
+    }
+
+    #[test]
+    fn test_iterate_control() {
+        let mut ctx = ProcedureContext::new();
+        assert!(!ctx.should_iterate());
+
+        ctx.set_iterate();
+        assert!(ctx.should_iterate());
+
+        ctx.reset_iterate();
+        assert!(!ctx.should_iterate());
+    }
+
+    #[test]
+    fn test_get_session_vars() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("@uid", Value::Integer(100));
+        ctx.set_var("@name", Value::Text("test".to_string()));
+
+        let vars = ctx.get_session_vars();
+        assert_eq!(vars.get("uid"), Some(&Value::Integer(100)));
+        assert_eq!(vars.get("name"), Some(&Value::Text("test".to_string())));
+    }
+
+    #[test]
+    fn test_stored_proc_error_display() {
+        let err = StoredProcError {
+            sqlstate: "45000".to_string(),
+            message: "test error".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("45000"));
+        assert!(display.contains("test error"));
+    }
 }
