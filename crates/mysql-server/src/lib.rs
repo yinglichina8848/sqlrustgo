@@ -34,6 +34,22 @@ fn rand_u8_8() -> [u8; 8] {
     bytes
 }
 
+fn rand_u8_20() -> [u8; 20] {
+    let part1 = rand_u8_8();
+    let part2 = rand_u8_8();
+    let part3: [u8; 4] = [
+        rand_u8_8()[0],
+        rand_u8_8()[1],
+        rand_u8_8()[2],
+        rand_u8_8()[3],
+    ];
+    let mut combined = [0u8; 20];
+    combined[0..8].copy_from_slice(&part1);
+    combined[8..16].copy_from_slice(&part2);
+    combined[16..20].copy_from_slice(&part3);
+    combined
+}
+
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
@@ -114,7 +130,7 @@ impl ExecutionEngine {
 // ============================================================================
 
 const SERVER_VERSION: &str = "SQLRustGo-2.4.0";
-const AUTH_PLUGIN: &str = "mysql_old_password";
+const AUTH_PLUGIN: &str = "mysql_native_password";
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -256,7 +272,7 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     p.write_u16::<LittleEndian>(0x0002).unwrap();
     p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
         .unwrap();
-    p.push(8);
+    p.push(seed.len() as u8);
     p.extend_from_slice(&[0u8; 10]);
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
@@ -553,7 +569,13 @@ fn handle_connection(
 
     let mut seq = 0u8;
 
-    let seed = rand_u8_8();
+    let seed = if AUTH_PLUGIN == "mysql_native_password" {
+        rand_u8_20()
+    } else {
+        let mut s = [0u8; 20];
+        s[0..8].copy_from_slice(&rand_u8_8());
+        s
+    };
 
     make_handshake_packet(seq, &seed).write_to(&mut stream)?;
     seq = seq.wrapping_add(1);
