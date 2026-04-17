@@ -643,12 +643,7 @@ fn handle_connection(
     tracing::info!("WRITE complete, server seq: {}", seq);
 
     let auth_packet = Packet::read_from(&mut stream)?;
-    let client_seq = auth_packet.sequence;
-    tracing::info!(
-        "Client packet seq: {}, server next seq should be: {}",
-        client_seq,
-        seq.wrapping_add(1)
-    );
+    tracing::info!("Client packet seq: {}", auth_packet.sequence);
 
     let auth_ok = if auth_packet.payload.len() >= 9 {
         let response = &auth_packet.payload[1..9];
@@ -660,23 +655,22 @@ fn handle_connection(
         false
     };
 
-    let response_seq = client_seq.wrapping_add(1);
-    tracing::info!("Sending response with seq: {}", response_seq);
+    // After handshake, use our own server sequence counter
+    // PyMySQL expects seq=2 for first OK response
+    let mut server_seq = 2;
+    tracing::info!("Sending OK with server seq: {}", server_seq);
 
     if !auth_ok {
-        make_err_packet(response_seq, 1045, "Access denied").write_to(&mut stream)?;
+        make_err_packet(server_seq, 1045, "Access denied").write_to(&mut stream)?;
         return Ok(());
     }
 
-    make_ok_packet(response_seq, 0, 0).write_to(&mut stream)?;
-    let _seq = response_seq.wrapping_add(1);
+    make_ok_packet(server_seq, 0, 0).write_to(&mut stream)?;
 
-    if !auth_ok {
-        make_err_packet(seq, 1045, "Access denied").write_to(&mut stream)?;
-        return Ok(());
-    }
+    // After auth phase, client resets to 0 for each new request
+    // We should ALWAYS respond with seq=1 for each new client packet
+    let mut server_seq = 1;
 
-    make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
     loop {
         let packet = match Packet::read_from(&mut stream) {
             Ok(p) => p,
@@ -695,15 +689,17 @@ fn handle_connection(
         };
 
         let client_seq = packet.sequence;
-        let response_seq = client_seq.wrapping_add(1);
+
+        // ALWAYS reset server_seq to 1 for each new client request
+        server_seq = 1;
 
         let cmd = packet.payload.first().copied().unwrap_or(0);
         let payload = &packet.payload[1..];
         tracing::info!(
-            "Received packet: cmd=0x{:02x}, client_seq={}, will respond with seq={}",
+            "Received packet: cmd=0x{:02x}, client_seq={}, server_seq={}",
             cmd,
             client_seq,
-            response_seq
+            server_seq
         );
 
         match cmd {
@@ -713,17 +709,19 @@ fn handle_connection(
             }
 
             packet_type::COM_PING => {
-                tracing::info!(">>> COM_PING received, response_seq={}", response_seq);
-                let result = make_ok_packet(response_seq, 0, 0).write_to(&mut stream);
+                tracing::info!(">>> COM_PING received, server_seq={}", server_seq);
+                let result = make_ok_packet(server_seq, 0, 0).write_to(&mut stream);
                 tracing::info!(">>> COM_PING write result: {:?}", result);
                 match result {
                     Ok(()) => {}
                     Err(e) => tracing::warn!("Write error in COM_PING: {}", e),
                 }
+                server_seq = server_seq.wrapping_add(1);
             }
 
             packet_type::COM_INIT_DB => {
-                make_ok_packet(response_seq, 0, 0).write_to(&mut stream)?;
+                make_ok_packet(server_seq, 0, 0).write_to(&mut stream)?;
+                server_seq = server_seq.wrapping_add(1);
             }
 
             packet_type::COM_QUERY => {
@@ -732,21 +730,24 @@ fn handle_connection(
                     .trim()
                     .to_string();
                 tracing::info!(
-                    "Query from {}: [{}] (response_seq={})",
+                    "Query from {}: [{}] (server_seq={})",
                     addr,
                     query,
-                    response_seq
+                    server_seq
                 );
 
                 if query.is_empty() {
-                    make_ok_packet(response_seq, 0, 0).write_to(&mut stream)?;
+                    make_ok_packet(server_seq, 0, 0).write_to(&mut stream)?;
+                    server_seq = server_seq.wrapping_add(1);
                     continue;
                 }
 
                 let query_upper = query.to_uppercase();
-                if query_upper.starts_with("SET NAMES") {
-                    tracing::info!("Handling SET NAMES command");
-                    make_ok_packet(response_seq, 0, 0).write_to(&mut stream)?;
+                if query_upper.starts_with("SET NAMES") || query_upper.starts_with("SET AUTOCOMMIT")
+                {
+                    tracing::info!("Handling SET command: {}", query);
+                    make_ok_packet(server_seq, 0, 0).write_to(&mut stream)?;
+                    server_seq = server_seq.wrapping_add(1);
                     continue;
                 }
 
@@ -766,8 +767,9 @@ fn handle_connection(
                                 &columns,
                                 &column_types,
                                 &rows,
-                                response_seq,
+                                server_seq,
                             )?;
+                            server_seq = 1;
                         }
                         Ok(Err(e)) => {
                             tracing::warn!("Query error: {}", e);
@@ -780,33 +782,37 @@ fn handle_connection(
                                 MySqlError::Sql(_) => 1064,
                                 _ => 2000,
                             };
-                            make_err_packet(response_seq, code, &e.to_string())
+                            make_err_packet(server_seq, code, &e.to_string())
                                 .write_to(&mut stream)?;
+                            server_seq = 1;
                         }
                         Err(_) => {
                             tracing::error!("PANIC in execute_select!");
-                            make_err_packet(response_seq, 2000, "Internal server error")
+                            make_err_packet(server_seq, 2000, "Internal server error")
                                 .write_to(&mut stream)?;
+                            server_seq = 1;
                         }
                     }
                 } else {
                     match execute_write(&query, &mut engine) {
                         Ok(affected) => {
-                            make_ok_packet(response_seq, affected as u64, 0)
-                                .write_to(&mut stream)?;
+                            make_ok_packet(server_seq, affected as u64, 0).write_to(&mut stream)?;
+                            server_seq = 1;
                         }
                         Err(e) => {
                             tracing::warn!("Write error: {}", e);
-                            make_err_packet(response_seq, 1064, &e.to_string())
+                            make_err_packet(server_seq, 1064, &e.to_string())
                                 .write_to(&mut stream)?;
+                            server_seq = 1;
                         }
                     }
                 }
             }
 
             packet_type::COM_STMT_PREPARE => {
-                make_err_packet(response_seq, 1295, "Prepared statements not yet supported")
+                make_err_packet(server_seq, 1295, "Prepared statements not yet supported")
                     .write_to(&mut stream)?;
+                server_seq = server_seq.wrapping_add(1);
             }
 
             _ => {
@@ -816,7 +822,8 @@ fn handle_connection(
                     addr,
                     &payload[..std::cmp::min(10, payload.len())]
                 );
-                make_err_packet(response_seq, 1047, "Unknown command").write_to(&mut stream)?;
+                make_err_packet(server_seq, 1047, "Unknown command").write_to(&mut stream)?;
+                server_seq = server_seq.wrapping_add(1);
             }
         }
     }
