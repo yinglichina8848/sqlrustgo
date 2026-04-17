@@ -127,7 +127,6 @@ mod tests {
         let debug = format!("{:?}", config);
         assert!(debug.contains("PoolConfig"));
     }
-
     #[test]
     fn test_sql_error_source() {
         let err = SqlError::new("source test");
