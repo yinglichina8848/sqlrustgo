@@ -1223,6 +1223,7 @@ impl StoredProcExecutor {
                     .all(|row| row.first().map(|v| v != &left_val).unwrap_or(true));
                 Value::Boolean(not_in_result)
             }
+            sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
             sqlrustgo_parser::Expression::Exists(select) => {
                 let rows = self.execute_subquery(select);
                 Value::Boolean(!rows.is_empty())
