@@ -148,4 +148,61 @@ mod tests {
         fn _check_cost_model<T: CostModel>(_model: &T) {}
         _check_cost_model(&SimpleCostModel::default_model());
     }
+
+    #[test]
+    fn test_simple_cost_model_new() {
+        let model = SimpleCostModel::new(2.0, 5.0, 0.01);
+        assert_eq!(model.cpu_cost_per_row, 2.0);
+        assert_eq!(model.io_cost_per_page, 5.0);
+        assert_eq!(model.network_cost_per_byte, 0.01);
+    }
+
+    #[test]
+    fn test_seq_scan_cost_zero_rows() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.seq_scan_cost(0, 0);
+        assert_eq!(cost, 0.0);
+    }
+
+    #[test]
+    fn test_index_scan_cost_zero_rows() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.index_scan_cost(0, 0, 0);
+        assert_eq!(cost, 0.0);
+    }
+
+    #[test]
+    fn test_join_cost_sort_merge() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.join_cost(100, 200, "sort_merge");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_join_cost_unknown_method() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.join_cost(100, 200, "unknown");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_agg_cost_zero_groups() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.agg_cost(1000, 0);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_sort_cost_external() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.sort_cost(2_000_000, 100);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cost_model_estimate_cost() {
+        let model = SimpleCostModel::default_model();
+        let cost = model.estimate_cost(&());
+        assert_eq!(cost, 100.0);
+    }
 }
