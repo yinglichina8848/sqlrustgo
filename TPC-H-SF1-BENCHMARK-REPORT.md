@@ -1,8 +1,8 @@
 # TPC-H SF=1 基准测试报告
 
-**生成日期**: 2026-04-16
+**生成日期**: 2026-04-17
 **版本**: v2.5.0 (develop/v2.5.0)
-**分支**: fix/tpch-comparison-scripts
+**分支**: fix/tpch-sf1-tests
 
 ---
 
@@ -191,19 +191,33 @@ cargo test --test tpch_sf1_benchmark -- --nocapture
 
 ### SF=10 测试
 
+⚠️ **已知问题**: SF10 测试的数据生成器存在 bug，会产生重复的 partsupp 键值。
+
+推荐使用 `tpch_binary_import` 从真实 .tbl 文件导入数据。
+
 ```bash
 # 生成 SF=10 数据
 cd /tmp/tpch-dbgen
 ./dbgen -s 10 -f -d
-mv *.tbl sf10/
 
-# 运行 SF=10 测试 (需要 ~50GB 内存)
-cargo test --test tpch_sf10_benchmark -- --ignored --nocapture
+# 使用二进制导入工具
+cargo run --example tpch_binary_import -p sqlrustgo-storage -- /tmp/tpch-dbgen
 ```
 
 ---
 
-## 8. 结论
+## 8. MySQL vs SQLite 对比 (SF1)
+
+| Query | MySQL (ms) | SQLite (ms) | 说明 |
+|-------|------------|-------------|------|
+| Q1 | 13,281 | 10,550 | SQLite 更快 |
+| Q6 | 9,317 | 1,782 | SQLite 更快 |
+
+**注意**: MySQL 默认配置未针对分析查询优化，实际部署时应调整配置。
+
+---
+
+## 9. 结论
 
 | 维度 | 结果 |
 |------|------|
@@ -211,16 +225,18 @@ cargo test --test tpch_sf10_benchmark -- --ignored --nocapture
 | SF=1 P99 延迟 | ✅ 所有查询 < 200ms (目标 < 1000ms) |
 | 数据导入 | ✅ ~5 分钟完成 SF=1 |
 | SQL 查询文件 | ✅ 标准格式，便于共享和验证 |
+| SF10 测试 | ⚠️ 数据生成器有 bug，需修复 |
 
 ---
 
-## 9. 相关提交
+## 10. 相关提交
 
 ```
+0ffe8203 feat: add TPC-H SF1 tests, standard SQL queries, and documentation
 043adc7c feat: add TPC-H comparison scripts for MySQL/PostgreSQL/SQLite
 a08d023f (origin/develop/v2.5.0) Merge branch ...
 ```
 
 ---
 
-*报告生成时间: 2026-04-16*
+*报告生成时间: 2026-04-17*

@@ -143,7 +143,24 @@ SF=10 数据规模:
 SF=10 测试需要:
 - 内存: ~50 GB
 - 磁盘空间: ~100 GB
-- 运行时间: 30-60 分钟 (取决于硬件)
+- 运行时间: 2-4 小时 (取决于硬件)
+
+### ⚠️ 已知问题
+
+当前 SF10 测试 (`tpch_sf10_benchmark.rs`) 的数据生成器存在 bug，会产生重复的 partsupp 键值，导致测试失败。
+
+**推荐方案**: 使用 `tpch_binary_import` 从真实 .tbl 文件导入数据:
+
+```bash
+# 1. 先生成 SF10 .tbl 文件
+cd /tmp/tpch-dbgen
+./dbgen -s 10 -f -d
+
+# 2. 使用二进制导入工具
+cargo run --example tpch_binary_import -p sqlrustgo-storage -- /tmp/tpch-dbgen
+
+# 3. 导入完成后，修改测试以使用导入的数据
+```
 
 ### 方法 1: 使用忽略测试运行
 
@@ -151,19 +168,21 @@ SF=10 测试需要:
 cargo test --test tpch_sf10_benchmark -- --ignored --nocapture
 ```
 
-### 方法 2: 快速二进制导入
-
-使用 `tpch_binary_import` 工具可以更快速地导入数据:
+### 方法 2: 使用 Python 对比脚本
 
 ```bash
-# 1. 先导入到 MySQL (更快)
-# ... (参考上面的 MySQL 加载步骤)
+# 安装依赖
+pip3 install mysql-connector-python psycopg2
 
-# 2. 使用二进制导入工具
-cargo run --example tpch_binary_import -p sqlrustgo-storage -- /tmp/tpch-dbgen/sf1
-
-# 3. 运行基准测试
-cargo test --test tpch_sf10_benchmark -- --nocapture
+# 运行对比测试
+python3 scripts/tpch_comparison.py \
+  --mysql \
+  --mysql-host localhost \
+  --mysql-user root \
+  --mysql-password details \
+  --mysql-db tpch_sf1 \
+  --sqlite /tmp/tpch_sf01.db \
+  --iterations 3
 ```
 
 ### 方法 3: 使用 Python 对比脚本
