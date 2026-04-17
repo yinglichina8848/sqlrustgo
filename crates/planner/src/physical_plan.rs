@@ -73,6 +73,64 @@ impl PhysicalPlan for SeqScanExec {
     }
 }
 
+/// Index scan execution operator - uses an index to retrieve rows
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct IndexScanExec {
+    table_name: String,
+    column: String,
+    index_name: String,
+    schema: Schema,
+    projection: Option<Vec<usize>>,
+}
+
+impl IndexScanExec {
+    pub fn new(table_name: String, column: String, index_name: String, schema: Schema) -> Self {
+        Self {
+            table_name,
+            column,
+            index_name,
+            schema,
+            projection: None,
+        }
+    }
+
+    pub fn with_projection(mut self, projection: Vec<usize>) -> Self {
+        self.projection = Some(projection);
+        self
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn column(&self) -> &str {
+        &self.column
+    }
+
+    pub fn index_name(&self) -> &str {
+        &self.index_name
+    }
+}
+
+impl PhysicalPlan for IndexScanExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![]
+    }
+
+    fn name(&self) -> &str {
+        "IndexScan"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Projection execution operator
 #[allow(dead_code)]
 pub struct ProjectionExec {

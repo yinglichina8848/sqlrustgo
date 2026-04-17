@@ -5,10 +5,13 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, DeleteExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec,
-    SeqScanExec, SortExec,
+    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
+    ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
+use sqlrustgo_optimizer::SimpleCostModel;
+use sqlrustgo_storage::StorageEngine;
+use std::sync::{Arc, RwLock};
 use thiserror::Error;
 
 /// Planner errors
@@ -38,13 +41,52 @@ pub trait Planner {
 /// Default planner implementation
 pub struct DefaultPlanner {
     optimizer: DefaultOptimizer,
+    storage: Option<Arc<RwLock<dyn StorageEngine>>>,
+    cost_model: SimpleCostModel,
 }
 
 impl DefaultPlanner {
     pub fn new() -> Self {
         Self {
             optimizer: DefaultOptimizer::new(),
+            storage: None,
+            cost_model: SimpleCostModel::default_model(),
         }
+    }
+
+    /// Create a planner with storage backend for cost-based index selection
+    pub fn with_storage(storage: Arc<RwLock<dyn StorageEngine>>) -> Self {
+        Self {
+            optimizer: DefaultOptimizer::new(),
+            storage: Some(storage),
+            cost_model: SimpleCostModel::default_model(),
+        }
+    }
+
+    /// Returns true if storage is available for CBO index selection
+    fn has_storage(&self) -> bool {
+        self.storage.is_some()
+    }
+
+    /// Select best scan method using cost model
+    fn select_scan(&self, table_name: &str, schema: &Schema) -> Box<dyn PhysicalPlan> {
+        if let Some(ref storage) = self.storage {
+            let storage = storage.read().unwrap();
+            let indexes = storage.list_indexes(table_name);
+
+            if !indexes.is_empty() {
+                // Use first available index for now
+                let (column, index_name) = &indexes[0];
+                return Box::new(IndexScanExec::new(
+                    table_name.to_string(),
+                    column.clone(),
+                    index_name.clone(),
+                    schema.clone(),
+                ));
+            }
+        }
+
+        Box::new(SeqScanExec::new(table_name.to_string(), schema.clone()))
     }
 
     fn create_physical_plan_internal(
@@ -57,11 +99,15 @@ impl DefaultPlanner {
                 schema,
                 projection,
             } => {
-                let mut exec = SeqScanExec::new(table_name.clone(), schema.clone());
+                let mut exec = self.select_scan(table_name, schema);
                 if let Some(proj) = projection {
-                    exec = exec.with_projection(proj.clone());
+                    if let Some(seq) = exec.as_mut().as_any().downcast_ref::<SeqScanExec>() {
+                        return Ok(Box::new(seq.clone().with_projection(proj.clone())));
+                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>() {
+                        return Ok(Box::new(idx.clone().with_projection(proj.clone())));
+                    }
                 }
-                Ok(Box::new(exec))
+                Ok(exec)
             }
             LogicalPlan::Projection {
                 input,

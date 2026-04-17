@@ -158,6 +158,9 @@ pub trait StorageEngine: Send + Sync {
     /// List all triggers for a table
     fn list_triggers(&self, table: &str) -> Vec<TriggerInfo>;
 
+    /// List all indexes for a table, returns Vec of (column_name, index_name)
+    fn list_indexes(&self, table: &str) -> Vec<(String, String)>;
+
     /// Check if a view exists
     fn has_view(&self, name: &str) -> bool;
 }
@@ -308,6 +311,10 @@ impl StorageEngine for MemoryStorage {
 
     fn has_view(&self, name: &str) -> bool {
         self.views.contains(name)
+    }
+
+    fn list_indexes(&self, _table: &str) -> Vec<(String, String)> {
+        Vec::new()
     }
 }
 
