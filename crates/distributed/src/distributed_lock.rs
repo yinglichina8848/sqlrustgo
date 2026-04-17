@@ -377,4 +377,35 @@ mod tests {
         assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
         assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
     }
+
+    #[test]
+    fn test_lock_manager_unlock() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.unlock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key1", 2, 100), LockResult::Acquired);
+    }
+
+    #[test]
+    fn test_lock_manager_unlock_wrong_owner() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.unlock("key1", 2, 100), LockResult::NotOwner);
+    }
+
+    #[test]
+    fn test_lock_manager_is_locked() {
+        let mut manager = DistributedLockManager::new();
+        assert!(!manager.is_locked("key1"));
+        manager.try_lock("key1", 1, 100);
+        assert!(manager.is_locked("key1"));
+    }
+
+    #[test]
+    fn test_lock_manager_get_lock_owner() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.get_lock_owner("key1"), None);
+        manager.try_lock("key1", 1, 100);
+        assert_eq!(manager.get_lock_owner("key1"), Some((1, 100)));
+    }
 }
