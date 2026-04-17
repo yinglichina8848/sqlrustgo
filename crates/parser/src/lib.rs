@@ -12,7 +12,7 @@ pub use token::Token;
 pub use parser::parse;
 pub use parser::{
     AlterTableOperation, AggregateCall, AggregateFunction, AlterTableStatement,
-    ColumnDefinition, CommonTableExpression, DeleteStatement, Expression, ForeignKeyRef,
-    InsertStatement, JoinClause, JoinType, SelectColumn, SelectStatement,
-    Statement, TableConstraint, UpdateStatement, WithClause, WithSelect,
+    ColumnDefinition, CommonTableExpression, CreateTableStatement, DeleteStatement, Expression,
+    ForeignKeyRef, InsertStatement, JoinClause, JoinType, SelectColumn, SelectStatement,
+    Statement, TableConstraint, UpdateStatement, WithClause, WithSelect, DropTableStatement,
 };
