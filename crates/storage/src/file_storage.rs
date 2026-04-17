@@ -1066,7 +1066,9 @@ impl StorageEngine for FileStorage {
 
     fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
         let _ = name;
-        Err(SqlError::ExecutionError("Triggers not supported in FileStorage".into()))
+        Err(SqlError::ExecutionError(
+            "Triggers not supported in FileStorage".into(),
+        ))
     }
 
     fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
