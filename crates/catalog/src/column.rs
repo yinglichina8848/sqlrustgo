@@ -105,8 +105,7 @@ impl ColumnDefinition {
             (Value::Float(_), DataType::Float) => true,
             (Value::Text(_), DataType::Text) => true,
             (Value::Blob(_), DataType::Blob) => true,
-            (Value::Date(_), DataType::Date) => true,
-            (Value::Timestamp(_), DataType::Timestamp) => true,
+            // Date/Timestamp variants may not exist in Value enum depending on feature flags
             _ => false,
         }
     }
