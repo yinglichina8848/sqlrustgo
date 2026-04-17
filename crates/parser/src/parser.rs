@@ -1750,4 +1750,121 @@ mod tests {
             _ => panic!("Expected SELECT statement"),
         }
     }
+
+    #[test]
+    fn test_parse_delete() {
+        let result = parse("DELETE FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_none());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_delete_with_where() {
+        let result = parse("DELETE FROM users WHERE id = 1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_some());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_table() {
+        let result = parse("DROP TABLE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::DropTable(d) => {
+                assert_eq!(d.name, "users");
+            }
+            _ => panic!("Expected DROP TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_add_column() {
+        let result = parse("ALTER TABLE users ADD COLUMN age INTEGER");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match &a.operation {
+                    AlterTableOperation::AddColumn {
+                        name, data_type, ..
+                    } => {
+                        assert_eq!(name, "age");
+                        assert_eq!(data_type, "INTEGER");
+                    }
+                    _ => panic!("Expected AddColumn operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_rename_to() {
+        let result = parse("ALTER TABLE users RENAME TO users_new");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match &a.operation {
+                    AlterTableOperation::RenameTo { new_name } => {
+                        assert_eq!(new_name, "users_new");
+                    }
+                    _ => panic!("Expected RenameTo operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_index() {
+        let result = parse("CREATE INDEX idx ON users(id)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::CreateIndex(i) => {
+                assert_eq!(i.index_name, "idx");
+                assert_eq!(i.table_name, "users");
+                assert_eq!(i.columns, vec!["id"]);
+            }
+            _ => panic!("Expected CREATE INDEX statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_index_multi_column() {
+        let result = parse("CREATE INDEX idx ON orders(user_id, order_id)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::CreateIndex(i) => {
+                assert_eq!(i.index_name, "idx");
+                assert_eq!(i.table_name, "orders");
+                assert_eq!(i.columns, vec!["user_id", "order_id"]);
+            }
+            _ => panic!("Expected CREATE INDEX statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze() {
+        let result = parse("ANALYZE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_name, Some("users".to_string()));
+            }
+            _ => panic!("Expected ANALYZE statement"),
+        }
+    }
 }

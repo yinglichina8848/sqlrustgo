@@ -283,3 +283,95 @@ impl fmt::Display for DataType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sort_expr_display() {
+        let expr = SortExpr {
+            expr: Expr::column("name"),
+            asc: true,
+            nulls_first: true,
+        };
+        assert!(expr.asc);
+        assert!(expr.nulls_first);
+    }
+
+    #[test]
+    fn test_sort_expr_descending() {
+        let expr = SortExpr {
+            expr: Expr::column("id"),
+            asc: false,
+            nulls_first: false,
+        };
+        assert!(!expr.asc);
+        assert!(!expr.nulls_first);
+    }
+
+    #[test]
+    fn test_expr_unary_operator() {
+        let expr = Expr::UnaryExpr {
+            op: Operator::Not,
+            expr: Box::new(Expr::Literal(Value::Boolean(true))),
+        };
+        assert!(matches!(expr, Expr::UnaryExpr { .. }));
+    }
+
+    #[test]
+    fn test_expr_alias() {
+        let expr = Expr::Alias {
+            expr: Box::new(Expr::column("x")),
+            name: "alias_x".to_string(),
+        };
+        assert!(matches!(expr, Expr::Alias { .. }));
+    }
+
+    #[test]
+    fn test_data_type_from_sql() {
+        assert_eq!(DataType::from_sql_type("INT"), DataType::Integer);
+        assert_eq!(DataType::from_sql_type("VARCHAR"), DataType::Text);
+        assert_eq!(DataType::from_sql_type("BOOL"), DataType::Boolean);
+    }
+
+    #[test]
+    fn test_data_type_display() {
+        assert_eq!(DataType::Boolean.to_string(), "BOOLEAN");
+        assert_eq!(DataType::Integer.to_string(), "INTEGER");
+        assert_eq!(DataType::Float.to_string(), "FLOAT");
+        assert_eq!(DataType::Text.to_string(), "TEXT");
+        assert_eq!(DataType::Blob.to_string(), "BLOB");
+        assert_eq!(DataType::Null.to_string(), "NULL");
+    }
+
+    #[test]
+    fn test_schema_field_by_name() {
+        let schema = Schema::new(vec![
+            Field::new_not_null("id".to_string(), DataType::Integer),
+            Field::new("name".to_string(), DataType::Text),
+        ]);
+        assert!(schema.field("id").is_some());
+        assert!(schema.field("name").is_some());
+        assert!(schema.field("unknown").is_none());
+    }
+
+    #[test]
+    fn test_schema_field_index() {
+        let schema = Schema::new(vec![
+            Field::new_not_null("a".to_string(), DataType::Integer),
+            Field::new("b".to_string(), DataType::Text),
+        ]);
+        assert_eq!(schema.field_index("a"), Some(0));
+        assert_eq!(schema.field_index("b"), Some(1));
+        assert_eq!(schema.field_index("c"), None);
+    }
+
+    #[test]
+    fn test_field_nullable() {
+        let nullable = Field::new("x".to_string(), DataType::Integer);
+        assert!(nullable.nullable);
+        let not_null = Field::new_not_null("y".to_string(), DataType::Integer);
+        assert!(!not_null.nullable);
+    }
+}
