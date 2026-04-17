@@ -5,8 +5,8 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec, SeqScanExec,
-    SortExec,
+    AggregateExec, DeleteExec, FilterExec, HashJoinExec, LimitExec, PhysicalPlan, ProjectionExec,
+    SeqScanExec, SortExec,
 };
 use crate::Schema;
 use thiserror::Error;
@@ -134,9 +134,12 @@ impl DefaultPlanner {
                 // DDL statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
-            LogicalPlan::Update { .. } | LogicalPlan::Delete { .. } => {
+            LogicalPlan::Update { .. } => {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::Delete { table_name, predicate } => {
+                Ok(Box::new(DeleteExec::new(table_name.clone(), predicate.clone())))
             }
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
             LogicalPlan::Union { left, .. } => {
@@ -487,7 +490,7 @@ mod tests {
         let planner = DefaultPlanner::new();
         let physical_plan = planner.create_physical_plan(&delete_plan).unwrap();
 
-        assert_eq!(physical_plan.name(), "SeqScan");
+        assert_eq!(physical_plan.name(), "Delete");
     }
 
     #[test]

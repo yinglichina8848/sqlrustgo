@@ -246,6 +246,7 @@ pub enum Expression {
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
+    Aggregate(AggregateCall),  // For HAVING clause - supports aggregate functions in expressions
 }
 
 /// SQL Parser
@@ -343,9 +344,8 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
-        self.expect(Token::LParen)?;
+        // parse_column_list already handles LParen and RParen
         let columns = self.parse_column_list()?;
-        self.expect(Token::RParen)?;
 
         Ok(Statement::CreateIndex(CreateIndexStatement {
             name,
@@ -1067,6 +1067,11 @@ impl Parser {
                 } else {
                     Err("NOT without EXISTS".to_string())
                 }
+            }
+            // Support aggregate functions in expressions (for HAVING clause)
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min) | Some(Token::Max) => {
+                let agg = self.parse_aggregate_function()?;
+                Ok(Expression::Aggregate(agg))
             }
             _ => Err("Expected expression".to_string()),
         }
@@ -1802,5 +1807,228 @@ mod tests {
             }
             _ => panic!("Expected SELECT statement"),
         }
+    }
+
+    #[test]
+    fn test_parse_delete() {
+        let result = parse("DELETE FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_none());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_delete_with_where() {
+        let result = parse("DELETE FROM users WHERE id = 1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Delete(d) => {
+                assert_eq!(d.table, "users");
+                assert!(d.where_clause.is_some());
+            }
+            _ => panic!("Expected DELETE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze() {
+        let result = parse("ANALYZE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_name, Some("users".to_string()));
+            }
+            _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_add_column() {
+        let result = parse("ALTER TABLE users ADD COLUMN age INTEGER");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match a.operation {
+                    AlterTableOperation::AddColumn {
+                        name, data_type, ..
+                    } => {
+                        assert_eq!(name, "age");
+                        assert_eq!(data_type, "INTEGER");
+                    }
+                    _ => panic!("Expected AddColumn operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_rename_to() {
+        let result = parse("ALTER TABLE users RENAME TO old_users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::AlterTable(a) => {
+                assert_eq!(a.table_name, "users");
+                match a.operation {
+                    AlterTableOperation::RenameTo { new_name } => {
+                        assert_eq!(new_name, "old_users");
+                    }
+                    _ => panic!("Expected RenameTo operation"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_right_join() {
+        let result = parse("SELECT * FROM users RIGHT JOIN orders ON users.id = orders.user_id");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.join_clause.is_some());
+                assert_eq!(s.join_clause.unwrap().join_type, JoinType::Right);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_expression() {
+        let result = parse("SELECT * FROM t WHERE a > b AND c < d");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_like_expression() {
+        let result = parse("SELECT * FROM t WHERE name LIKE '%test%'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_avg() {
+        let result = parse("SELECT AVG(price) FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "orders");
+                assert_eq!(s.aggregates.len(), 1);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Avg);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_aggregate_min_max() {
+        let result = parse("SELECT MIN(id), MAX(id) FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                assert_eq!(s.aggregates.len(), 2);
+                assert_eq!(s.aggregates[0].func, AggregateFunction::Min);
+                assert_eq!(s.aggregates[1].func, AggregateFunction::Max);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+}
+
+    #[test]
+    fn test_debug_having() {
+        let sql = "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
+        match parse(sql) {
+            Ok(stmt) => {
+                println!("OK: {:#?}", stmt);
+                if let Statement::Select(s) = stmt {
+                    println!("having = {:?}", s.having);
+                }
+            }
+            Err(e) => {
+                println!("ERROR: {}", e);
+            }
+        }
+    }
+
+#[test]
+fn test_debug_fk() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_refs() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_refs2() {
+    let sql = "CREATE TABLE orders (user_id INTEGER REFERENCES users(id))";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_exact() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_cascade() {
+    // This is EXACTLY what's in cascade.sql
+    let sql1 = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)";
+    println!("Test 1: {:?}", parse(sql1));
+    
+    let sql2 = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    println!("Test 2: {:?}", parse(sql2));
+    
+    let sql3 = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
+    println!("Test 3: {:?}", parse(sql3));
+}
+
+#[test]
+fn test_debug_idx() {
+    use crate::{parse, lexer::Lexer};
+    
+    let sql = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+    
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
     }
 }
