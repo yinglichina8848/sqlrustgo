@@ -432,10 +432,26 @@ mod tests {
         let table_info = TableInfo {
             name: "orders".to_string(),
             columns: vec![
-                ColumnDefinition { name: "id".to_string(), data_type: "INTEGER".to_string(), ..Default::default() },
-                ColumnDefinition { name: "price".to_string(), data_type: "FLOAT".to_string(), ..Default::default() },
-                ColumnDefinition { name: "quantity".to_string(), data_type: "INTEGER".to_string(), ..Default::default() },
-                ColumnDefinition { name: "total".to_string(), data_type: "FLOAT".to_string(), ..Default::default() },
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    ..Default::default()
+                },
+                ColumnDefinition {
+                    name: "price".to_string(),
+                    data_type: "FLOAT".to_string(),
+                    ..Default::default()
+                },
+                ColumnDefinition {
+                    name: "quantity".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    ..Default::default()
+                },
+                ColumnDefinition {
+                    name: "total".to_string(),
+                    data_type: "FLOAT".to_string(),
+                    ..Default::default()
+                },
             ],
             ..Default::default()
         };
@@ -769,5 +785,132 @@ mod tests {
         fn _check<T: Send + Sync>() {}
         let storage = create_test_storage();
         _check::<TriggerExecutor<MemoryStorage>>();
+    }
+
+    #[test]
+    fn test_trigger_executor_with_multiple_tables() {
+        let mut storage = MemoryStorage::new();
+
+        // Create orders table
+        let orders_table = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&orders_table).unwrap();
+
+        // Create products table
+        let products_table = TableInfo {
+            name: "products".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        storage.create_table(&products_table).unwrap();
+
+        // Add trigger to orders
+        let trigger = StorageTriggerInfo {
+            name: "before_order_insert".to_string(),
+            table_name: "orders".to_string(),
+            timing: StorageTriggerTiming::Before,
+            event: StorageTriggerEvent::Insert,
+            body: "".to_string(),
+        };
+        storage.create_trigger(trigger).unwrap();
+
+        let executor = TriggerExecutor::new(Arc::new(storage));
+
+        // Orders should have 1 trigger
+        assert_eq!(executor.get_table_triggers("orders").len(), 1);
+        // Products should have no triggers
+        assert_eq!(executor.get_table_triggers("products").len(), 0);
+    }
+
+    #[test]
+    fn test_execute_after_update_trigger() {
+        let mut storage = create_test_storage();
+
+        let trigger = StorageTriggerInfo {
+            name: "after_order_update".to_string(),
+            table_name: "orders".to_string(),
+            timing: StorageTriggerTiming::After,
+            event: StorageTriggerEvent::Update,
+            body: "".to_string(),
+        };
+        storage.create_trigger(trigger).unwrap();
+
+        let executor = TriggerExecutor::new(Arc::new(storage));
+
+        let old_row = vec![
+            Value::Integer(1),
+            Value::Float(10.0),
+            Value::Integer(5),
+            Value::Float(50.0),
+        ];
+        let new_row = vec![
+            Value::Integer(1),
+            Value::Float(12.0),
+            Value::Integer(5),
+            Value::Float(60.0),
+        ];
+
+        let result = executor.execute_after_update("orders", &old_row, &new_row);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_after_delete_trigger() {
+        let mut storage = create_test_storage();
+
+        let trigger = StorageTriggerInfo {
+            name: "after_order_delete".to_string(),
+            table_name: "orders".to_string(),
+            timing: StorageTriggerTiming::After,
+            event: StorageTriggerEvent::Delete,
+            body: "".to_string(),
+        };
+        storage.create_trigger(trigger).unwrap();
+
+        let executor = TriggerExecutor::new(Arc::new(storage));
+
+        let old_row = vec![
+            Value::Integer(1),
+            Value::Float(10.0),
+            Value::Integer(5),
+            Value::Float(50.0),
+        ];
+
+        let result = executor.execute_after_delete("orders", &old_row);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_trigger_execution_result_into_record() {
+        let unmodified = TriggerExecutionResult::Unmodified;
+        assert!(unmodified.into_record().is_none());
+
+        let modified_row = Record::from(vec![Value::Integer(42)]);
+        let modified = TriggerExecutionResult::ModifiedNewRow(modified_row.clone());
+        assert_eq!(modified.into_record(), Some(modified_row));
+    }
+
+    #[test]
+    fn test_trigger_timing_all_values() {
+        assert_eq!(format!("{:?}", TriggerTiming::Before), "Before");
+        assert_eq!(format!("{:?}", TriggerTiming::After), "After");
+    }
+
+    #[test]
+    fn test_trigger_event_all_values() {
+        assert_eq!(format!("{:?}", TriggerEvent::Insert), "Insert");
+        assert_eq!(format!("{:?}", TriggerEvent::Update), "Update");
+        assert_eq!(format!("{:?}", TriggerEvent::Delete), "Delete");
     }
 }
