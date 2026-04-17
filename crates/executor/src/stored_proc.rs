@@ -1250,7 +1250,6 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
-            _ => Value::Null,
         }
     }
 
@@ -1451,21 +1450,46 @@ impl StoredProcExecutor {
             .get_table_info(table_name)
             .map_err(|e| format!("Failed to get table info: {}", e))?;
 
-        let pk_indices: Vec<usize> = table_info
+        // Build column name to row index mapping
+        let col_to_row_idx: std::collections::HashMap<String, usize> = if columns.is_empty() {
+            std::collections::HashMap::new()
+        } else {
+            columns
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.to_uppercase(), i))
+                .collect()
+        };
+
+        // Get primary key column names from schema
+        let pk_col_names: Vec<String> = table_info
             .columns
             .iter()
-            .enumerate()
-            .filter(|(_, col)| col.primary_key)
-            .map(|(idx, _)| idx)
+            .filter(|c| c.primary_key)
+            .map(|c| c.name.to_uppercase())
             .collect();
 
-        if pk_indices.is_empty() {
+        if pk_col_names.is_empty() {
             return Ok(());
         }
 
-        let pk_values: Vec<Value> = pk_indices
+        // Extract primary key values from row using column mapping
+        let pk_values: Vec<Value> = pk_col_names
             .iter()
-            .filter_map(|&i| row.get(i).cloned())
+            .filter_map(|pk_name| {
+                if let Some(&row_idx) = col_to_row_idx.get(pk_name) {
+                    row.get(row_idx).cloned()
+                } else if columns.is_empty() {
+                    // Positional mapping when no column list
+                    table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.to_uppercase() == *pk_name)
+                        .and_then(|col_idx| row.get(col_idx).cloned())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         if pk_values.iter().any(|v| matches!(v, Value::Null)) {
@@ -1476,16 +1500,24 @@ impl StoredProcExecutor {
             .scan(table_name)
             .map_err(|e| format!("Failed to scan table: {}", e))?;
 
+        // Build full row mapping for existing rows
+        let all_col_names: Vec<String> = table_info
+            .columns
+            .iter()
+            .map(|c| c.name.to_uppercase())
+            .collect();
+
         for existing_row in existing_rows {
-            let existing_pk_values: Vec<Value> = pk_indices
+            let existing_pk_values: Vec<Value> = pk_col_names
                 .iter()
-                .filter_map(|&i| existing_row.get(i).cloned())
+                .filter_map(|pk_name| {
+                    all_col_names
+                        .iter()
+                        .position(|c| c == pk_name)
+                        .and_then(|col_idx| existing_row.get(col_idx).cloned())
+                })
                 .collect();
             if existing_pk_values == pk_values {
-                let pk_col_names: Vec<String> = pk_indices
-                    .iter()
-                    .filter_map(|&i| table_info.columns.get(i).map(|c| c.name.clone()))
-                    .collect();
                 return Err(format!(
                     "Duplicate primary key: ({}) values ({}) already exist",
                     pk_col_names.join(", "),
@@ -1562,110 +1594,6 @@ impl StoredProcExecutor {
                     Value::Boolean(*l || *r)
                 } else {
                     Value::Boolean(false)
-                }
-            }
-            _ => Value::Null,
-        }
-    }
-
-    /// Evaluate a function call expression
-    fn evaluate_function(
-        &self,
-        name: &str,
-        args: &[sqlrustgo_parser::Expression],
-        ctx: &ProcedureContext,
-    ) -> Value {
-        let name_upper = name.to_uppercase();
-        match name_upper.as_str() {
-            "COALESCE" => {
-                for arg in args {
-                    let val = self.expression_to_value(arg, ctx);
-                    if val != Value::Null {
-                        return val;
-                    }
-                }
-                Value::Null
-            }
-            "IFNULL" | "NVL" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if val == Value::Null {
-                    if args.len() > 1 {
-                        self.expression_to_value(&args[1], ctx)
-                    } else {
-                        Value::Null
-                    }
-                } else {
-                    val
-                }
-            }
-            "NULLIF" => {
-                if args.len() < 2 {
-                    return Value::Null;
-                }
-                let left = self.expression_to_value(&args[0], ctx);
-                let right = self.expression_to_value(&args[1], ctx);
-                if left == right {
-                    Value::Null
-                } else {
-                    left
-                }
-            }
-            "CONCAT" => {
-                let mut result = String::new();
-                for arg in args {
-                    let val = self.expression_to_value(arg, ctx);
-                    if !result.is_empty() {
-                        result.push_str(", ");
-                    }
-                    result.push_str(&val.to_string());
-                }
-                Value::Text(result)
-            }
-            "LENGTH" | "LEN" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Integer(s.len() as i64)
-                } else {
-                    Value::Integer(0)
-                }
-            }
-            "UPPER" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Text(s.to_uppercase())
-                } else {
-                    Value::Null
-                }
-            }
-            "LOWER" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Text(s.to_lowercase())
-                } else {
-                    Value::Null
-                }
-            }
-            "IF" => {
-                if args.len() < 3 {
-                    return Value::Null;
-                }
-                let cond = self.expression_to_value(&args[0], ctx);
-                if cond != Value::Null && cond != Value::Boolean(false) {
-                    self.expression_to_value(&args[1], ctx)
-                } else {
-                    self.expression_to_value(&args[2], ctx)
                 }
             }
             _ => Value::Null,

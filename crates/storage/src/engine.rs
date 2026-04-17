@@ -78,6 +78,17 @@ pub struct ColumnDefinition {
     pub primary_key: bool,
 }
 
+impl ColumnDefinition {
+    pub fn new(name: &str, data_type: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: data_type.to_string(),
+            nullable: false,
+            primary_key: false,
+        }
+    }
+}
+
 impl Default for ColumnDefinition {
     fn default() -> Self {
         Self {

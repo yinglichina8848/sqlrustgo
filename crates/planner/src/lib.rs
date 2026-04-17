@@ -16,6 +16,9 @@ pub mod planner;
 pub use logical_plan::LogicalPlan;
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::PhysicalPlan;
+pub use physical_plan::{
+    AggregateExec, FilterExec, HashJoinExec, LimitExec, ProjectionExec, SeqScanExec, SortExec,
+};
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
 use sqlrustgo_types::Value;
@@ -289,34 +292,165 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sort_expr_display() {
-        let expr = SortExpr {
-            expr: Expr::column("name"),
+    fn test_join_type_values() {
+        assert_eq!(format!("{:?}", JoinType::Inner), "Inner");
+        assert_eq!(format!("{:?}", JoinType::Left), "Left");
+        assert_eq!(format!("{:?}", JoinType::Right), "Right");
+        assert_eq!(format!("{:?}", JoinType::Full), "Full");
+        assert_eq!(format!("{:?}", JoinType::Cross), "Cross");
+        assert_eq!(format!("{:?}", JoinType::LeftSemi), "LeftSemi");
+        assert_eq!(format!("{:?}", JoinType::LeftAnti), "LeftAnti");
+        assert_eq!(format!("{:?}", JoinType::RightSemi), "RightSemi");
+        assert_eq!(format!("{:?}", JoinType::RightAnti), "RightAnti");
+    }
+
+    #[test]
+    fn test_join_type_clone() {
+        let jt = JoinType::Left.clone();
+        assert_eq!(jt, JoinType::Left);
+    }
+
+    #[test]
+    fn test_aggregate_function_values() {
+        assert_eq!(format!("{:?}", AggregateFunction::Count), "Count");
+        assert_eq!(format!("{:?}", AggregateFunction::Sum), "Sum");
+        assert_eq!(format!("{:?}", AggregateFunction::Avg), "Avg");
+        assert_eq!(format!("{:?}", AggregateFunction::Min), "Min");
+        assert_eq!(format!("{:?}", AggregateFunction::Max), "Max");
+    }
+
+    #[test]
+    fn test_aggregate_function_clone() {
+        let af = AggregateFunction::Count.clone();
+        assert_eq!(af, AggregateFunction::Count);
+    }
+
+    #[test]
+    fn test_operator_display() {
+        assert_eq!(format!("{}", Operator::Eq), "=");
+        assert_eq!(format!("{}", Operator::NotEq), "!=");
+        assert_eq!(format!("{}", Operator::Lt), "<");
+        assert_eq!(format!("{}", Operator::LtEq), "<=");
+        assert_eq!(format!("{}", Operator::Gt), ">");
+        assert_eq!(format!("{}", Operator::GtEq), ">=");
+        assert_eq!(format!("{}", Operator::Plus), "+");
+        assert_eq!(format!("{}", Operator::Minus), "-");
+        assert_eq!(format!("{}", Operator::Multiply), "*");
+        assert_eq!(format!("{}", Operator::Divide), "/");
+        assert_eq!(format!("{}", Operator::Modulo), "%");
+        assert_eq!(format!("{}", Operator::And), "AND");
+        assert_eq!(format!("{}", Operator::Or), "OR");
+        assert_eq!(format!("{}", Operator::Not), "NOT");
+        assert_eq!(format!("{}", Operator::Like), "LIKE");
+    }
+
+    #[test]
+    fn test_operator_clone() {
+        let op = Operator::Eq.clone();
+        assert_eq!(op, Operator::Eq);
+    }
+
+    #[test]
+    fn test_operator_partial_eq() {
+        assert_eq!(Operator::Eq, Operator::Eq);
+        assert_ne!(Operator::Eq, Operator::NotEq);
+    }
+
+    #[test]
+    fn test_sort_expr() {
+        let expr = Expr::column("x");
+        let sort = SortExpr {
+            expr,
             asc: true,
             nulls_first: true,
         };
-        assert!(expr.asc);
-        assert!(expr.nulls_first);
+        assert!(sort.asc);
+        assert!(sort.nulls_first);
     }
 
     #[test]
-    fn test_sort_expr_descending() {
-        let expr = SortExpr {
-            expr: Expr::column("id"),
-            asc: false,
-            nulls_first: false,
-        };
-        assert!(!expr.asc);
-        assert!(!expr.nulls_first);
+    fn test_column_new() {
+        let col = Column::new("id".to_string());
+        assert_eq!(col.name, "id");
+        assert!(col.relation.is_none());
     }
 
     #[test]
-    fn test_expr_unary_operator() {
-        let expr = Expr::UnaryExpr {
-            op: Operator::Not,
-            expr: Box::new(Expr::Literal(Value::Boolean(true))),
+    fn test_column_new_qualified() {
+        let col = Column::new_qualified("users".to_string(), "id".to_string());
+        assert_eq!(col.name, "id");
+        assert_eq!(col.relation, Some("users".to_string()));
+    }
+
+    #[test]
+    fn test_column_display() {
+        let col = Column::new("id".to_string());
+        assert_eq!(format!("{}", col), "id");
+        let qualified = Column::new_qualified("users".to_string(), "id".to_string());
+        assert_eq!(format!("{}", qualified), "users.id");
+    }
+
+    #[test]
+    fn test_column_clone() {
+        let col = Column::new("id".to_string());
+        let cloned = col.clone();
+        assert_eq!(col, cloned);
+    }
+
+    #[test]
+    fn test_expr_column() {
+        let expr = Expr::column("name");
+        match expr {
+            Expr::Column(col) => assert_eq!(col.name, "name"),
+            _ => panic!("Expected Column variant"),
+        }
+    }
+
+    #[test]
+    fn test_expr_literal() {
+        let expr = Expr::literal(Value::Integer(42));
+        match expr {
+            Expr::Literal(v) => assert_eq!(v, Value::Integer(42)),
+            _ => panic!("Expected Literal variant"),
+        }
+    }
+
+    #[test]
+    fn test_expr_binary_expr() {
+        let expr = Expr::binary_expr(Expr::column("a"), Operator::Plus, Expr::column("b"));
+        match expr {
+            Expr::BinaryExpr { left, op, right } => {
+                assert!(matches!(*left, Expr::Column(_)));
+                assert_eq!(op, Operator::Plus);
+                assert!(matches!(*right, Expr::Column(_)));
+            }
+            _ => panic!("Expected BinaryExpr variant"),
+        }
+    }
+
+    #[test]
+    fn test_expr_display() {
+        let col = Expr::column("x");
+        assert_eq!(format!("{}", col), "x");
+        let lit = Expr::literal(Value::Integer(5));
+        assert_eq!(format!("{}", lit), "5");
+    }
+
+    #[test]
+    fn test_expr_clone() {
+        let expr = Expr::column("x");
+        let cloned = expr.clone();
+        assert_eq!(expr, cloned);
+    }
+
+    #[test]
+    fn test_expr_aggregate_function() {
+        let expr = Expr::AggregateFunction {
+            func: AggregateFunction::Count,
+            args: vec![Expr::Wildcard],
+            distinct: false,
         };
-        assert!(matches!(expr, Expr::UnaryExpr { .. }));
+        assert_eq!(format!("{}", expr), "COUNT(*)");
     }
 
     #[test]
@@ -325,53 +459,113 @@ mod tests {
             expr: Box::new(Expr::column("x")),
             name: "alias_x".to_string(),
         };
-        assert!(matches!(expr, Expr::Alias { .. }));
+        assert_eq!(format!("{}", expr), "x AS alias_x");
     }
 
     #[test]
-    fn test_data_type_from_sql() {
-        assert_eq!(DataType::from_sql_type("INT"), DataType::Integer);
-        assert_eq!(DataType::from_sql_type("VARCHAR"), DataType::Text);
-        assert_eq!(DataType::from_sql_type("BOOL"), DataType::Boolean);
+    fn test_expr_wildcard() {
+        let expr = Expr::Wildcard;
+        assert_eq!(format!("{}", expr), "*");
     }
 
     #[test]
-    fn test_data_type_display() {
-        assert_eq!(DataType::Boolean.to_string(), "BOOLEAN");
-        assert_eq!(DataType::Integer.to_string(), "INTEGER");
-        assert_eq!(DataType::Float.to_string(), "FLOAT");
-        assert_eq!(DataType::Text.to_string(), "TEXT");
-        assert_eq!(DataType::Blob.to_string(), "BLOB");
-        assert_eq!(DataType::Null.to_string(), "NULL");
+    fn test_expr_qualified_wildcard() {
+        let expr = Expr::QualifiedWildcard {
+            qualifier: "users".to_string(),
+        };
+        assert_eq!(format!("{}", expr), "users.*");
     }
 
     #[test]
-    fn test_schema_field_by_name() {
-        let schema = Schema::new(vec![
-            Field::new_not_null("id".to_string(), DataType::Integer),
-            Field::new("name".to_string(), DataType::Text),
-        ]);
+    fn test_schema_new() {
+        let field = Field::new("id".to_string(), DataType::Integer);
+        let schema = Schema::new(vec![field]);
+        assert_eq!(schema.fields.len(), 1);
+    }
+
+    #[test]
+    fn test_schema_empty() {
+        let schema = Schema::empty();
+        assert!(schema.fields.is_empty());
+    }
+
+    #[test]
+    fn test_schema_field() {
+        let field = Field::new("id".to_string(), DataType::Integer);
+        let schema = Schema::new(vec![field]);
         assert!(schema.field("id").is_some());
-        assert!(schema.field("name").is_some());
-        assert!(schema.field("unknown").is_none());
+        assert!(schema.field("name").is_none());
     }
 
     #[test]
     fn test_schema_field_index() {
-        let schema = Schema::new(vec![
-            Field::new_not_null("a".to_string(), DataType::Integer),
-            Field::new("b".to_string(), DataType::Text),
-        ]);
-        assert_eq!(schema.field_index("a"), Some(0));
-        assert_eq!(schema.field_index("b"), Some(1));
-        assert_eq!(schema.field_index("c"), None);
+        let field = Field::new("id".to_string(), DataType::Integer);
+        let schema = Schema::new(vec![field]);
+        assert_eq!(schema.field_index("id"), Some(0));
+        assert_eq!(schema.field_index("name"), None);
     }
 
     #[test]
-    fn test_field_nullable() {
-        let nullable = Field::new("x".to_string(), DataType::Integer);
-        assert!(nullable.nullable);
-        let not_null = Field::new_not_null("y".to_string(), DataType::Integer);
-        assert!(!not_null.nullable);
+    fn test_schema_clone() {
+        let schema = Schema::empty();
+        let cloned = schema.clone();
+        assert_eq!(schema, cloned);
+    }
+
+    #[test]
+    fn test_field_new() {
+        let field = Field::new("name".to_string(), DataType::Text);
+        assert_eq!(field.name, "name");
+        assert_eq!(field.data_type, DataType::Text);
+        assert!(field.nullable);
+    }
+
+    #[test]
+    fn test_field_new_not_null() {
+        let field = Field::new_not_null("id".to_string(), DataType::Integer);
+        assert!(!field.nullable);
+        assert_eq!(field.data_type, DataType::Integer);
+    }
+
+    #[test]
+    fn test_field_clone() {
+        let field = Field::new("x".to_string(), DataType::Integer);
+        let cloned = field.clone();
+        assert_eq!(field, cloned);
+    }
+
+    #[test]
+    fn test_data_type_from_sql_type() {
+        assert_eq!(DataType::from_sql_type("INTEGER"), DataType::Integer);
+        assert_eq!(DataType::from_sql_type("INT"), DataType::Integer);
+        assert_eq!(DataType::from_sql_type("FLOAT"), DataType::Float);
+        assert_eq!(DataType::from_sql_type("DOUBLE"), DataType::Float);
+        assert_eq!(DataType::from_sql_type("TEXT"), DataType::Text);
+        assert_eq!(DataType::from_sql_type("VARCHAR"), DataType::Text);
+        assert_eq!(DataType::from_sql_type("BLOB"), DataType::Blob);
+        assert_eq!(DataType::from_sql_type("BOOLEAN"), DataType::Boolean);
+        assert_eq!(DataType::from_sql_type("UNKNOWN"), DataType::Null);
+    }
+
+    #[test]
+    fn test_data_type_display() {
+        assert_eq!(format!("{}", DataType::Boolean), "BOOLEAN");
+        assert_eq!(format!("{}", DataType::Integer), "INTEGER");
+        assert_eq!(format!("{}", DataType::Float), "FLOAT");
+        assert_eq!(format!("{}", DataType::Text), "TEXT");
+        assert_eq!(format!("{}", DataType::Blob), "BLOB");
+        assert_eq!(format!("{}", DataType::Null), "NULL");
+    }
+
+    #[test]
+    fn test_data_type_clone() {
+        let dt = DataType::Integer.clone();
+        assert_eq!(dt, DataType::Integer);
+    }
+
+    #[test]
+    fn test_data_type_partial_eq() {
+        assert_eq!(DataType::Integer, DataType::Integer);
+        assert_ne!(DataType::Integer, DataType::Float);
     }
 }
