@@ -961,7 +961,7 @@ impl StoredProcExecutor {
 
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
                 let mut new_rows: Vec<Vec<Value>> = Vec::new();
-                let mut insert_count = 0;
+                let insert_count;
 
                 if let Some(ref select) = insert.select {
                     let storage = self.storage.read().unwrap();
@@ -1266,7 +1266,7 @@ impl StoredProcExecutor {
         if let Some(ref where_expr) = select.where_clause {
             records
                 .into_iter()
-                .filter(|row| {
+                .filter(|_row| {
                     let where_val = self.expression_to_value(where_expr, &ProcedureContext::new());
                     if let Value::Boolean(b) = where_val {
                         b
