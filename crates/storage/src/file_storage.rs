@@ -918,6 +918,145 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_file_storage_add_column() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_add_col");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "add_col_test".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    primary_key: true,
+                }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
+            },
+            rows: vec![],
+        };
+        storage
+            .insert_table("add_col_test".to_string(), table_data)
+            .unwrap();
+
+        // Test add_column
+        let new_col = ColumnDefinition {
+            name: "name".to_string(),
+            data_type: "TEXT".to_string(),
+            nullable: true,
+            primary_key: false,
+        };
+        let result = storage.add_column("add_col_test", new_col);
+        assert!(result.is_ok());
+
+        // Verify column was added
+        let table = storage.get_table("add_col_test").unwrap();
+        assert_eq!(table.info.columns.len(), 2);
+        assert_eq!(table.info.columns[1].name, "name");
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_rename_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_rename");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        let table_data = TableData {
+            info: TableInfo {
+                name: "old_name".to_string(),
+                columns: vec![ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    ..Default::default()
+                }],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
+            },
+            rows: vec![],
+        };
+        storage
+            .insert_table("old_name".to_string(), table_data)
+            .unwrap();
+
+        // Test rename_table
+        let result = storage.rename_table("old_name", "new_name");
+        assert!(result.is_ok());
+
+        // Verify table was renamed
+        assert!(!storage.contains_table("old_name"));
+        assert!(storage.contains_table("new_name"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_rename_nonexistent() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_rename_none");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Rename non-existent table should return Ok (no-op)
+        let result = storage.rename_table("nonexistent", "new_name");
+        assert!(result.is_ok());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_trigger_operations() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_triggers");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Test create_trigger (returns Ok but does nothing)
+        let trigger_info = TriggerInfo {
+            name: "test_trigger".to_string(),
+            table_name: "test_table".to_string(),
+            timing: crate::engine::TriggerTiming::Before,
+            event: crate::engine::TriggerEvent::Insert,
+            body: "BEGIN END".to_string(),
+        };
+        let result = storage.create_trigger(trigger_info);
+        assert!(result.is_ok());
+
+        // Test drop_trigger returns error (not supported)
+        let result = storage.drop_trigger("test_trigger");
+        assert!(result.is_err());
+
+        // Test get_trigger returns None
+        let result = storage.get_trigger("test_trigger");
+        assert!(result.is_none());
+
+        // Test list_triggers returns empty
+        let result = storage.list_triggers("test_table");
+        assert!(result.is_empty());
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_file_storage_view_operations() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_views");
+        let _ = remove_dir_all(&temp_dir);
+
+        let storage = FileStorage::new(temp_dir.clone()).unwrap();
+
+        // Test has_view returns false
+        assert!(!storage.has_view("test_view"));
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
 
 impl StorageEngine for FileStorage {

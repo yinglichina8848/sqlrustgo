@@ -563,4 +563,87 @@ mod tests {
         assert_eq!(limit.name(), "Limit");
         assert!(!limit.children().is_empty());
     }
+
+    #[test]
+    fn test_delete_exec() {
+        let delete = DeleteExec::new("test_table".to_string(), None);
+
+        assert_eq!(delete.name(), "Delete");
+        assert_eq!(delete.table_name(), "test_table");
+        assert!(delete.predicate().is_none());
+        assert!(delete.children().is_empty());
+    }
+
+    #[test]
+    fn test_delete_exec_with_predicate() {
+        let predicate = Expr::binary_expr(
+            Expr::column("id"),
+            crate::Operator::Eq,
+            Expr::literal(Value::Integer(1)),
+        );
+        let delete = DeleteExec::new("test_table".to_string(), Some(predicate.clone()));
+
+        assert_eq!(delete.name(), "Delete");
+        assert_eq!(delete.table_name(), "test_table");
+        assert!(delete.predicate().is_some());
+    }
+
+    #[test]
+    fn test_seq_scan_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let scan = SeqScanExec::new("test_table".to_string(), schema.clone());
+        assert_eq!(scan.table_name(), "test_table");
+        assert!(scan.projection().is_none());
+
+        let scan_with_proj = scan.with_projection(vec![0]);
+        assert!(scan_with_proj.projection().is_some());
+    }
+
+    #[test]
+    fn test_projection_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema.clone()));
+        let expr = vec![Expr::column("id")];
+        let proj = ProjectionExec::new(input, expr.clone(), schema);
+
+        assert_eq!(proj.expr(), expr);
+        assert!(proj.input().name() == "SeqScan");
+    }
+
+    #[test]
+    fn test_filter_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let predicate = Expr::column("id");
+        let filter = FilterExec::new(input, predicate.clone());
+
+        assert!(filter.predicate() == &predicate);
+        assert!(filter.input().name() == "SeqScan");
+    }
+
+    #[test]
+    fn test_sort_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let sort_expr = vec![SortExpr {
+            expr: Expr::column("id"),
+            asc: true,
+            nulls_first: false,
+        }];
+        let sort = SortExec::new(input, sort_expr.clone());
+
+        assert_eq!(sort.sort_expr(), sort_expr);
+        assert!(sort.input().name() == "SeqScan");
+    }
+
+    #[test]
+    fn test_limit_exec_accessors() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let input = Box::new(SeqScanExec::new("test_table".to_string(), schema));
+        let limit = LimitExec::new(input, 10, Some(5));
+
+        assert_eq!(limit.limit(), 10);
+        assert_eq!(limit.offset(), Some(5));
+        assert!(limit.input().name() == "SeqScan");
+    }
 }
