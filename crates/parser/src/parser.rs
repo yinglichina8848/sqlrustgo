@@ -25,10 +25,20 @@ pub enum Statement {
     Update(UpdateStatement),
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
+    CreateIndex(CreateIndexStatement),
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
+}
+
+/// CREATE INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateIndexStatement {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
 }
 
 /// ALTER TABLE statement
@@ -124,6 +134,8 @@ pub struct SelectStatement {
     pub where_clause: Option<Expression>,
     pub join_clause: Option<JoinClause>,
     pub aggregates: Vec<AggregateCall>,
+    pub group_by: Vec<Expression>,
+    pub having: Option<Expression>,
 }
 
 /// Column in SELECT
@@ -288,7 +300,19 @@ impl Parser {
             Some(Token::Insert) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
-            Some(Token::Create) => self.parse_create_table(),
+            Some(Token::Create) => {
+                // Check what comes after CREATE
+                self.next(); // consume CREATE token
+                if matches!(self.current(), Some(Token::Table)) {
+                    self.parse_create_table()
+                } else if matches!(self.current(), Some(Token::Index)) {
+                    self.parse_create_index()
+                } else if matches!(self.current(), Some(Token::Unique)) {
+                    self.parse_create_index()
+                } else {
+                    Err("Expected TABLE or INDEX after CREATE".to_string())
+                }
+            }
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::With) => self.parse_with_select(),
@@ -296,6 +320,39 @@ impl Parser {
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
+    }
+
+    fn parse_create_index(&mut self) -> Result<Statement, String> {
+        // Current token is Token::Index or Token::Unique (not consumed yet)
+        let unique = if matches!(self.current(), Some(Token::Unique)) {
+            self.next(); // consume Unique if present
+            true
+        } else {
+            false
+        };
+
+        self.expect(Token::Index)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected index name".to_string()),
+        };
+
+        self.expect(Token::On)?;
+        let table = match self.next() {
+            Some(Token::Identifier(table)) => table,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+        let columns = self.parse_column_list()?;
+        self.expect(Token::RParen)?;
+
+        Ok(Statement::CreateIndex(CreateIndexStatement {
+            name,
+            table,
+            columns,
+            unique,
+        }))
     }
 
     fn parse_select(&mut self) -> Result<Statement, String> {
@@ -466,13 +523,45 @@ impl Parser {
             None
         };
 
+        // Parse GROUP BY clause
+        let group_by = if matches!(self.current(), Some(Token::Group)) {
+            self.next();
+            self.expect(Token::By)?;
+            self.parse_expression_list()?
+        } else {
+            Vec::new()
+        };
+
+        // Parse HAVING clause
+        let having = if matches!(self.current(), Some(Token::Having)) {
+            self.next();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
         Ok(SelectStatement {
             columns,
             table,
             where_clause,
             join_clause,
             aggregates,
+            group_by,
+            having,
         })
+    }
+
+    fn parse_expression_list(&mut self) -> Result<Vec<Expression>, String> {
+        let mut exprs = Vec::new();
+        loop {
+            exprs.push(self.parse_expression()?);
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+            } else {
+                break;
+            }
+        }
+        Ok(exprs)
     }
 
     fn parse_join_clause(&mut self) -> Result<JoinClause, String> {
@@ -1006,7 +1095,10 @@ impl Parser {
     }
 
     fn parse_create_table(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Create)?;
+        // Check if we need to consume Token::Create (may have been consumed by parse_statement)
+        if matches!(self.current(), Some(Token::Create)) {
+            self.next(); // consume CREATE if not already consumed
+        }
         self.expect(Token::Table)?;
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
