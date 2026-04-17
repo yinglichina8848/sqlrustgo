@@ -143,6 +143,7 @@ pub struct SelectStatement {
 pub struct SelectColumn {
     pub name: String,
     pub alias: Option<String>,
+    pub expression: Option<Expression>,
 }
 
 /// INSERT statement
@@ -336,10 +337,10 @@ impl Parser {
         };
         let columns = self.parse_column_list()?;
         Ok(Statement::CreateIndex(CreateIndexStatement {
-            index_name,
-            table_name,
+            name: index_name,
+            table: table_name,
             columns,
->>>>>>> 44be2121 (feat(parser): add CREATE INDEX support)
+            unique: false,
         }))
     }
 
@@ -428,6 +429,7 @@ impl Parser {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
                         alias: None,
+                        expression: None,
                     });
                     self.next();
                 }
@@ -438,10 +440,21 @@ impl Parser {
                     columns.push(SelectColumn {
                         name: format!("__agg_{}", aggregates.len()),
                         alias: None,
+                        expression: None,
+                    });
+                }
+                Some(Token::LParen) => {
+                    let expr = self.parse_expression()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias: None,
+                        expression: Some(expr),
                     });
                 }
                 Some(Token::Identifier(_)) => {
-                    let (name, consumed) = match self.current().cloned() {
+                    let start_position = self.position;
+                    let (name, consumed, _is_expression) = match self.current().cloned() {
                         Some(Token::Identifier(name)) => {
                             if matches!(self.peek(), Some(Token::Dot)) {
                                 let table = name.clone();
@@ -450,7 +463,7 @@ impl Parser {
                                 match self.current().cloned() {
                                     Some(Token::Identifier(col)) => {
                                         self.next();
-                                        (format!("{}.{}", table, col), true)
+                                        (format!("{}.{}", table, col), true, false)
                                     }
                                     Some(t) => {
                                         return Err(format!("Expected column name, got {:?}", t))
@@ -458,14 +471,84 @@ impl Parser {
                                     None => return Err("Expected column name".to_string()),
                                 }
                             } else {
-                                (name, false)
+                                (name.clone(), false, false)
                             }
                         }
                         _ => return Err("Expected column name".to_string()),
                     };
-                    columns.push(SelectColumn { name, alias: None });
-                    if !consumed {
-                        self.next();
+                    let is_operator = if consumed {
+                        matches!(self.current(), Some(Token::Plus))
+                            || matches!(self.current(), Some(Token::Minus))
+                            || matches!(self.current(), Some(Token::Star))
+                            || matches!(self.current(), Some(Token::Slash))
+                            || matches!(self.current(), Some(Token::Percent))
+                            || matches!(self.current(), Some(Token::Equal))
+                            || matches!(self.current(), Some(Token::NotEqual))
+                            || matches!(self.current(), Some(Token::Greater))
+                            || matches!(self.current(), Some(Token::Less))
+                            || matches!(self.current(), Some(Token::GreaterEqual))
+                            || matches!(self.current(), Some(Token::LessEqual))
+                    } else {
+                        matches!(self.peek(), Some(Token::Plus))
+                            || matches!(self.peek(), Some(Token::Minus))
+                            || matches!(self.peek(), Some(Token::Star))
+                            || matches!(self.peek(), Some(Token::Slash))
+                            || matches!(self.peek(), Some(Token::Percent))
+                            || matches!(self.peek(), Some(Token::Equal))
+                            || matches!(self.peek(), Some(Token::NotEqual))
+                            || matches!(self.peek(), Some(Token::Greater))
+                            || matches!(self.peek(), Some(Token::Less))
+                            || matches!(self.peek(), Some(Token::GreaterEqual))
+                            || matches!(self.peek(), Some(Token::LessEqual))
+                    };
+
+                    if is_operator {
+                        if consumed {
+                            let left = Expression::Identifier(name);
+                            let op = match self.current() {
+                                Some(Token::Plus) => "+",
+                                Some(Token::Minus) => "-",
+                                Some(Token::Star) => "*",
+                                Some(Token::Slash) => "/",
+                                Some(Token::Percent) => "%",
+                                Some(Token::Equal) => "=",
+                                Some(Token::NotEqual) => "!=",
+                                Some(Token::Greater) => ">",
+                                Some(Token::Less) => "<",
+                                Some(Token::GreaterEqual) => ">=",
+                                Some(Token::LessEqual) => "<=",
+                                _ => return Err("Expected operator".to_string()),
+                            };
+                            self.next();
+                            let right = self.parse_expression()?;
+                            let expr = Expression::BinaryOp(
+                                Box::new(left),
+                                op.to_string(),
+                                Box::new(right),
+                            );
+                            columns.push(SelectColumn {
+                                name: format!("{:?}", expr),
+                                alias: None,
+                                expression: Some(expr),
+                            });
+                        } else {
+                            self.position = start_position;
+                            let expr = self.parse_expression()?;
+                            columns.push(SelectColumn {
+                                name: format!("{:?}", expr),
+                                alias: None,
+                                expression: Some(expr),
+                            });
+                        }
+                    } else {
+                        columns.push(SelectColumn {
+                            name,
+                            alias: None,
+                            expression: None,
+                        });
+                        if !consumed {
+                            self.next();
+                        }
                     }
                 }
                 Some(Token::Comma) => {
@@ -992,10 +1075,26 @@ impl Parser {
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
-            Some(Token::Identifier(name)) => {
-                let expr = Expression::Identifier(name.clone());
+            Some(Token::Identifier(_)) => {
+                let name = match self.current() {
+                    Some(Token::Identifier(n)) => n.clone(),
+                    _ => return Err("Expected identifier".to_string()),
+                };
                 self.next();
-                Ok(expr)
+                if matches!(self.current(), Some(Token::Dot)) {
+                    self.next();
+                    match self.current() {
+                        Some(Token::Identifier(col)) => {
+                            let col_name = col.clone();
+                            self.next();
+                            Ok(Expression::Identifier(format!("{}.{}", name, col_name)))
+                        }
+                        Some(t) => Err(format!("Expected column name after dot, got {:?}", t)),
+                        None => Err("Expected column name after dot".to_string()),
+                    }
+                } else {
+                    Ok(Expression::Identifier(name))
+                }
             }
             Some(Token::NumberLiteral(n)) => {
                 let expr = Expression::Literal(n.clone());
@@ -1950,6 +2049,166 @@ fn test_debug_having() {
         }
         Err(e) => {
             println!("ERROR: {}", e);
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_subtraction() {
+        let result = parse("SELECT price - discount FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_multiplication() {
+        let result = parse("SELECT quantity * price FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_division() {
+        let result = parse("SELECT total / cnt FROM stats");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_modulo() {
+        let result = parse("SELECT total % discount FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_not_equal() {
+        let result = parse("SELECT a != b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_less_equal() {
+        let result = parse("SELECT a <= b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_greater_equal() {
+        let result = parse("SELECT a >= b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_complex() {
+        let result = parse("SELECT a + b * c - d / e FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_with_literal() {
+        let result = parse("SELECT id + 1 FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_multiple_columns() {
+        let result = parse("SELECT a + b, c - d, e * f FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 3);
+                assert!(s.columns[0].expression.is_some());
+                assert!(s.columns[1].expression.is_some());
+                assert!(s.columns[2].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_mixed_with_identifier() {
+        let result = parse("SELECT a + b, name, c * d FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 3);
+                assert!(s.columns[0].expression.is_some());
+                assert!(s.columns[1].expression.is_none());
+                assert!(s.columns[2].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_with_table_prefix() {
+        let result = parse("SELECT t.a + t.b FROM table_name t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
         }
     }
 }
