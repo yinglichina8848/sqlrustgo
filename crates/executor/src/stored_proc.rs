@@ -1014,7 +1014,7 @@ impl StoredProcExecutor {
                                 self.validate_foreign_keys(&table_name, &new_row, &insert_columns)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(&table_name, &new_row)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
@@ -1060,7 +1060,7 @@ impl StoredProcExecutor {
                                 self.validate_foreign_keys(&table_name, &new_row, &cols)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(&table_name, &new_row)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
@@ -1250,7 +1250,6 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
-            _ => Value::Null,
         }
     }
 
@@ -1440,12 +1439,7 @@ impl StoredProcExecutor {
     }
 
     /// Validate PRIMARY KEY uniqueness for a row being inserted
-    fn validate_primary_key(
-        &self,
-        table_name: &str,
-        row: &[Value],
-        columns: &[String],
-    ) -> Result<(), String> {
+    fn validate_primary_key(&self, table_name: &str, row: &[Value]) -> Result<(), String> {
         let storage = self.storage.read().unwrap();
         let table_info = storage
             .get_table_info(table_name)
@@ -1562,110 +1556,6 @@ impl StoredProcExecutor {
                     Value::Boolean(*l || *r)
                 } else {
                     Value::Boolean(false)
-                }
-            }
-            _ => Value::Null,
-        }
-    }
-
-    /// Evaluate a function call expression
-    fn evaluate_function(
-        &self,
-        name: &str,
-        args: &[sqlrustgo_parser::Expression],
-        ctx: &ProcedureContext,
-    ) -> Value {
-        let name_upper = name.to_uppercase();
-        match name_upper.as_str() {
-            "COALESCE" => {
-                for arg in args {
-                    let val = self.expression_to_value(arg, ctx);
-                    if val != Value::Null {
-                        return val;
-                    }
-                }
-                Value::Null
-            }
-            "IFNULL" | "NVL" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if val == Value::Null {
-                    if args.len() > 1 {
-                        self.expression_to_value(&args[1], ctx)
-                    } else {
-                        Value::Null
-                    }
-                } else {
-                    val
-                }
-            }
-            "NULLIF" => {
-                if args.len() < 2 {
-                    return Value::Null;
-                }
-                let left = self.expression_to_value(&args[0], ctx);
-                let right = self.expression_to_value(&args[1], ctx);
-                if left == right {
-                    Value::Null
-                } else {
-                    left
-                }
-            }
-            "CONCAT" => {
-                let mut result = String::new();
-                for arg in args {
-                    let val = self.expression_to_value(arg, ctx);
-                    if !result.is_empty() {
-                        result.push_str(", ");
-                    }
-                    result.push_str(&val.to_string());
-                }
-                Value::Text(result)
-            }
-            "LENGTH" | "LEN" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Integer(s.len() as i64)
-                } else {
-                    Value::Integer(0)
-                }
-            }
-            "UPPER" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Text(s.to_uppercase())
-                } else {
-                    Value::Null
-                }
-            }
-            "LOWER" => {
-                if args.is_empty() {
-                    return Value::Null;
-                }
-                let val = self.expression_to_value(&args[0], ctx);
-                if let Value::Text(s) = val {
-                    Value::Text(s.to_lowercase())
-                } else {
-                    Value::Null
-                }
-            }
-            "IF" => {
-                if args.len() < 3 {
-                    return Value::Null;
-                }
-                let cond = self.expression_to_value(&args[0], ctx);
-                if cond != Value::Null && cond != Value::Boolean(false) {
-                    self.expression_to_value(&args[1], ctx)
-                } else {
-                    self.expression_to_value(&args[2], ctx)
                 }
             }
             _ => Value::Null,

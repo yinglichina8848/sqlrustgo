@@ -387,4 +387,10 @@ L1 (Toy)   →   L2 (Query Engine)   →   L3 (Mini DBMS)   →   L4 (Analytical
 
 ---
 
-*文档更新: 2026-03-28*
+## 完整版本历史
+
+详细版本变更日志、功能矩阵、测试报告请查阅: [VERSION_HISTORY.md](./VERSION_HISTORY.md)
+
+---
+
+*文档更新: 2026-04-17*
