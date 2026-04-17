@@ -160,7 +160,9 @@
 | API_DOCUMENTATION.md | API 文档 | ⏳ 待创建 |
 | PERFORMANCE_REPORT.md | 性能报告 | ⏳ 待创建 |
 | SECURITY_REPORT.md | 安全报告 | ⏳ 待创建 |
-| COVERAGE_REPORT.md | 覆盖率报告 | ⏳ 待创建 |
+| COVERAGE_REPORT.md | 覆盖率报告 | ✅ 已创建 |
+| MIGRATION_GUIDE.md | 迁移指南 | ✅ 已创建 |
+| QUICK_START.md | 快速开始 | ✅ 已创建 |
 
 ### 7.4 OO 设计文档
 
