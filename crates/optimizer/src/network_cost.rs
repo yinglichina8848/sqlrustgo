@@ -144,4 +144,24 @@ mod tests {
         assert_eq!(cost.hops, 1);
         assert_eq!(cost.latency_ms, 2.0);
     }
+
+    #[test]
+    fn test_network_cost_calculate_transfer_time() {
+        let cost = NetworkCost::new(1_048_576, 0.0, 0);
+        let total = cost.calculate();
+        assert!((total - 1000.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_network_cost_zero_bytes() {
+        let cost = NetworkCost::new(0, 5.0, 0);
+        assert_eq!(cost.calculate(), 5.0);
+    }
+
+    #[test]
+    fn test_network_cost_debug() {
+        let cost = NetworkCost::new(100, 1.0, 2);
+        let debug_str = format!("{:?}", cost);
+        assert!(debug_str.contains("NetworkCost"));
+    }
 }
