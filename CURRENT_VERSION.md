@@ -1,32 +1,62 @@
 # 当前版本状态
 
-alpha/v1.2.0
+alpha/v2.6.0
 
 ## 阶段信息
 
 - **阶段**: Alpha (内测)
-- **开始日期**: 2026-03-06
-- **开发分支**: develop-v1.2.0
+- **开始日期**: 2026-04-17
+- **开发分支**: develop/v2.6.0
+- **目标**: 生产就绪 (Production Ready)
 
-## 当前执行口径（2026-03-07）
+## 版本概述
 
-- 当前阶段统一为 `alpha/v1.2.0`。
-- 当前主开发分支统一为 `develop-v1.2.0`。
-- 历史口径（如 `v1.2.0-draft`、`develop/v1.2.0`）仅用于追溯，不作为当前状态字段。
+v2.6.0 是 SQLRustGo 迈向 **生产就绪** 的关键版本。
 
-## 当前执行口径（2026-03-07）
+**核心目标**: 达到替代 MySQL 用于简单生产环境的能力。
 
-- 当前阶段统一为 `alpha/v1.2.0`。
-- 当前主开发分支统一为 `develop/v1.2.0`。
-- 历史口径（如 `v1.2.0-draft`、`develop/v1.2.0`）仅用于追溯，不作为当前状态字段。
+## 当前执行口径（2026-04-17）
 
-## 待解决问题
+- 当前版本统一为 `alpha/v2.6.0`
+- 当前主开发分支为 `develop/v2.6.0`
+- 目标: 实现 SQL-92 完整支持 + MVCC SSI 隔离级别
 
-详见 Issue #329 (Alpha 阶段任务与门禁要求) 与 PR #326 (待合并修复项)
+## v2.6.0 核心任务
+
+### P0 - 必须完成 (生产就绪)
+
+| 功能 | 状态 | Issue |
+|------|------|-------|
+| 功能集成 (索引扫描、CBO、存储过程、触发器、WAL) | 进行中 | #1497 |
+| SQL 语法扩展 (聚合函数、JOIN、GROUP BY) | 进行中 | #1498 |
+| MVCC SSI (可串行化快照隔离) | 待开发 | #1389 |
+
+### P1 - 重要功能
+
+| 功能 | Issue |
+|------|-------|
+| DELETE 语句 | #1498 |
+| FULL OUTER JOIN | #1380 |
+| 外键约束完善 | #1379 |
+
+## 开发时间线
+
+| 版本 | 日期 | 目标 |
+|------|------|------|
+| v2.6.0-alpha | 2026-04-21 | P0 功能开发完成 |
+| v2.6.0-beta | 2026-04-28 | P1 功能开发完成 |
+| v2.6.0-rc1 | 2026-05-05 | RC 候选 |
+| v2.6.0-GA | 2026-05-12 | 正式发布 |
 
 ## 相关文档
 
-- [VERSION_PLAN.md](docs/releases/v1.2.0/VERSION_PLAN.md)
-- [RELEASE_GATE_CHECKLIST.md](docs/releases/v1.2.0/RELEASE_GATE_CHECKLIST.md)
-- [BRANCH_STAGE_GOVERNANCE.md](docs/releases/v1.2.0/BRANCH_STAGE_GOVERNANCE.md)
-- [DRAFT_COMPLETION_TASKS.md](docs/releases/v1.2.0/DRAFT_COMPLETION_TASKS.md) (历史阶段记录)
+- [v2.6.0 文档入口](docs/releases/v2.6.0/README.md)
+- [v2.6.0 版本计划](docs/releases/v2.6.0/VERSION_PLAN.md)
+- [v2.6.0 门禁检查清单](docs/releases/v2.6.0/RELEASE_GATE_CHECKLIST.md)
+- [Issue #1501 - v2.6.0 详细开发计划](https://github.com/minzuuniversity/sqlrustgo/issues/1501)
+
+## 变更历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.0 | 2026-04-17 | 更新为 v2.6.0，基于 Issue #1501 |
