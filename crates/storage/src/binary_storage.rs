@@ -221,4 +221,141 @@ mod tests {
 
         std::fs::remove_dir_all(tmp).ok();
     }
+
+    #[test]
+    fn test_binary_storage_new() {
+        let tmp = std::env::temp_dir().join("bin_test_new");
+        let result = BinaryTableStorage::new(tmp.clone());
+        assert!(result.is_ok());
+        std::fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_binary_storage_exists() {
+        let tmp = std::env::temp_dir().join("bin_test_exists");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+        assert!(!storage.exists("nonexistent"));
+        std::fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_binary_storage_multiple_tables() {
+        let tmp = std::env::temp_dir().join("bin_test_multi");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+
+        for i in 1..=3 {
+            let cols = vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: false,
+            }];
+            let rows = vec![vec![sqlrustgo_types::Value::Integer(i)]];
+            let data = TableData {
+                info: TableInfo {
+                    name: format!("table_{}", i),
+                    columns: cols,
+                    ..Default::default()
+                },
+                rows,
+            };
+            storage.save(&format!("table_{}", i), &data).unwrap();
+        }
+
+        assert!(storage.exists("table_1"));
+        assert!(storage.exists("table_2"));
+        assert!(storage.exists("table_3"));
+        assert!(!storage.exists("table_4"));
+
+        std::fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_binary_storage_load_float() {
+        let tmp = std::env::temp_dir().join("bin_test_float");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+
+        let cols = vec![ColumnDefinition {
+            name: "value".to_string(),
+            data_type: "REAL".to_string(),
+            nullable: false,
+            primary_key: false,
+        }];
+        let rows = vec![vec![sqlrustgo_types::Value::Float(3.14159)]];
+
+        let data = TableData {
+            info: TableInfo {
+                name: "floats".to_string(),
+                columns: cols,
+                ..Default::default()
+            },
+            rows,
+        };
+
+        storage.save("floats", &data).unwrap();
+        let loaded = storage.load("floats").unwrap();
+        assert_eq!(loaded.rows.len(), 1);
+
+        std::fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_binary_storage_load_text() {
+        let tmp = std::env::temp_dir().join("bin_test_text");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+
+        let cols = vec![ColumnDefinition {
+            name: "name".to_string(),
+            data_type: "TEXT".to_string(),
+            nullable: false,
+            primary_key: false,
+        }];
+        let rows = vec![vec![sqlrustgo_types::Value::Text("hello".to_string())]];
+
+        let data = TableData {
+            info: TableInfo {
+                name: "texts".to_string(),
+                columns: cols,
+                ..Default::default()
+            },
+            rows,
+        };
+
+        storage.save("texts", &data).unwrap();
+        let loaded = storage.load("texts").unwrap();
+        assert_eq!(loaded.rows.len(), 1);
+
+        std::fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_binary_storage_multiple_rows() {
+        let tmp = std::env::temp_dir().join("bin_test_rows");
+        let storage = BinaryTableStorage::new(tmp.clone()).unwrap();
+
+        let cols = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            primary_key: false,
+        }];
+        let rows: Vec<Vec<sqlrustgo_types::Value>> = (1..=100)
+            .map(|i| vec![sqlrustgo_types::Value::Integer(i)])
+            .collect();
+
+        let data = TableData {
+            info: TableInfo {
+                name: "many_rows".to_string(),
+                columns: cols,
+                ..Default::default()
+            },
+            rows,
+        };
+
+        storage.save("many_rows", &data).unwrap();
+        let loaded = storage.load("many_rows").unwrap();
+        assert_eq!(loaded.rows.len(), 100);
+
+        std::fs::remove_dir_all(tmp).ok();
+    }
 }
