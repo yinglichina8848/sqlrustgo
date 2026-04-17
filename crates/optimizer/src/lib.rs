@@ -83,3 +83,91 @@ impl Default for RuleSet {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_noop_optimizer_optimize() {
+        let mut optimizer = NoOpOptimizer;
+        let mut plan: Box<dyn std::any::Any> = Box::new(42i32);
+        let result = optimizer.optimize(&mut plan);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_noop_optimizer_trait_object() {
+        let mut optimizer: Box<dyn Optimizer> = Box::new(NoOpOptimizer);
+        let mut plan: Box<dyn std::any::Any> = Box::new("test".to_string());
+        assert!(optimizer.optimize(&mut plan).is_ok());
+    }
+
+    #[test]
+    fn test_rule_set_new() {
+        let mut rule_set = RuleSet::new();
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
+    }
+
+    #[test]
+    fn test_rule_set_default() {
+        let mut rule_set = RuleSet::default();
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
+    }
+
+    #[test]
+    fn test_rule_set_add_rule() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| true);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == true);
+    }
+
+    #[test]
+    fn test_rule_set_multiple_rules() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| false);
+        rule_set.add_rule(|_| true);
+        rule_set.add_rule(|_| false);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == true);
+    }
+
+    #[test]
+    fn test_rule_set_no_changes() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| false);
+        rule_set.add_rule(|_| false);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
+    }
+
+    #[test]
+    fn test_rule_trait() {
+        struct TestRule;
+        impl Rule<i32> for TestRule {
+            fn name(&self) -> &str {
+                "TestRule"
+            }
+            fn apply(&self, plan: &mut i32) -> bool {
+                *plan += 1;
+                true
+            }
+        }
+        let rule = TestRule;
+        assert_eq!(rule.name(), "TestRule");
+        let mut plan = 10i32;
+        assert!(rule.apply(&mut plan));
+        assert_eq!(plan, 11);
+    }
+
+    #[test]
+    fn test_cost_model_trait() {
+        struct TestCostModel;
+        impl CostModel for TestCostModel {
+            fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
+                42.0
+            }
+        }
+        let model = TestCostModel;
+        let cost = model.estimate_cost(&0i32);
+        assert_eq!(cost, 42.0);
+    }
+}
