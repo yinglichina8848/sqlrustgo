@@ -254,6 +254,13 @@ impl GraphStore for MultiShardGraphStore {
             .unwrap_or_default()
     }
 
+    fn incoming_neighbors_by_edge_label(&self, node: NodeId, edge_label: &str) -> Vec<NodeId> {
+        self.get_shard_for_node(node)
+            .and_then(|shard_id| self.shards.get(&shard_id))
+            .map(|shard| shard.store.incoming_neighbors_by_edge_label(node, edge_label))
+            .unwrap_or_default()
+    }
+
     fn bfs<F>(&self, start: NodeId, visitor: F)
     where
         F: FnMut(NodeId) -> bool,

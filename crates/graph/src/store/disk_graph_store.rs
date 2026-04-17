@@ -612,6 +612,10 @@ impl GraphStore for DiskGraphStore {
         self.inner.neighbors_by_edge_label(node, edge_label)
     }
 
+    fn incoming_neighbors_by_edge_label(&self, node: NodeId, edge_label: &str) -> Vec<NodeId> {
+        self.inner.incoming_neighbors_by_edge_label(node, edge_label)
+    }
+
     fn bfs<F>(&self, start: NodeId, visitor: F)
     where
         F: FnMut(NodeId) -> bool,

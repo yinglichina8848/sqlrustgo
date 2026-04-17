@@ -54,6 +54,9 @@ pub trait GraphStore {
     /// Get neighbors by edge label
     fn neighbors_by_edge_label(&self, node: NodeId, edge_label: &str) -> Vec<NodeId>;
 
+    /// Get incoming neighbors of a node filtered by edge label
+    fn incoming_neighbors_by_edge_label(&self, node: NodeId, edge_label: &str) -> Vec<NodeId>;
+
     /// BFS traversal from a node
     fn bfs<F>(&self, start: NodeId, visitor: F)
     where
@@ -236,6 +239,20 @@ impl GraphStore for InMemoryGraphStore {
             .get(edge_label)
             .map(|label_id| self.adjacency.get_neighbors(node, label_id))
             .unwrap_or_default()
+    }
+
+    fn incoming_neighbors_by_edge_label(&self, node: NodeId, edge_label: &str) -> Vec<NodeId> {
+        let label_id = match self.labels.get(edge_label) {
+            Some(id) => id,
+            None => return vec![],
+        };
+        self.edges
+            .get_incoming(node)
+            .iter()
+            .filter_map(|&edge_id| self.edges.get(edge_id))
+            .filter(|edge| edge.label == label_id)
+            .map(|edge| edge.from)
+            .collect()
     }
 
     fn bfs<F>(&self, start: NodeId, mut visitor: F)

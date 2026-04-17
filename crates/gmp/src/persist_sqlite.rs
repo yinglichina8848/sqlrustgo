@@ -68,6 +68,7 @@ pub struct DocumentRecord {
     pub doc_type: String,
     pub content: String,
     pub keywords: Vec<String>,
+    pub properties: serde_json::Value, // department, category, chapter, devices
     pub version: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -206,6 +207,7 @@ impl StorageBackend for SqliteBackend {
                     doc_type      TEXT NOT NULL,
                     content       TEXT NOT NULL,
                     keywords      TEXT NOT NULL,
+                    properties    TEXT NOT NULL DEFAULT '{}',
                     version       INTEGER DEFAULT 1,
                     created_at    INTEGER NOT NULL,
                     updated_at    INTEGER NOT NULL,
@@ -260,27 +262,30 @@ impl StorageBackend for SqliteBackend {
         let conn = self.gmp_conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT id, title, doc_type, content, keywords, version, created_at,
-                        updated_at, effective_date, status FROM gmp_documents",
+                "SELECT id, title, doc_type, content, keywords, properties, version,
+                        created_at, updated_at, effective_date, status FROM gmp_documents",
             )
             .map_err(|e| e.to_string())?;
 
         let rows = stmt
             .query_map([], |row| {
                 let keywords_str: String = row.get(4)?;
-                let keywords: Vec<String> =
-                    serde_json::from_str(&keywords_str).unwrap_or_default();
+                let keywords: Vec<String> = serde_json::from_str(&keywords_str).unwrap_or_default();
+                let props_str: String = row.get(5)?;
+                let properties: serde_json::Value =
+                    serde_json::from_str(&props_str).unwrap_or(serde_json::json!({}));
                 Ok(DocumentRecord {
                     id: row.get(0)?,
                     title: row.get(1)?,
                     doc_type: row.get(2)?,
                     content: row.get(3)?,
                     keywords,
-                    version: row.get(5)?,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
-                    effective_date: row.get(8)?,
-                    status: row.get(9)?,
+                    properties,
+                    version: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    effective_date: row.get(9)?,
+                    status: row.get(10)?,
                 })
             })
             .map_err(|e| e.to_string())?
@@ -319,17 +324,19 @@ impl StorageBackend for SqliteBackend {
 
     fn save_document(&self, doc: &DocumentRecord) -> Result<i64, String> {
         let keywords_json = serde_json::to_string(&doc.keywords).unwrap_or_else(|_| "[]".into());
+        let properties_json = serde_json::to_string(&doc.properties).unwrap_or_else(|_| "{}".into());
         self.gmp_conn.lock().unwrap()
             .execute(
                 r#"INSERT INTO gmp_documents
-                   (title, doc_type, content, keywords, version, created_at, updated_at, effective_date, status)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                   (title, doc_type, content, keywords, properties, version, created_at, updated_at, effective_date, status)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                    ON CONFLICT(id) DO UPDATE SET
                    title=excluded.title, doc_type=excluded.doc_type,
                    content=excluded.content, keywords=excluded.keywords,
+                   properties=excluded.properties,
                    updated_at=excluded.updated_at, status=excluded.status"#,
                 params![
-                    doc.title, doc.doc_type, doc.content, keywords_json,
+                    doc.title, doc.doc_type, doc.content, keywords_json, properties_json,
                     doc.version, doc.created_at, doc.updated_at,
                     doc.effective_date, doc.status,
                 ],
