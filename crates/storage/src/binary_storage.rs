@@ -194,11 +194,7 @@ mod tests {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
-            is_unique: false,
-            is_primary_key: false,
-            references: None,
-            auto_increment: false,
-            compression: None,
+            primary_key: false,
         }];
         let rows = vec![vec![sqlrustgo_types::Value::Integer(42)]];
 
