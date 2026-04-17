@@ -592,4 +592,144 @@ mod tests {
         );
         assert_eq!(workflow.steps.len(), 1);
     }
+
+    #[test]
+    fn test_update_agent_status() {
+        let state = SchedulerState::new();
+        let agent = Agent {
+            id: Uuid::new_v4().to_string(),
+            name: "test_agent".to_string(),
+            status: AgentStatus::Idle,
+            capabilities: vec!["sql".to_string()],
+            current_task_id: None,
+            tasks_completed: 0,
+            created_at: 0,
+        };
+        let id = state.register_agent(agent);
+
+        let result =
+            state.update_agent_status(&id, AgentStatus::Busy, Some("task_123".to_string()));
+        assert!(result);
+
+        let updated = state.get_agent(&id).unwrap();
+        assert_eq!(updated.status, AgentStatus::Busy);
+        assert_eq!(updated.current_task_id, Some("task_123".to_string()));
+    }
+
+    #[test]
+    fn test_update_agent_status_not_found() {
+        let state = SchedulerState::new();
+        let result = state.update_agent_status("nonexistent", AgentStatus::Busy, None);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_update_task() {
+        let state = SchedulerState::new();
+        let task = Task::new("test_task".to_string(), serde_json::json!({"key": "value"}));
+        let id = state.create_task(task);
+
+        let mut updated_task = Task::new(
+            "updated_task".to_string(),
+            serde_json::json!({"key": "new_value"}),
+        );
+        updated_task.status = TaskStatus::Running;
+
+        let result = state.update_task(&id, updated_task);
+        assert!(result);
+
+        let retrieved = state.get_task(&id).unwrap();
+        assert_eq!(retrieved.name, "updated_task");
+        assert_eq!(retrieved.status, TaskStatus::Running);
+    }
+
+    #[test]
+    fn test_update_task_not_found() {
+        let state = SchedulerState::new();
+        let task = Task::new("test".to_string(), serde_json::json!({}));
+        let result = state.update_task("nonexistent_id", task);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_delete_workflow() {
+        let state = SchedulerState::new();
+        let workflow = Workflow::new("test_workflow".to_string(), vec![]);
+        let id = state.create_workflow(workflow);
+
+        assert!(state.get_workflow(&id).is_some());
+        assert!(state.delete_workflow(&id));
+        assert!(state.get_workflow(&id).is_none());
+    }
+
+    #[test]
+    fn test_delete_workflow_not_found() {
+        let state = SchedulerState::new();
+        assert!(!state.delete_workflow("nonexistent_id"));
+    }
+
+    #[test]
+    fn test_list_workflows() {
+        let state = SchedulerState::new();
+        let workflow1 = Workflow::new("wf1".to_string(), vec![]);
+        let workflow2 = Workflow::new("wf2".to_string(), vec![]);
+        state.create_workflow(workflow1);
+        state.create_workflow(workflow2);
+
+        let workflows = state.list_workflows();
+        assert_eq!(workflows.len(), 2);
+    }
+
+    #[test]
+    fn test_get_agent() {
+        let state = SchedulerState::new();
+        let agent = Agent {
+            id: Uuid::new_v4().to_string(),
+            name: "test_agent".to_string(),
+            status: AgentStatus::Idle,
+            capabilities: vec![],
+            current_task_id: None,
+            tasks_completed: 0,
+            created_at: 0,
+        };
+        let id = state.register_agent(agent);
+
+        let retrieved = state.get_agent(&id);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "test_agent");
+    }
+
+    #[test]
+    fn test_get_agent_not_found() {
+        let state = SchedulerState::new();
+        assert!(state.get_agent("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_list_agents() {
+        let state = SchedulerState::new();
+        let agent1 = Agent {
+            id: Uuid::new_v4().to_string(),
+            name: "agent1".to_string(),
+            status: AgentStatus::Idle,
+            capabilities: vec![],
+            current_task_id: None,
+            tasks_completed: 0,
+            created_at: 0,
+        };
+        let agent2 = Agent {
+            id: Uuid::new_v4().to_string(),
+            name: "agent2".to_string(),
+            status: AgentStatus::Busy,
+            capabilities: vec![],
+            current_task_id: None,
+            tasks_completed: 5,
+            created_at: 0,
+        };
+        state.register_agent(agent1);
+        state.register_agent(agent2);
+
+        let agents = state.list_agents();
+        assert_eq!(agents.len(), 2);
+    }
 }

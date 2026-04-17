@@ -257,4 +257,91 @@ mod tests {
         manager.set_shard_status(0, ShardStatus::Readonly);
         assert_eq!(manager.get_shard(0).unwrap().status, ShardStatus::Readonly);
     }
+
+    #[test]
+    fn test_get_shards_by_node() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        manager.create_shard(ShardInfo::new(1, 1));
+        manager.create_shard(ShardInfo::new(2, 2));
+
+        let node1_shards = manager.get_shards_by_node(1);
+        assert_eq!(node1_shards.len(), 2);
+
+        let node2_shards = manager.get_shards_by_node(2);
+        assert_eq!(node2_shards.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_node_from_shard() {
+        let mut manager = ShardManager::new();
+        let mut shard = ShardInfo::new(0, 1);
+        shard.add_replica(2);
+        manager.create_shard(shard);
+
+        let result = manager.remove_node_from_shard(0, 2);
+        assert!(result);
+
+        let shard_info = manager.get_shard(0).unwrap();
+        assert!(!shard_info.replica_nodes.contains(&2));
+    }
+
+    #[test]
+    fn test_get_active_shards() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        manager.create_shard(ShardInfo::new(1, 1));
+        manager.create_shard(ShardInfo::new(2, 2));
+
+        manager.set_shard_status(1, ShardStatus::Offline);
+
+        let active = manager.get_active_shards();
+        assert_eq!(active.len(), 2);
+    }
+
+    #[test]
+    fn test_get_node_shards() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        manager.create_shard(ShardInfo::new(1, 1));
+        manager.create_shard(ShardInfo::new(2, 2));
+
+        let node1_shards = manager.get_node_shards(1).unwrap();
+        assert_eq!(node1_shards.len(), 2);
+        assert!(node1_shards.contains(&0));
+        assert!(node1_shards.contains(&1));
+
+        assert!(manager.get_node_shards(999).is_none());
+    }
+
+    #[test]
+    fn test_num_nodes() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        manager.create_shard(ShardInfo::new(1, 2));
+        manager.create_shard(ShardInfo::new(2, 3));
+
+        assert_eq!(manager.num_nodes(), 3);
+    }
+
+    #[test]
+    fn test_shard_info_with_partition() {
+        let shard = ShardInfo::new(0, 1).with_partition(PartitionKey::new_hash("user_id", 8));
+        assert_eq!(
+            shard.partition_key.as_ref().map(|k| k.column.as_str()),
+            Some("user_id")
+        );
+    }
+
+    #[test]
+    fn test_get_shard_mut() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+
+        let shard = manager.get_shard_mut(0).unwrap();
+        shard.add_replica(2);
+
+        let shard = manager.get_shard(0).unwrap();
+        assert!(shard.replica_nodes.contains(&2));
+    }
 }
