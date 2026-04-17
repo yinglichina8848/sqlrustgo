@@ -328,21 +328,22 @@ mod tests {
     #[test]
     fn test_hash_join_exec() {
         let left_schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
-        let right_schema = Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
-        let left = Box::new(SeqScanExec::new("left_table".to_string(), left_schema.clone()));
-        let right = Box::new(SeqScanExec::new("right_table".to_string(), right_schema.clone()));
+        let right_schema =
+            Schema::new(vec![Field::new("id".to_string(), crate::DataType::Integer)]);
+        let left = Box::new(SeqScanExec::new(
+            "left_table".to_string(),
+            left_schema.clone(),
+        ));
+        let right = Box::new(SeqScanExec::new(
+            "right_table".to_string(),
+            right_schema.clone(),
+        ));
 
         let join_schema = Schema::new(vec![
             Field::new("id".to_string(), crate::DataType::Integer),
             Field::new("id".to_string(), crate::DataType::Integer),
         ]);
-        let join = HashJoinExec::new(
-            left,
-            right,
-            crate::JoinType::Inner,
-            None,
-            join_schema,
-        );
+        let join = HashJoinExec::new(left, right, crate::JoinType::Inner, None, join_schema);
 
         assert_eq!(join.name(), "HashJoin");
         assert!(!join.children().is_empty());
