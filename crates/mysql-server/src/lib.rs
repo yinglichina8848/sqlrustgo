@@ -141,12 +141,12 @@ mod packet_type {
 }
 
 mod capability {
-    pub const PROTOCOL_41: u32 = 1 << 9; // 512 - MySQL 4.1 protocol
-    pub const TRANSACTIONS: u32 = 1 << 13; // 8192
-    pub const SECURE_CONNECTION: u32 = 1 << 27; // 0x08000000
-    pub const MULTI_STATEMENTS: u32 = 1 << 16; // 0x10000
-    pub const MULTI_RESULTS: u32 = 1 << 17; // 0x20000
-    pub const PLUGIN_AUTH: u32 = 1 << 19; // 0x80000 - auth plugins
+    pub const PROTOCOL_41: u32 = 1 << 9;
+    pub const TRANSACTIONS: u32 = 1 << 13;
+    pub const SECURE_CONNECTION: u32 = 1 << 27;
+    pub const MULTI_STATEMENTS: u32 = 1 << 16;
+    pub const MULTI_RESULTS: u32 = 1 << 17;
+    pub const PLUGIN_AUTH: u32 = 1 << 19;
     pub const DEFAULT: u32 = PROTOCOL_41
         | TRANSACTIONS
         | MULTI_STATEMENTS
@@ -273,51 +273,42 @@ fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
 fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     let mut p = Vec::new();
 
-    // Protocol version
     p.push(0x0a);
 
-    // Server version (null-terminated string)
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
 
-    // Connection ID (4 bytes)
     p.write_u32::<LittleEndian>(1).unwrap();
 
-    // Auth plugin data (random nonce) - for mysql_native_password with SECURE_CONNECTION it's 20 bytes + 1 null
-    p.extend_from_slice(seed);
-    // Null terminator of auth plugin data (1 byte)
+    // First part of auth plugin data: 8 bytes
+    p.extend_from_slice(&seed[0..8]);
+
+    // Filler byte
     p.push(0x00);
 
-    // Capability flags lower (2 bytes)
     let cap_lower = (capability::DEFAULT & 0xFFFF) as u16;
     p.write_u16::<LittleEndian>(cap_lower).unwrap();
-    tracing::debug!("handshake: capability lower = 0x{:04x}", cap_lower);
 
-    // Character set (1 byte)
     p.push(0x2c);
 
-    // Server status (2 bytes)
     p.write_u16::<LittleEndian>(0x0002).unwrap();
 
-    // Capability flags upper (2 bytes)
     let cap_upper = (capability::DEFAULT >> 16) as u16;
     p.write_u16::<LittleEndian>(cap_upper).unwrap();
-    tracing::debug!("handshake: capability upper = 0x{:04x}", cap_upper);
-    tracing::debug!("handshake: full capability = 0x{:08x}", capability::DEFAULT);
 
-    // Auth plugin data length (1 byte) - seed.len() + 1 for null terminator
-    p.push((seed.len() + 1) as u8);
-    tracing::debug!("DEBUG: auth_len byte = 0x{:02x}", (seed.len() + 1) as u8);
+    // Auth plugin data length (for second part): max(12, seed_len - 8)
+    let auth_len = std::cmp::max(12, seed.len() - 8) as u8;
+    p.push(auth_len);
 
     // Reserved (10 bytes)
     p.extend_from_slice(&[0u8; 10]);
 
+    // Second part of auth plugin data
+    p.extend_from_slice(&seed[8..]);
+
     // Auth plugin name
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
-
-    tracing::debug!("DEBUG: full payload hex = {:02x?}", p);
-    tracing::info!("DEBUG: packet payload len = {}", p.len());
 
     Packet {
         length: p.len() as u32,
@@ -625,7 +616,7 @@ fn handle_connection(
     tracing::info!(
         "WRITE handshake packet: len={}, payload[:50]={:02x?}",
         packet.length,
-        &packet.payload[..50]
+        &packet.payload[..std::cmp::min(50, packet.payload.len())]
     );
 
     let mut full_packet = Vec::with_capacity(4 + packet.payload.len());
