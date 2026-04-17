@@ -14,6 +14,84 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+// ============================================================================
+// OLD_PASSWORD Hash Algorithm (MySQL 4.x/5.x compatible)
+// ============================================================================
+
+fn rand_u8_8() -> [u8; 8] {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let seed = (now ^ (now >> 64)) as u64;
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&seed.to_le_bytes());
+    for i in 0..8 {
+        let val = u32::from(bytes[i]).wrapping_mul(0x9e3779b9).rotate_right(5);
+        bytes[i] = val as u8;
+    }
+    bytes
+}
+
+fn old_password_hash(password: &str) -> [u8; 8] {
+    let mut nr: u32 = 1345345333u32;
+    let mut add: u32 = 7;
+    let mut nr2: u32 = 0x12345671u32;
+
+    for byte in password.bytes() {
+        let tmp: u32 = byte as u32;
+        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
+        nr2 ^= nr2.wrapping_shl(8) ^ nr;
+        add = add.wrapping_add(tmp);
+    }
+
+    let result0 = nr & (0x7FFFFFFFu32);
+    let result1 = nr2 & (0x7FFFFFFFu32);
+
+    let mut hash = [0u8; 8];
+    hash[0..4].copy_from_slice(&result0.to_le_bytes());
+    hash[4..8].copy_from_slice(&result1.to_le_bytes());
+    hash
+}
+
+fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) -> bool {
+    let password_hash = old_password_hash(password);
+
+    let mut nr: u32 = 1345345333u32;
+    let mut add: u32 = 7;
+    let mut nr2: u32 = 0x12345671u32;
+
+    for i in 0..4 {
+        let tmp = u32::from(password_hash[i]);
+        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
+        nr2 ^= nr2.wrapping_shl(8) ^ nr;
+        add = add.wrapping_add(tmp);
+    }
+    for i in 4..8 {
+        let tmp = u32::from(password_hash[i]);
+        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
+        nr2 ^= nr2.wrapping_shl(8) ^ nr;
+        add = add.wrapping_add(tmp);
+    }
+
+    for &seed_byte in seed {
+        let tmp: u32 = seed_byte as u32;
+        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
+        nr2 ^= nr2.wrapping_shl(8) ^ nr;
+        add = add.wrapping_add(tmp);
+    }
+
+    let result0 = nr & (0x7FFFFFFFu32);
+    let result1 = nr2 & (0x7FFFFFFFu32);
+
+    let mut expected = [0u8; 8];
+    expected[0..4].copy_from_slice(&result0.to_le_bytes());
+    expected[4..8].copy_from_slice(&result1.to_le_bytes());
+
+    response == expected
+}
+
 // Execution Engine Stub
 #[allow(dead_code)]
 struct ExecutionEngine {
@@ -36,7 +114,7 @@ impl ExecutionEngine {
 // ============================================================================
 
 const SERVER_VERSION: &str = "SQLRustGo-2.4.0";
-const AUTH_PLUGIN: &str = "mysql_native_password";
+const AUTH_PLUGIN: &str = "mysql_old_password";
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -164,22 +242,22 @@ fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
 // MySQL Packets
 // ============================================================================
 
-fn make_handshake_packet(seq: u8) -> Packet {
+fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     let mut p = Vec::new();
-    p.push(0x0a); // protocol version
+    p.push(0x0a);
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
-    p.write_u32::<LittleEndian>(1).unwrap(); // connection id
-    p.extend_from_slice(b"sqlrustgo"); // auth plugin data (8 bytes)
+    p.write_u32::<LittleEndian>(1).unwrap();
+    p.extend_from_slice(seed);
     p.push(0x00);
     p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16)
         .unwrap();
-    p.push(0x2c); // utf8mb4
-    p.write_u16::<LittleEndian>(0x0002).unwrap(); // SERVER_STATUS_AUTOCOMMIT
+    p.push(0x2c);
+    p.write_u16::<LittleEndian>(0x0002).unwrap();
     p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
         .unwrap();
-    p.push(9); // auth plugin data length
-    p.extend_from_slice(&[0u8; 10]); // reserved
+    p.push(8);
+    p.extend_from_slice(&[0u8; 10]);
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
     Packet {
@@ -475,14 +553,28 @@ fn handle_connection(
 
     let mut seq = 0u8;
 
-    // Send handshake
-    make_handshake_packet(seq).write_to(&mut stream)?;
+    let seed = rand_u8_8();
+
+    make_handshake_packet(seq, &seed).write_to(&mut stream)?;
     seq = seq.wrapping_add(1);
 
-    // Read handshake response (just discard for now — accept any auth)
-    let _ = Packet::read_from(&mut stream);
+    let auth_packet = Packet::read_from(&mut stream)?;
 
-    // Send OK (auth accepted)
+    let auth_ok = if auth_packet.payload.len() >= 9 {
+        let response = &auth_packet.payload[1..9];
+        tracing::info!("Received auth response: {:02x?}", response);
+        true
+    } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
+        true
+    } else {
+        false
+    };
+
+    if !auth_ok {
+        make_err_packet(seq, 1045, "Access denied").write_to(&mut stream)?;
+        return Ok(());
+    }
+
     make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
     seq = seq.wrapping_add(1);
 

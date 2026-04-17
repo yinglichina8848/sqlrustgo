@@ -332,6 +332,50 @@ impl PhysicalPlan for LimitExec {
     }
 }
 
+/// Delete execution operator
+#[allow(dead_code)]
+pub struct DeleteExec {
+    table_name: String,
+    predicate: Option<Expr>,
+    schema: Schema,
+}
+
+impl DeleteExec {
+    pub fn new(table_name: String, predicate: Option<Expr>) -> Self {
+        Self {
+            table_name,
+            predicate,
+            schema: Schema::empty(),
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn predicate(&self) -> Option<&Expr> {
+        self.predicate.as_ref()
+    }
+}
+
+impl PhysicalPlan for DeleteExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![]
+    }
+
+    fn name(&self) -> &str {
+        "Delete"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
