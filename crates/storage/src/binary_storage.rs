@@ -126,18 +126,15 @@ impl BinaryTableStorage {
                     _ => "TEXT".to_string(),
                 },
                 nullable: true,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             })
             .collect();
 
         let info = TableInfo {
             name: table.to_string(),
             columns,
-            table_foreign_keys: None,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
         };
 
         // Read rows
