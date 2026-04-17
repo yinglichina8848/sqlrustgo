@@ -33,7 +33,7 @@
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| Clippy | `cargo clippy -- -D warnings` | 零警告 | 🔴 有警告 |
+| Clippy | `cargo clippy -- -D warnings` | 零警告 | ✅ 通过 (#1570) |
 | 格式化 | `cargo fmt --check` | 通过 | ⚠️ 预存在错误 |
 | 文档 | `cargo doc --no-deps` | 无警告 | ⏳ 待测 |
 
