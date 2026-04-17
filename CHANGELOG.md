@@ -17,21 +17,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 生产就绪版本，实现 SQL-92 完整支持。
 
+### 已完成 (2026-04-18)
+
+| 功能 | PR | 状态 |
+|------|-----|------|
+| SQL-92 聚合函数 | #1545 | ✅ |
+| SQL-92 JOIN 语法 | #1545 | ✅ |
+| SQL-92 GROUP BY | #1545 | ✅ |
+| SQL-92 HAVING 子句 | #1567 | ✅ |
+| DELETE 语句 | #1557 | ✅ |
+| 外键约束 | #1436, #1567 | ✅ |
+| 集成测试修复 | #1561 | ✅ |
+| 覆盖率测试提升 | #1559, #1564 | ✅ |
+| ExecutionEngine API | #1566 | ✅ |
+| Clippy 零警告 | #1570 | ✅ |
+| SQL Corpus 100% | - | ✅ (59/59) |
+
 ### P0 功能 (进行中)
 
 | 功能 | 状态 | Issue |
 |------|--------|-------|
 | 功能集成 (索引扫描、CBO、存储过程、触发器、WAL) | 进行中 | #1497 |
-| SQL 语法扩展 (聚合函数、JOIN、GROUP BY) | 进行中 | #1498 |
 | MVCC SSI (可串行化快照隔离) | 待开发 | #1389 |
 
 ### P1 功能
 
 | 功能 | Issue |
 |------|-------|
-| DELETE 语句 | #1498 |
 | FULL OUTER JOIN | #1380 |
-| 外键约束完善 | #1379 |
 
 ### 文档
 
@@ -42,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新**: INTEGRATION_STATUS.md - 功能集成状态
 - **新**: PERFORMANCE_TARGETS.md - 性能目标
 - **新**: SQL_REGRESSION_PLAN.md - SQL 回归测试计划
+- **新**: INTEGRATION_TEST_PLAN.md - 集成测试计划
 
 ## [2.5.0] - 2026-04-16
 
