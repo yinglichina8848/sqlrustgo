@@ -40,7 +40,9 @@ impl Catalog {
         let schema_name = schema_name.into();
         let mut catalog = Self::new(name);
         catalog.default_schema = schema_name.clone();
-        catalog.schemas.insert(schema_name.clone(), Schema::new(schema_name));
+        catalog
+            .schemas
+            .insert(schema_name.clone(), Schema::new(schema_name));
         catalog
     }
 
@@ -119,10 +121,7 @@ impl Catalog {
 
     /// Get all stored procedure names
     pub fn stored_procedure_names(&self) -> Vec<&str> {
-        self.stored_procedures
-            .keys()
-            .map(|s| s.as_str())
-            .collect()
+        self.stored_procedures.keys().map(|s| s.as_str()).collect()
     }
 
     /// Check if a stored procedure exists
@@ -153,7 +152,7 @@ mod tests {
     use crate::data_type::DataType;
 
     fn create_test_catalog() -> Catalog {
-        let mut catalog = Catalog::with_default_schema("test_catalog", "public");
+        let mut catalog = Catalog::new("test_catalog");
         let schema = Schema::new("public")
             .add_table(crate::table::Table::new(
                 "users",
@@ -217,11 +216,7 @@ mod tests {
     #[test]
     fn test_duplicate_stored_procedure() {
         let mut catalog = create_test_catalog();
-        let proc = StoredProcedure::new(
-            "test_proc".to_string(),
-            vec![],
-            vec![],
-        );
+        let proc = StoredProcedure::new("test_proc".to_string(), vec![], vec![]);
         catalog.add_stored_procedure(proc.clone()).unwrap();
         let result = catalog.add_stored_procedure(proc);
         assert!(matches!(result, Err(CatalogError::DuplicateTable { .. })));
