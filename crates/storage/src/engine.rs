@@ -336,7 +336,13 @@ mod tests {
     #[test]
     fn test_memory_storage_list_tables() {
         let mut storage = MemoryStorage::new();
-        storage.tables.insert("users".to_string(), vec![]);
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
         assert!(tables.contains(&"users".to_string()));
     }
@@ -367,5 +373,128 @@ mod tests {
     fn test_storage_engine_send_sync() {
         fn _check<T: Send + Sync>() {}
         _check::<MemoryStorage>();
+    }
+
+    #[test]
+    fn test_storage_engine_create_and_drop_table() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+
+        storage.create_table(&info).unwrap();
+        assert!(storage.has_table("users"));
+        assert_eq!(storage.list_tables(), vec!["users"]);
+
+        storage.drop_table("users").unwrap();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_storage_engine_get_table_info() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+
+        storage.create_table(&info).unwrap();
+        let retrieved = storage.get_table_info("users").unwrap();
+        assert_eq!(retrieved.name, "users");
+        assert_eq!(retrieved.columns.len(), 1);
+    }
+
+    #[test]
+    fn test_storage_engine_insert_records() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        let records = storage.scan("users").unwrap();
+        assert_eq!(records.len(), 1);
+    }
+
+    #[test]
+    fn test_storage_engine_delete_all() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+        );
+
+        let deleted = storage.delete("users", &[]).unwrap();
+        assert_eq!(deleted, 2);
+    }
+
+    #[test]
+    fn test_storage_engine_update_values() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+        );
+
+        let updated = storage
+            .update("users", &[], &[(1, Value::Text("Bob".to_string()))][..])
+            .unwrap();
+        assert_eq!(updated, 1);
+    }
+
+    #[test]
+    fn test_storage_engine_table_operations() {
+        let mut storage = MemoryStorage::new();
+        let info1 = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        let info2 = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info1).unwrap();
+        storage.create_table(&info2).unwrap();
+
+        let tables = storage.list_tables();
+        assert_eq!(tables.len(), 2);
+        assert!(tables.contains(&"users".to_string()));
+        assert!(tables.contains(&"orders".to_string()));
+    }
+
+    #[test]
+    fn test_storage_engine_has_table_check() {
+        let mut storage = MemoryStorage::new();
+        assert!(!storage.has_table("users"));
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info).unwrap();
+        assert!(storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_storage_engine_table_not_found() {
+        let storage = MemoryStorage::new();
+        let result = storage.get_table_info("nonexistent");
+        assert!(result.is_err());
     }
 }

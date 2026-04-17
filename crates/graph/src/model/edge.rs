@@ -205,4 +205,34 @@ mod tests {
         assert!(GMP_EDGE_LABELS.contains(&"governed_by"));
         assert_eq!(GMP_EDGE_LABELS.len(), 9);
     }
+
+    #[test]
+    fn test_edge_clone() {
+        let edge = Edge::new(
+            EdgeId::new(1),
+            NodeId::new(100),
+            NodeId::new(200),
+            LabelId::new(1),
+            PropertyMap::new(),
+        );
+        let cloned = edge.clone();
+        assert_eq!(edge.id, cloned.id);
+        assert_eq!(edge.from, cloned.from);
+        assert_eq!(edge.to, cloned.to);
+    }
+
+    #[test]
+    fn test_edge_get_property() {
+        let mut props = PropertyMap::new();
+        props.insert("weight", 1.5);
+        let edge = Edge::new(
+            EdgeId::new(1),
+            NodeId::new(100),
+            NodeId::new(200),
+            LabelId::new(1),
+            props,
+        );
+        assert!(edge.get_property("weight").is_some());
+        assert!(edge.get_property("nonexistent").is_none());
+    }
 }

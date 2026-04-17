@@ -268,4 +268,64 @@ mod tests {
         manager.set_shard_status(0, ShardStatus::Readonly);
         assert_eq!(manager.get_shard(0).unwrap().status, ShardStatus::Readonly);
     }
+
+    #[test]
+    fn test_shard_info_new() {
+        let shard = ShardInfo::new(5, 10);
+        assert_eq!(shard.shard_id, 5);
+        assert_eq!(shard.primary_node(), Some(10));
+        assert_eq!(shard.status, ShardStatus::Active);
+    }
+
+    #[test]
+    fn test_shard_info_with_partition() {
+        let shard = ShardInfo::new(0, 1).with_partition(PartitionKey::new_hash("id", 4));
+        assert!(shard.partition_key.is_some());
+    }
+
+    #[test]
+    fn test_shard_info_add_replica() {
+        let mut shard = ShardInfo::new(0, 1);
+        shard.add_replica(2);
+        shard.add_replica(2); // duplicate - should not add again
+        assert_eq!(shard.replicas().len(), 2);
+        assert_eq!(shard.replicas(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_shard_info_promote_replica() {
+        let mut shard = ShardInfo::new(0, 1);
+        shard.add_replica(2);
+        shard.add_replica(3);
+        shard.promote_replica(3);
+        assert_eq!(shard.primary_node(), Some(3));
+        assert_eq!(shard.replicas(), &[3, 1, 2]);
+    }
+
+    #[test]
+    fn test_partition_rule_new() {
+        let rule = PartitionRule::new("users", PartitionKey::new_hash("user_id", 8));
+        assert_eq!(rule.table, "users");
+    }
+
+    #[test]
+    fn test_shard_manager_num_shards() {
+        let manager = ShardManager::new();
+        assert_eq!(manager.num_shards(), 0);
+    }
+
+    #[test]
+    fn test_shard_manager_get_shard_none() {
+        let manager = ShardManager::new();
+        assert!(manager.get_shard(999).is_none());
+    }
+
+    #[test]
+    fn test_shard_manager_remove_shard() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        assert_eq!(manager.num_shards(), 1);
+        manager.remove_node_from_shard(0, 1);
+        assert_eq!(manager.num_shards(), 1); // shard still exists, just no nodes
+    }
 }
