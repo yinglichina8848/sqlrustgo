@@ -295,3 +295,114 @@ pub type SharedAlertManager = Arc<parking_lot::RwLock<AlertManager>>;
 pub fn create_shared_alert_manager(config: AlertConfig) -> SharedAlertManager {
     Arc::new(parking_lot::RwLock::new(AlertManager::new(config)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_alert_error_channel_error() {
+        let err = AlertError::ChannelError("test".to_string());
+        assert!(err.to_string().contains("Alert channel error"));
+    }
+
+    #[test]
+    fn test_alert_error_queue_full() {
+        let err = AlertError::QueueFull;
+        assert!(err.to_string().contains("Alert queue full"));
+    }
+
+    #[test]
+    fn test_alert_error_send_failed() {
+        let err = AlertError::SendFailed("test failed".to_string());
+        assert!(err.to_string().contains("Alert send failed"));
+    }
+
+    #[test]
+    fn test_alert_config_default() {
+        let config = AlertConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.buffer_size, 1000);
+        assert_eq!(config.flush_interval_secs, 5);
+    }
+
+    #[test]
+    fn test_alert_stats_default() {
+        let stats = AlertStats::default();
+        assert_eq!(stats.total_alerts, 0);
+        assert_eq!(stats.acknowledged_alerts, 0);
+    }
+
+    #[test]
+    fn test_alert_manager_new() {
+        let manager = AlertManager::new(AlertConfig::default());
+        assert_eq!(manager.get_alerts().len(), 0);
+    }
+
+    #[test]
+    fn test_alert_manager_send_alert_disabled() {
+        let config = AlertConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let mut manager = AlertManager::new(config);
+        let alert = Alert::new(
+            super::super::firewall::ThreatSeverity::High,
+            AlertType::SqlInjection,
+            "test".to_string(),
+        );
+        assert!(manager.send_alert(alert).is_ok());
+        assert_eq!(manager.get_alerts().len(), 0);
+    }
+
+    #[test]
+    fn test_alert_manager_get_alerts_mut() {
+        let mut manager = AlertManager::new(AlertConfig::default());
+        assert!(manager.get_alerts_mut().is_empty());
+    }
+
+    #[test]
+    fn test_alert_manager_clear_alerts() {
+        let mut manager = AlertManager::new(AlertConfig::default());
+        let alert = Alert::new(
+            super::super::firewall::ThreatSeverity::Medium,
+            AlertType::QueryTimeout,
+            "test".to_string(),
+        );
+        manager.send_alert(alert).unwrap();
+        assert_eq!(manager.get_alerts().len(), 1);
+        manager.clear_alerts();
+        assert_eq!(manager.get_alerts().len(), 0);
+    }
+
+    #[test]
+    fn test_alert_manager_acknowledge_alert_not_found() {
+        let mut manager = AlertManager::new(AlertConfig::default());
+        let result = manager.acknowledge_alert("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_alert_manager_get_stats() {
+        let manager = AlertManager::new(AlertConfig::default());
+        let stats = manager.get_stats();
+        assert_eq!(stats.total_alerts, 0);
+    }
+
+    #[test]
+    fn test_alert_manager_update_config() {
+        let mut manager = AlertManager::new(AlertConfig::default());
+        let new_config = AlertConfig {
+            buffer_size: 2000,
+            ..Default::default()
+        };
+        manager.update_config(new_config);
+        assert_eq!(manager.get_config().buffer_size, 2000);
+    }
+
+    #[test]
+    fn test_create_shared_alert_manager() {
+        let manager = create_shared_alert_manager(AlertConfig::default());
+        assert!(manager.read().get_alerts().is_empty());
+    }
+}

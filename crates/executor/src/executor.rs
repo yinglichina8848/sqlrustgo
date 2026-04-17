@@ -143,4 +143,45 @@ mod tests {
         let executor = MockExecutor::new();
         assert!(executor.is_ready());
     }
+
+    #[test]
+    fn test_executor_result_with_null() {
+        let rows = vec![
+            vec![Value::Null, Value::Integer(1)],
+            vec![Value::Text("test".to_string()), Value::Null],
+        ];
+        let result = ExecutorResult::new(rows, 0);
+        assert_eq!(result.rows.len(), 2);
+        assert!(matches!(result.rows[0][0], Value::Null));
+    }
+
+    #[test]
+    fn test_executor_result_with_float() {
+        let rows = vec![
+            vec![Value::Float(3.14), Value::Integer(1)],
+            vec![Value::Float(-2.5), Value::Integer(2)],
+        ];
+        let result = ExecutorResult::new(rows, 0);
+        assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_executor_result_with_blob() {
+        let rows = vec![vec![Value::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF])]];
+        let result = ExecutorResult::new(rows, 0);
+        assert_eq!(result.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_executor_result_large_affected_rows() {
+        let result = ExecutorResult::new(vec![], 1_000_000);
+        assert_eq!(result.affected_rows, 1_000_000);
+    }
+
+    #[test]
+    fn test_executor_result_zero_rows() {
+        let result = ExecutorResult::new(vec![], 0);
+        assert!(result.rows.is_empty());
+        assert_eq!(result.affected_rows, 0);
+    }
 }

@@ -304,4 +304,44 @@ mod tests {
         // Check metric name format
         assert!(output.contains("sqlrustgo_"));
     }
+
+    #[test]
+    fn test_render_connections_active_zero() {
+        let metrics = Metrics::new();
+        let output = PrometheusRenderer::render(&metrics);
+        assert!(output.contains("sqlrustgo_connections_active 0"));
+    }
+
+    #[test]
+    fn test_render_storage_bytes_zero() {
+        let metrics = Metrics::new();
+        let output = PrometheusRenderer::render(&metrics);
+        assert!(output.contains("sqlrustgo_storage_read_bytes 0"));
+        assert!(output.contains("sqlrustgo_storage_write_bytes 0"));
+    }
+
+    #[test]
+    fn test_render_cache_hit_rate_zero() {
+        let metrics = Metrics::new();
+        let output = PrometheusRenderer::render(&metrics);
+        assert!(output.contains("sqlrustgo_cache_hit_rate 0"));
+    }
+
+    #[test]
+    fn test_render_multiple_queries() {
+        let metrics = Metrics::new();
+        metrics.record_query("SELECT", std::time::Duration::from_millis(10));
+        metrics.record_query("INSERT", std::time::Duration::from_millis(5));
+        metrics.record_query("UPDATE", std::time::Duration::from_millis(20));
+        let output = PrometheusRenderer::render(&metrics);
+        assert!(output.contains("sqlrustgo_queries_total 3"));
+    }
+
+    #[test]
+    fn test_render_infinity_bucket() {
+        let metrics = Metrics::new();
+        metrics.record_query("SELECT", std::time::Duration::from_secs(10));
+        let output = PrometheusRenderer::render(&metrics);
+        assert!(output.contains("bucket=\"+Inf\""));
+    }
 }

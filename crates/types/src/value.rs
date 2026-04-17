@@ -203,4 +203,95 @@ mod tests {
         let text = Value::Text("hello world".to_string());
         assert_eq!(text.to_sql_string(), "hello world");
     }
+
+    #[test]
+    fn test_value_to_index_key_integer() {
+        assert_eq!(Value::Integer(42).to_index_key(), Some(42));
+        assert_eq!(Value::Integer(-100).to_index_key(), Some(-100));
+        assert_eq!(Value::Integer(0).to_index_key(), Some(0));
+    }
+
+    #[test]
+    fn test_value_to_index_key_text() {
+        let text_hash = Value::Text("hello".to_string()).to_index_key();
+        assert!(text_hash.is_some());
+        let text_hash2 = Value::Text("hello".to_string()).to_index_key();
+        assert_eq!(text_hash, text_hash2);
+    }
+
+    #[test]
+    fn test_value_to_index_key_invalid() {
+        assert_eq!(Value::Null.to_index_key(), None);
+        assert_eq!(Value::Float(3.14).to_index_key(), None);
+        assert_eq!(Value::Blob(vec![0x01]).to_index_key(), None);
+    }
+
+    #[test]
+    fn test_value_sql_string_null() {
+        assert_eq!(Value::Null.to_sql_string(), "NULL");
+    }
+
+    #[test]
+    fn test_value_sql_string_boolean() {
+        assert_eq!(Value::Boolean(true).to_sql_string(), "true");
+        assert_eq!(Value::Boolean(false).to_sql_string(), "false");
+    }
+
+    #[test]
+    fn test_value_sql_string_integer() {
+        assert_eq!(Value::Integer(0).to_sql_string(), "0");
+        assert_eq!(Value::Integer(999).to_sql_string(), "999");
+    }
+
+    #[test]
+    fn test_value_sql_string_float() {
+        assert_eq!(Value::Float(0.0).to_sql_string(), "0");
+        assert_eq!(Value::Float(1.5).to_sql_string(), "1.5");
+    }
+
+    #[test]
+    fn test_value_sql_string_text() {
+        assert_eq!(Value::Text("".to_string()).to_sql_string(), "");
+        assert_eq!(Value::Text("abc".to_string()).to_sql_string(), "abc");
+    }
+
+    #[test]
+    fn test_value_sql_string_blob() {
+        let blob = Value::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        let s = blob.to_sql_string();
+        assert!(s.starts_with("X'"));
+        assert!(s.ends_with("'"));
+    }
+
+    #[test]
+    fn test_value_clone() {
+        let v1 = Value::Integer(42);
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+        let v3 = Value::Text("test".to_string());
+        let v4 = v3.clone();
+        assert_eq!(v3, v4);
+    }
+
+    #[test]
+    fn test_value_eq() {
+        assert_eq!(Value::Null, Value::Null);
+        assert_eq!(Value::Boolean(true), Value::Boolean(true));
+        assert_eq!(Value::Integer(42), Value::Integer(42));
+        assert_eq!(Value::Float(3.14), Value::Float(3.14));
+        assert_eq!(
+            Value::Text("test".to_string()),
+            Value::Text("test".to_string())
+        );
+        assert_eq!(Value::Blob(vec![0x01]), Value::Blob(vec![0x01]));
+    }
+
+    #[test]
+    fn test_value_ne() {
+        assert_ne!(Value::Null, Value::Integer(0));
+        assert_ne!(Value::Boolean(true), Value::Boolean(false));
+        assert_ne!(Value::Integer(1), Value::Integer(2));
+        assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
+        assert_ne!(Value::Blob(vec![0x01]), Value::Blob(vec![0x02]));
+    }
 }
