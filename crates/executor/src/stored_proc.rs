@@ -1250,6 +1250,7 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
+            sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
         }
     }
 
