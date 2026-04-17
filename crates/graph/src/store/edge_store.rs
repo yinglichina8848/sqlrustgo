@@ -179,4 +179,61 @@ mod tests {
         assert!(removed.is_some());
         assert!(!store.contains(EdgeId(1)));
     }
+
+    #[test]
+    fn test_edge_store_get_nonexistent() {
+        let store = EdgeStore::new();
+        let result = store.get(EdgeId(999));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_edge_store_len() {
+        let store = EdgeStore::new();
+        store.insert(create_test_edge(
+            EdgeId(1),
+            NodeId(100),
+            NodeId(200),
+            LabelId(1),
+        ));
+        store.insert(create_test_edge(
+            EdgeId(2),
+            NodeId(100),
+            NodeId(300),
+            LabelId(1),
+        ));
+        assert_eq!(store.len(), 2);
+    }
+
+    #[test]
+    fn test_edge_store_is_empty() {
+        let store = EdgeStore::new();
+        assert!(store.is_empty());
+        store.insert(create_test_edge(
+            EdgeId(1),
+            NodeId(100),
+            NodeId(200),
+            LabelId(1),
+        ));
+        assert!(!store.is_empty());
+    }
+
+    #[test]
+    fn test_edge_store_ids() {
+        let store = EdgeStore::new();
+        store.insert(create_test_edge(
+            EdgeId(1),
+            NodeId(100),
+            NodeId(200),
+            LabelId(1),
+        ));
+        store.insert(create_test_edge(
+            EdgeId(2),
+            NodeId(100),
+            NodeId(300),
+            LabelId(1),
+        ));
+        let ids = store.ids();
+        assert_eq!(ids.len(), 2);
+    }
 }
