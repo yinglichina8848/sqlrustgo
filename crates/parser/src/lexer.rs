@@ -364,4 +364,30 @@ mod tests {
         // Semicolon is at index 2
         assert!(matches!(&tokens[2], Token::Semicolon));
     }
+
+    #[test]
+    fn test_lexer_float_number() {
+        let tokens = Lexer::new("3.14").tokenize();
+        assert!(matches!(&tokens[0], Token::NumberLiteral(s) if s == "3.14"));
+    }
+
+    #[test]
+    fn test_lexer_negative_number() {
+        let tokens = Lexer::new("-42").tokenize();
+        assert!(matches!(&tokens[0], Token::Minus));
+        assert!(matches!(&tokens[1], Token::NumberLiteral(s) if s == "42"));
+    }
+
+    #[test]
+    fn test_lexer_boolean_literal() {
+        let tokens = Lexer::new("TRUE FALSE").tokenize();
+        assert!(matches!(&tokens[0], Token::BooleanLiteral(true)));
+        assert!(matches!(&tokens[1], Token::BooleanLiteral(false)));
+    }
+
+    #[test]
+    fn test_lexer_null() {
+        let tokens = Lexer::new("NULL").tokenize();
+        assert_eq!(tokens[0], Token::Null);
+    }
 }
