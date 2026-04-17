@@ -3,9 +3,9 @@
 > **版本**: v2.6.0
 > **代号**: Production Ready
 > **阶段**: Alpha
-> **检查日期**: 2026-04-17
-> **检查人**: 待定
-> **检查结果**: 🔴 进展中 (P0 功能集成中)
+> **检查日期**: 2026-04-18
+> **检查人**: yinglichina8848
+> **检查结果**: 🟡 进展中 (SQL-92 语法完成，门禁测试中)
 
 ---
 
@@ -15,26 +15,27 @@
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| Debug 编译 | `cargo build` | 通过 | ⏳ |
-| Release 编译 | `cargo build --release` | 通过 | ⏳ |
-| 全特性编译 | `cargo build --all-features` | 通过 | ⏳ |
+| Debug 编译 | `cargo build` | 通过 | ✅ 通过 |
+| Release 编译 | `cargo build --release` | 通过 | ⏳ 待测 |
+| 全特性编译 | `cargo build --all-features` | 通过 | ⏳ 待测 |
 
 ### 1.2 测试检查
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| 单元测试 | `cargo test --all-features --lib` | 全部通过 | ⏳ |
-| 集成测试 | `cargo test --test '*'` | 全部通过 | ⏳ |
-| 压力测试 | `cargo test --test '*_stress'` | 全部通过 | ⏳ |
-| 测试覆盖率 | `cargo tarpaulin` | ≥70% | ⏳ |
+| 单元测试 | `cargo test --all-features --lib` | 全部通过 | ⚠️ 0 tests |
+| 集成测试 | `cargo test --test '*'` | 全部通过 | ⏳ 待测 |
+| 压力测试 | `cargo test --test '*_stress'` | 全部通过 | ⏳ 待测 |
+| 测试覆盖率 | `cargo tarpaulin` | ≥70% | ⏳ 待测 |
+| **SQL Corpus** | `cargo test -p sqlrustgo-sql-corpus` | **100%** | **✅ 59/59 (100%)** |
 
 ### 1.3 代码规范
 
 | 检查项 | 命令 | 要求 | 状态 |
 |--------|------|------|------|
-| Clippy | `cargo clippy -- -D warnings` | 零警告 | ⏳ |
-| 格式化 | `cargo fmt --check` | 通过 | ⏳ |
-| 文档 | `cargo doc --no-deps` | 无警告 | ⏳ |
+| Clippy | `cargo clippy -- -D warnings` | 零警告 | 🔴 有警告 |
+| 格式化 | `cargo fmt --check` | 通过 | ⚠️ 预存在错误 |
+| 文档 | `cargo doc --no-deps` | 无警告 | ⏳ 待测 |
 
 ---
 
@@ -48,16 +49,17 @@
 | CBO 优化器 | #1505 | ⚠️ 部分 | 已可调用，需统计信息 |
 | 存储过程 | - | 🔒 阻塞 | 缺 Catalog 类型 |
 | 触发器 | #1505 | ⚠️ 部分 | API 基础完成，planner 未集成 |
-| 外键约束 | #1436 | 🔒 阻塞 | Parser 完成，Executor 未验证 |
+| 外键约束 | #1436, #1567 | ✅ 已合并 | Parser + Executor 完整支持 |
 | WAL | - | 🔒 阻塞 | 已实现，未默认启用 |
 
 ### 2.2 P0-2: SQL 语法扩展
 
 | 语法 | 失败 case 数 | 状态 |
 |------|-------------|------|
-| 聚合函数 (COUNT, SUM, AVG, MIN, MAX) | 11 | ⏳ |
-| JOIN 语法 | 14 | ⏳ |
-| GROUP BY / HAVING | 8 | ⏳ |
+| 聚合函数 (COUNT, SUM, AVG, MIN, MAX) | 0 | ✅ 已修复 |
+| JOIN 语法 | 0 | ✅ 已修复 |
+| GROUP BY / HAVING | 0 | ✅ 已修复 (#1567) |
+| DELETE 语句 | 0 | ✅ 已修复 (#1557) |
 
 ### 2.3 P0-3: MVCC SSI
 
@@ -194,3 +196,4 @@
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-04-17 | 初始版本 |
+| 1.1 | 2026-04-18 | 更新门禁状态：SQL-92 语法 100% 通过 (#1567)，SQL Corpus 59/59 通过，添加 DELETE 支持 |
