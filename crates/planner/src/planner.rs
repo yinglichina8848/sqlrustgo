@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_default_planner_creation() {
-        let planner = DefaultPlanner::new();
+        let _planner = DefaultPlanner::new();
         assert!(std::any::type_name::<DefaultPlanner>().contains("DefaultPlanner"));
     }
 
@@ -410,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_empty_relation_physical_plan() {
-        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let _schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
         let empty_plan = LogicalPlan::EmptyRelation;
 
         let planner = DefaultPlanner::new();

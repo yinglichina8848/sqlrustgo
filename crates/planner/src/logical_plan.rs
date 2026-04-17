@@ -115,7 +115,7 @@ impl LogicalPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Column, DataType, Field};
+    use crate::{DataType, Field};
 
     #[test]
     fn test_logical_plan_table_scan() {
