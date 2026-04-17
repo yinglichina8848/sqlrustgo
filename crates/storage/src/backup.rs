@@ -79,7 +79,6 @@ impl BackupExporter {
             Value::Null => "".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => {
                 if s.contains(',') || s.contains('"') || s.contains('\n') {
                     format!("\"{}\"", s.replace('"', "\"\""))
@@ -89,19 +88,6 @@ impl BackupExporter {
             }
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
-            Value::Date(d) => d.to_string(),
-            Value::Timestamp(t) => t.to_string(),
-            Value::Uuid(u) => format!("{:036x}", u),
-            Value::Array(arr) => {
-                format!(
-                    "[{}]",
-                    arr.iter()
-                        .map(Self::csv_escape)
-                        .collect::<Vec<_>>()
-                        .join(";")
-                )
-            }
-            Value::Enum(_, name) => name.clone(),
         }
     }
 
@@ -154,23 +140,9 @@ impl BackupExporter {
             Value::Null => "null".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("\"[BLOB: {} bytes]\"", b.len()),
-            Value::Date(d) => format!("\"{}\"", d),
-            Value::Timestamp(t) => format!("\"{}\"", t),
-            Value::Uuid(u) => format!("\"{:036x}\"", u),
-            Value::Array(arr) => {
-                format!(
-                    "[{}]",
-                    arr.iter()
-                        .map(Self::json_value)
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            }
-            Value::Enum(_, name) => format!("\"{}\"", name),
         }
     }
 
@@ -205,7 +177,6 @@ impl BackupExporter {
             Value::Null => "NULL".to_string(),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::Decimal(d) => d.to_string(),
             Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
             Value::Boolean(b) => {
                 if *b {
@@ -215,19 +186,6 @@ impl BackupExporter {
                 }
             }
             Value::Blob(b) => format!("X'{}'", use_hex::encode(b)),
-            Value::Date(d) => format!("'{}'", d),
-            Value::Timestamp(t) => format!("'{}'", t),
-            Value::Uuid(u) => format!("'{:036x}'", u),
-            Value::Array(arr) => {
-                format!(
-                    "'{}'",
-                    arr.iter()
-                        .map(Self::sql_value)
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            }
-            Value::Enum(_, name) => format!("'{}'", name),
         }
     }
 }
@@ -280,14 +238,11 @@ impl DataRestorer {
                     name: name.to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 })
                 .collect(),
-            table_foreign_keys: None,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
         };
 
         let count = rows.len();
@@ -349,14 +304,11 @@ impl DataRestorer {
                     name: name.clone(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 })
                 .collect(),
-            table_foreign_keys: None,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
         };
 
         let count = rows.len();
@@ -400,7 +352,8 @@ impl DataRestorer {
                     let table_info = TableInfo {
                         name: table_name.clone(),
                         columns: vec![],
-                        table_foreign_keys: None,
+                        foreign_keys: vec![],
+                        unique_constraints: vec![],
                     };
                     storage.create_table(&table_info)?;
                 }
@@ -491,21 +444,13 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 },
             ],
             ..Default::default()
@@ -544,21 +489,13 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
-                    compression: None,
+                    primary_key: false,
                 },
             ],
             ..Default::default()
@@ -644,11 +581,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             }],
             ..Default::default()
         };
@@ -745,11 +678,7 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             }],
             ..Default::default()
         };
@@ -772,11 +701,7 @@ mod tests {
                 name: "data".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             }],
             ..Default::default()
         };
@@ -805,11 +730,7 @@ mod tests {
                 name: "text".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             }],
             ..Default::default()
         };
