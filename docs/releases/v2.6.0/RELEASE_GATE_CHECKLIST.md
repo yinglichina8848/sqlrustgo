@@ -160,7 +160,18 @@
 | SECURITY_REPORT.md | 安全报告 | ⏳ 待创建 |
 | COVERAGE_REPORT.md | 覆盖率报告 | ⏳ 待创建 |
 
-### 7.4 文档清单模板
+### 7.4 OO 设计文档
+
+| 检查项 | 要求 | 状态 |
+|--------|------|------|
+| oo/README.md | OO 文档索引 | ✅ 已创建 |
+| oo/architecture/ARCHITECTURE_V2.6.md | 架构设计 | ✅ 已创建 |
+| oo/reports/SQL92_COMPLIANCE.md | SQL-92 合规报告 | ✅ 已创建 |
+| oo/reports/PERFORMANCE_ANALYSIS.md | 性能分析 | ✅ 已创建 |
+| oo/user-guide/USER_MANUAL.md | 用户手册 | ✅ 已创建 |
+| IMPLEMENTATION_ANALYSIS.md | 实现分析 | ✅ 已创建 |
+
+### 7.5 文档清单模板
 
 | 检查项 | 状态 |
 |--------|------|
