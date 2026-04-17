@@ -1,6 +1,6 @@
 //! End-to-End Query Integration Tests
 
-use sqlrustgo_planner::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
+use sqlrustgo::planner::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
 use sqlrustgo_types::Value;
 
 #[test]
