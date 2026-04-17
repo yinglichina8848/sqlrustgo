@@ -4,7 +4,7 @@
 CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
 INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob');
 
-CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER);
+CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER);
 CREATE INDEX idx_orders_user_id ON orders(user_id);
 
 -- === CASE: fk_insert_valid ===
