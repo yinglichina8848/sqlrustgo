@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 
 fn create_executor_with_proc(proc: StoredProcedure) -> StoredProcExecutor {
     let storage: Arc<RwLock<dyn StorageEngine>> = Arc::new(RwLock::new(MemoryStorage::new()));
-    let mut catalog = Catalog::new();
+    let mut catalog = Catalog::new("test");
     catalog.add_stored_procedure(proc).unwrap();
     StoredProcExecutor::new(Arc::new(catalog), storage)
 }
@@ -260,7 +260,7 @@ fn test_call_nested_procedure() {
             },
         ],
     );
-    let mut catalog = Catalog::new();
+    let mut catalog = Catalog::new("test");
     catalog.add_stored_procedure(inner).unwrap();
     catalog.add_stored_procedure(outer).unwrap();
     let storage: Arc<RwLock<dyn StorageEngine>> = Arc::new(RwLock::new(MemoryStorage::new()));
@@ -700,7 +700,7 @@ fn test_param_mode() {
 
 #[test]
 fn test_catalog_stored_procedures() {
-    let mut catalog = Catalog::new();
+    let mut catalog = Catalog::new("test");
     let proc = StoredProcedure::new(
         "test".to_string(),
         vec![],
