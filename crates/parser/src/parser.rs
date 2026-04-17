@@ -301,19 +301,7 @@ impl Parser {
             Some(Token::Insert) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
-            Some(Token::Create) => {
-                // Check what comes after CREATE
-                self.next(); // consume CREATE token
-                if matches!(self.current(), Some(Token::Table)) {
-                    self.parse_create_table()
-                } else if matches!(self.current(), Some(Token::Index))
-                    | matches!(self.current(), Some(Token::Unique))
-                {
-                    self.parse_create_index()
-                } else {
-                    Err("Expected TABLE or INDEX after CREATE".to_string())
-                }
-            }
+            Some(Token::Create) => self.parse_create(),
             Some(Token::Drop) => self.parse_drop_table(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::With) => self.parse_with_select(),
@@ -323,35 +311,35 @@ impl Parser {
         }
     }
 
+    fn parse_create(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Create)?;
+        match self.current() {
+            Some(Token::Table) => self.parse_create_table(),
+            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
+            Some(t) => Err(format!("Expected TABLE or INDEX after CREATE, got {:?}", t)),
+            None => Err("Expected TABLE or INDEX after CREATE".to_string()),
+        }
+    }
+
     fn parse_create_index(&mut self) -> Result<Statement, String> {
-        // Current token is Token::Index or Token::Unique (not consumed yet)
-        let unique = if matches!(self.current(), Some(Token::Unique)) {
-            self.next(); // consume Unique if present
-            true
-        } else {
-            false
-        };
-
         self.expect(Token::Index)?;
-        let name = match self.next() {
+        let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
-            _ => return Err("Expected index name".to_string()),
+            Some(t) => return Err(format!("Expected index name, got {:?}", t)),
+            None => return Err("Expected index name".to_string()),
         };
-
         self.expect(Token::On)?;
-        let table = match self.next() {
-            Some(Token::Identifier(table)) => table,
-            _ => return Err("Expected table name".to_string()),
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+            None => return Err("Expected table name".to_string()),
         };
-
-        // parse_column_list already handles LParen and RParen
         let columns = self.parse_column_list()?;
-
         Ok(Statement::CreateIndex(CreateIndexStatement {
-            name,
-            table,
+            index_name,
+            table_name,
             columns,
-            unique,
+>>>>>>> 44be2121 (feat(parser): add CREATE INDEX support)
         }))
     }
 
