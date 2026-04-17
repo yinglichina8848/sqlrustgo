@@ -4,7 +4,7 @@
 use crate::bplus_tree::BPlusTree;
 use crate::engine::{
     ColumnDefinition, ForeignKeyConstraint, Record, StorageEngine, TableData, TableInfo,
-    TriggerEvent, TriggerInfo, TriggerTiming, UniqueConstraint,
+    TriggerInfo, UniqueConstraint,
 };
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
