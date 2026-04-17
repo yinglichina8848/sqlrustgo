@@ -246,6 +246,7 @@ pub enum Expression {
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
+    Aggregate(AggregateCall),  // For HAVING clause - supports aggregate functions in expressions
 }
 
 /// SQL Parser
@@ -343,9 +344,8 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
-        self.expect(Token::LParen)?;
+        // parse_column_list already handles LParen and RParen
         let columns = self.parse_column_list()?;
-        self.expect(Token::RParen)?;
 
         Ok(Statement::CreateIndex(CreateIndexStatement {
             name,
@@ -1067,6 +1067,11 @@ impl Parser {
                 } else {
                     Err("NOT without EXISTS".to_string())
                 }
+            }
+            // Support aggregate functions in expressions (for HAVING clause)
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min) | Some(Token::Max) => {
+                let agg = self.parse_aggregate_function()?;
+                Ok(Expression::Aggregate(agg))
             }
             _ => Err("Expected expression".to_string()),
         }
@@ -1945,5 +1950,85 @@ mod tests {
             }
             _ => panic!("Expected SELECT statement"),
         }
+    }
+}
+
+    #[test]
+    fn test_debug_having() {
+        let sql = "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
+        match parse(sql) {
+            Ok(stmt) => {
+                println!("OK: {:#?}", stmt);
+                if let Statement::Select(s) = stmt {
+                    println!("having = {:?}", s.having);
+                }
+            }
+            Err(e) => {
+                println!("ERROR: {}", e);
+            }
+        }
+    }
+
+#[test]
+fn test_debug_fk() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_refs() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_refs2() {
+    let sql = "CREATE TABLE orders (user_id INTEGER REFERENCES users(id))";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_exact() {
+    let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_cascade() {
+    // This is EXACTLY what's in cascade.sql
+    let sql1 = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)";
+    println!("Test 1: {:?}", parse(sql1));
+    
+    let sql2 = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
+    println!("Test 2: {:?}", parse(sql2));
+    
+    let sql3 = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
+    println!("Test 3: {:?}", parse(sql3));
+}
+
+#[test]
+fn test_debug_idx() {
+    use crate::{parse, lexer::Lexer};
+    
+    let sql = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+    
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
     }
 }
