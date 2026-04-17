@@ -1,6 +1,6 @@
 // SQLRustGo Common Module - Common types and errors
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqlError {
     message: String,
 }
@@ -41,6 +41,7 @@ impl Default for PoolConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
     fn test_sql_error_new() {
@@ -125,5 +126,28 @@ mod tests {
         let config = PoolConfig::default();
         let debug = format!("{:?}", config);
         assert!(debug.contains("PoolConfig"));
+    }
+
+    #[test]
+    fn test_sql_error_source() {
+        let err = SqlError::new("source test");
+        let source = err.source();
+        assert!(source.is_none());
+    }
+
+    #[test]
+    fn test_sql_error_clone() {
+        let err = SqlError::new("clone test");
+        let cloned = err.clone();
+        assert_eq!(cloned.message, err.message);
+    }
+
+    #[test]
+    fn test_pool_config_modified() {
+        let mut config = PoolConfig::default();
+        config.size = 20;
+        config.timeout_ms = 20000;
+        assert_eq!(config.size, 20);
+        assert_eq!(config.timeout_ms, 20000);
     }
 }
