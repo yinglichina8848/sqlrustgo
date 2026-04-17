@@ -464,7 +464,10 @@ mod tests {
     fn test_update_physical_plan() {
         let update_plan = LogicalPlan::Update {
             table_name: "users".to_string(),
-            updates: vec![("id".to_string(), Expr::literal(sqlrustgo_types::Value::Integer(1)))],
+            updates: vec![(
+                "id".to_string(),
+                Expr::literal(sqlrustgo_types::Value::Integer(1)),
+            )],
             predicate: Some(Expr::column("id")),
         };
 
