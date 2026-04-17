@@ -140,4 +140,81 @@ mod tests {
         let debug_str = format!("{:?}", err);
         assert!(debug_str.contains("ParseError"));
     }
+
+    #[test]
+    fn test_error_display_parse() {
+        let err = SqlError::ParseError("syntax error".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("syntax error"));
+    }
+
+    #[test]
+    fn test_error_display_execution() {
+        let err = SqlError::ExecutionError("query failed".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("query failed"));
+    }
+
+    #[test]
+    fn test_error_display_type_mismatch() {
+        let err = SqlError::TypeMismatch("expected int".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("expected int"));
+    }
+
+    #[test]
+    fn test_error_display_division_by_zero() {
+        let err = SqlError::DivisionByZero;
+        let display = format!("{}", err);
+        assert!(display.contains("Division by zero"));
+    }
+
+    #[test]
+    fn test_error_display_null_value() {
+        let err = SqlError::NullValueError("cannot be null".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("cannot be null"));
+    }
+
+    #[test]
+    fn test_error_display_constraint() {
+        let err = SqlError::ConstraintViolation("unique key".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("unique key"));
+    }
+
+    #[test]
+    fn test_error_display_table_not_found() {
+        let err = SqlError::TableNotFound("users".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("users"));
+    }
+
+    #[test]
+    fn test_error_display_column_not_found() {
+        let err = SqlError::ColumnNotFound("id".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("id"));
+    }
+
+    #[test]
+    fn test_error_display_duplicate_key() {
+        let err = SqlError::DuplicateKey("email".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("email"));
+    }
+
+    #[test]
+    fn test_error_display_io() {
+        let err = SqlError::IoError("file not found".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("file not found"));
+    }
+
+    #[test]
+    fn test_error_display_protocol() {
+        let err = SqlError::ProtocolError("invalid packet".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("invalid packet"));
+    }
 }
