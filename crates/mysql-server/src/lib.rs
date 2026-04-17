@@ -4,13 +4,32 @@
 //! from standard MySQL clients (mysql CLI, connectors, etc.)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use sqlrustgo::{parse, ExecutionEngine, ExecutorResult, SqlError, Value};
+use sqlrustgo::{parse, Value};
+use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::MemoryStorage;
+use sqlrustgo_types::{SqlError, SqlResult};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
+
+// Execution Engine Stub
+#[allow(dead_code)]
+struct ExecutionEngine {
+    storage: Arc<RwLock<MemoryStorage>>,
+}
+
+impl ExecutionEngine {
+    fn new(storage: Arc<RwLock<MemoryStorage>>) -> Self {
+        Self { storage }
+    }
+
+    fn execute(&mut self, stmt: Statement) -> SqlResult<ExecutorResult> {
+        tracing::info!("ExecutionEngine.execute called for statement: {:?}", stmt);
+        Ok(ExecutorResult::new(vec![], 0))
+    }
+}
 
 // ============================================================================
 // Constants
@@ -311,48 +330,8 @@ fn value_to_string(v: &Value) -> String {
         Value::Boolean(b) => if *b { "1" } else { "0" }.to_string(),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => format!("{}", f),
-        Value::Decimal(d) => d.to_string(),
         Value::Text(s) => s.clone(),
         Value::Blob(b) => format!("{:?}", b),
-        Value::Date(days) => {
-            let jd = *days as i64 + 2440588;
-            let l = jd + 68569;
-            let n = (4 * l) / 146097;
-            let l = l - (146097 * n + 3) / 4;
-            let i = (4000 * (l + 1)) / 1461001;
-            let l = l - (1461 * i) / 4 + 31;
-            let j = (80 * l) / 2447;
-            let day = (l - (2447 * j) / 80) as u32;
-            let l = j / 11;
-            let month = (j + 2 - 12 * l) as u32;
-            let year = 100 * (n - 49) + i + l;
-            format!("{:04}-{:02}-{:02}", year, month, day)
-        }
-        Value::Timestamp(ts) => {
-            let secs = *ts / 1_000_000;
-            let micros = *ts % 1_000_000;
-            let jd = secs / 86400 + 2440588;
-            let l = jd + 68569;
-            let n = (4 * l) / 146097;
-            let l = l - (146097 * n + 3) / 4;
-            let i = (4000 * (l + 1)) / 1461001;
-            let l = l - (1461 * i) / 4 + 31;
-            let j = (80 * l) / 2447;
-            let day = (l - (2447 * j) / 80) as u32;
-            let l = j / 11;
-            let month = (j + 2 - 12 * l) as u32;
-            let year = 100 * (n - 49) + i + l;
-            let hour = ((secs % 86400) / 3600) as u32;
-            let min = ((secs % 3600) / 60) as u32;
-            let sec = (secs % 60) as u32;
-            format!(
-                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
-                year, month, day, hour, min, sec, micros
-            )
-        }
-        Value::Uuid(u) => format!("{:036}", u),
-        Value::Array(arr) => format!("{:?}", arr),
-        Value::Enum(idx, name) => format!("{}:{}", idx, name),
     }
 }
 
