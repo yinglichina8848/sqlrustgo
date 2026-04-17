@@ -27,37 +27,26 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
                 name: "doc_id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: true,
-                is_primary_key: true,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: true,
             },
             sqlrustgo_storage::ColumnDefinition {
                 name: "embedding".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             },
             sqlrustgo_storage::ColumnDefinition {
                 name: "updated_at".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
-                compression: None,
+                primary_key: false,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {
             name: TABLE_EMBEDDINGS.to_string(),
             columns,
-            table_foreign_keys: None,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
         })?;
     }
     Ok(())
