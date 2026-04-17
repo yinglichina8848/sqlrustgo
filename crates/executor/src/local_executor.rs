@@ -142,6 +142,7 @@ impl<'a> LocalExecutor<'a> {
                 "SortMergeJoin" => self.execute_sort_merge_join(plan),
                 "Sort" => self.execute_sort(plan),
                 "Limit" => self.execute_limit(plan),
+                "Delete" => self.execute_delete(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
             let duration_ms = start.elapsed().as_millis() as u64;
@@ -961,6 +962,32 @@ impl<'a> LocalExecutor<'a> {
 
         // Sort would go here
         Ok(child_result)
+    }
+
+    /// Execute delete
+    fn execute_delete(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_planner::DeleteExec;
+        
+        let delete_exec = plan.as_any().downcast_ref::<DeleteExec>();
+        
+        match delete_exec {
+            Some(delete_plan) => {
+                let table_name = delete_plan.table_name();
+                
+                // For now, delete all rows if no predicate
+                // Full predicate evaluation would require expression evaluation
+                if delete_plan.predicate().is_some() {
+                    // TODO: Implement predicate-based delete
+                    // For now, return empty result
+                    return Ok(ExecutorResult::empty());
+                }
+                
+                // Delete all rows from table
+                let deleted = self.storage.delete(table_name, &[])?;
+                Ok(ExecutorResult::new(vec![], deleted))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
     }
 
     /// Execute limit

@@ -34,6 +34,22 @@ fn rand_u8_8() -> [u8; 8] {
     bytes
 }
 
+fn rand_u8_20() -> [u8; 20] {
+    let part1 = rand_u8_8();
+    let part2 = rand_u8_8();
+    let part3: [u8; 4] = [
+        rand_u8_8()[0],
+        rand_u8_8()[1],
+        rand_u8_8()[2],
+        rand_u8_8()[3],
+    ];
+    let mut combined = [0u8; 20];
+    combined[0..8].copy_from_slice(&part1);
+    combined[8..16].copy_from_slice(&part2);
+    combined[16..20].copy_from_slice(&part3);
+    combined
+}
+
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
@@ -114,7 +130,7 @@ impl ExecutionEngine {
 // ============================================================================
 
 const SERVER_VERSION: &str = "SQLRustGo-2.4.0";
-const AUTH_PLUGIN: &str = "mysql_old_password";
+const AUTH_PLUGIN: &str = "mysql_native_password";
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -125,13 +141,18 @@ mod packet_type {
 }
 
 mod capability {
-    pub const PROTOCOL_41: u32 = 1 << 21;
-    pub const TRANSACTIONS: u32 = 1 << 26;
-    pub const SECURE_CONNECTION: u32 = 1 << 29;
-    pub const MULTI_STATEMENTS: u32 = 1 << 30;
-    pub const MULTI_RESULTS: u32 = 1 << 31;
-    pub const DEFAULT: u32 =
-        PROTOCOL_41 | TRANSACTIONS | MULTI_STATEMENTS | MULTI_RESULTS | SECURE_CONNECTION;
+    pub const PROTOCOL_41: u32 = 1 << 9; // 512 - MySQL 4.1 protocol
+    pub const TRANSACTIONS: u32 = 1 << 13; // 8192
+    pub const SECURE_CONNECTION: u32 = 1 << 27; // 0x08000000
+    pub const MULTI_STATEMENTS: u32 = 1 << 16; // 0x10000
+    pub const MULTI_RESULTS: u32 = 1 << 17; // 0x20000
+    pub const PLUGIN_AUTH: u32 = 1 << 19; // 0x80000 - auth plugins
+    pub const DEFAULT: u32 = PROTOCOL_41
+        | TRANSACTIONS
+        | MULTI_STATEMENTS
+        | MULTI_RESULTS
+        | SECURE_CONNECTION
+        | PLUGIN_AUTH;
 }
 
 // ============================================================================
@@ -205,9 +226,16 @@ impl Packet {
     }
 
     pub fn write_to<W: Write>(&self, w: &mut W) -> MySqlResult<()> {
-        w.write_u24::<LittleEndian>(self.length)?;
-        w.write_u8(self.sequence)?;
+        // Write 3-byte length (little endian)
+        let len = self.length as u32;
+        w.write_all(&[
+            ((len >> 0) & 0xff) as u8,
+            ((len >> 8) & 0xff) as u8,
+            ((len >> 16) & 0xff) as u8,
+        ])?;
+        w.write_all(&[self.sequence])?;
         w.write_all(&self.payload)?;
+        w.flush()?;
         Ok(())
     }
 }
@@ -244,22 +272,54 @@ fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
 
 fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     let mut p = Vec::new();
+
+    // Protocol version
     p.push(0x0a);
+
+    // Server version (null-terminated string)
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
+
+    // Connection ID (4 bytes)
     p.write_u32::<LittleEndian>(1).unwrap();
+
+    // Auth plugin data (random nonce) - for mysql_native_password with SECURE_CONNECTION it's 20 bytes
     p.extend_from_slice(seed);
+
+    // Null terminator of auth plugin data (1 byte)
     p.push(0x00);
-    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16)
-        .unwrap();
+
+    // Capability flags lower (2 bytes)
+    let cap_lower = (capability::DEFAULT & 0xFFFF) as u16;
+    p.write_u16::<LittleEndian>(cap_lower).unwrap();
+    tracing::debug!("handshake: capability lower = 0x{:04x}", cap_lower);
+
+    // Character set (1 byte)
     p.push(0x2c);
+
+    // Server status (2 bytes)
     p.write_u16::<LittleEndian>(0x0002).unwrap();
-    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
-        .unwrap();
-    p.push(8);
+
+    // Capability flags upper (2 bytes)
+    let cap_upper = (capability::DEFAULT >> 16) as u16;
+    p.write_u16::<LittleEndian>(cap_upper).unwrap();
+    tracing::debug!("handshake: capability upper = 0x{:04x}", cap_upper);
+    tracing::debug!("handshake: full capability = 0x{:08x}", capability::DEFAULT);
+
+    // Auth plugin data length (1 byte) - 20 for mysql_native_password with SECURE_CONNECTION
+    p.push(seed.len() as u8);
+    tracing::debug!("DEBUG: auth_len byte = 0x{:02x}", seed.len() as u8);
+
+    // Reserved (10 bytes)
     p.extend_from_slice(&[0u8; 10]);
+
+    // Auth plugin name
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
+
+    tracing::debug!("DEBUG: full payload hex = {:02x?}", p);
+    tracing::info!("DEBUG: packet payload len = {}", p.len());
+
     Packet {
         length: p.len() as u32,
         sequence: seq,
@@ -546,16 +606,31 @@ fn handle_connection(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
 ) -> MySqlResult<()> {
-    stream.set_read_timeout(Some(std::time::Duration::from_secs(60)))?;
-    stream.set_write_timeout(Some(std::time::Duration::from_secs(60)))?;
+    use std::net::TcpStreamExt;
+    stream.set_nodelay(true)?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(60))?;
+    stream.set_write_timeout(Some(std::time::Duration::from_secs(60))?;
 
     tracing::info!("MySQL connection from {}", addr);
 
     let mut seq = 0u8;
 
-    let seed = rand_u8_8();
+    let seed = if AUTH_PLUGIN == "mysql_native_password" {
+        rand_u8_20()
+    } else {
+        let mut s = [0u8; 20];
+        s[0..8].copy_from_slice(&rand_u8_8());
+        s
+    };
 
-    make_handshake_packet(seq, &seed).write_to(&mut stream)?;
+    let packet = make_handshake_packet(seq, &seed);
+    tracing::info!(
+        "WRITE handshake packet: len={}, payload[:50]={:02x?}",
+        packet.length,
+        &packet.payload[..50]
+    );
+    packet.write_to(&mut stream)?;
+    tracing::info!("WRITE complete");
     seq = seq.wrapping_add(1);
 
     let auth_packet = Packet::read_from(&mut stream)?;
