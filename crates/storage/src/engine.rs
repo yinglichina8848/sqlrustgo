@@ -336,7 +336,13 @@ mod tests {
     #[test]
     fn test_memory_storage_list_tables() {
         let mut storage = MemoryStorage::new();
-        storage.tables.insert("users".to_string(), vec![]);
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
         assert!(tables.contains(&"users".to_string()));
     }
@@ -449,8 +455,20 @@ mod tests {
     #[test]
     fn test_storage_engine_table_operations() {
         let mut storage = MemoryStorage::new();
-        storage.tables.insert("users".to_string(), vec![]);
-        storage.tables.insert("orders".to_string(), vec![]);
+        let info1 = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        let info2 = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info1).unwrap();
+        storage.create_table(&info2).unwrap();
 
         let tables = storage.list_tables();
         assert_eq!(tables.len(), 2);
@@ -463,7 +481,13 @@ mod tests {
         let mut storage = MemoryStorage::new();
         assert!(!storage.has_table("users"));
 
-        storage.tables.insert("users".to_string(), vec![]);
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));
     }
 
