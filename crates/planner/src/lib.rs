@@ -16,6 +16,9 @@ pub mod planner;
 pub use logical_plan::LogicalPlan;
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::PhysicalPlan;
+pub use physical_plan::{
+    AggregateExec, FilterExec, HashJoinExec, LimitExec, ProjectionExec, SeqScanExec, SortExec,
+};
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
 use sqlrustgo_types::Value;
