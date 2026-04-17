@@ -13,6 +13,7 @@
 //! Note: Full SF=10 test is ignored by default due to long runtime (~10-30 minutes).
 //! Run with --ignored flag to execute.
 
+use rand::seq::SliceRandom;
 use rand::Rng;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -146,15 +147,15 @@ fn generate_sf10_data(output_path: &str) -> std::io::Result<PathBuf> {
     // Create tables
     create_tpch_tables(&conn);
 
-    // Import data
+    // Import data (order matters: references must be created after referenced tables)
     println!("Generating SF=10 data (60M lineitem rows)...");
-    generate_lineitem(&conn, 10);
-    generate_orders(&conn, 10);
-    generate_customer(&conn, 10);
-    generate_part(&conn, 10);
-    generate_partsupp(&conn, 10);
-    generate_nation_region(&conn);
-    generate_supplier(&conn, 10);
+    generate_nation_region(&conn); // 1. nation & region (no dependencies)
+    generate_supplier(&conn, 10); // 2. supplier (uses nation)
+    generate_part(&conn, 10); // 3. part (no dependencies)
+    generate_partsupp(&conn, 10); // 4. partsupp (uses part & supplier)
+    generate_customer(&conn, 10); // 5. customer (uses nation)
+    generate_orders(&conn, 10); // 6. orders (uses customer)
+    generate_lineitem(&conn, 10); // 7. lineitem (uses orders, part, supplier)
 
     println!(
         "SF=10 data generation complete: {:.1}s",
@@ -386,8 +387,10 @@ fn generate_part(conn: &Connection, scale: usize) {
 }
 
 fn generate_partsupp(conn: &Connection, scale: usize) {
-    let count = SF10_PARTSUPP * scale / 10;
-    println!("Generating partsupp ({} rows)...", count);
+    let part_count = SF10_PART * scale / 10;
+    let supplier_count = SF10_SUPPLIER * scale / 10;
+    let target_count = SF10_PARTSUPP * scale / 10;
+    println!("Generating partsupp ({} rows)...", target_count);
 
     let mut stmt = conn
         .prepare("INSERT INTO partsupp VALUES (?,?,?,?,?)")
@@ -396,22 +399,36 @@ fn generate_partsupp(conn: &Connection, scale: usize) {
     let mut rng = rand::thread_rng();
     let start = Instant::now();
 
-    for i in 1..=count {
-        stmt.execute(rusqlite::params![
-            rng.gen_range(1..=(SF10_PART * scale / 10) as i64),
-            rng.gen_range(1..=(SF10_SUPPLIER * scale / 10) as i64),
-            rng.gen_range(1..9999) as i32,
-            rng.gen_range(1.0..1000.0),
-            format!("partsupp comment {}", i)
-        ])
-        .unwrap();
+    // For SF=10: 8M rows, 2M parts, 100K suppliers
+    // Average 4 suppliers per part
+    // Use a deterministic pattern: for each part, assign suppliers based on partkey % supplier_count
+    let suppliers_per_part = target_count / part_count;
 
-        if i % 100000 == 0 {
-            print!("\r  Progress: {:.1}%", 100.0 * i as f64 / count as f64);
+    for partkey in 1..=part_count as i64 {
+        for j in 0..suppliers_per_part {
+            // Use deterministic supplier selection to avoid duplicates
+            let suppkey = ((partkey + (j as i64) * 7919) % supplier_count as i64) + 1;
+            stmt.execute(rusqlite::params![
+                partkey,
+                suppkey,
+                rng.gen_range(1..9999) as i32,
+                rng.gen_range(1.0..1000.0),
+                format!("partsupp comment {}:{}", partkey, suppkey)
+            ])
+            .unwrap();
+        }
+
+        if partkey % 100000 == 0 {
+            print!(
+                "\r  Progress: {:.1}%",
+                100.0 * partkey as f64 / part_count as f64
+            );
         }
     }
+
     println!(
-        "\n  partsupp complete: {:.1}s",
+        "\n  partsupp complete: {} rows in {:.1}s",
+        target_count,
         start.elapsed().as_secs_f64()
     );
 }
