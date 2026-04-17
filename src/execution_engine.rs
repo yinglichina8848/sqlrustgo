@@ -37,9 +37,7 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(_) => Ok(ExecutorResult::empty()),
-            _ => Err(SqlError::ExecutionError(format!(
-                "Unsupported statement type"
-            ))),
+            _ => Err(SqlError::ExecutionError("Unsupported statement type".to_string())),
         }
     }
 

@@ -640,7 +640,7 @@ impl StoredProcExecutor {
                     if case_val == when_expr_val {
                         return self.evaluate_expression(result, ctx).map(|v| {
                             ctx.set_return(v);
-                            ()
+                            
                         });
                     }
                 }
@@ -648,7 +648,7 @@ impl StoredProcExecutor {
                 if let Some(else_val) = else_result {
                     return self.evaluate_expression(else_val, ctx).map(|v| {
                         ctx.set_return(v);
-                        ()
+                        
                     });
                 }
 
@@ -662,7 +662,7 @@ impl StoredProcExecutor {
                     if self.evaluate_condition(condition, ctx)? {
                         return self.evaluate_expression(result, ctx).map(|v| {
                             ctx.set_return(v);
-                            ()
+                            
                         });
                     }
                 }
@@ -670,7 +670,7 @@ impl StoredProcExecutor {
                 if let Some(else_val) = else_result {
                     return self.evaluate_expression(else_val, ctx).map(|v| {
                         ctx.set_return(v);
-                        ()
+                        
                     });
                 }
 
@@ -694,7 +694,7 @@ impl StoredProcExecutor {
                         continue;
                     }
 
-                    if self.evaluate_condition(&condition, ctx)? {
+                    if self.evaluate_condition(condition, ctx)? {
                         break;
                     }
                 }
@@ -953,10 +953,10 @@ impl StoredProcExecutor {
 
                 let table_info = {
                     let storage = self.storage.read().unwrap();
-                    if !storage.has_table(&table_name) {
+                    if !storage.has_table(table_name) {
                         return Err(format!("Table '{}' not found", table_name));
                     }
-                    storage.get_table_info(&table_name).ok()
+                    storage.get_table_info(table_name).ok()
                 };
 
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
@@ -1011,14 +1011,14 @@ impl StoredProcExecutor {
                         }
                         if let Some(ref info) = table_info {
                             if !info.foreign_keys.is_empty() {
-                                self.validate_foreign_keys(&table_name, &new_row, &insert_columns)?;
+                                self.validate_foreign_keys(table_name, &new_row, &insert_columns)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(table_name, &new_row, &insert_columns)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
-                                    &table_name,
+                                    table_name,
                                     &new_row,
                                     &insert_columns,
                                 )?;
@@ -1057,14 +1057,14 @@ impl StoredProcExecutor {
                         if let Some(ref info) = table_info {
                             if !info.foreign_keys.is_empty() {
                                 let cols = insert_columns.clone();
-                                self.validate_foreign_keys(&table_name, &new_row, &cols)?;
+                                self.validate_foreign_keys(table_name, &new_row, &cols)?;
                             }
                             if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(&table_name, &new_row, &insert_columns)?;
+                                self.validate_primary_key(table_name, &new_row, &insert_columns)?;
                             }
                             if !info.unique_constraints.is_empty() {
                                 self.validate_unique_constraints(
-                                    &table_name,
+                                    table_name,
                                     &new_row,
                                     &insert_columns,
                                 )?;
@@ -1080,7 +1080,7 @@ impl StoredProcExecutor {
                     let mut storage = self.storage.write().unwrap();
                     for new_row in new_rows {
                         storage
-                            .insert(&table_name, vec![new_row])
+                            .insert(table_name, vec![new_row])
                             .map_err(|e| format!("Failed to insert: {}", e))?;
                     }
                 }

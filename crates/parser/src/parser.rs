@@ -246,7 +246,7 @@ pub enum Expression {
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
-    Aggregate(AggregateCall),  // For HAVING clause - supports aggregate functions in expressions
+    Aggregate(AggregateCall), // For HAVING clause - supports aggregate functions in expressions
 }
 
 /// SQL Parser
@@ -306,9 +306,9 @@ impl Parser {
                 self.next(); // consume CREATE token
                 if matches!(self.current(), Some(Token::Table)) {
                     self.parse_create_table()
-                } else if matches!(self.current(), Some(Token::Index)) {
-                    self.parse_create_index()
-                } else if matches!(self.current(), Some(Token::Unique)) {
+                } else if matches!(self.current(), Some(Token::Index))
+                    | matches!(self.current(), Some(Token::Unique))
+                {
                     self.parse_create_index()
                 } else {
                     Err("Expected TABLE or INDEX after CREATE".to_string())
@@ -1069,7 +1069,8 @@ impl Parser {
                 }
             }
             // Support aggregate functions in expressions (for HAVING clause)
-            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min) | Some(Token::Max) => {
+            Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
+            | Some(Token::Max) => {
                 let agg = self.parse_aggregate_function()?;
                 Ok(Expression::Aggregate(agg))
             }
@@ -1303,21 +1304,16 @@ impl Parser {
     ) -> Result<(Option<ReferentialAction>, Option<ReferentialAction>), String> {
         let mut on_delete = None;
         let mut on_update = None;
-        loop {
+        while let Some(Token::On) = self.current() {
+            self.next();
             match self.current() {
-                Some(Token::On) => {
+                Some(Token::Delete) => {
                     self.next();
-                    match self.current() {
-                        Some(Token::Delete) => {
-                            self.next();
-                            on_delete = Some(self.parse_referential_action()?);
-                        }
-                        Some(Token::Update) => {
-                            self.next();
-                            on_update = Some(self.parse_referential_action()?);
-                        }
-                        _ => break,
-                    }
+                    on_delete = Some(self.parse_referential_action()?);
+                }
+                Some(Token::Update) => {
+                    self.next();
+                    on_update = Some(self.parse_referential_action()?);
                 }
                 _ => break,
             }
@@ -1953,21 +1949,22 @@ mod tests {
     }
 }
 
-    #[test]
-    fn test_debug_having() {
-        let sql = "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
-        match parse(sql) {
-            Ok(stmt) => {
-                println!("OK: {:#?}", stmt);
-                if let Statement::Select(s) = stmt {
-                    println!("having = {:?}", s.having);
-                }
-            }
-            Err(e) => {
-                println!("ERROR: {}", e);
+#[test]
+fn test_debug_having() {
+    let sql =
+        "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
+    match parse(sql) {
+        Ok(stmt) => {
+            println!("OK: {:#?}", stmt);
+            if let Statement::Select(s) = stmt {
+                println!("having = {:?}", s.having);
             }
         }
+        Err(e) => {
+            println!("ERROR: {}", e);
+        }
     }
+}
 
 #[test]
 fn test_debug_fk() {
@@ -2010,23 +2007,23 @@ fn test_debug_cascade() {
     // This is EXACTLY what's in cascade.sql
     let sql1 = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)";
     println!("Test 1: {:?}", parse(sql1));
-    
+
     let sql2 = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), amount INTEGER)";
     println!("Test 2: {:?}", parse(sql2));
-    
+
     let sql3 = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
     println!("Test 3: {:?}", parse(sql3));
 }
 
 #[test]
 fn test_debug_idx() {
-    use crate::{parse, lexer::Lexer};
-    
+    use crate::{lexer::Lexer, parse};
+
     let sql = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
     println!("SQL: [{}]", sql);
     let tokens = Lexer::new(sql).tokenize();
     println!("Tokens: {:?}", tokens);
-    
+
     match parse(sql) {
         Ok(stmt) => println!("OK: {:#?}", stmt),
         Err(e) => println!("ERROR: {}", e),
