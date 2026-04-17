@@ -5,7 +5,7 @@
 use crate::ExecutorResult;
 use sqlrustgo_catalog::HandlerCondition;
 use sqlrustgo_catalog::StoredProcStatement;
-use sqlrustgo_storage::{ColumnDefinition, ForeignKeyConstraint, StorageEngine};
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -1194,16 +1194,10 @@ impl StoredProcExecutor {
                     Value::Text(name.to_string())
                 }
             }
-            sqlrustgo_parser::Expression::QualifiedColumn(table, col) => {
-                Value::Text(format!("{}.{}", table, col))
-            }
             sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
                 let left_val = self.expression_to_value(left, ctx);
                 let right_val = self.expression_to_value(right, ctx);
                 self.evaluate_binary_op(&left_val, &right_val, op)
-            }
-            sqlrustgo_parser::Expression::FunctionCall(name, args) => {
-                self.evaluate_function(name, args, ctx)
             }
             sqlrustgo_parser::Expression::Subquery(select) => {
                 let rows = self.execute_subquery(select);
@@ -1322,7 +1316,7 @@ impl StoredProcExecutor {
         &self,
         table_name: &str,
         row: &[Value],
-        columns: &[sqlrustgo_parser::ColumnDefinition],
+        columns: &[String],
     ) -> Result<(), String> {
         let storage = self.storage.read().unwrap();
         let table_info = storage
@@ -1336,7 +1330,7 @@ impl StoredProcExecutor {
                 .filter_map(|col_name| {
                     columns
                         .iter()
-                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                        .position(|c| c.eq_ignore_ascii_case(col_name))
                         .and_then(|idx| row.get(idx).cloned())
                 })
                 .collect();
@@ -1387,7 +1381,7 @@ impl StoredProcExecutor {
         &self,
         table_name: &str,
         row: &[Value],
-        columns: &[sqlrustgo_parser::ColumnDefinition],
+        columns: &[String],
     ) -> Result<(), String> {
         let storage = self.storage.read().unwrap();
         let table_info = storage
@@ -1401,7 +1395,7 @@ impl StoredProcExecutor {
                 .filter_map(|col_name| {
                     columns
                         .iter()
-                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                        .position(|c| c.eq_ignore_ascii_case(col_name))
                 })
                 .collect();
 
@@ -1450,7 +1444,7 @@ impl StoredProcExecutor {
         &self,
         table_name: &str,
         row: &[Value],
-        columns: &[sqlrustgo_parser::ColumnDefinition],
+        columns: &[String],
     ) -> Result<(), String> {
         let storage = self.storage.read().unwrap();
         let table_info = storage
