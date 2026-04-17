@@ -220,4 +220,79 @@ mod tests {
         assert!(cache.get(&make_key("q1", 1)).is_some());
         assert!(cache.get(&make_key("q3", 3)).is_some());
     }
+
+    #[test]
+    fn test_cache_invalidate_table() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        cache.put(
+            make_key("SELECT 1", 1),
+            make_entry(1),
+            vec!["users".to_string()],
+        );
+        cache.put(
+            make_key("SELECT 2", 2),
+            make_entry(2),
+            vec!["orders".to_string()],
+        );
+        cache.put(
+            make_key("SELECT 3", 3),
+            make_entry(3),
+            vec!["users".to_string(), "products".to_string()],
+        );
+
+        cache.invalidate_table("users");
+
+        assert!(cache.get(&make_key("SELECT 1", 1)).is_none());
+        assert!(cache.get(&make_key("SELECT 2", 2)).is_some());
+        assert!(cache.get(&make_key("SELECT 3", 3)).is_none());
+    }
+
+    #[test]
+    fn test_cache_clear() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        cache.put(make_key("SELECT 1", 1), make_entry(1), vec![]);
+        cache.put(make_key("SELECT 2", 2), make_entry(2), vec![]);
+
+        cache.clear();
+
+        assert!(cache.get(&make_key("SELECT 1", 1)).is_none());
+        assert!(cache.get(&make_key("SELECT 2", 2)).is_none());
+    }
+
+    #[test]
+    fn test_cache_stats() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        cache.put(make_key("SELECT 1", 1), make_entry(100), vec![]);
+        cache.put(make_key("SELECT 2", 2), make_entry(200), vec![]);
+
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 2);
+        assert!(stats.memory_bytes > 0);
+    }
+
+    #[test]
+    fn test_cache_miss() {
+        let config = QueryCacheConfig::default();
+        let mut cache = QueryCache::new(config);
+
+        assert!(cache.get(&make_key("nonexistent", 1)).is_none());
+    }
+
+    #[test]
+    fn test_should_cache_non_empty_result() {
+        let result = crate::ExecutorResult::new(vec![vec![]], 0);
+        assert!(should_cache(&result));
+    }
+
+    #[test]
+    fn test_should_cache_empty_result() {
+        let result = crate::ExecutorResult::empty();
+        assert!(!should_cache(&result));
+    }
 }
