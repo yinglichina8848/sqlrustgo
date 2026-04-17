@@ -68,7 +68,7 @@ pub struct TableInfo {
 }
 
 /// Column definition for table schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
@@ -83,17 +83,6 @@ impl ColumnDefinition {
         Self {
             name: name.to_string(),
             data_type: data_type.to_string(),
-            nullable: false,
-            primary_key: false,
-        }
-    }
-}
-
-impl Default for ColumnDefinition {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            data_type: String::new(),
             nullable: false,
             primary_key: false,
         }
