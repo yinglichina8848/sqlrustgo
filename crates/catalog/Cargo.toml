@@ -11,6 +11,10 @@ sqlrustgo-types.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+hmac = "0.12"
+pbkdf2 = "0.12"
+rand = "0.8"
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile.workspace = true
