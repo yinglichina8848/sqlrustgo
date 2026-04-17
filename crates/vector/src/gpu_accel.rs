@@ -190,6 +190,7 @@ impl GpuAccelerator for CpuSimdAccelerator {
 // OpenCL GPU Accelerator (Real Implementation)
 // =============================================================================
 
+#[allow(dead_code)]
 #[cfg(feature = "opencl")]
 mod opencl_impl {
     use super::*;
@@ -639,6 +640,7 @@ mod opencl_impl {
 // Stub OpenCL when feature is not enabled
 // =============================================================================
 
+#[allow(dead_code)]
 #[cfg(not(feature = "opencl"))]
 mod opencl_impl {
     use super::*;

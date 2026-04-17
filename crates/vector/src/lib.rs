@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 //! SQLRustGo Vector Index Library
 //!
 //! High-performance vector index supporting Flat, IVF, and HNSW algorithms.
