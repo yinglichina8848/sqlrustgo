@@ -103,7 +103,8 @@ impl DefaultPlanner {
                 if let Some(proj) = projection {
                     if let Some(seq) = exec.as_mut().as_any().downcast_ref::<SeqScanExec>() {
                         return Ok(Box::new(seq.clone().with_projection(proj.clone())));
-                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>() {
+                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>()
+                    {
                         return Ok(Box::new(idx.clone().with_projection(proj.clone())));
                     }
                 }
@@ -184,9 +185,13 @@ impl DefaultPlanner {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
-            LogicalPlan::Delete { table_name, predicate } => {
-                Ok(Box::new(DeleteExec::new(table_name.clone(), predicate.clone())))
-            }
+            LogicalPlan::Delete {
+                table_name,
+                predicate,
+            } => Ok(Box::new(DeleteExec::new(
+                table_name.clone(),
+                predicate.clone(),
+            ))),
             LogicalPlan::Subquery { subquery, .. } => self.create_physical_plan_internal(subquery),
             LogicalPlan::Union { left, .. } => {
                 // Union - use left plan as base (simplified)
