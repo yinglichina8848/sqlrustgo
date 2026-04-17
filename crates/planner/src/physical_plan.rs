@@ -326,6 +326,10 @@ impl PhysicalPlan for LimitExec {
     fn name(&self) -> &str {
         "Limit"
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[cfg(test)]
