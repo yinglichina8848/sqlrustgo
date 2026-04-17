@@ -63,8 +63,8 @@ impl<'a> InformationSchema<'a> {
     /// Get all schemata from the catalog
     pub fn get_schemata(&self) -> Vec<SchemaRow> {
         self.catalog
-            .all_schemas()
-            .iter()
+            .schemas()
+            .values()
             .map(|schema| SchemaRow {
                 schema_name: schema.name.clone(),
                 schema_owner: "owner".to_string(), // Default owner since Catalog doesn't track owners
@@ -76,8 +76,8 @@ impl<'a> InformationSchema<'a> {
     pub fn get_tables(&self) -> Vec<TableRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
                 let table_type = "BASE TABLE".to_string();
 
                 // Tables are generally insertable
@@ -85,7 +85,7 @@ impl<'a> InformationSchema<'a> {
 
                 rows.push(TableRow {
                     table_schema: schema.name.clone(),
-                    table_name: table.name.clone(),
+                    table_name: table_ref.name.clone(),
                     table_type,
                     is_insertable_into,
                 });
@@ -99,15 +99,15 @@ impl<'a> InformationSchema<'a> {
     pub fn get_columns(&self) -> Vec<ColumnRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
-                for (i, column) in table.columns.iter().enumerate() {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                for (i, column) in table_ref.columns.iter().enumerate() {
                     let (character_maximum_length, numeric_precision, numeric_scale) =
                         Self::get_type_attributes(&column.data_type);
 
                     rows.push(ColumnRow {
                         table_schema: schema.name.clone(),
-                        table_name: table.name.clone(),
+                        table_name: table_ref.name.clone(),
                         column_name: column.name.clone(),
                         ordinal_position: (i + 1) as i32,
                         column_default: column.default_value.as_ref().map(|v| format!("{}", v)),
@@ -140,13 +140,13 @@ impl<'a> InformationSchema<'a> {
     pub fn get_indexes(&self) -> Vec<IndexRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
-                for index in &table.indices {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                for index in &table_ref.indices {
                     for (i, column_name) in index.columns.iter().enumerate() {
                         rows.push(IndexRow {
                             table_schema: schema.name.clone(),
-                            table_name: table.name.clone(),
+                            table_name: table_ref.name.clone(),
                             index_name: index.name.clone(),
                             column_name: column_name.clone(),
                             ordinal_position: (i + 1) as i32,
