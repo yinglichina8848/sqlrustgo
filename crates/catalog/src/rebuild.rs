@@ -2,7 +2,7 @@
 //!
 //! Provides utilities to rebuild a Catalog from a StorageEngine for testing.
 
-use crate::DataType;
+use crate::data_type::DataType;
 
 #[allow(dead_code)]
 /// Convert a storage data type string to catalog DataType
