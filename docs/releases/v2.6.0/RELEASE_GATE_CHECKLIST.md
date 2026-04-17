@@ -129,13 +129,42 @@
 
 ## 七、文档门禁 (B类 - 应该通过)
 
+### 7.1 必需文档
+
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
-| README 更新 | 版本信息正确 | ⏳ |
-| CHANGELOG 更新 | 变更记录完整 | ⏳ |
-| API 文档 | 新增 API 有文档 | ⏳ |
-| 升级指南 | 升级步骤清晰 | ⏳ |
-| 性能报告 | 性能数据完整 | ⏳ |
+| README 更新 | 版本信息正确 | ✅ 已更新 |
+| CHANGELOG 更新 | 变更记录完整 | ✅ 已更新 |
+| VERSION_PLAN.md | 版本计划 | ✅ 已创建 |
+| TEST_PLAN.md | 测试计划 | ✅ 已创建 |
+| INTEGRATION_TEST_PLAN.md | 集成测试计划 | ✅ 已创建 |
+| RELEASE_GATE_CHECKLIST.md | 门禁检查清单 | ✅ 已创建 |
+| INTEGRATION_STATUS.md | 功能集成状态 | ✅ 已创建 |
+| PERFORMANCE_TARGETS.md | 性能目标 | ✅ 已创建 |
+| SQL_REGRESSION_PLAN.md | SQL回归测试计划 | ✅ 已创建 |
+
+### 7.2 Beta 文档
+
+| 检查项 | 要求 | 状态 |
+|--------|------|------|
+| RELEASE_NOTES.md | 发布说明 | ✅ 已创建 |
+| FEATURE_MATRIX.md | 功能矩阵 | ✅ 已创建 |
+| UPGRADE_GUIDE.md | 升级指南 | ✅ 已创建 |
+
+### 7.3 RC/GA 文档
+
+| 检查项 | 要求 | 状态 |
+|--------|------|------|
+| API_DOCUMENTATION.md | API 文档 | ⏳ 待创建 |
+| PERFORMANCE_REPORT.md | 性能报告 | ⏳ 待创建 |
+| SECURITY_REPORT.md | 安全报告 | ⏳ 待创建 |
+| COVERAGE_REPORT.md | 覆盖率报告 | ⏳ 待创建 |
+
+### 7.4 文档清单模板
+
+| 检查项 | 状态 |
+|--------|------|
+| `docs/releases/RELEASE_DOCUMENTATION_CHECKLIST.md` | ✅ 已创建 |
 
 ---
 
