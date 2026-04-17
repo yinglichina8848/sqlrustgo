@@ -18,7 +18,7 @@ fn create_test_storage() -> MemoryStorage {
             ColumnDefinition::new("quantity", "INTEGER"),
             ColumnDefinition::new("total", "FLOAT"),
         ],
-        table_foreign_keys: None,
+        foreign_keys: vec![], unique_constraints: vec![],
     };
 
     storage.create_table(&table_info).unwrap();
