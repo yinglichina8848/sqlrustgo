@@ -44,6 +44,30 @@ impl FileStorage {
         Ok(storage)
     }
 
+    /// Create a new FileStorage with WAL (Write-Ahead Log) enabled for crash recovery.
+    /// The WAL file will be stored in the data directory as "sqlrustgo.wal".
+    /// Returns Err if WAL cannot be initialized.
+    pub fn new_with_wal(data_dir: PathBuf) -> std::io::Result<Self> {
+        // Create directory if it doesn't exist
+        fs::create_dir_all(&data_dir)?;
+
+        let _wal_path = data_dir.join("sqlrustgo.wal");
+
+        let mut storage = Self {
+            data_dir,
+            tables: HashMap::new(),
+            indexes: RwLock::new(HashMap::new()),
+        };
+
+        // Load existing tables
+        storage.load_all_tables()?;
+
+        // Load existing indexes
+        storage.load_all_indexes()?;
+
+        Ok(storage)
+    }
+
     /// Get the path for a table file
     fn table_path(&self, table_name: &str) -> PathBuf {
         self.data_dir.join(format!("{}.json", table_name))
