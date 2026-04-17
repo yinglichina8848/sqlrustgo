@@ -150,15 +150,6 @@ fn value_to_sql(value: &Value) -> String {
         Value::Text(s) => format!("'{}'", s.replace("'", "''")),
         Value::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
         Value::Blob(bytes) => format!("X'{}'", hex::encode(bytes)),
-        Value::Date(days) => format!("DATE '{}'", days),
-        Value::Timestamp(us) => format!("TIMESTAMP '{}'", us),
-        Value::Uuid(u) => format!("'{:036x}'", u),
-        Value::Array(arr) => format!(
-            "'{}'",
-            arr.iter().map(value_to_sql).collect::<Vec<_>>().join(",")
-        ),
-        Value::Enum(_, name) => format!("'{}'", name),
-        Value::Decimal(d) => d.to_string(),
     }
 }
 
@@ -1067,11 +1058,7 @@ pub fn restore_backup(dir: &Path, target: &Path, clean: bool) -> Result<()> {
                 name: c.name.clone(),
                 data_type: c.data_type.clone(),
                 nullable: c.nullable,
-                is_primary_key: c.is_primary_key,
-                is_unique: c.is_unique,
-                auto_increment: c.auto_increment,
-                references: None,
-                compression: None,
+                primary_key: c.primary_key,
             })
             .collect();
 

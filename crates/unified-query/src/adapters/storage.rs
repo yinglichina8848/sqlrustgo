@@ -30,21 +30,21 @@ impl StorageAdapter {
 
         match table_name {
             Some(table) => {
-                let offset = plan.offset as usize;
-                let limit = plan.top_k as usize;
-
-                match self.storage.scan_batch(&table, offset, limit) {
-                    Ok((records, _total, _has_more)) => {
-                        let json_records: Vec<Vec<Value>> = records
+                match self.storage.scan(&table) {
+                    Ok(records) => {
+                        let offset = plan.offset as usize;
+                        let limit = plan.top_k as usize;
+                        let sliced: Vec<Vec<Value>> = records
                             .into_iter()
+                            .skip(offset)
+                            .take(limit)
                             .map(|record| record.into_iter().map(sql_value_to_json).collect())
                             .collect();
 
-                        if json_records.is_empty() {
-                            // Return empty result if no records
+                        if sliced.is_empty() {
                             QueryResult::Ok(vec![])
                         } else {
-                            QueryResult::Ok(json_records)
+                            QueryResult::Ok(sliced)
                         }
                     }
                     Err(e) => QueryResult::Err(format!("Storage error: {}", e)),
@@ -56,9 +56,7 @@ impl StorageAdapter {
                 let mut all_records = Vec::new();
 
                 for table in tables {
-                    if let Ok((records, _, _)) =
-                        self.storage.scan_batch(&table, 0, plan.top_k as usize)
-                    {
+                    if let Ok(records) = self.storage.scan(&table) {
                         for record in records {
                             all_records.push(record.into_iter().map(sql_value_to_json).collect());
                         }
@@ -113,9 +111,15 @@ impl StorageAdapter {
             name: name.to_string(),
             columns: columns
                 .into_iter()
-                .map(|(name, dtype)| ColumnDefinition::new(name, dtype))
+                .map(|(name, dtype)| ColumnDefinition {
+                    name: name.to_string(),
+                    data_type: dtype.to_string(),
+                    nullable: true,
+                    primary_key: false,
+                })
                 .collect(),
-            table_foreign_keys: None,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
         };
 
         // Create table schema
@@ -143,30 +147,8 @@ fn sql_value_to_json(value: SqlValue) -> Value {
         SqlValue::Float(f) => serde_json::Number::from_f64(f)
             .map(Value::Number)
             .unwrap_or(Value::Null),
-        SqlValue::Decimal(ref d) => {
-            // Convert Decimal to string then parse as f64
-            let s = d.to_string();
-            s.parse::<f64>()
-                .ok()
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number)
-                .unwrap_or(Value::String(s))
-        }
         SqlValue::Text(s) => Value::String(s),
         SqlValue::Blob(b) => Value::String(format!("[blob: {} bytes]", b.len())),
-        SqlValue::Date(days) => {
-            // days is days since UNIX epoch
-            Value::String(format!("date:{}days", days))
-        }
-        SqlValue::Timestamp(micros) => {
-            // micros is microseconds since UNIX epoch
-            Value::String(format!("timestamp:{}micros", micros))
-        }
-        SqlValue::Uuid(u) => Value::String(format!("{:036}", u)),
-        SqlValue::Array(arr) => Value::Array(arr.into_iter().map(sql_value_to_json).collect()),
-        SqlValue::Enum(idx, name) => {
-            serde_json::json!({"index": idx, "name": name})
-        }
     }
 }
 
