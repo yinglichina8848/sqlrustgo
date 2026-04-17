@@ -11,8 +11,9 @@ pub use binary_format::BinaryFormat;
 pub use bplus_tree::BPlusTree;
 pub use buffer_pool::BufferPool;
 pub use engine::{
-    ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record, StorageEngine,
-    TableData, TableInfo, UniqueConstraint,
+    ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint, MemoryStorage, Record,
+    StorageEngine, TableData, TableInfo, TriggerEvent, TriggerInfo, TriggerTiming,
+    UniqueConstraint,
 };
 pub use file_storage::FileStorage;
 pub use page::Page;

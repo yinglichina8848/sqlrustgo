@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Referential action for foreign key constraints
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -29,6 +29,31 @@ pub struct ForeignKeyConstraint {
 pub struct UniqueConstraint {
     pub name: Option<String>,
     pub columns: Vec<String>,
+}
+
+/// Trigger timing: BEFORE or AFTER
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// Trigger event: INSERT, UPDATE, or DELETE
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Trigger definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerInfo {
+    pub name: String,
+    pub table_name: String,
+    pub timing: TriggerTiming,
+    pub event: TriggerEvent,
+    pub body: String,
 }
 
 /// Table metadata
@@ -120,12 +145,29 @@ pub trait StorageEngine: Send + Sync {
 
     /// Rename a table
     fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()>;
+
+    /// Create a trigger on a table
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()>;
+
+    /// Drop a trigger by name
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()>;
+
+    /// Get a trigger by name
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo>;
+
+    /// List all triggers for a table
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo>;
+
+    /// Check if a view exists
+    fn has_view(&self, name: &str) -> bool;
 }
 
 /// In-memory storage implementation for testing and caching
 pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
+    triggers: HashMap<String, TriggerInfo>,
+    views: HashSet<String>,
 }
 
 impl MemoryStorage {
@@ -133,6 +175,8 @@ impl MemoryStorage {
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
+            triggers: HashMap::new(),
+            views: HashSet::new(),
         }
     }
 }
@@ -190,15 +234,15 @@ impl StorageEngine for MemoryStorage {
         self.table_infos
             .get(table)
             .cloned()
-            .ok_or_else(|| sqlrustgo_types::SqlError::TableNotFound(table.to_string()))
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
     fn has_table(&self, table: &str) -> bool {
-        self.tables.contains_key(table)
+        self.table_infos.contains_key(table)
     }
 
     fn list_tables(&self) -> Vec<String> {
-        self.tables.keys().cloned().collect()
+        self.table_infos.keys().cloned().collect()
     }
 
     fn create_index(&mut self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
@@ -212,20 +256,58 @@ impl StorageEngine for MemoryStorage {
     fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()> {
         if let Some(info) = self.table_infos.get_mut(table) {
             info.columns.push(column);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot add column: table {} not found",
+                table
+            )))
         }
-        Ok(())
     }
 
     fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()> {
-        if let Some(info) = self.table_infos.remove(table) {
+        let info = self.table_infos.remove(table);
+        let records = self.tables.remove(table);
+        if let (Some(info), Some(records)) = (info, records) {
             let mut new_info = info;
             new_info.name = new_name.to_string();
             self.table_infos.insert(new_name.to_string(), new_info);
-            if let Some(records) = self.tables.remove(table) {
-                self.tables.insert(new_name.to_string(), records);
-            }
+            self.tables.insert(new_name.to_string(), records);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot rename table: table {} not found",
+                table
+            )))
         }
+    }
+
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        self.triggers.insert(info.name.clone(), info);
         Ok(())
+    }
+
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        self.triggers
+            .remove(name)
+            .map(|_| ())
+            .ok_or_else(|| SqlError::ExecutionError(format!("Trigger not found: {}", name)))
+    }
+
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        self.triggers.get(name).cloned()
+    }
+
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        self.triggers
+            .values()
+            .filter(|t| t.table_name == table)
+            .cloned()
+            .collect()
+    }
+
+    fn has_view(&self, name: &str) -> bool {
+        self.views.contains(name)
     }
 }
 

@@ -4,7 +4,7 @@
 use crate::bplus_tree::BPlusTree;
 use crate::engine::{
     ColumnDefinition, ForeignKeyConstraint, Record, StorageEngine, TableData, TableInfo,
-    UniqueConstraint,
+    TriggerEvent, TriggerInfo, TriggerTiming, UniqueConstraint,
 };
 use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::collections::HashMap;
@@ -1057,5 +1057,30 @@ impl StorageEngine for FileStorage {
             }
         }
         Ok(())
+    }
+
+    fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
+        let _ = info;
+        Ok(())
+    }
+
+    fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
+        let _ = name;
+        Err(SqlError::ExecutionError("Triggers not supported in FileStorage".into()))
+    }
+
+    fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
+        let _ = name;
+        None
+    }
+
+    fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
+        let _ = table;
+        Vec::new()
+    }
+
+    fn has_view(&self, name: &str) -> bool {
+        let _ = name;
+        false
     }
 }
