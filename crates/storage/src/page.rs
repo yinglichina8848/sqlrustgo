@@ -496,4 +496,49 @@ mod tests {
         let restored = Page::from_bytes(bytes).unwrap();
         assert_eq!(restored.page_id(), 1);
     }
+
+    #[test]
+    fn test_page_multiple_rows() {
+        let mut page = Page::new_data(1, 200);
+        page.write_row(&vec![Value::Integer(1)]);
+        page.write_row(&vec![Value::Integer(2)]);
+        page.write_row(&vec![Value::Integer(3)]);
+
+        assert_eq!(page.row_count(), 3);
+
+        let rows = page.read_rows();
+        assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn test_page_free_space() {
+        let page = Page::new_data(1, 100);
+        assert!(page.free_space() >= 0);
+    }
+
+    #[test]
+    fn test_page_page_id() {
+        let page = Page::new(42);
+        assert_eq!(page.page_id(), 42);
+    }
+
+    #[test]
+    fn test_page_type() {
+        let page = Page::new(1);
+        assert_eq!(page.page_type(), PageType::Free);
+    }
+
+    #[test]
+    fn test_value_to_bytes_blob() {
+        let value = Value::Blob(vec![1, 2, 3]);
+        let bytes = value_to_bytes(&value);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_bytes_to_value_integer() {
+        let bytes = vec![0x01, 42, 0, 0, 0, 0, 0, 0, 0];
+        let result = bytes_to_value(&bytes);
+        assert_eq!(result, Some(Value::Integer(42)));
+    }
 }
