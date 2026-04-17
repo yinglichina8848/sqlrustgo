@@ -35,6 +35,7 @@ members = [
     "crates/unified-query",
     "crates/sql-corpus",
     "crates/types",
+    "crates/mysql-server",
 ]
 
 [workspace.package]
