@@ -11,9 +11,9 @@ pub use token::Token;
 
 pub use parser::parse;
 pub use parser::{
-    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, ColumnDefinition,
-    CommonTableExpression, CreateTableStatement, CreateProcedureStatement, CallStatement,
-    DeleteStatement, DropTableStatement, Expression,
-    ForeignKeyRef, InsertStatement, JoinClause, JoinType, SelectColumn, SelectStatement, Statement,
-    TableConstraint, UpdateStatement, WithClause, WithSelect,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
+    ColumnDefinition, CommonTableExpression, CreateProcedureStatement, CreateTableStatement,
+    DeleteStatement, DropTableStatement, Expression, ForeignKeyRef, InsertStatement, JoinClause,
+    JoinType, SelectColumn, SelectStatement, Statement, StoredProcParam, StoredProcParamMode,
+    StoredProcStatement, TableConstraint, UpdateStatement, WithClause, WithSelect,
 };

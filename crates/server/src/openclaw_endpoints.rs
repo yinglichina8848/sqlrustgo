@@ -2041,6 +2041,75 @@ fn execute_sql(
             })
         }
 
+        sqlrustgo_parser::Statement::Call(call) => {
+            let catalog = ctx.catalog.read();
+            match catalog.get_stored_procedure(&call.procedure_name) {
+                Some(proc) => {
+                    if proc.params.len() != call.args.len() {
+                        return Err(format!(
+                            "Procedure '{}' expects {} parameters but got {}",
+                            call.procedure_name,
+                            proc.params.len(),
+                            call.args.len()
+                        ));
+                    }
+                    Ok(SqlExecResult {
+                        columns: vec![],
+                        rows: vec![],
+                        affected_rows: 0,
+                    })
+                }
+                None => Err(format!("Procedure '{}' not found", call.procedure_name)),
+            }
+        }
+
+        sqlrustgo_parser::Statement::CreateProcedure(create) => {
+            let catalog = ctx.catalog.read();
+            let proc = sqlrustgo_catalog::stored_proc::StoredProcedure::new(
+                create.name.clone(),
+                create
+                    .params
+                    .iter()
+                    .map(|p| sqlrustgo_catalog::stored_proc::StoredProcParam {
+                        name: p.name.clone(),
+                        mode: match p.mode {
+                            sqlrustgo_parser::StoredProcParamMode::In => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::In
+                            }
+                            sqlrustgo_parser::StoredProcParamMode::Out => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::Out
+                            }
+                            sqlrustgo_parser::StoredProcParamMode::InOut => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::InOut
+                            }
+                        },
+                        data_type: p.data_type.clone(),
+                    })
+                    .collect(),
+                create
+                    .body
+                    .iter()
+                    .map(|s| match s {
+                        sqlrustgo_parser::StoredProcStatement::RawSql(sql) => {
+                            sqlrustgo_catalog::stored_proc::StoredProcStatement::RawSql(sql.clone())
+                        }
+                        _ => sqlrustgo_catalog::stored_proc::StoredProcStatement::RawSql(
+                            "UNSUPPORTED".to_string(),
+                        ),
+                    })
+                    .collect(),
+            );
+            let mut catalog = ctx.catalog.write();
+            catalog
+                .add_stored_procedure(proc)
+                .map_err(|e| e.to_string())?;
+            Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
         _ => Err("Unsupported statement type".to_string()),
     }
 }
