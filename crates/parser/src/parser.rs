@@ -32,6 +32,15 @@ pub enum Statement {
     AlterTable(AlterTableStatement),
     Call(CallStatement),
     CreateProcedure(CreateProcedureStatement),
+    Union(UnionStatement),
+}
+
+/// UNION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnionStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub union_all: bool,
 }
 
 /// CREATE INDEX statement
@@ -175,6 +184,17 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub group_by: Vec<Expression>,
     pub having: Option<Expression>,
+    pub order_by: Vec<OrderByExpression>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+    pub distinct: bool,
+}
+
+/// ORDER BY expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByExpression {
+    pub expression: Expression,
+    pub ascending: bool,
 }
 
 /// Column in SELECT
@@ -753,6 +773,10 @@ impl Parser {
             aggregates,
             group_by,
             having,
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+            distinct: false,
         })
     }
 
