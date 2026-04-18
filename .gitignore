@@ -18,3 +18,5 @@ Thumbs.db
 *.tbl
 data/tpch-sf01/
 data/tpch-sf01-generated/
+.worktrees/
+/worktrees/
