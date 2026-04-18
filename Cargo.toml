@@ -218,6 +218,10 @@ name = "parser_token_test"
 path = "tests/parser_token_test.rs"
 
 [[test]]
+name = "cbo_integration_test"
+path = "tests/cbo_integration_test.rs"
+
+[[test]]
 name = "page_io_benchmark_test"
 path = "tests/page_io_benchmark_test.rs"
 
