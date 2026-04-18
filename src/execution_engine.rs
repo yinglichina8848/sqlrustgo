@@ -4,10 +4,11 @@
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    CreateIndexStatement, CreateTableStatement, DropTableStatement, InsertStatement, SelectStatement,
+    AggregateCall, AggregateFunction, CreateIndexStatement, CreateTableStatement,
+    DropTableStatement, InsertStatement, SelectStatement,
 };
-use sqlrustgo_parser::{DeleteStatement, Statement, UpdateStatement};
-use sqlrustgo_storage::{MemoryStorage, StorageEngine};
+use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
+use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use std::sync::{Arc, RwLock};
 
 /// Execution engine for SQL statements
@@ -43,8 +44,136 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
-        let rows = storage.scan(&select.table)?;
-        Ok(ExecutorResult::new(rows, 0))
+
+        // Get table info
+        let table_info = storage.get_table_info(&select.table)?;
+
+        // Scan all rows
+        let mut rows = storage.scan(&select.table)?;
+
+        // Apply WHERE clause filter
+        if let Some(ref where_expr) = select.where_clause {
+            rows.retain(|row| evaluate_condition(where_expr, row, &table_info));
+        }
+
+        // Handle aggregate functions
+        if !select.aggregates.is_empty() {
+            // Group rows by GROUP BY expressions
+            let group_exprs = &select.group_by;
+            if group_exprs.is_empty() {
+                // No GROUP BY - compute aggregates over all filtered rows
+                let agg_values = self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
+                return Ok(ExecutorResult::new(vec![agg_values], 1));
+            } else {
+                // GROUP BY - group rows first
+                let mut groups: std::collections::HashMap<String, Vec<Vec<Value>>> =
+                    std::collections::HashMap::new();
+                for row in &rows {
+                    let key = group_exprs
+                        .iter()
+                        .map(|expr| evaluate_expr_to_string(expr, row, &table_info))
+                        .collect::<Vec<_>>()
+                        .join("\x00");
+                    groups.entry(key).or_default().push(row.clone());
+                }
+
+                let agg_result_rows: Vec<Vec<Value>> = groups
+                    .values()
+                    .map(|group_rows| {
+                        self.compute_aggregates(&select.aggregates, group_rows, &table_info)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let row_count = agg_result_rows.len();
+                return Ok(ExecutorResult::new(agg_result_rows, row_count));
+            }
+        }
+
+        let row_count = rows.len();
+        Ok(ExecutorResult::new(rows, row_count))
+    }
+
+    fn compute_aggregates(
+        &self,
+        aggregates: &[AggregateCall],
+        rows: &[Vec<Value>],
+        table_info: &TableInfo,
+    ) -> SqlResult<Vec<Value>> {
+        let mut results = Vec::with_capacity(aggregates.len());
+        for agg in aggregates {
+            let values: Vec<Value> = if let Some(arg) = agg.args.first() {
+                rows.iter()
+                    .map(|row| evaluate_expression(arg, row, table_info))
+                    .collect()
+            } else {
+                vec![Value::Integer(rows.len() as i64)]
+            };
+
+            let result = match agg.func {
+                AggregateFunction::Count => Value::Integer(values.len() as i64),
+                AggregateFunction::Sum => {
+                    let sum: i64 = values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .sum();
+                    Value::Integer(sum)
+                }
+                AggregateFunction::Avg => {
+                    let sum: i64 = values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .sum();
+                    let count = values
+                        .iter()
+                        .filter(|v| matches!(v, Value::Integer(_)))
+                        .count();
+                    if count > 0 {
+                        Value::Integer(sum / count as i64)
+                    } else {
+                        Value::Null
+                    }
+                }
+                AggregateFunction::Min => {
+                    let min = values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .min();
+                    min.map(Value::Integer).unwrap_or(Value::Null)
+                }
+                AggregateFunction::Max => {
+                    let max = values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .max();
+                    max.map(Value::Integer).unwrap_or(Value::Null)
+                }
+            };
+            results.push(result);
+        }
+        Ok(results)
     }
 
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
@@ -152,6 +281,168 @@ impl ExecutionEngine<MemoryStorage> {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
         }
     }
+}
+
+/// Evaluate a WHERE clause expression against a row
+fn evaluate_condition(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+    match expr {
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+            evaluate_condition(left, row, table_info) && evaluate_condition(right, row, table_info)
+        }
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+            evaluate_condition(left, row, table_info) || evaluate_condition(right, row, table_info)
+        }
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            if let Expression::Identifier(col_name) = left.as_ref() {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(row_val) = row.get(col_idx) {
+                        return matches!(row_val, Value::Null);
+                    }
+                }
+            }
+            false
+        }
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS NOT"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            if let Expression::Identifier(col_name) = left.as_ref() {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(row_val) = row.get(col_idx) {
+                        return !matches!(row_val, Value::Null);
+                    }
+                }
+            }
+            false
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression(left, row, table_info);
+            let right_val = evaluate_expression(right, row, table_info);
+            compare_bool(&left_val, &right_val, op)
+        }
+        _ => {
+            let val = evaluate_expression(expr, row, table_info);
+            val != Value::Null
+        }
+    }
+}
+
+/// Evaluate an expression and return a Value
+fn evaluate_expression(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Value {
+    match expr {
+        Expression::Literal(s) => {
+            let s = s.trim();
+            if s.eq_ignore_ascii_case("NULL") {
+                Value::Null
+            } else if let Ok(n) = s.parse::<i64>() {
+                Value::Integer(n)
+            } else if let Ok(f) = s.parse::<f64>() {
+                Value::Float(f)
+            } else if s.starts_with('\'') && s.ends_with('\'') {
+                Value::Text(s[1..s.len() - 1].to_string())
+            } else {
+                Value::Text(s.to_string())
+            }
+        }
+        Expression::Identifier(name) => {
+            if let Some(col_idx) = find_column_index(name, table_info) {
+                row.get(col_idx).cloned().unwrap_or(Value::Null)
+            } else {
+                Value::Text(name.clone())
+            }
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression(left, row, table_info);
+            let right_val = evaluate_expression(right, row, table_info);
+            eval_binary_op(&left_val, &right_val, op)
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Evaluate a binary operation and return a Value
+fn eval_binary_op(left: &Value, right: &Value, op: &str) -> Value {
+    match op.to_uppercase().as_str() {
+        "=" | "==" | "IS" => Value::Boolean(left == right),
+        "!=" | "<>" => Value::Boolean(left != right),
+        ">" => Value::Boolean(compare_values(left, right) > 0),
+        ">=" => Value::Boolean(compare_values(left, right) >= 0),
+        "<" => Value::Boolean(compare_values(left, right) < 0),
+        "<=" => Value::Boolean(compare_values(left, right) <= 0),
+        "AND" | "&&" => {
+            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                Value::Boolean(*l && *r)
+            } else {
+                Value::Boolean(false)
+            }
+        }
+        "OR" | "||" => {
+            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                Value::Boolean(*l || *r)
+            } else {
+                Value::Boolean(false)
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Compare two values and return -1, 0, or 1
+fn compare_values(left: &Value, right: &Value) -> i32 {
+    match (left, right) {
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r) as i32,
+        (Value::Float(l), Value::Float(r)) => {
+            if l < r {
+                -1
+            } else if l > r {
+                1
+            } else {
+                0
+            }
+        }
+        (Value::Text(l), Value::Text(r)) => l.cmp(r) as i32,
+        (Value::Null, Value::Null) => 0,
+        (Value::Null, _) => -1,
+        (_, Value::Null) => 1,
+        _ => 0,
+    }
+}
+
+/// Compare two values for boolean condition
+fn compare_bool(left: &Value, right: &Value, op: &str) -> bool {
+    match op.to_uppercase().as_str() {
+        "=" | "==" | "IS" => left == right,
+        "!=" | "<>" => left != right,
+        ">" => compare_values(left, right) > 0,
+        ">=" => compare_values(left, right) >= 0,
+        "<" => compare_values(left, right) < 0,
+        "<=" => compare_values(left, right) <= 0,
+        _ => false,
+    }
+}
+
+/// Evaluate expression to string (for GROUP BY key)
+fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableInfo) -> String {
+    let val = evaluate_expression(expr, row, table_info);
+    match val {
+        Value::Null => "NULL".to_string(),
+        Value::Integer(n) => n.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Text(s) => s,
+        Value::Boolean(b) => b.to_string(),
+        _ => "?".to_string(),
+    }
+}
+
+/// Find the index of a column in the table info
+fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
+    table_info
+        .columns
+        .iter()
+        .position(|c| c.name.eq_ignore_ascii_case(col_name))
 }
 
 /// Convert a parser Expression to a Value (simple literal evaluation)
