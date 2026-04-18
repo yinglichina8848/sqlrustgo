@@ -55,7 +55,7 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 
         // Apply WHERE clause filter
         if let Some(ref where_expr) = select.where_clause {
-            rows.retain(|row| evaluate_condition(where_expr, row, &table_info));
+            rows.retain(|row| evaluate_where_clause(where_expr, row, &table_info));
         }
 
         // Handle aggregate functions
@@ -104,7 +104,7 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         for agg in aggregates {
             let values: Vec<Value> = if let Some(arg) = agg.args.first() {
                 rows.iter()
-                    .map(|row| evaluate_expression(arg, row, table_info))
+                    .map(|row| evaluate_expression(arg, row, table_info).unwrap_or(Value::Null))
                     .collect()
             } else {
                 vec![Value::Integer(rows.len() as i64)]
@@ -218,8 +218,84 @@ impl<S: StorageEngine> ExecutionEngine<S> {
     }
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
-        let mut storage = self.storage.write().unwrap();
-        let count = storage.update(&update.table, &[], &[])?;
+        // If no WHERE clause, use the simple storage.update() path
+        if update.where_clause.is_none() {
+            let mut storage = self.storage.write().unwrap();
+            let count = storage.update(&update.table, &[], &[])?;
+            return Ok(ExecutorResult::new(vec![], count));
+        }
+
+        // Get table info and scan rows
+        let table_info = {
+            let storage = self.storage.read().unwrap();
+            storage.get_table_info(&update.table)?
+        };
+
+        let all_rows = {
+            let storage = self.storage.read().unwrap();
+            storage.scan(&update.table)?
+        };
+
+        let where_clause = update.where_clause.as_ref().unwrap();
+
+        // Filter rows that match the WHERE clause
+        let rows_to_update: Vec<Vec<Value>> = all_rows
+            .into_iter()
+            .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
+            .collect();
+
+        let count = rows_to_update.len();
+
+        if count == 0 {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+
+        // Build column index map for SET clauses
+        let set_col_indices: Vec<(usize, &Expression)> = update
+            .set_clauses
+            .iter()
+            .filter_map(|(col_name, expr)| {
+                find_column_index(col_name, &table_info).map(|idx| (idx, expr))
+            })
+            .collect();
+
+        // Apply SET expressions to each matching row
+        let updated_rows: Vec<Vec<Value>> = rows_to_update
+            .into_iter()
+            .map(|mut row| {
+                for &(col_idx, ref set_expr) in &set_col_indices {
+                    let new_val = evaluate_expression(set_expr, &row, &table_info)
+                        .unwrap_or(Value::Null);
+                    if col_idx < row.len() {
+                        row[col_idx] = new_val;
+                    }
+                }
+                row
+            })
+            .collect();
+
+        // Get rows to keep (non-matching rows)
+        let rows_to_keep: Vec<Vec<Value>> = {
+            let storage = self.storage.read().unwrap();
+            let all_rows = storage.scan(&update.table)?;
+            all_rows
+                .into_iter()
+                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .collect()
+        };
+
+        // Delete all rows and re-insert updated + kept rows
+        {
+            let mut storage = self.storage.write().unwrap();
+            storage.delete(&update.table, &[])?;
+            if !rows_to_keep.is_empty() {
+                storage.insert(&update.table, rows_to_keep)?;
+            }
+            if !updated_rows.is_empty() {
+                storage.insert(&update.table, updated_rows)?;
+            }
+        }
+
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -334,168 +410,6 @@ impl ExecutionEngine<MemoryStorage> {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
         }
     }
-}
-
-/// Evaluate a WHERE clause expression against a row
-fn evaluate_condition(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
-    match expr {
-        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            evaluate_condition(left, row, table_info) && evaluate_condition(right, row, table_info)
-        }
-        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            evaluate_condition(left, row, table_info) || evaluate_condition(right, row, table_info)
-        }
-        Expression::BinaryOp(left, op, right)
-            if op.to_uppercase() == "IS"
-                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
-        {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
-        }
-        Expression::BinaryOp(left, op, right)
-            if op.to_uppercase() == "IS NOT"
-                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
-        {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return !matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
-        }
-        Expression::BinaryOp(left, op, right) => {
-            let left_val = evaluate_expression(left, row, table_info);
-            let right_val = evaluate_expression(right, row, table_info);
-            compare_bool(&left_val, &right_val, op)
-        }
-        _ => {
-            let val = evaluate_expression(expr, row, table_info);
-            val != Value::Null
-        }
-    }
-}
-
-/// Evaluate an expression and return a Value
-fn evaluate_expression(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Value {
-    match expr {
-        Expression::Literal(s) => {
-            let s = s.trim();
-            if s.eq_ignore_ascii_case("NULL") {
-                Value::Null
-            } else if let Ok(n) = s.parse::<i64>() {
-                Value::Integer(n)
-            } else if let Ok(f) = s.parse::<f64>() {
-                Value::Float(f)
-            } else if s.starts_with('\'') && s.ends_with('\'') {
-                Value::Text(s[1..s.len() - 1].to_string())
-            } else {
-                Value::Text(s.to_string())
-            }
-        }
-        Expression::Identifier(name) => {
-            if let Some(col_idx) = find_column_index(name, table_info) {
-                row.get(col_idx).cloned().unwrap_or(Value::Null)
-            } else {
-                Value::Text(name.clone())
-            }
-        }
-        Expression::BinaryOp(left, op, right) => {
-            let left_val = evaluate_expression(left, row, table_info);
-            let right_val = evaluate_expression(right, row, table_info);
-            eval_binary_op(&left_val, &right_val, op)
-        }
-        _ => Value::Null,
-    }
-}
-
-/// Evaluate a binary operation and return a Value
-fn eval_binary_op(left: &Value, right: &Value, op: &str) -> Value {
-    match op.to_uppercase().as_str() {
-        "=" | "==" | "IS" => Value::Boolean(left == right),
-        "!=" | "<>" => Value::Boolean(left != right),
-        ">" => Value::Boolean(compare_values(left, right) > 0),
-        ">=" => Value::Boolean(compare_values(left, right) >= 0),
-        "<" => Value::Boolean(compare_values(left, right) < 0),
-        "<=" => Value::Boolean(compare_values(left, right) <= 0),
-        "AND" | "&&" => {
-            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
-                Value::Boolean(*l && *r)
-            } else {
-                Value::Boolean(false)
-            }
-        }
-        "OR" | "||" => {
-            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
-                Value::Boolean(*l || *r)
-            } else {
-                Value::Boolean(false)
-            }
-        }
-        _ => Value::Null,
-    }
-}
-
-/// Compare two values and return -1, 0, or 1
-fn compare_values(left: &Value, right: &Value) -> i32 {
-    match (left, right) {
-        (Value::Integer(l), Value::Integer(r)) => l.cmp(r) as i32,
-        (Value::Float(l), Value::Float(r)) => {
-            if l < r {
-                -1
-            } else if l > r {
-                1
-            } else {
-                0
-            }
-        }
-        (Value::Text(l), Value::Text(r)) => l.cmp(r) as i32,
-        (Value::Null, Value::Null) => 0,
-        (Value::Null, _) => -1,
-        (_, Value::Null) => 1,
-        _ => 0,
-    }
-}
-
-/// Compare two values for boolean condition
-fn compare_bool(left: &Value, right: &Value, op: &str) -> bool {
-    match op.to_uppercase().as_str() {
-        "=" | "==" | "IS" => left == right,
-        "!=" | "<>" => left != right,
-        ">" => compare_values(left, right) > 0,
-        ">=" => compare_values(left, right) >= 0,
-        "<" => compare_values(left, right) < 0,
-        "<=" => compare_values(left, right) <= 0,
-        _ => false,
-    }
-}
-
-/// Evaluate expression to string (for GROUP BY key)
-fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableInfo) -> String {
-    let val = evaluate_expression(expr, row, table_info);
-    match val {
-        Value::Null => "NULL".to_string(),
-        Value::Integer(n) => n.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Text(s) => s,
-        Value::Boolean(b) => b.to_string(),
-        _ => "?".to_string(),
-    }
-}
-
-/// Find the index of a column in the table info
-fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    table_info
-        .columns
-        .iter()
-        .position(|c| c.name.eq_ignore_ascii_case(col_name))
 }
 
 /// Convert a parser Expression to a Value (simple literal evaluation)
@@ -737,6 +651,19 @@ fn compare_values(left: &Value, right: &Value) -> i32 {
         (Value::Null, _) => -1,
         (_, Value::Null) => 1,
         _ => 0,
+    }
+}
+
+/// Evaluate expression to string (for GROUP BY key)
+fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableInfo) -> String {
+    let val = evaluate_expression(expr, row, table_info).unwrap_or(Value::Null);
+    match val {
+        Value::Null => "NULL".to_string(),
+        Value::Integer(n) => n.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Text(s) => s,
+        Value::Boolean(b) => b.to_string(),
+        _ => "?".to_string(),
     }
 }
 
