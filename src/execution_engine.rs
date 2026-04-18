@@ -81,6 +81,31 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         self.stats.clone()
     }
 
+    /// Estimate the number of rows returned by a query based on statistics
+    /// This is a building block for cost-based optimization
+    pub fn estimate_row_count(&self, table_name: &str) -> u64 {
+        let stats = self.stats.read().unwrap();
+        stats
+            .table_stats
+            .get(table_name)
+            .map(|s| s.row_count)
+            .unwrap_or(1000) // Default estimate
+    }
+
+    /// Estimate the selectivity of a predicate based on column statistics
+    /// Returns a value between 0.0 and 1.0 representing the fraction of rows that match
+    pub fn estimate_selectivity(&self, table_name: &str, column_name: &str) -> f64 {
+        let stats = self.stats.read().unwrap();
+        if let Some(table_stats) = stats.table_stats.get(table_name) {
+            if let Some(col_stats) = table_stats.column_stats.get(column_name) {
+                if col_stats.distinct_count > 0 {
+                    return 1.0 / col_stats.distinct_count as f64;
+                }
+            }
+        }
+        0.1 // Default: assume 10% selectivity
+    }
+
     /// Collect statistics for a table (ANALYZE)
     fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
         let storage = self.storage.read().unwrap();
@@ -1017,6 +1042,56 @@ mod tests {
 
         let exec_stats = ExecutionStats { table_stats: stats };
         assert_eq!(exec_stats.table_stats.get("users").unwrap().row_count, 100);
+    }
+
+    #[test]
+    fn test_estimate_row_count() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice')")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (2, 'Bob')")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (3, 'Charlie')")
+            .unwrap();
+
+        // Before ANALYZE, should return default estimate
+        assert_eq!(engine.estimate_row_count("users"), 1000);
+
+        // After ANALYZE, should return actual count
+        engine.execute("ANALYZE users").unwrap();
+        assert_eq!(engine.estimate_row_count("users"), 3);
+    }
+
+    #[test]
+    fn test_estimate_selectivity() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'User{}')", i, i))
+                .unwrap();
+        }
+
+        // Before ANALYZE, should return default selectivity
+        let selectivity = engine.estimate_selectivity("users", "id");
+        assert_eq!(selectivity, 0.1); // Default 10%
+
+        // After ANALYZE with distinct_count, should return better estimate
+        engine.execute("ANALYZE users").unwrap();
+        let selectivity = engine.estimate_selectivity("users", "id");
+        assert_eq!(selectivity, 0.01); // 1/100 distinct values
     }
 
     #[test]
