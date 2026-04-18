@@ -3,7 +3,23 @@
 //! Implements MySQL Wire Protocol (Server-side) to accept connections
 //! from standard MySQL clients (mysql CLI, connectors, etc.)
 
+#![allow(
+    clippy::unnecessary_cast,
+    clippy::identity_op,
+    clippy::needless_bool,
+    clippy::len_zero,
+    clippy::comparison_to_empty,
+    clippy::needless_range_loop,
+    clippy::explicit_counter_loop,
+    clippy::zero_prefixed_literal,
+    dead_code
+)]
+
+pub mod http_server;
+pub mod monitoring;
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use monitoring::{create_monitor, SharedMonitor};
 use sqlrustgo::{parse, Value};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::Statement;
@@ -597,6 +613,29 @@ fn is_select_query(sql: &str) -> bool {
     result
 }
 
+fn get_query_type(sql: &str) -> String {
+    let upper = sql.trim().to_uppercase();
+    if upper.starts_with("SELECT") {
+        "SELECT".to_string()
+    } else if upper.starts_with("INSERT") {
+        "INSERT".to_string()
+    } else if upper.starts_with("UPDATE") {
+        "UPDATE".to_string()
+    } else if upper.starts_with("DELETE") {
+        "DELETE".to_string()
+    } else if upper.starts_with("CREATE") {
+        "CREATE".to_string()
+    } else if upper.starts_with("DROP") {
+        "DROP".to_string()
+    } else if upper.starts_with("ALTER") {
+        "ALTER".to_string()
+    } else if upper.starts_with("SHOW") {
+        "SHOW".to_string()
+    } else {
+        "OTHER".to_string()
+    }
+}
+
 // ============================================================================
 // Connection Handler
 // ============================================================================
@@ -605,12 +644,14 @@ fn handle_connection(
     mut stream: TcpStream,
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
+    monitor: SharedMonitor,
 ) -> MySqlResult<()> {
     stream.set_nodelay(true)?;
     stream.set_read_timeout(Some(std::time::Duration::from_secs(60)))?;
     stream.set_write_timeout(Some(std::time::Duration::from_secs(60)))?;
 
     tracing::info!("MySQL connection from {}", addr);
+    monitor.record_connection_opened();
 
     let mut seq = 0u8;
 
@@ -672,6 +713,7 @@ fn handle_connection(
         match cmd {
             packet_type::COM_QUIT => {
                 tracing::info!("Client {} QUIT", addr);
+                monitor.record_connection_closed();
                 break;
             }
 
@@ -705,6 +747,8 @@ fn handle_connection(
                 }
 
                 let mut engine = ExecutionEngine::new(storage.clone());
+                let query_type = get_query_type(&query);
+                let start_time = std::time::Instant::now();
 
                 tracing::info!("is_select={}, query=[{}]", is_select_query(&query), query);
                 if is_select_query(&query) {
@@ -747,6 +791,10 @@ fn handle_connection(
                         }
                     }
                 }
+
+                let execution_time = start_time.elapsed().as_secs_f64();
+                monitor.record_query(&query, &query_type, execution_time, 0);
+
                 seq = seq.wrapping_add(1);
             }
 
@@ -770,6 +818,7 @@ fn handle_connection(
     }
 
     tracing::info!("Connection {} closed", addr);
+    monitor.record_connection_closed();
     Ok(())
 }
 
@@ -777,14 +826,19 @@ fn handle_connection(
 // Server
 // ============================================================================
 
-pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
+pub fn run_server(host: &str, port: u16, monitoring_port: Option<u16>) -> MySqlResult<()> {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr)?;
     tracing::info!("MySQL server listening on {}", addr);
 
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
+    let monitor = create_monitor();
 
-    // Initialize QMD tables via SQL
+    if let Some(mon_port) = monitoring_port {
+        let http_server = http_server::MonitoringServer::new(monitor.clone(), mon_port);
+        http_server.start();
+    }
+
     {
         let mut engine = ExecutionEngine::new(storage.clone());
         let ddl_stmts = [
@@ -819,8 +873,9 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
                     .peer_addr()
                     .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
                 let storage = storage.clone();
+                let monitor = monitor.clone();
                 thread::spawn(move || {
-                    if let Err(e) = handle_connection(stream, addr, storage) {
+                    if let Err(e) = handle_connection(stream, addr, storage, monitor) {
                         tracing::error!("Connection error: {}", e);
                     }
                 });
