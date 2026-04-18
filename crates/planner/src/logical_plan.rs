@@ -87,6 +87,29 @@ pub enum LogicalPlan {
     },
     /// Drop table
     DropTable { table_name: String, if_exists: bool },
+    /// Create trigger
+    CreateTrigger {
+        trigger_name: String,
+        table_name: String,
+        timing: TriggerTiming,
+        event: TriggerEvent,
+        body: String,
+    },
+}
+
+/// Trigger timing
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// Trigger event
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
 }
 
 impl LogicalPlan {
@@ -108,6 +131,7 @@ impl LogicalPlan {
             LogicalPlan::Update { .. } => Schema::empty(),
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
+            LogicalPlan::CreateTrigger { .. } => Schema::empty(),
         }
     }
 }
