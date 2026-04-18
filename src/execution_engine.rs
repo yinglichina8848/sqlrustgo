@@ -64,7 +64,8 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             let group_exprs = &select.group_by;
             if group_exprs.is_empty() {
                 // No GROUP BY - compute aggregates over all filtered rows
-                let mut agg_values = self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
+                let mut agg_values =
+                    self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
 
                 // Apply HAVING clause if present
                 if let Some(ref having_expr) = select.having {
@@ -96,7 +97,8 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 
                 // Apply HAVING clause if present (filters aggregated groups)
                 if let Some(ref having_expr) = select.having {
-                    agg_result_rows.retain(|row| evaluate_where_clause(having_expr, row, &table_info));
+                    agg_result_rows
+                        .retain(|row| evaluate_where_clause(having_expr, row, &table_info));
                 }
 
                 let row_count = agg_result_rows.len();
@@ -278,8 +280,8 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             .into_iter()
             .map(|mut row| {
                 for &(col_idx, ref set_expr) in &set_col_indices {
-                    let new_val = evaluate_expression(set_expr, &row, &table_info)
-                        .unwrap_or(Value::Null);
+                    let new_val =
+                        evaluate_expression(set_expr, &row, &table_info).unwrap_or(Value::Null);
                     if col_idx < row.len() {
                         row[col_idx] = new_val;
                     }
@@ -462,9 +464,14 @@ fn validate_foreign_keys(
             .iter()
             .filter_map(|col_name| {
                 let col_idx = if insert_columns.is_empty() {
-                    table_info.columns.iter().position(|c| c.name.eq_ignore_ascii_case(col_name))
+                    table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
                 } else {
-                    insert_columns.iter().position(|c| c.eq_ignore_ascii_case(col_name))
+                    insert_columns
+                        .iter()
+                        .position(|c| c.eq_ignore_ascii_case(col_name))
                 };
                 col_idx.and_then(|idx| row.get(idx).cloned())
             })

@@ -99,8 +99,7 @@ impl IvfpqIndex {
 
         self.clusters = centers
             .into_iter()
-            .enumerate()
-            .map(|(_, vector)| Cluster {
+            .map(|vector| Cluster {
                 center: vector,
                 vector_ids: Vec::new(),
                 codes: Vec::new(),

@@ -2,14 +2,14 @@
 
 pub mod oltp_delete;
 pub mod oltp_index_scan;
+pub mod oltp_insert;
 pub mod oltp_mixed;
 pub mod oltp_point_select;
+pub mod oltp_range_scan;
 pub mod oltp_read_only;
 pub mod oltp_read_write;
 pub mod oltp_update_index;
 pub mod oltp_update_non_index;
-pub mod oltp_insert;
-pub mod oltp_range_scan;
 pub mod oltp_write_only;
 
 use async_trait::async_trait;
@@ -194,7 +194,10 @@ mod tests {
         // Test SQL contains range scan
         let sql = workload.generate_sql(&mut rng);
         assert!(sql.contains("SELECT"), "Should contain SELECT");
-        assert!(sql.contains("BETWEEN"), "Should contain BETWEEN for range scan");
+        assert!(
+            sql.contains("BETWEEN"),
+            "Should contain BETWEEN for range scan"
+        );
 
         // Test transaction generation
         let tx = workload.generate_transaction(&mut rng);

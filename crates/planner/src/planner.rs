@@ -39,6 +39,7 @@ pub trait Planner {
 }
 
 /// Default planner implementation
+#[allow(dead_code)]
 pub struct DefaultPlanner {
     optimizer: DefaultOptimizer,
     storage: Option<Arc<RwLock<dyn StorageEngine>>>,
@@ -64,6 +65,7 @@ impl DefaultPlanner {
     }
 
     /// Returns true if storage is available for CBO index selection
+    #[allow(dead_code)]
     fn has_storage(&self) -> bool {
         self.storage.is_some()
     }

@@ -29,27 +29,25 @@ impl StorageAdapter {
         let table_name = self.extract_table_from_query(query);
 
         match table_name {
-            Some(table) => {
-                match self.storage.scan(&table) {
-                    Ok(records) => {
-                        let offset = plan.offset as usize;
-                        let limit = plan.top_k as usize;
-                        let sliced: Vec<Vec<Value>> = records
-                            .into_iter()
-                            .skip(offset)
-                            .take(limit)
-                            .map(|record| record.into_iter().map(sql_value_to_json).collect())
-                            .collect();
+            Some(table) => match self.storage.scan(&table) {
+                Ok(records) => {
+                    let offset = plan.offset as usize;
+                    let limit = plan.top_k as usize;
+                    let sliced: Vec<Vec<Value>> = records
+                        .into_iter()
+                        .skip(offset)
+                        .take(limit)
+                        .map(|record| record.into_iter().map(sql_value_to_json).collect())
+                        .collect();
 
-                        if sliced.is_empty() {
-                            QueryResult::Ok(vec![])
-                        } else {
-                            QueryResult::Ok(sliced)
-                        }
+                    if sliced.is_empty() {
+                        QueryResult::Ok(vec![])
+                    } else {
+                        QueryResult::Ok(sliced)
                     }
-                    Err(e) => QueryResult::Err(format!("Storage error: {}", e)),
                 }
-            }
+                Err(e) => QueryResult::Err(format!("Storage error: {}", e)),
+            },
             None => {
                 // If no table detected, try full scan
                 let tables = self.storage.list_tables();

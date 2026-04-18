@@ -1,11 +1,11 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkTime};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkTime, Criterion};
 use sqlrustgo_distributed::{
     consensus::ShardReplicaManager,
-    failover_manager::{FailoverConfig, FailoverManager, ClusterHealth},
+    failover_manager::{ClusterHealth, FailoverConfig, FailoverManager},
     replica_sync::{ReplicaSynchronizer, SyncConfig},
-    shard_manager::{ShardId, ShardManager, ShardInfo},
+    shard_manager::{ShardId, ShardInfo, ShardManager},
     shard_router::ShardRouter,
-    CrossShardQueryExecutor, ClientPool,
+    ClientPool, CrossShardQueryExecutor,
 };
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -49,14 +49,16 @@ fn criterion_benchmark(c: &mut Criterion) {
             let replica_manager = Arc::new(tokio::sync::RwLock::new(ShardReplicaManager::new(1)));
             let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
 
-            b.to_async(&rt).iter(|| async {
-                manager.get_cluster_health().await
-            });
+            b.to_async(&rt)
+                .iter(|| async { manager.get_cluster_health().await });
         });
 
     c.benchmark_group("replica_sync")
         .bench_function("sync_progress_tracking", |b| {
-            let router = Arc::new(tokio::sync::RwLock::new(ShardRouter::new(ShardManager::new(), 1)));
+            let router = Arc::new(tokio::sync::RwLock::new(ShardRouter::new(
+                ShardManager::new(),
+                1,
+            )));
             let mut sync = ReplicaSynchronizer::new(router);
 
             b.iter(|| {
@@ -67,9 +69,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.benchmark_group("sharding")
         .bench_function("label_based_partitioning", |b| {
-            use sqlrustgo_graph::sharded_graph::MultiShardGraphStore;
-            use sqlrustgo_graph::sharded_graph::GraphShardId;
             use sqlrustgo_graph::model::PropertyMap;
+            use sqlrustgo_graph::sharded_graph::GraphShardId;
+            use sqlrustgo_graph::sharded_graph::MultiShardGraphStore;
 
             let mut store = MultiShardGraphStore::new();
             store.register_label_sharding("User", GraphShardId(0));
@@ -105,9 +107,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 index.insert(i, &vector).unwrap();
             }
 
-            b.iter(|| {
-                black_box(index.search(&[0.5, 0.5], 10))
-            });
+            b.iter(|| black_box(index.search(&[0.5, 0.5], 10)));
         });
 }
 

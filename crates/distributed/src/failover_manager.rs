@@ -109,7 +109,8 @@ impl FailoverManager {
                 return Ok(());
             }
             if self.dead_nodes.contains(&primary) {
-                if let Some(new_primary) = replicas.iter().find(|&&n| !self.dead_nodes.contains(&n)) {
+                if let Some(new_primary) = replicas.iter().find(|&&n| !self.dead_nodes.contains(&n))
+                {
                     self.do_promote(shard_id, *new_primary).await?;
                 }
             }

@@ -89,10 +89,10 @@ impl crate::workload::Workload for OltpMixed {
     fn generate_sql(&self, rng: &mut SmallRng) -> String {
         let op = rng.gen_range(0..100);
         match op {
-            0..70 => self.generate_select(rng),   // 70%
-            70..90 => self.generate_update(rng),  // 20%
-            90..95 => self.generate_insert(rng),  // 5%
-            _ => self.generate_delete(rng),         // 5%
+            0..70 => self.generate_select(rng),  // 70%
+            70..90 => self.generate_update(rng), // 20%
+            90..95 => self.generate_insert(rng), // 5%
+            _ => self.generate_delete(rng),      // 5%
         }
     }
 

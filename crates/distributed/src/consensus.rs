@@ -118,11 +118,9 @@ impl ShardReplicaManager {
             .get_mut(&shard_id)
             .ok_or(DistributedError::ShardNotFound(shard_id))?;
 
-        if vote_granted {
-            if node.become_leader_on_votes(node.count_votes() + 1) {
-                self.shard_to_primary.insert(shard_id, self.node_id);
-                return Ok(true);
-            }
+        if vote_granted && node.become_leader_on_votes(node.count_votes() + 1) {
+            self.shard_to_primary.insert(shard_id, self.node_id);
+            return Ok(true);
         }
         Ok(false)
     }

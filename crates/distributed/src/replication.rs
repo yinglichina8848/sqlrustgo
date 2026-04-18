@@ -7,7 +7,6 @@
 //!
 //! For full MySQL 5.7 replication, this is a foundation.
 
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::RwLock as AsyncRwLock;
 
@@ -96,9 +95,12 @@ impl BinlogManager {
             return Err("Binlog is disabled".to_string());
         }
 
-        let mut pos = self.current_pos.write().unwrap();
-        let new_pos = *pos + 1;
-        *pos = new_pos;
+        let new_pos = {
+            let mut pos = self.current_pos.write().unwrap();
+            let new_pos = *pos + 1;
+            *pos = new_pos;
+            new_pos
+        };
 
         self.events.write().await.push(event);
         Ok(new_pos)
@@ -118,10 +120,10 @@ impl BinlogManager {
     pub async fn rotate(&self, new_file: String) -> Result<(), String> {
         let mut file = self.current_file.write().unwrap();
         *file = new_file;
-        
+
         let mut pos = self.current_pos.write().unwrap();
         *pos = 4;
-        
+
         Ok(())
     }
 
@@ -225,13 +227,13 @@ impl ReplicationState {
     /// Get master status (SHOW MASTER STATUS)
     pub fn get_master_status(&self) -> Option<MasterStatus> {
         let config = self.config.read().unwrap();
-        
+
         if config.role != ReplicationRole::Master {
             return None;
         }
 
         let binlog_status = self.binlog.get_status();
-        
+
         Some(MasterStatus {
             file: binlog_status.file,
             position: binlog_status.position,
@@ -244,7 +246,7 @@ impl ReplicationState {
     /// Get slave status (SHOW SLAVE STATUS)
     pub fn get_slave_status(&self) -> Option<SlaveStatus> {
         let config = self.config.read().unwrap();
-        
+
         if config.role != ReplicationRole::Slave {
             return None;
         }
@@ -293,7 +295,7 @@ mod tests {
     fn test_binlog_manager() {
         let manager = BinlogManager::new(1);
         assert!(manager.is_enabled());
-        
+
         let status = manager.get_status();
         assert_eq!(status.server_id, 1);
     }
@@ -302,7 +304,7 @@ mod tests {
     fn test_replication_state() {
         let state = ReplicationState::new();
         let config = state.config();
-        
+
         assert_eq!(config.server_id, 1);
         assert_eq!(config.role, ReplicationRole::Standalone);
     }
@@ -310,7 +312,7 @@ mod tests {
     #[tokio::test]
     async fn test_binlog_events() {
         let manager = BinlogManager::new(1);
-        
+
         let event = BinlogEvent {
             event_type: BinlogEventType::Query,
             server_id: 1,
@@ -321,7 +323,7 @@ mod tests {
             sql: Some("INSERT INTO users VALUES (1)".to_string()),
             affected_rows: 1,
         };
-        
+
         let pos = manager.write_event(event).await.unwrap();
         assert!(pos > 0);
     }

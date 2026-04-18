@@ -5,12 +5,12 @@
 //! Usage:
 //!   cargo run --example distributed_test_server -- --node-id 1 --listen-addr 127.0.0.1:50051 --peers 127.0.0.1:50052,127.0.0.1:50053
 
-use std::collections::HashMap;
 use sqlrustgo_distributed::{
     error::DistributedError,
     grpc_server::{start_server, GraphStorage, ShardServerConfig, VectorStorage},
     proto::distributed::SearchResult,
 };
+use std::collections::HashMap;
 
 // Simple in-memory vector storage for testing
 #[derive(Clone)]
@@ -50,7 +50,11 @@ impl VectorStorage for TestVectorStorage {
                 let dot = v.iter().zip(query.iter()).map(|(a, b)| a * b).sum::<f32>();
                 let norm_v = v.iter().map(|x| x * x).sum::<f32>().sqrt();
                 let norm_q = query.iter().map(|x| x * x).sum::<f32>().sqrt();
-                let similarity = if norm_v > 0.0 && norm_q > 0.0 { dot / (norm_v * norm_q) } else { 0.0 };
+                let similarity = if norm_v > 0.0 && norm_q > 0.0 {
+                    dot / (norm_v * norm_q)
+                } else {
+                    0.0
+                };
                 (*id, similarity, v.clone())
             })
             .collect();
@@ -130,7 +134,8 @@ impl GraphStorage for TestGraphStorage {
         if let Some(edges) = self.edges.get_mut(&from) {
             edges.push((edge_id, to, label.to_string()));
         } else {
-            self.edges.insert(from, vec![(edge_id, to, label.to_string())]);
+            self.edges
+                .insert(from, vec![(edge_id, to, label.to_string())]);
         }
         Ok(edge_id)
     }
@@ -170,7 +175,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if args[i] == "--help" || args[i] == "-h" {
             println!("Distributed Storage Test Server");
-            println!("Usage: {} --node-id N --listen-addr ADDR --peers PEERS", args[0]);
+            println!(
+                "Usage: {} --node-id N --listen-addr ADDR --peers PEERS",
+                args[0]
+            );
             println!("  --node-id N       Node ID (default: 1)");
             println!("  --listen-addr     Address to listen on (default: 127.0.0.1:50051)");
             println!("  --peers           Comma-separated list of peer addresses");
@@ -196,7 +204,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         listen_addr: listen_addr.clone(),
     };
 
-    println!("\n[Node {}] Starting gRPC server on {}...", node_id, listen_addr);
+    println!(
+        "\n[Node {}] Starting gRPC server on {}...",
+        node_id, listen_addr
+    );
 
     // Start the server
     start_server(config, vector_storage, graph_storage)
