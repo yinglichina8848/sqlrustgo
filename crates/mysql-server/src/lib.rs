@@ -606,10 +606,10 @@ fn handle_connection(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
 ) -> MySqlResult<()> {
-    use std::net::TcpStreamExt;
+    use std::net::TcpStream;
     stream.set_nodelay(true)?;
-    stream.set_read_timeout(Some(std::time::Duration::from_secs(60))?;
-    stream.set_write_timeout(Some(std::time::Duration::from_secs(60))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(60)))?;
+    stream.set_write_timeout(Some(std::time::Duration::from_secs(60)))?;
 
     tracing::info!("MySQL connection from {}", addr);
 

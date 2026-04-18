@@ -347,7 +347,7 @@ impl Parser {
             name: index_name,
             table: table_name,
             columns,
-            unique: false,
+            unique,
         }))
     }
 
