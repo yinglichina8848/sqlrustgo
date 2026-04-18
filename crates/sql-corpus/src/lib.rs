@@ -88,10 +88,58 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(rows, count))
             }
             Statement::Delete(delete) => {
-                let count = self
+                // If no WHERE clause, delete all rows
+                if delete.where_clause.is_none() {
+                    let count = self
+                        .storage
+                        .delete(&delete.table, &[])
+                        .map_err(|e| format!("Delete error: {:?}", e))?;
+                    return Ok(ExecutorResult::new(vec![], count));
+                }
+
+                // Get table info to find column indices
+                let table_info = self
                     .storage
+                    .get_table_info(&delete.table)
+                    .map_err(|e| format!("Get table info error: {:?}", e))?;
+
+                // Scan all rows
+                let all_rows = self
+                    .storage
+                    .scan(&delete.table)
+                    .map_err(|e| format!("Scan error: {:?}", e))?;
+
+                // Filter rows based on WHERE clause
+                let where_clause = delete.where_clause.as_ref().unwrap();
+                let rows_to_delete: Vec<Vec<Value>> = all_rows
+                    .clone()
+                    .into_iter()
+                    .filter(|row| self.evaluate_where(where_clause, row, &table_info))
+                    .collect();
+
+                let count = rows_to_delete.len();
+
+                if count == 0 {
+                    return Ok(ExecutorResult::new(vec![], 0));
+                }
+
+                // Keep rows that don't match the WHERE clause
+                let rows_to_keep: Vec<Vec<Value>> = all_rows
+                    .into_iter()
+                    .filter(|row| !self.evaluate_where(where_clause, row, &table_info))
+                    .collect();
+
+                // Delete all rows and re-insert non-matching ones
+                self.storage
                     .delete(&delete.table, &[])
                     .map_err(|e| format!("Delete error: {:?}", e))?;
+
+                if !rows_to_keep.is_empty() {
+                    self.storage
+                        .insert(&delete.table, rows_to_keep)
+                        .map_err(|e| format!("Insert error: {:?}", e))?;
+                }
+
                 Ok(ExecutorResult::new(vec![], count))
             }
             Statement::Update(update) => {
@@ -192,24 +240,177 @@ impl SimpleExecutor {
             .map_err(|e| format!("Scan error: {:?}", e))?;
 
         if let Some(ref where_clause) = select.where_clause {
+            let table_info = self
+                .storage
+                .get_table_info(&select.table)
+                .map_err(|e| format!("Get table info error: {:?}", e))?;
             rows = rows
                 .into_iter()
-                .filter(|row| self.evaluate_where(where_clause, row))
+                .filter(|row| self.evaluate_where(where_clause, row, &table_info))
                 .collect();
         }
 
         Ok(rows)
     }
 
-    fn evaluate_where(&self, expr: &Expression, _row: &[Value]) -> bool {
+    fn evaluate_where(&self, expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
         match expr {
-            Expression::BinaryOp(left, _, right) => {
-                let left_val = self.evaluate_expression(left).unwrap_or(Value::Null);
-                let right_val = self.evaluate_expression(right).unwrap_or(Value::Null);
-                left_val == right_val
+            // Handle AND conditions
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                self.evaluate_where(left, row, table_info)
+                    && self.evaluate_where(right, row, table_info)
+            }
+            // Handle OR conditions
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+                self.evaluate_where(left, row, table_info)
+                    || self.evaluate_where(right, row, table_info)
+            }
+            // Handle IS NULL
+            Expression::BinaryOp(left, op, right)
+                if op.to_uppercase() == "IS"
+                    && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+            {
+                if let Expression::Identifier(col_name) = left.as_ref() {
+                    if let Some(col_idx) = self.find_column_index(col_name, table_info) {
+                        if let Some(row_val) = row.get(col_idx) {
+                            return matches!(row_val, Value::Null);
+                        }
+                    }
+                }
+                false
+            }
+            // Handle IS NOT NULL
+            Expression::BinaryOp(left, op, right)
+                if op.to_uppercase() == "IS NOT"
+                    && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+            {
+                if let Expression::Identifier(col_name) = left.as_ref() {
+                    if let Some(col_idx) = self.find_column_index(col_name, table_info) {
+                        if let Some(row_val) = row.get(col_idx) {
+                            return !matches!(row_val, Value::Null);
+                        }
+                    }
+                }
+                false
+            }
+            // Handle comparison operators
+            Expression::BinaryOp(left, op, right) => {
+                self.evaluate_binary_comparison(left, op, right, row, table_info)
             }
             _ => true,
         }
+    }
+
+    fn evaluate_binary_comparison(
+        &self,
+        left: &Expression,
+        op: &str,
+        right: &Expression,
+        row: &[Value],
+        table_info: &TableInfo,
+    ) -> bool {
+        let left_val = self.get_expression_value(left, row, table_info);
+        let right_val = self.get_expression_value(right, row, table_info);
+
+        match op.to_uppercase().as_str() {
+            "=" | "==" | "IS" => left_val == right_val,
+            "!=" | "<>" => left_val != right_val,
+            ">" => self.compare_values(&left_val, &right_val) > 0,
+            ">=" => self.compare_values(&left_val, &right_val) >= 0,
+            "<" => self.compare_values(&left_val, &right_val) < 0,
+            "<=" => self.compare_values(&left_val, &right_val) <= 0,
+            _ => false,
+        }
+    }
+
+    fn get_expression_value(
+        &self,
+        expr: &Expression,
+        row: &[Value],
+        table_info: &TableInfo,
+    ) -> Value {
+        match expr {
+            Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            Expression::Identifier(name) => {
+                if let Some(col_idx) = self.find_column_index(name, table_info) {
+                    row.get(col_idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expression::BinaryOp(left, op, right) => {
+                let left_val = self.get_expression_value(left, row, table_info);
+                let right_val = self.get_expression_value(right, row, table_info);
+                self.evaluate_binary_op_value(&left_val, &right_val, op)
+            }
+            _ => Value::Null,
+        }
+    }
+
+    fn evaluate_binary_op_value(&self, left: &Value, right: &Value, op: &str) -> Value {
+        match op.to_uppercase().as_str() {
+            "=" | "==" | "IS" => Value::Boolean(left == right),
+            "!=" | "<>" => Value::Boolean(left != right),
+            ">" => Value::Boolean(self.compare_values(left, right) > 0),
+            ">=" => Value::Boolean(self.compare_values(left, right) >= 0),
+            "<" => Value::Boolean(self.compare_values(left, right) < 0),
+            "<=" => Value::Boolean(self.compare_values(left, right) <= 0),
+            "AND" | "&&" => {
+                if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                    Value::Boolean(*l && *r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            "OR" | "||" => {
+                if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                    Value::Boolean(*l || *r)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            _ => Value::Null,
+        }
+    }
+
+    fn compare_values(&self, left: &Value, right: &Value) -> i32 {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l.cmp(r) as i32,
+            (Value::Float(l), Value::Float(r)) => {
+                if l < r {
+                    -1
+                } else if l > r {
+                    1
+                } else {
+                    0
+                }
+            }
+            (Value::Text(l), Value::Text(r)) => l.cmp(r) as i32,
+            (Value::Null, Value::Null) => 0,
+            (Value::Null, _) => -1,
+            (_, Value::Null) => 1,
+            _ => 0,
+        }
+    }
+
+    fn find_column_index(&self, col_name: &str, table_info: &TableInfo) -> Option<usize> {
+        table_info
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(col_name))
     }
 }
 

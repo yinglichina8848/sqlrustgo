@@ -130,6 +130,7 @@ impl ProductQuantizer {
     }
 
     /// Update centroids based on assignments
+    #[allow(unused_mut)]
     fn update_centroids(
         vectors: &[Vec<f32>],
         assignments: &[Vec<usize>],
@@ -139,7 +140,7 @@ impl ProductQuantizer {
         let mut new_centroids: Vec<Vec<f32>> = Vec::with_capacity(k);
         let mut converged = true;
 
-        for (c_idx, members) in assignments.iter().enumerate() {
+        for members in assignments.iter() {
             if members.is_empty() {
                 new_centroids.push(vec![0.0f32; sub_dim]);
                 continue;
@@ -192,11 +193,11 @@ impl ProductQuantizer {
 
     /// Decode PQ codes back to vector (approximation)
     pub fn decode(&self, code: &[u8]) -> Vec<f32> {
-        let sub_dim = self.dimension / self.m_pq;
+        let _sub_dim = self.dimension / self.m_pq;
         let mut vector = Vec::with_capacity(self.dimension);
 
-        for sub_idx in 0..self.m_pq {
-            let c_idx = code[sub_idx] as usize;
+        for (sub_idx, &c_idx) in code.iter().enumerate().take(self.m_pq) {
+            let c_idx = c_idx as usize;
             if let Some(centroid) = self.centroids.get(sub_idx).and_then(|c| c.get(c_idx)) {
                 vector.extend_from_slice(centroid);
             }

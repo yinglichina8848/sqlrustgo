@@ -25,9 +25,9 @@ impl CrossShardQueryExecutor {
             if let Some(client) = self.client_pool.get_client(*node_id).await {
                 let shard_id = *shard_id;
                 let query = query.to_vec();
-                futures.push(async move {
-                    client.search_vectors(shard_id, &query, top_k as u32).await
-                });
+                futures.push(
+                    async move { client.search_vectors(shard_id, &query, top_k as u32).await },
+                );
             }
         }
 
@@ -41,7 +41,11 @@ impl CrossShardQueryExecutor {
             }
         }
 
-        all_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        all_results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         all_results.truncate(top_k);
         all_results.dedup_by(|a, b| a.id == b.id);
 
@@ -60,22 +64,24 @@ impl CrossShardQueryExecutor {
             if let Some(client) = self.client_pool.get_client(*node_id).await {
                 let shard_id = *shard_id;
                 let query = query.to_vec();
-                futures.push(async move {
-                    client.search_vectors(shard_id, &query, top_k as u32).await
-                });
+                futures.push(
+                    async move { client.search_vectors(shard_id, &query, top_k as u32).await },
+                );
             }
         }
 
         let results = join_all(futures).await;
         let mut merged = Vec::new();
 
-        for result in results {
-            if let Ok(shard_results) = result {
-                merged.extend(shard_results);
-            }
+        for shard_results in results.into_iter().flatten() {
+            merged.extend(shard_results);
         }
 
-        merged.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        merged.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         merged.truncate(top_k);
 
         Ok(merged)
@@ -134,7 +140,9 @@ impl QueryRouter {
             .get_active_shards()
             .iter()
             .filter_map(|shard| {
-                shard.primary_node().map(|node_id| (node_id, shard.shard_id))
+                shard
+                    .primary_node()
+                    .map(|node_id| (node_id, shard.shard_id))
             })
             .collect()
     }

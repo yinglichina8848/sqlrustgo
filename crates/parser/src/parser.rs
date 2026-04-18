@@ -26,6 +26,7 @@ pub enum Statement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
+    CreateTrigger(CreateTriggerStatement),
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
@@ -39,6 +40,17 @@ pub struct CreateIndexStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub unique: bool,
+}
+
+/// CREATE TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTriggerStatement {
+    pub name: String,
+    pub timing: String,      // BEFORE, AFTER, INSTEAD OF
+    pub events: Vec<String>, // INSERT, UPDATE, DELETE
+    pub table: String,
+    pub for_each_row: bool,
+    pub body: String,
 }
 
 /// ALTER TABLE statement
@@ -136,6 +148,17 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub group_by: Vec<Expression>,
     pub having: Option<Expression>,
+    pub order_by: Vec<OrderByExpr>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+    pub distinct: bool,
+}
+
+/// ORDER BY expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByExpr {
+    pub expression: Expression,
+    pub ascending: bool,
 }
 
 /// Column in SELECT
@@ -317,9 +340,176 @@ impl Parser {
         match self.current() {
             Some(Token::Table) => self.parse_create_table(),
             Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
-            Some(t) => Err(format!("Expected TABLE or INDEX after CREATE, got {:?}", t)),
-            None => Err("Expected TABLE or INDEX after CREATE".to_string()),
+            Some(Token::Trigger) => self.parse_create_trigger(),
+            Some(t) => Err(format!(
+                "Expected TABLE, INDEX, or TRIGGER after CREATE, got {:?}",
+                t
+            )),
+            None => Err("Expected TABLE, INDEX, or TRIGGER after CREATE".to_string()),
         }
+    }
+
+    fn parse_create_trigger(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Trigger)?;
+
+        // Trigger name
+        let trigger_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected trigger name, got {:?}", t)),
+            None => return Err("Expected trigger name".to_string()),
+        };
+
+        // Timing: BEFORE or AFTER
+        let timing = match self.current() {
+            Some(Token::Before) => {
+                self.next();
+                "BEFORE".to_string()
+            }
+            Some(Token::After) => {
+                self.next();
+                "AFTER".to_string()
+            }
+            Some(Token::Instead) => {
+                self.next();
+                self.expect(Token::Of)?;
+                "INSTEAD OF".to_string()
+            }
+            Some(t) => {
+                return Err(format!(
+                    "Expected BEFORE, AFTER, or INSTEAD OF, got {:?}",
+                    t
+                ))
+            }
+            None => return Err("Expected BEFORE, AFTER, or INSTEAD OF".to_string()),
+        };
+
+        // Event: INSERT, UPDATE, DELETE
+        let events = self.parse_trigger_events()?;
+
+        // ON table_name
+        self.expect(Token::On)?;
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+            None => return Err("Expected table name".to_string()),
+        };
+
+        // FOR EACH ROW (optional)
+        let for_each_row = if matches!(self.current(), Some(Token::For)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Each)) {
+                self.next();
+                self.expect(Token::Row)?;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // BEGIN ... END block
+        let body = self.parse_trigger_body()?;
+
+        Ok(Statement::CreateTrigger(CreateTriggerStatement {
+            name: trigger_name,
+            timing,
+            events,
+            table: table_name,
+            for_each_row,
+            body,
+        }))
+    }
+
+    fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
+        let mut events = Vec::new();
+
+        loop {
+            match self.current() {
+                Some(Token::Insert) => {
+                    self.next();
+                    events.push("INSERT".to_string());
+                }
+                Some(Token::Update) => {
+                    self.next();
+                    // Check for OF column1, column2
+                    if matches!(self.current(), Some(Token::Of)) {
+                        self.next();
+                        // Parse column list (simplified)
+                        while matches!(self.current(), Some(Token::Identifier(_))) {
+                            self.next();
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            }
+                        }
+                    }
+                    events.push("UPDATE".to_string());
+                }
+                Some(Token::Delete) => {
+                    self.next();
+                    events.push("DELETE".to_string());
+                }
+                Some(Token::Identifier(_)) => {
+                    // Could be column name in UPDATE OF col1, col2
+                    break;
+                }
+                _ => break,
+            }
+
+            // Check for OR (INSERT OR UPDATE)
+            if matches!(self.current(), Some(Token::Or)) {
+                self.next();
+                // Continue to next event
+            } else {
+                break;
+            }
+        }
+
+        if events.is_empty() {
+            Err("Expected at least one trigger event (INSERT, UPDATE, DELETE)".to_string())
+        } else {
+            Ok(events)
+        }
+    }
+
+    fn parse_trigger_body(&mut self) -> Result<String, String> {
+        // Check for BEGIN
+        if !matches!(self.current(), Some(Token::Begin)) {
+            return Err("Expected BEGIN for trigger body".to_string());
+        }
+
+        // Simple implementation: return the SQL between BEGIN and END
+        // In production, this would parse the actual statements
+        let mut body = "BEGIN ".to_string();
+        self.next(); // consume BEGIN
+
+        // Consume until END
+        let mut depth = 1;
+        while let Some(token) = self.current() {
+            match token {
+                Token::Begin => {
+                    depth += 1;
+                    body.push_str("BEGIN ");
+                    self.next();
+                }
+                Token::End => {
+                    depth -= 1;
+                    if depth == 0 {
+                        self.next(); // consume END
+                        body.push_str(" END");
+                        break;
+                    }
+                    body.push_str(" END");
+                    self.next();
+                }
+                _ => {
+                    body.push_str(&format!("{:?}", token));
+                    self.next();
+                }
+            }
+        }
+
+        Ok(body)
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
@@ -347,7 +537,7 @@ impl Parser {
             name: index_name,
             table: table_name,
             columns,
-            unique: false,
+            unique,
         }))
     }
 
@@ -425,6 +615,13 @@ impl Parser {
 
     fn parse_select_statement(&mut self) -> Result<SelectStatement, String> {
         self.expect(Token::Select)?;
+
+        // Parse DISTINCT keyword
+        let mut distinct = false;
+        if matches!(self.current(), Some(Token::Distinct)) {
+            distinct = true;
+            self.next();
+        }
 
         let mut columns = Vec::new();
         let mut aggregates = Vec::new();
@@ -618,6 +815,68 @@ impl Parser {
             None
         };
 
+        // Parse ORDER BY clause
+        let order_by = if matches!(self.current(), Some(Token::Order)) {
+            self.next();
+            self.expect(Token::By)?;
+            let mut exprs = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+                let ascending = match self.current() {
+                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("ASC") => {
+                        self.next();
+                        true
+                    }
+                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("DESC") => {
+                        self.next();
+                        false
+                    }
+                    _ => true, // default ascending
+                };
+                exprs.push(OrderByExpr {
+                    expression: expr,
+                    ascending,
+                });
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+            exprs
+        } else {
+            Vec::new()
+        };
+
+        // Parse LIMIT clause
+        let limit = if matches!(self.current(), Some(Token::Limit)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let v = n.parse::<u64>().unwrap_or(0);
+                    self.next();
+                    Some(v)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Parse OFFSET clause
+        let offset = if matches!(self.current(), Some(Token::Offset)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let v = n.parse::<u64>().unwrap_or(0);
+                    self.next();
+                    Some(v)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         Ok(SelectStatement {
             columns,
             table,
@@ -626,6 +885,10 @@ impl Parser {
             aggregates,
             group_by,
             having,
+            order_by,
+            limit,
+            offset,
+            distinct,
         })
     }
 
@@ -651,11 +914,31 @@ impl Parser {
             }
             Some(Token::Left) => {
                 self.next();
-                JoinType::Left
+                // Check for FULL OUTER JOIN
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                    JoinType::Full
+                } else {
+                    JoinType::Left
+                }
             }
             Some(Token::Right) => {
                 self.next();
-                JoinType::Right
+                // Check for RIGHT OUTER JOIN
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                    JoinType::Full
+                } else {
+                    JoinType::Right
+                }
+            }
+            Some(Token::Full) => {
+                self.next();
+                // Consume optional OUTER keyword
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                }
+                JoinType::Full
             }
             Some(Token::Cross) => {
                 self.next();

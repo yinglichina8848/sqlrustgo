@@ -81,7 +81,7 @@ impl ShardedVectorIndex {
 
     pub fn with_shard_indices(
         num_shards: usize,
-        metric: DistanceMetric,
+        _metric: DistanceMetric,
         build_shard: impl Fn(usize) -> Box<dyn VectorIndex>,
     ) -> Self {
         let partitioner = HashPartitioner::new(num_shards as u64);

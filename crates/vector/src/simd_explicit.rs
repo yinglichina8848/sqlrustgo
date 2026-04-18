@@ -6,7 +6,7 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", test))]
 use std::arch::aarch64::*;
 
 /// SIMD vector size for f32 (AVX2 = 8, AVX-512 = 16)

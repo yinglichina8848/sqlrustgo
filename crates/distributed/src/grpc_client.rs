@@ -2,19 +2,20 @@
 //!
 //! Provides client for cross-node vector and graph operations.
 
+#![allow(dead_code)]
+
 use crate::error::DistributedError;
 use crate::proto::distributed::{
-    shard_service_client::ShardServiceClient,
-    CreateEdgeRequest, CreateEdgeResponse, CreateNodeRequest, CreateNodeResponse,
-    DeleteNodeRequest, DeleteNodeResponse, DeleteVectorRequest, DeleteVectorResponse,
-    GetEdgesRequest, GetEdgesResponse, GetNodeRequest, GetNodeResponse, InsertVectorRequest,
-    InsertVectorResponse, PropertyMap, SearchResult, SearchVectorsRequest,
-    SearchVectorsResponse, VectorRecord,
+    shard_service_client::ShardServiceClient, CreateEdgeRequest, CreateEdgeResponse,
+    CreateNodeRequest, CreateNodeResponse, DeleteNodeRequest, DeleteNodeResponse,
+    DeleteVectorRequest, DeleteVectorResponse, GetEdgesRequest, GetEdgesResponse, GetNodeRequest,
+    GetNodeResponse, InsertVectorRequest, InsertVectorResponse, PropertyMap, SearchResult,
+    SearchVectorsRequest, SearchVectorsResponse, VectorRecord,
 };
 use std::collections::HashMap;
-use tonic::transport::{Channel, Endpoint};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tonic::transport::{Channel, Endpoint};
 
 pub type NodeId = u64;
 pub type ShardId = u64;
@@ -181,9 +182,7 @@ impl ShardClient {
         } = response.into_inner();
 
         if found {
-            let props = properties
-                .map(|p| p.properties)
-                .unwrap_or_default();
+            let props = properties.map(|p| p.properties).unwrap_or_default();
             Ok(Some((label, props)))
         } else {
             Ok(None)
@@ -289,11 +288,7 @@ impl ClientPool {
         }
     }
 
-    pub async fn add_client(
-        &self,
-        node_id: NodeId,
-        addr: &str,
-    ) -> Result<(), DistributedError> {
+    pub async fn add_client(&self, node_id: NodeId, addr: &str) -> Result<(), DistributedError> {
         let client = ShardClient::connect(addr, node_id).await?;
         let mut clients = self.clients.write().await;
         clients.insert(node_id, client);

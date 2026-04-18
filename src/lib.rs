@@ -3,6 +3,13 @@
 //! A Rust implementation of a SQL-92 compliant database system.
 //! This crate re-exports functionality from the modular crates/ workspace.
 
+#![allow(
+    unused_mut,
+    clippy::unused_enumerate_index,
+    clippy::needless_borrow,
+    renamed_and_removed_lints
+)]
+
 pub mod execution_engine;
 
 pub use sqlrustgo_executor::{Executor, ExecutorResult};

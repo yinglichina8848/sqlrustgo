@@ -2,10 +2,10 @@ use crate::error::DistributedError;
 use crate::proto::distributed::{
     shard_service_server::{ShardService, ShardServiceServer},
     CreateEdgeRequest, CreateEdgeResponse, CreateNodeRequest, CreateNodeResponse,
-    DeleteNodeRequest, DeleteNodeResponse, DeleteVectorRequest, DeleteVectorResponse,
-    EdgeInfo, GetEdgesRequest, GetEdgesResponse, GetNodeRequest, GetNodeResponse,
-    HealthCheckResponse, InsertVectorRequest, InsertVectorResponse, PropertyMap, SearchResult,
-    SearchVectorsRequest, SearchVectorsResponse,
+    DeleteNodeRequest, DeleteNodeResponse, DeleteVectorRequest, DeleteVectorResponse, EdgeInfo,
+    GetEdgesRequest, GetEdgesResponse, GetNodeRequest, GetNodeResponse, HealthCheckResponse,
+    InsertVectorRequest, InsertVectorResponse, PropertyMap, SearchResult, SearchVectorsRequest,
+    SearchVectorsResponse,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,16 +17,37 @@ pub type NodeId = u64;
 pub type ShardId = u64;
 
 pub trait VectorStorage: Send + Sync {
-    fn insert(&mut self, shard_id: ShardId, id: u64, vector: Vec<f32>) -> Result<(), DistributedError>;
-    fn search(&self, shard_id: ShardId, query: &[f32], top_k: usize) -> Result<Vec<SearchResult>, DistributedError>;
+    fn insert(
+        &mut self,
+        shard_id: ShardId,
+        id: u64,
+        vector: Vec<f32>,
+    ) -> Result<(), DistributedError>;
+    fn search(
+        &self,
+        shard_id: ShardId,
+        query: &[f32],
+        top_k: usize,
+    ) -> Result<Vec<SearchResult>, DistributedError>;
     fn delete(&mut self, shard_id: ShardId, id: u64) -> Result<(), DistributedError>;
 }
 
 pub trait GraphStorage: Send + Sync {
-    fn create_node(&mut self, shard_id: ShardId, label: &str, props: HashMap<String, String>) -> Result<u64, DistributedError>;
+    fn create_node(
+        &mut self,
+        shard_id: ShardId,
+        label: &str,
+        props: HashMap<String, String>,
+    ) -> Result<u64, DistributedError>;
     fn get_node(&self, node_id: u64) -> Option<(String, HashMap<String, String>)>;
     fn delete_node(&mut self, node_id: u64) -> Result<(), DistributedError>;
-    fn create_edge(&mut self, from: u64, to: u64, label: &str, props: HashMap<String, String>) -> Result<u64, DistributedError>;
+    fn create_edge(
+        &mut self,
+        from: u64,
+        to: u64,
+        label: &str,
+        props: HashMap<String, String>,
+    ) -> Result<u64, DistributedError>;
     fn get_edges(&self, node_id: u64) -> Vec<(u64, u64, u64, String)>;
 }
 

@@ -79,10 +79,7 @@ impl ReplicaSynchronizer {
         }
     }
 
-    pub fn with_config(
-        shard_router: Arc<RwLock<ShardRouter>>,
-        config: SyncConfig,
-    ) -> Self {
+    pub fn with_config(shard_router: Arc<RwLock<ShardRouter>>, config: SyncConfig) -> Self {
         Self {
             config,
             shard_router,

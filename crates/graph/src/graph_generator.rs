@@ -28,7 +28,7 @@ impl GraphGenerator {
         }
 
         let initial_nodes = m + 1;
-        for i in 0..initial_nodes {
+        for _i in 0..initial_nodes {
             store.create_node("Node", PropertyMap::new());
         }
 
@@ -110,6 +110,7 @@ impl SimpleRng {
     }
 }
 
+#[allow(dead_code)]
 fn is_connected(store: &InMemoryGraphStore) -> bool {
     if store.node_count() == 0 {
         return true;

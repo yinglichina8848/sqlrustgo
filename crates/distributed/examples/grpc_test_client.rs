@@ -2,7 +2,7 @@
 
 use sqlrustgo_distributed::{
     grpc_client::{ClientPool, ShardClient},
-    ShardReplicaManager, ShardManager,
+    ShardManager, ShardReplicaManager,
 };
 
 #[tokio::main]
@@ -67,7 +67,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initial state: is_leader={}", replica_manager.is_leader(0));
 
     replica_manager.become_leader(0).unwrap();
-    println!("After become_leader: is_leader={}", replica_manager.is_leader(0));
+    println!(
+        "After become_leader: is_leader={}",
+        replica_manager.is_leader(0)
+    );
     println!("Primary: {:?}", replica_manager.get_primary(0));
 
     println!("\n=== Test 6: Shard Routing ===");
@@ -75,14 +78,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     shard_manager.initialize_table_shards("users", 4, &[1, 2, 3]);
 
     let key = sqlrustgo_distributed::partition::PartitionValue::Integer(7);
-    let shard_id = shard_manager.get_partition_key("users")
+    let shard_id = shard_manager
+        .get_partition_key("users")
         .unwrap()
         .partition(&key)
         .unwrap();
     println!("Key 7 partitions to shard {}", shard_id);
 
     let shard_info = shard_manager.get_shard(shard_id).unwrap();
-    println!("Shard {} primary: {:?}", shard_id, shard_info.primary_node());
+    println!(
+        "Shard {} primary: {:?}",
+        shard_id,
+        shard_info.primary_node()
+    );
     println!("Shard {} replicas: {:?}", shard_id, shard_info.replicas());
 
     println!("\n===========================================");

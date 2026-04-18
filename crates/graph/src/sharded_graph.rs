@@ -86,9 +86,7 @@ impl MultiShardGraphStore {
     }
 
     pub fn create_shard(&mut self, shard_id: GraphShardId) {
-        if !self.shards.contains_key(&shard_id) {
-            self.shards.insert(shard_id, GraphShard::new());
-        }
+        self.shards.entry(shard_id).or_insert_with(GraphShard::new);
     }
 
     pub fn register_label_sharding(&mut self, label: &str, shard_id: GraphShardId) {
