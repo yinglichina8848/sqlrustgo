@@ -158,13 +158,11 @@ mod packet_type {
 
 mod capability {
     pub const PROTOCOL_41: u32 = 1 << 9;
-    pub const TRANSACTIONS: u32 = 1 << 13;
-    pub const SECURE_CONNECTION: u32 = 1 << 27;
-    pub const MULTI_STATEMENTS: u32 = 1 << 16;
-    pub const MULTI_RESULTS: u32 = 1 << 17;
-    pub const PLUGIN_AUTH: u32 = 1 << 19;
     pub const LONG_PASSWORD: u32 = 1 << 1;
     pub const LONG_FLAG: u32 = 1 << 3;
+    pub const TRANSACTIONS: u32 = 1 << 13;
+    pub const MULTI_STATEMENTS: u32 = 1 << 16;
+    pub const MULTI_RESULTS: u32 = 1 << 17;
     pub const INTERACTIVE: u32 = 1 << 15;
     pub const LOCAL_FILES: u32 = 1 << 21;
     pub const IGNORE_SPACE: u32 = 1 << 22;
@@ -178,8 +176,6 @@ mod capability {
         | TRANSACTIONS
         | MULTI_STATEMENTS
         | MULTI_RESULTS
-        | SECURE_CONNECTION
-        | PLUGIN_AUTH
         | INTERACTIVE
         | LOCAL_FILES
         | IGNORE_SPACE
@@ -308,22 +304,23 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     p.push(0x0a);
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
+
     p.write_u32::<LittleEndian>(1).unwrap();
+
     p.extend_from_slice(seed);
     p.push(0x00);
 
-    let cap_lower = (capability::DEFAULT & 0xFFFF) as u16;
-    p.write_u16::<LittleEndian>(cap_lower).unwrap();
+    p.write_u16::<LittleEndian>(capability::DEFAULT as u16)
+        .unwrap();
 
-    p.push(0x2c);
+    p.push(45);
 
     p.write_u16::<LittleEndian>(0x0002).unwrap();
 
-    let cap_upper = ((capability::DEFAULT >> 16) & 0xFFFF) as u16;
-    p.write_u16::<LittleEndian>(cap_upper).unwrap();
-
-    p.push(0x00);
     p.extend_from_slice(&[0u8; 10]);
+
+    p.write_u16::<LittleEndian>(((capability::DEFAULT >> 16) & 0xFFFF) as u16)
+        .unwrap();
 
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
@@ -767,10 +764,30 @@ fn handle_connection(
                     continue;
                 }
 
+                if query_upper == "COMMIT"
+                    || query_upper == "BEGIN"
+                    || query_upper == "START TRANSACTION"
+                {
+                    println!("[MYSQL-QUERY] Transaction command ignored (no-op)");
+                    make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
+                    continue;
+                }
+
+                // Preprocess CREATE TABLE IF NOT EXISTS to remove "IF NOT EXISTS"
+                let query_for_parse = if query_upper.contains("CREATE TABLE IF NOT EXISTS") {
+                    let processed = query
+                        .replace("IF NOT EXISTS", "")
+                        .replace("if not exists", "");
+                    println!("[MYSQL-QUERY] Preprocessed: [{}]", processed);
+                    processed
+                } else {
+                    query.clone()
+                };
+
                 let mut engine = ExecutionEngine::new(storage.clone());
 
-                if is_select_query(&query) {
-                    match execute_select(&query, &mut engine) {
+                if is_select_query(&query_for_parse) {
+                    match execute_select(&query_for_parse, &mut engine) {
                         Ok((columns, column_types, rows)) => {
                             send_result_set(&mut stream, &columns, &column_types, &rows, resp_seq)?;
                         }
@@ -785,7 +802,7 @@ fn handle_connection(
                         }
                     }
                 } else {
-                    match execute_write(&query, &mut engine) {
+                    match execute_write(&query_for_parse, &mut engine) {
                         Ok(affected) => {
                             make_ok_packet(resp_seq, affected as u64, 0).write_to(&mut stream)?;
                         }
