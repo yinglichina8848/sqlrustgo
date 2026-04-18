@@ -75,6 +75,8 @@ pub struct UnifiedCostModel {
     vector_dimension: u32,
     /// Graph size for cost estimation
     graph_size: u64,
+    /// Table statistics for cost estimation (table_name -> (row_count, page_count))
+    table_stats: std::collections::HashMap<String, (u64, u64)>,
 }
 
 impl UnifiedCostModel {
@@ -92,6 +94,7 @@ impl UnifiedCostModel {
             graph_cost_model,
             vector_dimension,
             graph_size,
+            table_stats: std::collections::HashMap::new(),
         }
     }
 
@@ -103,7 +106,30 @@ impl UnifiedCostModel {
             graph_cost_model: GraphCostModel::default_model(),
             vector_dimension,
             graph_size,
+            table_stats: std::collections::HashMap::new(),
         }
+    }
+
+    /// Update table statistics for cost estimation
+    /// This allows the cost model to use actual statistics instead of defaults
+    pub fn update_table_stats(&mut self, table_name: String, row_count: u64, page_count: u64) {
+        self.table_stats.insert(table_name, (row_count, page_count));
+    }
+
+    /// Get the default row count for a table if no stats available
+    fn get_row_count(&self, table_name: &str) -> u64 {
+        self.table_stats
+            .get(table_name)
+            .map(|(rows, _)| *rows)
+            .unwrap_or(1000) // Default estimate
+    }
+
+    /// Get the default page count for a table if no stats available
+    fn get_page_count(&self, table_name: &str) -> u64 {
+        self.table_stats
+            .get(table_name)
+            .map(|(_, pages)| *pages)
+            .unwrap_or(10) // Default estimate
     }
 
     /// Estimate cost for any UnifiedPlan
@@ -111,12 +137,12 @@ impl UnifiedCostModel {
         match plan {
             // Pure SQL operations - delegate to SimpleCostModel
             UnifiedPlan::TableScan {
-                table_name: _,
+                table_name,
                 projection: _,
             } => {
-                // Simplified: use row_count=1000, page_count=10
-                let row_count = 1000u64;
-                let page_count = 10u64;
+                // Use actual statistics if available, otherwise use defaults
+                let row_count = self.get_row_count(table_name);
+                let page_count = self.get_page_count(table_name);
                 self.sql_cost_model.seq_scan_cost(row_count, page_count)
             }
             UnifiedPlan::IndexScan { .. } => self.sql_cost_model.index_scan_cost(100, 1, 10),
@@ -366,5 +392,65 @@ mod tests {
         };
         let cost = model.estimate_cost(&plan);
         assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_update_table_stats() {
+        let mut model = UnifiedCostModel::default_model(128, 10000);
+        model.update_table_stats("users".to_string(), 10000, 100);
+        assert_eq!(model.get_row_count("users"), 10000);
+        assert_eq!(model.get_page_count("users"), 100);
+    }
+
+    #[test]
+    fn test_cost_with_updated_stats() {
+        let mut model = UnifiedCostModel::default_model(128, 10000);
+
+        // Default cost for users table
+        let default_cost = {
+            let plan = UnifiedPlan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            };
+            model.estimate_cost(&plan)
+        };
+
+        // Update stats to be much larger
+        model.update_table_stats("users".to_string(), 1_000_000, 10000);
+
+        // New cost should be higher
+        let new_cost = {
+            let plan = UnifiedPlan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            };
+            model.estimate_cost(&plan)
+        };
+
+        assert!(new_cost > default_cost);
+    }
+
+    #[test]
+    fn test_cost_model_with_statistics() {
+        let mut model = UnifiedCostModel::default_model(128, 10000);
+
+        // Update stats for multiple tables
+        model.update_table_stats("orders".to_string(), 50000, 500);
+        model.update_table_stats("customers".to_string(), 10000, 100);
+
+        let orders_plan = UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        };
+        let customers_plan = UnifiedPlan::TableScan {
+            table_name: "customers".to_string(),
+            projection: None,
+        };
+
+        let orders_cost = model.estimate_cost(&orders_plan);
+        let customers_cost = model.estimate_cost(&customers_plan);
+
+        // Orders table is larger, so should have higher cost
+        assert!(orders_cost > customers_cost);
     }
 }
