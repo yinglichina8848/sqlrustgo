@@ -44,15 +44,19 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                 // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
-                    _ => return Err(SqlError::ExecutionError(
-                        "UNION left side must be a SELECT".to_string(),
-                    )),
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "UNION left side must be a SELECT".to_string(),
+                        ))
+                    }
                 };
                 let right_select = match union_stmt.right.as_ref() {
                     Statement::Select(s) => s,
-                    _ => return Err(SqlError::ExecutionError(
-                        "UNION right side must be a SELECT".to_string(),
-                    )),
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "UNION right side must be a SELECT".to_string(),
+                        ))
+                    }
                 };
 
                 let mut left_result = self.execute_select(left_select)?;
@@ -361,8 +365,8 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             .into_iter()
             .map(|mut row| {
                 for &(col_idx, ref set_expr) in &set_col_indices {
-                    let new_val = evaluate_expression(set_expr, &row, &table_info)
-                        .unwrap_or(Value::Null);
+                    let new_val =
+                        evaluate_expression(set_expr, &row, &table_info).unwrap_or(Value::Null);
                     if col_idx < row.len() {
                         row[col_idx] = new_val;
                     }
@@ -769,7 +773,6 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
     }
 }
 
-<<<<<<< HEAD
 /// Compare two values for ORDER BY sorting. Returns -1, 0, or 1.
 fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
     use std::cmp::Ordering;
