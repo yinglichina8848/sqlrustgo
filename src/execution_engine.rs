@@ -6,8 +6,8 @@ use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     CreateIndexStatement, CreateTableStatement, DropTableStatement, InsertStatement, SelectStatement,
 };
-use sqlrustgo_parser::{DeleteStatement, Statement, UpdateStatement};
-use sqlrustgo_storage::{MemoryStorage, StorageEngine};
+use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
+use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use std::sync::{Arc, RwLock};
 
 /// Execution engine for SQL statements
@@ -37,7 +37,9 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(_) => Ok(ExecutorResult::empty()),
-            _ => Err(SqlError::ExecutionError("Unsupported statement type".to_string())),
+            _ => Err(SqlError::ExecutionError(
+                "Unsupported statement type".to_string(),
+            )),
         }
     }
 
@@ -93,13 +95,64 @@ impl<S: StorageEngine> ExecutionEngine<S> {
     }
 
     fn execute_delete(&self, delete: &DeleteStatement) -> SqlResult<ExecutorResult> {
-        let mut storage = self.storage.write().unwrap();
-        let count = storage.delete(&delete.table, &[])?;
+        // If no WHERE clause, delete all rows (current behavior is correct)
+        if delete.where_clause.is_none() {
+            let mut storage = self.storage.write().unwrap();
+            let count = storage.delete(&delete.table, &[])?;
+            return Ok(ExecutorResult::new(vec![], count));
+        }
+
+        // Scan all rows from the table
+        let all_rows = {
+            let storage = self.storage.read().unwrap();
+            storage.scan(&delete.table)?
+        };
+
+        // Get table info to find column indices
+        let table_info = {
+            let storage = self.storage.read().unwrap();
+            storage.get_table_info(&delete.table)?
+        };
+
+        // Filter rows based on WHERE clause
+        let where_clause = delete.where_clause.as_ref().unwrap();
+        let rows_to_delete: Vec<Vec<Value>> = all_rows
+            .into_iter()
+            .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
+            .collect();
+
+        let count = rows_to_delete.len();
+
+        if count == 0 {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+
+        // Delete all rows and re-insert non-matching ones
+        // Since storage.delete ignores filters, we need to:
+        // 1. Scan remaining rows (those that don't match WHERE)
+        // 2. Delete all
+        // 3. Re-insert the non-matching ones
+        let rows_to_keep: Vec<Vec<Value>> = {
+            let storage = self.storage.read().unwrap();
+            let all_rows = storage.scan(&delete.table)?;
+            all_rows
+                .into_iter()
+                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .collect()
+        };
+
+        {
+            let mut storage = self.storage.write().unwrap();
+            storage.delete(&delete.table, &[])?; // Delete all
+            if !rows_to_keep.is_empty() {
+                storage.insert(&delete.table, rows_to_keep)?;
+            }
+        }
+
         Ok(ExecutorResult::new(vec![], count))
     }
 
     fn execute_create_table(&self, create: &CreateTableStatement) -> SqlResult<ExecutorResult> {
-        use sqlrustgo_storage::{ColumnDefinition, TableInfo};
         let mut storage = self.storage.write().unwrap();
         let columns: Vec<ColumnDefinition> = create
             .columns
@@ -238,4 +291,168 @@ fn validate_foreign_keys(
         }
     }
     Ok(())
+}
+
+/// Evaluate a WHERE clause expression against a row
+/// Returns true if the row matches the WHERE condition
+fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+    match expr {
+        // Handle AND conditions
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+            evaluate_where_clause(left, row, table_info)
+                && evaluate_where_clause(right, row, table_info)
+        }
+        // Handle OR conditions
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+            evaluate_where_clause(left, row, table_info)
+                || evaluate_where_clause(right, row, table_info)
+        }
+        // Handle IS NULL
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            if let Expression::Identifier(col_name) = left.as_ref() {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(row_val) = row.get(col_idx) {
+                        return matches!(row_val, Value::Null);
+                    }
+                }
+            }
+            false
+        }
+        // Handle IS NOT NULL
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS NOT"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            if let Expression::Identifier(col_name) = left.as_ref() {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(row_val) = row.get(col_idx) {
+                        return !matches!(row_val, Value::Null);
+                    }
+                }
+            }
+            false
+        }
+        // Handle comparison operators (=, !=, >, <, >=, <=)
+        Expression::BinaryOp(left, op, right) => {
+            evaluate_binary_comparison(left, op, right, row, table_info)
+        }
+        // For other expressions, try to evaluate as a condition
+        _ => {
+            if let Ok(val) = evaluate_expression(expr, row, table_info) {
+                if let Value::Boolean(b) = val {
+                    b
+                } else {
+                    val != Value::Null
+                }
+            } else {
+                false
+            }
+        }
+    }
+}
+
+/// Evaluate a binary comparison expression
+fn evaluate_binary_comparison(
+    left: &Expression,
+    op: &str,
+    right: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+) -> bool {
+    let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+    let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+
+    match op.to_uppercase().as_str() {
+        "=" | "==" | "IS" => left_val == right_val,
+        "!=" | "<>" => left_val != right_val,
+        ">" => compare_values(&left_val, &right_val) > 0,
+        ">=" => compare_values(&left_val, &right_val) >= 0,
+        "<" => compare_values(&left_val, &right_val) < 0,
+        "<=" => compare_values(&left_val, &right_val) <= 0,
+        _ => false,
+    }
+}
+
+/// Evaluate an expression and return a Value
+fn evaluate_expression(
+    expr: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+) -> Result<Value, String> {
+    match expr {
+        Expression::Literal(_) => Ok(expression_to_value(expr)),
+        Expression::Identifier(name) => {
+            if let Some(col_idx) = find_column_index(name, table_info) {
+                Ok(row.get(col_idx).cloned().unwrap_or(Value::Null))
+            } else {
+                // If column not found, treat as literal value
+                Ok(expression_to_value(expr))
+            }
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+            Ok(evaluate_binary_op(&left_val, &right_val, op))
+        }
+        _ => Ok(Value::Null),
+    }
+}
+
+/// Evaluate a binary operation and return a boolean Value
+fn evaluate_binary_op(left: &Value, right: &Value, op: &str) -> Value {
+    match op.to_uppercase().as_str() {
+        "=" | "==" | "IS" => Value::Boolean(left == right),
+        "!=" | "<>" => Value::Boolean(left != right),
+        ">" => Value::Boolean(compare_values(left, right) > 0),
+        ">=" => Value::Boolean(compare_values(left, right) >= 0),
+        "<" => Value::Boolean(compare_values(left, right) < 0),
+        "<=" => Value::Boolean(compare_values(left, right) <= 0),
+        "AND" | "&&" => {
+            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                Value::Boolean(*l && *r)
+            } else {
+                Value::Boolean(false)
+            }
+        }
+        "OR" | "||" => {
+            if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
+                Value::Boolean(*l || *r)
+            } else {
+                Value::Boolean(false)
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Compare two values and return -1, 0, or 1
+fn compare_values(left: &Value, right: &Value) -> i32 {
+    match (left, right) {
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r) as i32,
+        (Value::Float(l), Value::Float(r)) => {
+            if l < r {
+                -1
+            } else if l > r {
+                1
+            } else {
+                0
+            }
+        }
+        (Value::Text(l), Value::Text(r)) => l.cmp(r) as i32,
+        (Value::Null, Value::Null) => 0,
+        (Value::Null, _) => -1,
+        (_, Value::Null) => 1,
+        _ => 0,
+    }
+}
+
+/// Find the index of a column in the table info
+fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
+    table_info
+        .columns
+        .iter()
+        .position(|c| c.name.eq_ignore_ascii_case(col_name))
 }
