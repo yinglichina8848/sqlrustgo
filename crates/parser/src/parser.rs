@@ -688,10 +688,23 @@ impl Parser {
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
                     let func = self.parse_aggregate_function()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => return Err("Expected alias name after AS".to_string()),
+                        }
+                    } else {
+                        None
+                    };
                     aggregates.push(func);
                     columns.push(SelectColumn {
                         name: format!("__agg_{}", aggregates.len()),
-                        alias: None,
+                        alias,
                         expression: None,
                     });
                 }
@@ -793,9 +806,22 @@ impl Parser {
                             });
                         }
                     } else {
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => return Err("Expected alias name after AS".to_string()),
+                            }
+                        } else {
+                            None
+                        };
                         columns.push(SelectColumn {
                             name,
-                            alias: None,
+                            alias,
                             expression: None,
                         });
                         if !consumed {
