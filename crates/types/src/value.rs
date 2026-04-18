@@ -80,7 +80,7 @@ impl Ord for Value {
         use std::cmp::Ordering;
         match (self, other) {
             (Value::Null, Value::Null) => Ordering::Equal,
-            (Value::Null, _) => Ordering::Greater, // NULL sorts last
+            (Value::Null, _) => Ordering::Greater,
             (_, Value::Null) => Ordering::Less,
             (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
             (Value::Integer(a), Value::Integer(b)) => a.cmp(b),

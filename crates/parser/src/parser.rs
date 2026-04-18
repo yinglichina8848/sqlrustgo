@@ -31,6 +31,7 @@ pub enum Statement {
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
+    Union(UnionStatement),
 }
 
 /// CREATE INDEX statement
@@ -58,6 +59,14 @@ pub struct CreateTriggerStatement {
 pub struct AlterTableStatement {
     pub table_name: String,
     pub operation: AlterTableOperation,
+}
+
+/// UNION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnionStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub union_all: bool, // true = UNION ALL (keep duplicates), false = UNION (dedup)
 }
 
 /// ALTER TABLE operation types
@@ -606,6 +615,21 @@ impl Parser {
         }
 
         let select = self.parse_select_statement()?;
+
+        // Check for UNION after SELECT
+        if matches!(self.current(), Some(Token::Union)) {
+            self.next(); // consume UNION
+            let union_all = matches!(self.current(), Some(Token::All));
+            if union_all {
+                self.next(); // consume ALL
+            }
+            let right = self.parse_select_statement()?;
+            return Ok(Statement::Union(UnionStatement {
+                left: Box::new(Statement::Select(select)),
+                right: Box::new(Statement::Select(right)),
+                union_all,
+            }));
+        }
 
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
@@ -2436,6 +2460,50 @@ mod tests {
     fn test_parse_is_not_null_expression() {
         let result = parse("SELECT * FROM t WHERE a IS NOT NULL");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_create_procedure() {
+        let sql = "CREATE PROCEDURE my_proc(param1 INT) BEGIN SELECT 1; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::CreateProcedure(proc) => {
+                assert_eq!(proc.name, "my_proc");
+                assert_eq!(proc.params.len(), 1);
+                assert_eq!(proc.params[0].name, "param1");
+                assert_eq!(proc.params[0].data_type, "INT");
+            }
+            _ => panic!("Expected CREATE PROCEDURE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_call_procedure() {
+        let sql = "CALL my_proc(1, 'hello')";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::Call(call) => {
+                assert_eq!(call.procedure_name, "my_proc");
+                assert_eq!(call.args.len(), 2);
+            }
+            _ => panic!("Expected CALL statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_procedure_no_params() {
+        let sql = "CREATE PROCEDURE simple_proc() BEGIN SELECT * FROM users; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::CreateProcedure(proc) => {
+                assert_eq!(proc.name, "simple_proc");
+                assert!(proc.params.is_empty());
+            }
+            _ => panic!("Expected CREATE PROCEDURE statement"),
+        }
     }
 }
 
