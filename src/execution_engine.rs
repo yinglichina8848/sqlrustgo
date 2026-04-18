@@ -107,6 +107,49 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         }
 
         let row_count = rows.len();
+
+        // Apply ORDER BY
+        if !select.order_by.is_empty() {
+            let order_exprs = &select.order_by;
+            rows.sort_by(|a, b| {
+                for expr in order_exprs {
+                    let a_val = evaluate_expression(&expr.expression, a, &table_info)
+                        .unwrap_or(Value::Null);
+                    let b_val = evaluate_expression(&expr.expression, b, &table_info)
+                        .unwrap_or(Value::Null);
+                    let cmp = compare_values_for_sort(&a_val, &b_val);
+                    let result = if expr.ascending { cmp } else { -cmp };
+                    if result != 0 {
+                        return if result < 0 {
+                            std::cmp::Ordering::Less
+                        } else {
+                            std::cmp::Ordering::Greater
+                        };
+                    }
+                }
+                std::cmp::Ordering::Equal
+            });
+        }
+
+        // Apply OFFSET
+        if let Some(offset_n) = select.offset {
+            let offset_n = offset_n as usize;
+            if offset_n < rows.len() {
+                rows = rows[offset_n..].to_vec();
+            } else {
+                rows.clear();
+            }
+        }
+
+        // Apply LIMIT
+        if let Some(limit_n) = select.limit {
+            let limit_n = limit_n as usize;
+            if limit_n < rows.len() {
+                rows.truncate(limit_n);
+            }
+        }
+
+        let row_count = rows.len();
         Ok(ExecutorResult::new(rows, row_count))
     }
 
@@ -685,6 +728,23 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
         Value::Text(s) => s,
         Value::Boolean(b) => b.to_string(),
         _ => "?".to_string(),
+    }
+}
+
+/// Compare two values for ORDER BY sorting. Returns -1, 0, or 1.
+fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
+    use std::cmp::Ordering;
+    match (a, b) {
+        (Value::Null, Value::Null) => 0,
+        (Value::Null, _) => 1,  // NULL sorts last (ascending)
+        (_, Value::Null) => -1,
+        (Value::Integer(a_i), Value::Integer(b_i)) => a_i.cmp(b_i) as i32,
+        (Value::Float(a_f), Value::Float(b_f)) => {
+            if a_f < b_f { -1 } else if a_f > b_f { 1 } else { 0 }
+        }
+        (Value::Text(a_s), Value::Text(b_s)) => a_s.cmp(b_s) as i32,
+        (Value::Boolean(a_b), Value::Boolean(b_b)) => a_b.cmp(b_b) as i32,
+        _ => 0,
     }
 }
 

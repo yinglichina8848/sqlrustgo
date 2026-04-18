@@ -148,6 +148,16 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub group_by: Vec<Expression>,
     pub having: Option<Expression>,
+    pub order_by: Vec<OrderByExpr>,   // NEW
+    pub limit: Option<u64>,            // NEW
+    pub offset: Option<u64>,           // NEW
+}
+
+/// ORDER BY expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByExpr {
+    pub expression: Expression,
+    pub ascending: bool,
 }
 
 /// Column in SELECT
@@ -797,6 +807,68 @@ impl Parser {
             None
         };
 
+        // Parse ORDER BY clause
+        let order_by = if matches!(self.current(), Some(Token::Order)) {
+            self.next();
+            self.expect(Token::By)?;
+            let mut exprs = Vec::new();
+            loop {
+                let expr = self.parse_expression()?;
+                let ascending = match self.current() {
+                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("ASC") => {
+                        self.next();
+                        true
+                    }
+                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("DESC") => {
+                        self.next();
+                        false
+                    }
+                    _ => true, // default ascending
+                };
+                exprs.push(OrderByExpr {
+                    expression: expr,
+                    ascending,
+                });
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next(); // consume comma
+            }
+            exprs
+        } else {
+            Vec::new()
+        };
+
+        // Parse LIMIT clause
+        let limit = if matches!(self.current(), Some(Token::Limit)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let v = n.parse::<u64>().unwrap_or(0);
+                    self.next();
+                    Some(v)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Parse OFFSET clause
+        let offset = if matches!(self.current(), Some(Token::Offset)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let v = n.parse::<u64>().unwrap_or(0);
+                    self.next();
+                    Some(v)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         Ok(SelectStatement {
             columns,
             table,
@@ -805,6 +877,9 @@ impl Parser {
             aggregates,
             group_by,
             having,
+            order_by,
+            limit,
+            offset,
         })
     }
 
