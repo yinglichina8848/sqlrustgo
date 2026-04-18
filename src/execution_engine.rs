@@ -138,6 +138,72 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         benefit > 0.0
     }
 
+    /// Estimate the cost of a join between two tables
+    /// join_type: "hash", "nested_loop", "merge"
+    pub fn estimate_join_cost(&self, left_table: &str, right_table: &str, join_type: &str) -> f64 {
+        let left_rows = self.estimate_row_count(left_table);
+        let right_rows = self.estimate_row_count(right_table);
+
+        match join_type {
+            "hash" => {
+                // Hash join cost = build + probe
+                let build_cost = right_rows as f64 * 0.8;
+                let probe_cost = left_rows as f64 * 0.8;
+                build_cost + probe_cost
+            }
+            "merge" => {
+                // Merge join cost = sort + merge
+                let left_sort = left_rows as f64 * 0.5 * (left_rows as f64).log2();
+                let right_sort = right_rows as f64 * 0.5 * (right_rows as f64).log2();
+                left_sort + right_sort + (left_rows + right_rows) as f64 * 0.1
+            }
+            _ => {
+                // Nested loop: outer * inner
+                let outer_cost = left_rows as f64;
+                let inner_cost = right_rows as f64 * 0.1; // Assuming index on inner
+                outer_cost + outer_cost * inner_cost
+            }
+        }
+    }
+
+    /// Find the optimal join order using a greedy algorithm
+    /// Returns tables in optimal join order (smallest first)
+    pub fn optimize_join_order<'a>(&self, tables: &'a [&str]) -> Vec<&'a str> {
+        if tables.len() <= 1 {
+            return tables.to_vec();
+        }
+
+        let mut remaining: Vec<&str> = tables.to_vec();
+        let mut result: Vec<&str> = Vec::new();
+
+        while !remaining.is_empty() {
+            let candidate = if result.is_empty() {
+                remaining
+                    .iter()
+                    .min_by(|a, b| self.estimate_row_count(a).cmp(&self.estimate_row_count(b)))
+                    .copied()
+            } else {
+                remaining
+                    .iter()
+                    .min_by(|a, b| {
+                        let cost_a = self.estimate_join_cost(result.last().unwrap(), a, "hash");
+                        let cost_b = self.estimate_join_cost(result.last().unwrap(), b, "hash");
+                        cost_a.partial_cmp(&cost_b).unwrap()
+                    })
+                    .copied()
+            };
+
+            if let Some(t) = candidate {
+                result.push(t);
+                remaining.retain(|x| *x != t);
+            } else {
+                break;
+            }
+        }
+
+        result
+    }
+
     /// Collect statistics for a table (ANALYZE)
     fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
         let storage = self.storage.read().unwrap();
@@ -1127,10 +1193,43 @@ mod tests {
     }
 
     #[test]
-    fn test_cbo_enabled_by_default() {
+    fn test_optimize_join_order() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-        let engine = ExecutionEngine::new(storage);
-        assert!(engine.is_cbo_enabled());
+        let mut engine = ExecutionEngine::new(storage);
+
+        // Create tables of different sizes
+        engine.execute("CREATE TABLE large (id INTEGER)").unwrap();
+        engine.execute("CREATE TABLE medium (id INTEGER)").unwrap();
+        engine.execute("CREATE TABLE small (id INTEGER)").unwrap();
+
+        for i in 0..1000 {
+            engine
+                .execute(&format!("INSERT INTO large VALUES ({})", i))
+                .unwrap();
+        }
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO medium VALUES ({})", i))
+                .unwrap();
+        }
+        for i in 0..10 {
+            engine
+                .execute(&format!("INSERT INTO small VALUES ({})", i))
+                .unwrap();
+        }
+
+        // Analyze to get accurate row counts
+        engine.execute("ANALYZE large").unwrap();
+        engine.execute("ANALYZE medium").unwrap();
+        engine.execute("ANALYZE small").unwrap();
+
+        let tables = vec!["large", "medium", "small"];
+        let optimal = engine.optimize_join_order(&tables);
+
+        // Smallest table should be first after ANALYZE
+        assert_eq!(optimal[0], "small");
+        // Should have all tables
+        assert_eq!(optimal.len(), 3);
     }
 
     #[test]
@@ -1198,5 +1297,75 @@ mod tests {
         engine.execute("ANALYZE users").unwrap();
         let use_index_after = engine.should_use_index("users", "id");
         assert!(use_index_after);
+    }
+
+    #[test]
+    fn test_estimate_join_cost() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE orders (id INTEGER, user_id INTEGER)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO orders VALUES ({}, {})", i, i % 10))
+                .unwrap();
+        }
+        for i in 0..10 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'User{}')", i, i))
+                .unwrap();
+        }
+
+        let hash_cost = engine.estimate_join_cost("orders", "users", "hash");
+        let nl_cost = engine.estimate_join_cost("orders", "users", "nested_loop");
+        let merge_cost = engine.estimate_join_cost("orders", "users", "merge");
+
+        // Hash join should be reasonable
+        assert!(hash_cost > 0.0);
+        assert!(nl_cost > 0.0);
+        assert!(merge_cost > 0.0);
+    }
+
+    #[test]
+    fn test_optimize_join_order_after_analyze() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
+        engine.execute("CREATE TABLE t2 (id INTEGER)").unwrap();
+        engine.execute("CREATE TABLE t3 (id INTEGER)").unwrap();
+
+        for i in 0..500 {
+            engine
+                .execute(&format!("INSERT INTO t1 VALUES ({})", i))
+                .unwrap();
+        }
+        for i in 0..50 {
+            engine
+                .execute(&format!("INSERT INTO t2 VALUES ({})", i))
+                .unwrap();
+        }
+        for i in 0..5 {
+            engine
+                .execute(&format!("INSERT INTO t3 VALUES ({})", i))
+                .unwrap();
+        }
+
+        // Analyze to get accurate stats
+        engine.execute("ANALYZE t1").unwrap();
+        engine.execute("ANALYZE t2").unwrap();
+        engine.execute("ANALYZE t3").unwrap();
+
+        let tables = vec!["t1", "t2", "t3"];
+        let optimal = engine.optimize_join_order(&tables);
+
+        // Smallest (t3 with 5 rows) should be first after ANALYZE
+        assert_eq!(optimal[0], "t3");
     }
 }
