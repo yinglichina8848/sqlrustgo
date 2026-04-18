@@ -120,6 +120,13 @@ pub enum Token {
     Procedure,
     End,
 
+    // Trigger keywords
+    Trigger,
+    Before,
+    After,
+    ForEach,
+    Each,
+
     // Data Types
     Integer,
     Text,
@@ -257,6 +264,11 @@ impl fmt::Display for Token {
             Token::Call => write!(f, "CALL"),
             Token::Procedure => write!(f, "PROCEDURE"),
             Token::End => write!(f, "END"),
+            Token::Trigger => write!(f, "TRIGGER"),
+            Token::Before => write!(f, "BEFORE"),
+            Token::After => write!(f, "AFTER"),
+            Token::ForEach => write!(f, "FOR EACH"),
+            Token::Each => write!(f, "EACH"),
             Token::Unbounded => write!(f, "UNBOUNDED"),
             Token::Preceding => write!(f, "PRECEDING"),
             Token::Following => write!(f, "FOLLOWING"),
