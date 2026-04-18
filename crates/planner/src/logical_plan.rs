@@ -87,6 +87,14 @@ pub enum LogicalPlan {
     },
     /// Drop table
     DropTable { table_name: String, if_exists: bool },
+    /// Create trigger
+    CreateTrigger {
+        trigger_name: String,
+        table_name: String,
+        timing: String,
+        events: Vec<String>,
+        body: String,
+    },
 }
 
 impl LogicalPlan {
@@ -108,6 +116,7 @@ impl LogicalPlan {
             LogicalPlan::Update { .. } => Schema::empty(),
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
+            LogicalPlan::CreateTrigger { .. } => Schema::empty(),
         }
     }
 }

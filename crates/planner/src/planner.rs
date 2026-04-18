@@ -179,7 +179,9 @@ impl DefaultPlanner {
                 // VALUES clause - create scan with no underlying table
                 Ok(Box::new(SeqScanExec::new(String::new(), schema.clone())))
             }
-            LogicalPlan::CreateTable { .. } | LogicalPlan::DropTable { .. } => {
+            LogicalPlan::CreateTable { .. }
+            | LogicalPlan::DropTable { .. }
+            | LogicalPlan::CreateTrigger { .. } => {
                 // DDL statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }

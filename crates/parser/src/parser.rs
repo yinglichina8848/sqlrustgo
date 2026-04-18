@@ -2437,6 +2437,56 @@ mod tests {
         let result = parse("SELECT * FROM t WHERE a IS NOT NULL");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
     }
+
+    #[test]
+    fn test_parse_create_trigger_before_insert() {
+        let sql = "CREATE TRIGGER my_trigger BEFORE INSERT ON users FOR EACH ROW BEGIN INSERT INTO log(msg) VALUES('new user'); END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::CreateTrigger(trigger) => {
+                assert_eq!(trigger.name, "my_trigger");
+                assert_eq!(trigger.timing, "BEFORE");
+                assert_eq!(trigger.events, vec!["INSERT"]);
+                assert_eq!(trigger.table, "users");
+                assert!(trigger.for_each_row);
+                // Body should contain some content
+                assert!(!trigger.body.is_empty());
+            }
+            _ => panic!("Expected CREATE TRIGGER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_trigger_after_delete() {
+        let sql = "CREATE TRIGGER del_log AFTER DELETE ON orders FOR EACH ROW BEGIN DELETE FROM temp WHERE id = OLD.id; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::CreateTrigger(trigger) => {
+                assert_eq!(trigger.name, "del_log");
+                assert_eq!(trigger.timing, "AFTER");
+                assert_eq!(trigger.events, vec!["DELETE"]);
+                assert_eq!(trigger.table, "orders");
+            }
+            _ => panic!("Expected CREATE TRIGGER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_trigger_multiple_events() {
+        let sql = "CREATE TRIGGER upd_check BEFORE UPDATE ON products FOR EACH ROW BEGIN SELECT 1; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for: {}", sql);
+        match result.unwrap() {
+            Statement::CreateTrigger(trigger) => {
+                assert_eq!(trigger.name, "upd_check");
+                assert_eq!(trigger.timing, "BEFORE");
+                assert_eq!(trigger.events, vec!["UPDATE"]);
+            }
+            _ => panic!("Expected CREATE TRIGGER statement"),
+        }
+    }
 }
 
 #[test]
