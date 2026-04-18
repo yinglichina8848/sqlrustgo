@@ -40,6 +40,36 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(_) => Ok(ExecutorResult::empty()),
+            Statement::Union(ref union_stmt) => {
+                // Extract left and right SelectStatements from the Union
+                let left_select = match union_stmt.left.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => return Err(SqlError::ExecutionError(
+                        "UNION left side must be a SELECT".to_string(),
+                    )),
+                };
+                let right_select = match union_stmt.right.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => return Err(SqlError::ExecutionError(
+                        "UNION right side must be a SELECT".to_string(),
+                    )),
+                };
+
+                let mut left_result = self.execute_select(left_select)?;
+                let right_result = self.execute_select(right_select)?;
+
+                // Append rows from right to left
+                left_result.rows.extend(right_result.rows);
+
+                // If not UNION ALL, deduplicate
+                if !union_stmt.union_all {
+                    left_result.rows.sort();
+                    left_result.rows.dedup();
+                }
+
+                left_result.affected_rows = left_result.rows.len();
+                Ok(left_result)
+            }
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
