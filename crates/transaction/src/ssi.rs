@@ -99,3 +99,101 @@ impl Default for SerializationGraph {
         Self::new()
     }
 }
+
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use crate::gid::GlobalTransactionId;
+use crate::lock_manager::{DistributedLockManager, LockKey};
+
+pub struct SsiDetector {
+    read_sets: RwLock<HashMap<TxId, HashSet<Vec<u8>>>>,
+    write_sets: RwLock<HashMap<TxId, HashSet<Vec<u8>>>>,
+    graph: RwLock<SerializationGraph>,
+    locks: Arc<DistributedLockManager>,
+}
+
+impl SsiDetector {
+    pub fn new(locks: Arc<DistributedLockManager>) -> Self {
+        Self {
+            read_sets: RwLock::new(HashMap::new()),
+            write_sets: RwLock::new(HashMap::new()),
+            graph: RwLock::new(SerializationGraph::new()),
+            locks,
+        }
+    }
+
+    pub async fn record_read(&self, tx_id: TxId, key: Vec<u8>) {
+        let mut read_sets = self.read_sets.write().await;
+        read_sets.entry(tx_id).or_default().insert(key);
+    }
+
+    pub async fn record_write(&self, tx_id: TxId, key: Vec<u8>) -> Result<(), SsiError> {
+        {
+            let mut write_sets = self.write_sets.write().await;
+            write_sets.entry(tx_id).or_default().insert(key.clone());
+        }
+
+        let lock_key = LockKey::Row {
+            table: String::new(),
+            row_key: key,
+        };
+
+        let gid = GlobalTransactionId::new(crate::gid::NodeId(0));
+        match self.locks.try_lock(&gid, &lock_key).await {
+            Ok(()) => Ok(()),
+            Err(_) => Err(SsiError::LockTimeout),
+        }
+    }
+
+    pub async fn validate_commit(&self, tx_id: TxId) -> Result<(), SsiError> {
+        let read_sets = self.read_sets.read().await;
+        let write_sets = self.write_sets.read().await;
+
+        let my_reads = read_sets.get(&tx_id).cloned().unwrap_or_default();
+        let my_writes = write_sets.get(&tx_id).cloned().unwrap_or_default();
+
+        for (other_tx, other_writes) in write_sets.iter() {
+            if *other_tx == tx_id {
+                continue;
+            }
+
+            let rw_conflict = my_reads.intersection(other_writes).count() > 0;
+
+            if rw_conflict {
+                if let Some(other_reads) = read_sets.get(other_tx) {
+                    let wr_conflict = my_writes.intersection(other_reads).count() > 0;
+
+                    if wr_conflict {
+                        return Err(SsiError::SerializationConflict {
+                            our_tx: tx_id,
+                            conflicting_tx: *other_tx,
+                            reason: "RW-WR cycle detected".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn release(&self, tx_id: TxId) {
+        let gid = GlobalTransactionId::new(crate::gid::NodeId(0));
+        let _ = self.locks.unlock(&gid).await;
+
+        {
+            let mut read_sets = self.read_sets.write().await;
+            read_sets.remove(&tx_id);
+        }
+        {
+            let mut write_sets = self.write_sets.write().await;
+            write_sets.remove(&tx_id);
+        }
+
+        {
+            let mut graph = self.graph.write().await;
+            graph.remove_tx(&tx_id);
+        }
+    }
+}
