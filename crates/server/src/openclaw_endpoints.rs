@@ -2110,6 +2110,54 @@ fn execute_sql(
             })
         }
 
+        sqlrustgo_parser::Statement::CreateTrigger(create) => {
+            let timing = match create.timing.to_uppercase().as_str() {
+                "BEFORE" => sqlrustgo_storage::engine::TriggerTiming::Before,
+                "AFTER" => sqlrustgo_storage::engine::TriggerTiming::After,
+                _ => {
+                    return Err(format!("Invalid trigger timing: {}", create.timing));
+                }
+            };
+
+            let events: Vec<_> = create
+                .events
+                .iter()
+                .filter_map(|e| match e.to_uppercase().as_str() {
+                    "INSERT" => Some(sqlrustgo_storage::engine::TriggerEvent::Insert),
+                    "UPDATE" => Some(sqlrustgo_storage::engine::TriggerEvent::Update),
+                    "DELETE" => Some(sqlrustgo_storage::engine::TriggerEvent::Delete),
+                    _ => None,
+                })
+                .collect();
+
+            if events.is_empty() {
+                return Err(
+                    "At least one trigger event (INSERT, UPDATE, DELETE) is required".to_string(),
+                );
+            }
+
+            let trigger_info = sqlrustgo_storage::engine::TriggerInfo {
+                name: create.name.clone(),
+                table_name: create.table.clone(),
+                timing,
+                event: events[0],
+                body: create.body.clone(),
+            };
+
+            let mut storage = storage
+                .write()
+                .map_err(|e| format!("Storage lock error: {}", e))?;
+            storage
+                .create_trigger(trigger_info)
+                .map_err(|e| e.to_string())?;
+
+            Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
         _ => Err("Unsupported statement type".to_string()),
     }
 }

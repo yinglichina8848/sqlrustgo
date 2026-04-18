@@ -26,12 +26,10 @@ pub enum Statement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
-    CreateTrigger(CreateTriggerStatement),
     DropTable(DropTableStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
-    Union(UnionStatement),
     Call(CallStatement),
     CreateProcedure(CreateProcedureStatement),
 }
@@ -45,52 +43,11 @@ pub struct CreateIndexStatement {
     pub unique: bool,
 }
 
-/// CREATE TRIGGER statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateTriggerStatement {
-    pub name: String,
-    pub timing: String,      // BEFORE, AFTER, INSTEAD OF
-    pub events: Vec<String>, // INSERT, UPDATE, DELETE
-    pub table: String,
-    pub for_each_row: bool,
-    pub body: String,
-}
-
 /// ALTER TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlterTableStatement {
     pub table_name: String,
     pub operation: AlterTableOperation,
-}
-
-/// UNION statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct UnionStatement {
-    pub left: Box<Statement>,
-    pub right: Box<Statement>,
-    pub union_all: bool, // true = UNION ALL (keep duplicates), false = UNION (dedup)
-}
-
-/// CREATE PROCEDURE statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateProcedureStatement {
-    pub name: String,
-    pub params: Vec<ProcedureParam>,
-    pub body: String,
-}
-
-/// Procedure parameter
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProcedureParam {
-    pub name: String,
-    pub data_type: String,
-}
-
-/// CALL statement (invokes a stored procedure)
-#[derive(Debug, Clone, PartialEq)]
-pub struct CallStatement {
-    pub procedure_name: String,
-    pub args: Vec<String>,
 }
 
 /// ALTER TABLE operation types
@@ -105,6 +62,43 @@ pub enum AlterTableOperation {
     RenameTo {
         new_name: String,
     },
+}
+
+/// CALL statement for invoking stored procedures
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStatement {
+    pub procedure_name: String,
+    pub args: Vec<String>,
+}
+
+/// CREATE PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateProcedureStatement {
+    pub name: String,
+    pub params: Vec<StoredProcParam>,
+    pub body: Vec<StoredProcStatement>,
+}
+
+/// Stored procedure parameter
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredProcParam {
+    pub name: String,
+    pub mode: StoredProcParamMode,
+    pub data_type: String,
+}
+
+/// Parameter mode for stored procedure
+#[derive(Debug, Clone, PartialEq)]
+pub enum StoredProcParamMode {
+    In,
+    Out,
+    InOut,
+}
+
+/// Stored procedure statement types
+#[derive(Debug, Clone, PartialEq)]
+pub enum StoredProcStatement {
+    RawSql(String),
 }
 
 /// Common Table Expression (CTE)
@@ -133,56 +127,6 @@ pub struct WithSelect {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
     pub table_name: Option<String>,
-}
-
-/// CALL statement for executing stored procedures
-#[derive(Debug, Clone, PartialEq)]
-pub struct CallStatement {
-    pub procedure_name: String,
-    pub args: Vec<String>,
-}
-
-/// CREATE PROCEDURE statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateProcedureStatement {
-    pub name: String,
-    pub params: Vec<StoredProcParam>,
-    pub body: Vec<StoredProcStatement>,
-}
-
-/// Stored procedure parameter (parser-level copy of catalog type)
-#[derive(Debug, Clone, PartialEq)]
-pub struct StoredProcParam {
-    pub name: String,
-    pub mode: StoredProcParamMode,
-    pub data_type: String,
-}
-
-/// Parameter mode for stored procedure
-#[derive(Debug, Clone, PartialEq)]
-pub enum StoredProcParamMode {
-    In,
-    Out,
-    InOut,
-}
-
-/// Stored procedure statement types (parser-level copy of catalog type)
-#[derive(Debug, Clone, PartialEq)]
-pub enum StoredProcStatement {
-    RawSql(String),
-    SelectInto {
-        columns: Vec<String>,
-        into_vars: Vec<String>,
-        table: String,
-        where_clause: Option<String>,
-    },
-    Set {
-        variable: String,
-        value: String,
-    },
-    Return {
-        value: String,
-    },
 }
 
 /// Join type
@@ -231,17 +175,6 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub group_by: Vec<Expression>,
     pub having: Option<Expression>,
-    pub order_by: Vec<OrderByExpr>,
-    pub limit: Option<u64>,
-    pub offset: Option<u64>,
-    pub distinct: bool,
-}
-
-/// ORDER BY expression
-#[derive(Debug, Clone, PartialEq)]
-pub struct OrderByExpr {
-    pub expression: Expression,
-    pub ascending: bool,
 }
 
 /// Column in SELECT
@@ -424,189 +357,16 @@ impl Parser {
         match self.current() {
             Some(Token::Table) => self.parse_create_table(),
             Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
-<<<<<<< HEAD
-            Some(Token::Trigger) => self.parse_create_trigger(),
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, TRIGGER, or PROCEDURE after CREATE, got {:?}",
+                "Expected TABLE, INDEX, or PROCEDURE after CREATE, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, TRIGGER, or PROCEDURE after CREATE".to_string()),
+            None => Err("Expected TABLE, INDEX, or PROCEDURE after CREATE".to_string()),
         }
-    }
-    }
-
-    fn parse_create_trigger(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Trigger)?;
-
-        // Trigger name
-        let trigger_name = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected trigger name, got {:?}", t)),
-            None => return Err("Expected trigger name".to_string()),
-        };
-
-        // Timing: BEFORE or AFTER
-        let timing = match self.current() {
-            Some(Token::Before) => {
-                self.next();
-                "BEFORE".to_string()
-            }
-            Some(Token::After) => {
-                self.next();
-                "AFTER".to_string()
-            }
-            Some(Token::Instead) => {
-                self.next();
-                self.expect(Token::Of)?;
-                "INSTEAD OF".to_string()
-            }
-            Some(t) => {
-                return Err(format!(
-                    "Expected BEFORE, AFTER, or INSTEAD OF, got {:?}",
-                    t
-                ))
-            }
-            None => return Err("Expected BEFORE, AFTER, or INSTEAD OF".to_string()),
-        };
-
-        // Event: INSERT, UPDATE, DELETE
-        let events = self.parse_trigger_events()?;
-
-        // ON table_name
-        self.expect(Token::On)?;
-        let table_name = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
-            None => return Err("Expected table name".to_string()),
-        };
-
-        // FOR EACH ROW (optional)
-        let for_each_row = if matches!(self.current(), Some(Token::For)) {
-            self.next();
-            if matches!(self.current(), Some(Token::Each)) {
-                self.next();
-                self.expect(Token::Row)?;
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        // BEGIN ... END block
-        let body = self.parse_trigger_body()?;
-
-        Ok(Statement::CreateTrigger(CreateTriggerStatement {
-            name: trigger_name,
-            timing,
-            events,
-            table: table_name,
-            for_each_row,
-            body,
-        }))
-    }
-
-    fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
-        let mut events = Vec::new();
-
-        loop {
-            match self.current() {
-                Some(Token::Insert) => {
-                    self.next();
-                    events.push("INSERT".to_string());
-                }
-                Some(Token::Update) => {
-                    self.next();
-                    // Check for OF column1, column2
-                    if matches!(self.current(), Some(Token::Of)) {
-                        self.next();
-                        // Parse column list (simplified)
-                        while matches!(self.current(), Some(Token::Identifier(_))) {
-                            self.next();
-                            if matches!(self.current(), Some(Token::Comma)) {
-                                self.next();
-                            }
-                        }
-                    }
-                    events.push("UPDATE".to_string());
-                }
-                Some(Token::Delete) => {
-                    self.next();
-                    events.push("DELETE".to_string());
-                }
-                Some(Token::Identifier(_)) => {
-                    // Could be column name in UPDATE OF col1, col2
-                    break;
-                }
-                _ => break,
-            }
-
-            // Check for OR (INSERT OR UPDATE)
-            if matches!(self.current(), Some(Token::Or)) {
-                self.next();
-                // Continue to next event
-            } else {
-                break;
-            }
-        }
-
-        if events.is_empty() {
-            Err("Expected at least one trigger event (INSERT, UPDATE, DELETE)".to_string())
-        } else {
-            Ok(events)
-        }
-    }
-
-    fn parse_trigger_body(&mut self) -> Result<String, String> {
-        // Check for BEGIN
-        if !matches!(self.current(), Some(Token::Begin)) {
-            return Err("Expected BEGIN for trigger body".to_string());
-        }
-
-        // Simple implementation: return the SQL between BEGIN and END
-        // In production, this would parse the actual statements
-        let mut body = "BEGIN ".to_string();
-        self.next(); // consume BEGIN
-
-        // Consume until END
-        let mut depth = 1;
-        while let Some(token) = self.current() {
-            match token {
-                Token::Begin => {
-                    depth += 1;
-                    body.push_str("BEGIN ");
-                    self.next();
-                }
-                Token::End => {
-                    depth -= 1;
-                    if depth == 0 {
-                        self.next(); // consume END
-                        body.push_str(" END");
-                        break;
-                    }
-                    body.push_str(" END");
-                    self.next();
-                }
-                _ => {
-                    body.push_str(&format!("{:?}", token));
-                    self.next();
-                }
-            }
-        }
-
-        Ok(body)
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
-        // Check for UNIQUE keyword
-        let unique = if matches!(self.current(), Some(Token::Unique)) {
-            self.next();
-            true
-        } else {
-            false
-        };
         self.expect(Token::Index)?;
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
@@ -624,7 +384,97 @@ impl Parser {
             name: index_name,
             table: table_name,
             columns,
-            unique,
+            unique: false,
+        }))
+    }
+
+    fn parse_create_procedure(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Procedure)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected procedure name, got {:?}", t)),
+            None => return Err("Expected procedure name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+        let mut params = Vec::new();
+        while !matches!(self.current(), Some(Token::RParen) | None) {
+            let param_name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
+                None => return Err("Expected parameter name".to_string()),
+            };
+
+            let mode = match self.current() {
+                Some(Token::Identifier(mode_str))
+                    if ["OUT", "INOUT"].contains(&mode_str.to_uppercase().as_str()) =>
+                {
+                    let mode = match mode_str.to_uppercase().as_str() {
+                        "OUT" => StoredProcParamMode::Out,
+                        "INOUT" => StoredProcParamMode::InOut,
+                        _ => StoredProcParamMode::In,
+                    };
+                    self.next();
+                    mode
+                }
+                _ => StoredProcParamMode::In,
+            };
+
+            let data_type = match self.next() {
+                Some(Token::Identifier(typename)) => typename,
+                Some(Token::Integer) => "INTEGER".to_string(),
+                Some(Token::Text) => "TEXT".to_string(),
+                Some(Token::Float) => "FLOAT".to_string(),
+                Some(Token::Boolean) => "BOOLEAN".to_string(),
+                Some(t) => return Err(format!("Expected data type, got {:?}", t)),
+                None => return Err("Expected data type".to_string()),
+            };
+
+            params.push(StoredProcParam {
+                name: param_name,
+                mode,
+                data_type,
+            });
+
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+            }
+        }
+        self.expect(Token::RParen)?;
+
+        self.expect(Token::Begin)?;
+        let mut body = Vec::new();
+        let mut current_sql = String::new();
+        while !matches!(self.current(), Some(Token::End) | None) {
+            match self.next() {
+                Some(Token::Semicolon) => {
+                    if !current_sql.is_empty() {
+                        body.push(StoredProcStatement::RawSql(current_sql.trim().to_string()));
+                        current_sql = String::new();
+                    }
+                }
+                Some(Token::Identifier(sql)) => {
+                    current_sql.push_str(&sql);
+                    current_sql.push(' ');
+                }
+                Some(t) => {
+                    current_sql.push_str(&t.to_string());
+                    current_sql.push(' ');
+                }
+                None => return Err("Expected END".to_string()),
+            }
+        }
+        self.expect(Token::End)?;
+
+        if !current_sql.is_empty() {
+            body.push(StoredProcStatement::RawSql(current_sql.trim().to_string()));
+        }
+
+        Ok(Statement::CreateProcedure(CreateProcedureStatement {
+            name,
+            params,
+            body,
         }))
     }
 
@@ -694,21 +544,6 @@ impl Parser {
 
         let select = self.parse_select_statement()?;
 
-        // Check for UNION after SELECT
-        if matches!(self.current(), Some(Token::Union)) {
-            self.next(); // consume UNION
-            let union_all = matches!(self.current(), Some(Token::All));
-            if union_all {
-                self.next(); // consume ALL
-            }
-            let right = self.parse_select_statement()?;
-            return Ok(Statement::Union(UnionStatement {
-                left: Box::new(Statement::Select(select)),
-                right: Box::new(Statement::Select(right)),
-                union_all,
-            }));
-        }
-
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
             select,
@@ -717,13 +552,6 @@ impl Parser {
 
     fn parse_select_statement(&mut self) -> Result<SelectStatement, String> {
         self.expect(Token::Select)?;
-
-        // Parse DISTINCT keyword
-        let mut distinct = false;
-        if matches!(self.current(), Some(Token::Distinct)) {
-            distinct = true;
-            self.next();
-        }
 
         let mut columns = Vec::new();
         let mut aggregates = Vec::new();
@@ -742,23 +570,10 @@ impl Parser {
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
                     let func = self.parse_aggregate_function()?;
-                    let alias = if matches!(self.current(), Some(Token::As)) {
-                        self.next();
-                        match self.current() {
-                            Some(Token::Identifier(name)) => {
-                                let alias_name = name.clone();
-                                self.next();
-                                Some(alias_name)
-                            }
-                            _ => return Err("Expected alias name after AS".to_string()),
-                        }
-                    } else {
-                        None
-                    };
                     aggregates.push(func);
                     columns.push(SelectColumn {
                         name: format!("__agg_{}", aggregates.len()),
-                        alias,
+                        alias: None,
                         expression: None,
                     });
                 }
@@ -860,22 +675,9 @@ impl Parser {
                             });
                         }
                     } else {
-                        let alias = if matches!(self.current(), Some(Token::As)) {
-                            self.next();
-                            match self.current() {
-                                Some(Token::Identifier(name)) => {
-                                    let alias_name = name.clone();
-                                    self.next();
-                                    Some(alias_name)
-                                }
-                                _ => return Err("Expected alias name after AS".to_string()),
-                            }
-                        } else {
-                            None
-                        };
                         columns.push(SelectColumn {
                             name,
-                            alias,
+                            alias: None,
                             expression: None,
                         });
                         if !consumed {
@@ -943,68 +745,6 @@ impl Parser {
             None
         };
 
-        // Parse ORDER BY clause
-        let order_by = if matches!(self.current(), Some(Token::Order)) {
-            self.next();
-            self.expect(Token::By)?;
-            let mut exprs = Vec::new();
-            loop {
-                let expr = self.parse_expression()?;
-                let ascending = match self.current() {
-                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("ASC") => {
-                        self.next();
-                        true
-                    }
-                    Some(Token::Identifier(s)) if s.eq_ignore_ascii_case("DESC") => {
-                        self.next();
-                        false
-                    }
-                    _ => true, // default ascending
-                };
-                exprs.push(OrderByExpr {
-                    expression: expr,
-                    ascending,
-                });
-                if !matches!(self.current(), Some(Token::Comma)) {
-                    break;
-                }
-                self.next(); // consume comma
-            }
-            exprs
-        } else {
-            Vec::new()
-        };
-
-        // Parse LIMIT clause
-        let limit = if matches!(self.current(), Some(Token::Limit)) {
-            self.next();
-            match self.current() {
-                Some(Token::NumberLiteral(n)) => {
-                    let v = n.parse::<u64>().unwrap_or(0);
-                    self.next();
-                    Some(v)
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
-
-        // Parse OFFSET clause
-        let offset = if matches!(self.current(), Some(Token::Offset)) {
-            self.next();
-            match self.current() {
-                Some(Token::NumberLiteral(n)) => {
-                    let v = n.parse::<u64>().unwrap_or(0);
-                    self.next();
-                    Some(v)
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
-
         Ok(SelectStatement {
             columns,
             table,
@@ -1013,10 +753,6 @@ impl Parser {
             aggregates,
             group_by,
             having,
-            order_by,
-            limit,
-            offset,
-            distinct,
         })
     }
 
@@ -1042,31 +778,11 @@ impl Parser {
             }
             Some(Token::Left) => {
                 self.next();
-                // Check for FULL OUTER JOIN
-                if matches!(self.current(), Some(Token::Outer)) {
-                    self.next();
-                    JoinType::Full
-                } else {
-                    JoinType::Left
-                }
+                JoinType::Left
             }
             Some(Token::Right) => {
                 self.next();
-                // Check for RIGHT OUTER JOIN
-                if matches!(self.current(), Some(Token::Outer)) {
-                    self.next();
-                    JoinType::Full
-                } else {
-                    JoinType::Right
-                }
-            }
-            Some(Token::Full) => {
-                self.next();
-                // Consume optional OUTER keyword
-                if matches!(self.current(), Some(Token::Outer)) {
-                    self.next();
-                }
-                JoinType::Full
+                JoinType::Right
             }
             Some(Token::Cross) => {
                 self.next();
@@ -1932,6 +1648,48 @@ impl Parser {
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
     }
 
+    fn parse_call(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Call)?;
+
+        let procedure_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected procedure name, got {:?}", t)),
+            None => return Err("Expected procedure name".to_string()),
+        };
+
+        let mut args = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            while !matches!(self.current(), Some(Token::RParen) | None) {
+                match self.current() {
+                    Some(
+                        Token::Identifier(_) | Token::StringLiteral(_) | Token::NumberLiteral(_),
+                    ) => {
+                        let arg = match self.next() {
+                            Some(Token::Identifier(s)) => s,
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::NumberLiteral(s)) => s,
+                            Some(t) => return Err(format!("Expected argument, got {:?}", t)),
+                            None => return Err("Unexpected end of input".to_string()),
+                        };
+                        args.push(arg);
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(t) => return Err(format!("Unexpected token in argument list: {:?}", t)),
+                    None => return Err("Unexpected end of input".to_string()),
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        Ok(Statement::Call(CallStatement {
+            procedure_name,
+            args,
+        }))
+    }
+
     fn parse_alter_table(&mut self) -> Result<Statement, String> {
         self.expect(Token::Alter)?;
         self.expect(Token::Table)?;
@@ -1988,139 +1746,6 @@ impl Parser {
             }
             _ => Err("Expected ADD or RENAME".to_string()),
         }
-    }
-
-    fn parse_call(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Call)?;
-        let procedure_name = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected procedure name, got {:?}", t)),
-            None => return Err("Expected procedure name".to_string()),
-        };
-
-        let mut args = Vec::new();
-        if matches!(self.current(), Some(Token::LParen)) {
-            self.next();
-            while !matches!(self.current(), Some(Token::RParen) | None) {
-                match self.next() {
-                    Some(Token::Identifier(name)) => args.push(name),
-                    Some(Token::NumberLiteral(n)) => args.push(n),
-                    Some(Token::StringLiteral(s)) => args.push(s),
-                    Some(Token::Null) => args.push("NULL".to_string()),
-                    Some(t) => return Err(format!("Expected argument, got {:?}", t)),
-                    None => return Err("Expected closing parenthesis".to_string()),
-                }
-                if matches!(self.current(), Some(Token::Comma)) {
-                    self.next();
-                }
-            }
-            self.expect(Token::RParen)?;
-        }
-
-        Ok(Statement::Call(CallStatement {
-            procedure_name,
-            args,
-        }))
-    }
-
-    fn parse_create_procedure(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Procedure)?;
-
-        let name = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected procedure name, got {:?}", t)),
-            None => return Err("Expected procedure name".to_string()),
-        };
-
-        self.expect(Token::LParen)?;
-        let mut params = Vec::new();
-        while !matches!(self.current(), Some(Token::RParen) | None) {
-            let (param_name, mode) = match self.current() {
-                Some(Token::In) => {
-                    self.next();
-                    let param_name = match self.next() {
-                        Some(Token::Identifier(name)) => name,
-                        Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
-                        None => return Err("Expected parameter name".to_string()),
-                    };
-                    (param_name, StoredProcParamMode::In)
-                }
-                Some(Token::Identifier(mode_str))
-                    if ["OUT", "INOUT"].contains(&mode_str.to_uppercase().as_str()) =>
-                {
-                    let mode = match mode_str.to_uppercase().as_str() {
-                        "OUT" => StoredProcParamMode::Out,
-                        "INOUT" => StoredProcParamMode::InOut,
-                        _ => StoredProcParamMode::In,
-                    };
-                    self.next();
-                    let param_name = match self.next() {
-                        Some(Token::Identifier(name)) => name,
-                        Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
-                        None => return Err("Expected parameter name".to_string()),
-                    };
-                    (param_name, mode)
-                }
-                _ => {
-                    let param_name = match self.next() {
-                        Some(Token::Identifier(name)) => name,
-                        Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
-                        None => return Err("Expected parameter name".to_string()),
-                    };
-                    (param_name, StoredProcParamMode::In)
-                }
-            };
-
-            let data_type = match self.next() {
-                Some(Token::Identifier(typename)) => typename,
-                Some(Token::Integer) => "INTEGER".to_string(),
-                Some(Token::Text) => "TEXT".to_string(),
-                Some(Token::Float) => "FLOAT".to_string(),
-                Some(Token::Boolean) => "BOOLEAN".to_string(),
-                Some(t) => return Err(format!("Expected data type, got {:?}", t)),
-                None => return Err("Expected data type".to_string()),
-            };
-
-            params.push(StoredProcParam {
-                name: param_name,
-                mode,
-                data_type,
-            });
-
-            if matches!(self.current(), Some(Token::Comma)) {
-                self.next();
-            }
-        }
-        self.expect(Token::RParen)?;
-
-        self.expect(Token::Begin)?;
-        let mut body = Vec::new();
-        let mut current_sql = String::new();
-        while !matches!(self.current(), Some(Token::End) | None) {
-            match self.next() {
-                Some(Token::Semicolon) => {
-                    if !current_sql.is_empty() {
-                        body.push(StoredProcStatement::RawSql(current_sql.trim().to_string()));
-                        current_sql = String::new();
-                    }
-                }
-                Some(t) => {
-                    current_sql.push_str(&t.to_string());
-                    current_sql.push(' ');
-                }
-                None => return Err("Expected END".to_string()),
-            }
-        }
-        if !current_sql.is_empty() {
-            body.push(StoredProcStatement::RawSql(current_sql.trim().to_string()));
-        }
-        self.expect(Token::End)?;
-
-        Ok(Statement::CreateProcedure(CreateProcedureStatement {
-            name,
-            params,
-            body,
-        }))
     }
 }
 
@@ -2534,6 +2159,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_call() {
+        let result = parse("CALL test_proc()");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Call(c) => {
+                assert_eq!(c.procedure_name, "test_proc");
+                assert!(c.args.is_empty());
+            }
+            _ => panic!("Expected CALL statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_call_with_args() {
+        let result = parse("CALL test_proc(1, 'hello', var1)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Call(c) => {
+                assert_eq!(c.procedure_name, "test_proc");
+                assert_eq!(c.args.len(), 3);
+                assert_eq!(c.args[0], "1");
+                assert_eq!(c.args[1], "hello");
+                assert_eq!(c.args[2], "var1");
+            }
+            _ => panic!("Expected CALL statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_comparison_expression() {
         let result = parse("SELECT * FROM t WHERE a > b AND c < d");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
@@ -2585,161 +2239,181 @@ mod tests {
             _ => panic!("Expected SELECT statement"),
         }
     }
+}
 
-    #[test]
-    fn test_parse_create_index() {
-        let result = parse("CREATE INDEX idx ON users (name, email)");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::CreateIndex(idx) => {
-                assert_eq!(idx.name, "idx");
-                assert_eq!(idx.table, "users");
-                assert_eq!(idx.columns.len(), 2);
+#[test]
+fn test_debug_having() {
+    let sql =
+        "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
+    match parse(sql) {
+        Ok(stmt) => {
+            println!("OK: {:#?}", stmt);
+            if let Statement::Select(s) = stmt {
+                println!("having = {:?}", s.having);
             }
-            _ => panic!("Expected CREATE INDEX statement"),
+        }
+        Err(e) => {
+            println!("ERROR: {}", e);
         }
     }
 
     #[test]
-    fn test_parse_create_unique_index() {
-        let result = parse("CREATE UNIQUE INDEX idx ON users (id)");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_cross_join() {
-        let result = parse("SELECT * FROM a CROSS JOIN b");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_with_cte() {
-        let result = parse("WITH cte AS (SELECT * FROM t) SELECT * FROM cte");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_with_recursive() {
-        let result = parse("WITH RECURSIVE t AS (SELECT * FROM x) SELECT * FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_expression_list() {
-        let result = parse("SELECT a, b, c FROM t");
+    fn test_parse_binary_expression_subtraction() {
+        let result = parse("SELECT price - discount FROM orders");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
             }
             _ => panic!("Expected SELECT statement"),
         }
     }
 
     #[test]
-    fn test_parse_on_delete_cascade() {
-        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE)";
-        let result = parse(sql);
+    fn test_parse_binary_expression_multiplication() {
+        let result = parse("SELECT quantity * price FROM orders");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_on_delete_set_null() {
-        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE SET NULL)";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_on_update_cascade() {
-        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE)";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_or_expression() {
-        let result = parse("SELECT * FROM t WHERE a = 1 OR b = 2");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_and_expression() {
-        let result = parse("SELECT * FROM t WHERE a = 1 AND b = 2");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_in_expression() {
-        let result = parse("SELECT * FROM t WHERE a IN (SELECT id FROM u)");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_not_in_expression() {
-        let result = parse("SELECT * FROM t WHERE a NOT IN (SELECT id FROM u)");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_between_expression() {
-        let result = parse("SELECT * FROM t WHERE a BETWEEN 1 AND 10");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_is_null_expression() {
-        let result = parse("SELECT * FROM t WHERE a IS NULL");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_is_not_null_expression() {
-        let result = parse("SELECT * FROM t WHERE a IS NOT NULL");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-    }
-
-    #[test]
-    fn test_parse_create_procedure() {
-        let sql = "CREATE PROCEDURE my_proc(param1 INT) BEGIN SELECT 1; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for: {}", sql);
         match result.unwrap() {
-            Statement::CreateProcedure(proc) => {
-                assert_eq!(proc.name, "my_proc");
-                assert_eq!(proc.params.len(), 1);
-                assert_eq!(proc.params[0].name, "param1");
-                assert_eq!(proc.params[0].data_type, "INT");
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
             }
-            _ => panic!("Expected CREATE PROCEDURE statement"),
+            _ => panic!("Expected SELECT statement"),
         }
     }
 
     #[test]
-    fn test_parse_call_procedure() {
-        let sql = "CALL my_proc(1, 'hello')";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for: {}", sql);
+    fn test_parse_binary_expression_division() {
+        let result = parse("SELECT total / cnt FROM stats");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Call(call) => {
-                assert_eq!(call.procedure_name, "my_proc");
-                assert_eq!(call.args.len(), 2);
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
             }
-            _ => panic!("Expected CALL statement"),
+            _ => panic!("Expected SELECT statement"),
         }
     }
 
     #[test]
-    fn test_parse_create_procedure_no_params() {
-        let sql = "CREATE PROCEDURE simple_proc() BEGIN SELECT * FROM users; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for: {}", sql);
+    fn test_parse_binary_expression_modulo() {
+        let result = parse("SELECT total % discount FROM orders");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::CreateProcedure(proc) => {
-                assert_eq!(proc.name, "simple_proc");
-                assert!(proc.params.is_empty());
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
             }
-            _ => panic!("Expected CREATE PROCEDURE statement"),
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_not_equal() {
+        let result = parse("SELECT a != b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_less_equal() {
+        let result = parse("SELECT a <= b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_greater_equal() {
+        let result = parse("SELECT a >= b FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_complex() {
+        let result = parse("SELECT a + b * c - d / e FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_with_literal() {
+        let result = parse("SELECT id + 1 FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_multiple_columns() {
+        let result = parse("SELECT a + b, c - d, e * f FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 3);
+                assert!(s.columns[0].expression.is_some());
+                assert!(s.columns[1].expression.is_some());
+                assert!(s.columns[2].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_mixed_with_identifier() {
+        let result = parse("SELECT a + b, name, c * d FROM t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 3);
+                assert!(s.columns[0].expression.is_some());
+                assert!(s.columns[1].expression.is_none());
+                assert!(s.columns[2].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression_with_table_prefix() {
+        let result = parse("SELECT t.a + t.b FROM table_name t");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.columns.len(), 1);
+                assert!(s.columns[0].expression.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
         }
     }
 }
@@ -2805,60 +2479,5 @@ fn test_debug_idx() {
     match parse(sql) {
         Ok(stmt) => println!("OK: {:#?}", stmt),
         Err(e) => println!("ERROR: {}", e),
-    }
-}
-
-#[test]
-fn test_parse_call() {
-    let result = parse("CALL test_proc()");
-    assert!(result.is_ok(), "Parse failed: {:?}", result);
-    match result.unwrap() {
-        Statement::Call(c) => {
-            assert_eq!(c.procedure_name, "test_proc");
-            assert!(c.args.is_empty());
-        }
-        _ => panic!("Expected CALL statement"),
-    }
-
-    let result = parse("CALL test_proc(1, 'hello', var1)");
-    assert!(result.is_ok(), "Parse failed: {:?}", result);
-    match result.unwrap() {
-        Statement::Call(c) => {
-            assert_eq!(c.procedure_name, "test_proc");
-            assert_eq!(c.args.len(), 3);
-            assert_eq!(c.args[0], "1");
-            assert_eq!(c.args[1], "hello");
-            assert_eq!(c.args[2], "var1");
-        }
-        _ => panic!("Expected CALL statement"),
-    }
-}
-
-#[test]
-fn test_parse_create_procedure() {
-    let result = parse("CREATE PROCEDURE test_proc() BEGIN SELECT 1 END");
-    assert!(result.is_ok(), "Parse failed: {:?}", result);
-    match result.unwrap() {
-        Statement::CreateProcedure(p) => {
-            assert_eq!(p.name, "test_proc");
-            assert!(p.params.is_empty());
-            assert_eq!(p.body.len(), 1);
-        }
-        _ => panic!("Expected CREATE PROCEDURE statement"),
-    }
-
-    let result = parse(
-        "CREATE PROCEDURE test_proc(IN id INTEGER) BEGIN SELECT * FROM users WHERE id = id END",
-    );
-    assert!(result.is_ok(), "Parse failed: {:?}", result);
-    match result.unwrap() {
-        Statement::CreateProcedure(p) => {
-            assert_eq!(p.name, "test_proc");
-            assert_eq!(p.params.len(), 1);
-            assert_eq!(p.params[0].name, "id");
-            assert_eq!(p.params[0].mode, StoredProcParamMode::In);
-            assert_eq!(p.params[0].data_type, "INTEGER");
-        }
-        _ => panic!("Expected CREATE PROCEDURE statement"),
     }
 }
