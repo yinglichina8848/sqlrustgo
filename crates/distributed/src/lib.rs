@@ -21,6 +21,7 @@ pub mod partition;
 pub mod proto;
 pub mod raft;
 pub mod replica_sync;
+pub mod replication;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
@@ -35,6 +36,7 @@ pub use grpc_server::{GraphStorage, ShardServer, ShardServerConfig, VectorStorag
 pub use partition::{PartitionKey, PartitionStrategy};
 pub use raft::{RaftMessage, RaftNode, RaftState};
 pub use replica_sync::{LSN, SyncConfig, SyncProgress, SyncResult, ReplicaSynchronizer};
+pub use replication::{BinlogEvent, BinlogManager, BinlogStatus, MasterStatus, ReplicationConfig, ReplicationRole, ReplicationState, SlaveStatus};
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{RoutedPlan, RoutedQuery, RouterError, ShardRouter};
 pub use two_phase_commit::{
