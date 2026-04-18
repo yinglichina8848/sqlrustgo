@@ -197,3 +197,85 @@ impl SsiDetector {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ssi_error_display() {
+        let err = SsiError::LockTimeout;
+        assert_eq!(err.to_string(), "SSI lock timeout");
+
+        let err = SsiError::SerializationConflict {
+            our_tx: TxId::new(1),
+            conflicting_tx: TxId::new(2),
+            reason: "test".to_string(),
+        };
+        assert!(err.to_string().contains("Serialization conflict"));
+    }
+
+    #[test]
+    fn test_serialization_graph_cycle_detection() {
+        let graph = SerializationGraph::new();
+        assert!(!graph.would_create_cycle(TxId::new(1), TxId::new(2)));
+
+        let mut graph = SerializationGraph::new();
+        graph.add_dependency(TxId::new(1), TxId::new(2));
+        assert!(graph.would_create_cycle(TxId::new(2), TxId::new(1)));
+        assert!(!graph.would_create_cycle(TxId::new(1), TxId::new(2)));
+    }
+
+    #[test]
+    fn test_serialization_graph_remove_tx() {
+        let mut graph = SerializationGraph::new();
+        graph.add_dependency(TxId::new(1), TxId::new(2));
+        graph.add_dependency(TxId::new(2), TxId::new(3));
+
+        graph.remove_tx(&TxId::new(2));
+
+        assert!(!graph.would_create_cycle(TxId::new(1), TxId::new(2)));
+        assert!(!graph.would_create_cycle(TxId::new(1), TxId::new(3)));
+    }
+
+    #[tokio::test]
+    async fn test_ssi_detector_no_conflict() {
+        let locks = Arc::new(DistributedLockManager::new());
+        let detector = SsiDetector::new(locks);
+
+        let tx_id = TxId::new(1);
+        detector.record_read(tx_id, b"key1".to_vec()).await;
+        let _ = detector.record_write(tx_id, b"key2".to_vec()).await;
+
+        let result = detector.validate_commit(tx_id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ssi_detector_record_read() {
+        let locks = Arc::new(DistributedLockManager::new());
+        let detector = SsiDetector::new(locks);
+
+        let tx_id = TxId::new(1);
+        detector.record_read(tx_id, b"key1".to_vec()).await;
+        detector.record_read(tx_id, b"key2".to_vec()).await;
+
+        let read_sets = detector.read_sets.read().await;
+        let reads = read_sets.get(&tx_id).unwrap();
+        assert_eq!(reads.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_ssi_detector_record_write() {
+        let locks = Arc::new(DistributedLockManager::new());
+        let detector = SsiDetector::new(locks);
+
+        let tx_id = TxId::new(1);
+        let result = detector.record_write(tx_id, b"key1".to_vec()).await;
+        assert!(result.is_ok());
+
+        let write_sets = detector.write_sets.read().await;
+        let writes = write_sets.get(&tx_id).unwrap();
+        assert!(writes.contains(&b"key1".to_vec()));
+    }
+}
