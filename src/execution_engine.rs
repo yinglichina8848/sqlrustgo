@@ -106,6 +106,38 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         0.1 // Default: assume 10% selectivity
     }
 
+    /// Estimate the cost of a sequential scan
+    pub fn estimate_seq_scan_cost(&self, table_name: &str) -> f64 {
+        let rows = self.estimate_row_count(table_name);
+        rows as f64 * 1.0 // Each row has unit cost
+    }
+
+    /// Estimate the cost of an index scan
+    /// selectivity: fraction of rows that match the predicate
+    pub fn estimate_index_scan_cost(&self, table_name: &str, selectivity: f64) -> f64 {
+        let rows = self.estimate_row_count(table_name);
+        // Index scan cost = index lookup cost + random I/O for matching rows
+        let index_lookup_cost = 10.0; // Fixed overhead for index access
+        let random_io_cost = (rows as f64 * selectivity) * 0.5; // Random I/O per match
+        index_lookup_cost + random_io_cost
+    }
+
+    /// Estimate the benefit (cost reduction) of using an index vs sequential scan
+    /// Returns positive value if index is beneficial, negative if sequential scan is better
+    pub fn estimate_index_benefit(&self, table_name: &str, selectivity: f64) -> f64 {
+        let seq_cost = self.estimate_seq_scan_cost(table_name);
+        let index_cost = self.estimate_index_scan_cost(table_name, selectivity);
+        seq_cost - index_cost
+    }
+
+    /// Decide whether to use index scan or sequential scan based on cost estimation
+    /// Returns true if index scan is recommended
+    pub fn should_use_index(&self, table_name: &str, column_name: &str) -> bool {
+        let selectivity = self.estimate_selectivity(table_name, column_name);
+        let benefit = self.estimate_index_benefit(table_name, selectivity);
+        benefit > 0.0
+    }
+
     /// Collect statistics for a table (ANALYZE)
     fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
         let storage = self.storage.read().unwrap();
@@ -1117,5 +1149,54 @@ mod tests {
 
         let engine_disabled = ExecutionEngine::with_memory_and_cbo(false);
         assert!(!engine_disabled.is_cbo_enabled());
+    }
+
+    #[test]
+    fn test_estimate_index_benefit() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        for i in 0..1000 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'User{}')", i, i))
+                .unwrap();
+        }
+
+        // High selectivity (1/1000) - index should be very beneficial
+        let high_sel = engine.estimate_selectivity("users", "id");
+        let benefit = engine.estimate_index_benefit("users", high_sel);
+        assert!(benefit > 0.0); // Index should be beneficial
+
+        // With ANALYZE, we get actual stats
+        engine.execute("ANALYZE users").unwrap();
+        let benefit_after_analyze = engine.estimate_index_benefit("users", high_sel);
+        assert!(benefit_after_analyze > 0.0);
+    }
+
+    #[test]
+    fn test_should_use_index() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        for i in 0..10000 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'User{}')", i, i))
+                .unwrap();
+        }
+
+        // With low selectivity (high cardinality), index is beneficial
+        let use_index = engine.should_use_index("users", "id");
+        assert!(use_index);
+
+        // After ANALYZE, should still recommend index for high cardinality
+        engine.execute("ANALYZE users").unwrap();
+        let use_index_after = engine.should_use_index("users", "id");
+        assert!(use_index_after);
     }
 }
