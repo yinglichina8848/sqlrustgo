@@ -88,6 +88,56 @@ fn generate_tls_config() -> Result<ServerConfig, Box<dyn std::error::Error>> {
     Ok(config)
 }
 
+struct TlsStream<'a> {
+    conn: &'a mut rustls::ServerConnection,
+    stream: &'a mut TcpStream,
+}
+
+impl<'a> TlsStream<'a> {
+    fn new(conn: &'a mut rustls::ServerConnection, stream: &'a mut TcpStream) -> Self {
+        Self { conn, stream }
+    }
+}
+
+impl<'a> Read for TlsStream<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            match self.conn.reader().read(buf) {
+                Ok(0) => {
+                    if self.conn.is_handshaking() {
+                        match self.conn.complete_io(self.stream) {
+                            Ok((_, _)) => continue,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    return Ok(0);
+                }
+                Ok(n) => return Ok(n),
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    match self.conn.complete_io(self.stream) {
+                        Ok((_, _)) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
+impl<'a> Write for TlsStream<'a> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use std::io::Write;
+        let mut writer = self.conn.writer();
+        writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.conn.send_close_notify();
+        Ok(())
+    }
+}
+
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
@@ -327,7 +377,7 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     let cap_upper = ((capability::DEFAULT >> 16) & 0xFFFF) as u16;
     p.write_u16::<LittleEndian>(cap_upper).unwrap();
 
-    p.push(seed.len() as u8);
+    p.push(0x00);
     p.extend_from_slice(&[0u8; 10]);
 
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
@@ -673,13 +723,204 @@ fn handle_connection(
     tracing::info!("WRITE complete");
     seq = seq.wrapping_add(1);
 
-    let auth_packet = Packet::read_from(&mut stream)?;
+    // Read initial data to detect TLS ClientHello or MySQL auth packet
+    // TLS ClientHello starts with 0x16 0x03 (TLS record type + version)
+    let mut initial_header = [0u8; 5];
+    let n = match stream.read(&mut initial_header) {
+        Ok(0) => {
+            tracing::info!("Connection closed by client");
+            return Ok(());
+        }
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!("Failed to read from client: {}", e);
+            return Err(MySqlError::Io(e));
+        }
+    };
 
-    let auth_ok = if auth_packet.payload.len() >= 9 {
-        let response = &auth_packet.payload[1..9];
-        tracing::info!("Received auth response: {:02x?}", response);
-        true
-    } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
+    if n < 4 {
+        tracing::error!("Expected at least 4 bytes, got {}", n);
+        return Ok(());
+    }
+
+    // Check for TLS ClientHello: bytes 0-1 should be 0x16 0x03
+    let is_tls = n >= 2 && initial_header[0] == 0x16 && initial_header[1] == 0x03;
+
+    if is_tls {
+        tracing::info!("Detected TLS ClientHello, starting TLS handshake...");
+        let tls_config = match generate_tls_config() {
+            Ok(cfg) => std::sync::Arc::new(cfg),
+            Err(e) => {
+                tracing::error!("Failed to generate TLS config: {}", e);
+                return Err(MySqlError::Protocol(format!("TLS config error: {}", e)));
+            }
+        };
+
+        let mut tls_conn = match rustls::ServerConnection::new(tls_config) {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!("Failed to create TLS connection: {}", e);
+                return Err(MySqlError::Protocol(format!("TLS connection error: {}", e)));
+            }
+        };
+
+        match tls_conn.complete_io(&mut stream) {
+            Ok((_, _)) => tracing::info!("TLS handshake completed"),
+            Err(e) => {
+                tracing::error!("TLS handshake failed: {:?}", e);
+                return Err(MySqlError::Protocol(format!("TLS handshake error: {}", e)));
+            }
+        }
+
+        tracing::info!("TLS connection established");
+
+        let mut tls_stream = TlsStream::new(&mut tls_conn, &mut stream);
+
+        let auth_packet = Packet::read_from(&mut tls_stream)?;
+
+        let auth_ok = if auth_packet.payload.len() >= 9 {
+            let response = &auth_packet.payload[1..9];
+            tracing::info!("Received auth response: {:02x?}", response);
+            true
+        } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
+            true
+        } else {
+            false
+        };
+
+        if !auth_ok {
+            make_err_packet(seq, 1045, "Access denied").write_to(&mut tls_stream)?;
+            return Ok(());
+        }
+
+        make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
+        seq = seq.wrapping_add(1);
+
+        loop {
+            let packet = match Packet::read_from(&mut tls_stream) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::info!("Packet read error: {}", e);
+                    break;
+                }
+            };
+
+            let cmd = packet.payload.first().copied().unwrap_or(0);
+            let payload = &packet.payload[1..];
+
+            match cmd {
+                packet_type::COM_QUIT => {
+                    tracing::info!("Client {} QUIT", addr);
+                    break;
+                }
+                packet_type::COM_PING => {
+                    make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+                packet_type::COM_INIT_DB => {
+                    make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+                packet_type::COM_QUERY => {
+                    let query = String::from_utf8_lossy(payload)
+                        .trim_end_matches('\0')
+                        .trim()
+                        .to_string();
+                    tracing::info!("Query from {}: [{}]", addr, query);
+
+                    if query.is_empty() {
+                        make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
+                        seq = seq.wrapping_add(1);
+                        continue;
+                    }
+
+                    let mut engine = ExecutionEngine::new(storage.clone());
+                    if is_select_query(&query) {
+                        match execute_select(&query, &mut engine) {
+                            Ok((columns, column_types, rows)) => {
+                                send_result_set(
+                                    &mut tls_stream,
+                                    &columns,
+                                    &column_types,
+                                    &rows,
+                                    seq,
+                                )?;
+                            }
+                            Err(e) => {
+                                let code = if e.to_string().contains("not found") {
+                                    1146u16
+                                } else {
+                                    1064
+                                };
+                                make_err_packet(seq, code, &e.to_string())
+                                    .write_to(&mut tls_stream)?;
+                            }
+                        }
+                    } else {
+                        match execute_write(&query, &mut engine) {
+                            Ok(affected) => {
+                                make_ok_packet(seq, affected as u64, 0)
+                                    .write_to(&mut tls_stream)?;
+                            }
+                            Err(e) => {
+                                make_err_packet(seq, 1064, &e.to_string())
+                                    .write_to(&mut tls_stream)?;
+                            }
+                        }
+                    }
+                    seq = seq.wrapping_add(1);
+                }
+                packet_type::COM_STMT_PREPARE => {
+                    make_err_packet(seq, 1295, "Prepared statements not yet supported")
+                        .write_to(&mut tls_stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+                _ => {
+                    make_err_packet(seq, 2000, "Unsupported command").write_to(&mut tls_stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+            }
+        }
+
+        return Ok(());
+    }
+
+    // Not TLS - regular MySQL protocol
+    let length = u32::from(initial_header[0])
+        | (u32::from(initial_header[1]) << 8)
+        | (u32::from(initial_header[2]) << 16);
+    let recv_seq = initial_header[3];
+
+    tracing::info!(
+        "Received initial packet: length={}, seq={}",
+        length,
+        recv_seq
+    );
+
+    if length == 0 {
+        tracing::error!("Received empty packet");
+        return Ok(());
+    }
+
+    // initial_header[0..3] is packet length (3 bytes)
+    // initial_header[3] is sequence number
+    // initial_header[4] is first byte of payload
+    // We need to read the remaining payload bytes
+    let mut auth_payload = vec![0u8; length as usize];
+    // Copy the first byte we already read (at position 4 of initial_header)
+    auth_payload[0] = initial_header[4];
+    // Read the remaining length-1 bytes
+    use std::io::Read;
+    stream.read_exact(&mut auth_payload[1..])?;
+
+    let auth_packet = Packet {
+        length,
+        sequence: recv_seq,
+        payload: auth_payload,
+    };
+
+    let auth_ok = if auth_packet.payload.len() >= 1 {
+        tracing::info!("Auth payload first byte: 0x{:02x}", auth_packet.payload[0]);
         true
     } else {
         false
