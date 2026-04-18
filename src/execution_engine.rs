@@ -1,6 +1,8 @@
 //! ExecutionEngine - high-level SQL execution API
 //! Provides a simple interface for executing SQL statements against a storage backend.
 
+#![allow(unused_variables, unused_imports)]
+
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
@@ -742,11 +744,17 @@ fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
     use std::cmp::Ordering;
     match (a, b) {
         (Value::Null, Value::Null) => 0,
-        (Value::Null, _) => 1,  // NULL sorts last (ascending)
+        (Value::Null, _) => 1, // NULL sorts last (ascending)
         (_, Value::Null) => -1,
         (Value::Integer(a_i), Value::Integer(b_i)) => a_i.cmp(b_i) as i32,
         (Value::Float(a_f), Value::Float(b_f)) => {
-            if a_f < b_f { -1 } else if a_f > b_f { 1 } else { 0 }
+            if a_f < b_f {
+                -1
+            } else if a_f > b_f {
+                1
+            } else {
+                0
+            }
         }
         (Value::Text(a_s), Value::Text(b_s)) => a_s.cmp(b_s) as i32,
         (Value::Boolean(a_b), Value::Boolean(b_b)) => a_b.cmp(b_b) as i32,
