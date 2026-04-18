@@ -33,6 +33,7 @@ pub enum Statement {
     Call(CallStatement),
     CreateProcedure(CreateProcedureStatement),
     Union(UnionStatement),
+    CreateTrigger(CreateTriggerStatement),
 }
 
 /// UNION statement
@@ -108,6 +109,16 @@ pub enum StoredProcParamMode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StoredProcStatement {
     RawSql(String),
+}
+
+/// CREATE TRIGGER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTriggerStatement {
+    pub name: String,
+    pub table: String,
+    pub timing: String,
+    pub events: Vec<String>,
+    pub body: String,
 }
 
 /// Common Table Expression (CTE)
@@ -378,11 +389,12 @@ impl Parser {
             Some(Token::Table) => self.parse_create_table(),
             Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
             Some(Token::Procedure) => self.parse_create_procedure(),
+            Some(Token::Trigger) => self.parse_create_trigger(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, or PROCEDURE after CREATE, got {:?}",
+                "Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, or PROCEDURE after CREATE".to_string()),
+            None => Err("Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE".to_string()),
         }
     }
 
@@ -496,6 +508,110 @@ impl Parser {
             params,
             body,
         }))
+    }
+
+    fn parse_create_trigger(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Trigger)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected trigger name, got {:?}", t)),
+            None => return Err("Expected trigger name".to_string()),
+        };
+
+        let timing = match self.current() {
+            Some(Token::Before) => {
+                self.next();
+                "BEFORE".to_string()
+            }
+            Some(Token::After) => {
+                self.next();
+                "AFTER".to_string()
+            }
+            Some(t) => return Err(format!("Expected BEFORE or AFTER, got {:?}", t)),
+            None => return Err("Expected BEFORE or AFTER".to_string()),
+        };
+
+        let events = self.parse_trigger_events()?;
+
+        self.expect(Token::On)?;
+
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+            None => return Err("Expected table name".to_string()),
+        };
+
+        self.expect(Token::ForEach)?;
+        self.expect(Token::Row)?;
+
+        self.expect(Token::Begin)?;
+        let mut body = String::new();
+        while !matches!(self.current(), Some(Token::End) | None) {
+            match self.next() {
+                Some(Token::Semicolon) => {
+                    body.push(';');
+                    body.push(' ');
+                }
+                Some(Token::Identifier(sql)) => {
+                    body.push_str(&sql);
+                    body.push(' ');
+                }
+                Some(t) => {
+                    body.push_str(&t.to_string());
+                    body.push(' ');
+                }
+                None => return Err("Expected END".to_string()),
+            }
+        }
+        self.expect(Token::End)?;
+
+        Ok(Statement::CreateTrigger(CreateTriggerStatement {
+            name,
+            table,
+            timing,
+            events,
+            body: body.trim().to_string(),
+        }))
+    }
+
+    fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
+        let mut events = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Insert) => {
+                    events.push("INSERT".to_string());
+                    self.next();
+                }
+                Some(Token::Update) => {
+                    events.push("UPDATE".to_string());
+                    self.next();
+                }
+                Some(Token::Delete) => {
+                    events.push("DELETE".to_string());
+                    self.next();
+                }
+                Some(Token::Identifier(ref s))
+                    if ["INSERT", "UPDATE", "DELETE"].contains(&s.to_uppercase().as_str()) =>
+                {
+                    events.push(s.to_uppercase().clone());
+                    self.next();
+                }
+                Some(t) => {
+                    if events.is_empty() {
+                        return Err(format!("Expected INSERT, UPDATE, or DELETE, got {:?}", t));
+                    }
+                    break;
+                }
+                None => {
+                    if events.is_empty() {
+                        return Err("Expected INSERT, UPDATE, or DELETE".to_string());
+                    }
+                    break;
+                }
+            }
+        }
+        Ok(events)
     }
 
     fn parse_select(&mut self) -> Result<Statement, String> {
@@ -2438,6 +2554,41 @@ fn test_debug_having() {
                 assert!(s.columns[0].expression.is_some());
             }
             _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_trigger() {
+        let sql = "CREATE TRIGGER test_trigger BEFORE INSERT ON users FOR EACH ROW BEGIN SET NEW.name = 'triggered'; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::CreateTrigger(t) => {
+                assert_eq!(t.name, "test_trigger");
+                assert_eq!(t.timing, "BEFORE");
+                assert_eq!(t.table, "users");
+                assert_eq!(t.events.len(), 1);
+                assert_eq!(t.events[0], "INSERT");
+                assert!(t.body.contains("SET NEW.name"));
+            }
+            _ => panic!("Expected CREATE TRIGGER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_trigger_after_update() {
+        let sql = "CREATE TRIGGER update_trigger AFTER UPDATE ON orders FOR EACH ROW BEGIN DELETE FROM log; END";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::CreateTrigger(t) => {
+                assert_eq!(t.name, "update_trigger");
+                assert_eq!(t.timing, "AFTER");
+                assert_eq!(t.table, "orders");
+                assert_eq!(t.events.len(), 1);
+                assert_eq!(t.events[0], "UPDATE");
+            }
+            _ => panic!("Expected CREATE TRIGGER statement"),
         }
     }
 }
