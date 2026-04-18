@@ -31,6 +31,7 @@ pub enum Statement {
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
+    Union(UnionStatement),
 }
 
 /// CREATE INDEX statement
@@ -58,6 +59,14 @@ pub struct CreateTriggerStatement {
 pub struct AlterTableStatement {
     pub table_name: String,
     pub operation: AlterTableOperation,
+}
+
+/// UNION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnionStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub union_all: bool, // true = UNION ALL (keep duplicates), false = UNION (dedup)
 }
 
 /// ALTER TABLE operation types
@@ -606,6 +615,21 @@ impl Parser {
         }
 
         let select = self.parse_select_statement()?;
+
+        // Check for UNION after SELECT
+        if matches!(self.current(), Some(Token::Union)) {
+            self.next(); // consume UNION
+            let union_all = matches!(self.current(), Some(Token::All));
+            if union_all {
+                self.next(); // consume ALL
+            }
+            let right = self.parse_select_statement()?;
+            return Ok(Statement::Union(UnionStatement {
+                left: Box::new(Statement::Select(select)),
+                right: Box::new(Statement::Select(right)),
+                union_all,
+            }));
+        }
 
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
