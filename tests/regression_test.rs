@@ -119,8 +119,9 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "mvcc_snapshot_isolation_test",
                 "snapshot_isolation_test",
                 "concurrency_stress_test",
+                "ssi_regression_test",
             ],
-            description: "MVCC并发、快照隔离、并发压力测试",
+            description: "MVCC并发、快照隔离、并发压力测试、SSI序列化冲突检测",
         },
         // 异常测试 - 隔离级别
         TestCategory {
