@@ -1,4 +1,4 @@
-use sqlrustgo_transaction::{DistributedLockManager, SsiDetector, TxId};
+use sqlrustgo_transaction::{DistributedLockManager, SsiDetector, SsiDetectorSync, TxId};
 use std::sync::Arc;
 
 #[tokio::test]
@@ -37,9 +37,6 @@ async fn test_ssi_rw_conflict_detection() {
 
     // At least one should fail due to cycle detection
     assert!(result1.is_err() || result2.is_err());
-
-    // If both err, that's expected for this dangerous structure
-    // If one ok and one err, the one that err'd found the conflict
 }
 
 #[tokio::test]
@@ -55,4 +52,50 @@ async fn test_ssi_write_no_conflict() {
 
     assert!(detector.validate_commit(tx1).await.is_ok());
     assert!(detector.validate_commit(tx2).await.is_ok());
+}
+
+#[test]
+fn test_ssi_sync_concurrent_read_no_conflict() {
+    let detector = SsiDetectorSync::new();
+
+    let tx1 = TxId::new(1);
+    detector.record_read(tx1, b"key1".to_vec());
+
+    let tx2 = TxId::new(2);
+    detector.record_read(tx2, b"key1".to_vec());
+
+    assert!(detector.validate_commit(tx1).is_ok());
+    assert!(detector.validate_commit(tx2).is_ok());
+}
+
+#[test]
+fn test_ssi_sync_rw_conflict_detection() {
+    let detector = SsiDetectorSync::new();
+
+    let tx1 = TxId::new(1);
+    detector.record_read(tx1, b"X".to_vec());
+    detector.record_write(tx1, b"Y".to_vec());
+
+    let tx2 = TxId::new(2);
+    detector.record_read(tx2, b"Y".to_vec());
+    detector.record_write(tx2, b"X".to_vec());
+
+    let result1 = detector.validate_commit(tx1);
+    let result2 = detector.validate_commit(tx2);
+
+    assert!(result1.is_err() || result2.is_err());
+}
+
+#[test]
+fn test_ssi_sync_write_no_conflict() {
+    let detector = SsiDetectorSync::new();
+
+    let tx1 = TxId::new(1);
+    detector.record_write(tx1, b"key1".to_vec());
+
+    let tx2 = TxId::new(2);
+    detector.record_write(tx2, b"key2".to_vec());
+
+    assert!(detector.validate_commit(tx1).is_ok());
+    assert!(detector.validate_commit(tx2).is_ok());
 }
