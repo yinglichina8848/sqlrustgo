@@ -64,7 +64,15 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             let group_exprs = &select.group_by;
             if group_exprs.is_empty() {
                 // No GROUP BY - compute aggregates over all filtered rows
-                let agg_values = self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
+                let mut agg_values = self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
+
+                // Apply HAVING clause if present
+                if let Some(ref having_expr) = select.having {
+                    if !evaluate_where_clause(having_expr, &agg_values, &table_info) {
+                        return Ok(ExecutorResult::new(vec![], 0));
+                    }
+                }
+
                 return Ok(ExecutorResult::new(vec![agg_values], 1));
             } else {
                 // GROUP BY - group rows first
@@ -79,12 +87,18 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                     groups.entry(key).or_default().push(row.clone());
                 }
 
-                let agg_result_rows: Vec<Vec<Value>> = groups
+                let mut agg_result_rows: Vec<Vec<Value>> = groups
                     .values()
                     .map(|group_rows| {
                         self.compute_aggregates(&select.aggregates, group_rows, &table_info)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
+
+                // Apply HAVING clause if present (filters aggregated groups)
+                if let Some(ref having_expr) = select.having {
+                    agg_result_rows.retain(|row| evaluate_where_clause(having_expr, row, &table_info));
+                }
+
                 let row_count = agg_result_rows.len();
                 return Ok(ExecutorResult::new(agg_result_rows, row_count));
             }
