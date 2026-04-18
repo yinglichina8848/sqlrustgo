@@ -258,3 +258,23 @@ fn test_optimize_join_order_respects_stats() {
     // Smallest (t3 with 5 rows) should be first after ANALYZE
     assert_eq!(optimal[0], "t3");
 }
+
+#[test]
+fn test_call_statement_returns_error() {
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(storage);
+
+    // CALL statement should return an error (not fully implemented)
+    let result = engine.execute("CALL my_proc(1, 2)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_create_procedure_statement_returns_error() {
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut engine = ExecutionEngine::new(storage);
+
+    // CREATE PROCEDURE should return an error (not fully implemented)
+    let result = engine.execute("CREATE PROCEDURE test_proc() BEGIN END");
+    assert!(result.is_err());
+}

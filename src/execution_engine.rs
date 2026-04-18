@@ -6,8 +6,9 @@
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, CreateIndexStatement, CreateTableStatement,
-    DropTableStatement, InsertStatement, SelectStatement,
+    AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
+    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
+    InsertStatement, SelectStatement,
 };
 use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
@@ -347,6 +348,13 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 
                 left_result.affected_rows = left_result.rows.len();
                 Ok(left_result)
+            }
+            Statement::CreateTrigger(ref create_trigger) => {
+                self.execute_create_trigger(create_trigger)
+            }
+            Statement::Call(ref call) => self.execute_call(call),
+            Statement::CreateProcedure(ref create_proc) => {
+                self.execute_create_procedure(create_proc)
             }
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
@@ -775,6 +783,67 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             .ok_or_else(|| SqlError::ExecutionError("Column not found".to_string()))?;
         storage.create_index(table_name, col_name, col_idx)?;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_create_trigger(&self, stmt: &CreateTriggerStatement) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_storage::engine::{TriggerEvent, TriggerInfo, TriggerTiming};
+
+        let mut storage = self.storage.write().unwrap();
+        let timing = match stmt.timing.to_uppercase().as_str() {
+            "BEFORE" => TriggerTiming::Before,
+            "AFTER" => TriggerTiming::After,
+            _ => {
+                return Err(SqlError::ExecutionError(format!(
+                    "Invalid trigger timing: {}",
+                    stmt.timing
+                )))
+            }
+        };
+        // Handle first event (triggers support one event per trigger in storage)
+        let event_str = stmt
+            .events
+            .first()
+            .ok_or_else(|| SqlError::ExecutionError("No trigger event specified".to_string()))?;
+        let event = match event_str.to_uppercase().as_str() {
+            "INSERT" => TriggerEvent::Insert,
+            "UPDATE" => TriggerEvent::Update,
+            "DELETE" => TriggerEvent::Delete,
+            _ => {
+                return Err(SqlError::ExecutionError(format!(
+                    "Invalid trigger event: {}",
+                    event_str
+                )))
+            }
+        };
+        let trigger_info = TriggerInfo {
+            name: stmt.name.clone(),
+            table_name: stmt.table.clone(),
+            timing,
+            event,
+            body: stmt.body.clone(),
+        };
+        storage.create_trigger(trigger_info)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_call(&self, call: &CallStatement) -> SqlResult<ExecutorResult> {
+        // Stored procedure call - return error indicating not fully implemented
+        // Full implementation requires catalog integration
+        Err(SqlError::ExecutionError(format!(
+            "CALL statement execution requires stored procedure catalog: {}",
+            call.procedure_name
+        )))
+    }
+
+    fn execute_create_procedure(
+        &self,
+        _stmt: &CreateProcedureStatement,
+    ) -> SqlResult<ExecutorResult> {
+        // Stored procedure creation - return error indicating not fully implemented
+        // Full implementation requires catalog integration
+        Err(SqlError::ExecutionError(
+            "CREATE PROCEDURE requires stored procedure catalog integration".to_string(),
+        ))
     }
 }
 
