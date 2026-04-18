@@ -49,16 +49,39 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
-        // insert.values is Vec<Vec<Expression>>, need to evaluate expressions to Values
+
+        // Get table info for FK validation
+        let table_info = storage.get_table_info(&insert.table)?;
+
+        // Build column name to index map
+        let _col_indices: std::collections::HashMap<&str, usize> = if insert.columns.is_empty() {
+            std::collections::HashMap::new()
+        } else {
+            insert
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (c.as_str(), i))
+                .collect()
+        };
+
+        // Convert expressions to records and validate FK constraints
         let mut all_records = Vec::new();
         for row_exprs in &insert.values {
             let mut record = Vec::with_capacity(row_exprs.len());
-            for expr in row_exprs {
+            for (_i, expr) in row_exprs.iter().enumerate() {
                 let val = expression_to_value(expr);
                 record.push(val);
             }
+
+            // Validate foreign key constraints before insert
+            if !table_info.foreign_keys.is_empty() {
+                validate_foreign_keys(&*storage, &table_info, &record, &insert.columns)?;
+            }
+
             all_records.push(record);
         }
+
         storage.insert(&insert.table, all_records)?;
         Ok(ExecutorResult::new(vec![], insert.values.len()))
     }
@@ -151,4 +174,68 @@ fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
         sqlrustgo_parser::Expression::Identifier(name) => Value::Text(name.clone()),
         _ => Value::Null,
     }
+}
+
+/// Validate foreign key constraints for a row before insert
+fn validate_foreign_keys(
+    storage: &dyn StorageEngine,
+    table_info: &sqlrustgo_storage::TableInfo,
+    row: &[Value],
+    insert_columns: &[String],
+) -> SqlResult<()> {
+    for fk in &table_info.foreign_keys {
+        // Collect FK column values from the row
+        let fk_values: Vec<Value> = fk
+            .columns
+            .iter()
+            .filter_map(|col_name| {
+                let col_idx = if insert_columns.is_empty() {
+                    table_info.columns.iter().position(|c| c.name.eq_ignore_ascii_case(col_name))
+                } else {
+                    insert_columns.iter().position(|c| c.eq_ignore_ascii_case(col_name))
+                };
+                col_idx.and_then(|idx| row.get(idx).cloned())
+            })
+            .collect();
+
+        // Skip if any FK value is NULL (NULL FKs are allowed)
+        if fk_values.iter().any(|v| matches!(v, Value::Null)) {
+            continue;
+        }
+
+        // Scan parent table to verify referenced row exists
+        let parent_rows = storage.scan(&fk.referenced_table)?;
+
+        // Find referenced column indices in parent table
+        let ref_col_indices: Vec<usize> = fk
+            .referenced_columns
+            .iter()
+            .filter_map(|col_name| {
+                storage
+                    .get_table_info(&fk.referenced_table)
+                    .ok()?
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(col_name))
+            })
+            .collect();
+
+        let parent_has_match = parent_rows.iter().any(|parent_row| {
+            ref_col_indices
+                .iter()
+                .enumerate()
+                .all(|(i, &col_idx)| parent_row.get(col_idx) == fk_values.get(i))
+        });
+
+        if !parent_has_match {
+            return Err(SqlError::ExecutionError(format!(
+                "Foreign key constraint failed: {} ({}) references {} ({}) which does not exist",
+                table_info.name,
+                fk.columns.join(", "),
+                fk.referenced_table,
+                fk.referenced_columns.join(", ")
+            )));
+        }
+    }
+    Ok(())
 }
