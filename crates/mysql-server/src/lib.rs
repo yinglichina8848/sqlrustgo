@@ -66,6 +66,28 @@ fn rand_u8_20() -> [u8; 20] {
     combined
 }
 
+fn generate_tls_config() -> Result<ServerConfig, Box<dyn std::error::Error>> {
+    let mut distinguished_name = DistinguishedName::new();
+    distinguished_name.push(DnType::CommonName, "localhost");
+    distinguished_name.push(DnType::OrganizationName, "SQLRustGo");
+
+    let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)?;
+    let cert_params = rcgen::CertificateParams::default();
+    let certificate = cert_params.self_signed(&key_pair)?;
+
+    let cert_pem = certificate.pem();
+    let key_pem = key_pair.serialize_pem();
+
+    let cert = CertificateDer::from_pem_slice(cert_pem.as_bytes())?;
+    let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes())?;
+
+    let config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert], key)?;
+
+    Ok(config)
+}
+
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
