@@ -11,20 +11,157 @@ use sqlrustgo_parser::parser::{
 };
 use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
+use sqlrustgo_types::Value as SqlValue;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
     storage: Arc<RwLock<S>>,
+    stats: Arc<RwLock<ExecutionStats>>,
+    cbo_enabled: bool,
+}
+
+/// Execution statistics for CBO
+#[derive(Debug, Clone, Default)]
+pub struct ExecutionStats {
+    pub table_stats: HashMap<String, TableStatistics>,
+}
+
+/// Table-level statistics for query optimization
+#[derive(Debug, Clone)]
+pub struct TableStatistics {
+    pub row_count: u64,
+    pub column_stats: HashMap<String, ColumnStatistics>,
+}
+
+/// Column-level statistics
+#[derive(Debug, Clone)]
+pub struct ColumnStatistics {
+    pub null_count: u64,
+    pub distinct_count: u64,
+    pub min_value: Option<SqlValue>,
+    pub max_value: Option<SqlValue>,
 }
 
 /// Type alias for MemoryStorage-backed execution engine
 pub type MemoryExecutionEngine = ExecutionEngine<MemoryStorage>;
 
 impl<S: StorageEngine> ExecutionEngine<S> {
-    /// Create a new execution engine
+    /// Create a new execution engine with CBO enabled by default
     pub fn new(storage: Arc<RwLock<S>>) -> Self {
-        Self { storage }
+        Self {
+            storage,
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled: true,
+        }
+    }
+
+    /// Create a new execution engine with CBO configuration
+    pub fn with_cbo(storage: Arc<RwLock<S>>, cbo_enabled: bool) -> Self {
+        Self {
+            storage,
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled,
+        }
+    }
+
+    /// Check if CBO is enabled
+    pub fn is_cbo_enabled(&self) -> bool {
+        self.cbo_enabled
+    }
+
+    /// Enable or disable CBO
+    pub fn set_cbo_enabled(&mut self, enabled: bool) {
+        self.cbo_enabled = enabled;
+    }
+
+    /// Get table statistics for CBO
+    pub fn get_table_stats(&self) -> Arc<RwLock<ExecutionStats>> {
+        self.stats.clone()
+    }
+
+    /// Collect statistics for a table (ANALYZE)
+    fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
+        let storage = self.storage.read().unwrap();
+        let rows = storage.scan(table)?;
+        let row_count = rows.len() as u64;
+
+        let table_info = storage.get_table_info(table)?;
+
+        let mut column_stats = HashMap::new();
+        for col in &table_info.columns {
+            let mut null_count = 0u64;
+            let mut distinct_values = std::collections::HashSet::new();
+            let mut min_value: Option<SqlValue> = None;
+            let mut max_value: Option<SqlValue> = None;
+
+            let col_idx = table_info
+                .columns
+                .iter()
+                .position(|c| c.name == col.name)
+                .unwrap_or(0);
+
+            for row in &rows {
+                if let Some(val) = row.get(col_idx) {
+                    if val == &SqlValue::Null {
+                        null_count += 1;
+                    } else {
+                        distinct_values.insert(format!("{:?}", val));
+                        match val {
+                            SqlValue::Integer(n) => {
+                                min_value = Some(SqlValue::Integer(*n));
+                                max_value = Some(SqlValue::Integer(*n));
+                            }
+                            SqlValue::Text(s) => {
+                                let cmp_min = min_value
+                                    .as_ref()
+                                    .and_then(|v| {
+                                        if let SqlValue::Text(ms) = v {
+                                            Some(ms < s)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or(true);
+                                let cmp_max = max_value
+                                    .as_ref()
+                                    .and_then(|v| {
+                                        if let SqlValue::Text(ms) = v {
+                                            Some(ms > s)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or(true);
+                                if cmp_min {
+                                    min_value = Some(SqlValue::Text(s.clone()));
+                                }
+                                if cmp_max {
+                                    max_value = Some(SqlValue::Text(s.clone()));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            column_stats.insert(
+                col.name.clone(),
+                ColumnStatistics {
+                    null_count,
+                    distinct_count: distinct_values.len() as u64,
+                    min_value,
+                    max_value,
+                },
+            );
+        }
+
+        Ok(TableStatistics {
+            row_count,
+            column_stats,
+        })
     }
 
     /// Execute a SQL statement and return results
@@ -39,7 +176,21 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             Statement::CreateTable(ref create) => self.execute_create_table(create),
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
-            Statement::Analyze(_) => Ok(ExecutorResult::empty()),
+            Statement::Analyze(ref analyze) => {
+                let table_name = analyze.table_name.as_ref().ok_or_else(|| {
+                    SqlError::ExecutionError("ANALYZE: table name is required".to_string())
+                })?;
+                let stats = self.collect_table_stats(table_name)?;
+                let row_count = stats.row_count;
+
+                let mut stats_guard = self.stats.write().unwrap();
+                stats_guard.table_stats.insert(table_name.clone(), stats);
+
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Integer(row_count as i64)]],
+                    1,
+                ))
+            }
             Statement::Union(ref union_stmt) => {
                 // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
@@ -505,10 +656,21 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 }
 
 impl ExecutionEngine<MemoryStorage> {
-    /// Create a new execution engine backed by MemoryStorage
+    /// Create a new execution engine backed by MemoryStorage with CBO enabled
     pub fn with_memory() -> Self {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled: true,
+        }
+    }
+
+    /// Create a new execution engine backed by MemoryStorage with custom CBO setting
+    pub fn with_memory_and_cbo(cbo_enabled: bool) -> Self {
+        Self {
+            storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled,
         }
     }
 }
@@ -802,4 +964,83 @@ fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
         .columns
         .iter()
         .position(|c| c.name.eq_ignore_ascii_case(col_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_analyze_table_stats() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT, age INTEGER)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (2, 'Bob', 25)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (3, 'Charlie', 30)")
+            .unwrap();
+
+        let result = engine.execute("ANALYZE users").unwrap();
+        assert_eq!(result.affected_rows, 1);
+        assert_eq!(result.rows[0][0], Value::Integer(3));
+
+        let stats = engine.get_table_stats();
+        let stats_guard = stats.read().unwrap();
+        let table_stats = stats_guard.table_stats.get("users").unwrap();
+        assert_eq!(table_stats.row_count, 3);
+    }
+
+    #[test]
+    fn test_execution_stats_default() {
+        let stats = ExecutionStats::default();
+        assert!(stats.table_stats.is_empty());
+    }
+
+    #[test]
+    fn test_table_statistics() {
+        let mut stats = HashMap::new();
+        stats.insert(
+            "users".to_string(),
+            TableStatistics {
+                row_count: 100,
+                column_stats: HashMap::new(),
+            },
+        );
+
+        let exec_stats = ExecutionStats { table_stats: stats };
+        assert_eq!(exec_stats.table_stats.get("users").unwrap().row_count, 100);
+    }
+
+    #[test]
+    fn test_cbo_enabled_by_default() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let engine = ExecutionEngine::new(storage);
+        assert!(engine.is_cbo_enabled());
+    }
+
+    #[test]
+    fn test_cbo_disable() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::with_cbo(storage, false);
+        assert!(!engine.is_cbo_enabled());
+        engine.set_cbo_enabled(true);
+        assert!(engine.is_cbo_enabled());
+    }
+
+    #[test]
+    fn test_memory_engine_with_cbo() {
+        let engine = ExecutionEngine::with_memory();
+        assert!(engine.is_cbo_enabled());
+
+        let engine_disabled = ExecutionEngine::with_memory_and_cbo(false);
+        assert!(!engine_disabled.is_cbo_enabled());
+    }
 }
