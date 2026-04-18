@@ -285,6 +285,7 @@ pub enum TransactionError {
     TransactionNotActive,
     LockError,
     StorageError(String),
+    SerializationConflict(String),
 }
 
 impl std::fmt::Display for TransactionError {
@@ -296,6 +297,9 @@ impl std::fmt::Display for TransactionError {
             TransactionError::TransactionNotActive => write!(f, "transaction is not active"),
             TransactionError::LockError => write!(f, "failed to acquire lock"),
             TransactionError::StorageError(msg) => write!(f, "storage error: {}", msg),
+            TransactionError::SerializationConflict(msg) => {
+                write!(f, "serialization conflict: {}", msg)
+            }
         }
     }
 }
