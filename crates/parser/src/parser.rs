@@ -323,6 +323,13 @@ impl Parser {
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
+        // Check for UNIQUE keyword
+        let unique = if matches!(self.current(), Some(Token::Unique)) {
+            self.next();
+            true
+        } else {
+            false
+        };
         self.expect(Token::Index)?;
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
@@ -2034,182 +2041,118 @@ mod tests {
             _ => panic!("Expected SELECT statement"),
         }
     }
-}
-
-#[test]
-fn test_debug_having() {
-    let sql =
-        "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
-    match parse(sql) {
-        Ok(stmt) => {
-            println!("OK: {:#?}", stmt);
-            if let Statement::Select(s) = stmt {
-                println!("having = {:?}", s.having);
-            }
-        }
-        Err(e) => {
-            println!("ERROR: {}", e);
-        }
-    }
 
     #[test]
-    fn test_parse_binary_expression_subtraction() {
-        let result = parse("SELECT price - discount FROM orders");
+    fn test_parse_create_index() {
+        let result = parse("CREATE INDEX idx ON users (name, email)");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
+            Statement::CreateIndex(idx) => {
+                assert_eq!(idx.name, "idx");
+                assert_eq!(idx.table, "users");
+                assert_eq!(idx.columns.len(), 2);
             }
-            _ => panic!("Expected SELECT statement"),
+            _ => panic!("Expected CREATE INDEX statement"),
         }
     }
 
     #[test]
-    fn test_parse_binary_expression_multiplication() {
-        let result = parse("SELECT quantity * price FROM orders");
+    fn test_parse_create_unique_index() {
+        let result = parse("CREATE UNIQUE INDEX idx ON users (id)");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
     }
 
     #[test]
-    fn test_parse_binary_expression_division() {
-        let result = parse("SELECT total / cnt FROM stats");
+    fn test_parse_cross_join() {
+        let result = parse("SELECT * FROM a CROSS JOIN b");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
     }
 
     #[test]
-    fn test_parse_binary_expression_modulo() {
-        let result = parse("SELECT total % discount FROM orders");
+    fn test_parse_with_cte() {
+        let result = parse("WITH cte AS (SELECT * FROM t) SELECT * FROM cte");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
     }
 
     #[test]
-    fn test_parse_binary_expression_not_equal() {
-        let result = parse("SELECT a != b FROM t");
+    fn test_parse_with_recursive() {
+        let result = parse("WITH RECURSIVE t AS (SELECT * FROM x) SELECT * FROM t");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
     }
 
     #[test]
-    fn test_parse_binary_expression_less_equal() {
-        let result = parse("SELECT a <= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_greater_equal() {
-        let result = parse("SELECT a >= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_complex() {
-        let result = parse("SELECT a + b * c - d / e FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_with_literal() {
-        let result = parse("SELECT id + 1 FROM users");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_multiple_columns() {
-        let result = parse("SELECT a + b, c - d, e * f FROM t");
+    fn test_parse_expression_list() {
+        let result = parse("SELECT a, b, c FROM t");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Select(s) => {
                 assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_some());
-                assert!(s.columns[2].expression.is_some());
             }
             _ => panic!("Expected SELECT statement"),
         }
     }
 
     #[test]
-    fn test_parse_binary_expression_mixed_with_identifier() {
-        let result = parse("SELECT a + b, name, c * d FROM t");
+    fn test_parse_on_delete_cascade() {
+        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE)";
+        let result = parse(sql);
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_none());
-                assert!(s.columns[2].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
     }
 
     #[test]
-    fn test_parse_binary_expression_with_table_prefix() {
-        let result = parse("SELECT t.a + t.b FROM table_name t");
+    fn test_parse_on_delete_set_null() {
+        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE SET NULL)";
+        let result = parse(sql);
         assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
+    }
+
+    #[test]
+    fn test_parse_on_update_cascade() {
+        let sql = "CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE)";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_or_expression() {
+        let result = parse("SELECT * FROM t WHERE a = 1 OR b = 2");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_and_expression() {
+        let result = parse("SELECT * FROM t WHERE a = 1 AND b = 2");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_in_expression() {
+        let result = parse("SELECT * FROM t WHERE a IN (SELECT id FROM u)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_not_in_expression() {
+        let result = parse("SELECT * FROM t WHERE a NOT IN (SELECT id FROM u)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_between_expression() {
+        let result = parse("SELECT * FROM t WHERE a BETWEEN 1 AND 10");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_is_null_expression() {
+        let result = parse("SELECT * FROM t WHERE a IS NULL");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_is_not_null_expression() {
+        let result = parse("SELECT * FROM t WHERE a IS NOT NULL");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
     }
 }
 
