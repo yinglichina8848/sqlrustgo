@@ -5,10 +5,17 @@
 #![allow(clippy::type_complexity)]
 
 pub mod cost;
+pub mod graph_cost;
+pub mod index_selector;
 pub mod network_cost;
+pub mod path_selector;
 pub mod plan;
+pub mod query_planner;
 pub mod rules;
 pub mod stats;
+pub mod unified_cost;
+pub mod unified_plan;
+pub mod vector_cost;
 
 pub use cost::SimpleCostModel;
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
