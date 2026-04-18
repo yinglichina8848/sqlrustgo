@@ -15,7 +15,7 @@ use sqlrustgo_optimizer::{
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::{Statement, TransactionCommand};
 use sqlrustgo_rag::{Document, OpenClawClient};
-use sqlrustgo_storage::engine::StorageEngine;
+use sqlrustgo_storage::engine::{StorageEngine, TriggerEvent, TriggerInfo, TriggerTiming};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -1708,6 +1708,216 @@ struct SqlExecResult {
     affected_rows: usize,
 }
 
+/// Execute BEFORE triggers for an INSERT operation
+fn execute_before_insert_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    records: &mut [Vec<sqlrustgo_storage::engine::Value>],
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Insert)
+        .collect();
+
+    for trigger in triggers {
+        for record in records.iter_mut() {
+            execute_simple_trigger_body(&trigger, record, &storage)?;
+        }
+    }
+    Ok(())
+}
+
+/// Execute AFTER triggers for an INSERT operation
+fn execute_after_insert_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    records: &[Vec<sqlrustgo_storage::engine::Value>],
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::After && t.event == TriggerEvent::Insert)
+        .collect();
+
+    for trigger in triggers {
+        for record in records.iter() {
+            execute_simple_trigger_body(&trigger, record, &storage)?;
+        }
+    }
+    Ok(())
+}
+
+/// Execute a simple trigger body (SET NEW.col = value pattern)
+fn execute_simple_trigger_body(
+    trigger: &TriggerInfo,
+    record: &[sqlrustgo_storage::engine::Value],
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let body = &trigger.body;
+
+    if body.starts_with("SET NEW.") {
+        if let Some(assignments) = parse_simple_set_assignments(body) {
+            let table_info = storage
+                .get_table_info(&trigger.table_name)
+                .map_err(|e| e.to_string())?;
+            let mut result = record.to_vec();
+
+            for (col_name, value) in assignments {
+                if let Some(col_idx) = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                {
+                    if col_idx < result.len() {
+                        result[col_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parse simple SET NEW.col = value assignments
+fn parse_simple_set_assignments(
+    body: &str,
+) -> Option<Vec<(String, sqlrustgo_storage::engine::Value)>> {
+    let mut assignments = Vec::new();
+    let body = body.trim_start_matches("SET ");
+
+    for part in body.split(',') {
+        let part = part.trim();
+        if let Some((lhs, rhs)) = part.split_once('=') {
+            let lhs = lhs.trim();
+            let rhs = rhs.trim();
+
+            if lhs.starts_with("NEW.") {
+                let col_name = lhs.trim_start_matches("NEW.").trim().to_string();
+                if let Some(value) = evaluate_simple_trigger_value(rhs) {
+                    assignments.push((col_name, value));
+                }
+            }
+        }
+    }
+    if assignments.is_empty() {
+        None
+    } else {
+        Some(assignments)
+    }
+}
+
+/// Evaluate a simple value expression for triggers
+fn evaluate_simple_trigger_value(expr: &str) -> Option<sqlrustgo_storage::engine::Value> {
+    let expr = expr.trim();
+    if expr.starts_with('\'') && expr.ends_with('\'') {
+        return Some(sqlrustgo_storage::engine::Value::Text(
+            expr[1..expr.len() - 1].to_string(),
+        ));
+    }
+    if let Ok(num) = expr.parse::<i64>() {
+        return Some(sqlrustgo_storage::engine::Value::Integer(num));
+    }
+    if let Ok(num) = expr.parse::<f64>() {
+        return Some(sqlrustgo_storage::engine::Value::Float(num));
+    }
+    if expr.eq_ignore_ascii_case("NULL") {
+        return Some(sqlrustgo_storage::engine::Value::Null);
+    }
+    if expr.eq_ignore_ascii_case("TRUE") {
+        return Some(sqlrustgo_storage::engine::Value::Boolean(true));
+    }
+    if expr.eq_ignore_ascii_case("FALSE") {
+        return Some(sqlrustgo_storage::engine::Value::Boolean(false));
+    }
+    None
+}
+
+/// Execute BEFORE triggers for an UPDATE operation
+fn execute_before_update_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    new_row: &mut Vec<sqlrustgo_storage::engine::Value>,
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Update)
+        .collect();
+
+    for trigger in triggers {
+        execute_update_trigger_body(&trigger, old_row, new_row, &storage)?;
+    }
+    Ok(())
+}
+
+/// Execute a trigger body for UPDATE operation
+fn execute_update_trigger_body(
+    trigger: &TriggerInfo,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    new_row: &mut Vec<sqlrustgo_storage::engine::Value>,
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let body = &trigger.body;
+
+    if body.starts_with("SET NEW.") {
+        if let Some(assignments) = parse_simple_set_assignments(body) {
+            let table_info = storage
+                .get_table_info(&trigger.table_name)
+                .map_err(|e| e.to_string())?;
+
+            for (col_name, value) in assignments {
+                if let Some(col_idx) = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                {
+                    if col_idx < new_row.len() {
+                        new_row[col_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Execute BEFORE DELETE triggers
+fn execute_before_delete_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Delete)
+        .collect();
+
+    for trigger in triggers {
+        let _ = execute_delete_trigger_body(&trigger, old_row, &storage);
+    }
+    Ok(())
+}
+
+/// Execute a trigger body for DELETE operation
+fn execute_delete_trigger_body(
+    trigger: &TriggerInfo,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let _body = &trigger.body;
+    let _table_info = storage
+        .get_table_info(&trigger.table_name)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Execute SQL query
 fn execute_sql(
     sql: &str,
@@ -1839,7 +2049,7 @@ fn execute_sql(
                 .map(|i| i.columns.len())
                 .unwrap_or(insert.values.first().map(|r| r.len()).unwrap_or(0));
 
-            let records: Vec<Vec<sqlrustgo_storage::engine::Value>> = insert
+            let mut records: Vec<Vec<sqlrustgo_storage::engine::Value>> = insert
                 .values
                 .iter()
                 .map(|row| {
@@ -1872,9 +2082,14 @@ fn execute_sql(
                 })
                 .collect();
 
+            execute_before_insert_triggers(storage, table_name, &mut records)?;
+
+            let records_to_insert = records.clone();
             storage
                 .insert(table_name, records)
                 .map_err(|e| e.to_string())?;
+
+            execute_after_insert_triggers(storage, table_name, &records_to_insert)?;
 
             Ok(SqlExecResult {
                 columns: vec![],
@@ -1944,6 +2159,10 @@ fn execute_sql(
                         .collect()
                 };
 
+            for row in &rows_to_delete {
+                execute_before_delete_triggers(storage, &delete.table, row)?;
+            }
+
             let deleted_count = rows_to_delete.len();
 
             if deleted_count > 0 {
@@ -2005,6 +2224,8 @@ fn execute_sql(
                             new_row[col_idx] = evaluate_expr(expr, &new_row, &columns);
                         }
                     }
+                    let _ =
+                        execute_before_update_triggers(storage, &update.table, row, &mut new_row);
                     (idx, new_row)
                 })
                 .collect();
