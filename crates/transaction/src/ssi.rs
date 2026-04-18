@@ -1,6 +1,7 @@
 //! SSI (Serializable Snapshot Isolation) implementation
 
 use std::collections::{HashMap, HashSet};
+use std::sync::RwLock as SyncRwLock;
 
 use crate::mvcc::TxId;
 
@@ -198,6 +199,86 @@ impl SsiDetector {
     }
 }
 
+/// Synchronous SSI detector for use with sync storage engines
+pub struct SsiDetectorSync {
+    read_sets: SyncRwLock<HashMap<TxId, HashSet<Vec<u8>>>>,
+    write_sets: SyncRwLock<HashMap<TxId, HashSet<Vec<u8>>>>,
+    graph: SyncRwLock<SerializationGraph>,
+}
+
+impl SsiDetectorSync {
+    pub fn new() -> Self {
+        Self {
+            read_sets: SyncRwLock::new(HashMap::new()),
+            write_sets: SyncRwLock::new(HashMap::new()),
+            graph: SyncRwLock::new(SerializationGraph::new()),
+        }
+    }
+
+    pub fn record_read(&self, tx_id: TxId, key: Vec<u8>) {
+        let mut read_sets = self.read_sets.write().unwrap();
+        read_sets.entry(tx_id).or_default().insert(key);
+    }
+
+    pub fn record_write(&self, tx_id: TxId, key: Vec<u8>) {
+        let mut write_sets = self.write_sets.write().unwrap();
+        write_sets.entry(tx_id).or_default().insert(key);
+    }
+
+    pub fn validate_commit(&self, tx_id: TxId) -> Result<(), SsiError> {
+        let read_sets = self.read_sets.read().unwrap();
+        let write_sets = self.write_sets.read().unwrap();
+
+        let my_reads = read_sets.get(&tx_id).cloned().unwrap_or_default();
+        let my_writes = write_sets.get(&tx_id).cloned().unwrap_or_default();
+
+        for (other_tx, other_writes) in write_sets.iter() {
+            if *other_tx == tx_id {
+                continue;
+            }
+
+            let rw_conflict = my_reads.intersection(other_writes).count() > 0;
+
+            if rw_conflict {
+                if let Some(other_reads) = read_sets.get(other_tx) {
+                    let wr_conflict = my_writes.intersection(other_reads).count() > 0;
+
+                    if wr_conflict {
+                        return Err(SsiError::SerializationConflict {
+                            our_tx: tx_id,
+                            conflicting_tx: *other_tx,
+                            reason: "RW-WR cycle detected".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn release(&self, tx_id: TxId) {
+        {
+            let mut read_sets = self.read_sets.write().unwrap();
+            read_sets.remove(&tx_id);
+        }
+        {
+            let mut write_sets = self.write_sets.write().unwrap();
+            write_sets.remove(&tx_id);
+        }
+        {
+            let mut graph = self.graph.write().unwrap();
+            graph.remove_tx(&tx_id);
+        }
+    }
+}
+
+impl Default for SsiDetectorSync {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +358,50 @@ mod tests {
         let write_sets = detector.write_sets.read().await;
         let writes = write_sets.get(&tx_id).unwrap();
         assert!(writes.contains(&b"key1".to_vec()));
+    }
+
+    #[test]
+    fn test_ssi_detector_sync_no_conflict() {
+        let detector = SsiDetectorSync::new();
+
+        let tx_id = TxId::new(1);
+        detector.record_read(tx_id, b"key1".to_vec());
+        detector.record_write(tx_id, b"key2".to_vec());
+
+        let result = detector.validate_commit(tx_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ssi_detector_sync_rw_conflict() {
+        let detector = SsiDetectorSync::new();
+
+        let tx1 = TxId::new(1);
+        let tx2 = TxId::new(2);
+
+        detector.record_read(tx1, b"A".to_vec());
+        detector.record_write(tx1, b"B".to_vec());
+
+        detector.record_read(tx2, b"B".to_vec());
+        detector.record_write(tx2, b"A".to_vec());
+
+        let result1 = detector.validate_commit(tx1);
+        let result2 = detector.validate_commit(tx2);
+
+        assert!(result1.is_err() || result2.is_err());
+    }
+
+    #[test]
+    fn test_ssi_detector_sync_release() {
+        let detector = SsiDetectorSync::new();
+
+        let tx_id = TxId::new(1);
+        detector.record_read(tx_id, b"key1".to_vec());
+        detector.record_write(tx_id, b"key2".to_vec());
+
+        detector.release(tx_id);
+
+        let result = detector.validate_commit(tx_id);
+        assert!(result.is_ok());
     }
 }
