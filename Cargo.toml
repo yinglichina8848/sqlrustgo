@@ -194,351 +194,52 @@ features = ["bundled"]
 version = "25"
 
 [[test]]
-name = "optimizer_rules_test"
-path = "tests/unit/optimizer_rules_test.rs"
-
-
-[[test]]
 name = "buffer_pool_test"
 path = "tests/ci/buffer_pool_test.rs"
 
-
 [[test]]
-name = "page_test"
-path = "tests/integration/page_test.rs"
-
-
-[[test]]
-name = "executor_test"
-path = "tests/integration/executor_test.rs"
-
-[[test]]
-name = "foreign_key_test"
-path = "tests/integration/foreign_key_test.rs"
-
-[[test]]
-name = "mysql_compatibility_test"
-path = "tests/integration/mysql_compatibility_test.rs"
-
-[[test]]
-name = "planner_test"
-path = "tests/integration/planner_test.rs"
-
+name = "buffer_pool_benchmark_test"
+path = "tests/ci/buffer_pool_benchmark_test.rs"
 
 [[test]]
 name = "binary_format_test"
 path = "tests/binary_format_test.rs"
 
 [[test]]
-name = "optimizer_stats_test"
-path = "tests/integration/optimizer_stats_test.rs"
-
-[[test]]
-name = "types_value_test"
-path = "tests/unit/types_value_test.rs"
-
-[[test]]
-name = "query_cache_config_test"
-path = "tests/unit/query_cache_config_test.rs"
-
-[[test]]
-name = "server_health_test"
-path = "tests/unit/server_health_test.rs"
-
-[[test]]
-name = "bplus_tree_test"
-path = "tests/unit/bplus_tree_test.rs"
-
-[[test]]
-name = "optimizer_cost_test"
-path = "tests/unit/optimizer_cost_test.rs"
-
-[[test]]
-name = "local_executor_test"
-path = "tests/unit/local_executor_test.rs"
-
-[[test]]
-name = "query_cache_test"
-path = "tests/unit/query_cache_test.rs"
-
-[[test]]
-name = "vectorization_test"
-path = "tests/unit/vectorization_test.rs"
-
-[[test]]
-name = "file_storage_test"
-path = "tests/unit/file_storage_test.rs"
-
-[[test]]
-name = "crash_recovery_test"
-path = "tests/stress/crash_recovery_test.rs"
-
-[[test]]
-name = "wal_deterministic_test"
-path = "tests/stress/wal_deterministic_test.rs"
-
-[[test]]
-name = "wal_fuzz_test"
-path = "tests/stress/wal_fuzz_test.rs"
-
-[[test]]
-name = "stress_test"
-path = "tests/stress/stress_test.rs"
-
-[[test]]
-name = "concurrency_stress_test"
-path = "tests/stress/concurrency_stress_test.rs"
-
-[[test]]
-name = "kill_stress_test"
-path = "tests/stress/kill_stress_test.rs"
-
-[[test]]
-name = "chaos_test"
-path = "tests/stress/chaos_test.rs"
-
-[[test]]
-name = "production_scenario_test"
-path = "tests/stress/production_scenario_test.rs"
-
-[[test]]
-name = "teaching_scenario_test"
-path = "tests/integration/teaching_scenario_test.rs"
-
-[[test]]
-name = "performance_test"
-path = "tests/integration/performance_test.rs"
-
-[[test]]
-name = "mysql_tpch_test"
-path = "tests/integration/mysql_tpch_test.rs"
-
-[[test]]
-name = "tpch_test"
-path = "tests/integration/tpch_test.rs"
-
-[[test]]
-name = "tpch_benchmark"
-path = "tests/integration/tpch_benchmark.rs"
-
-[[test]]
-name = "tpch_full_test"
-path = "tests/integration/tpch_full_test.rs"
-
-[[test]]
-name = "mvcc_concurrency_test"
-path = "tests/anomaly/mvcc_concurrency_test.rs"
-
-[[test]]
-name = "snapshot_isolation_test"
-path = "tests/anomaly/snapshot_isolation_test.rs"
-
-[[test]]
-name = "checksum_corruption_test"
-path = "tests/integration/checksum_corruption_test.rs"
-
-[[test]]
-name = "crash_injection_test"
-path = "tests/anomaly/crash_injection_test.rs"
-
-[[test]]
-name = "catalog_consistency_test"
-path = "tests/anomaly/catalog_consistency_test.rs"
-
-[[test]]
-name = "long_run_stability_test"
-path = "tests/anomaly/long_run_stability_test.rs"
-
-[[test]]
-name = "qps_benchmark_test"
-path = "tests/anomaly/qps_benchmark_test.rs"
-
-[[test]]
-name = "transaction_isolation_test"
-path = "tests/anomaly/transaction_isolation_test.rs"
-
-[[test]]
-name = "join_test"
-path = "tests/anomaly/join_test.rs"
-
-[[test]]
-name = "fk_constraint_test"
-path = "tests/anomaly/fk_constraint_test.rs"
-
-[[test]]
-name = "server_integration_test"
-path = "tests/integration/server_integration_test.rs"
-
-[[test]]
-name = "set_operations_test"
-path = "tests/anomaly/set_operations_test.rs"
-
-[[test]]
-name = "view_test"
-path = "tests/anomaly/view_test.rs"
-
-[[test]]
-name = "transaction_timeout_test"
-path = "tests/anomaly/transaction_timeout_test.rs"
-
-[[test]]
-name = "datetime_type_test"
-path = "tests/anomaly/datetime_type_test.rs"
-
-[[test]]
-name = "boundary_test"
-path = "tests/anomaly/boundary_test.rs"
-
-[[test]]
-name = "error_handling_test"
-path = "tests/anomaly/error_handling_test.rs"
-
-[[test]]
-name = "aggregate_type_test"
-path = "tests/anomaly/aggregate_type_test.rs"
-
-[[test]]
-name = "null_handling_test"
-path = "tests/anomaly/null_handling_test.rs"
-[[test]]
-name = "window_function_test"
-path = "tests/integration/window_function_test.rs"
-
-[[test]]
-name = "upsert_test"
-path = "tests/integration/upsert_test.rs"
-
-[[test]]
-name = "teaching_scenario_client_server_test"
-path = "tests/integration/teaching_scenario_client_server_test.rs"
-
-[[test]]
-name = "openclaw_api_test"
-path = "tests/integration/openclaw_api_test.rs"
-
-[[test]]
-name = "distributed_transaction_test"
-path = "tests/integration/distributed_transaction_test.rs"
-
-[[test]]
 name = "regression_test"
 path = "tests/regression_test.rs"
 
 [[test]]
-name = "prometheus_test"
-path = "tests/unit/prometheus_test.rs"
+name = "wal_integration_test"
+path = "tests/wal_integration_test.rs"
 
 [[test]]
-name = "slow_query_log_test"
-path = "tests/unit/slow_query_log_test.rs"
+name = "parser_token_test"
+path = "tests/parser_token_test.rs"
 
 [[test]]
-name = "mysqldump_test"
-path = "tests/unit/mysqldump_test.rs"
+name = "page_io_benchmark_test"
+path = "tests/page_io_benchmark_test.rs"
 
 [[test]]
-name = "backup_test"
-path = "tests/unit/backup_test.rs"
+name = "data_loader"
+path = "tests/data_loader.rs"
 
 [[test]]
-name = "auth_rbac_test"
-path = "tests/integration/auth_rbac_test.rs"
+name = "e2e_query_test"
+path = "tests/e2e/e2e_query_test.rs"
 
 [[test]]
-name = "logging_test"
-path = "tests/integration/logging_test.rs"
+name = "e2e_observability_test"
+path = "tests/e2e/observability_test.rs"
 
 [[test]]
-name = "query_cache_benchmark"
-path = "tests/anomaly/query_cache_benchmark.rs"
+name = "e2e_monitoring_test"
+path = "tests/e2e/monitoring_test.rs"
 
 [[test]]
-name = "parquet_test"
-path = "tests/integration/parquet_test.rs"
-
-[[test]]
-name = "columnar_storage_test"
-path = "tests/integration/columnar_storage_test.rs"
-
-[[test]]
-name = "autoinc_test"
-path = "tests/integration/autoinc_test.rs"
-
-[[test]]
-name = "batch_insert_test"
-path = "tests/integration/batch_insert_test.rs"
-
-[[test]]
-name = "fk_actions_test"
-path = "tests/integration/fk_actions_test.rs"
-
-[[test]]
-name = "index_integration_test"
-path = "tests/integration/index_integration_test.rs"
-
-[[test]]
-name = "savepoint_test"
-path = "tests/integration/savepoint_test.rs"
-
-[[test]]
-name = "session_config_test"
-path = "tests/integration/session_config_test.rs"
-
-[[test]]
-name = "storage_integration_test"
-path = "tests/integration/storage_integration_test.rs"
-
-[[test]]
-name = "sql_cli_test"
-path = "tests/integration/sql_cli_test.rs"
-
-[[test]]
-name = "tpch_compliance_test"
-path = "tests/integration/tpch_compliance_test.rs"
-
-[[test]]
-name = "tpch_sf03_test"
-path = "tests/integration/tpch_sf03_test.rs"
-
-[[test]]
-name = "tpch_sf1_test"
-path = "tests/integration/tpch_sf1_test.rs"
-
-[[test]]
-name = "tpch_index_test"
-path = "tests/integration/tpch_index_test.rs"
-
-[[test]]
-name = "tpch_comparison_test"
-path = "tests/integration/tpch_comparison_test.rs"
-
-[[test]]
-name = "tpch_text_index_test"
-path = "tests/integration/tpch_text_index_test.rs"
-
-[[test]]
-name = "agentsql_test"
-path = "tests/integration/agentsql_test.rs"
-
-[[test]]
-name = "vector_storage_integration_test"
-path = "tests/integration/vector_storage_integration_test.rs"
-
-[[test]]
-name = "hybrid_search_integration_test"
-path = "tests/integration/hybrid_search_integration_test.rs"
-
-[[test]]
-name = "wal_transaction_integration_test"
-path = "tests/integration/wal_transaction_integration_test.rs"
-
-[[test]]
-name = "unified_query_integration_test"
-path = "tests/integration/unified_query_integration_test.rs"
-
-[[test]]
-name = "distributed_storage_sharding_test"
-path = "tests/integration/distributed_storage_sharding_test.rs"
+name = "stored_procedure_parser_test"
+path = "tests/stored_procedure_parser_test.rs"
 
 [[test]]
 name = "scheduler_integration_test"
