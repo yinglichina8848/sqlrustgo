@@ -66,78 +66,6 @@ fn rand_u8_20() -> [u8; 20] {
     combined
 }
 
-fn generate_tls_config() -> Result<ServerConfig, Box<dyn std::error::Error>> {
-    let mut distinguished_name = DistinguishedName::new();
-    distinguished_name.push(DnType::CommonName, "localhost");
-    distinguished_name.push(DnType::OrganizationName, "SQLRustGo");
-
-    let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)?;
-    let cert_params = rcgen::CertificateParams::default();
-    let certificate = cert_params.self_signed(&key_pair)?;
-
-    let cert_pem = certificate.pem();
-    let key_pem = key_pair.serialize_pem();
-
-    let cert = CertificateDer::from_pem_slice(cert_pem.as_bytes())?;
-    let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes())?;
-
-    let config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(vec![cert], key)?;
-
-    Ok(config)
-}
-
-struct TlsStream<'a> {
-    conn: &'a mut rustls::ServerConnection,
-    stream: &'a mut TcpStream,
-}
-
-impl<'a> TlsStream<'a> {
-    fn new(conn: &'a mut rustls::ServerConnection, stream: &'a mut TcpStream) -> Self {
-        Self { conn, stream }
-    }
-}
-
-impl<'a> Read for TlsStream<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        loop {
-            match self.conn.reader().read(buf) {
-                Ok(0) => {
-                    if self.conn.is_handshaking() {
-                        match self.conn.complete_io(self.stream) {
-                            Ok((_, _)) => continue,
-                            Err(e) => return Err(e),
-                        }
-                    }
-                    return Ok(0);
-                }
-                Ok(n) => return Ok(n),
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    match self.conn.complete_io(self.stream) {
-                        Ok((_, _)) => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-}
-
-impl<'a> Write for TlsStream<'a> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        use std::io::Write;
-        let mut writer = self.conn.writer();
-        writer.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.conn.send_close_notify();
-        Ok(())
-    }
-}
-
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
@@ -235,12 +163,29 @@ mod capability {
     pub const MULTI_STATEMENTS: u32 = 1 << 16;
     pub const MULTI_RESULTS: u32 = 1 << 17;
     pub const PLUGIN_AUTH: u32 = 1 << 19;
+    pub const LONG_PASSWORD: u32 = 1 << 1;
+    pub const LONG_FLAG: u32 = 1 << 3;
+    pub const INTERACTIVE: u32 = 1 << 15;
+    pub const LOCAL_FILES: u32 = 1 << 21;
+    pub const IGNORE_SPACE: u32 = 1 << 22;
+    pub const PLUGIN_AUTH_LENENC_CLIENT_DATA: u32 = 1 << 29;
+    pub const CAN_KEX: u32 = 1 << 30;
+    pub const CONNECTION_ATTR: u32 = 1 << 31;
+
     pub const DEFAULT: u32 = PROTOCOL_41
+        | LONG_PASSWORD
+        | LONG_FLAG
         | TRANSACTIONS
         | MULTI_STATEMENTS
         | MULTI_RESULTS
         | SECURE_CONNECTION
-        | PLUGIN_AUTH;
+        | PLUGIN_AUTH
+        | INTERACTIVE
+        | LOCAL_FILES
+        | IGNORE_SPACE
+        | PLUGIN_AUTH_LENENC_CLIENT_DATA
+        | CAN_KEX
+        | CONNECTION_ATTR;
 }
 
 // ============================================================================
@@ -700,278 +645,93 @@ fn handle_connection(
         tracing::warn!("Failed to set TCP_NODELAY: {}", e);
     }
 
-    tracing::info!("MySQL connection from {}", addr);
+    println!("[MYSQL-CONN] Connection from {}", addr);
     monitor.record_connection_opened();
 
-    let mut seq = 0u8;
+    // ========================================================================
+    // PHASE 1: Send Handshake (seq=0)
+    // ========================================================================
+    let seq = 0u8;
 
-    let seed = if AUTH_PLUGIN == "mysql_native_password" {
-        rand_u8_20()
-    } else {
-        let mut s = [0u8; 20];
-        s[0..8].copy_from_slice(&rand_u8_8());
-        s
-    };
+    let seed = rand_u8_20();
 
     let packet = make_handshake_packet(seq, &seed);
-    tracing::info!(
-        "WRITE handshake packet: len={}, payload[:50]={:02x?}",
-        packet.length,
-        &packet.payload[..50]
+    println!(
+        "[MYSQL-PACKET] S->C len={} seq={} type=handshake",
+        packet.length, packet.sequence
     );
     packet.write_to(&mut stream)?;
-    tracing::info!("WRITE complete");
-    seq = seq.wrapping_add(1);
+    println!("[MYSQL-PACKET] Handshake written");
 
-    // Read initial data to detect TLS ClientHello or MySQL auth packet
-    // TLS ClientHello starts with 0x16 0x03 (TLS record type + version)
-    let mut initial_header = [0u8; 5];
-    let n = match stream.read(&mut initial_header) {
-        Ok(0) => {
-            tracing::info!("Connection closed by client");
-            return Ok(());
+    // ========================================================================
+    // PHASE 2: Read Auth Packet (client seq should be 1)
+    // ========================================================================
+    let auth_packet = match Packet::read_from(&mut stream) {
+        Ok(p) => {
+            println!(
+                "[MYSQL-PACKET] C->S len={} seq={} payload[:20]={:02x?}",
+                p.length,
+                p.sequence,
+                &p.payload[..20.min(p.payload.len())]
+            );
+            p
         }
-        Ok(n) => n,
         Err(e) => {
-            tracing::error!("Failed to read from client: {}", e);
-            return Err(MySqlError::Io(e));
+            println!("[MYSQL-ERROR] Failed to read auth packet: {}", e);
+            return Err(MySqlError::Io(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                format!("auth read failed: {}", e),
+            )));
         }
     };
 
-    if n < 4 {
-        tracing::error!("Expected at least 4 bytes, got {}", n);
-        return Ok(());
-    }
+    // ========================================================================
+    // PHASE 3: Send OK Packet (seq = client seq + 1)
+    // ========================================================================
+    let ok_seq = auth_packet.sequence.wrapping_add(1);
+    println!("[MYSQL-PACKET] S->C len=? seq={} type=ok", ok_seq);
+    make_ok_packet(ok_seq, 0, 0).write_to(&mut stream)?;
+    println!("[MYSQL-PACKET] OK written");
 
-    // Check for TLS ClientHello: bytes 0-1 should be 0x16 0x03
-    let is_tls = n >= 2 && initial_header[0] == 0x16 && initial_header[1] == 0x03;
-
-    if is_tls {
-        tracing::info!("Detected TLS ClientHello, starting TLS handshake...");
-        let tls_config = match generate_tls_config() {
-            Ok(cfg) => std::sync::Arc::new(cfg),
-            Err(e) => {
-                tracing::error!("Failed to generate TLS config: {}", e);
-                return Err(MySqlError::Protocol(format!("TLS config error: {}", e)));
-            }
-        };
-
-        let mut tls_conn = match rustls::ServerConnection::new(tls_config) {
-            Ok(conn) => conn,
-            Err(e) => {
-                tracing::error!("Failed to create TLS connection: {}", e);
-                return Err(MySqlError::Protocol(format!("TLS connection error: {}", e)));
-            }
-        };
-
-        match tls_conn.complete_io(&mut stream) {
-            Ok((_, _)) => tracing::info!("TLS handshake completed"),
-            Err(e) => {
-                tracing::error!("TLS handshake failed: {:?}", e);
-                return Err(MySqlError::Protocol(format!("TLS handshake error: {}", e)));
-            }
-        }
-
-        tracing::info!("TLS connection established");
-
-        let mut tls_stream = TlsStream::new(&mut tls_conn, &mut stream);
-
-        let auth_packet = Packet::read_from(&mut tls_stream)?;
-
-        let auth_ok = if auth_packet.payload.len() >= 9 {
-            let response = &auth_packet.payload[1..9];
-            tracing::info!("Received auth response: {:02x?}", response);
-            true
-        } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
-            true
-        } else {
-            false
-        };
-
-        if !auth_ok {
-            make_err_packet(seq, 1045, "Access denied").write_to(&mut tls_stream)?;
-            return Ok(());
-        }
-
-        make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
-        seq = seq.wrapping_add(1);
-
-        loop {
-            let packet = match Packet::read_from(&mut tls_stream) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::info!("Packet read error: {}", e);
-                    break;
-                }
-            };
-
-            let cmd = packet.payload.first().copied().unwrap_or(0);
-            let payload = &packet.payload[1..];
-
-            match cmd {
-                packet_type::COM_QUIT => {
-                    tracing::info!("Client {} QUIT", addr);
-                    break;
-                }
-                packet_type::COM_PING => {
-                    make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
-                    seq = seq.wrapping_add(1);
-                }
-                packet_type::COM_INIT_DB => {
-                    make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
-                    seq = seq.wrapping_add(1);
-                }
-                packet_type::COM_QUERY => {
-                    let query = String::from_utf8_lossy(payload)
-                        .trim_end_matches('\0')
-                        .trim()
-                        .to_string();
-                    tracing::info!("Query from {}: [{}]", addr, query);
-
-                    if query.is_empty() {
-                        make_ok_packet(seq, 0, 0).write_to(&mut tls_stream)?;
-                        seq = seq.wrapping_add(1);
-                        continue;
-                    }
-
-                    let mut engine = ExecutionEngine::new(storage.clone());
-                    if is_select_query(&query) {
-                        match execute_select(&query, &mut engine) {
-                            Ok((columns, column_types, rows)) => {
-                                send_result_set(
-                                    &mut tls_stream,
-                                    &columns,
-                                    &column_types,
-                                    &rows,
-                                    seq,
-                                )?;
-                            }
-                            Err(e) => {
-                                let code = if e.to_string().contains("not found") {
-                                    1146u16
-                                } else {
-                                    1064
-                                };
-                                make_err_packet(seq, code, &e.to_string())
-                                    .write_to(&mut tls_stream)?;
-                            }
-                        }
-                    } else {
-                        match execute_write(&query, &mut engine) {
-                            Ok(affected) => {
-                                make_ok_packet(seq, affected as u64, 0)
-                                    .write_to(&mut tls_stream)?;
-                            }
-                            Err(e) => {
-                                make_err_packet(seq, 1064, &e.to_string())
-                                    .write_to(&mut tls_stream)?;
-                            }
-                        }
-                    }
-                    seq = seq.wrapping_add(1);
-                }
-                packet_type::COM_STMT_PREPARE => {
-                    make_err_packet(seq, 1295, "Prepared statements not yet supported")
-                        .write_to(&mut tls_stream)?;
-                    seq = seq.wrapping_add(1);
-                }
-                _ => {
-                    make_err_packet(seq, 2000, "Unsupported command").write_to(&mut tls_stream)?;
-                    seq = seq.wrapping_add(1);
-                }
-            }
-        }
-
-        return Ok(());
-    }
-
-    // Not TLS - regular MySQL protocol
-    let length = u32::from(initial_header[0])
-        | (u32::from(initial_header[1]) << 8)
-        | (u32::from(initial_header[2]) << 16);
-    let recv_seq = initial_header[3];
-
-    tracing::info!(
-        "Received initial packet: length={}, seq={}",
-        length,
-        recv_seq
-    );
-
-    if length == 0 {
-        tracing::error!("Received empty packet");
-        return Ok(());
-    }
-
-    // initial_header[0..3] is packet length (3 bytes)
-    // initial_header[3] is sequence number
-    // initial_header[4] is first byte of payload
-    // We need to read the remaining payload bytes
-    let mut auth_payload = vec![0u8; length as usize];
-    // Copy the first byte we already read (at position 4 of initial_header)
-    auth_payload[0] = initial_header[4];
-    // Read the remaining length-1 bytes
-    use std::io::Read;
-    stream.read_exact(&mut auth_payload[1..])?;
-
-    let auth_packet = Packet {
-        length,
-        sequence: recv_seq,
-        payload: auth_payload,
-    };
-
-    let auth_ok = if auth_packet.payload.len() >= 1 {
-        tracing::info!("Auth payload first byte: 0x{:02x}", auth_packet.payload[0]);
-        true
-    } else {
-        false
-    };
-
-    if !auth_ok {
-        make_err_packet(seq, 1045, "Access denied").write_to(&mut stream)?;
-        return Ok(());
-    }
-
-    make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-    seq = seq.wrapping_add(1);
-
+    // ========================================================================
+    // PHASE 4: Command Loop
+    // ========================================================================
     loop {
         let packet = match Packet::read_from(&mut stream) {
-            Ok(p) => p,
+            Ok(p) => {
+                println!(
+                    "[MYSQL-PACKET] C->S len={} seq={} cmd=0x{:02x}",
+                    p.length,
+                    p.sequence,
+                    p.payload.first().copied().unwrap_or(0)
+                );
+                p
+            }
             Err(e) => {
-                tracing::info!("Packet read error: {}", e);
+                println!("[MYSQL-ERROR] Packet read error: {}", e);
                 break;
             }
         };
 
         let cmd = packet.payload.first().copied().unwrap_or(0);
         let payload = &packet.payload[1..];
-        tracing::info!(
-            "Received packet: cmd=0x{:02x}, payload_len={}",
-            cmd,
-            payload.len()
-        );
 
         match cmd {
             packet_type::COM_QUIT => {
-                tracing::info!("Client {} QUIT", addr);
-                monitor.record_connection_closed();
+                println!("[MYSQL-PACKET] Client QUIT");
                 break;
             }
 
             packet_type::COM_PING => {
-                tracing::info!(">>> COM_PING received, seq={}", seq);
-                let result = make_ok_packet(seq, 0, 0).write_to(&mut stream);
-                tracing::info!(">>> COM_PING write result: {:?}", result);
-                match result {
-                    Ok(()) => {}
-                    Err(e) => tracing::warn!("Write error in COM_PING: {}", e),
-                }
-                seq = seq.wrapping_add(1);
+                // Server response seq must be client_seq + 1
+                let resp_seq = packet.sequence.wrapping_add(1);
+                println!("[MYSQL-PACKET] S->C len=? seq={} type=pong", resp_seq);
+                make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
             }
 
             packet_type::COM_INIT_DB => {
-                make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
+                let resp_seq = packet.sequence.wrapping_add(1);
+                make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
             }
 
             packet_type::COM_QUERY => {
@@ -979,86 +739,79 @@ fn handle_connection(
                     .trim_end_matches('\0')
                     .trim()
                     .to_string();
-                tracing::info!("Query from {}: [{}] (seq={})", addr, query, seq);
+                println!("[MYSQL-QUERY] query=[{}]", query);
+
+                let resp_seq = packet.sequence.wrapping_add(1);
 
                 if query.is_empty() {
-                    make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-                    seq = seq.wrapping_add(1);
+                    make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
+                    continue;
+                }
+
+                let query_upper = query.to_uppercase();
+                if query_upper.starts_with("SET NAMES") || query_upper == "SET NAMES" {
+                    println!("[MYSQL-QUERY] SET NAMES ignored (charset setting)");
+                    make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
+                    continue;
+                }
+
+                if query_upper.starts_with("SET autocommit") || query_upper == "SET AUTOCOMMIT" {
+                    println!("[MYSQL-QUERY] SET AUTOCOMMIT ignored");
+                    make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
+                    continue;
+                }
+
+                if query_upper.starts_with("SET ") {
+                    println!("[MYSQL-QUERY] SET command ignored");
+                    make_ok_packet(resp_seq, 0, 0).write_to(&mut stream)?;
                     continue;
                 }
 
                 let mut engine = ExecutionEngine::new(storage.clone());
-                let query_type = get_query_type(&query);
-                let start_time = std::time::Instant::now();
 
-                tracing::info!("is_select={}, query=[{}]", is_select_query(&query), query);
                 if is_select_query(&query) {
-                    tracing::info!("Executing SELECT...");
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        execute_select(&query, &mut engine)
-                    }));
-                    match result {
-                        Ok(Ok((columns, column_types, rows))) => {
-                            tracing::info!("SELECT returned {} rows", rows.len());
-                            send_result_set(&mut stream, &columns, &column_types, &rows, seq)?;
+                    match execute_select(&query, &mut engine) {
+                        Ok((columns, column_types, rows)) => {
+                            send_result_set(&mut stream, &columns, &column_types, &rows, resp_seq)?;
                         }
-                        Ok(Err(e)) => {
-                            tracing::warn!("Query error: {}", e);
-                            let code: u16 = match &e {
-                                MySqlError::Sql(s)
-                                    if s.contains("not found") || s.contains("does not exist") =>
-                                {
-                                    1146
-                                }
-                                MySqlError::Sql(_) => 1064,
-                                _ => 2000,
+                        Err(e) => {
+                            let code = if e.to_string().contains("not found") {
+                                1146u16
+                            } else {
+                                1064
                             };
-                            make_err_packet(seq, code, &e.to_string()).write_to(&mut stream)?;
-                        }
-                        Err(_) => {
-                            tracing::error!("PANIC in execute_select!");
-                            make_err_packet(seq, 2000, "Internal server error")
+                            make_err_packet(resp_seq, code, &e.to_string())
                                 .write_to(&mut stream)?;
                         }
                     }
                 } else {
                     match execute_write(&query, &mut engine) {
                         Ok(affected) => {
-                            make_ok_packet(seq, affected as u64, 0).write_to(&mut stream)?;
+                            make_ok_packet(resp_seq, affected as u64, 0).write_to(&mut stream)?;
                         }
                         Err(e) => {
-                            tracing::warn!("Write error: {}", e);
-                            make_err_packet(seq, 1064, &e.to_string()).write_to(&mut stream)?;
+                            make_err_packet(resp_seq, 1064, &e.to_string())
+                                .write_to(&mut stream)?;
                         }
                     }
                 }
-
-                let execution_time = start_time.elapsed().as_secs_f64();
-                monitor.record_query(&query, &query_type, execution_time, 0);
-
-                seq = seq.wrapping_add(1);
             }
 
             packet_type::COM_STMT_PREPARE => {
-                make_err_packet(seq, 1295, "Prepared statements not yet supported")
+                let resp_seq = packet.sequence.wrapping_add(1);
+                make_err_packet(resp_seq, 1295, "Prepared statements not yet supported")
                     .write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
             }
 
             _ => {
-                tracing::warn!(
-                    "Unknown command 0x{:02x} from {} (payload first bytes: {:?})",
-                    cmd,
-                    addr,
-                    &payload[..std::cmp::min(10, payload.len())]
-                );
-                make_err_packet(seq, 1047, "Unknown command").write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
+                let resp_seq = packet.sequence.wrapping_add(1);
+                println!("[MYSQL-WARN] Unsupported command 0x{:02x}", cmd);
+                make_err_packet(resp_seq, 2000, "Unsupported command").write_to(&mut stream)?;
             }
         }
     }
 
-    tracing::info!("Connection {} closed", addr);
+    println!("[MYSQL-CONN] Connection {} closed", addr);
     monitor.record_connection_closed();
     Ok(())
 }
