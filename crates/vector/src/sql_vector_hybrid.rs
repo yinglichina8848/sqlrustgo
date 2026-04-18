@@ -71,6 +71,7 @@ impl SqlPredicate {
         SqlPredicate::Or(Box::new(left), Box::new(right))
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn not(predicate: SqlPredicate) -> Self {
         SqlPredicate::Not(Box::new(predicate))
     }

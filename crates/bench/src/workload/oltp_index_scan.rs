@@ -57,7 +57,10 @@ impl crate::workload::Workload for OltpIndexScan {
     fn generate_sql(&self, rng: &mut SmallRng) -> String {
         let start = rng.gen_range(1..self.max_id);
         let end = start.saturating_add(self.range_size);
-        format!("SELECT id, k FROM sbtest WHERE id BETWEEN {} AND {}", start, end)
+        format!(
+            "SELECT id, k FROM sbtest WHERE id BETWEEN {} AND {}",
+            start, end
+        )
     }
 
     fn generate_transaction(&self, rng: &mut SmallRng) -> Vec<String> {

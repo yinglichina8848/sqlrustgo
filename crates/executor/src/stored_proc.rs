@@ -640,7 +640,6 @@ impl StoredProcExecutor {
                     if case_val == when_expr_val {
                         return self.evaluate_expression(result, ctx).map(|v| {
                             ctx.set_return(v);
-                            
                         });
                     }
                 }
@@ -648,7 +647,6 @@ impl StoredProcExecutor {
                 if let Some(else_val) = else_result {
                     return self.evaluate_expression(else_val, ctx).map(|v| {
                         ctx.set_return(v);
-                        
                     });
                 }
 
@@ -662,7 +660,6 @@ impl StoredProcExecutor {
                     if self.evaluate_condition(condition, ctx)? {
                         return self.evaluate_expression(result, ctx).map(|v| {
                             ctx.set_return(v);
-                            
                         });
                     }
                 }
@@ -670,7 +667,6 @@ impl StoredProcExecutor {
                 if let Some(else_val) = else_result {
                     return self.evaluate_expression(else_val, ctx).map(|v| {
                         ctx.set_return(v);
-                        
                     });
                 }
 

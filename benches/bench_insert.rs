@@ -8,9 +8,7 @@ use sqlrustgo_types::Value;
 
 /// Generate test data rows
 fn generate_rows(count: usize) -> Vec<Vec<Value>> {
-    (0..count)
-        .map(|i| vec![Value::Integer(i as i64)])
-        .collect()
+    (0..count).map(|i| vec![Value::Integer(i as i64)]).collect()
 }
 
 /// Create test table info

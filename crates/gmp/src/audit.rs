@@ -62,7 +62,6 @@ impl AuditLog {
         };
         let timestamp = match &row[1] {
             Value::Integer(n) => *n,
-            Value::Integer(n) => *n,
             _ => return None,
         };
         let user_id = match &row[2] {

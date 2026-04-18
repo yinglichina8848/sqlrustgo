@@ -9,13 +9,10 @@ use rustyline::Editor;
 use sqlrustgo::{MemoryExecutionEngine, MemoryStorage};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    CreateTableStatement, DropTableStatement, Expression, InsertStatement,
-    SelectStatement,
+    CreateTableStatement, DropTableStatement, Expression, InsertStatement, SelectStatement,
 };
 use sqlrustgo_security::SessionManager;
-use sqlrustgo_storage::{
-    ColumnDefinition, StorageEngine, TableInfo,
-};
+use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::env;
 use std::sync::{Arc, RwLock};
@@ -333,13 +330,11 @@ fn execute_create_table(
     let columns: Vec<ColumnDefinition> = create
         .columns
         .iter()
-        .map(|col| {
-            ColumnDefinition {
-                name: col.name.clone(),
-                data_type: col.data_type.clone(),
-                nullable: col.nullable,
-                primary_key: false,
-            }
+        .map(|col| ColumnDefinition {
+            name: col.name.clone(),
+            data_type: col.data_type.clone(),
+            nullable: col.nullable,
+            primary_key: false,
         })
         .collect();
 

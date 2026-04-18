@@ -22,6 +22,28 @@
 //! let results = index.search(&[0.1, 0.2, 0.3], 1).unwrap();
 //! ```
 
+#![allow(unexpected_cfgs)]
+//!
+//! # Architecture
+//!
+//! - `metrics` - Distance metric implementations (Cosine, Euclidean, DotProduct, Manhattan)
+//! - `flat` - Flat index (brute-force O(n) search)
+//! - `ivf` - IVF index (Inverted File with k-means clustering)
+//! - `hnsw` - HNSW index (Hierarchical Navigable Small World)
+//!
+//! # Usage
+//!
+//! ```
+//! use sqlrustgo_vector::{FlatIndex, DistanceMetric, VectorIndex};
+//!
+//! let mut index = FlatIndex::new(DistanceMetric::Cosine);
+//! index.insert(1, &[0.1, 0.2, 0.3]).unwrap();
+//! index.insert(2, &[0.4, 0.5, 0.6]).unwrap();
+//! index.build_index().unwrap();
+//!
+//! let results = index.search(&[0.1, 0.2, 0.3], 1).unwrap();
+//! ```
+
 pub mod batch_writer;
 pub mod flat;
 pub mod gpu_accel;

@@ -24,20 +24,51 @@ use std::time::Instant;
 pub enum Request {
     Ping,
     Init,
-    VectorSearch { query: String, top_k: usize },
-    HybridSearch { query: String, top_k: usize },
-    ImportDoc { title: String, doc_type: String, content: String, keywords: Vec<String> },
+    VectorSearch {
+        query: String,
+        top_k: usize,
+    },
+    HybridSearch {
+        query: String,
+        top_k: usize,
+    },
+    ImportDoc {
+        title: String,
+        doc_type: String,
+        content: String,
+        keywords: Vec<String>,
+    },
     /// Upsert node by label (string name). Returns internal NodeId as string.
-    UpsertNode { node_type: String, name: String, code: Option<String>, properties: Option<serde_json::Value> },
+    UpsertNode {
+        node_type: String,
+        name: String,
+        code: Option<String>,
+        properties: Option<serde_json::Value>,
+    },
     /// Upsert edge between two nodes by their string names.
-    UpsertEdge { from_name: String, from_type: String, to_name: String, to_type: String, rel_type: String, weight: Option<f64> },
+    UpsertEdge {
+        from_name: String,
+        from_type: String,
+        to_name: String,
+        to_type: String,
+        rel_type: String,
+        weight: Option<f64>,
+    },
     /// Get direct neighbors of a node by its string name/type
-    GraphNeighbors { node_type: String, node_name: String, rel_type: Option<String> },
+    GraphNeighbors {
+        node_type: String,
+        node_name: String,
+        rel_type: Option<String>,
+    },
     /// List all nodes of a given type (or all if None)
-    ListNodes { node_type: Option<String> },
+    ListNodes {
+        node_type: Option<String>,
+    },
     ListEdgeTypes,
     /// Execute raw SQL (limited)
-    SqlExec { sql: String },
+    SqlExec {
+        sql: String,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -52,10 +83,20 @@ pub struct Response {
 
 impl Response {
     fn ok(data: serde_json::Value, ms: u64) -> Self {
-        Self { success: true, data: Some(data), error: None, time_ms: ms }
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+            time_ms: ms,
+        }
     }
     fn err(msg: String, ms: u64) -> Self {
-        Self { success: false, data: None, error: Some(msg), time_ms: ms }
+        Self {
+            success: false,
+            data: None,
+            error: Some(msg),
+            time_ms: ms,
+        }
     }
 }
 
@@ -119,12 +160,24 @@ impl GmpCliState {
         self.gmp.hybrid_search(q, k)
     }
 
-    fn import_doc(&self, title: &str, doc_type: &str, content: &str, keywords: &[String]) -> SqlResult<i64> {
+    fn import_doc(
+        &self,
+        title: &str,
+        doc_type: &str,
+        content: &str,
+        keywords: &[String],
+    ) -> SqlResult<i64> {
         let kw: Vec<&str> = keywords.iter().map(|s| s.as_str()).collect();
         self.gmp.import_document(title, doc_type, content, &kw)
     }
 
-    fn upsert_node(&self, node_type: &str, name: &str, code: Option<&str>, props: Option<serde_json::Value>) -> Result<String, String> {
+    fn upsert_node(
+        &self,
+        node_type: &str,
+        name: &str,
+        code: Option<&str>,
+        props: Option<serde_json::Value>,
+    ) -> Result<String, String> {
         let key = format!("{}:{}", node_type, name);
         let label = node_type.to_string();
 
@@ -149,8 +202,12 @@ impl GmpCliState {
                         for (k, v) in map {
                             let pv = match v {
                                 serde_json::Value::String(s) => PropertyValue::String(s),
-                                serde_json::Value::Number(n) => PropertyValue::Float(n.as_f64().unwrap_or(0.0)),
-                                serde_json::Value::Bool(b) => PropertyValue::Int(if b { 1 } else { 0 }),
+                                serde_json::Value::Number(n) => {
+                                    PropertyValue::Float(n.as_f64().unwrap_or(0.0))
+                                }
+                                serde_json::Value::Bool(b) => {
+                                    PropertyValue::Int(if b { 1 } else { 0 })
+                                }
                                 _ => PropertyValue::String(v.to_string()),
                             };
                             pm.insert(k, pv);
@@ -168,14 +225,26 @@ impl GmpCliState {
         Ok(format!("{}:{}", node_type, name))
     }
 
-    fn upsert_edge(&self, from_name: &str, from_type: &str, to_name: &str, to_type: &str, rel_type: &str, weight: Option<f64>) -> Result<(), String> {
+    fn upsert_edge(
+        &self,
+        from_name: &str,
+        from_type: &str,
+        to_name: &str,
+        to_type: &str,
+        rel_type: &str,
+        weight: Option<f64>,
+    ) -> Result<(), String> {
         let from_key = format!("{}:{}", from_type, from_name);
         let to_key = format!("{}:{}", to_type, to_name);
 
         let (from_id, to_id) = {
             let n2id = self.name_to_id.read().map_err(|e| e.to_string())?;
-            let f = *n2id.get(&from_key).ok_or_else(|| format!("Node not found: {}", from_key))?;
-            let t = *n2id.get(&to_key).ok_or_else(|| format!("Node not found: {}", to_key))?;
+            let f = *n2id
+                .get(&from_key)
+                .ok_or_else(|| format!("Node not found: {}", from_key))?;
+            let t = *n2id
+                .get(&to_key)
+                .ok_or_else(|| format!("Node not found: {}", to_key))?;
             (f, t)
         };
 
@@ -184,15 +253,24 @@ impl GmpCliState {
         if let Some(w) = weight {
             pm.insert("weight".to_string(), PropertyValue::Float(w));
         }
-        graph.create_edge(from_id, to_id, rel_type, pm).map_err(|e| e.to_string())?;
+        graph
+            .create_edge(from_id, to_id, rel_type, pm)
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 
-    fn graph_neighbors(&self, node_type: &str, node_name: &str, rel_type: Option<&str>) -> Result<GraphNeighborsResult, String> {
+    fn graph_neighbors(
+        &self,
+        node_type: &str,
+        node_name: &str,
+        rel_type: Option<&str>,
+    ) -> Result<GraphNeighborsResult, String> {
         let key = format!("{}:{}", node_type, node_name);
         let nid = {
             let n2id = self.name_to_id.read().map_err(|e| e.to_string())?;
-            *n2id.get(&key).ok_or_else(|| format!("Node not found: {}", key))?
+            *n2id
+                .get(&key)
+                .ok_or_else(|| format!("Node not found: {}", key))?
         };
 
         let graph = self.graph.read().map_err(|e| e.to_string())?;
@@ -232,12 +310,16 @@ impl GmpCliState {
                 };
 
                 // Get name from node properties
-                let nb_name = nb_node.properties.get("name")
+                let nb_name = nb_node
+                    .properties
+                    .get("name")
                     .and_then(|v| v.as_string())
                     .cloned()
                     .unwrap_or_else(|| nb_id.0.to_string());
 
-                let nb_label_str = graph.label_registry().get_label(nb_node.label)
+                let nb_label_str = graph
+                    .label_registry()
+                    .get_label(nb_node.label)
                     .map(|s| s.as_str())
                     .unwrap_or("?");
                 neighbors.push(NeighborView {
@@ -265,11 +347,14 @@ impl GmpCliState {
         let label_registry = graph.label_registry();
         for (key, &nid) in n2id.iter() {
             if let Some(node) = graph.get_node(nid) {
-                let label_str = label_registry.get_label(node.label)
+                let label_str = label_registry
+                    .get_label(node.label)
                     .map(|s| s.as_str())
                     .unwrap_or("?");
                 if node_type.map_or(true, |t| label_str == t) {
-                    let name = node.properties.get("name")
+                    let name = node
+                        .properties
+                        .get("name")
                         .and_then(|v| v.as_string())
                         .cloned()
                         .unwrap_or_else(|| nid.0.to_string());
@@ -288,11 +373,14 @@ impl GmpCliState {
             let nid = NodeId(i as u64);
             if !n2id.values().any(|&v| v == nid) {
                 if let Some(node) = graph.get_node(nid) {
-                    let label_str = label_registry.get_label(node.label)
+                    let label_str = label_registry
+                        .get_label(node.label)
                         .map(|s| s.as_str())
                         .unwrap_or("?");
                     if node_type.map_or(true, |t| label_str == t) {
-                        let name = node.properties.get("name")
+                        let name = node
+                            .properties
+                            .get("name")
                             .and_then(|v| v.as_string())
                             .cloned()
                             .unwrap_or_else(|| nid.0.to_string());
@@ -318,7 +406,9 @@ impl GmpCliState {
         for i in 0..edge_count {
             if let Some(edge) = graph.get_edge(EdgeId(i as u64)) {
                 // Get label string from label registry
-                let label_str = graph.label_registry().get_label(edge.label)
+                let label_str = graph
+                    .label_registry()
+                    .get_label(edge.label)
                     .map(|s| s.as_str())
                     .unwrap_or("?");
                 labels.insert(label_str.to_string());
@@ -371,7 +461,8 @@ fn main() {
         let ms = start.elapsed().as_millis() as u64;
 
         let out = match resp {
-            Ok(r) => serde_json::to_string(&r).unwrap_or_else(|_| r#"{"success":false,"error":"json error"}"#.to_string()),
+            Ok(r) => serde_json::to_string(&r)
+                .unwrap_or_else(|_| r#"{"success":false,"error":"json error"}"#.to_string()),
             Err(e) => serde_json::to_string(&Response::err(e, ms)).unwrap_or_default(),
         };
         println!("{}", out);
@@ -391,64 +482,114 @@ fn handle_request(line: &str, state: &GmpCliState) -> Result<Response, String> {
         }
 
         Request::VectorSearch { query, top_k } => {
-            let results = state.vector_search(&query, top_k).map_err(|e| e.to_string())?;
-            let data: Vec<_> = results.into_iter().map(|r| {
-                serde_json::json!({
-                    "doc_id": r.doc_id,
-                    "title": r.title,
-                    "doc_type": r.doc_type,
-                    "similarity": r.similarity
+            let results = state
+                .vector_search(&query, top_k)
+                .map_err(|e| e.to_string())?;
+            let data: Vec<_> = results
+                .into_iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "doc_id": r.doc_id,
+                        "title": r.title,
+                        "doc_type": r.doc_type,
+                        "similarity": r.similarity
+                    })
                 })
-            }).collect();
-            Ok(Response::ok(serde_json::to_value(data).unwrap_or_default(), ms))
+                .collect();
+            Ok(Response::ok(
+                serde_json::to_value(data).unwrap_or_default(),
+                ms,
+            ))
         }
 
         Request::HybridSearch { query, top_k } => {
-            let results = state.hybrid_search(&query, top_k).map_err(|e| e.to_string())?;
-            let data: Vec<_> = results.into_iter().map(|r| {
-                serde_json::json!({
-                    "doc_id": r.doc_id,
-                    "title": r.title,
-                    "doc_type": r.doc_type,
-                    "similarity": r.similarity
+            let results = state
+                .hybrid_search(&query, top_k)
+                .map_err(|e| e.to_string())?;
+            let data: Vec<_> = results
+                .into_iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "doc_id": r.doc_id,
+                        "title": r.title,
+                        "doc_type": r.doc_type,
+                        "similarity": r.similarity
+                    })
                 })
-            }).collect();
-            Ok(Response::ok(serde_json::to_value(data).unwrap_or_default(), ms))
+                .collect();
+            Ok(Response::ok(
+                serde_json::to_value(data).unwrap_or_default(),
+                ms,
+            ))
         }
 
-        Request::ImportDoc { title, doc_type, content, keywords } => {
-            let doc_id = state.import_doc(&title, &doc_type, &content, &keywords)
+        Request::ImportDoc {
+            title,
+            doc_type,
+            content,
+            keywords,
+        } => {
+            let doc_id = state
+                .import_doc(&title, &doc_type, &content, &keywords)
                 .map_err(|e| e.to_string())?;
             Ok(Response::ok(serde_json::json!({"doc_id": doc_id}), ms))
         }
 
-        Request::UpsertNode { node_type, name, code, properties } => {
+        Request::UpsertNode {
+            node_type,
+            name,
+            code,
+            properties,
+        } => {
             let node_id = state.upsert_node(&node_type, &name, code.as_deref(), properties)?;
             Ok(Response::ok(serde_json::json!({"node_id": node_id}), ms))
         }
 
-        Request::UpsertEdge { from_name, from_type, to_name, to_type, rel_type, weight } => {
-            state.upsert_edge(&from_name, &from_type, &to_name, &to_type, &rel_type, weight)?;
+        Request::UpsertEdge {
+            from_name,
+            from_type,
+            to_name,
+            to_type,
+            rel_type,
+            weight,
+        } => {
+            state.upsert_edge(
+                &from_name, &from_type, &to_name, &to_type, &rel_type, weight,
+            )?;
             Ok(Response::ok(serde_json::json!({"edge_created": true}), ms))
         }
 
-        Request::GraphNeighbors { node_type, node_name, rel_type } => {
+        Request::GraphNeighbors {
+            node_type,
+            node_name,
+            rel_type,
+        } => {
             let result = state.graph_neighbors(&node_type, &node_name, rel_type.as_deref())?;
-            Ok(Response::ok(serde_json::to_value(result).unwrap_or_default(), ms))
+            Ok(Response::ok(
+                serde_json::to_value(result).unwrap_or_default(),
+                ms,
+            ))
         }
 
         Request::ListNodes { node_type } => {
             let nodes = state.list_nodes(node_type.as_deref())?;
-            Ok(Response::ok(serde_json::to_value(nodes).unwrap_or_default(), ms))
+            Ok(Response::ok(
+                serde_json::to_value(nodes).unwrap_or_default(),
+                ms,
+            ))
         }
 
         Request::ListEdgeTypes => {
             let types = state.list_edge_types()?;
-            Ok(Response::ok(serde_json::to_value(types).unwrap_or_default(), ms))
+            Ok(Response::ok(
+                serde_json::to_value(types).unwrap_or_default(),
+                ms,
+            ))
         }
 
-        Request::SqlExec { .. } => {
-            Ok(Response::err("SQL exec not supported in this build".to_string(), ms))
-        }
+        Request::SqlExec { .. } => Ok(Response::err(
+            "SQL exec not supported in this build".to_string(),
+            ms,
+        )),
     }
 }
