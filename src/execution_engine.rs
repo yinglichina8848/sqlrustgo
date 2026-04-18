@@ -149,6 +149,12 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             }
         }
 
+        // Apply DISTINCT - remove duplicate rows
+        if select.distinct {
+            rows.sort();
+            rows.dedup();
+        }
+
         let row_count = rows.len();
         Ok(ExecutorResult::new(rows, row_count))
     }

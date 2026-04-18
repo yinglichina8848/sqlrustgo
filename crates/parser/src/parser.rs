@@ -148,9 +148,10 @@ pub struct SelectStatement {
     pub aggregates: Vec<AggregateCall>,
     pub group_by: Vec<Expression>,
     pub having: Option<Expression>,
-    pub order_by: Vec<OrderByExpr>,   // NEW
-    pub limit: Option<u64>,            // NEW
-    pub offset: Option<u64>,           // NEW
+    pub order_by: Vec<OrderByExpr>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+    pub distinct: bool,
 }
 
 /// ORDER BY expression
@@ -615,6 +616,13 @@ impl Parser {
     fn parse_select_statement(&mut self) -> Result<SelectStatement, String> {
         self.expect(Token::Select)?;
 
+        // Parse DISTINCT keyword
+        let mut distinct = false;
+        if matches!(self.current(), Some(Token::Distinct)) {
+            distinct = true;
+            self.next();
+        }
+
         let mut columns = Vec::new();
         let mut aggregates = Vec::new();
 
@@ -880,6 +888,7 @@ impl Parser {
             order_by,
             limit,
             offset,
+            distinct,
         })
     }
 
