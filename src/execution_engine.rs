@@ -361,8 +361,8 @@ impl<S: StorageEngine> ExecutionEngine<S> {
             .into_iter()
             .map(|mut row| {
                 for &(col_idx, ref set_expr) in &set_col_indices {
-                    let new_val =
-                        evaluate_expression(set_expr, &row, &table_info).unwrap_or(Value::Null);
+                    let new_val = evaluate_expression(set_expr, &row, &table_info)
+                        .unwrap_or(Value::Null);
                     if col_idx < row.len() {
                         row[col_idx] = new_val;
                     }
@@ -769,6 +769,7 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
     }
 }
 
+<<<<<<< HEAD
 /// Compare two values for ORDER BY sorting. Returns -1, 0, or 1.
 fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
     use std::cmp::Ordering;
