@@ -76,21 +76,6 @@ pub enum Token {
     Outer,
     Natural,
 
-    // Trigger keywords
-    Trigger,
-    Before,
-    After,
-    Instead,
-    Of,
-    New,
-    Old,
-    For,
-    Each,
-    Row,
-    Statement,
-    Referencing,
-    End,
-
     // Other SQL keywords
     Group,
     By,
@@ -111,17 +96,11 @@ pub enum Token {
     Preceding,
     Following,
     Current,
+    Row,
     Rows,
     Grouping,
     Rollup,
     Cube,
-
-    // Control flow keywords
-    End,
-
-    // Stored Procedure keywords
-    Call,
-    Procedure,
 
     // Transaction keywords
     Transaction,
@@ -135,6 +114,11 @@ pub enum Token {
     Read,
     Write,
     Only,
+
+    // Stored Procedure keywords
+    Call,
+    Procedure,
+    End,
 
     // Data Types
     Integer,
@@ -256,20 +240,6 @@ impl fmt::Display for Token {
             Token::Cross => write!(f, "CROSS"),
             Token::Outer => write!(f, "OUTER"),
             Token::Natural => write!(f, "NATURAL"),
-            // Trigger tokens
-            Token::Trigger => write!(f, "TRIGGER"),
-            Token::Before => write!(f, "BEFORE"),
-            Token::After => write!(f, "AFTER"),
-            Token::Instead => write!(f, "INSTEAD"),
-            Token::Of => write!(f, "OF"),
-            Token::New => write!(f, "NEW"),
-            Token::Old => write!(f, "OLD"),
-            Token::For => write!(f, "FOR"),
-            Token::Each => write!(f, "EACH"),
-            // Token::Row is defined elsewhere
-            Token::Statement => write!(f, "STATEMENT"),
-            Token::Referencing => write!(f, "REFERENCING"),
-            Token::End => write!(f, "END"),
             Token::Union => write!(f, "UNION"),
             Token::Intersect => write!(f, "INTERSECT"),
             Token::Except => write!(f, "EXCEPT"),
@@ -284,6 +254,9 @@ impl fmt::Display for Token {
             Token::Read => write!(f, "READ"),
             Token::Write => write!(f, "WRITE"),
             Token::Only => write!(f, "ONLY"),
+            Token::Call => write!(f, "CALL"),
+            Token::Procedure => write!(f, "PROCEDURE"),
+            Token::End => write!(f, "END"),
             Token::Unbounded => write!(f, "UNBOUNDED"),
             Token::Preceding => write!(f, "PRECEDING"),
             Token::Following => write!(f, "FOLLOWING"),
@@ -294,9 +267,6 @@ impl fmt::Display for Token {
             Token::Rollup => write!(f, "ROLLUP"),
             Token::Cube => write!(f, "CUBE"),
             Token::AsOf => write!(f, "ASOF"),
-            Token::End => write!(f, "END"),
-            Token::Call => write!(f, "CALL"),
-            Token::Procedure => write!(f, "PROCEDURE"),
             Token::Window => write!(f, "WINDOW"),
             Token::Partition => write!(f, "PARTITION"),
             Token::Over => write!(f, "OVER"),
@@ -385,9 +355,6 @@ pub fn is_keyword(s: &str) -> bool {
             | "WITH"
             | "RECURSIVE"
             | "AS"
-            | "CALL"
-            | "PROCEDURE"
-            | "END"
     )
 }
 
@@ -469,19 +436,6 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "CROSS" => Some(Token::Cross),
         "OUTER" => Some(Token::Outer),
         "NATURAL" => Some(Token::Natural),
-        // Trigger keywords
-        "TRIGGER" => Some(Token::Trigger),
-        "BEFORE" => Some(Token::Before),
-        "AFTER" => Some(Token::After),
-        "INSTEAD" => Some(Token::Instead),
-        "OF" => Some(Token::Of),
-        "NEW" => Some(Token::New),
-        "OLD" => Some(Token::Old),
-        "FOR" => Some(Token::For),
-        "EACH" => Some(Token::Each),
-        "ROW" => Some(Token::Row),
-        "STATEMENT" => Some(Token::Statement),
-        "REFERENCING" => Some(Token::Referencing),
         "UNION" => Some(Token::Union),
         "INTERSECT" => Some(Token::Intersect),
         "EXCEPT" => Some(Token::Except),
@@ -496,11 +450,14 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "READ" => Some(Token::Read),
         "WRITE" => Some(Token::Write),
         "ONLY" => Some(Token::Only),
+        "CALL" => Some(Token::Call),
+        "PROCEDURE" => Some(Token::Procedure),
+        "END" => Some(Token::End),
         "UNBOUNDED" => Some(Token::Unbounded),
         "PRECEDING" => Some(Token::Preceding),
         "FOLLOWING" => Some(Token::Following),
         "CURRENT" => Some(Token::Current),
-        // ROW is defined above
+        "ROW" => Some(Token::Row),
         "ROWS" => Some(Token::Rows),
         "GROUPING" => Some(Token::Grouping),
         "ROLLUP" => Some(Token::Rollup),
@@ -510,9 +467,6 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "PARTITION" => Some(Token::Partition),
         "OVER" => Some(Token::Over),
         "BETWEEN" => Some(Token::Between),
-        "CALL" => Some(Token::Call),
-        "PROCEDURE" => Some(Token::Procedure),
-        "END" => Some(Token::End),
         _ => None,
     }
 }
