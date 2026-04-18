@@ -183,6 +183,10 @@ impl DefaultPlanner {
                 // DDL statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::CreateTrigger { .. } => {
+                // CREATE TRIGGER - handled by storage layer
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
             LogicalPlan::Update { .. } => {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
