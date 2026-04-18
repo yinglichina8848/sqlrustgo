@@ -35,3 +35,23 @@ impl std::fmt::Display for SsiError {
 }
 
 impl std::error::Error for SsiError {}
+
+/// SIREAD lock - records keys read by a transaction
+#[derive(Debug, Clone)]
+pub struct SireadLock {
+    pub tx_id: TxId,
+    pub keys: Vec<Vec<u8>>,
+}
+
+impl SireadLock {
+    pub fn new(tx_id: TxId) -> Self {
+        Self {
+            tx_id,
+            keys: Vec::new(),
+        }
+    }
+
+    pub fn add_key(&mut self, key: Vec<u8>) {
+        self.keys.push(key);
+    }
+}
