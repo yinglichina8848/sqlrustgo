@@ -116,6 +116,13 @@ pub enum Token {
     Rollup,
     Cube,
 
+    // Control flow keywords
+    End,
+
+    // Stored Procedure keywords
+    Call,
+    Procedure,
+
     // Transaction keywords
     Transaction,
     Work,
@@ -287,6 +294,9 @@ impl fmt::Display for Token {
             Token::Rollup => write!(f, "ROLLUP"),
             Token::Cube => write!(f, "CUBE"),
             Token::AsOf => write!(f, "ASOF"),
+            Token::End => write!(f, "END"),
+            Token::Call => write!(f, "CALL"),
+            Token::Procedure => write!(f, "PROCEDURE"),
             Token::Window => write!(f, "WINDOW"),
             Token::Partition => write!(f, "PARTITION"),
             Token::Over => write!(f, "OVER"),
@@ -375,6 +385,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "WITH"
             | "RECURSIVE"
             | "AS"
+            | "CALL"
+            | "PROCEDURE"
+            | "END"
     )
 }
 
@@ -497,6 +510,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "PARTITION" => Some(Token::Partition),
         "OVER" => Some(Token::Over),
         "BETWEEN" => Some(Token::Between),
+        "CALL" => Some(Token::Call),
+        "PROCEDURE" => Some(Token::Procedure),
+        "END" => Some(Token::End),
         _ => None,
     }
 }

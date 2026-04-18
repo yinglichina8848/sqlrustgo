@@ -39,6 +39,7 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "slow_query_log_test",
                 "types_value_test",
                 "vectorization_test",
+                "stored_procedure_parser_test",
             ],
             description: "测试底层组件：存储、缓冲区、解析器、类型系统",
         },
