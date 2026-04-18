@@ -2,6 +2,46 @@
 
 use crate::Rule;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
+    LeftSemi,
+    LeftAnti,
+    RightSemi,
+    RightAnti,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+    Column(String),
+    Literal(String),
+    BinaryExpr {
+        left: Box<Expr>,
+        op: BinaryOperator,
+        right: Box<Expr>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOperator {
+    Eq,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    And,
+    Or,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+}
+
 /// PredicatePushdown rule - pushes filter conditions down to the source
 pub struct PredicatePushdown;
 
