@@ -11,6 +11,7 @@ sqlrustgo-storage.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
