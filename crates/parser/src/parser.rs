@@ -32,6 +32,8 @@ pub enum Statement {
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
     Union(UnionStatement),
+    CreateProcedure(CreateProcedureStatement),
+    Call(CallStatement),
 }
 
 /// CREATE INDEX statement
@@ -67,6 +69,28 @@ pub struct UnionStatement {
     pub left: Box<Statement>,
     pub right: Box<Statement>,
     pub union_all: bool, // true = UNION ALL (keep duplicates), false = UNION (dedup)
+}
+
+/// CREATE PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateProcedureStatement {
+    pub name: String,
+    pub params: Vec<ProcedureParam>,
+    pub body: String,
+}
+
+/// Procedure parameter
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcedureParam {
+    pub name: String,
+    pub data_type: String,
+}
+
+/// CALL statement (invokes a stored procedure)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStatement {
+    pub procedure_name: String,
+    pub args: Vec<String>,
 }
 
 /// ALTER TABLE operation types
