@@ -651,11 +651,31 @@ impl Parser {
             }
             Some(Token::Left) => {
                 self.next();
-                JoinType::Left
+                // Check for FULL OUTER JOIN
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                    JoinType::Full
+                } else {
+                    JoinType::Left
+                }
             }
             Some(Token::Right) => {
                 self.next();
-                JoinType::Right
+                // Check for RIGHT OUTER JOIN
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                    JoinType::Full
+                } else {
+                    JoinType::Right
+                }
+            }
+            Some(Token::Full) => {
+                self.next();
+                // Consume optional OUTER keyword
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                }
+                JoinType::Full
             }
             Some(Token::Cross) => {
                 self.next();
