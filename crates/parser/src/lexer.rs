@@ -308,6 +308,7 @@ impl<'a> Lexer<'a> {
                     "GROUPING" => Token::Grouping,
                     "ROLLUP" => Token::Rollup,
                     "CUBE" => Token::Cube,
+                    "AS" => Token::As,
                     "ASOF" => Token::AsOf,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
