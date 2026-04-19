@@ -620,8 +620,8 @@ git config user.name
 | 文档 | 路径 | 说明 |
 |------|------|------|
 | 多身份隔离开发模式 | [MULTI_IDENTITY_DEVELOPMENT_MODEL.md](./MULTI_IDENTITY_DEVELOPMENT_MODEL.md) | 配置规范 |
-| 权限模型 | [GIT_PERMISSION_MODEL.md](../GIT_PERMISSION_MODEL.md) | 2.0 权限模型 |
-| 企业级权限 | [GIT_PERMISSION_MODEL_V3.md](../GIT_PERMISSION_MODEL_V3.md) | 3.0 企业级权限 |
+| 权限模型 | [enterprise-github-minimal-permission-model.md](../governance/enterprise-github-minimal-permission-model.md) | 2.0 权限模型 |
+| 企业级权限 | [enterprise-github-permissions-implementation-plan.md](../governance/enterprise-github-permissions-implementation-plan.md) | 3.0 企业级权限 |
 
 ---
 
