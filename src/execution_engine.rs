@@ -967,7 +967,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let result = executor
             .execute_call(&call.procedure_name, args)
-            .map_err(|e| SqlError::ExecutionError(e))?;
+            .map_err(SqlError::ExecutionError)?;
 
         Ok(result)
     }
@@ -1083,8 +1083,6 @@ fn expression_to_value_from_string(s: &str) -> Value {
         Value::Float(f)
     } else if s.starts_with('\'') && s.ends_with('\'') {
         Value::Text(s[1..s.len() - 1].to_string())
-    } else if s.starts_with('@') {
-        Value::Text(s.to_string())
     } else {
         Value::Text(s.to_string())
     }

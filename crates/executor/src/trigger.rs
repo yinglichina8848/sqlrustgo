@@ -214,14 +214,10 @@ impl TriggerExecutor {
             let expanded = self.expand_row_variables(
                 &stmt,
                 &trigger.table_name,
-                old_row.as_deref(),
-                new_row.as_deref(),
+                old_row,
+                new_row,
             );
-            if let Err(e) =
-                self.execute_trigger_sql(&expanded, table, old_row.as_deref(), new_row.as_deref())
-            {
-                return Err(e);
-            }
+            self.execute_trigger_sql(&expanded, table, old_row, new_row)?;
         }
 
         Ok(result.unwrap_or_default())
@@ -288,7 +284,7 @@ impl TriggerExecutor {
         let mut result = sql.to_string();
 
         if let Some(new) = new_row {
-            if let Some(info) = self.storage.read().unwrap().get_table_info(table_name).ok() {
+            if let Ok(info) = self.storage.read().unwrap().get_table_info(table_name) {
                 for (i, col) in info.columns.iter().enumerate() {
                     if i < new.len() {
                         let val = &new[i];
@@ -302,7 +298,7 @@ impl TriggerExecutor {
         }
 
         if let Some(old) = old_row {
-            if let Some(info) = self.storage.read().unwrap().get_table_info(table_name).ok() {
+            if let Ok(info) = self.storage.read().unwrap().get_table_info(table_name) {
                 for (i, col) in info.columns.iter().enumerate() {
                     if i < old.len() {
                         let val = &old[i];
@@ -450,7 +446,7 @@ impl TriggerExecutor {
         Ok(())
     }
 
-/// Execute SELECT within a trigger (for setting variables or validation)
+    /// Execute SELECT within a trigger (for setting variables or validation)
     fn execute_trigger_select(
         &self,
         sql: &str,
@@ -463,6 +459,7 @@ impl TriggerExecutor {
             .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
 
         if let sqlrustgo_parser::Statement::Select(select) = statement {
+            #[allow(clippy::match_result_ok)]
             let storage = self.storage.read().unwrap();
             let table_info = storage.get_table_info(&select.table).ok();
 

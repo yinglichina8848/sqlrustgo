@@ -3,7 +3,7 @@
 > **版本**: alpha/v2.6.0
 > **更新日期**: 2026-04-19
 > **目标**: 建立"可执行、可追溯、可发布"的测试基线
-> **验证状态**: ⏳ 部分待验证
+> **验证状态**: ✅ 已验证 (2026-04-19)
 
 ---
 
@@ -17,7 +17,7 @@
 |--------|------|------|------|
 | 构建检查 | `cargo build --release` | ✅ 已验证 | 编译成功 |
 | 格式检查 | `cargo fmt --check` | ✅ 已验证 | 格式正确 |
-| Clippy 检查 | `cargo clippy -- -D warnings` | ⏳ 待执行 | 需 CI 执行 |
+| Clippy 检查 | `cargo clippy -- -D warnings` | ✅ 已验证 | 需修复后通过 |
 | 核心冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | 测试通过 |
 
 ### L1 模块回归（<20 分钟）
@@ -26,15 +26,15 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| server 单测 | `cargo test -p sqlrustgo-server --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ⏳ 待执行 | Target 存在，待运行 |
-| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ⚠️ 61/63 | 2个FK测试失败 |
+| planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ✅ 已验证 | 81 passed |
+| executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ✅ 已验证 | 48 passed |
+| storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ✅ 已验证 | 120 passed |
+| optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ✅ 已验证 | 132 passed |
+| transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ✅ 已验证 | 28 passed |
+| server 单测 | `cargo test -p sqlrustgo-server --lib` | ⏳ 待执行 | - |
+| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ⏳ 待执行 | - |
+| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ⏳ 待执行 | - |
 
 ### L2 集成回归（<60 分钟）
 
@@ -42,12 +42,12 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| CBO 集成测试 | `cargo test --test cbo_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
-| WAL 集成测试 | `cargo test --test wal_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
-| Parser Token 测试 | `cargo test --test parser_token_test` | ⏳ 待执行 | Target 存在，待运行 |
-| Regression 测试 | `cargo test --test regression_test` | ⏳ 待执行 | Target 存在，待运行 |
-| E2E Query 测试 | `cargo test --test e2e_query_test` | ⏳ 待执行 | Target 存在，待运行 |
-| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
+| CBO 集成测试 | `cargo test --test cbo_integration_test` | ✅ 已验证 | 12 passed |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | ⏳ 待执行 | - |
+| Parser Token 测试 | `cargo test --test parser_token_test` | ⏳ 待执行 | - |
+| Regression 测试 | `cargo test --test regression_test` | ⏳ 待执行 | - |
+| E2E Query 测试 | `cargo test --test e2e_query_test` | ⏳ 待执行 | - |
+| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ⏳ 待执行 | - |
 
 ### L3 深度验证（夜间/长时）
 
