@@ -754,13 +754,69 @@ impl Parser {
                     self.next();
                 }
                 // Handle NumberLiteral in SELECT (e.g., SELECT 123, SELECT 3.14)
-                Some(Token::NumberLiteral(ref n)) => {
-                    columns.push(SelectColumn {
-                        name: n.to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal(n.to_string())),
-                    });
+                // Also handle binary expressions: SELECT 1+2, SELECT 10/2, SELECT 3*4
+                // Handle negative numbers: SELECT -9223372036854775808
+                Some(Token::Minus) => {
+                    // Unary minus - check if followed by number
                     self.next();
+                    match self.current() {
+                        Some(Token::NumberLiteral(s)) => {
+                            let neg_str = format!("-{}", s);
+                            self.next();
+                            columns.push(SelectColumn {
+                                name: neg_str.clone(),
+                                alias: None,
+                                expression: Some(Expression::Literal(neg_str)),
+                            });
+                        }
+                        _ => return Err("Expected number after -".to_string()),
+                    }
+                }
+                Some(Token::NumberLiteral(ref _n)) => {
+                    let num_str = _n.to_string();
+                    self.next();
+                    let mut expr = Expression::Literal(num_str.clone());
+                    // Parse binary expression if followed by operator
+                    while let Some(op) = self.current() {
+                        let op_str = match op {
+                            Token::Plus => Some("+"),
+                            Token::Minus => Some("-"),
+                            Token::Star => Some("*"),
+                            Token::Slash => Some("/"),
+                            Token::Percent => Some("%"),
+                            _ => None,
+                        };
+                        if let Some(op_str) = op_str {
+                            self.next();
+                            let right = match self.current() {
+                                Some(Token::NumberLiteral(s)) => {
+                                    let right_expr = Expression::Literal(s.clone());
+                                    self.next();
+                                    right_expr
+                                }
+                                Some(Token::Minus) => {
+                                    self.next();
+                                    match self.current() {
+                                        Some(Token::NumberLiteral(s)) => {
+                                            let right_expr = Expression::Literal(format!("-{}", s));
+                                            self.next();
+                                            right_expr
+                                        }
+                                        _ => return Err("Expected number after -".to_string()),
+                                    }
+                                }
+                                _ => return Err("Expected number after operator".to_string()),
+                            };
+                            expr = Expression::BinaryOp(Box::new(expr), op_str.to_string(), Box::new(right));
+                        } else {
+                            break;
+                        }
+                    }
+                    columns.push(SelectColumn {
+                        name: num_str,
+                        alias: None,
+                        expression: Some(expr),
+                    });
                 }
                 // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
                 Some(Token::StringLiteral(s)) => {
