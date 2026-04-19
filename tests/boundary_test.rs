@@ -1,7 +1,6 @@
 use sqlrustgo::parse;
 
 #[test]
-#[ignore] // Parser: SELECT literals not supported
 fn test_null_handling_in_select() {
     let sql = "SELECT NULL";
     let result = parse(sql);
@@ -23,7 +22,6 @@ fn test_null_handling_in_join() {
 }
 
 #[test]
-#[ignore] // Parser: large int literals
 fn test_large_integer_positive() {
     let sql = "SELECT 9223372036854775807";
     let result = parse(sql);
@@ -31,7 +29,7 @@ fn test_large_integer_positive() {
 }
 
 #[test]
-#[ignore] // Parser: large int literals
+#[ignore]
 fn test_large_integer_negative() {
     let sql = "SELECT -9223372036854775808";
     let result = parse(sql);
@@ -39,7 +37,6 @@ fn test_large_integer_negative() {
 }
 
 #[test]
-#[ignore] // Parser: float literals
 fn test_large_float() {
     let sql = "SELECT 1.7976931348623157e308";
     let result = parse(sql);
@@ -70,7 +67,6 @@ fn test_special_characters_sql_injection_attempt() {
 }
 
 #[test]
-#[ignore] // Parser: empty strings
 fn test_empty_string() {
     let sql = "SELECT ''";
     let result = parse(sql);
@@ -94,7 +90,7 @@ fn test_tab_and_newline_in_string() {
 }
 
 #[test]
-#[ignore] // Parser: division in expressions
+#[ignore]
 fn test_zero_division_parsing() {
     let sql = "SELECT 1 / 0";
     let result = parse(sql);
@@ -142,7 +138,6 @@ fn test_many_values_in_insert() {
 }
 
 #[test]
-#[ignore] // Parser: TRUE/FALSE keywords
 fn test_bool_true_false() {
     let sql = "SELECT TRUE, FALSE, true, false";
     let result = parse(sql);
