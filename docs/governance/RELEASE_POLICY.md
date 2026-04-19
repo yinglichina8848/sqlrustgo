@@ -176,7 +176,7 @@ git checkout v1.1.0
 |------|------|
 | [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
 | [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | 贡献指南 |
+| 贡献指南 | (待创建) |
 | [AI_COLLABORATION.md](./AI_COLLABORATION.md) | AI 协作规则 |
 
 ---
