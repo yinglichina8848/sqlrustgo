@@ -4,11 +4,15 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
+use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
+use sqlrustgo_catalog::{Catalog, StoredProcedure};
+use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement,
+    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
+    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
 };
 use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
@@ -19,6 +23,7 @@ use std::sync::{Arc, RwLock};
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
     storage: Arc<RwLock<S>>,
+    catalog: Option<Arc<RwLock<Catalog>>>,
     stats: Arc<RwLock<ExecutionStats>>,
     cbo_enabled: bool,
 }
@@ -48,11 +53,12 @@ pub struct ColumnStatistics {
 /// Type alias for MemoryStorage-backed execution engine
 pub type MemoryExecutionEngine = ExecutionEngine<MemoryStorage>;
 
-impl<S: StorageEngine> ExecutionEngine<S> {
+impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Create a new execution engine with CBO enabled by default
     pub fn new(storage: Arc<RwLock<S>>) -> Self {
         Self {
             storage,
+            catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
         }
@@ -62,8 +68,19 @@ impl<S: StorageEngine> ExecutionEngine<S> {
     pub fn with_cbo(storage: Arc<RwLock<S>>, cbo_enabled: bool) -> Self {
         Self {
             storage,
+            catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+        }
+    }
+
+    /// Create a new execution engine with a catalog
+    pub fn with_catalog(storage: Arc<RwLock<S>>, catalog: Arc<RwLock<Catalog>>) -> Self {
+        Self {
+            storage,
+            catalog: Some(catalog),
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled: true,
         }
     }
 
@@ -827,23 +844,78 @@ impl<S: StorageEngine> ExecutionEngine<S> {
     }
 
     fn execute_call(&self, call: &CallStatement) -> SqlResult<ExecutorResult> {
-        // Stored procedure call - return error indicating not fully implemented
-        // Full implementation requires catalog integration
-        Err(SqlError::ExecutionError(format!(
-            "CALL statement execution requires stored procedure catalog: {}",
-            call.procedure_name
-        )))
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("CALL statement requires stored procedure catalog".to_string())
+        })?;
+        let catalog = catalog_guard.read().unwrap();
+
+        let procedure = catalog
+            .get_stored_procedure(&call.procedure_name)
+            .ok_or_else(|| {
+                SqlError::ExecutionError(format!(
+                    "Stored procedure '{}' not found",
+                    call.procedure_name
+                ))
+            })?;
+
+        let executor = StoredProcExecutor::new(Arc::new(catalog.clone()), self.storage.clone());
+
+        let args: Vec<Value> = call
+            .args
+            .iter()
+            .map(|arg| expression_to_value_from_string(arg))
+            .collect();
+
+        let result = executor
+            .execute_call(&call.procedure_name, args)
+            .map_err(|e| SqlError::ExecutionError(e))?;
+
+        Ok(result)
     }
 
     fn execute_create_procedure(
         &self,
-        _stmt: &CreateProcedureStatement,
+        stmt: &CreateProcedureStatement,
     ) -> SqlResult<ExecutorResult> {
-        // Stored procedure creation - return error indicating not fully implemented
-        // Full implementation requires catalog integration
-        Err(SqlError::ExecutionError(
-            "CREATE PROCEDURE requires stored procedure catalog integration".to_string(),
-        ))
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError(
+                "CREATE PROCEDURE requires stored procedure catalog".to_string(),
+            )
+        })?;
+        let mut catalog = catalog_guard.write().unwrap();
+
+        let params: Vec<sqlrustgo_catalog::stored_proc::StoredProcParam> = stmt
+            .params
+            .iter()
+            .map(|p| {
+                let mode = match p.mode {
+                    ParserParamMode::In => ParamMode::In,
+                    ParserParamMode::Out => ParamMode::Out,
+                    ParserParamMode::InOut => ParamMode::InOut,
+                };
+                sqlrustgo_catalog::stored_proc::StoredProcParam {
+                    name: p.name.clone(),
+                    mode,
+                    data_type: p.data_type.clone(),
+                }
+            })
+            .collect();
+
+        let body: Vec<StoredProcStatement> = stmt
+            .body
+            .iter()
+            .map(|s| match s {
+                ParserStatement::RawSql(sql) => StoredProcStatement::RawSql(sql.clone()),
+            })
+            .collect();
+
+        let procedure = StoredProcedure::new(stmt.name.clone(), params, body);
+
+        catalog.add_stored_procedure(procedure).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to create procedure: {:?}", e))
+        })?;
+
+        Ok(ExecutorResult::empty())
     }
 }
 
@@ -852,6 +924,7 @@ impl ExecutionEngine<MemoryStorage> {
     pub fn with_memory() -> Self {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
         }
@@ -861,8 +934,19 @@ impl ExecutionEngine<MemoryStorage> {
     pub fn with_memory_and_cbo(cbo_enabled: bool) -> Self {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+        }
+    }
+
+    /// Create a new execution engine with catalog
+    pub fn with_memory_and_catalog(catalog: Arc<RwLock<Catalog>>) -> Self {
+        Self {
+            storage: Arc::new(RwLock::new(MemoryStorage::new())),
+            catalog: Some(catalog),
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled: true,
         }
     }
 }
@@ -886,6 +970,24 @@ fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
         }
         sqlrustgo_parser::Expression::Identifier(name) => Value::Text(name.clone()),
         _ => Value::Null,
+    }
+}
+
+/// Convert a string argument to a Value (for CALL arguments)
+fn expression_to_value_from_string(s: &str) -> Value {
+    let s = s.trim();
+    if s.eq_ignore_ascii_case("NULL") {
+        Value::Null
+    } else if let Ok(n) = s.parse::<i64>() {
+        Value::Integer(n)
+    } else if let Ok(f) = s.parse::<f64>() {
+        Value::Float(f)
+    } else if s.starts_with('\'') && s.ends_with('\'') {
+        Value::Text(s[1..s.len() - 1].to_string())
+    } else if s.starts_with('@') {
+        Value::Text(s.to_string())
+    } else {
+        Value::Text(s.to_string())
     }
 }
 

@@ -543,6 +543,7 @@ impl Parser {
         };
 
         self.expect(Token::ForEach)?;
+        self.expect(Token::Each)?;
         self.expect(Token::Row)?;
 
         self.expect(Token::Begin)?;
