@@ -93,7 +93,7 @@ impl<'a> Lexer<'a> {
         self.input[start..self.position].to_string()
     }
 
-    /// Read a string literal (single-quoted)
+    /// Read a string literal (single-quoted) - handles Unicode correctly
     fn read_string(&mut self) -> String {
         self.position += 1; // Skip opening quote
         let start = self.position;
@@ -101,13 +101,16 @@ impl<'a> Lexer<'a> {
         while !self.is_eof() {
             let ch = self.peek_char();
             if ch == '\'' {
-                if self.input[self.position..].starts_with("''") {
+                // Check for escaped quote ''
+                let remaining = &self.input[self.position..];
+                if remaining.starts_with("''") {
                     self.position += 2;
                     continue;
                 }
                 break;
             }
-            self.position += 1;
+            // Move by character, not by byte, to handle Unicode
+            self.position += ch.len_utf8();
         }
 
         let result = self.input[start..self.position].to_string();
