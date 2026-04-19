@@ -130,6 +130,19 @@ fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) ->
     response == expected
 }
 
+// ============================================================================
+// Password Verification
+// ============================================================================
+
+const DEFAULT_PASSWORD: &str = "";
+
+fn verify_auth_response(auth_response: &[u8], _seed: &[u8], password: &str) -> bool {
+    if password.is_empty() {
+        return true;
+    }
+    verify_old_password_response(_seed, auth_response, password)
+}
+
 // Execution Engine Stub
 #[allow(dead_code)]
 struct ExecutionEngine {
@@ -1281,6 +1294,14 @@ fn handle_connection(
         println!("[MYSQL-PACKET] OK written over TLS");
         run_command_loop(&mut tls_stream, addr, storage, monitor, ok_seq.wrapping_add(1))?;
         return Ok(());
+    }
+
+    let auth_response = &auth_packet.payload[4..];
+    let seed = rand_u8_20();
+    if !verify_auth_response(auth_response, &seed, DEFAULT_PASSWORD) {
+        let err_seq = auth_packet.sequence.wrapping_add(1);
+        make_err_packet(err_seq, 1045, "Access denied for user").write_to(&mut stream)?;
+        return Err(MySqlError::Protocol("Authentication failed".to_string()));
     }
 
     let ok_seq = auth_packet.sequence.wrapping_add(1);
