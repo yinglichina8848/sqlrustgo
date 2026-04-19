@@ -154,8 +154,8 @@ enum SyncMode {
 
 ## 六、相关文档
 
-- [MVCC_DESIGN.md](./MVCC_DESIGN.md) - MVCC 集成
-- [PITR_RECOVERY.md](./PITR_RECOVERY.md) - 时间点恢复
+- [MVCC_DESIGN.md](../mvcc/MVCC_DESIGN.md) - MVCC 集成
+- *(已归档 - PITR 恢复文档不存在)*
 
 ---
 

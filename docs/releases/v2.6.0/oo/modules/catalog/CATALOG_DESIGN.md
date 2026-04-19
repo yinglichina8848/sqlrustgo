@@ -20,7 +20,7 @@ Catalog 是 SQLRustGo 的元数据管理系统，负责管理数据库 schema、
 
 ## 三、相关文档
 
-- [ARCHITECTURE_V2.6.md](../architecture/ARCHITECTURE_V2.6.md)
+- [ARCHITECTURE_V2.6.md](../../architecture/ARCHITECTURE_V2.6.md)
 
 ---
 

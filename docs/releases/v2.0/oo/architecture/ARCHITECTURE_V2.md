@@ -253,7 +253,7 @@ parser → planner → optimizer → executor → storage
 
 | 模块 | 文档 |
 |------|------|
-| Cascades 设计 | [architecture/CASCADES_DESIGN.md](./architecture/CASCADES_DESIGN.md) *(已归档)* |
+| Cascades 设计 | CASCADES_DESIGN.md *(已归档)* |
 | 用户手册 | USER_MANUAL.md *(已归档)* |
 
 ---

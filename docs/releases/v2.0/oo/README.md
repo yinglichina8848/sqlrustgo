@@ -50,7 +50,7 @@ docs/releases/v2.0/oo/
 | 模块 | 文档 |
 |------|------|
 | 架构设计 | [oo/architecture/ARCHITECTURE_V2.md](./architecture/ARCHITECTURE_V2.md) |
-| Cascades | [oo/architecture/CASCADES_DESIGN.md](./architecture/CASCADES_DESIGN.md) *(已归档)* |
+| Cascades | CASCADES_DESIGN.md *(已归档)* |
 | 用户手册 | [USER_MANUAL.md](../USER_MANUAL.md) *(已归档)* |
 
 ---

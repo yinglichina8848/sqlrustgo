@@ -175,8 +175,8 @@ pub trait BatchIterator {
 
 ## 六、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md) - 整体架构
-- [OPTIMIZER_DESIGN.md](./OPTIMIZER_DESIGN.md) - 优化器
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md) - 整体架构
+- [OPTIMIZER_DESIGN.md](../optimizer/OPTIMIZER_DESIGN.md) - 优化器
 
 ---
 

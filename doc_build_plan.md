@@ -1,5 +1,7 @@
 ## 文档构建任务计划
 
+> **状态**: *(已归档)* - 本文档记录的计划未实际执行，mdbook 未采用
+
 ### 1. 文档构建工具选择
 
 选择 **mdbook** 作为文档构建工具，原因：
@@ -67,17 +69,10 @@ extra-css = ["custom.css"]
 ```markdown
 # Table of Contents
 
-- [Introduction](introduction.md)
-- [Getting Started](getting-started.md)
-- [Architecture](architecture.md)
-- [API Documentation](api/index.md)
-  - [API Reference](api/reference.md)
-- [User Guide](user-guide/index.md)
-  - [Best Practices](user-guide/best-practices.md)
-- [Developer Guide](developer-guide/index.md)
-  - [Contributing](developer-guide/contributing.md)
-  - [Development Setup](developer-guide/setup.md)
-- [Release Notes](release-notes.md)
+- Introduction *(未实现)*
+- Getting Started *(未实现)*
+- Architecture *(未实现)*
+- Release Notes *(未实现)*
 ```
 
 #### 2.2 文档迁移与整合

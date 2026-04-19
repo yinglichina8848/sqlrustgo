@@ -247,7 +247,7 @@ sqlrustgo/
 ### 8.2 相关文档
 
 - [README.md](../README.md) - 项目介绍
-- [architecture.md](../architecture.md) - 架构设计
+- [architecture.md](../../architecture.md) - 架构设计
 - [v1.1.0-beta/README.md](./README.md) - Beta 版本索引
 
 ---

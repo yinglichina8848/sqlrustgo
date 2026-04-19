@@ -20,8 +20,8 @@ Transaction 是 SQLRustGo 的事务管理模块，负责事务的开启、提交
 
 ## 三、相关文档
 
-- [ARCHITECTURE_V2.6.md](../architecture/ARCHITECTURE_V2.6.md)
-- [MVCC_DESIGN.md](./mvcc/MVCC_DESIGN.md)
+- [ARCHITECTURE_V2.6.md](../../architecture/ARCHITECTURE_V2.6.md)
+- [MVCC_DESIGN.md](../mvcc/MVCC_DESIGN.md)
 
 ---
 

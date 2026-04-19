@@ -224,8 +224,8 @@ pub enum PhysicalPlan {
 
 ## 六、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md) - 整体架构
-- [PLANNER_DESIGN.md](./PLANNER_DESIGN.md) - 查询规划
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md) - 整体架构
+- [PLANNER_DESIGN.md](../planner/PLANNER_DESIGN.md) - 查询规划
 
 ---
 

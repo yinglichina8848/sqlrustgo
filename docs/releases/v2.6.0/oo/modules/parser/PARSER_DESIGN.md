@@ -41,8 +41,8 @@ pub struct SelectStmt {
 
 ## 四、相关文档
 
-- [ARCHITECTURE_V2.6.md](../architecture/ARCHITECTURE_V2.6.md)
-- [SQL92_COMPLIANCE.md](../reports/SQL92_COMPLIANCE.md)
+- [ARCHITECTURE_V2.6.md](../../architecture/ARCHITECTURE_V2.6.md)
+- [SQL92_COMPLIANCE.md](../../reports/SQL92_COMPLIANCE.md)
 
 ---
 

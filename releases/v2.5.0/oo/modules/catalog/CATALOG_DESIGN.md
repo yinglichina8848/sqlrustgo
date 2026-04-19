@@ -30,7 +30,7 @@ pub struct Catalog {
 
 ## 四、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md)
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md)
 
 ---
 

@@ -147,8 +147,8 @@ pub enum MVCCError {
 
 ## 七、相关文档
 
-- [MVCC_DESIGN.md](../../MVCC_DESIGN.md) - 详细设计文档
-- [MVCC_DESIGN.md](./WAL_DESIGN.md) - WAL 集成
+- [MVCC_DESIGN.md](../../../MVCC_DESIGN.md) - 详细设计文档
+- [WAL_DESIGN.md](../wal/WAL_DESIGN.md) - WAL 集成
 
 ---
 

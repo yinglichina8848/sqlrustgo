@@ -138,7 +138,7 @@ Week 1-2 (已完成)      Week 3-4 (开发中)      Week 5-6 (待开发)
 | [EPIC-02-可观测性.md](./EPIC-02-可观测性.md) | 可观测性详细设计 |
 | [EPIC-03-Benchmark完善.md](./EPIC-03-Benchmark完善.md) | Benchmark 详细设计 |
 | [EPIC-04-错误系统.md](./EPIC-04-错误系统.md) | 错误系统详细设计 |
-| [版本路线图](../ROADMAP.md) | 版本路线图 |
+| [版本路线图](../../ROADMAP.md) | 版本路线图 |
 
 > 注: `2026-03-21-v170-issue-spec.md` 和 `2026-03-21-v170-release-plan.md` 已迁移至 `docs/releases/v1.7.0/`
 

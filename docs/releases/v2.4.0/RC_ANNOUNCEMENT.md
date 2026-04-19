@@ -115,7 +115,7 @@ cargo install sqlrustgo
 - [Release Notes](./RELEASE_NOTES.md)
 - [Changelog](./CHANGELOG.md)
 - [性能报告](../../benchmark/TPCH-SF1-PERFORMANCE-REPORT.md)
-- [Graph Engine 文档](../../graph-engine/README.md) *(已归档)*
+- Graph Engine 文档 *(已归档 - 文件不存在)*
 
 ## 反馈
 

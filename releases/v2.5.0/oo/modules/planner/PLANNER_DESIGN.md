@@ -39,8 +39,8 @@ impl Planner {
 
 ## 四、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md)
-- [OPTIMIZER_DESIGN.md](./optimizer/OPTIMIZER_DESIGN.md)
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md)
+- [OPTIMIZER_DESIGN.md](../optimizer/OPTIMIZER_DESIGN.md)
 
 ---
 
