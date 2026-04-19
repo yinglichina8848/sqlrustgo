@@ -1,13 +1,21 @@
 # v2.6.0 测试计划（Phase B 重构版）
 
 > **版本**: alpha/v2.6.0
-> **更新日期**: 2026-04-19
+> **更新日期**: 2026-04-20
 > **目标**: 建立"可执行、可追溯、可发布"的测试基线
-> **验证状态**: ✅ 已验证 (2026-04-19)
+> **验证状态**: ✅ 已验证 (2026-04-20)
 
 ---
 
-## 一、测试分层
+## 一、测试分层执行结果汇总
+
+| 层级 | 通过率 | 说明 |
+|------|--------|------|
+| L0 冒烟 | ✅ 100% | build, fmt, clippy, binary_format |
+| L1 模块 | ⚠️ 99% | parser 62/63 (1 ignored) |
+| L2 集成 | ⚠️ 92% | regression 110/119, 6 failures |
+| L3 深度 | ⚠️ 部分 | TPC-H 编译错误, stress 3/3 |
+| L4 Corpus | ✅ 100% | SQL corpus 59/59 |
 
 ### L0 冒烟（<5 分钟）
 
@@ -43,23 +51,27 @@
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
 | CBO 集成测试 | `cargo test --test cbo_integration_test` | ✅ 已验证 | 12 passed |
-| WAL 集成测试 | `cargo test --test wal_integration_test` | ⏳ 待执行 | - |
-| Parser Token 测试 | `cargo test --test parser_token_test` | ⏳ 待执行 | - |
-| Regression 测试 | `cargo test --test regression_test` | ⏳ 待执行 | - |
-| E2E Query 测试 | `cargo test --test e2e_query_test` | ⏳ 待执行 | - |
-| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ⏳ 待执行 | - |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | ❌ 编译错误 | 依赖问题 |
+| Parser Token 测试 | `cargo test --test parser_token_test` | ✅ 已验证 | 20 passed |
+| Regression 测试 | `cargo test --test regression_test` | ⚠️ 部分失败 | 110/119 (92.4%), 6 failures |
+| E2E Query 测试 | `cargo test --test e2e_query_test` | ❌ 编译错误 | 依赖问题 |
+| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ❌ 编译错误 | 依赖问题 |
 
-### L3 深度验证（夜间/长时）
-
-长时间运行和压力测试。
+## L3 深度验证（夜间/长时）
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| TPC-H SF1 | `cargo bench --bench tpch_bench` | ⚠️ 代码编译错误 | 待创建 Issue 修复 |
-| Sysbench | 外部工具 | ⏳ 待集成 | 需手动执行 |
-| 压力测试 | `cargo test --test concurrency_stress_test` | 🔴 Target 不存在 | 计划中 |
+| TPC-H SF1 | `cargo bench --bench tpch_bench` | ⚠️ 代码编译错误 | 待修复 |
+| Sysbench | 外部工具 | ⚠️ 未安装 | 需手动安装执行 |
+| 压力测试 | `cargo test --test concurrency_stress_test` | ✅ 已实现 | 3 passed |
 | 崩溃恢复 | `kill -9` 测试 | ⏳ 待手动测试 | 需文档化 |
 | 备份恢复 | backup/restore 测试 | ⏳ 待实现 | 计划中 |
+
+### L4 SQL Corpus 测试
+
+| 测试项 | 命令 | 状态 | 结果 |
+|--------|------|------|------|
+| SQL Regression Corpus | `cargo test -p sqlrustgo-sql-corpus --lib` | ✅ 已验证 | 59/59 (100%) |
 
 ---
 
