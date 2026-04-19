@@ -95,6 +95,17 @@ pub enum LogicalPlan {
         event: TriggerEvent,
         body: String,
     },
+    /// Create stored procedure
+    CreateProcedure {
+        procedure_name: String,
+        params: Vec<ProcedureParam>,
+        body: Vec<ProcedureStatement>,
+    },
+    /// Call stored procedure
+    Call {
+        procedure_name: String,
+        args: Vec<String>,
+    },
 }
 
 /// Trigger timing
@@ -110,6 +121,29 @@ pub enum TriggerEvent {
     Insert,
     Update,
     Delete,
+}
+
+/// Stored procedure parameter
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcedureParam {
+    pub name: String,
+    pub data_type: String,
+    pub mode: ParamMode,
+}
+
+/// Parameter mode
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ParamMode {
+    In,
+    Out,
+    InOut,
+}
+
+/// Stored procedure statement
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcedureStatement {
+    RawSql(String),
+    Select(String),
 }
 
 impl LogicalPlan {
@@ -132,6 +166,8 @@ impl LogicalPlan {
             LogicalPlan::Delete { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
             LogicalPlan::CreateTrigger { .. } => Schema::empty(),
+            LogicalPlan::CreateProcedure { .. } => Schema::empty(),
+            LogicalPlan::Call { .. } => Schema::empty(),
         }
     }
 }

@@ -911,7 +911,10 @@ impl StoredProcExecutor {
             sqlrustgo_parser::Statement::Select(select) => {
                 let table_name = &select.table;
 
-                let records = if ctx.cte_tables.contains_key(table_name) {
+                // Handle SELECT without FROM (e.g., SELECT 1, SELECT 'hello', SELECT NULL)
+                let records = if table_name.is_empty() {
+                    vec![]
+                } else if ctx.cte_tables.contains_key(table_name) {
                     ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
                 } else {
                     let storage = self.storage.read().unwrap();

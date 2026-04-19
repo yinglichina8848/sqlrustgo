@@ -187,6 +187,14 @@ impl DefaultPlanner {
                 // CREATE TRIGGER - handled by storage layer
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::CreateProcedure { .. } => {
+                // CREATE PROCEDURE - handled by storage layer
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::Call { .. } => {
+                // CALL stored procedure - handled by execution engine
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
             LogicalPlan::Update { .. } => {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
