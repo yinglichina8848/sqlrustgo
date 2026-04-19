@@ -160,4 +160,4 @@ cargo test connection_pool
 
 ## 相关文档
 
-- [性能测试报告](./performance-test-report.md)
+- 性能测试报告 *(已归档，内容已合并至基准测试)*

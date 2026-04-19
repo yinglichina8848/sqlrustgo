@@ -107,11 +107,13 @@ open coverage/index.html
 # 单元测试
 cargo test --lib
 
-# 集成测试
-cargo test --test '*'
+# 集成测试（抽样验证）
+cargo test --test binary_format_test
+cargo test --test cbo_integration_test
+cargo test --test wal_integration_test
 
 # SQL Corpus
-cargo test -p sqlrustgo-sql-corpus
+cargo test -p sqlrustgo-sql-corpus --lib
 ```
 
 ---

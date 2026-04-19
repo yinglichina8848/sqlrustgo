@@ -428,7 +428,7 @@ impl ReportGenerator {
 | test_join_100k | executor | OutOfMemory | 120s |
 
 ## 性能趋势
-![Performance Trend](trend.png)
+![Performance Trend](trend.png) *(已归档)*
 
 ## 建议
 - 建议关注 executor 模块的内存使用

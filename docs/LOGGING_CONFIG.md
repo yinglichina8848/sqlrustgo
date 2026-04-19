@@ -155,5 +155,5 @@ sudo chown sqlrustgo:sqlrustgo /var/log/sqlrustgo
 
 ## 相关文档
 
-- [DEPLOYMENT_GUIDE.md](./v1.9.0/DEPLOYMENT_GUIDE.md) - 部署指南
-- [issue #1022](./ISSUE_1022_LOG_ROTATION.md) - 功能设计文档
+- [DEPLOYMENT_GUIDE.md](releases/v1.9.0/DEPLOYMENT_GUIDE.md) - 部署指南
+- [issue #1022](./issue-1023-lru-performance-analysis.md) - LRU 缓存分析 (该 issue 已关闭，日志轮转功能已合并)

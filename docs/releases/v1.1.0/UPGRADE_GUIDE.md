@@ -316,7 +316,7 @@ sudo ufw status
 ### 10.1 文档资源
 
 - [Release Notes](./RELEASE_NOTES.md)
-- [CHANGELOG](../../CHANGELOG.md)
+- [CHANGELOG](../../../CHANGELOG.md)
 - [API 文档](https://docs.rs/sqlrustgo)
 
 ### 10.2 社区支持
