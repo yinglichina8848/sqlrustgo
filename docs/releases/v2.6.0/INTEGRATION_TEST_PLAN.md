@@ -3,7 +3,9 @@
 > **版本**: alpha/v2.6.0
 > **创建日期**: 2026-04-19
 > **目标**: 区分"当前可执行"与"计划中"测试
-> **验证状态**: ⏳ 部分待验证
+> **验证状态**: ⏳ 部分待执行
+>
+> ⚠️ **此文档已废弃**: 请参考 [TEST_PLAN.md](./TEST_PLAN.md) 获取最新测试命令和状态。
 
 ---
 
@@ -13,36 +15,36 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| 构建 | `cargo build --release` | ✅ 已验证 | |
-| 格式 | `cargo fmt --check` | ✅ 已验证 | |
-| 冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | |
+| 构建 | `cargo build --release` | ✅ 已验证 | 编译成功 |
+| 格式 | `cargo fmt --check` | ✅ 已验证 | 格式正确 |
+| 冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | 测试通过 |
 
 ### L1 模块回归（<20 分钟）
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| parser | `cargo test -p sqlrustgo-parser --lib` | ✅ 已验证 | |
-| planner | `cargo test -p sqlrustgo-planner --lib` | ✅ 已验证 | |
-| executor | `cargo test -p sqlrustgo-executor --lib` | ✅ 已验证 | |
-| storage | `cargo test -p sqlrustgo-storage --lib` | ✅ 已验证 | |
-| optimizer | `cargo test -p sqlrustgo-optimizer --lib` | ✅ 已验证 | |
-| transaction | `cargo test -p sqlrustgo-transaction --lib` | ✅ 已验证 | |
+| parser | `cargo test -p sqlrustgo-parser --lib` | ⏳ 待执行 | |
+| planner | `cargo test -p sqlrustgo-planner --lib` | ⏳ 待执行 | |
+| executor | `cargo test -p sqlrustgo-executor --lib` | ⏳ 待执行 | |
+| storage | `cargo test -p sqlrustgo-storage --lib` | ⏳ 待执行 | |
+| optimizer | `cargo test -p sqlrustgo-optimizer --lib` | ⏳ 待执行 | |
+| transaction | `cargo test -p sqlrustgo-transaction --lib` | ⏳ 待执行 | |
 
 ### L2 集成回归（<60 分钟）
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| CBO | `cargo test --test cbo_integration_test` | ✅ 已验证 | |
-| WAL | `cargo test --test wal_integration_test` | ✅ 已验证 | |
-| E2E Query | `cargo test --test e2e_query_test` | ✅ 已验证 | |
-| Regression | `cargo test --test regression_test` | ✅ 已验证 | |
+| CBO | `cargo test --test cbo_integration_test` | ⏳ 待执行 | |
+| WAL | `cargo test --test wal_integration_test` | ⏳ 待执行 | |
+| E2E Query | `cargo test --test e2e_query_test` | ⏳ 待执行 | |
+| Regression | `cargo test --test regression_test` | ⏳ 待执行 | |
 
 ### L3 深度验证（夜间）
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| TPC-H | `cargo bench --bench tpch_bench` | ⚠️ 代码错误 | 需修复 |
-| Bench CBO | `cargo bench --bench bench_cbo` | ⚠️ 代码错误 | 需修复 |
+| TPC-H | `cargo bench --bench tpch_bench` | ⚠️ 代码错误 | 待修复 |
+| Bench CBO | `cargo bench --bench bench_cbo` | ⚠️ 代码错误 | 待修复 |
 | Sysbench | 外部工具 | ⏳ 待集成 | 需手动 |
 | 压力测试 | 待定 | 🔴 不存在 | 计划中 |
 | 崩溃恢复 | 待定 | ⏳ 待实现 | 计划中 |

@@ -17,8 +17,8 @@
 |--------|------|------|------|
 | 构建检查 | `cargo build --release` | ✅ 已验证 | 编译成功 |
 | 格式检查 | `cargo fmt --check` | ✅ 已验证 | 格式正确 |
-| Clippy 检查 | `cargo clippy -- -D warnings` | ⚠️ 待验证 | 需在 CI 执行 |
-| 核心冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | Target 存在 |
+| Clippy 检查 | `cargo clippy -- -D warnings` | ⏳ 待执行 | 需 CI 执行 |
+| 核心冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | 测试通过 |
 
 ### L1 模块回归（<20 分钟）
 
@@ -26,15 +26,15 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ✅ 已验证 | Target 存在 |
-| planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ✅ 已验证 | Target 存在 |
-| executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ✅ 已验证 | Target 存在 |
-| storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ✅ 已验证 | Target 存在 |
-| optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ✅ 已验证 | Target 存在 |
-| transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ✅ 已验证 | Target 存在 |
-| server 单测 | `cargo test -p sqlrustgo-server --lib` | ✅ 已验证 | Target 存在 |
-| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ✅ 已验证 | Target 存在 |
-| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ✅ 已验证 | Target 存在 |
+| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| server 单测 | `cargo test -p sqlrustgo-server --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ⏳ 待执行 | Target 存在，待运行 |
+| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ⏳ 待执行 | Target 存在，待运行 |
 
 ### L2 集成回归（<60 分钟）
 
@@ -42,12 +42,12 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| CBO 集成测试 | `cargo test --test cbo_integration_test` | ✅ 已验证 | Target 存在 |
-| WAL 集成测试 | `cargo test --test wal_integration_test` | ✅ 已验证 | Target 存在 |
-| Parser Token 测试 | `cargo test --test parser_token_test` | ✅ 已验证 | Target 存在 |
-| Regression 测试 | `cargo test --test regression_test` | ✅ 已验证 | Target 存在 |
-| E2E Query 测试 | `cargo test --test e2e_query_test` | ✅ 已验证 | Target 存在 |
-| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ✅ 已验证 | Target 存在 |
+| CBO 集成测试 | `cargo test --test cbo_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
+| Parser Token 测试 | `cargo test --test parser_token_test` | ⏳ 待执行 | Target 存在，待运行 |
+| Regression 测试 | `cargo test --test regression_test` | ⏳ 待执行 | Target 存在，待运行 |
+| E2E Query 测试 | `cargo test --test e2e_query_test` | ⏳ 待执行 | Target 存在，待运行 |
+| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ⏳ 待执行 | Target 存在，待运行 |
 
 ### L3 深度验证（夜间/长时）
 
@@ -55,7 +55,7 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| TPC-H SF1 | `cargo bench --bench tpch_bench` | ⚠️ 代码编译错误 | 需修复代码 |
+| TPC-H SF1 | `cargo bench --bench tpch_bench` | ⚠️ 代码编译错误 | 待创建 Issue 修复 |
 | Sysbench | 外部工具 | ⏳ 待集成 | 需手动执行 |
 | 压力测试 | `cargo test --test concurrency_stress_test` | 🔴 Target 不存在 | 计划中 |
 | 崩溃恢复 | `kill -9` 测试 | ⏳ 待手动测试 | 需文档化 |
@@ -192,12 +192,29 @@ cargo test -p sqlrustgo-sql-corpus --lib
 
 ---
 
+## 六、已知问题
+
+### TPC-H 基准测试编译错误
+
+**问题描述**: `cargo bench --bench tpch_bench` 编译失败
+
+**错误信息**:
+- `unresolved imports: sqlrustgo_server::ConnectionPool, PoolConfig`
+- `mismatched types: expected &str, found Statement`
+
+**修复计划**: 需要在基准测试中修复导入和类型转换代码
+
+**Issue 跟踪**: 待创建
+
+---
+
 ## 七、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-04-17 | 初始版本 |
 | 2.0 | 2026-04-19 | Phase B 重构：区分可执行/计划中测试，映射到真实 target |
+| 3.0 | 2026-04-19 | 修正测试状态语义：已验证≠已执行，添加 TPC-H 问题说明 |
 
 ---
 
