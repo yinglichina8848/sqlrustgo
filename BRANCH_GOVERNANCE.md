@@ -1,12 +1,18 @@
 # SQLRustGo 分支治理规范
 
+> **⚠️ 此文档已弃用**
+> 
+> 分支治理规范请参考：`docs/governance/RELEASE_LIFECYCLE.md`
+> 
+> 此文件保留仅为向后兼容，不再更新。
+
 > **版本**: 1.0
 > **更新日期**: 2026-03-06
 > **维护人**: yinglichina8848
 
 ---
 
-## 一、分支结构
+## 分支结构（已移至 docs/governance/）
 
 ```
 main
