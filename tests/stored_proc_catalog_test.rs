@@ -107,3 +107,171 @@ fn test_create_trigger_with_catalog() {
     let insert_result = engine.execute("INSERT INTO users VALUES (1, 'Alice')");
     assert!(insert_result.is_ok());
 }
+
+#[test]
+fn test_before_insert_trigger_sets_column() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE orders (id INTEGER, price FLOAT, quantity INTEGER, total FLOAT)")
+        .unwrap();
+
+    let create_trigger = engine.execute(
+        "CREATE TRIGGER calc_total BEFORE INSERT ON orders FOR EACH ROW BEGIN SET NEW.total = 50.0; END"
+    );
+    assert!(create_trigger.is_ok(), "CREATE TRIGGER should succeed");
+
+    let result = engine.execute("INSERT INTO orders VALUES (1, 10.0, 5, 0.0)");
+    assert!(
+        result.is_ok(),
+        "INSERT should succeed even if trigger modifies value"
+    );
+
+    let rows = engine.execute("SELECT * FROM orders").unwrap();
+    assert_eq!(rows.rows.len(), 1);
+}
+
+#[test]
+fn test_after_insert_trigger_executes() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE source (id INTEGER, val TEXT)")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER log_insert AFTER INSERT ON source FOR EACH ROW BEGIN END")
+        .unwrap();
+
+    let result = engine.execute("INSERT INTO source VALUES (1, 'test')");
+    assert!(
+        result.is_ok(),
+        "AFTER INSERT trigger should execute without error"
+    );
+}
+
+#[test]
+fn test_before_update_trigger_sets_column() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE products (id INTEGER, price FLOAT, discounted_price FLOAT)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO products VALUES (1, 100.0, 0.0)")
+        .unwrap();
+
+    let create_trigger = engine.execute(
+        "CREATE TRIGGER apply_discount BEFORE UPDATE ON products FOR EACH ROW BEGIN SET NEW.discounted_price = 90.0; END"
+    );
+    assert!(create_trigger.is_ok(), "CREATE TRIGGER should succeed");
+
+    let result = engine.execute("UPDATE products SET price = 100.0 WHERE id = 1");
+    assert!(
+        result.is_ok(),
+        "UPDATE should succeed even if trigger modifies value"
+    );
+}
+
+#[test]
+fn test_after_update_trigger_executes() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE items (id INTEGER, status TEXT)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO items VALUES (1, 'pending')")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER log_status AFTER UPDATE ON items FOR EACH ROW BEGIN END")
+        .unwrap();
+
+    let result = engine.execute("UPDATE items SET status = 'approved' WHERE id = 1");
+    assert!(
+        result.is_ok(),
+        "AFTER UPDATE trigger should execute without error"
+    );
+}
+
+#[test]
+fn test_before_delete_trigger_executes() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE items (id INTEGER, name TEXT)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO items VALUES (1, 'to_delete')")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER archive_delete BEFORE DELETE ON items FOR EACH ROW BEGIN END")
+        .unwrap();
+
+    let result = engine.execute("DELETE FROM items WHERE id = 1");
+    assert!(
+        result.is_ok(),
+        "BEFORE DELETE trigger should execute without error"
+    );
+
+    let remaining = engine.execute("SELECT * FROM items").unwrap();
+    assert_eq!(remaining.rows.len(), 0, "Row should be deleted");
+}
+
+#[test]
+fn test_after_delete_trigger_executes() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE orders (id INTEGER, amount FLOAT)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO orders VALUES (1, 100.0)")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER track_deletion AFTER DELETE ON orders FOR EACH ROW BEGIN END")
+        .unwrap();
+
+    let result = engine.execute("DELETE FROM orders WHERE id = 1");
+    assert!(
+        result.is_ok(),
+        "AFTER DELETE trigger should execute without error"
+    );
+}
+
+#[test]
+fn test_multiple_triggers_on_same_table() {
+    let catalog = Arc::new(RwLock::new(Catalog::new("test")));
+    let mut engine = ExecutionEngine::with_memory_and_catalog(catalog.clone());
+
+    engine
+        .execute("CREATE TABLE events (id INTEGER, data TEXT, ts TEXT)")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER set_ts1 BEFORE INSERT ON events FOR EACH ROW BEGIN SET NEW.ts = 'first'; END")
+        .unwrap();
+
+    engine
+        .execute("CREATE TRIGGER set_ts2 BEFORE INSERT ON events FOR EACH ROW BEGIN SET NEW.ts = 'second'; END")
+        .unwrap();
+
+    let result = engine.execute("INSERT INTO events VALUES (1, 'test', '')");
+    assert!(result.is_ok());
+
+    let rows = engine.execute("SELECT ts FROM events").unwrap();
+    assert_eq!(rows.rows.len(), 1);
+}
