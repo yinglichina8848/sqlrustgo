@@ -199,7 +199,7 @@
 | ID | 检查项 | 状态 | 说明 |
 |----|--------|------|------|
 | E-01 |发行说明| ✅ | [RELEASE_NOTES.md](./RELEASE_NOTES.md) |
-| E-02 |CHANGELOG 更新| ✅ | [CHANGELOG.md](../../CHANGELOG.md) |
+| E-02 |CHANGELOG 更新| ✅ | [CHANGELOG.md](../../../CHANGELOG.md) |
 | E-03 | API 文档 | ✅ | [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) |
 | E-04 | 架构文档 | ✅ | 2.0 架构设计文档完整 |
 | E-05 | 升级指南 | ✅ | [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md) |
@@ -226,7 +226,7 @@
 |----|--------|------|------|
 | G-01 | CI 流程完整 | ✅ |GitHub Actions 配置完整|
 | G-02 | 分支保护配置 | ✅ | develop-v1.1.0 保护规则已启用 |
-| G-03 | 代码所有者 | ✅ |[CODEOWNERS](../../CODEOWNERS) 已创建|
+| G-03 | 代码所有者 | ✅ |[CODEOWNERS](../../../CODEOWNERS) 已创建|
 | G-04 | Issue 关联 | ✅ | 所有 PR 关联 Issue |
 | G-05 |Commit 规范| ✅ |遵循 Conventional Commits|
 
@@ -452,10 +452,10 @@ gh release create v1.1.0-alpha --prerelease --title "v1.1.0 Alpha" --notes-file 
 
 ### A. 相关文档
 
-- [v1.0.0 发布回顾](../governance/v1.0-release-retrospective.md)
-- [成熟度评估模型](../v2.0/成熟度评估/MATURITY_MODEL.md)
-- [分支策略](../v2.0/BRANCH_STRATEGY.md)
-- [2.0 路线图](../v2.0/SQLRUSTGO_2_0_ROADMAP.md)
+- [v1.0.0 发布回顾](../../governance/v1.0-release-retrospective.md)
+- [成熟度评估模型](../../v2.0/成熟度评估/MATURITY_MODEL.md)
+- [分支策略](../../v2.0/BRANCH_STRATEGY.md)
+- [2.0 路线图](../../v2.0/SQLRUSTGO_2_0_ROADMAP.md)
 - [代码质量审计报告](./CODE_QUALITY_AUDIT.md)
 - [安全审计报告](./SECURITY_AUDIT.md)
 
