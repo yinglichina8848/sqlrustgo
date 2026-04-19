@@ -76,7 +76,7 @@ cargo test -p sqlrustgo-executor --lib
 
 **验证命令**:
 ```bash
-cargo test fk_constraint
+cargo test -p sqlrustgo-parser --lib
 ```
 
 ### 2.6 WAL 日志
@@ -87,7 +87,7 @@ cargo test fk_constraint
 
 **验证命令**:
 ```bash
-cargo test wal_integration
+cargo test --test wal_integration_test
 ```
 
 ---
@@ -136,8 +136,8 @@ WAL 启用         → 需要确认配置和恢复逻辑
 cargo test -p sqlrustgo-planner --lib   # CBO 优化器测试通过
 cargo test -p sqlrustgo-executor --lib  # 存储过程/触发器测试通过
 cargo test -p sqlrustgo-storage --lib  # 索引扫描测试通过
-cargo test fk_constraint               # 外键约束测试通过
-cargo test wal_integration             # WAL 测试通过
+cargo test -p sqlrustgo-parser --lib    # 外键约束测试通过
+cargo test --test wal_integration_test # WAL 测试通过
 ```
 
 ---

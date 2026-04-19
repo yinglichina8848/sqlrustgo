@@ -311,7 +311,7 @@ Error: Column 'name' is NOT NULL but no value provided
 
 ## 八、获取帮助
 
-- **文档**: [docs/](../../docs/)
+- **文档**: [README.md](../../README.md)
 - **Issue**: https://github.com/minzuuniversity/sqlrustgo/issues
 - **讨论**: https://github.com/minzuuniversity/sqlrustgo/discussions
 

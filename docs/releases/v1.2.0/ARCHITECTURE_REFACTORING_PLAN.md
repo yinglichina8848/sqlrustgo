@@ -398,7 +398,7 @@ crates/
 - [VERSION_PLAN.md](./VERSION_PLAN.md)
 - [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md)
 - [TASK_MATRIX.md](./TASK_MATRIX.md)
-- [AI_CLI_GUIDE.md](./AI_CLI_GUIDE.md)
+- [AI_CLI_GUIDE.md](./AI_CLI_GUIDE.md) *(已归档)*
 
 ---
 

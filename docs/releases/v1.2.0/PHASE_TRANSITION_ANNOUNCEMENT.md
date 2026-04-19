@@ -74,7 +74,7 @@ SQLRustGo v1.2.0 已完成 Craft 阶段，正式进入 Alpha 阶段。
 ## 联系方式
 
 - GitHub Issues: https://github.com/minzuuniversity/sqlrustgo/issues
-- 项目文档: [docs/](docs/)
+- 项目文档: [README.md](../README.md)
 
 ---
 

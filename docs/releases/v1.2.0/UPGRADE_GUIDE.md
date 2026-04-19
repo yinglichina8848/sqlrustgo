@@ -346,7 +346,7 @@ EXPLAIN ANALYZE SELECT * FROM users;
 ### 10.1 文档资源
 
 - [Release Notes](./RELEASE_NOTES.md)
-- [CHANGELOG](../../CHANGELOG.md)
+- [CHANGELOG](../../../CHANGELOG.md)
 - [API 文档](https://docs.rs/sqlrustgo)
 - [性能报告](./PERFORMANCE_REPORT.md)
 

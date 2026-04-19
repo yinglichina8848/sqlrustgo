@@ -272,7 +272,7 @@ SELECT * FROM users /* 这里也是注释 */ WHERE id = 1;
 详见:
 - [RELEASE_NOTES.md](./RELEASE_NOTES.md)
 - [GOALS_AND_PLANNING.md](./GOALS_AND_PLANNING.md)
-- [sql92-compliance-report.md](../sql92/sql92-compliance-report.md)
+- [sql92-compliance-report.md](../sql92/sql92-compliance-report.md) *(已归档)*
 
 ---
 

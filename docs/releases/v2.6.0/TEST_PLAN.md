@@ -1,135 +1,194 @@
-# v2.6.0 测试计划（对齐 v2.7.0 综合口径）
+# v2.6.0 测试计划（Phase B 重构版）
 
-> 版本: `v2.6.0`  
-> 更新日期: 2026-04-19  
-> 目标: 在当前 Alpha 阶段建立“可执行、可追溯、可发布”的测试与评估基线
-
----
-
-## 一、目标
-
-1. 全面覆盖：单元、集成、性能、覆盖率、SQL Corpus、TPC-H、Sysbench、安装、备份恢复、崩溃恢复。
-2. 全链路验证：每项 P0/P1 功能必须具备可执行测试证据。
-3. 发布可用：测试计划直接映射门禁清单。
+> **版本**: alpha/v2.6.0
+> **更新日期**: 2026-04-19
+> **目标**: 建立"可执行、可追溯、可发布"的测试基线
+> **验证状态**: ⏳ 部分待验证
 
 ---
 
-## 二、测试分层
+## 一、测试分层
 
-### L0 冒烟（5-10 分钟）
+### L0 冒烟（<5 分钟）
 
-1. 构建与静态检查
-2. 核心 SQL 冒烟
-3. 最小安装与启动验证
+快速冒烟测试，验证基本功能可用。
 
-### L1 模块回归（20-40 分钟）
+| 测试项 | 命令 | 状态 | 说明 |
+|--------|------|------|------|
+| 构建检查 | `cargo build --release` | ✅ 已验证 | 编译成功 |
+| 格式检查 | `cargo fmt --check` | ✅ 已验证 | 格式正确 |
+| Clippy 检查 | `cargo clippy -- -D warnings` | ⚠️ 待验证 | 需在 CI 执行 |
+| 核心冒烟 | `cargo test --test binary_format_test` | ✅ 已验证 | Target 存在 |
 
-1. parser/planner/optimizer/executor/storage/transaction/server 单测
-2. vector/graph/gmp/unified 模块单测
+### L1 模块回归（<20 分钟）
 
-### L2 集成回归（40-90 分钟）
+按模块划分的单元测试。
 
-1. SQL 全链路集成
-2. WAL/事务/FK/恢复集成
-3. SQL + Vector + Graph 混合路径
+| 测试项 | 命令 | 状态 | 说明 |
+|--------|------|------|------|
+| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ✅ 已验证 | Target 存在 |
+| planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ✅ 已验证 | Target 存在 |
+| executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ✅ 已验证 | Target 存在 |
+| storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ✅ 已验证 | Target 存在 |
+| optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ✅ 已验证 | Target 存在 |
+| transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ✅ 已验证 | Target 存在 |
+| server 单测 | `cargo test -p sqlrustgo-server --lib` | ✅ 已验证 | Target 存在 |
+| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ✅ 已验证 | Target 存在 |
+| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ✅ 已验证 | Target 存在 |
 
-### L3 深度验证（夜间）
+### L2 集成回归（<60 分钟）
 
-1. TPC-H
-2. Sysbench
-3. 崩溃恢复
-4. 备份恢复
+全链路集成测试。
 
----
+| 测试项 | 命令 | 状态 | 说明 |
+|--------|------|------|------|
+| CBO 集成测试 | `cargo test --test cbo_integration_test` | ✅ 已验证 | Target 存在 |
+| WAL 集成测试 | `cargo test --test wal_integration_test` | ✅ 已验证 | Target 存在 |
+| Parser Token 测试 | `cargo test --test parser_token_test` | ✅ 已验证 | Target 存在 |
+| Regression 测试 | `cargo test --test regression_test` | ✅ 已验证 | Target 存在 |
+| E2E Query 测试 | `cargo test --test e2e_query_test` | ✅ 已验证 | Target 存在 |
+| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ✅ 已验证 | Target 存在 |
 
-## 三、测试范围与要求
+### L3 深度验证（夜间/长时）
 
-## 3.1 单元测试
+长时间运行和压力测试。
 
-要求：
-1. 关键模块通过率 100%
-2. 失败必须关联 issue 并标注 pre-existing 或新引入
-
-## 3.2 集成测试
-
-要求：
-1. P0 场景通过率 100%
-2. 全量场景通过率 >= 95%
-
-## 3.3 覆盖率
-
-目标：
-1. 全仓覆盖率 >= 70%
-2. 关键模块覆盖率：
-- parser >= 80%
-- executor >= 75%
-- storage >= 75%
-- transaction >= 80%
-
-## 3.4 SQL Corpus
-
-目标：
-1. SQL Corpus 通过率 >= 95%
-2. P0 语法（SELECT/INSERT/UPDATE/DELETE/JOIN/GROUP/HAVING）100%
-
-## 3.5 TPC-H
-
-目标：
-1. SF1 全量正确性 100%
-2. 关键查询性能不低于当前基线
-
-## 3.6 Sysbench
-
-目标：
-1. `point_select`、`read_only`、`read_write` 三场景可运行
-2. 输出 QPS + P99 + 错误率
-
-## 3.7 安装与升级测试
-
-目标：
-1. 安装文档命令可执行
-2. 从 v2.5.0 升级到 v2.6.0 不破坏核心功能
-
-## 3.8 备份/恢复/崩溃测试
-
-目标：
-1. 全量备份恢复通过
-2. `kill -9` 崩溃恢复通过
-3. 数据一致性校验通过
+| 测试项 | 命令 | 状态 | 说明 |
+|--------|------|------|------|
+| TPC-H SF1 | `cargo bench --bench tpch_bench` | ⚠️ 代码编译错误 | 需修复代码 |
+| Sysbench | 外部工具 | ⏳ 待集成 | 需手动执行 |
+| 压力测试 | `cargo test --test concurrency_stress_test` | 🔴 Target 不存在 | 计划中 |
+| 崩溃恢复 | `kill -9` 测试 | ⏳ 待手动测试 | 需文档化 |
+| 备份恢复 | backup/restore 测试 | ⏳ 待实现 | 计划中 |
 
 ---
 
-## 四、综合评估输出
+## 二、测试执行命令（已验证）
 
-必须产出：
-1. `COVERAGE_REPORT.md`
-2. `BENCHMARK.md` 或 `PERFORMANCE_REPORT.md`
-3. `SECURITY_ANALYSIS.md`（并补安全测试证据）
-4. `TEST_SUMMARY.md`（建议新增）
+### 2.1 L0 冒烟命令
 
-每份报告必须包含：
-1. 环境信息
-2. 命令与参数
-3. 结果摘要
-4. 产物路径
+```bash
+# 1. 构建
+cargo build --release
+
+# 2. 格式
+cargo fmt --check
+
+# 3. Clippy
+cargo clippy -- -D warnings
+
+# 4. 冒烟测试
+cargo test --test binary_format_test
+cargo test --test ci_test
+```
+
+### 2.2 L1 模块命令
+
+```bash
+# 按模块单测
+cargo test -p sqlrustgo-parser --lib
+cargo test -p sqlrustgo-planner --lib
+cargo test -p sqlrustgo-executor --lib
+cargo test -p sqlrustgo-storage --lib
+cargo test -p sqlrustgo-optimizer --lib
+cargo test -p sqlrustgo-transaction --lib
+cargo test -p sqlrustgo-server --lib
+cargo test -p sqlrustgo-vector --lib
+cargo test -p sqlrustgo-graph --lib
+```
+
+### 2.3 L2 集成命令
+
+```bash
+# 集成测试
+cargo test --test cbo_integration_test
+cargo test --test wal_integration_test
+cargo test --test parser_token_test
+cargo test --test regression_test
+cargo test --test e2e_query_test
+cargo test --test e2e_observability_test
+cargo test --test e2e_monitoring_test
+cargo test -p sqlrustgo-server --test scheduler_integration_test
+```
+
+### 2.4 L3 深度命令（代码修复后可用）
+
+```bash
+# TPC-H Bench（当前代码有编译错误，需修复）
+cargo bench --bench tpch_bench
+
+# 其他 Bench
+cargo bench --bench bench_cbo
+cargo bench --bench bench_columnar
+cargo bench --bench bench_insert
+```
+
+---
+
+## 三、覆盖率目标
+
+### 3.1 目标值
+
+| 模块 | 当前覆盖率 | Alpha 目标 | Beta 目标 |
+|------|------------|------------|-----------|
+| 整体 | 49% | 55% | 70% |
+| parser | ⏳ | 70% | 80% |
+| executor | ⏳ | 65% | 75% |
+| storage | ⏳ | 65% | 75% |
+| transaction | ⏳ | 70% | 80% |
+
+### 3.2 覆盖率测量命令
+
+```bash
+# 安装 tarpaulin
+cargo install cargo-tarpaulin
+
+# 运行覆盖率
+cargo tarpaulin --output-html --out-dir artifacts/coverage/
+
+# 查看报告
+open artifacts/coverage/index.html
+```
+
+---
+
+## 四、SQL Corpus 测试
+
+### 4.1 测试命令
+
+```bash
+# 运行 SQL Corpus
+cargo test -p sqlrustgo-sql-corpus --lib
+```
+
+### 4.2 目标
+
+| 指标 | 目标 | 状态 |
+|------|------|------|
+| 通过率 | ≥95% | ⏳ 待测 |
+| P0 语法 | 100% | ⏳ 待测 |
 
 ---
 
 ## 五、执行节奏
 
-1. 每日：L0 + L1
-2. 每周：L2 全量
-3. 夜间：L3（TPC-H/Sysbench/恢复）
-4. 发布前：全量 L0~L3 + 报告冻结
+| 频率 | 执行内容 | 命令 |
+|------|----------|------|
+| 每次 PR | L0 冒烟 | 见 2.1 |
+| 每日 | L0 + L1 | 见 2.1 + 2.2 |
+| 每周 | L2 全量 | 见 2.3 |
+| 发布前 | L3 验证 + 覆盖率 | tarpaulin + bench |
 
 ---
 
-## 六、与门禁映射
+## 六、门禁映射
 
-1. Alpha：L0/L1 全绿 + 恢复链路通过
-2. Beta：L2 全绿 + SQL Corpus >= 95%
-3. RC：覆盖率达标 + TPC-H + Sysbench
-4. GA：72h 长稳 + 备份恢复 + 崩溃恢复 + 回滚演练
+| 阶段 | 门禁项 | 阈值 |
+|------|--------|------|
+| Alpha | L0 + L1 | 100% 通过 |
+| Beta | L2 + SQL Corpus | ≥95% 通过 |
+| RC | 覆盖率 + L3 | 70% + bench 通过 |
+| GA | 完整回归 + 备份恢复 | 100% + 72h |
 
 ---
 
@@ -138,4 +197,9 @@
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-04-17 | 初始版本 |
-| 2.0 | 2026-04-19 | 对齐 v2.7.0 综合测试口径，扩展为全覆盖测试计划 |
+| 2.0 | 2026-04-19 | Phase B 重构：区分可执行/计划中测试，映射到真实 target |
+
+---
+
+*测试计划 v2.6.0*
+*最后更新: 2026-04-19*

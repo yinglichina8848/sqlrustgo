@@ -152,7 +152,7 @@
 
 ## 相关资源
 
-- [CHANGELOG](CHANGELOG.md)
-- [RELEASE_NOTES](RELEASE_NOTES.md)
-- [设计文档](docs/2026-02-13-sqlcc-rust-redesign-design.md)
-- [实施计划](docs/2026-02-13-sqlcc-rust-impl-plan.md)
+- [CHANGELOG](../CHANGELOG.md)
+- [RELEASE_NOTES](../RELEASE_NOTES.md)
+- [设计文档](2026-02-13-sqlcc-rust-redesign-design.md)
+- [实施计划](2026-02-13-sqlcc-rust-impl-plan.md)

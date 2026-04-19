@@ -98,7 +98,7 @@
 
 ## 七、参与贡献
 
-欢迎提交 PR！请参考 [开发指南](./docs/plans/)。
+欢迎提交 PR！请参考 [开发指南](../../plans/)。
 
 - GitHub: https://github.com/minzuuniversity/sqlrustgo
 - 分支: `develop/v1.6.1`

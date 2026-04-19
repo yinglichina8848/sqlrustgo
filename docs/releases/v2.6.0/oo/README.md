@@ -76,9 +76,9 @@ v2.6.0 重点实现 SQL-92 完整支持：
 
 ## 相关文档
 
-- [../../VERSION_PLAN.md](../../VERSION_PLAN.md) - 版本计划
-- [../../RELEASE_NOTES.md](../../RELEASE_NOTES.md) - 发布说明
-- [../../FEATURE_MATRIX.md](../../FEATURE_MATRIX.md) - 功能矩阵
+- [../VERSION_PLAN.md](../VERSION_PLAN.md) - 版本计划
+- [../RELEASE_NOTES.md](../RELEASE_NOTES.md) - 发布说明
+- [../FEATURE_MATRIX.md](../FEATURE_MATRIX.md) - 功能矩阵
 
 ---
 

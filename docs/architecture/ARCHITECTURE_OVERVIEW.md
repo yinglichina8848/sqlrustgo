@@ -277,7 +277,7 @@ end
 | [CASCADES_OPTIMIZER.md](./CASCADES_OPTIMIZER.md) | Cascades 优化器设计 |
 | [DISTRIBUTED_EXECUTION.md](./DISTRIBUTED_EXECUTION.md) | 分布式执行架构 |
 | [DIRECTORY_STRUCTURE.md](./DIRECTORY_STRUCTURE.md) | 目录结构规范 |
-| [BRANCH_GOVERNANCE.md](../governance/BRANCH_GOVERNANCE.md) | 分支治理规范 |
+| [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理规范 |
 
 ---
 

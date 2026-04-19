@@ -40,9 +40,9 @@ v2.0 是 SQLRustGo 的**向量化引擎版本**：
 
 | 文档 | 说明 |
 |------|------|
-| [docs/v2.0/CASCADES_OPTIMIZER.md](../v2.0/CASCADES_OPTIMIZER.md) | Cascades 优化器设计 |
-| [docs/v2.0/BENCHMARK_FRAMEWORK.md](../v2.0/BENCHMARK_FRAMEWORK.md) | 基准测试框架 |
-| [docs/v2.0/WHITEPAPER.md](../v2.0/WHITEPAPER.md) | 技术白皮书 |
+| [do../../v2.0/CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md) | Cascades 优化器设计 |
+| [do../../v2.0/BENCHMARK_FRAMEWORK.md](../../v2.0/BENCHMARK_FRAMEWORK.md) | 基准测试框架 |
+| [do../../v2.0/WHITEPAPER.md](../../v2.0/WHITEPAPER.md) | 技术白皮书 |
 
 ---
 

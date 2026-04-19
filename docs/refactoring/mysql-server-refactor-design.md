@@ -270,6 +270,6 @@ serde_json = "1"
 ## 5. 参考资料
 
 - [MySQL Wire Protocol](https://dev.mysql.com/doc/internals/en/client-server-protocol.html)
-- [现有 mysql-server 实现](../crates/mysql-server/src/lib.rs)
-- [LocalExecutor 实现](../crates/executor/src/local_executor.rs)
-- [Planner API](../crates/planner/src/lib.rs)
+- [现有 mysql-server 实现](../../crates/mysql-server/src/lib.rs)
+- [LocalExecutor 实现](../../crates/executor/src/local_executor.rs)
+- [Planner API](../../crates/planner/src/lib.rs)

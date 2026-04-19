@@ -291,7 +291,7 @@ tls_key = "/etc/sqlrustgo/server.key"
 
 ## 相关文档
 
-- [用户手册](USER_MANUAL.md)
+- [用户手册](oo/user-guide/USER_MANUAL.md)
 - [升级指南](UPGRADE_GUIDE.md)
 - [性能目标](PERFORMANCE_TARGETS.md)
 
