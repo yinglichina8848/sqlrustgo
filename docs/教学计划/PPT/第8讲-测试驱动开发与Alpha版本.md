@@ -1,555 +1,215 @@
 ---
 marp: true
-theme: gaia
+theme: default
 paginate: true
-backgroundColor: #fff
-color: #333
+header: "第8讲：测试驱动开发与Alpha版本"
 ---
 
 <!-- _class: lead -->
 
-# 第八讲：测试驱动开发与Alpha版本
+# 第8讲：测试驱动开发与Alpha版本
 
-## AI增强的软件工程
-
----
-
-# 课程大纲
-
-1. **测试驱动开发（TDD）**（25分钟）
-2. **AI辅助测试生成**（25分钟）
-3. **Rust测试框架**（20分钟）
-4. **Alpha版本验收**（20分钟）
+## 🕹️ 手动档第1周 - 从自动档转向手动实现
 
 ---
 
-# Part 1: 测试驱动开发（TDD）
+## 今日课程目标
+
+1. 理解测试驱动开发（TDD）方法论
+2. 掌握使用AI辅助生成测试用例
+3. 提高测试覆盖率至70%以上
+4. 完成Alpha版本发布
 
 ---
 
-## 1.1 TDD的核心思想
+## 🚗→🕹️ 阶段转变：从自动档到手动档
 
-### 测试先行
+| 自动档阶段 | 手动档阶段 |
+|-----------|-----------|
+| AI生成代码，我来运行 | **我自己写代码，AI帮我审查** |
+| "帮我做一个..." | "帮我看看我写的对不对" |
+| 追求结果正确 | 追求理解原理 |
 
-- 先写测试，再写代码
-- 测试定义了代码的预期行为
-
-### 快速反馈
-
-- 测试立即反馈代码是否正确
-- 快速发现和修复问题
-
-### 持续重构
-
-- 在测试保护下重构代码
-- 保证重构不破坏现有功能
+**本周的核心转变**：
+- 不再完全依赖AI生成代码
+- 自己动手写测试用例
+- AI的角色从"执行者"变成"审查者"
 
 ---
 
-## 1.2 Red-Green-Refactor循环
+## 为什么需要测试驱动开发？
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                                                      │
-│   Red ──> Green ──> Refactor ──> Red                │
-│    │        │           │          │                 │
-│    │        │           │          │                 │
-│    ▼        ▼           ▼          ▼                 │
-│ 编写失败  编写最少   重构代码   编写新测试            │
-│ 的测试    代码通过                                        │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-```
-
-### Red：编写失败的测试
-
-- 测试描述预期行为
-- 测试应该失败
-
-### Green：编写最少代码使测试通过
-
-- 只编写必要的代码
-- 不需要完美，只需通过测试
-
-### Refactor：重构代码
-
-- 在测试保护下优化代码
-- 保持测试通过
-
----
-
-## 1.3 测试先行的好处
-
-### 更好的设计
-
-- 从使用者角度设计接口
-- 代码更易于测试和使用
-
-### 更高的测试覆盖率
-
-- 每个功能都有对应的测试
-- 测试覆盖率自然提高
-
-### 更少的Bug
-
-- 测试捕获大部分Bug
-- 回归测试防止Bug重现
-
-### 文档作用
-
-- 测试就是活文档
-- 展示代码的使用方式
-
----
-
-## 1.4 TDD实践技巧
-
-### 从简单测试开始
-
-- 先写最简单的测试
-- 逐步增加复杂度
-
-### 保持测试独立
-
-- 测试之间不应该有依赖
-- 每个测试可以独立运行
-
-### 测试命名规范
-
-```rust
-#[test]
-fn test_lexer_should_recognize_select_keyword() {
-    // 测试内容
-}
-
-#[test]
-fn test_parser_should_parse_select_statement() {
-    // 测试内容
-}
-```
-
-### 使用AI辅助TDD
-
-- AI可以生成测试用例
-- AI可以生成实现代码
-- AI可以建议重构方案
-
----
-
-# Part 2: AI辅助测试生成
-
----
-
-## 2.1 使用AI生成测试用例
-
-### 提示词设计
-
-```
-为以下词法分析器代码生成测试用例：
-[Lexer代码]
-要求：
-1. 测试关键字识别
-2. 测试标识符识别
-3. 测试数字字面量识别
-4. 测试字符串字面量识别
-5. 测试运算符识别
-6. 使用Rust #[test]属性
+┌────────────────────────────────────────────────────────────┐
+│                    TDD的核心思想                           │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│   🔴 红 → 🟢 绿 → 🟡 重构                                  │
+│                                                            │
+│   1. 先写一个失败的测试（红）                              │
+│   2. 写最少的代码让测试通过（绿）                           │
+│   3. 重构代码（黄）                                        │
+│                                                            │
+│   "测试先行" - 让测试成为代码的"设计文档"                  │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2.1 使用AI生成测试用例（续）
+## 测试覆盖率：代码质量的度量仪
 
-### AI输出示例
+| 覆盖率指标 | 含义 | 目标 |
+|-----------|------|------|
+| 行覆盖率 | 执行过的代码行数/总行数 | ≥70% |
+| 分支覆盖率 | 执行过的分支/总分支 | ≥60% |
+| 函数覆盖率 | 调用过的函数/总函数 | ≥80% |
 
-```rust
-#[test]
-fn test_keywords() {
-    let mut lexer = Lexer::new("SELECT FROM WHERE");
-    assert_eq!(lexer.next_token().unwrap(), Token::Select);
-    assert_eq!(lexer.next_token().unwrap(), Token::From);
-    assert_eq!(lexer.next_token().unwrap(), Token::Where);
-}
-
-#[test]
-fn test_identifiers() {
-    let mut lexer = Lexer::new("users table_name");
-    assert_eq!(lexer.next_token().unwrap(), Token::Identifier("users".to_string()));
-    assert_eq!(lexer.next_token().unwrap(), Token::Identifier("table_name".to_string()));
-}
-```
+**覆盖率不是目的，而是手段**
+- 高覆盖率 ≠ 没有bug
+- 低覆盖率 = 风险未知
 
 ---
 
-## 2.2 使用AI分析测试覆盖率
-
-### 识别未覆盖的代码路径
-
-- AI可以分析代码，识别未测试的分支
-- AI可以建议补充测试
-
-### 生成补充测试建议
-
-```
-分析以下代码的测试覆盖率，建议补充测试：
-[代码]
-[现有测试]
-要求：
-1. 识别未覆盖的代码路径
-2. 建议边界条件测试
-3. 建议异常情况测试
-```
-
-### 边界条件发现
-
-- AI可以发现容易忽略的边界条件
-- 如：空字符串、最大值、最小值等
-
----
-
-## 2.3 实例：SQLRustGo测试
-
-### 词法分析器测试
-
-```rust
-#[test]
-fn test_lexer_integer_literal() {
-    let mut lexer = Lexer::new("123 456");
-    assert_eq!(lexer.next_token().unwrap(), Token::IntegerLiteral(123));
-    assert_eq!(lexer.next_token().unwrap(), Token::IntegerLiteral(456));
-}
-
-#[test]
-fn test_lexer_string_literal() {
-    let mut lexer = Lexer::new("'hello' \"world\"");
-    assert_eq!(lexer.next_token().unwrap(), Token::StringLiteral("hello".to_string()));
-    assert_eq!(lexer.next_token().unwrap(), Token::StringLiteral("world".to_string()));
-}
-```
-
----
-
-## 2.3 实例：SQLRustGo测试（续）
-
-### 语法分析器测试
-
-```rust
-#[test]
-fn test_parser_select_with_where() {
-    let mut parser = Parser::new("SELECT * FROM users WHERE age > 18");
-    let stmt = parser.parse().unwrap();
-    match stmt {
-        Statement::Select(select) => {
-            assert_eq!(select.columns, vec!["*"]);
-            assert_eq!(select.from_table, "users");
-            assert!(select.where_clause.is_some());
-        }
-        _ => panic!("Expected SELECT statement"),
-    }
-}
-```
-
----
-
-# Part 3: Rust测试框架
-
----
-
-## 3.1 #[test] 属性
-
-### 测试函数定义
-
-```rust
-#[test]
-fn test_addition() {
-    assert_eq!(2 + 2, 4);
-}
-```
-
-### 测试命名规范
-
-- 使用`test_`前缀
-- 描述测试的行为
-- 如：`test_lexer_should_recognize_keywords`
-
----
-
-## 3.2 assert! 宏系列
-
-### assert!(expr)
-
-```rust
-#[test]
-fn test_true() {
-    assert!(true);
-}
-```
-
-### assert_eq!(left, right)
-
-```rust
-#[test]
-fn test_equality() {
-    assert_eq!(2 + 2, 4);
-}
-```
-
-### assert_ne!(left, right)
-
-```rust
-#[test]
-fn test_inequality() {
-    assert_ne!(2 + 2, 5);
-}
-```
-
-### 自定义错误消息
-
-```rust
-assert_eq!(result, expected, "计算结果不正确，期望{}，实际{}", expected, result);
-```
-
----
-
-## 3.3 测试组织
-
-### 单元测试（#[cfg(test)]）
-
-```rust
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_add() {
-        assert_eq!(add(2, 3), 5);
-    }
-}
-```
-
-### 集成测试（tests/目录）
-
-```
-project/
-├── src/
-│   └── lib.rs
-└── tests/
-    └── integration_test.rs
-```
-
-### 文档测试（doc tests）
-
-```rust
-/// 将两个数相加
-/// 
-/// # Examples
-/// ```
-/// let result = add(2, 3);
-/// assert_eq!(result, 5);
-/// ```
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-```
-
----
-
-## 3.4 测试覆盖率工具
-
-### cargo-tarpaulin
+## SQLRustGo测试现状分析
 
 ```bash
+# 查看当前覆盖率
 cargo tarpaulin --out Html
+
+# 重点关注模块
+- parser: 词法/语法分析器测试
+- executor: 查询执行器测试
+- storage: 存储引擎测试
 ```
 
-### cargo-llvm-cov
+---
 
-```bash
-cargo llvm-cov --html
+## 使用AI辅助生成测试用例
+
+### 提示词技巧
+
+```
+我需要为SQLRustGo的[模块名]生成测试用例。
+现有代码位于 [文件路径]
+
+请生成以下测试：
+1. [具体测试场景1]
+2. [具体测试场景2]
+3. 边界条件测试
+
+请使用Rust的 #[test] 属性编写测试代码。
 ```
 
-### 覆盖率报告
+### AI生成测试的局限性
 
-- 行覆盖率
-- 分支覆盖率
-- 函数覆盖率
-
----
-
-# Part 4: Alpha版本验收
+- ✅ 擅长：标准场景、常见用例
+- ❌ 不擅长：边界条件、特殊场景
+- ⚠️ 需要人工补充边界测试
 
 ---
 
-## 4.1 Alpha版本定义
+## 质量门禁：代码的"体检中心"
 
-### 功能完整性
-
-- 核心功能已实现
-- 主要功能可运行
-
-### 可运行
-
-- 系统可以启动和运行
-- 基本流程可以走通
-
-### 有测试
-
-- 单元测试覆盖核心功能
-- 测试覆盖率 ≥ 70%
-
-### 有文档
-
-- README文档
-- API文档
-- 设计文档
-
----
-
-## 4.2 功能验收标准
-
-### SQL解析
-
-- ✅ 支持SELECT语句
-- ✅ 支持INSERT语句
-- ✅ 支持UPDATE语句
-- ✅ 支持DELETE语句
-- ✅ 支持CREATE TABLE语句
-
-### 存储引擎
-
-- ✅ 支持数据读写
-- ✅ 支持基本的页管理
-- ✅ 支持缓冲池
-
-### 执行引擎
-
-- ✅ 支持基本查询执行
-- ✅ 返回查询结果
-
----
-
-## 4.3 质量门禁
-
-| 检查项 | 命令 | 状态要求 |
-|--------|------|---------|
-| 编译 | `cargo build` | 通过 |
-| 测试 | `cargo test` | 全部通过 |
-| Clippy | `cargo clippy` | 无警告 |
-| 格式化 | `cargo fmt --check` | 通过 |
-| 覆盖率 | `cargo tarpaulin` | ≥ 70% |
-
----
-
-## 4.4 Alpha版本发布
-
-### 创建版本标签
-
-```bash
-git tag -a v0.1.0-alpha -m "Alpha版本发布"
-git push origin v0.1.0-alpha
+```
+┌────────────────────────────────────────────────────────────┐
+│                    质量门禁清单                             │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  ✅ 编译检查:    cargo build --all-features               │
+│  ✅ 测试检查:    cargo test --all-features                │
+│  ✅ Clippy检查: cargo clippy --all-features -D warnings  │
+│  ✅ 格式化检查: cargo fmt --all                         │
+│                                                            │
+│  所有检查必须通过才能发布！                                 │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
-### 编写Release Notes
+---
 
-```markdown
-# SQLRustGo v0.1.0-alpha
+## Alpha版本发布流程
 
-## 新功能
-- 支持基本的SQL解析
-- 支持SELECT、INSERT、UPDATE、DELETE语句
-- 支持基本的存储引擎
+1. **代码准备**
+   - 确保所有测试通过
+   - 确保覆盖率达标
+   - 运行完整质量门禁
 
-## 已知问题
-- 不支持JOIN操作
-- 不支持事务
+2. **版本标签**
+   ```bash
+   git tag -a v0.1.0-alpha -m "Alpha版本发布"
+   git push origin v0.1.0-alpha
+   ```
 
-## 下一步计划
-- 添加JOIN支持
-- 添加事务支持
+3. **GitHub Release**
+   - 填写版本信息
+   - 描述新特性
+   - 链接相关Issue
+
+---
+
+## 版本命名规范
+
+| 阶段 | 版本格式 | 示例 |
+|------|---------|------|
+| 开发中 | 0.x.0-dev | 0.1.0-dev |
+| Alpha | 0.x.0-alpha | 0.1.0-alpha |
+| Beta | 0.x.0-beta | 0.1.0-beta |
+| 正式 | x.0.0 | 1.0.0 |
+
+---
+
+## 本周实验任务
+
+### 任务1：运行测试并分析覆盖率（20分钟）
+- 执行 `cargo tarpaulin`
+- 分析覆盖率报告
+
+### 任务2：AI辅助生成测试用例（30分钟）
+- 使用AI为parser/executor生成测试
+
+### 任务3：补充测试用例（30分钟）
+- 补充AI未覆盖的边界情况
+
+### 任务4：运行质量门禁（20分钟）
+- 执行所有门禁检查
+
+### 任务5：创建Alpha版本（20分钟）
+- 推送版本标签
+- 创建GitHub Release
+
+---
+
+## 思考问题
+
+### 问题1：如何优化和改进？
+- 我的提示词需要迭代几次才能得到满意的结果？
+
+### 问题2：AI不可替代的能力
+- AI生成的测试覆盖了"常见情况"吗？
+- 哪些"边界情况"需要我手动补充？
+
+### 问题3：自我提升
+- 我是否开始理解什么样的提示词能获得更好的输出？
+
+---
+
+## 下周预告：软件治理与分支策略
+
 ```
+🕹️ 手动档第2周
 
-### 发布公告
-
-- 在GitHub创建Release
-- 编写发布说明
-- 附上安装和使用指南
-
----
-
-# 核心知识点总结
-
----
-
-## 1. 测试驱动开发
-
-- **Red-Green-Refactor循环**
-- **测试先行的好处**
-- **TDD实践技巧**
-
-## 2. AI辅助测试
-
-- **测试用例生成**
-- **覆盖率分析**
-- **边界条件发现**
-
-## 3. Rust测试框架
-
-- **#[test]属性**
-- **assert!宏**
-- **测试组织**
-- **覆盖率工具**
-
-## 4. Alpha版本验收
-
-- **功能验收标准**
-- **质量门禁**
-- **发布流程**
-
----
-
-# 上半学期总结
-
----
-
-## 知识点回顾
-
-| 周次 | 理论知识 | 实践技能 | 项目产出 |
-|------|----------|----------|----------|
-| 1 | 软件工程发展历史、Greenfield/Brownfield、AI局限性 | 环境搭建 | 开发环境 |
-| 2 | 结构化设计、UML概述、用例图 | PlantUML使用 | 用例图文档 |
-| 3 | 面向对象设计、SOLID原则、类图 | 类图绘制 | 类图文档 |
-| 4 | 顺序图、状态图、架构图、快速原型法 | UML综合实践 | 设计文档 |
-| 5 | 架构设计原理、SQLRustGo架构 | 架构图绘制 | 架构文档 |
-| 6 | 功能模块划分、接口设计 | 模块设计 | 模块文档 |
-| 7 | AI辅助开发、核心模块实现 | 编码实践 | 核心代码 |
-| 8 | TDD、AI辅助测试、Alpha版本验收 | 测试编写 | Alpha版本 |
-
----
-
-# 课后作业
-
----
-
-## 任务
-
-1. 补充单元测试
-2. 提高测试覆盖率至70%+
-3. 运行所有质量检查
-4. 完成Alpha版本
-
-## 预习
-
-- 软件治理与分支策略
-- Git协作开发
+- Git分支策略
+- 分支保护规则
+- 多AI协同开发模式
+```
 
 ---
 
 <!-- _class: lead -->
 
-# 谢谢！
+# 思考：从自动档到手动档，你准备好了吗？
 
-## 下半学期：协同开发与工程治理
+**手动档的核心**：自己动手，AI辅助审查
+
+---
