@@ -242,8 +242,8 @@ database/
 
 ## 七、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md) - 整体架构
-- [MVCC_DESIGN.md](./mvcc/MVCC_DESIGN.md) - MVCC 集成
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md) - 整体架构
+- *(已归档 - MVCC 子模块文档不存在)*
 
 ---
 

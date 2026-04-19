@@ -337,7 +337,7 @@ pub mod sqlrustgo_server {
 | [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | 门禁检查 |
 | [TEST_VERIFICATION_PLAN.md](./TEST_VERIFICATION_PLAN.md) | 测试验证计划 |
 | [HEALTH_CHECK_SPECIFICATION.md](./HEALTH_CHECK_SPECIFICATION.md) | 健康检查规范 |
-| [OBSERVABILITY_GUIDE.md]([OBSERVABILITY_GUIDE.md](../monitoring/OBSERVABILITY_GUIDE.md)) | 可观测性指南 |
+| [OBSERVABILITY_GUIDE.md](../../monitoring/OBSERVABILITY_GUIDE.md) | 可观测性指南 |
 
 ---
 

@@ -29,7 +29,7 @@
 
 ### 2.1 调用次数趋势
 
-![API Call Trend](overall_token_usage_trend.png)
+*(图片已归档 - overall_token_usage_trend.png 不存在)*
 
 **趋势分析**:
 - 2月中旬和3月中旬调用次数较高

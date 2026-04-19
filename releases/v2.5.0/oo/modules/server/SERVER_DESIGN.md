@@ -45,8 +45,8 @@ pub struct ConnectionPool {
 
 ## 五、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md)
-- [DEPLOYMENT_GUIDE.md](../../DEPLOYMENT_GUIDE.md)
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md)
+- [DEPLOYMENT_GUIDE.md](../../../DEPLOYMENT_GUIDE.md)
 
 ---
 

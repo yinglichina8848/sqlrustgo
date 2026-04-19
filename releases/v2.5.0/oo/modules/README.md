@@ -37,14 +37,14 @@
 |------|------|------|
 | Graph | [GRAPH_DESIGN.md](./graph/GRAPH_DESIGN.md) | 图引擎 |
 | Vector | [VECTOR_DESIGN.md](./vector/VECTOR_DESIGN.md) | 向量索引 |
-| Unified Query | [UNIFIED_QUERY_DESIGN.md](./unified-query/UNIFIED_QUERY_DESIGN.md) | 统一查询 |
+| Unified Query | [UNIFIED_QUERY_DESIGN.md](./unified-query/) *(已归档)* | 统一查询 |
 | Transaction | [TRANSACTION_DESIGN.md](./transaction/TRANSACTION_DESIGN.md) | 事务管理 |
 
 ### 工具与服务模块
 
 | 模块 | 文档 | 说明 |
 |------|------|------|
-| Agent (OpenClaw) | [AGENT_DESIGN.md](./openclaw/AGENT_DESIGN.md) | Agent 框架 |
+| Agent (OpenClaw) | [AGENT_DESIGN.md](./openclaw/) *(已归档)* | Agent 框架 |
 | Server | [SERVER_DESIGN.md](./server/SERVER_DESIGN.md) | 服务器 |
 | Bench | [BENCH_DESIGN.md](./bench/BENCH_DESIGN.md) | 基准测试 |
 

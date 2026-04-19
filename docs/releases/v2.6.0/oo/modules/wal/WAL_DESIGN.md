@@ -58,7 +58,7 @@ v2.6.0 WAL 优化:
 
 ## 五、相关文档
 
-- [ARCHITECTURE_V2.6.md](../architecture/ARCHITECTURE_V2.6.md)
+- [ARCHITECTURE_V2.6.md](../../architecture/ARCHITECTURE_V2.6.md)
 
 ---
 

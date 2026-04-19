@@ -87,7 +87,7 @@ oo/modules/
 - **标题层级**: # (一级), ## (二级), ### (三级), #### (四级)
 - **代码块**: 使用 ``` 代码块，指定语言
 - **表格**: 使用 Markdown 表格语法
-- **链接**: 使用 `[链接文本](链接地址)` 格式
+- **链接**: 使用 `[链接文本](../README.md)` 格式
 
 ### 3.2 文档头信息
 
@@ -147,6 +147,14 @@ oo/modules/
 | 开发文档 | 开发环境、代码规范、测试指南 | [DEVELOPMENT_TEMPLATE.md](./templates/DEVELOPMENT_TEMPLATE.md) |
 | 测试文档 | 测试计划、测试用例、测试结果 | [TEST_TEMPLATE.md](./templates/TEST_TEMPLATE.md) |
 | 报告文档 | 评估结果、性能分析、问题总结 | [REPORT_TEMPLATE.md](./templates/REPORT_TEMPLATE.md) |
+| 部署指南 | 系统部署、环境配置、运维管理 | [DEPLOYMENT_GUIDE_TEMPLATE.md](./templates/DEPLOYMENT_GUIDE_TEMPLATE.md) |
+| 升级指南 | 版本升级、数据迁移、系统更新 | [MIGRATION_GUIDE_TEMPLATE.md](./templates/MIGRATION_GUIDE_TEMPLATE.md) |
+| API 文档 | API 开发、集成、使用指南 | [API_DOCUMENTATION_TEMPLATE.md](./templates/API_DOCUMENTATION_TEMPLATE.md) |
+| 架构设计 | 系统架构设计、技术评审、新成员培训 | [ARCHITECTURE_TEMPLATE.md](./templates/ARCHITECTURE_TEMPLATE.md) |
+| 用户手册 | 终端用户、系统管理员、新用户培训 | [USER_MANUAL_TEMPLATE.md](./templates/USER_MANUAL_TEMPLATE.md) |
+| 故障排查 | 运维人员、技术支持、开发人员 | [TROUBLESHOOTING_TEMPLATE.md](./templates/TROUBLESHOOTING_TEMPLATE.md) |
+| 发布说明 | 版本发布、用户通知、变更记录 | [RELEASE_NOTES_TEMPLATE.md](./templates/RELEASE_NOTES_TEMPLATE.md) |
+| 监控与告警 | 运维监控、系统维护、故障预警 | [MONITORING_TEMPLATE.md](./templates/MONITORING_TEMPLATE.md) |
 
 ### 4.2 内容要求
 

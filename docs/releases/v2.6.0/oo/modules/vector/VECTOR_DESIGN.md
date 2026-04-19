@@ -32,8 +32,8 @@ Vector 是 SQLRustGo 的向量索引模块，支持 HNSW、IVF、IVFPQ 等多种
 
 ## 五、相关文档
 
-- [ARCHITECTURE_V2.6.md](../architecture/ARCHITECTURE_V2.6.md)
-- [PERFORMANCE_ANALYSIS.md](../reports/PERFORMANCE_ANALYSIS.md)
+- [ARCHITECTURE_V2.6.md](../../architecture/ARCHITECTURE_V2.6.md)
+- [PERFORMANCE_ANALYSIS.md](../../reports/PERFORMANCE_ANALYSIS.md)
 
 ---
 

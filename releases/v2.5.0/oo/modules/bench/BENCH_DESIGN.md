@@ -27,8 +27,8 @@ Bench 是 SQLRustGo 的基准测试模块，支持 TPC-H、OLTP、向量搜索�
 
 ## 四、相关文档
 
-- [TEST_PLAN.md](../../TEST_PLAN.md)
-- [TEST_MANUAL.md](../../TEST_MANUAL.md)
+- [TEST_PLAN.md](../../../TEST_PLAN.md)
+- [TEST_MANUAL.md](../../../TEST_MANUAL.md)
 
 ---
 

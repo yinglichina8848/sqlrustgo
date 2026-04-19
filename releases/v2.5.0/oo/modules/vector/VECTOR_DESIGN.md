@@ -254,8 +254,8 @@ impl VectorIndexFactory {
 
 ## 六、相关文档
 
-- [VECTOR_INDEX_DESIGN.md](../../VECTOR_INDEX_DESIGN.md) - 详细设计
-- [UNIFIED_QUERY_DESIGN.md](./UNIFIED_QUERY_DESIGN.md) - 统一查询
+- [VECTOR_INDEX_DESIGN.md](../../../VECTOR_INDEX_DESIGN.md) - 详细设计
+- *(已归档 - 统一查询文档不存在)*
 
 ---
 

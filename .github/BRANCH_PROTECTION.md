@@ -322,9 +322,9 @@ git config --global commit.gpgsign true
 
 | 文档 | 说明 |
 |------|------|
-| [RELEASE_GOVERNANCE.md](./RELEASE_GOVERNANCE.md) | 版本治理模型 |
-| [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md) | AI 协作安全规则 |
-| [BRANCH_GOVERNANCE.md](./BRANCH_GOVERNANCE.md) | 分支治理规范 |
+| [RELEASE_GOVERNANCE.md](../RELEASE_GOVERNANCE.md) | 版本治理模型 |
+| [ARCHITECTURE_RULES.md](../ARCHITECTURE_RULES.md) | AI 协作安全规则 |
+| [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理规范 |
 
 ---
 

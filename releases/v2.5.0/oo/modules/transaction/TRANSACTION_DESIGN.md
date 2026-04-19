@@ -46,8 +46,8 @@ pub struct Transaction {
 
 ## 五、相关文档
 
-- [ARCHITECTURE_V2.5.md](../architecture/ARCHITECTURE_V2.5.md)
-- [MVCC_DESIGN.md](./mvcc/MVCC_DESIGN.md)
+- [ARCHITECTURE_V2.5.md](../../architecture/ARCHITECTURE_V2.5.md)
+- *(已归档 - MVCC 子模块文档不存在)*
 
 ---
 

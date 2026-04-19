@@ -170,8 +170,8 @@ impl GraphEngine {
 
 ## 六、相关文档
 
-- [GRAPH_ENGINE_DESIGN.md](../../GRAPH_ENGINE_DESIGN.md) - 详细设计
-- [UNIFIED_QUERY_DESIGN.md](./UNIFIED_QUERY_DESIGN.md) - 统一查询
+- [GRAPH_ENGINE_DESIGN.md](../../../GRAPH_ENGINE_DESIGN.md) - 详细设计
+- *(已归档 - 统一查询文档不存在)*
 
 ---
 

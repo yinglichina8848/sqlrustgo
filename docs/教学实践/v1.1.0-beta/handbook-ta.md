@@ -301,7 +301,7 @@ cargo clippy --all-features -- -D warnings
 
 - [任务看板](./task-board.md) - Beta 阶段任务追踪
 - [PR 证据链](./pr-evidence.md) - 已合并 PR 记录
-- [阶段日报模板](./daily-template.md) - 每日报告模板
+- 阶段日报模板 *(已归档)*
 
 ### 7.2 GitHub CLI 常用命令
 
