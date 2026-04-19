@@ -211,12 +211,7 @@ impl TriggerExecutor {
 
         let statements = self.split_body_statements(body);
         for stmt in statements {
-            let expanded = self.expand_row_variables(
-                &stmt,
-                &trigger.table_name,
-                old_row,
-                new_row,
-            );
+            let expanded = self.expand_row_variables(&stmt, &trigger.table_name, old_row, new_row);
             self.execute_trigger_sql(&expanded, table, old_row, new_row)?;
         }
 
