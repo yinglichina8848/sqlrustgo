@@ -450,7 +450,7 @@ impl TriggerExecutor {
         Ok(())
     }
 
-    /// Execute SELECT within a trigger (for setting variables or validation)
+/// Execute SELECT within a trigger (for setting variables or validation)
     fn execute_trigger_select(
         &self,
         sql: &str,
