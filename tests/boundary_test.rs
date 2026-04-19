@@ -44,7 +44,6 @@ fn test_large_float() {
 }
 
 #[test]
-#[ignore] // Parser: string encoding
 fn test_special_characters_chinese() {
     let sql = "SELECT '中文测试'";
     let result = parse(sql);
@@ -52,7 +51,6 @@ fn test_special_characters_chinese() {
 }
 
 #[test]
-#[ignore] // Parser: emoji in strings
 fn test_special_characters_emoji() {
     let sql = "SELECT '😀🎉🔥'";
     let result = parse(sql);
@@ -74,7 +72,6 @@ fn test_empty_string() {
 }
 
 #[test]
-#[ignore]
 fn test_whitespace_handling() {
     let sql = "SELECT   1   ,   2   ,   3   ";
     let result = parse(sql);
@@ -82,7 +79,6 @@ fn test_whitespace_handling() {
 }
 
 #[test]
-#[ignore] // Parser: escape sequences
 fn test_tab_and_newline_in_string() {
     let sql = "SELECT 'line1\nline2\ttab'";
     let result = parse(sql);
@@ -114,7 +110,7 @@ fn test_max_table_name_length() {
 }
 
 #[test]
-#[ignore] // Parser: deeply nested subqueries
+#[ignore] // Parser: deeply nested subqueries - requires subquery in FROM support
 fn test_deeply_nested_subquery() {
     let sql = "SELECT * FROM (SELECT * FROM (SELECT * FROM t) AS a) AS b";
     let result = parse(sql);
@@ -145,7 +141,6 @@ fn test_bool_true_false() {
 }
 
 #[test]
-#[ignore] // Parser: hex literals
 fn test_hex_value() {
     let sql = "SELECT 0xFF, 0xabcdef";
     let result = parse(sql);
@@ -153,7 +148,6 @@ fn test_hex_value() {
 }
 
 #[test]
-#[ignore] // Parser: bit literals
 fn test_bit_value() {
     let sql = "SELECT b'1010', b'11111111'";
     let result = parse(sql);
