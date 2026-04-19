@@ -25,9 +25,9 @@ pub enum Expr {
 
 impl Expr {
     /// Evaluate this expression against a record
-    pub fn evaluate(&self, record: &[Value]) -> Option<Value> {
+    pub fn evaluate(&self, _record: &[Value]) -> Option<Value> {
         match self {
-            Expr::Column(name) => {
+            Expr::Column(_name) => {
                 // Column evaluation is handled by the caller with schema info
                 None
             }
