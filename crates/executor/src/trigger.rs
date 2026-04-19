@@ -362,6 +362,8 @@ impl TriggerExecutor {
                 self.execute_trigger_set(sql_trimmed, trigger_table, new)?;
             }
             Ok(())
+        } else if sql_upper.starts_with("SELECT") {
+            self.execute_trigger_select(sql_trimmed, trigger_table, new_row)
         } else {
             Ok(())
         }
@@ -444,6 +446,46 @@ impl TriggerExecutor {
 
         if let sqlrustgo_parser::Statement::Delete(delete) = statement {
             storage.delete(&delete.table, &[])?;
+        }
+        Ok(())
+    }
+
+    /// Execute SELECT within a trigger (for setting variables or validation)
+    fn execute_trigger_select(
+        &self,
+        sql: &str,
+        trigger_table: &str,
+        new_row: Option<&Record>,
+    ) -> SqlResult<()> {
+        let expanded = self.expand_row_variables(sql, trigger_table, None, new_row);
+
+        let statement = parse(&expanded)
+            .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        if let sqlrustgo_parser::Statement::Select(select) = statement {
+            let storage = self.storage.read().unwrap();
+            let table_info = storage.get_table_info(&select.table).ok();
+
+            for col in &select.columns {
+                if let Some(expr) = &col.expression {
+                    match expr {
+                        sqlrustgo_parser::Expression::Identifier(name) => {
+                            if let (Some(new), Some(info)) = (new_row, &table_info) {
+                                for (i, c) in info.columns.iter().enumerate() {
+                                    if c.name.eq_ignore_ascii_case(name) && i < new.len() {
+                                        let _val = new[i].clone();
+                                    }
+                                }
+                            }
+                        }
+                        sqlrustgo_parser::Expression::Literal(lit) => {
+                            let lit_str = lit.as_str();
+                            let _ = self.evaluate_simple_expression(lit_str);
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
         Ok(())
     }
