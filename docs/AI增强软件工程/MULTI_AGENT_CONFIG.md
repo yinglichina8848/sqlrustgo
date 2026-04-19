@@ -591,7 +591,7 @@ chmod 600 ~/workspace/identities/*/PAT.txt
 |------|------|------|
 |AI Agent 提示词| [AI_AGENT_PROMPTS.md](./AI_AGENT_PROMPTS.md) | 4 Agent 提示词体系 |
 | 多身份隔离开发模式 | [../MULTI_IDENTITY_DEVELOPMENT_MODEL.md](../MULTI_IDENTITY_DEVELOPMENT_MODEL.md) | 完整配置规范 |
-| 权限模型 | [../GIT_PERMISSION_MODEL.md](../GIT_PERMISSION_MODEL.md) | 2.0 权限模型 |
+| 权限模型 | [../governance/enterprise-github-minimal-permission-model.md](../governance/enterprise-github-minimal-permission-model.md) | 2.0 权限模型 |
 
 ### C. 变更历史
 
