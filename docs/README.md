@@ -51,31 +51,31 @@ docs/
 
 | 文档 | 说明 |
 |------|------|
-| [v2.5.0 文档](../releases/v2.5.0/) | v2.5.0 发布文档 |
+| [v2.5.0 文档](releases/v2.5.0/) | v2.5.0 发布文档 |
 
 ### v2.4.0 (已发布)
 
 | 文档 | 说明 |
 |------|------|
-| [v2.4.0 文档](../releases/v2.4.0/) | v2.4.0 发布文档 |
+| [v2.4.0 文档](releases/v2.4.0/) | v2.4.0 发布文档 |
 
 ### v2.0.0 (已发布)
 
 | 文档 | 说明 |
 |------|------|
-| [v2.0.0 文档](../releases/v2.0.0/) | v2.0.0 发布文档 |
+| [v2.0.0 文档](releases/v2.0.0/) | v2.0.0 发布文档 |
 
 ### v1.9.0 (已发布)
 
 | 文档 | 说明 |
 |------|------|
-| [v1.9.0 文档](../releases/v1.9.0/) | v1.9.0 发布文档 |
+| [v1.9.0 文档](releases/v1.9.0/) | v1.9.0 发布文档 |
 
 ### v1.6.1 (已发布)
 
 | 文档 | 说明 |
 |------|------|
-| [v1.6.1 文档](../releases/v1.6.1/) | v1.6.1 发布文档 |
+| [v1.6.1 文档](releases/v1.6.1/) | v1.6.1 发布文档 |
 
 ### v1.1.0 (已发布)
 
@@ -104,10 +104,6 @@ docs/
 | [分布式接口设计](v2.0/DISTRIBUTED_INTERFACE_DESIGN.md) | 3.0 分布式接口 |
 | [风险矩阵](v2.0/RISK_MATRIX.md) | 风险评估 |
 | [白皮书](v2.0/WHITEPAPER.md) | 项目白皮书 |
-| [白皮书 v3](v2.0/WHITEPAPER_V3.md) | 3.0 分布式接口与治理白皮书 |
-| [权限模型](v2.0/GIT_PERMISSION_MODEL.md) |Git & GitHub 权限体系|
-| [企业级权限](v2.0/GIT_PERMISSION_MODEL_V3.md) | 3.0 企业级权限推演 |
-| [展示材料](v2.0/PRESENTATION_MATERIALS.md) | 多受众展示版本 |
 | [分支策略](v2.0/BRANCH_STRATEGY.md) | 分支管理策略 |
 | [网络增强计划](v2.0/网络设计/NETWORK_ENHANCEMENT_PLAN.md) | 网络层增强计划 |
 
@@ -148,7 +144,7 @@ docs/
 | [架构设计](architecture.md) | 系统架构设计 |
 | [架构演进](ARCHITECTURE_EVOLUTION.md) | 架构演进历史 |
 | [设计文档](2026-02-13-sqlcc-rust-redesign-design.md) | 重构设计文档 |
-| [实施计划](2026-02-13-sqlcc-rust-redesign-impl-plan.md) | 实施计划 |
+| [实施计划](2026-02-13-sqlcc-rust-impl-plan.md) | 实施计划 |
 
 ---
 
