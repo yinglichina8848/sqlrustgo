@@ -47,6 +47,18 @@ pub enum SqlError {
     /// Network protocol error
     #[error("Protocol error: {0}")]
     ProtocolError(String),
+
+    /// Timeout error
+    #[error("Timeout: {0}")]
+    TimeoutError(String),
+
+    /// Overflow error (numeric overflow)
+    #[error("Overflow: {0}")]
+    OverflowError(String),
+
+    /// Authentication error
+    #[error("Authentication failed: {0}")]
+    AuthError(String),
 }
 
 /// Result type alias for SQL operations
@@ -98,6 +110,9 @@ mod tests {
             SqlError::DuplicateKey("test".to_string()),
             SqlError::IoError("test".to_string()),
             SqlError::ProtocolError("test".to_string()),
+            SqlError::TimeoutError("test".to_string()),
+            SqlError::OverflowError("test".to_string()),
+            SqlError::AuthError("test".to_string()),
         ];
 
         for err in errors {
@@ -216,5 +231,26 @@ mod tests {
         let err = SqlError::ProtocolError("invalid packet".to_string());
         let display = format!("{}", err);
         assert!(display.contains("invalid packet"));
+    }
+
+    #[test]
+    fn test_error_display_timeout() {
+        let err = SqlError::TimeoutError("connection timeout".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("Timeout"));
+    }
+
+    #[test]
+    fn test_error_display_overflow() {
+        let err = SqlError::OverflowError("i32 overflow".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("Overflow"));
+    }
+
+    #[test]
+    fn test_error_display_auth() {
+        let err = SqlError::AuthError("invalid credentials".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("Authentication"));
     }
 }

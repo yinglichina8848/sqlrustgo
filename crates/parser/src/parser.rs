@@ -695,7 +695,7 @@ impl Parser {
 
         loop {
             match self.current() {
-                Some(Token::From) => break,
+                Some(Token::From) | Some(Token::Eof) => break,
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -704,15 +704,36 @@ impl Parser {
                     });
                     self.next();
                 }
+                // Handle aggregate functions: COUNT(*), SUM(col), etc.
+                // Only treat as aggregate if followed by LParen
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
-                    let func = self.parse_aggregate_function()?;
-                    aggregates.push(func);
-                    columns.push(SelectColumn {
-                        name: format!("__agg_{}", aggregates.len()),
-                        alias: None,
-                        expression: None,
-                    });
+                    if matches!(self.peek(), Some(Token::LParen)) {
+                        let func = self.parse_aggregate_function()?;
+                        aggregates.push(func);
+                        columns.push(SelectColumn {
+                            name: format!("__agg_{}", aggregates.len()),
+                            alias: None,
+                            expression: None,
+                        });
+                    } else {
+                        // Not followed by LParen - treat as identifier (column name)
+                        // Convert keyword to identifier and process as column
+                        let name = match self.current() {
+                            Some(Token::Count) => "count",
+                            Some(Token::Sum) => "sum",
+                            Some(Token::Avg) => "avg",
+                            Some(Token::Min) => "min",
+                            Some(Token::Max) => "max",
+                            _ => return Err("Expected column name".to_string()),
+                        };
+                        self.next(); // consume the keyword
+                        columns.push(SelectColumn {
+                            name: name.to_string(),
+                            alias: None,
+                            expression: Some(Expression::Identifier(name.to_string())),
+                        });
+                    }
                 }
                 Some(Token::LParen) => {
                     let expr = self.parse_expression()?;
@@ -722,6 +743,43 @@ impl Parser {
                         alias: None,
                         expression: Some(expr),
                     });
+                }
+                // Handle NULL literal in SELECT
+                Some(Token::Null) => {
+                    columns.push(SelectColumn {
+                        name: "NULL".to_string(),
+                        alias: None,
+                        expression: Some(Expression::Literal("NULL".to_string())),
+                    });
+                    self.next();
+                }
+                // Handle NumberLiteral in SELECT (e.g., SELECT 123, SELECT 3.14)
+                Some(Token::NumberLiteral(ref n)) => {
+                    columns.push(SelectColumn {
+                        name: n.to_string(),
+                        alias: None,
+                        expression: Some(Expression::Literal(n.to_string())),
+                    });
+                    self.next();
+                }
+                // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
+                Some(Token::StringLiteral(s)) => {
+                    columns.push(SelectColumn {
+                        name: format!("'{}'", s),
+                        alias: None,
+                        expression: Some(Expression::Literal(format!("'{}'", s))),
+                    });
+                    self.next();
+                }
+                // Handle BooleanLiteral in SELECT (e.g., SELECT TRUE, FALSE)
+                Some(Token::BooleanLiteral(b)) => {
+                    let val = if *b { "TRUE" } else { "FALSE" };
+                    columns.push(SelectColumn {
+                        name: val.to_string(),
+                        alias: None,
+                        expression: Some(Expression::Literal(val.to_string())),
+                    });
+                    self.next();
                 }
                 Some(Token::Identifier(_)) => {
                     let start_position = self.position;
@@ -825,18 +883,52 @@ impl Parser {
                 Some(Token::Comma) => {
                     self.next();
                 }
+                Some(Token::Null) => {
+                    columns.push(SelectColumn {
+                        name: "NULL".to_string(),
+                        alias: None,
+                        expression: Some(Expression::Literal("NULL".to_string())),
+                    });
+                    self.next();
+                }
+                Some(Token::NumberLiteral(_)) | Some(Token::StringLiteral(_)) => {
+                    let expr = self.parse_expression()?;
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias: None,
+                        expression: Some(expr),
+                    });
+                }
+                Some(Token::BooleanLiteral(b)) => {
+                    columns.push(SelectColumn {
+                        name: b.to_string(),
+                        alias: None,
+                        expression: Some(Expression::Literal(b.to_string())),
+                    });
+                    self.next();
+                }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
                 }
             }
         }
 
-        self.expect(Token::From)?;
-
-        let table = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            Some(t) => return Err(format!("Expected table name, got {:?}", t)),
-            None => return Err("Expected table name".to_string()),
+        // Handle SELECT without FROM (e.g., SELECT NULL, SELECT 1, SELECT 'hello')
+        let table = match self.current() {
+            Some(Token::From) => {
+                self.next(); // consume FROM
+                match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+                    None => return Err("Expected table name".to_string()),
+                }
+            }
+            Some(Token::Eof) | None => {
+                // No FROM clause - this is a SELECT without table (e.g., SELECT 1+1)
+                // Return an empty table name to indicate no table
+                "".to_string()
+            }
+            Some(t) => return Err(format!("Expected FROM or end of query, got {:?}", t)),
         };
 
         // Check for table alias (e.g., `FROM users u`)
@@ -1742,7 +1834,7 @@ impl Parser {
 
     fn parse_column_list(&mut self) -> Result<Vec<String>, String> {
         let mut columns = Vec::new();
-        self.expect(Token::LParen)?;
+
         loop {
             match self.current() {
                 Some(Token::Identifier(name)) => {

@@ -385,6 +385,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
 
+        // Handle SELECT without FROM (e.g., SELECT 1, SELECT 'hello', SELECT NULL)
+        if select.table.is_empty() {
+            // Return empty result for SELECT without table reference
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+
         // Get table info
         let table_info = storage.get_table_info(&select.table)?;
 
