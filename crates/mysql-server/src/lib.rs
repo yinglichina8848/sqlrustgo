@@ -20,10 +20,16 @@ pub mod monitoring;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use monitoring::{create_monitor, SharedMonitor};
+use rcgen::{DistinguishedName, DnType, KeyPair};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::ServerConfig;
 use sqlrustgo::{parse, Value};
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_parser::parser::{
+    AggregateCall, AggregateFunction, CreateIndexStatement, CreateTableStatement,
+    DropTableStatement, InsertStatement, SelectStatement,
+};
 use sqlrustgo_parser::Statement;
-use sqlrustgo_parser::parser::{AggregateCall, AggregateFunction, CreateIndexStatement, CreateTableStatement, DropTableStatement, InsertStatement, SelectStatement};
 use sqlrustgo_parser::{DeleteStatement, Expression, UpdateStatement};
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_storage::{StorageEngine, TableInfo};
@@ -32,9 +38,6 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use rcgen::{DistinguishedName, DnType, KeyPair};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls::ServerConfig;
 
 // ============================================================================
 // OLD_PASSWORD Hash Algorithm (MySQL 4.x/5.x compatible)
@@ -182,24 +185,80 @@ impl ExecutionEngine {
         Ok(ExecutorResult::new(rows, row_count))
     }
 
-    fn compute_aggs(&self, aggregates: &[AggregateCall], rows: &[Vec<Value>], table_info: &TableInfo) -> SqlResult<Vec<Value>> {
+    fn compute_aggs(
+        &self,
+        aggregates: &[AggregateCall],
+        rows: &[Vec<Value>],
+        table_info: &TableInfo,
+    ) -> SqlResult<Vec<Value>> {
         let mut results = Vec::with_capacity(aggregates.len());
         for agg in aggregates {
             let values: Vec<Value> = if let Some(arg) = agg.args.first() {
-                rows.iter().map(|row| eval_expr(arg, row, table_info).unwrap_or(Value::Null)).collect()
+                rows.iter()
+                    .map(|row| eval_expr(arg, row, table_info).unwrap_or(Value::Null))
+                    .collect()
             } else {
                 vec![Value::Integer(rows.len() as i64)]
             };
             let result = match agg.func {
                 AggregateFunction::Count => Value::Integer(values.len() as i64),
-                AggregateFunction::Sum => Value::Integer(values.iter().filter_map(|v| if let Value::Integer(n) = v { Some(*n) } else { None }).sum()),
+                AggregateFunction::Sum => Value::Integer(
+                    values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .sum(),
+                ),
                 AggregateFunction::Avg => {
-                    let sum: i64 = values.iter().filter_map(|v| if let Value::Integer(n) = v { Some(*n) } else { None }).sum();
-                    let count = values.iter().filter(|v| matches!(v, Value::Integer(_))).count();
-                    if count > 0 { Value::Integer(sum / count as i64) } else { Value::Null }
+                    let sum: i64 = values
+                        .iter()
+                        .filter_map(|v| {
+                            if let Value::Integer(n) = v {
+                                Some(*n)
+                            } else {
+                                None
+                            }
+                        })
+                        .sum();
+                    let count = values
+                        .iter()
+                        .filter(|v| matches!(v, Value::Integer(_)))
+                        .count();
+                    if count > 0 {
+                        Value::Integer(sum / count as i64)
+                    } else {
+                        Value::Null
+                    }
                 }
-                AggregateFunction::Min => values.iter().filter_map(|v| if let Value::Integer(n) = v { Some(*n) } else { None }).min().map(Value::Integer).unwrap_or(Value::Null),
-                AggregateFunction::Max => values.iter().filter_map(|v| if let Value::Integer(n) = v { Some(*n) } else { None }).max().map(Value::Integer).unwrap_or(Value::Null),
+                AggregateFunction::Min => values
+                    .iter()
+                    .filter_map(|v| {
+                        if let Value::Integer(n) = v {
+                            Some(*n)
+                        } else {
+                            None
+                        }
+                    })
+                    .min()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null),
+                AggregateFunction::Max => values
+                    .iter()
+                    .filter_map(|v| {
+                        if let Value::Integer(n) = v {
+                            Some(*n)
+                        } else {
+                            None
+                        }
+                    })
+                    .max()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null),
             };
             results.push(result);
         }
@@ -228,29 +287,52 @@ impl ExecutionEngine {
             Some(w) => w,
             None => return Ok(ExecutorResult::new(vec![], 0)),
         };
-        let rows_to_update: Vec<Vec<Value>> = all_rows.into_iter().filter(|row| eval_where(where_clause, row, &table_info)).collect();
-        let count = rows_to_update.len();
-        if count == 0 { return Ok(ExecutorResult::new(vec![], 0)); }
-        let set_col_indices: Vec<(usize, &Expression)> = update.set_clauses.iter()
-            .filter_map(|(col_name, expr)| find_col_idx(col_name, &table_info).map(|idx| (idx, expr)))
+        let rows_to_update: Vec<Vec<Value>> = all_rows
+            .into_iter()
+            .filter(|row| eval_where(where_clause, row, &table_info))
             .collect();
-        let updated_rows: Vec<Vec<Value>> = rows_to_update.into_iter().map(|mut row| {
-            for &(col_idx, ref set_expr) in &set_col_indices {
-                if let Ok(new_val) = eval_expr(set_expr, &row, &table_info) {
-                    if col_idx < row.len() { row[col_idx] = new_val; }
+        let count = rows_to_update.len();
+        if count == 0 {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+        let set_col_indices: Vec<(usize, &Expression)> = update
+            .set_clauses
+            .iter()
+            .filter_map(|(col_name, expr)| {
+                find_col_idx(col_name, &table_info).map(|idx| (idx, expr))
+            })
+            .collect();
+        let updated_rows: Vec<Vec<Value>> = rows_to_update
+            .into_iter()
+            .map(|mut row| {
+                for &(col_idx, ref set_expr) in &set_col_indices {
+                    if let Ok(new_val) = eval_expr(set_expr, &row, &table_info) {
+                        if col_idx < row.len() {
+                            row[col_idx] = new_val;
+                        }
+                    }
                 }
-            }
-            row
-        }).collect();
+                row
+            })
+            .collect();
         let rows_to_keep: Vec<Vec<Value>> = {
-            self.storage.read().unwrap().scan(&update.table)?
-                .into_iter().filter(|row| !eval_where(where_clause, row, &table_info)).collect()
+            self.storage
+                .read()
+                .unwrap()
+                .scan(&update.table)?
+                .into_iter()
+                .filter(|row| !eval_where(where_clause, row, &table_info))
+                .collect()
         };
         {
             let mut storage = self.storage.write().unwrap();
             let _ = storage.delete(&update.table, &[]);
-            if !rows_to_keep.is_empty() { storage.insert(&update.table, rows_to_keep)?; }
-            if !updated_rows.is_empty() { storage.insert(&update.table, updated_rows)?; }
+            if !rows_to_keep.is_empty() {
+                storage.insert(&update.table, rows_to_keep)?;
+            }
+            if !updated_rows.is_empty() {
+                storage.insert(&update.table, updated_rows)?;
+            }
         }
         Ok(ExecutorResult::new(vec![], count))
     }
@@ -264,26 +346,40 @@ impl ExecutionEngine {
         let table_info = { self.storage.read().unwrap().get_table_info(&delete.table)? };
         let all_rows = { self.storage.read().unwrap().scan(&delete.table)? };
         let where_clause = delete.where_clause.as_ref().unwrap();
-        let rows_to_keep: Vec<Vec<Value>> = all_rows.into_iter().filter(|row| !eval_where(where_clause, row, &table_info)).collect();
+        let rows_to_keep: Vec<Vec<Value>> = all_rows
+            .into_iter()
+            .filter(|row| !eval_where(where_clause, row, &table_info))
+            .collect();
         let total = { self.storage.read().unwrap().scan(&delete.table)?.len() };
         let count = total - rows_to_keep.len();
         {
             let mut storage = self.storage.write().unwrap();
             let _ = storage.delete(&delete.table, &[]);
-            if !rows_to_keep.is_empty() { storage.insert(&delete.table, rows_to_keep)?; }
+            if !rows_to_keep.is_empty() {
+                storage.insert(&delete.table, rows_to_keep)?;
+            }
         }
         Ok(ExecutorResult::new(vec![], count))
     }
 
     fn exec_create_table(&self, create: &CreateTableStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
-        let columns: Vec<sqlrustgo_storage::ColumnDefinition> = create.columns.iter().map(|c| {
-            sqlrustgo_storage::ColumnDefinition {
-                name: c.name.clone(), data_type: c.data_type.clone(),
-                nullable: !c.primary_key, primary_key: c.primary_key,
-            }
-        }).collect();
-        storage.create_table(&TableInfo { name: create.name.clone(), columns, foreign_keys: vec![], unique_constraints: vec![] })?;
+        let columns: Vec<sqlrustgo_storage::ColumnDefinition> = create
+            .columns
+            .iter()
+            .map(|c| sqlrustgo_storage::ColumnDefinition {
+                name: c.name.clone(),
+                data_type: c.data_type.clone(),
+                nullable: !c.primary_key,
+                primary_key: c.primary_key,
+            })
+            .collect();
+        storage.create_table(&TableInfo {
+            name: create.name.clone(),
+            columns,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        })?;
         Ok(ExecutorResult::empty())
     }
 
@@ -294,9 +390,15 @@ impl ExecutionEngine {
 
     fn exec_create_index(&self, idx: &CreateIndexStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
-        let col_name = idx.columns.first().ok_or_else(|| SqlError::ExecutionError("No columns in index".to_string()))?;
+        let col_name = idx
+            .columns
+            .first()
+            .ok_or_else(|| SqlError::ExecutionError("No columns in index".to_string()))?;
         let table_info = storage.get_table_info(&idx.table)?;
-        let col_idx = table_info.columns.iter().position(|c| c.name == *col_name)
+        let col_idx = table_info
+            .columns
+            .iter()
+            .position(|c| c.name == *col_name)
             .ok_or_else(|| SqlError::ExecutionError("Column not found".to_string()))?;
         storage.create_index(&idx.table, col_name, col_idx)?;
         Ok(ExecutorResult::empty())
@@ -307,11 +409,17 @@ fn expr_to_value(expr: &Expression) -> Value {
     match expr {
         Expression::Literal(s) => {
             let s = s.trim();
-            if s.eq_ignore_ascii_case("NULL") { Value::Null }
-            else if let Ok(n) = s.parse::<i64>() { Value::Integer(n) }
-            else if let Ok(f) = s.parse::<f64>() { Value::Float(f) }
-            else if s.len() >= 2 && s.starts_with("'") && s.ends_with("'") { Value::Text(s[1..s.len()-1].to_string()) }
-            else { Value::Text(s.to_string()) }
+            if s.eq_ignore_ascii_case("NULL") {
+                Value::Null
+            } else if let Ok(n) = s.parse::<i64>() {
+                Value::Integer(n)
+            } else if let Ok(f) = s.parse::<f64>() {
+                Value::Float(f)
+            } else if s.len() >= 2 && s.starts_with("'") && s.ends_with("'") {
+                Value::Text(s[1..s.len() - 1].to_string())
+            } else {
+                Value::Text(s.to_string())
+            }
         }
         Expression::Identifier(name) => Value::Text(name.clone()),
         _ => Value::Null,
@@ -320,16 +428,26 @@ fn expr_to_value(expr: &Expression) -> Value {
 
 fn eval_where(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
     match expr {
-        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" =>
-            eval_where(left, row, table_info) && eval_where(right, row, table_info),
-        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" =>
-            eval_where(left, row, table_info) || eval_where(right, row, table_info),
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+            eval_where(left, row, table_info) && eval_where(right, row, table_info)
+        }
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+            eval_where(left, row, table_info) || eval_where(right, row, table_info)
+        }
         Expression::BinaryOp(left, op, right) => eval_cmp(left, op, right, row, table_info),
-        _ => eval_expr(expr, row, table_info).map(|v| v != Value::Null).unwrap_or(false),
+        _ => eval_expr(expr, row, table_info)
+            .map(|v| v != Value::Null)
+            .unwrap_or(false),
     }
 }
 
-fn eval_cmp(left: &Expression, op: &str, right: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+fn eval_cmp(
+    left: &Expression,
+    op: &str,
+    right: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+) -> bool {
     let lv = eval_expr(left, row, table_info).unwrap_or(Value::Null);
     let rv = eval_expr(right, row, table_info).unwrap_or(Value::Null);
     match op.to_uppercase().as_str() {
@@ -346,18 +464,25 @@ fn eval_cmp(left: &Expression, op: &str, right: &Expression, row: &[Value], tabl
 fn eval_expr(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Result<Value, String> {
     match expr {
         Expression::Literal(_) => Ok(expr_to_value(expr)),
-        Expression::Identifier(name) => {
-            find_col_idx(name, table_info)
-                .map(|idx| row.get(idx).cloned().unwrap_or(Value::Null))
-                .ok_or_else(|| format!("Column {} not found", name))
-        }
+        Expression::Identifier(name) => find_col_idx(name, table_info)
+            .map(|idx| row.get(idx).cloned().unwrap_or(Value::Null))
+            .ok_or_else(|| format!("Column {} not found", name)),
         Expression::BinaryOp(left, op, right) => {
             let lv = eval_expr(left, row, table_info).unwrap_or(Value::Null);
             let rv = eval_expr(right, row, table_info).unwrap_or(Value::Null);
             match op.as_ref() {
-                "+" => match (lv, rv) { (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l+r)), _ => Ok(Value::Null) },
-                "-" => match (lv, rv) { (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l-r)), _ => Ok(Value::Null) },
-                "*" => match (lv, rv) { (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l*r)), _ => Ok(Value::Null) },
+                "+" => match (lv, rv) {
+                    (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l + r)),
+                    _ => Ok(Value::Null),
+                },
+                "-" => match (lv, rv) {
+                    (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l - r)),
+                    _ => Ok(Value::Null),
+                },
+                "*" => match (lv, rv) {
+                    (Value::Integer(l), Value::Integer(r)) => Ok(Value::Integer(l * r)),
+                    _ => Ok(Value::Null),
+                },
                 _ => Ok(Value::Null),
             }
         }
@@ -368,7 +493,15 @@ fn eval_expr(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Result
 fn cmp_vals(left: &Value, right: &Value) -> i32 {
     match (left, right) {
         (Value::Integer(l), Value::Integer(r)) => l.cmp(r) as i32,
-        (Value::Float(l), Value::Float(r)) => if l < r { -1 } else if l > r { 1 } else { 0 },
+        (Value::Float(l), Value::Float(r)) => {
+            if l < r {
+                -1
+            } else if l > r {
+                1
+            } else {
+                0
+            }
+        }
         (Value::Text(l), Value::Text(r)) => l.cmp(r) as i32,
         (Value::Null, Value::Null) => 0,
         (Value::Null, _) => -1,
@@ -378,7 +511,10 @@ fn cmp_vals(left: &Value, right: &Value) -> i32 {
 }
 
 fn find_col_idx(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    table_info.columns.iter().position(|c| c.name.eq_ignore_ascii_case(col_name))
+    table_info
+        .columns
+        .iter()
+        .position(|c| c.name.eq_ignore_ascii_case(col_name))
 }
 
 // ============================================================================
@@ -723,8 +859,13 @@ fn value_to_string(v: &Value) -> String {
 fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     for val in row {
         match val {
-            Value::Null => { w.write_all(&[0xFB])?; }
-            _ => { let s = value_to_string(val); write_lenenc_string(w, s.as_bytes())?; }
+            Value::Null => {
+                w.write_all(&[0xFB])?;
+            }
+            _ => {
+                let s = value_to_string(val);
+                write_lenenc_string(w, s.as_bytes())?;
+            }
         }
     }
     Ok(())
@@ -817,7 +958,9 @@ fn execute_select(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<Select
     tracing::info!("execute_select called with: [{}]", sql);
     let statement: Statement = parse(sql).map_err(MySqlError::Sql)?;
     tracing::info!("parse done, executing...");
-    let result: ExecutorResult = engine.execute(statement.clone()).map_err(MySqlError::from)?;
+    let result: ExecutorResult = engine
+        .execute(statement.clone())
+        .map_err(MySqlError::from)?;
 
     let col_count = result.rows.first().map(|r| r.len()).unwrap_or(0);
 
@@ -828,8 +971,12 @@ fn execute_select(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<Select
             if let Ok(storage) = engine.storage.read() {
                 if let Ok(table_info) = storage.get_table_info(&select.table) {
                     table_info.columns.iter().map(|c| c.name.clone()).collect()
-                } else { vec!["*".to_string()] }
-            } else { vec!["*".to_string()] }
+                } else {
+                    vec!["*".to_string()]
+                }
+            } else {
+                vec!["*".to_string()]
+            }
         } else {
             select.columns.iter().map(|c| c.name.clone()).collect()
         }
@@ -883,15 +1030,19 @@ fn get_query_type(sql: &str) -> String {
 fn generate_tls_config() -> Result<Arc<ServerConfig>, Box<dyn std::error::Error>> {
     let mut params = rcgen::CertificateParams::new(Vec::new())?;
     params.distinguished_name = DistinguishedName::new();
-    params.distinguished_name.push(DnType::CommonName, "SQLRustGo");
-    params.distinguished_name.push(DnType::OrganizationName, "SQLRustGo");
+    params
+        .distinguished_name
+        .push(DnType::CommonName, "SQLRustGo");
+    params
+        .distinguished_name
+        .push(DnType::OrganizationName, "SQLRustGo");
     let key_pair = KeyPair::generate()?;
     let cert = params.self_signed(&key_pair)?;
     let cert_der = cert.der().to_owned();
     let key_der = key_pair.serialize_der();
     let certs = vec![CertificateDer::from(cert_der)];
-    let key = PrivateKeyDer::try_from(key_der)
-        .map_err(|e| format!("Failed to parse key: {:?}", e))?;
+    let key =
+        PrivateKeyDer::try_from(key_der).map_err(|e| format!("Failed to parse key: {:?}", e))?;
     let config = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
@@ -914,12 +1065,10 @@ impl<'a, S: Read + Write> Read for TlsStream<'a, S> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         loop {
             match self.conn.reader().read(buf) {
-                Ok(0) => {
-                    match self.conn.complete_io(&mut self.stream) {
-                        Ok(_) => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
+                Ok(0) => match self.conn.complete_io(&mut self.stream) {
+                    Ok(_) => continue,
+                    Err(e) => return Err(e),
+                },
                 Ok(n) => return Ok(n),
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     match self.conn.complete_io(&mut self.stream) {
@@ -954,26 +1103,34 @@ fn preprocess_sql(query: &str) -> String {
         if let Some(end_pos) = result[abs_pos..].find("*/") {
             result = format!("{}{}", &result[..abs_pos], &result[abs_pos + end_pos + 2..]);
             start = abs_pos;
-        } else { break; }
+        } else {
+            break;
+        }
     }
-    result = result.replace("AUTO_INCREMENT", "").replace("auto_increment", "");
+    result = result
+        .replace("AUTO_INCREMENT", "")
+        .replace("auto_increment", "");
     let mut char_result = String::new();
     let bytes = result.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
         if i + 4 < bytes.len()
             && (bytes[i] == b'C' || bytes[i] == b'c')
-            && (bytes[i+1] == b'H' || bytes[i+1] == b'h')
-            && (bytes[i+2] == b'A' || bytes[i+2] == b'a')
-            && (bytes[i+3] == b'R' || bytes[i+3] == b'r')
-            && bytes[i+4] == b'(' {
+            && (bytes[i + 1] == b'H' || bytes[i + 1] == b'h')
+            && (bytes[i + 2] == b'A' || bytes[i + 2] == b'a')
+            && (bytes[i + 3] == b'R' || bytes[i + 3] == b'r')
+            && bytes[i + 4] == b'('
+        {
             char_result.push_str("TEXT");
             i += 4;
             let mut depth = 1;
             i += 1;
             while i < bytes.len() && depth > 0 {
-                if bytes[i] == b'(' { depth += 1; }
-                else if bytes[i] == b')' { depth -= 1; }
+                if bytes[i] == b'(' {
+                    depth += 1;
+                } else if bytes[i] == b')' {
+                    depth -= 1;
+                }
                 i += 1;
             }
             continue;
@@ -1007,13 +1164,16 @@ fn preprocess_sql(query: &str) -> String {
 
     // Remove LIMIT clause
     if let Some(pos) = result.to_uppercase().rfind("LIMIT") {
-        let rest = &result[pos+5..];
-        let end_pos = rest.find(|c: char| !c.is_digit(10) && c != ' ' && c != ',' && c != 'O')
+        let rest = &result[pos + 5..];
+        let end_pos = rest
+            .find(|c: char| !c.is_digit(10) && c != ' ' && c != ',' && c != 'O')
             .unwrap_or(rest.len());
         result = format!("{}{}", &result[..pos], &rest[end_pos..]);
     }
 
-    while result.contains("  ") { result = result.replace("  ", " "); }
+    while result.contains("  ") {
+        result = result.replace("  ", " ");
+    }
     result = result.replace("DEFAULT '0'", "DEFAULT 0");
     result.trim().to_string()
 }
@@ -1029,8 +1189,15 @@ fn convert_between(sql: &str) -> String {
         if let Some(rest) = rest {
             let rest = rest.trim_start();
             let (high, remainder) = split_at_keyword(rest);
-            let col = before.trim().rsplit(|c: char| c == ' ' || c == '(').next().unwrap_or("");
-            result = format!("{}{} >= {} AND {} <= {}{}", before, col, low, col, high, remainder);
+            let col = before
+                .trim()
+                .rsplit(|c: char| c == ' ' || c == '(')
+                .next()
+                .unwrap_or("");
+            result = format!(
+                "{}{} >= {} AND {} <= {}{}",
+                before, col, low, col, high, remainder
+            );
         } else {
             break;
         }
@@ -1047,7 +1214,7 @@ fn split_at_and(s: &str) -> (String, Option<&str>) {
             '(' => depth += 1,
             ')' => depth -= 1,
             'A' if depth == 0 && upper[i..].starts_with("AND ") => {
-                return (s[..i].trim().to_string(), Some(s[i+3..].trim_start()))
+                return (s[..i].trim().to_string(), Some(s[i + 3..].trim_start()))
             }
             _ => {}
         }
@@ -1060,7 +1227,7 @@ fn split_at_keyword(s: &str) -> (String, &str) {
     let keywords = ["ORDER", "LIMIT", "GROUP", "HAVING", "UNION", ")", ";"];
     for kw in &keywords {
         if let Some(pos) = upper.find(kw) {
-            return (s[..pos].trim().to_string(), &s[pos..])
+            return (s[..pos].trim().to_string(), &s[pos..]);
         }
     }
     (s.trim().to_string(), "")
@@ -1068,9 +1235,16 @@ fn split_at_keyword(s: &str) -> (String, &str) {
 
 fn simplify_update_arithmetic(query: &str) -> String {
     let mut result = query.to_string();
-    let patterns = [("k=k+1", "k=1"), ("k = k + 1", "k=1"), ("K=K+1", "K=1"), ("K = K + 1", "K=1")];
+    let patterns = [
+        ("k=k+1", "k=1"),
+        ("k = k + 1", "k=1"),
+        ("K=K+1", "K=1"),
+        ("K = K + 1", "K=1"),
+    ];
     for (pat, rep) in &patterns {
-        if result.contains(pat) { result = result.replace(pat, rep); }
+        if result.contains(pat) {
+            result = result.replace(pat, rep);
+        }
     }
     result
 }
@@ -1095,11 +1269,21 @@ fn extract_session_var(query: &str) -> String {
     String::new()
 }
 
-fn send_variable_result_set<W: Write>(w: &mut W, var_name: &str, var_value: &str, mut seq: u8) -> MySqlResult<u8> {
+fn send_variable_result_set<W: Write>(
+    w: &mut W,
+    var_name: &str,
+    var_value: &str,
+    mut seq: u8,
+) -> MySqlResult<u8> {
     {
         let mut p = Vec::new();
         write_lenenc_int(&mut p, 2).unwrap();
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
     write_column_def(w, "Variable_name", "VARCHAR(255)", seq)?;
@@ -1112,18 +1296,33 @@ fn send_variable_result_set<W: Write>(w: &mut W, var_name: &str, var_value: &str
         let mut p = Vec::new();
         write_lenenc_string(&mut p, var_name.as_bytes()).unwrap();
         write_lenenc_string(&mut p, var_value.as_bytes()).unwrap();
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
     make_eof_packet(seq, 0x0002).write_to(w)?;
     Ok(seq.wrapping_add(1))
 }
 
-fn send_session_var_result_set<W: Write>(w: &mut W, var_name: &str, var_value: &str, mut seq: u8) -> MySqlResult<u8> {
+fn send_session_var_result_set<W: Write>(
+    w: &mut W,
+    var_name: &str,
+    var_value: &str,
+    mut seq: u8,
+) -> MySqlResult<u8> {
     {
         let mut p = Vec::new();
         write_lenenc_int(&mut p, 1).unwrap();
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
     write_column_def(w, var_name, "INTEGER", seq)?;
@@ -1133,7 +1332,12 @@ fn send_session_var_result_set<W: Write>(w: &mut W, var_name: &str, var_value: &
     {
         let mut p = Vec::new();
         write_lenenc_string(&mut p, var_value.as_bytes()).unwrap();
-        Packet { length: p.len() as u32, sequence: seq, payload: p }.write_to(w)?;
+        Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        }
+        .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
     make_eof_packet(seq, 0x0002).write_to(w)?;
@@ -1155,7 +1359,10 @@ fn handle_special_query<W: Write>(query: &str, w: &mut W, seq: u8) -> MySqlResul
             "max_allowed_packet" => ("max_allowed_packet", "4194304"),
             "net_buffer_length" => ("net_buffer_length", "16384"),
             "version" => ("version", SERVER_VERSION),
-            _ => { let new_seq = send_variable_result_set(w, &like_val, "", seq)?; return Ok(Some(new_seq)); }
+            _ => {
+                let new_seq = send_variable_result_set(w, &like_val, "", seq)?;
+                return Ok(Some(new_seq));
+            }
         };
         let new_seq = send_variable_result_set(w, var_name, var_value, seq)?;
         return Ok(Some(new_seq));
@@ -1179,7 +1386,12 @@ fn handle_special_query<W: Write>(query: &str, w: &mut W, seq: u8) -> MySqlResul
         {
             let mut p = Vec::new();
             write_lenenc_int(&mut p, 1).unwrap();
-            Packet { length: p.len() as u32, sequence: s, payload: p }.write_to(w)?;
+            Packet {
+                length: p.len() as u32,
+                sequence: s,
+                payload: p,
+            }
+            .write_to(w)?;
             s = s.wrapping_add(1);
         }
         write_column_def(w, "1", "INTEGER", s)?;
@@ -1189,7 +1401,12 @@ fn handle_special_query<W: Write>(query: &str, w: &mut W, seq: u8) -> MySqlResul
         {
             let mut p = Vec::new();
             write_lenenc_string(&mut p, b"1").unwrap();
-            Packet { length: p.len() as u32, sequence: s, payload: p }.write_to(w)?;
+            Packet {
+                length: p.len() as u32,
+                sequence: s,
+                payload: p,
+            }
+            .write_to(w)?;
             s = s.wrapping_add(1);
         }
         make_eof_packet(s, 0x0002).write_to(w)?;
@@ -1259,8 +1476,15 @@ fn handle_connection(
     // PHASE 3: Send OK Packet (seq = client seq + 1)
     // ========================================================================
     let client_capabilities = if auth_packet.payload.len() >= 4 {
-        u32::from_le_bytes([auth_packet.payload[0], auth_packet.payload[1], auth_packet.payload[2], auth_packet.payload[3]])
-    } else { 0 };
+        u32::from_le_bytes([
+            auth_packet.payload[0],
+            auth_packet.payload[1],
+            auth_packet.payload[2],
+            auth_packet.payload[3],
+        ])
+    } else {
+        0
+    };
     let client_wants_ssl = (client_capabilities & capability::SSL) != 0;
 
     if client_wants_ssl {
@@ -1292,7 +1516,13 @@ fn handle_connection(
         let ok_seq = reauth.sequence.wrapping_add(1);
         make_ok_packet(ok_seq, 0, 0).write_to(&mut tls_stream)?;
         println!("[MYSQL-PACKET] OK written over TLS");
-        run_command_loop(&mut tls_stream, addr, storage, monitor, ok_seq.wrapping_add(1))?;
+        run_command_loop(
+            &mut tls_stream,
+            addr,
+            storage,
+            monitor,
+            ok_seq.wrapping_add(1),
+        )?;
         return Ok(());
     }
 
@@ -1417,11 +1647,12 @@ fn run_command_loop<W: Read + Write>(
                     None => {}
                 }
 
-                let effective_query = if query_upper.starts_with("UPDATE ") && query_for_parse.contains("+") {
-                    simplify_update_arithmetic(&query_for_parse)
-                } else {
-                    query_for_parse.clone()
-                };
+                let effective_query =
+                    if query_upper.starts_with("UPDATE ") && query_for_parse.contains("+") {
+                        simplify_update_arithmetic(&query_for_parse)
+                    } else {
+                        query_for_parse.clone()
+                    };
 
                 let mut engine = ExecutionEngine::new(storage.clone());
 

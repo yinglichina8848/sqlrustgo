@@ -883,30 +883,6 @@ impl Parser {
                 Some(Token::Comma) => {
                     self.next();
                 }
-                Some(Token::Null) => {
-                    columns.push(SelectColumn {
-                        name: "NULL".to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal("NULL".to_string())),
-                    });
-                    self.next();
-                }
-                Some(Token::NumberLiteral(_)) | Some(Token::StringLiteral(_)) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                Some(Token::BooleanLiteral(b)) => {
-                    columns.push(SelectColumn {
-                        name: b.to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal(b.to_string())),
-                    });
-                    self.next();
-                }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
                 }
