@@ -13,7 +13,7 @@ pub mod planner;
 // pub mod cost;
 // pub mod executor;
 
-pub use logical_plan::LogicalPlan;
+pub use logical_plan::{LogicalPlan, ParamMode, ProcedureParam, ProcedureStatement};
 pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::PhysicalPlan;
 pub use physical_plan::{
