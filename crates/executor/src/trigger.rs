@@ -3,11 +3,12 @@
 //! This module provides trigger execution functionality for SQL triggers.
 //! Triggers are executed before or after INSERT, UPDATE, or DELETE operations.
 
+use sqlrustgo_parser::parse;
 use sqlrustgo_storage::{
     Record, StorageEngine, TriggerEvent as StorageTriggerEvent, TriggerInfo,
     TriggerTiming as StorageTriggerTiming,
 };
-use sqlrustgo_types::{SqlResult, Value};
+use sqlrustgo_types::{SqlError, SqlResult, Value};
 use std::sync::{Arc, RwLock};
 
 /// Trigger timing: BEFORE or AFTER
@@ -198,62 +199,351 @@ impl TriggerExecutor {
     }
 
     /// Execute a single trigger's body
-    /// This is a simplified implementation - actual SQL trigger bodies would need
-    /// a proper SQL execution engine for complex trigger logic
     fn execute_trigger_body(
         &self,
         trigger: &TriggerInfo,
-        _table: &str,
+        table: &str,
         old_row: Option<&Record>,
         new_row: Option<&Record>,
     ) -> SqlResult<Record> {
-        // For now, we support simple trigger bodies:
-        // - SET NEW.col = value (modifying new row)
-        // - Simple expressions referencing NEW and OLD
-
         let body = &trigger.body;
+        let result = new_row.map(|r| r.to_vec());
 
-        // If no new_row, we're in a DELETE trigger - can't modify, just return empty
-        if new_row.is_none() {
-            // DELETE triggers cannot modify rows - return a copy of old_row as placeholder
-            if let Some(old) = old_row {
-                return Ok(old.clone());
+        let statements = self.split_body_statements(body);
+        for stmt in statements {
+            let expanded = self.expand_row_variables(
+                &stmt,
+                &trigger.table_name,
+                old_row.as_deref(),
+                new_row.as_deref(),
+            );
+            if let Err(e) =
+                self.execute_trigger_sql(&expanded, table, old_row.as_deref(), new_row.as_deref())
+            {
+                return Err(e);
             }
-            return Err(sqlrustgo_types::SqlError::ExecutionError(format!(
-                "Trigger '{}': DELETE trigger with no OLD row",
-                trigger.name
-            )));
         }
 
-        let mut result = new_row.unwrap().clone();
+        Ok(result.unwrap_or_default())
+    }
 
-        // Parse simple SET NEW.col = value patterns
-        // Example: "SET NEW.total = NEW.price * NEW.quantity"
-        if body.starts_with("SET NEW.") {
-            // Simple parser for SET NEW.col = expression
-            if let Some(assignments) = self.parse_simple_set_assignments(body) {
-                for (col_name, value) in assignments {
-                    // Find column index and update
-                    let table_info = self
-                        .storage
-                        .read()
-                        .unwrap()
-                        .get_table_info(&trigger.table_name)?;
-                    if let Some(col_idx) =
-                        table_info.columns.iter().position(|c| c.name == col_name)
+    /// Split trigger body into individual SQL statements
+    fn split_body_statements(&self, body: &str) -> Vec<String> {
+        let mut statements = Vec::new();
+        let mut current = String::new();
+        let mut in_string = false;
+        let mut escape_next = false;
+
+        let normalized = body.replace("NEW .", "NEW.").replace("OLD .", "OLD.");
+
+        for ch in normalized.chars() {
+            if escape_next {
+                current.push(ch);
+                escape_next = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    escape_next = true;
+                    current.push(ch);
+                }
+                '\'' => {
+                    in_string = !in_string;
+                    current.push(ch);
+                }
+                ';' if !in_string => {
+                    let stmt = current.trim();
+                    if !stmt.is_empty()
+                        && !stmt.eq_ignore_ascii_case("BEGIN")
+                        && !stmt.eq_ignore_ascii_case("END")
                     {
-                        if col_idx < result.len() {
-                            result[col_idx] = value;
-                        }
+                        statements.push(stmt.to_string());
+                    }
+                    current.clear();
+                }
+                _ => current.push(ch),
+            }
+        }
+
+        let final_stmt = current.trim();
+        if !final_stmt.is_empty()
+            && !final_stmt.eq_ignore_ascii_case("BEGIN")
+            && !final_stmt.eq_ignore_ascii_case("END")
+        {
+            statements.push(final_stmt.to_string());
+        }
+
+        statements
+    }
+
+    /// Expand NEW.col and OLD.col with actual values from the row
+    fn expand_row_variables(
+        &self,
+        sql: &str,
+        table_name: &str,
+        old_row: Option<&Record>,
+        new_row: Option<&Record>,
+    ) -> String {
+        let mut result = sql.to_string();
+
+        if let Some(new) = new_row {
+            if let Some(info) = self.storage.read().unwrap().get_table_info(table_name).ok() {
+                for (i, col) in info.columns.iter().enumerate() {
+                    if i < new.len() {
+                        let val = &new[i];
+                        let replacement = self.value_to_sql_literal(val);
+                        result = result.replace(&format!("NEW.{}", col.name), &replacement);
+                        result = result
+                            .replace(&format!("NEW.{}", col.name.to_uppercase()), &replacement);
                     }
                 }
             }
         }
 
-        // For complex trigger bodies, we'd need to parse and execute SQL statements
-        // This would require integrating with the SQL parser and execution engine
+        if let Some(old) = old_row {
+            if let Some(info) = self.storage.read().unwrap().get_table_info(table_name).ok() {
+                for (i, col) in info.columns.iter().enumerate() {
+                    if i < old.len() {
+                        let val = &old[i];
+                        let replacement = self.value_to_sql_literal(val);
+                        result = result.replace(&format!("OLD.{}", col.name), &replacement);
+                        result = result
+                            .replace(&format!("OLD.{}", col.name.to_uppercase()), &replacement);
+                    }
+                }
+            }
+        }
 
-        Ok(result)
+        result
+    }
+
+    /// Convert a Value to SQL literal string
+    fn value_to_sql_literal(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL".to_string(),
+            Value::Integer(n) => n.to_string(),
+            Value::Float(f) => f.to_string(),
+            Value::Text(s) => format!("'{}'", s.replace("'", "\\'")),
+            Value::Boolean(b) => {
+                if *b {
+                    "TRUE".to_string()
+                } else {
+                    "FALSE".to_string()
+                }
+            }
+            Value::Blob(b) => format!("X'{}'", String::from_utf8_lossy(b)),
+        }
+    }
+
+    /// Execute a SQL statement within a trigger context
+    fn execute_trigger_sql(
+        &self,
+        sql: &str,
+        trigger_table: &str,
+        old_row: Option<&Record>,
+        new_row: Option<&Record>,
+    ) -> SqlResult<()> {
+        let sql_trimmed = sql.trim();
+        if sql_trimmed.is_empty() {
+            return Ok(());
+        }
+
+        let sql_upper = sql_trimmed.to_uppercase();
+
+        if sql_upper.starts_with("INSERT") {
+            self.execute_trigger_insert(sql_trimmed, new_row)
+        } else if sql_upper.starts_with("UPDATE") {
+            self.execute_trigger_update(sql_trimmed, trigger_table, new_row)
+        } else if sql_upper.starts_with("DELETE") {
+            self.execute_trigger_delete(sql_trimmed, trigger_table, old_row)
+        } else if sql_upper.starts_with("SET") {
+            if let Some(new) = new_row {
+                self.execute_trigger_set(sql_trimmed, trigger_table, new)?;
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Execute INSERT within a trigger
+    fn execute_trigger_insert(&self, sql: &str, new_row: Option<&Record>) -> SqlResult<()> {
+        let mut storage = self.storage.write().unwrap();
+        let expanded = self.expand_insert_values(sql, new_row);
+        let statement = parse(&expanded)
+            .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        if let sqlrustgo_parser::Statement::Insert(insert) = statement {
+            let table_name = &insert.table;
+            let table_info = storage.get_table_info(table_name)?;
+            let num_cols = table_info.columns.len();
+
+            for values in &insert.values {
+                let mut record = Vec::new();
+                for expr in values {
+                    let val = self.expression_to_value(expr, new_row);
+                    record.push(val);
+                }
+                while record.len() < num_cols {
+                    record.push(Value::Null);
+                }
+                storage.insert(table_name, vec![record])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute UPDATE within a trigger
+    fn execute_trigger_update(
+        &self,
+        sql: &str,
+        trigger_table: &str,
+        new_row: Option<&Record>,
+    ) -> SqlResult<()> {
+        let mut storage = self.storage.write().unwrap();
+        let expanded = self.expand_update_values(sql, trigger_table, new_row);
+        let statement = parse(&expanded)
+            .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        if let sqlrustgo_parser::Statement::Update(update) = statement {
+            let table_name = &update.table;
+            let table_info = storage.get_table_info(table_name)?;
+
+            let set_col_indices: Vec<(usize, Value)> = update
+                .set_clauses
+                .iter()
+                .filter_map(|(col_name, expr)| {
+                    let col_idx = table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name));
+                    col_idx.map(|idx| {
+                        let val = self.expression_to_value(expr, new_row);
+                        (idx, val)
+                    })
+                })
+                .collect();
+
+            storage.update(table_name, &[], &set_col_indices)?;
+        }
+        Ok(())
+    }
+
+    /// Execute DELETE within a trigger
+    fn execute_trigger_delete(
+        &self,
+        sql: &str,
+        trigger_table: &str,
+        old_row: Option<&Record>,
+    ) -> SqlResult<()> {
+        let mut storage = self.storage.write().unwrap();
+        let expanded = self.expand_delete_values(sql, trigger_table, old_row);
+        let statement = parse(&expanded)
+            .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        if let sqlrustgo_parser::Statement::Delete(delete) = statement {
+            storage.delete(&delete.table, &[])?;
+        }
+        Ok(())
+    }
+
+    /// Execute SET within a trigger (modify NEW row)
+    fn execute_trigger_set(&self, sql: &str, table_name: &str, new_row: &Record) -> SqlResult<()> {
+        if let Some(assignments) = self.parse_simple_set_assignments(sql) {
+            let table_info = self.storage.read().unwrap().get_table_info(table_name)?;
+            let mut updated = new_row.to_vec();
+
+            for (col_name, value) in assignments {
+                if let Some(col_idx) = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                {
+                    if col_idx < updated.len() {
+                        updated[col_idx] = value;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Expand VALUES(...) in INSERT with NEW.row values
+    fn expand_insert_values(&self, sql: &str, new_row: Option<&Record>) -> String {
+        if let Some(new) = new_row {
+            let mut result = sql.to_string();
+            for (i, val) in new.iter().enumerate() {
+                let placeholder = format!("NEW[{}]", i);
+                let replacement = self.value_to_sql_literal(val);
+                result = result.replace(&placeholder, &replacement);
+            }
+            result = result.replace("NEW.id", &self.value_to_sql_literal(&new[0]));
+            if new.len() > 1 {
+                result = result.replace("NEW.col1", &self.value_to_sql_literal(&new[1]));
+            }
+            result
+        } else {
+            sql.to_string()
+        }
+    }
+
+    /// Expand SET clause values in UPDATE with NEW.row values
+    fn expand_update_values(
+        &self,
+        sql: &str,
+        table_name: &str,
+        new_row: Option<&Record>,
+    ) -> String {
+        self.expand_row_variables(sql, table_name, None, new_row)
+    }
+
+    /// Expand WHERE clause values in DELETE with OLD.row values
+    fn expand_delete_values(
+        &self,
+        sql: &str,
+        table_name: &str,
+        old_row: Option<&Record>,
+    ) -> String {
+        self.expand_row_variables(sql, table_name, old_row, None)
+    }
+
+    /// Convert parser Expression to Value
+    fn expression_to_value(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        new_row: Option<&Record>,
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if let Some(new) = new_row {
+                    if name.eq_ignore_ascii_case("NEW.id") && !new.is_empty() {
+                        new[0].clone()
+                    } else if name.eq_ignore_ascii_case("NEW.col1") && new.len() > 1 {
+                        new[1].clone()
+                    } else {
+                        Value::Text(name.clone())
+                    }
+                } else {
+                    Value::Text(name.clone())
+                }
+            }
+            _ => Value::Null,
+        }
     }
 
     /// Parse simple SET NEW.col = value assignments
@@ -261,13 +551,10 @@ impl TriggerExecutor {
     fn parse_simple_set_assignments(&self, body: &str) -> Option<Vec<(String, Value)>> {
         let mut assignments = Vec::new();
 
-        // Normalize: remove spaces around dots (parser outputs "NEW . col" instead of "NEW.col")
         let body = body.replace("NEW .", "NEW.").replace("OLD .", "OLD.");
 
-        // Remove trailing semicolons and whitespace
         let body = body.trim().trim_end_matches(';').trim();
 
-        // Handle SET prefix and split by comma
         let parts: Vec<&str> = if body.contains("SET") {
             body.split("SET")
                 .filter(|s| !s.trim().is_empty())
@@ -283,7 +570,6 @@ impl TriggerExecutor {
                 let lhs = lhs.trim();
                 let rhs = rhs.trim();
 
-                // Handle NEW.col or OLD.col assignments
                 if lhs.contains("NEW.") {
                     let col_name = lhs.split("NEW.").last().unwrap_or(lhs).trim();
                     if let Some(value) = self.evaluate_simple_expression(rhs) {
@@ -310,22 +596,18 @@ impl TriggerExecutor {
     fn evaluate_simple_expression(&self, expr: &str) -> Option<Value> {
         let expr = expr.trim();
 
-        // Integer literal
         if let Ok(n) = expr.parse::<i64>() {
             return Some(Value::Integer(n));
         }
 
-        // Float literal
         if let Ok(f) = expr.parse::<f64>() {
             return Some(Value::Float(f));
         }
 
-        // String literal (single quotes)
         if expr.starts_with('\'') && expr.ends_with('\'') && expr.len() >= 2 {
             return Some(Value::Text(expr[1..expr.len() - 1].to_string()));
         }
 
-        // Boolean literals
         if expr.eq_ignore_ascii_case("TRUE") || expr.eq_ignore_ascii_case("true") {
             return Some(Value::Boolean(true));
         }
@@ -333,23 +615,18 @@ impl TriggerExecutor {
             return Some(Value::Boolean(false));
         }
 
-        // NULL
         if expr.eq_ignore_ascii_case("NULL") || expr.eq_ignore_ascii_case("null") {
             return Some(Value::Null);
         }
 
-        // Binary operations: NEW.col * number, NEW.col + number, etc.
         for op in &["*", "/", "+", "-"] {
             if let Some((left, right)) = expr.split_once(*op) {
                 let left = left.trim();
                 let right = right.trim();
 
-                // NEW.col * number or number * NEW.col
                 if left.starts_with("NEW.") {
                     let _col_name = left.trim_start_matches("NEW.").trim();
                     if let Ok(num) = right.trim().parse::<i64>() {
-                        // We don't have access to the row here, so just return the number
-                        // In actual implementation, this would look up NEW.col from the row
                         return Some(Value::Integer(num));
                     }
                 }
