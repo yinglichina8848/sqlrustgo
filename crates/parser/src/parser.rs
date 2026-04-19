@@ -704,15 +704,36 @@ impl Parser {
                     });
                     self.next();
                 }
+                // Handle aggregate functions: COUNT(*), SUM(col), etc.
+                // Only treat as aggregate if followed by LParen
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
-                    let func = self.parse_aggregate_function()?;
-                    aggregates.push(func);
-                    columns.push(SelectColumn {
-                        name: format!("__agg_{}", aggregates.len()),
-                        alias: None,
-                        expression: None,
-                    });
+                    if matches!(self.peek(), Some(Token::LParen)) {
+                        let func = self.parse_aggregate_function()?;
+                        aggregates.push(func);
+                        columns.push(SelectColumn {
+                            name: format!("__agg_{}", aggregates.len()),
+                            alias: None,
+                            expression: None,
+                        });
+                    } else {
+                        // Not followed by LParen - treat as identifier (column name)
+                        // Convert keyword to identifier and process as column
+                        let name = match self.current() {
+                            Some(Token::Count) => "count",
+                            Some(Token::Sum) => "sum",
+                            Some(Token::Avg) => "avg",
+                            Some(Token::Min) => "min",
+                            Some(Token::Max) => "max",
+                            _ => return Err("Expected column name".to_string()),
+                        };
+                        self.next(); // consume the keyword
+                        columns.push(SelectColumn {
+                            name: name.to_string(),
+                            alias: None,
+                            expression: Some(Expression::Identifier(name.to_string())),
+                        });
+                    }
                 }
                 Some(Token::LParen) => {
                     let expr = self.parse_expression()?;
