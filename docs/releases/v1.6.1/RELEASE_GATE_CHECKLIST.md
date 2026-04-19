@@ -620,7 +620,7 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 PR #699 已合并，包含:
 
 - [docs/POSTGRESQL_SETUP.md](../../POSTGRESQL_SETUP.md) - PostgreSQL 安装配置指南
-- [benchmark_results/BENCHMARK_COMPARISON_REPORT.md](../../benchmark_results/BENCHMARK_COMPARISON_REPORT.md) - SQLite 对比报告
+- [BENCHMARK_COMPARISON_REPORT.md](../../../benchmark_results/BENCHMARK_COMPARISON_REPORT.md) - 性能基准报告
 
 ### PostgreSQL 对比测试
 

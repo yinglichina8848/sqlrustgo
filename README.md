@@ -62,14 +62,14 @@ cargo clippy --all-targets -- -D warnings
 
 ### 已发布版本
 
-- [v2.5.0 文档](../releases/v2.5.0/)
-- [v2.4.0 文档](../releases/v2.4.0/)
-- [v2.1.0 文档](../releases/v2.1.0/)
-- [v2.0.0 文档](../releases/v2.0.0/)
-- [v1.9.0 文档](../releases/v1.9.0/)
-- [v1.6.1 文档](../releases/v1.6.1/)
-- [v1.1.0 文档](../releases/v1.1.0/)
-- [v1.0.0 文档](../releases/v1.0.0/)
+- [v2.5.0 文档](docs/releases/v2.5.0/)
+- [v2.4.0 文档](docs/releases/v2.4.0/)
+- [v2.1.0 文档](docs/releases/v2.1.0/)
+- [v2.0.0 文档](docs/releases/v2.0.0/)
+- [v1.9.0 文档](docs/releases/v1.9.0/)
+- [v1.6.1 文档](docs/releases/v1.6.1/)
+- [v1.1.0 文档](docs/releases/v1.1.0/)
+- [v1.0.0 文档](docs/releases/v1.0.0/)
 
 ### 中长期规划
 

@@ -578,9 +578,9 @@ gh pr merge <PR_NUMBER> --squash
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| 权限模型 | [GIT_PERMISSION_MODEL.md](./GIT_PERMISSION_MODEL.md) | 2.0 权限模型 |
-| 企业级权限 | [GIT_PERMISSION_MODEL_V3.md](./GIT_PERMISSION_MODEL_V3.md) | 3.0 企业级权限 |
-| 白皮书 | [WHITEPAPER_V3.md](./WHITEPAPER_V3.md) | 3.0 白皮书 |
+| 权限模型 | [enterprise-github-minimal-permission-model.md](../governance/enterprise-github-minimal-permission-model.md) | 2.0 权限模型 |
+| 企业级权限 | [enterprise-github-permissions-implementation-plan.md](../governance/enterprise-github-permissions-implementation-plan.md) | 3.0 企业级权限 |
+| 白皮书 | [WHITEPAPER.md](../v2.0/WHITEPAPER.md) | 3.0 白皮书 |
 
 ### C. 变更历史
 

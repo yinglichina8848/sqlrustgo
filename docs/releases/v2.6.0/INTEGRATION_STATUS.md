@@ -76,7 +76,7 @@ cargo test -p sqlrustgo-executor --lib
 
 **验证命令**:
 ```bash
-cargo test fk_constraint
+cargo test -p sqlrustgo-parser --lib
 ```
 
 ### 2.6 WAL 日志
@@ -87,7 +87,7 @@ cargo test fk_constraint
 
 **验证命令**:
 ```bash
-cargo test wal_integration
+cargo test --test wal_integration_test
 ```
 
 ---
@@ -136,8 +136,8 @@ WAL 启用         → 需要确认配置和恢复逻辑
 cargo test -p sqlrustgo-planner --lib   # CBO 优化器测试通过
 cargo test -p sqlrustgo-executor --lib  # 存储过程/触发器测试通过
 cargo test -p sqlrustgo-storage --lib  # 索引扫描测试通过
-cargo test fk_constraint               # 外键约束测试通过
-cargo test wal_integration             # WAL 测试通过
+cargo test -p sqlrustgo-parser --lib    # 外键约束测试通过
+cargo test --test wal_integration_test # WAL 测试通过
 ```
 
 ---
@@ -147,3 +147,27 @@ cargo test wal_integration             # WAL 测试通过
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-04-17 | 初始版本 |
+
+---
+
+## 八、元数据
+
+| 字段 | 值 |
+|------|------|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | yinglichina8848 |
+| AI 工具 | TRAE (Auto Model) |
+| 当前版本 | v2.6.0 (alpha) |
+| 工作分支 | develop/v2.6.0 |
+| 时间段 | 2026-04-19 16:10 (UTC+8) |
+
+---
+
+*功能集成状态 v2.6.0*
+*创建者: TRAE Agent*
+*审核者: -*
+*修改者: TRAE Agent*
+*修改记录:*
+* - 2026-04-17: 初始版本创建*
+* - 2026-04-19: 修复无效命令，添加元数据*
+*最后更新: 2026-04-19*

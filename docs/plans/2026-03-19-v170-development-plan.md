@@ -384,9 +384,9 @@ SIMD 向量化
 
 | 文档 | 说明 |
 |------|------|
-| [v1.6.0 ARCHITECTURE](./v1.6.0/ARCHITECTURE_DESIGN.md) | 架构设计 |
-| [v1.6.0 RELEASE_NOTES](./v1.6.0/RELEASE_NOTES.md) | 发布说明 |
-| [v1.6.0 MATURITY](./v1.6.0/MATURITY_ASSESSMENT.md) | 成熟度评估 |
+| [v1.6.0 ARCHITECTURE](../releases/v1.6.0/ARCHITECTURE_DESIGN.md) | 架构设计 |
+| [v1.6.0 RELEASE_NOTES](../releases/v1.6.0/RELEASE_NOTES.md) | 发布说明 |
+| [v1.6.0 MATURITY](../releases/v1.6.0/MATURITY_ASSESSMENT.md) | 成熟度评估 |
 
 ---
 

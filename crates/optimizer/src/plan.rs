@@ -1,6 +1,12 @@
 //! Optimizer Plan Types Module
 
+use std::any::Any;
 use thiserror::Error;
+
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 /// Optimizer result type alias
 pub type OptimizerResult<T> = Result<T, OptimizerError>;

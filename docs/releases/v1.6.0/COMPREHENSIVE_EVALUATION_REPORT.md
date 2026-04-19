@@ -546,7 +546,7 @@ pub struct RowVersion {
 
 ## 十二、参考资源
 
-- 版本文件: [VERSION](../../VERSION)
+- 版本文件: [VERSION](../../../VERSION)
 - 发布说明: [RELEASE_NOTES.md](./RELEASE_NOTES.md)
 - 架构设计: [ARCHITECTURE_DESIGN.md](./ARCHITECTURE_DESIGN.md)
 - 性能报告: [PERFORMANCE_BENCHMARK_REPORT.md](./PERFORMANCE_BENCHMARK_REPORT.md)

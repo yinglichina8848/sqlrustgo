@@ -341,7 +341,7 @@ Human Architect 对以下事项负责:
 | [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
 | [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 |
 | [RELEASE_POLICY.md](./RELEASE_POLICY.md) | 发布策略 |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
+| 贡献指南 | (待创建) |
 
 ---
 

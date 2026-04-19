@@ -8,6 +8,7 @@ pub mod buffer_pool;
 pub mod engine;
 pub mod file_storage;
 pub mod page;
+pub mod predicate;
 
 pub use binary_format::BinaryFormat;
 pub use binary_storage::BinaryTableStorage;

@@ -294,6 +294,6 @@ cargo test --lib storage
 
 ## 8. 相关文档
 
-- [v1.2.0 发布说明](../releases/v1.2.0/RELEASE_NOTES.md)
-- [v1.2.0 门禁检查清单](../releases/v1.2.0/RELEASE_GATE_CHECKLIST.md)
-- [v1.1.0 性能报告](../releases/v1.1.0/PERFORMANCE_REPORT.md)
+- [v1.2.0 发布说明](./RELEASE_NOTES.md)
+- [v1.2.0 门禁检查清单](./RELEASE_GATE_CHECKLIST.md)
+- [v1.1.0 性能报告](../v1.1.0/PERFORMANCE_REPORT.md)

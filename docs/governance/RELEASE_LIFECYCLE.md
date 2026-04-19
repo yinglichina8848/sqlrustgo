@@ -250,7 +250,7 @@ PATCH: Bug 修复 (向后兼容)
 |------|------|
 | [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
 | [RELEASE_POLICY.md](./RELEASE_POLICY.md) | 发布策略 |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | 贡献指南 |
+| 贡献指南 | (待创建) |
 
 ---
 

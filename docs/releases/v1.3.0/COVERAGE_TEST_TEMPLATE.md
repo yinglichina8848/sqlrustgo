@@ -355,7 +355,7 @@ fi
 
 ## 8. 相关文档
 
-- [覆盖率提升计划](../coverage_improvement_plan.md)
+- [覆盖率提升计划](../../coverage_improvement_plan.md)
 - [v1.2.0 测试计划](../v1.2.0/TEST_PLAN.md)
 - [性能测试模板](./PERFORMANCE_TEST_TEMPLATE.md)
 

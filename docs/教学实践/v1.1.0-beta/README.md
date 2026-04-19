@@ -35,7 +35,7 @@
 |------|------|------|
 | [任务看板](./task-board.md) | Beta 阶段任务追踪 | ✅ |
 | [PR 证据链](./pr-evidence.md) | PR 审核与风险摘要 | ✅ |
-| [阶段日报模板](./daily-template.md) | 课堂用日报模板 | ✅ |
+| 阶段日报模板 *(已归档)* | 课堂用日报模板 | ✅ |
 | [执行手册(学生版)](./handbook-student.md) | 学生可复现步骤 | ⏳ |
 | [执行手册(助教版)](./handbook-ta.md) | PR 证据链示例 | ⏳ |
 
@@ -53,5 +53,5 @@
 
 - [Issue #18 - Phase 2 任务](https://github.com/minzuuniversity/sqlrustgo/issues/18)
 - [Issue #19 - RC1 任务和门禁验收](https://github.com/minzuuniversity/sqlrustgo/issues/19)
-- [Phase 1 文档](../alpha/)
-- [版本演进计划](../草稿计划/2026-02-16-version-evolution-plan.md)
+- Phase 1 文档 *(已归档)*
+- 版本演进计划 *(已归档)*

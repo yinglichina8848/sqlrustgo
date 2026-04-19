@@ -45,7 +45,7 @@ v1.1.0-draft 版本经 DeepSeek AI 评估，发现以下问题：
 
 AI-CLI 工具参与协作时，请遵循：
 
-1. **身份规范**: 参考 [AI Agent 提示词体系](../AI增强软件工程/AI_AGENT_PROMPTS.md)
+1. **身份规范**: 参考 [AI Agent 提示词体系](../../AI增强软件工程/AI_AGENT_PROMPTS.md)
 2. **分支规范**: 基于 `release/v1.1.0` 创建 `fix/<issue>` 分支
 3. **PR 规范**: 目标分支为 `release/v1.1.0`，非 `main`
 4. **审核规范**: 作者不能审核自己的 PR
@@ -100,7 +100,7 @@ AI-CLI 工具参与协作时，请遵循：
 | DeepSeek 评估报告 | [DEEPSEEK_EVALUATION.md](./DEEPSEEK_EVALUATION.md) |
 | 改进计划 | [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md) |
 | 门禁检查清单 | [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) |
-|AI Agent 提示词| [AI_AGENT_PROMPTS.md](../AI增强软件工程/AI_AGENT_PROMPTS.md) |
+|AI Agent 提示词| [AI_AGENT_PROMPTS.md](../../AI增强软件工程/AI_AGENT_PROMPTS.md) |
 | Issue #152 | 改进任务追踪 |
 
 ---
