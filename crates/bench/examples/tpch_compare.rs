@@ -16,7 +16,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::io::Write;
 use std::sync::{Arc, RwLock};
@@ -352,13 +352,13 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
 
         for _ in 0..ITERATIONS {
             let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-            let mut engine = ExecutionEngine::new(storage);
+            let mut engine = MemoryExecutionEngine::new(storage);
 
             // Create and populate tables
             create_tables(&mut engine, &lineitem_data, &orders_data, &customer_data);
 
             let start = Instant::now();
-            let _ = engine.execute(parse(sql).unwrap());
+            let _ = engine.execute(sql);
             latencies.record(start.elapsed().as_micros() as u64);
         }
 
@@ -457,15 +457,14 @@ fn run_mysql_benchmarks() -> Option<SystemResult> {
 }
 
 fn create_tables(
-    engine: &mut ExecutionEngine,
+    engine: &mut MemoryExecutionEngine,
     lineitem_data: &[LineItemRow],
     orders_data: &[OrdersRow],
     customer_data: &[CustomerRow],
 ) {
     // Create lineitem table
     let _ = engine.execute(
-        parse(
-            "CREATE TABLE lineitem (
+        "CREATE TABLE lineitem (
             l_orderkey INTEGER,
             l_partkey INTEGER,
             l_suppkey INTEGER,
@@ -476,14 +475,11 @@ fn create_tables(
             l_returnflag TEXT,
             l_shipdate INTEGER
         )",
-        )
-        .unwrap(),
     );
 
     // Create orders table
     let _ = engine.execute(
-        parse(
-            "CREATE TABLE orders (
+        "CREATE TABLE orders (
             o_orderkey INTEGER,
             o_custkey INTEGER,
             o_orderstatus TEXT,
@@ -491,20 +487,15 @@ fn create_tables(
             o_totalprice INTEGER,
             o_orderdate INTEGER
         )",
-        )
-        .unwrap(),
     );
 
     // Create customer table
     let _ = engine.execute(
-        parse(
-            "CREATE TABLE customer (
+        "CREATE TABLE customer (
             c_custkey INTEGER,
             c_name TEXT,
             c_nationkey INTEGER
         )",
-        )
-        .unwrap(),
     );
 
     // Insert data
@@ -521,7 +512,7 @@ fn create_tables(
             row.return_flag,
             row.ship_date
         );
-        let _ = engine.execute(parse(&sql).unwrap());
+        let _ = engine.execute(&sql);
     }
 
     for row in orders_data {
@@ -534,7 +525,7 @@ fn create_tables(
             row.total_price,
             row.order_date
         );
-        let _ = engine.execute(parse(&sql).unwrap());
+        let _ = engine.execute(&sql);
     }
 
     for row in customer_data {
@@ -542,6 +533,6 @@ fn create_tables(
             "INSERT INTO customer VALUES ({}, '{}', {})",
             row.cust_key, row.name, row.nation_key
         );
-        let _ = engine.execute(parse(&sql).unwrap());
+        let _ = engine.execute(&sql);
     }
 }
