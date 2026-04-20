@@ -1,7 +1,7 @@
 use crate::cli::TpchArgs;
 use crate::metrics::LatencyCollector;
 use crate::reporter::{BenchmarkResult, QueryResult};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -57,7 +57,7 @@ pub fn run(args: TpchArgs) -> BenchmarkResult {
             let iteration_start = Instant::now();
             let storage = Arc::new(RwLock::new(MemoryStorage::new()));
             let mut engine = ExecutionEngine::new(storage);
-            let _ = engine.execute(parse(sql).unwrap());
+            let _ = engine.execute(sql);
             collector.record(iteration_start.elapsed().as_nanos() as u64);
         }
 
