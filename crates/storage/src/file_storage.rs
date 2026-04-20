@@ -1090,6 +1090,105 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_insert_buffering() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_buffer");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 10, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+        assert_eq!(storage.insert_buffer.get("test_table").unwrap().len(), 5);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_insert_buffer_threshold() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_threshold");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 3, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+        assert_eq!(storage.insert_buffer.get("test_table").unwrap().len(), 2);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_flush_all_buffers() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_flush");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 100, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+
+        storage.flush_all_buffers().unwrap();
+
+        assert!(!storage.insert_buffer.contains_key("test_table"));
+
+        let table = storage.get_table("test_table").unwrap();
+        assert_eq!(table.rows.len(), 5);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
 }
 
 impl FileStorage {
