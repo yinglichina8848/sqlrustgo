@@ -6,7 +6,9 @@
 
 use crate::Expr;
 use crate::Schema;
+use sqlrustgo_types::Value;
 use std::any::Any;
+use std::collections::HashMap;
 
 /// Physical plan trait - common interface for all physical operators
 pub trait PhysicalPlan: Send + Sync {
@@ -52,6 +54,10 @@ impl SeqScanExec {
 
     pub fn projection(&self) -> Option<&[usize]> {
         self.projection.as_deref()
+    }
+
+    pub fn execute(&self) -> Result<Vec<HashMap<String, Value>>, String> {
+        Ok(vec![])
     }
 }
 
