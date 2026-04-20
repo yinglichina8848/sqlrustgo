@@ -17,3 +17,8 @@ miniz_oxide.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion = "0.8"
+
+[[bench]]
+name = "storage_benchmark"
+harness = false
