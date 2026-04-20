@@ -21,6 +21,12 @@ pub struct FileStorage {
     tables: HashMap<String, TableData>,
     /// B+ Tree indexes protected by RwLock for concurrent access
     indexes: RwLock<HashMap<(String, String), BPlusTree>>,
+    /// Insert buffer for batching writes
+    insert_buffer: HashMap<String, Vec<Record>>,
+    /// Threshold to trigger buffer flush
+    buffer_threshold: usize,
+    /// Enable insert buffering
+    enable_buffer: bool,
 }
 
 impl FileStorage {
@@ -33,6 +39,9 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
+            insert_buffer: HashMap::new(),
+            buffer_threshold: 100,
+            enable_buffer: true,
         };
 
         // Load existing tables
@@ -44,11 +53,32 @@ impl FileStorage {
         Ok(storage)
     }
 
+    pub fn new_with_buffer_config(
+        data_dir: PathBuf,
+        buffer_threshold: usize,
+        enable_buffer: bool,
+    ) -> std::io::Result<Self> {
+        fs::create_dir_all(&data_dir)?;
+
+        let mut storage = Self {
+            data_dir,
+            tables: HashMap::new(),
+            indexes: RwLock::new(HashMap::new()),
+            insert_buffer: HashMap::new(),
+            buffer_threshold,
+            enable_buffer,
+        };
+
+        storage.load_all_tables()?;
+        storage.load_all_indexes()?;
+
+        Ok(storage)
+    }
+
     /// Create a new FileStorage with WAL (Write-Ahead Log) enabled for crash recovery.
     /// The WAL file will be stored in the data directory as "sqlrustgo.wal".
     /// Returns Err if WAL cannot be initialized.
     pub fn new_with_wal(data_dir: PathBuf) -> std::io::Result<Self> {
-        // Create directory if it doesn't exist
         fs::create_dir_all(&data_dir)?;
 
         let _wal_path = data_dir.join("sqlrustgo.wal");
@@ -57,6 +87,9 @@ impl FileStorage {
             data_dir,
             tables: HashMap::new(),
             indexes: RwLock::new(HashMap::new()),
+            insert_buffer: HashMap::new(),
+            buffer_threshold: 100,
+            enable_buffer: true,
         };
 
         // Load existing tables
@@ -1057,6 +1090,141 @@ mod tests {
 
         let _ = remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_insert_buffering() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_buffer");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 10, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+        assert_eq!(storage.insert_buffer.get("test_table").unwrap().len(), 5);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_insert_buffer_threshold() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_threshold");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 3, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+        assert_eq!(storage.insert_buffer.get("test_table").unwrap().len(), 2);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_flush_all_buffers() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_flush");
+        let _ = remove_dir_all(&temp_dir);
+
+        let mut storage = FileStorage::new_with_buffer_config(temp_dir.clone(), 100, true).unwrap();
+
+        let table_info = TableInfo {
+            name: "test_table".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+        };
+        storage.create_table(&table_info).unwrap();
+
+        for i in 0..5 {
+            let record = vec![Value::Integer(i as i64)];
+            storage.insert("test_table", vec![record]).unwrap();
+        }
+
+        assert!(storage.insert_buffer.contains_key("test_table"));
+
+        storage.flush_all_buffers().unwrap();
+
+        assert!(!storage.insert_buffer.contains_key("test_table"));
+
+        let table = storage.get_table("test_table").unwrap();
+        assert_eq!(table.rows.len(), 5);
+
+        let _ = remove_dir_all(&temp_dir);
+    }
+}
+
+impl FileStorage {
+    fn insert_direct(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+        if let Some(ref mut data) = self.tables.get_mut(table) {
+            data.rows.extend(records);
+            let table_data = data.clone();
+            self.save_table(table, &table_data)?;
+        }
+        Ok(())
+    }
+
+    fn insert_buffered(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+        let buffered = self.insert_buffer.entry(table.to_string()).or_default();
+        buffered.extend(records);
+
+        if buffered.len() >= self.buffer_threshold {
+            self.flush_buffer(table)?;
+        }
+        Ok(())
+    }
+
+    fn flush_buffer(&mut self, table: &str) -> SqlResult<()> {
+        if let Some(records) = self.insert_buffer.remove(table) {
+            self.insert_direct(table, records)?;
+        }
+        Ok(())
+    }
+
+    pub fn flush_all_buffers(&mut self) -> SqlResult<()> {
+        let tables: Vec<String> = self.insert_buffer.keys().cloned().collect();
+        for table in tables {
+            self.flush_buffer(&table)?;
+        }
+        Ok(())
+    }
 }
 
 impl StorageEngine for FileStorage {
@@ -1068,12 +1236,11 @@ impl StorageEngine for FileStorage {
     }
 
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
-        if let Some(ref mut data) = self.tables.get_mut(table) {
-            data.rows.extend(records);
-            let table_data = data.clone();
-            self.save_table(table, &table_data)?;
+        if !self.enable_buffer || records.len() >= self.buffer_threshold {
+            self.insert_direct(table, records)
+        } else {
+            self.insert_buffered(table, records)
         }
-        Ok(())
     }
 
     fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize> {
