@@ -1073,6 +1073,7 @@ impl Parser {
                 | Some(Token::Left)
                 | Some(Token::Right)
                 | Some(Token::Inner)
+                | Some(Token::Full)
                 | Some(Token::Cross)
         ) {
             Some(self.parse_join_clause()?)
@@ -2319,6 +2320,35 @@ mod tests {
                 let join = s.join_clause.unwrap();
                 assert_eq!(join.table, "orders");
                 assert_eq!(join.join_type, JoinType::Left);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_full_join() {
+        let result = parse("SELECT * FROM t1 FULL JOIN t2 ON t1.id = t2.id");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "t1");
+                assert!(s.join_clause.is_some());
+                let join = s.join_clause.unwrap();
+                assert_eq!(join.table, "t2");
+                assert_eq!(join.join_type, JoinType::Full);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+
+        let result2 = parse("SELECT * FROM t1 FULL OUTER JOIN t2 ON t1.id = t2.id");
+        assert!(result2.is_ok(), "Parse failed: {:?}", result2);
+        match result2.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "t1");
+                assert!(s.join_clause.is_some());
+                let join = s.join_clause.unwrap();
+                assert_eq!(join.table, "t2");
+                assert_eq!(join.join_type, JoinType::Full);
             }
             _ => panic!("Expected SELECT statement"),
         }
