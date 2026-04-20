@@ -56,6 +56,98 @@ pub struct TriggerInfo {
     pub body: String,
 }
 
+/// Partition type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PartitionType {
+    Range,
+    List,
+    Hash,
+}
+
+/// Partition definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartitionInfo {
+    pub partition_type: PartitionType,
+    pub column: String,
+    pub boundaries: Vec<Value>,
+}
+
+impl PartitionInfo {
+    pub fn new_range(column: &str, boundaries: Vec<Value>) -> Self {
+        Self {
+            partition_type: PartitionType::Range,
+            column: column.to_string(),
+            boundaries,
+        }
+    }
+
+    pub fn new_list(column: &str, values: Vec<Value>) -> Self {
+        Self {
+            partition_type: PartitionType::List,
+            column: column.to_string(),
+            boundaries: values,
+        }
+    }
+
+    pub fn new_hash(column: &str, num_partitions: u32) -> Self {
+        Self {
+            partition_type: PartitionType::Hash,
+            column: column.to_string(),
+            boundaries: vec![Value::Integer(num_partitions as i64)],
+        }
+    }
+
+    pub fn get_partition_index(&self, value: &Value) -> Option<usize> {
+        match self.partition_type {
+            PartitionType::Range => self.get_range_partition(value),
+            PartitionType::List => self.get_list_partition(value),
+            PartitionType::Hash => self.get_hash_partition(value),
+        }
+    }
+
+    fn get_range_partition(&self, value: &Value) -> Option<usize> {
+        if let Value::Integer(n) = value {
+            for (i, boundary) in self.boundaries.iter().enumerate() {
+                if let Value::Integer(b) = boundary {
+                    if n < b {
+                        return Some(i);
+                    }
+                }
+            }
+            Some(self.boundaries.len())
+        } else {
+            None
+        }
+    }
+
+    fn get_list_partition(&self, value: &Value) -> Option<usize> {
+        for (i, boundary) in self.boundaries.iter().enumerate() {
+            if value == boundary {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn get_hash_partition(&self, value: &Value) -> Option<usize> {
+        if let Value::Integer(n) = value {
+            let num_partitions = self.boundaries.first()?.as_integer()? as u64;
+            let hash = n.unsigned_abs() % num_partitions;
+            Some(hash as usize)
+        } else if let Value::Text(s) = value {
+            let num_partitions = self.boundaries.first()?.as_integer()? as u32;
+            let hash = calculate_hash(s.as_bytes()) % num_partitions;
+            Some(hash as usize)
+        } else {
+            None
+        }
+    }
+}
+
+fn calculate_hash(data: &[u8]) -> u32 {
+    data.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32).wrapping_mul(31))
+}
+
 /// Table metadata
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableInfo {
@@ -65,6 +157,8 @@ pub struct TableInfo {
     pub foreign_keys: Vec<ForeignKeyConstraint>,
     #[serde(default)]
     pub unique_constraints: Vec<UniqueConstraint>,
+    #[serde(skip)]
+    pub partition_info: Option<PartitionInfo>,
 }
 
 /// Column definition for table schema
@@ -341,13 +435,14 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_storage_list_tables() {
+    fn test_memory_storage_create_and_drop() {
         let mut storage = MemoryStorage::new();
         let info = TableInfo {
             name: "users".to_string(),
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
         storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
@@ -390,6 +485,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -413,6 +509,7 @@ mod tests {
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
 
         storage.create_table(&info).unwrap();
@@ -467,12 +564,14 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
         let info2 = TableInfo {
             name: "orders".to_string(),
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
         storage.create_table(&info1).unwrap();
         storage.create_table(&info2).unwrap();
@@ -493,6 +592,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
         storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));

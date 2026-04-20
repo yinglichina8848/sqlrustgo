@@ -243,6 +243,7 @@ impl DataRestorer {
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
 
         let count = rows.len();
@@ -309,6 +310,7 @@ impl DataRestorer {
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
 
         let count = rows.len();
@@ -354,6 +356,7 @@ impl DataRestorer {
                         columns: vec![],
                         foreign_keys: vec![],
                         unique_constraints: vec![],
+                        partition_info: None,
                     };
                     storage.create_table(&table_info)?;
                 }
