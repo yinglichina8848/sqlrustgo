@@ -9,6 +9,7 @@ pub mod engine;
 pub mod file_storage;
 pub mod page;
 pub mod predicate;
+pub mod wal;
 
 pub use binary_format::BinaryFormat;
 pub use binary_storage::BinaryTableStorage;

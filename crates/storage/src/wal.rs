@@ -394,9 +394,6 @@ impl WalManager {
 
     /// Force sync WAL to disk for durability
     pub fn sync(&self) -> std::io::Result<()> {
-        use std::fs::File;
-        use std::io::Write;
-
         let file = OpenOptions::new()
             .create(true)
             .append(true)

@@ -432,13 +432,11 @@ impl Parser {
         self.expect(Token::LParen)?;
         let mut params = Vec::new();
         while !matches!(self.current(), Some(Token::RParen) | None) {
-            let param_name = match self.next() {
-                Some(Token::Identifier(name)) => name,
-                Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
-                None => return Err("Expected parameter name".to_string()),
-            };
-
             let mode = match self.current() {
+                Some(Token::In) => {
+                    self.next();
+                    StoredProcParamMode::In
+                }
                 Some(Token::Identifier(mode_str))
                     if ["OUT", "INOUT"].contains(&mode_str.to_uppercase().as_str()) =>
                 {
@@ -451,6 +449,12 @@ impl Parser {
                     mode
                 }
                 _ => StoredProcParamMode::In,
+            };
+
+            let param_name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                Some(t) => return Err(format!("Expected parameter name, got {:?}", t)),
+                None => return Err("Expected parameter name".to_string()),
             };
 
             let data_type = match self.next() {
@@ -1882,12 +1886,17 @@ impl Parser {
             while !matches!(self.current(), Some(Token::RParen) | None) {
                 match self.current() {
                     Some(
-                        Token::Identifier(_) | Token::StringLiteral(_) | Token::NumberLiteral(_),
-                    ) => {
+                        Token::Identifier(_)
+                        | Token::StringLiteral(_)
+                        | Token::NumberLiteral(_)
+                        | Token::Null,
+                    ) =>
+                    {
                         let arg = match self.next() {
                             Some(Token::Identifier(s)) => s,
                             Some(Token::StringLiteral(s)) => s,
                             Some(Token::NumberLiteral(s)) => s,
+                            Some(Token::Null) => "NULL".to_string(),
                             Some(t) => return Err(format!("Expected argument, got {:?}", t)),
                             None => return Err("Unexpected end of input".to_string()),
                         };
