@@ -1890,8 +1890,7 @@ impl Parser {
                         | Token::StringLiteral(_)
                         | Token::NumberLiteral(_)
                         | Token::Null,
-                    ) =>
-                    {
+                    ) => {
                         let arg = match self.next() {
                             Some(Token::Identifier(s)) => s,
                             Some(Token::StringLiteral(s)) => s,

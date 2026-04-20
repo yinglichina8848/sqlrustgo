@@ -258,12 +258,10 @@ fn bench_tpch_q3(c: &mut Criterion) {
         generator.generate_orders_data()
     {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO orders VALUES ({}, {}, {}, '1-URGENT', {}, {})",
-                    order_key, cust_key, order_status, total_price, order_date
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO orders VALUES ({}, {}, {}, '1-URGENT', {}, {})",
+                order_key, cust_key, order_status, total_price, order_date
+            ))
             .unwrap();
     }
 
@@ -272,12 +270,10 @@ fn bench_tpch_q3(c: &mut Criterion) {
         generator.generate_lineitem_data()
     {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {})",
-                    order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {})",
+                order_key, part_key, supp_key as i32, quantity as i32, extended_price as i32
+            ))
             .unwrap();
     }
 
@@ -308,18 +304,16 @@ fn bench_tpch_q6(c: &mut Criterion) {
         generator.generate_lineitem_data()
     {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {})",
-                    order_key,
-                    part_key,
-                    supp_key as i32,
-                    quantity as i32,
-                    extended_price as i32,
-                    discount as i32,
-                    tax as i32
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {})",
+                order_key,
+                part_key,
+                supp_key as i32,
+                quantity as i32,
+                extended_price as i32,
+                discount as i32,
+                tax as i32
+            ))
             .unwrap();
     }
 
@@ -347,41 +341,27 @@ fn bench_simple_aggregation(c: &mut Criterion) {
 
     for i in 0..10000 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
-                    i,
-                    i as f64 * 10.0,
-                    i % 10
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO sales VALUES ({}, {}, 'cat{}')",
+                i,
+                i as f64 * 10.0,
+                i % 10
+            ))
             .unwrap();
     }
 
     let mut group = c.benchmark_group("aggregation");
 
     group.bench_function("sum_amount_10k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT SUM(amount) FROM sales")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT SUM(amount) FROM sales").unwrap());
     });
 
     group.bench_function("avg_amount_10k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT AVG(amount) FROM sales")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT AVG(amount) FROM sales").unwrap());
     });
 
     group.bench_function("count_all_10k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT COUNT(*) FROM sales")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT COUNT(*) FROM sales").unwrap());
     });
 
     group.finish();
@@ -395,32 +375,26 @@ fn bench_simple_join(c: &mut Criterion) {
         .execute("CREATE TABLE customers (id INTEGER, name TEXT)")
         .unwrap();
     engine
-        .execute(
-            "CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount REAL)",
-        )
+        .execute("CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount REAL)")
         .unwrap();
 
     for i in 0..1000 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO customers VALUES ({}, 'customer{}')",
-                    i, i
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO customers VALUES ({}, 'customer{}')",
+                i, i
+            ))
             .unwrap();
     }
 
     for i in 0..5000 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO orders VALUES ({}, {}, {})",
-                    i,
-                    i % 1000,
-                    i as f64 * 10.0
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO orders VALUES ({}, {}, {})",
+                i,
+                i % 1000,
+                i as f64 * 10.0
+            ))
             .unwrap();
     }
 
