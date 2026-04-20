@@ -1,36 +1,36 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::{parse, ExecutionEngine};
+use sqlrustgo::ExecutionEngine;
 
 fn bench_parse_select(c: &mut Criterion) {
     c.bench_function("parse_simple_select", |b| {
-        b.iter(|| parse("SELECT * FROM users WHERE id = 1").unwrap());
+        b.iter(|| "SELECT * FROM users WHERE id = 1");
     });
 }
 
 fn bench_execute_select(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE users (id INTEGER)").unwrap())
+        .execute("CREATE TABLE users (id INTEGER)")
         .unwrap();
     for i in 0..10 {
         engine
-            .execute(parse(&format!("INSERT INTO users VALUES ({i})")).unwrap())
+            .execute(&format!("INSERT INTO users VALUES ({i})"))
             .unwrap();
     }
 
     c.bench_function("execute_select_all", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM users").unwrap())
+                .execute("SELECT * FROM users")
                 .unwrap()
         });
     });
 }
 
 fn bench_execute_insert(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE bench (id INTEGER)").unwrap())
+        .execute("CREATE TABLE bench (id INTEGER)")
         .unwrap();
 
     c.bench_function("execute_insert_single", |b| {
@@ -38,27 +38,27 @@ fn bench_execute_insert(c: &mut Criterion) {
         b.iter(|| {
             counter += 1;
             engine
-                .execute(parse(&format!("INSERT INTO bench VALUES ({counter})")).unwrap())
+                .execute(&format!("INSERT INTO bench VALUES ({counter})"))
                 .unwrap()
         });
     });
 }
 
 fn bench_execute_aggregate(c: &mut Criterion) {
-    let mut engine = ExecutionEngine::new();
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE orders (amount INTEGER)").unwrap())
+        .execute("CREATE TABLE orders (amount INTEGER)")
         .unwrap();
     for i in 1..=10 {
         engine
-            .execute(parse(&format!("INSERT INTO orders VALUES ({})", i * 10)).unwrap())
+            .execute(&format!("INSERT INTO orders VALUES ({})", i * 10))
             .unwrap();
     }
 
     c.bench_function("execute_count", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT COUNT(*) FROM orders").unwrap())
+                .execute("SELECT COUNT(*) FROM orders")
                 .unwrap()
         });
     });
