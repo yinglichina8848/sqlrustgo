@@ -17,8 +17,12 @@ use sqlrustgo_parser::parser::{
     InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
 };
-use sqlrustgo_parser::{DeleteStatement, Expression, Statement, UpdateStatement};
+use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
+use sqlrustgo_parser::{
+    DeleteStatement, Expression, Statement, TransactionStatement, UpdateStatement,
+};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
+use sqlrustgo_transaction::{IsolationLevel as TmIsolationLevel, TransactionManager, TxId};
 use sqlrustgo_types::Value as SqlValue;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -29,6 +33,9 @@ pub struct ExecutionEngine<S: StorageEngine> {
     catalog: Option<Arc<RwLock<Catalog>>>,
     stats: Arc<RwLock<ExecutionStats>>,
     cbo_enabled: bool,
+    transaction_manager: TransactionManager,
+    current_tx_id: Option<TxId>,
+    default_isolation: TmIsolationLevel,
 }
 
 /// Execution statistics for CBO
@@ -64,6 +71,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 
@@ -74,6 +84,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 
@@ -84,6 +97,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 
@@ -376,6 +392,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::CreateProcedure(ref create_proc) => {
                 self.execute_create_procedure(create_proc)
             }
+            Statement::Transaction(ref txn) => self.execute_transaction(txn),
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
@@ -1016,6 +1033,98 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         Ok(ExecutorResult::empty())
     }
+
+    fn execute_transaction(&mut self, stmt: &TransactionStatement) -> SqlResult<ExecutorResult> {
+        match stmt {
+            TransactionStatement::Begin {
+                work: _,
+                isolation_level,
+            } => {
+                let iso = isolation_level
+                    .as_ref()
+                    .map(|il| match il {
+                        ParserIsolationLevel::ReadCommitted => TmIsolationLevel::SnapshotIsolation,
+                        ParserIsolationLevel::ReadUncommitted => {
+                            TmIsolationLevel::SnapshotIsolation
+                        }
+                        ParserIsolationLevel::SnapshotIsolation => {
+                            TmIsolationLevel::SnapshotIsolation
+                        }
+                        ParserIsolationLevel::Serializable => TmIsolationLevel::Serializable,
+                    })
+                    .unwrap_or(self.default_isolation);
+                self.begin_transaction(iso)
+            }
+            TransactionStatement::Commit { work: _ } => self.commit_transaction(),
+            TransactionStatement::Rollback { work: _ } => self.rollback_transaction(),
+            TransactionStatement::SetTransaction { isolation_level } => {
+                self.default_isolation = match isolation_level {
+                    ParserIsolationLevel::ReadCommitted => TmIsolationLevel::SnapshotIsolation,
+                    ParserIsolationLevel::ReadUncommitted => TmIsolationLevel::SnapshotIsolation,
+                    ParserIsolationLevel::SnapshotIsolation => TmIsolationLevel::SnapshotIsolation,
+                    ParserIsolationLevel::Serializable => TmIsolationLevel::Serializable,
+                };
+                Ok(ExecutorResult::empty())
+            }
+            TransactionStatement::StartTransaction { isolation_level } => {
+                let iso = isolation_level
+                    .as_ref()
+                    .map(|il| match il {
+                        ParserIsolationLevel::ReadCommitted => TmIsolationLevel::SnapshotIsolation,
+                        ParserIsolationLevel::ReadUncommitted => {
+                            TmIsolationLevel::SnapshotIsolation
+                        }
+                        ParserIsolationLevel::SnapshotIsolation => {
+                            TmIsolationLevel::SnapshotIsolation
+                        }
+                        ParserIsolationLevel::Serializable => TmIsolationLevel::Serializable,
+                    })
+                    .unwrap_or(self.default_isolation);
+                self.begin_transaction(iso)
+            }
+        }
+    }
+
+    fn begin_transaction(&mut self, isolation: TmIsolationLevel) -> SqlResult<ExecutorResult> {
+        if self.current_tx_id.is_some() {
+            return Err(SqlError::ExecutionError(
+                "Transaction already in progress".to_string(),
+            ));
+        }
+        let tx_id = self
+            .transaction_manager
+            .begin_transaction(isolation)
+            .map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to begin transaction: {:?}", e))
+            })?;
+        self.current_tx_id = Some(tx_id);
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Integer(tx_id.as_u64() as i64)]],
+            1,
+        ))
+    }
+
+    fn commit_transaction(&mut self) -> SqlResult<ExecutorResult> {
+        let tx_id = self
+            .current_tx_id
+            .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
+        self.transaction_manager.commit(tx_id).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to commit transaction: {:?}", e))
+        })?;
+        self.current_tx_id = None;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn rollback_transaction(&mut self) -> SqlResult<ExecutorResult> {
+        let tx_id = self
+            .current_tx_id
+            .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
+        self.transaction_manager.rollback(tx_id).map_err(|e| {
+            SqlError::ExecutionError(format!("Failed to rollback transaction: {:?}", e))
+        })?;
+        self.current_tx_id = None;
+        Ok(ExecutorResult::empty())
+    }
 }
 
 impl ExecutionEngine<MemoryStorage> {
@@ -1026,6 +1135,9 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 
@@ -1036,6 +1148,9 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 
@@ -1046,6 +1161,9 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: TmIsolationLevel::default(),
         }
     }
 }
