@@ -4,18 +4,18 @@
 //! 验证 IndexScan 性能显著优于 SeqScan
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-use std::sync::Arc;
+use sqlrustgo::ExecutionEngine;
+use sqlrustgo::MemoryStorage;
 
-fn setup_engine_with_data(rows: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+fn setup_engine_with_data(rows: usize) -> ExecutionEngine<MemoryStorage> {
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE idx_bench (id INTEGER, value INTEGER)").unwrap())
+        .execute("CREATE TABLE idx_bench (id INTEGER, value INTEGER)")
         .unwrap();
 
     for i in 0..rows {
         engine
-            .execute(parse(&format!("INSERT INTO idx_bench VALUES ({}, {})", i, i * 10)).unwrap())
+            .execute(&format!("INSERT INTO idx_bench VALUES ({}, {})", i, i * 10))
             .unwrap();
     }
 
@@ -32,7 +32,7 @@ fn bench_seq_scan_point_query(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("scan", rows), &rows, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT * FROM idx_bench WHERE id = 500").unwrap())
+                    .execute("SELECT * FROM idx_bench WHERE id = 500")
                     .unwrap()
             });
         });
@@ -51,7 +51,7 @@ fn bench_seq_scan_range_query(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("scan", rows), &rows, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT * FROM idx_bench WHERE id > 100 AND id < 500").unwrap())
+                    .execute("SELECT * FROM idx_bench WHERE id > 100 AND id < 500")
                     .unwrap()
             });
         });
@@ -68,7 +68,7 @@ fn bench_seq_scan_high_selectivity(c: &mut Criterion) {
     group.bench_function("scan_1_percent", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM idx_bench WHERE id < 1000").unwrap())
+                .execute("SELECT * FROM idx_bench WHERE id < 1000")
                 .unwrap()
         });
     });
@@ -84,7 +84,7 @@ fn bench_seq_scan_low_selectivity(c: &mut Criterion) {
     group.bench_function("scan_80_percent", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM idx_bench WHERE id < 8000").unwrap())
+                .execute("SELECT * FROM idx_bench WHERE id < 8000")
                 .unwrap()
         });
     });
