@@ -15,6 +15,7 @@
 
 use crate::lexer::Lexer;
 use crate::token::Token;
+use crate::transaction::{IsolationLevel, TransactionStatement};
 use serde::{Deserialize, Serialize};
 
 /// SQL Statement types
@@ -34,6 +35,7 @@ pub enum Statement {
     CreateProcedure(CreateProcedureStatement),
     Union(UnionStatement),
     CreateTrigger(CreateTriggerStatement),
+    Transaction(TransactionStatement),
 }
 
 /// UNION statement
@@ -378,8 +380,128 @@ impl Parser {
             Some(Token::With) => self.parse_with_select(),
             Some(Token::Alter) => self.parse_alter_table(),
             Some(Token::Call) => self.parse_call(),
+            Some(Token::Begin)
+            | Some(Token::Commit)
+            | Some(Token::Rollback)
+            | Some(Token::Set)
+            | Some(Token::Start) => self.parse_transaction(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
+        }
+    }
+
+    fn parse_transaction(&mut self) -> Result<Statement, String> {
+        match self.current() {
+            Some(Token::Begin) => self.parse_begin(),
+            Some(Token::Commit) => self.parse_commit(),
+            Some(Token::Rollback) => self.parse_rollback(),
+            Some(Token::Set) => self.parse_set_transaction(),
+            Some(Token::Start) => self.parse_start_transaction(),
+            Some(t) => Err(format!("Unexpected transaction token: {:?}", t)),
+            None => Err("Unexpected end of input".to_string()),
+        }
+    }
+
+    fn parse_begin(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Begin)?;
+        let work = if self.current() == Some(&Token::Work) {
+            self.next();
+            true
+        } else {
+            false
+        };
+        let isolation_level = if self.current() == Some(&Token::Isolation) {
+            self.next();
+            Some(self.parse_isolation_level()?)
+        } else {
+            None
+        };
+        Ok(Statement::Transaction(TransactionStatement::Begin {
+            work,
+            isolation_level,
+        }))
+    }
+
+    fn parse_commit(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Commit)?;
+        let work = if self.current() == Some(&Token::Work) {
+            self.next();
+            true
+        } else {
+            false
+        };
+        Ok(Statement::Transaction(TransactionStatement::Commit {
+            work,
+        }))
+    }
+
+    fn parse_rollback(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Rollback)?;
+        let work = if self.current() == Some(&Token::Work) {
+            self.next();
+            true
+        } else {
+            false
+        };
+        Ok(Statement::Transaction(TransactionStatement::Rollback {
+            work,
+        }))
+    }
+
+    fn parse_start_transaction(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Start)?;
+        self.expect(Token::Transaction)?;
+        let isolation_level = if self.current() == Some(&Token::Isolation) {
+            self.next();
+            Some(self.parse_isolation_level()?)
+        } else {
+            None
+        };
+        Ok(Statement::Transaction(
+            TransactionStatement::StartTransaction { isolation_level },
+        ))
+    }
+
+    fn parse_set_transaction(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Set)?;
+        self.expect(Token::Transaction)?;
+        let isolation_level = self.parse_isolation_level()?;
+        Ok(Statement::Transaction(
+            TransactionStatement::SetTransaction { isolation_level },
+        ))
+    }
+
+    fn parse_isolation_level(&mut self) -> Result<IsolationLevel, String> {
+        self.expect(Token::Level)?;
+        match self.current() {
+            Some(Token::Serializable) => {
+                self.next();
+                Ok(IsolationLevel::Serializable)
+            }
+            Some(Token::Repeatable) => {
+                self.next();
+                Ok(IsolationLevel::SnapshotIsolation)
+            }
+            Some(Token::Read) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Committed) => {
+                        self.next();
+                        Ok(IsolationLevel::ReadCommitted)
+                    }
+                    Some(Token::Uncommitted) => {
+                        self.next();
+                        Ok(IsolationLevel::ReadUncommitted)
+                    }
+                    Some(t) => Err(format!(
+                        "Expected COMMITTED or UNCOMMITTED after READ, got {:?}",
+                        t
+                    )),
+                    None => Err("Unexpected end of input after READ".to_string()),
+                }
+            }
+            Some(t) => Err(format!("Unexpected isolation level keyword: {:?}", t)),
+            None => Err("Unexpected end of input".to_string()),
         }
     }
 
@@ -2677,6 +2799,210 @@ fn test_debug_having() {
                 assert_eq!(t.events[0], "UPDATE");
             }
             _ => panic!("Expected CREATE TRIGGER statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin() {
+        let result = parse("BEGIN");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(!work);
+                assert!(isolation_level.is_none());
+            }
+            _ => panic!("Expected BEGIN statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_work() {
+        let result = parse("BEGIN WORK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(work);
+                assert!(isolation_level.is_none());
+            }
+            _ => panic!("Expected BEGIN WORK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_serializable() {
+        let result = parse("BEGIN SERIALIZABLE");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(!work);
+                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
+            }
+            _ => panic!("Expected BEGIN SERIALIZABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_isolation_level() {
+        let result = parse("BEGIN ISOLATION LEVEL SERIALIZABLE");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(!work);
+                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
+            }
+            _ => panic!("Expected BEGIN ISOLATION LEVEL SERIALIZABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_commit() {
+        let result = parse("COMMIT");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Commit { work }) => {
+                assert!(!work);
+            }
+            _ => panic!("Expected COMMIT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_commit_work() {
+        let result = parse("COMMIT WORK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Commit { work }) => {
+                assert!(work);
+            }
+            _ => panic!("Expected COMMIT WORK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_rollback() {
+        let result = parse("ROLLBACK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Rollback { work }) => {
+                assert!(!work);
+            }
+            _ => panic!("Expected ROLLBACK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_rollback_work() {
+        let result = parse("ROLLBACK WORK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Rollback { work }) => {
+                assert!(work);
+            }
+            _ => panic!("Expected ROLLBACK WORK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_start_transaction() {
+        let result = parse("START TRANSACTION");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
+                assert!(isolation_level.is_none());
+            }
+            _ => panic!("Expected START TRANSACTION statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_start_transaction_serializable() {
+        let result = parse("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
+                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
+            }
+            _ => panic!("Expected START TRANSACTION ISOLATION LEVEL SERIALIZABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_set_transaction() {
+        let result = parse("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
+                assert_eq!(isolation_level, IsolationLevel::Serializable);
+            }
+            _ => panic!("Expected SET TRANSACTION statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_set_transaction_read_committed() {
+        let result = parse("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
+                assert_eq!(isolation_level, IsolationLevel::ReadCommitted);
+            }
+            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ COMMITTED statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_set_transaction_read_uncommitted() {
+        let result = parse("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
+                assert_eq!(isolation_level, IsolationLevel::ReadUncommitted);
+            }
+            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_read_committed() {
+        let result = parse("BEGIN ISOLATION LEVEL READ COMMITTED");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(!work);
+                assert_eq!(isolation_level, Some(IsolationLevel::ReadCommitted));
+            }
+            _ => panic!("Expected BEGIN ISOLATION LEVEL READ COMMITTED statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_repeatable_read() {
+        let result = parse("BEGIN ISOLATION LEVEL REPEATABLE READ");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::Begin {
+                work,
+                isolation_level,
+            }) => {
+                assert!(!work);
+                assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
+            }
+            _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
         }
     }
 }
