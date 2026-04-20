@@ -1147,6 +1147,13 @@ impl Parser {
                 self.next();
                 JoinType::Right
             }
+            Some(Token::Full) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                }
+                JoinType::Full
+            }
             Some(Token::Cross) => {
                 self.next();
                 JoinType::Cross
