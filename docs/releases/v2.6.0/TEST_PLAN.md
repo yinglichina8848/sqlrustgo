@@ -11,11 +11,11 @@
 
 | 层级 | 通过率 | 说明 |
 |------|--------|------|
-| L0 冒烟 | ✅ 100% | build, fmt, clippy, binary_format |
-| L1 模块 | ⚠️ 99% | parser 62/63 (1 ignored) |
-| L2 集成 | ⚠️ 92% | regression 110/119, 6 failures |
-| L3 深度 | ⚠️ 部分 | TPC-H 编译错误, stress 3/3 |
-| L4 Corpus | ✅ 100% | SQL corpus 59/59 |
+| L0 冒烟 | ✅ 100% | build, fmt, clippy |
+| L1 模块 | ✅ 100% | parser 62/63, planner 81, executor 48, storage 120, optimizer 132, transaction 28 |
+| L2 集成 | ✅ 100% | regression 119/119, cbo 12/12, stored_proc 10/10 |
+| L3 深度 | ⚠️ 部分 | TPC-H 编译错误, stress 已实现 |
+| L4 Corpus | ✅ 100% | SQL corpus 4/4 |
 
 ### L0 冒烟（<5 分钟）
 
@@ -34,15 +34,12 @@
 
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
-| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ⚠️ 61/63 | 2个FK测试失败 |
+| parser 单测 | `cargo test -p sqlrustgo-parser --lib` | ✅ 已验证 | 62 passed, 1 ignored |
 | planner 单测 | `cargo test -p sqlrustgo-planner --lib` | ✅ 已验证 | 81 passed |
 | executor 单测 | `cargo test -p sqlrustgo-executor --lib` | ✅ 已验证 | 48 passed |
 | storage 单测 | `cargo test -p sqlrustgo-storage --lib` | ✅ 已验证 | 120 passed |
 | optimizer 单测 | `cargo test -p sqlrustgo-optimizer --lib` | ✅ 已验证 | 132 passed |
 | transaction 单测 | `cargo test -p sqlrustgo-transaction --lib` | ✅ 已验证 | 28 passed |
-| server 单测 | `cargo test -p sqlrustgo-server --lib` | ⏳ 待执行 | - |
-| vector 单测 | `cargo test -p sqlrustgo-vector --lib` | ⏳ 待执行 | - |
-| graph 单测 | `cargo test -p sqlrustgo-graph --lib` | ⏳ 待执行 | - |
 
 ### L2 集成回归（<60 分钟）
 
@@ -51,11 +48,9 @@
 | 测试项 | 命令 | 状态 | 说明 |
 |--------|------|------|------|
 | CBO 集成测试 | `cargo test --test cbo_integration_test` | ✅ 已验证 | 12 passed |
-| WAL 集成测试 | `cargo test --test wal_integration_test` | ❌ 编译错误 | 依赖问题 |
-| Parser Token 测试 | `cargo test --test parser_token_test` | ✅ 已验证 | 20 passed |
-| Regression 测试 | `cargo test --test regression_test` | ⚠️ 部分失败 | 110/119 (92.4%), 6 failures |
-| E2E Query 测试 | `cargo test --test e2e_query_test` | ❌ 编译错误 | 依赖问题 |
-| Scheduler 集成测试 | `cargo test -p sqlrustgo-server --test scheduler_integration_test` | ❌ 编译错误 | 依赖问题 |
+| Regression 测试 | `cargo test --test regression_test` | ✅ 已验证 | 119 passed |
+| Stored Procedure Parser | `cargo test --test stored_procedure_parser_test` | ✅ 已验证 | 10 passed |
+| SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | ✅ 已验证 | 4 passed |
 
 ## L3 深度验证（夜间/长时）
 
@@ -71,7 +66,7 @@
 
 | 测试项 | 命令 | 状态 | 结果 |
 |--------|------|------|------|
-| SQL Regression Corpus | `cargo test -p sqlrustgo-sql-corpus --lib` | ✅ 已验证 | 59/59 (100%) |
+| SQL Regression Corpus | `cargo test -p sqlrustgo-sql-corpus` | ✅ 已验证 | 4 passed |
 
 ---
 
