@@ -2417,6 +2417,69 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_call_with_null() {
+        let result = parse("CALL test_proc(NULL)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Call(c) => {
+                assert_eq!(c.procedure_name, "test_proc");
+                assert_eq!(c.args.len(), 1);
+                assert_eq!(c.args[0], "NULL");
+            }
+            _ => panic!("Expected CALL statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_call_with_mixed_args() {
+        let result = parse("CALL process_user(1, 'Alice', balance, NULL)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Call(c) => {
+                assert_eq!(c.procedure_name, "process_user");
+                assert_eq!(c.args.len(), 4);
+                assert_eq!(c.args[0], "1");
+                assert_eq!(c.args[1], "Alice");
+                assert_eq!(c.args[2], "balance");
+                assert_eq!(c.args[3], "NULL");
+            }
+            _ => panic!("Expected CALL statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_procedure_with_in_param() {
+        let result = parse(
+            "CREATE PROCEDURE test_proc(IN id INTEGER) BEGIN SELECT * FROM users WHERE id = id END",
+        );
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_create_procedure_with_out_param() {
+        let result = parse(
+            "CREATE PROCEDURE get_count(OUT cnt INTEGER) BEGIN SELECT COUNT(*) INTO cnt FROM users END",
+        );
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_create_procedure_with_inout_param() {
+        let result = parse(
+            "CREATE PROCEDURE test_proc(INOUT counter INTEGER) BEGIN SET counter = counter + 1 END",
+        );
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_parse_create_procedure_with_multiple_params() {
+        let result = parse(
+            "CREATE PROCEDURE add_user(IN name TEXT, IN email TEXT) BEGIN INSERT INTO users VALUES(name, email) END",
+        );
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+    }
+
+    #[test]
     fn test_parse_comparison_expression() {
         let result = parse("SELECT * FROM t WHERE a > b AND c < d");
         assert!(result.is_ok(), "Parse failed: {:?}", result);

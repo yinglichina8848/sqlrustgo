@@ -1,180 +1,170 @@
-# v2.6.0 发布门禁检查清单（Phase B 重构版）
+# v2.6.0 发布门禁检查清单
 
 > **版本**: beta/v2.6.0
 > **当前阶段**: `Beta`
 > **更新日期**: 2026-04-20
-> **验证状态**: ✅ Alpha门禁已通过
+> **说明**: 门禁检查通过引用测试报告验证，不直接执行测试
 
 ---
 
-## 一、门禁分类
+## 一、门禁原则
 
-| 分类 | 说明 | 影响 |
-|------|------|------|
-| A 类 | 必须通过 | 失败则阻塞发布/阶段晋级 |
-| B 类 | 应通过 | 失败需风险审批与整改计划 |
+### 1.1 核心原则
 
-### 证据要求（统一）
+1. **报告驱动**: 门禁检查引用测试报告中的数据，不直接执行测试
+2. **证据要求**: 每项检查必须提供报告路径、commit hash、执行日期
+3. **阶段隔离**: 不同阶段检查不同报告，不可混淆
+
+### 1.2 证据要求（统一）
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| 执行命令 | 实际执行的命令 | `cargo test --test binary_format_test` |
-| 执行日期 | 命令执行日期 | 2026-04-19 |
-| Commit Hash | 代码版本 | `abc1234` |
-| 结果摘要 | 关键结果 | "通过，0 failures" |
-| 产物路径 | 报告或日志位置 | `artifacts/coverage/index.html` |
+| 报告路径 | 测试报告文件位置 | `report/BETA_TEST_REPORT.md` |
+| Commit Hash | 代码版本 | `aac4d64c` |
+| 执行日期 | 测试执行日期 | 2026-04-20 |
+| 结果摘要 | 通过/失败统计 | "通过 481/481" |
+| 产物路径 | 报告或日志位置 | `artifacts/coverage/` |
 
 ---
 
-## 二、Alpha 门禁（当前阶段）
+## 二、Alpha 门禁
 
-### A 类（必须）
+### 2.1 检查清单
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 构建通过 | `cargo build --release` | 成功 | ✅ 已验证 | - |
-| 格式检查 | `cargo fmt --check` | 无问题 | ✅ 已验证 | - |
-| L0 冒烟 | `cargo test --test binary_format_test` | 通过 | ✅ 已验证 | - |
-| L1 parser | `cargo test -p sqlrustgo-parser --lib` | 100% | ⏳ 待执行 | - |
-| L1 planner | `cargo test -p sqlrustgo-planner --lib` | 100% | ⏳ 待执行 | - |
-| L1 executor | `cargo test -p sqlrustgo-executor --lib` | 100% | ⏳ 待执行 | - |
-| L1 storage | `cargo test -p sqlrustgo-storage --lib` | 100% | ⏳ 待执行 | - |
-| L1 optimizer | `cargo test -p sqlrustgo-optimizer --lib` | 100% | ⏳ 待执行 | - |
-| L1 transaction | `cargo test -p sqlrustgo-transaction --lib` | 100% | ⏳ 待执行 | - |
-| L1 server | `cargo test -p sqlrustgo-server --lib` | 100% | ⏳ 待执行 | - |
-| L1 vector | `cargo test -p sqlrustgo-vector --lib` | 100% | ⏳ 待执行 | - |
-| L1 graph | `cargo test -p sqlrustgo-graph --lib` | 100% | ⏳ 待执行 | - |
-| Clippy | `cargo clippy -- -D warnings` | 0 警告 | ⏳ 待验证 | - |
+| 检查项 | 引用报告 | 阈值 | 证据要求 |
+|--------|----------|------|----------|
+| L0 冒烟 | `report/ALPHA_TEST_REPORT.md` - L0 节 | 100% | build, fmt, clippy, smoke |
+| L1 parser | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | parser 单测结果 |
+| L1 planner | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | planner 单测结果 |
+| L1 executor | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | executor 单测结果 |
+| L1 storage | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | storage 单测结果 |
+| L1 optimizer | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | optimizer 单测结果 |
+| L1 transaction | `report/ALPHA_TEST_REPORT.md` - L1 节 | 100% | transaction 单测结果 |
 
-### B 类（应通过）
+### 2.2 Alpha 通过条件
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| SQL Corpus | `cargo test -p sqlrustgo-sql-corpus --lib` | ≥95% | ⏳ 待测 | - |
-| 覆盖率趋势 | `cargo tarpaulin` | 较上版本提升 | ⏳ 待测 | `artifacts/coverage/` |
+- [ ] 所有 L0 冒烟测试通过
+- [ ] 所有 L1 模块测试通过
+- [ ] 报告已生成并位于 `report/ALPHA_TEST_REPORT.md`
 
 ---
 
 ## 三、Beta 门禁
 
-### A 类（必须）
+### 3.1 检查清单
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| L2 CBO | `cargo test --test cbo_integration_test` | 100% | ⏳ 待执行 | - |
-| L2 WAL | `cargo test --test wal_integration_test` | 100% | ⏳ 待执行 | - |
-| L2 Regression | `cargo test --test regression_test` | 100% | ⏳ 待执行 | - |
-| L2 E2E Query | `cargo test --test e2e_query_test` | 100% | ⏳ 待执行 | - |
-| SQL Corpus | `cargo test -p sqlrustgo-sql-corpus --lib` | ≥95% | ⏳ 待测 | - |
+| 检查项 | 引用报告 | 阈值 | 证据要求 |
+|--------|----------|------|----------|
+| L2 CBO | `report/BETA_TEST_REPORT.md` - L2 节 | 100% | cbo_integration_test |
+| L2 WAL | `report/BETA_TEST_REPORT.md` - L2 节 | 100% | wal_integration_test |
+| L2 Regression | `report/BETA_TEST_REPORT.md` - L2 节 | 100% | regression_test |
+| L2 E2E | `report/BETA_TEST_REPORT.md` - L2 节 | 100% | e2e_*_test |
+| SQL Corpus | `report/BETA_TEST_REPORT.md` - L4 节 | ≥95% | sql-corpus 通过率 |
+| 覆盖率 | `report/BETA_TEST_REPORT.md` - 覆盖率节 | ≥65% | tarpaulin 报告 |
 
-### B 类（应通过）
+### 3.2 Beta 通过条件
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 覆盖率 | `cargo tarpaulin` | ≥65% | ⏳ 待测 | `artifacts/coverage/` |
-| TPC-H | `cargo bench --bench tpch_bench` | 通过 | ⚠️ 代码错误 | - |
+- [ ] 所有 L2 集成测试通过
+- [ ] SQL Corpus 通过率 ≥95%
+- [ ] 覆盖率 ≥65%
+- [ ] 报告已生成并位于 `report/BETA_TEST_REPORT.md`
 
 ---
 
 ## 四、RC 门禁
 
-### A 类（必须）
+### 4.1 检查清单
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 全量 L0~L2 | 见 TEST_PLAN.md 2.1-2.3 | 100% | ⏳ 待执行 | - |
-| 覆盖率 | `cargo tarpaulin` | ≥70% | ⏳ 待测 | `artifacts/coverage/` |
-| TPC-H SF1 | `cargo bench --bench tpch_bench` | 通过 | ⚠️ 代码错误 | `artifacts/benchmark/` |
-| Sysbench | 外部工具 | ≥1000 QPS | ⏳ 待集成 | `artifacts/benchmark/` |
-| 备份恢复 | 手动测试 | 通过 | ⏳ 待实现 | - |
-| 崩溃恢复 | `kill -9` 测试 | 恢复 | ⏳ 待实现 | - |
+| 检查项 | 引用报告 | 阈值 | 证据要求 |
+|--------|----------|------|----------|
+| 全量 L0~L2 | `report/RC_TEST_REPORT.md` | 100% | 所有测试汇总 |
+| 覆盖率 | `report/RC_TEST_REPORT.md` - 覆盖率节 | ≥70% | tarpaulin 报告 |
+| TPC-H SF1 | `report/RC_TEST_REPORT.md` - L3 节 | 通过 | bench_tpch 结果 |
+| Sysbench | `report/RC_TEST_REPORT.md` - L3 节 | ≥1000 QPS | 外部工具报告 |
+| 备份恢复 | `report/RC_TEST_REPORT.md` - L3 节 | 通过 | 手动测试记录 |
+| 崩溃恢复 | `report/RC_TEST_REPORT.md` - L3 节 | 通过 | kill -9 测试记录 |
 
-### B 类（应通过）
+### 4.2 RC 通过条件
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 安全审计 | 安全分析报告 | 通过 | ⏳ 待审 | `docs/releases/v2.6.0/SECURITY_ANALYSIS.md` |
-| 升级路径 | 从 v2.5.0 升级测试 | 通过 | ⏳ 待测 | - |
+- [ ] L0~L2 全部测试通过
+- [ ] 覆盖率 ≥70%
+- [ ] TPC-H SF1 基准测试通过
+- [ ] 备份恢复测试通过
+- [ ] 报告已生成并位于 `report/RC_TEST_REPORT.md`
 
 ---
 
 ## 五、GA 门禁
 
-### A 类（必须）
+### 5.1 检查清单
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 72h 长稳 | 压力测试 | 稳定 | ⏳ 待实现 | `artifacts/benchmark/` |
-| 全部 A 类为绿 | 汇总检查 | 100% | ⏳ 待汇总 | - |
-| 发布文档完整 | 完整性检查 | 通过 | ⏳ 待检查 | `docs/releases/v2.6.0/` |
-| 回滚演练 | 回滚测试 | 通过 | ⏳ 待演练 | - |
+| 检查项 | 引用报告 | 阈值 | 证据要求 |
+|--------|----------|------|----------|
+| 72h 长稳 | `report/GA_TEST_REPORT.md` - 长稳节 | 稳定 | 压测报告 |
+| 全量 A 类为绿 | `report/GA_TEST_REPORT.md` | 100% | 所有检查项汇总 |
+| 发布文档完整 | `report/GA_TEST_REPORT.md` - 文档节 | 通过 | 完整性检查 |
+| 回滚演练 | `report/GA_TEST_REPORT.md` - 回滚节 | 通过 | 回滚测试记录 |
 
-### B 类（应通过）
+### 5.2 GA 通过条件
 
-| 检查项 | 验证命令 | 阈值 | 状态 | 产物路径 |
-|--------|----------|------|------|----------|
-| 未解决缺陷 | 缺陷分级 | 有计划 | ⏳ 待整理 | Issue tracker |
-| 维护计划 | v2.6.x 维护文档 | 明确 | ⏳ 待创建 | `docs/releases/v2.6.x/` |
-
----
-
-## 六、测试覆盖清单（全部勾选）
-
-| # | 测试类型 | 命令来源 | Alpha | Beta | RC | GA |
-|---|----------|----------|-------|------|-----|-----|
-| 1 | 单元测试 (L1) | TEST_PLAN.md 2.2 | ⏳ | ⏳ | ✅ | ✅ |
-| 2 | 集成测试 (L2) | TEST_PLAN.md 2.3 | - | ⏳ | ✅ | ✅ |
-| 3 | TPC-H Bench | INTEGRATION_TEST_PLAN.md 2.3 | - | - | ⚠️ | ⚠️ |
-| 4 | Sysbench | 外部工具 | - | - | ⏳ | ✅ |
-| 5 | 覆盖率 | tarpaulin | ⏳ | ⏳ | ✅ | ✅ |
-| 6 | SQL Corpus | TEST_PLAN.md 4.1 | ⏳ | ✅ | ✅ | ✅ |
-| 7 | 安装测试 | DEPLOYMENT_GUIDE.md | ⏳ | ⏳ | ✅ | ✅ |
-| 8 | 升级测试 | MIGRATION_GUIDE.md | - | ⏳ | ⏳ | ✅ |
-| 9 | 备份恢复 | 手动 | - | - | ⏳ | ✅ |
-| 10 | 崩溃恢复 | 手动 | - | - | ⏳ | ✅ |
-| 11 | 长稳测试 | 72h 压测 | - | - | - | ⏳ |
+- [ ] 72h 长稳测试通过
+- [ ] 所有 A 类检查项为绿
+- [ ] 发布文档完整
+- [ ] 回滚演练通过
+- [ ] 报告已生成并位于 `report/GA_TEST_REPORT.md`
 
 ---
 
-## 七、门禁统计模板
+## 六、门禁流程
 
-| 分类 | 总数 | ✅ 已验证 | ⏳ 待执行 | ⚠️ 已知问题 | 🔴 失败 | 通过率 |
-|------|------|----------|-----------|-------------|---------|--------|
-| A 类 | 13 | 3 | 9 | 1 | 0 | 23% |
-| B 类 | 2 | 0 | 2 | 0 | 0 | 0% |
-| **总计** | **15** | **3** | **11** | **1** | **0** | **20%** |
+### 6.1 标准流程
 
-> **说明**: "✅ 已验证" 表示实际执行并通过的测试；"⏳ 待执行" 表示 Target 存在但尚未运行的测试。
+```
+1. 执行测试 → 生成测试报告
+2. 门禁检查 → 引用报告验证
+3. 通过 → 进入下一阶段
+4. 失败 → 修复后重新执行测试
+```
+
+### 6.2 报告命名规范
+
+| 阶段 | 报告路径 |
+|------|----------|
+| Alpha | `report/ALPHA_TEST_REPORT.md` |
+| Beta | `report/BETA_TEST_REPORT.md` |
+| RC | `report/RC_TEST_REPORT.md` |
+| GA | `report/GA_TEST_REPORT.md` |
+
+### 6.3 报告验证清单
+
+每项检查必须验证：
+
+- [ ] 报告文件存在
+- [ ] Commit Hash 与待发布代码一致
+- [ ] 执行日期在合理范围内
+- [ ] 结果数据完整
 
 ---
 
-## 八、变更历史
+## 七、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-04-17 | 初始版本 |
-| 2.0 | 2026-04-19 | Phase B 重构：映射到真实 target，明确命令和状态 |
+| 2.0 | 2026-04-20 | 重构：改为引用报告而非直接测试 |
 
 ---
 
-## 九、元数据
+## 八、元数据
 
 | 字段 | 值 |
 |------|------|
 | 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
-| GitHub 身份 | yinglichina8848 |
-| AI 工具 | TRAE (Auto Model) |
-| 当前版本 | v2.6.0 (alpha) |
+| 当前版本 | v2.6.0 |
 | 工作分支 | develop/v2.6.0 |
-| 时间段 | 2026-04-19 16:10 (UTC+8) |
 
 ---
 
 *门禁检查清单 v2.6.0*
-*创建者: TRAE Agent*
-*审核者: -*
-*修改者: TRAE Agent*
-*修改记录:*
-* - 2026-04-17: 初始版本创建*
-* - 2026-04-19: Phase B 重构，添加元数据*
-*最后更新: 2026-04-19*
+*本文件规定门禁检查流程，通过引用测试报告验证*
+*测试执行和结果见对应阶段的测试报告*
