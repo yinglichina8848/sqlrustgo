@@ -3,7 +3,7 @@
 > **版本**: v2.6.0
 > **阶段**: Beta
 > **生成日期**: 2026-04-20
-> **验证状态**: ✅ 全部通过
+> **验证状态**: ✅ L2测试全部通过，覆盖率待CI验证
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 字段 | 值 |
 |------|------|
-| Commit Hash | `34ca5c6` (PR #1662 merged) |
+| Commit Hash | `58be03a8` (PR #1668/#1669/#1670 merged) |
 | 执行日期 | 2026-04-20 |
 | 执行人 | OpenCode Agent |
 | 测试分支 | develop/v2.6.0 |
@@ -77,7 +77,20 @@ cargo tarpaulin --output-html --out-dir artifacts/coverage/
 
 ### 4.2 覆盖率统计
 
-**状态**: ⏳ 待执行
+**状态**: ⚠️ 本地测试超时，需要 CI 环境
+
+**问题分析**:
+- tarpaulin 编译耗时过长，单个 crate (sqlrustgo-parser) 超过 3 分钟超时
+- 本地环境资源不足以完成全量覆盖率测试
+- 需要创建 GitHub Actions workflow 利用 CI 资源进行覆盖率测试
+
+**建议方案**:
+1. 创建 `.github/workflows/coverage.yml` 利用 CI 的更高资源配置
+2. 或使用 `--fail-under 60` 参数快速检查是否达标
+3. 或使用 `grcov` 替代 tarpaulin
+
+**后续动作**:
+- ✅ 已创建 `.github/workflows/coverage.yml` (PR 待合并)
 
 ---
 
