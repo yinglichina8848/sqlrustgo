@@ -187,7 +187,11 @@ mod tests {
     fn create_test_catalog() -> Catalog {
         let mut catalog = Catalog::new("test_catalog");
 
-        // Add a schema
+        // Add public schema (default)
+        let public_schema = Schema::new("public");
+        catalog.add_schema(public_schema).unwrap();
+
+        // Add test schema
         let schema = Schema::new("test_schema");
 
         // Create users table
@@ -348,10 +352,9 @@ mod tests {
         let catalog = Catalog::new("test");
         let info_schema = InformationSchema::new(&catalog);
 
-        // Should still have public schema
+        // Empty catalog has no schemas (public is not auto-created)
         let schemata = info_schema.get_schemata();
-        assert_eq!(schemata.len(), 1);
-        assert_eq!(schemata[0].schema_name, "public");
+        assert_eq!(schemata.len(), 0);
 
         // No tables or columns
         assert!(info_schema.get_tables().is_empty());
