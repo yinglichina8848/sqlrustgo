@@ -182,10 +182,10 @@ impl<'a> InformationSchema<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_catalog::{ColumnDefinition, DataType, IndexInfo, Schema, Table};
+    use sqlrustgo_catalog::{index::IndexInfo, schema::Schema, ColumnDefinition, DataType, Table};
 
     fn create_test_catalog() -> Catalog {
-        let mut catalog = Catalog::new();
+        let mut catalog = Catalog::new("test_catalog");
 
         // Add a schema
         let schema = Schema::new("test_schema");
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_empty_catalog() {
-        let catalog = Catalog::new();
+        let catalog = Catalog::new("test");
         let info_schema = InformationSchema::new(&catalog);
 
         // Should still have public schema
