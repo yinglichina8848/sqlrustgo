@@ -721,8 +721,7 @@ impl<'a> LocalExecutor<'a> {
 
                 let matched_right_keys: HashSet<Vec<Value>> = matched
                     .iter()
-                    .skip(left_schema.fields.len())
-                    .cloned()
+                    .map(|row| row.iter().skip(left_schema.fields.len()).cloned().collect())
                     .collect();
 
                 let left_only: Vec<Vec<Value>> = left_result

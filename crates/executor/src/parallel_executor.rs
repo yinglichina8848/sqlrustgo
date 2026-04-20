@@ -343,8 +343,7 @@ impl ParallelVolcanoExecutor {
                 );
                 let matched_keys: HashSet<Vec<Value>> = all_matched
                     .iter()
-                    .skip(left_schema.fields.len())
-                    .cloned()
+                    .map(|row| row.iter().skip(left_schema.fields.len()).cloned().collect())
                     .collect();
                 let left_len = left_schema.fields.len();
                 let right_len = right_schema.fields.len();
