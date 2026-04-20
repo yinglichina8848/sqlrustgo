@@ -11,12 +11,17 @@
 )]
 
 pub mod execution_engine;
+pub mod planner;
 
 pub use sqlrustgo_executor::{Executor, ExecutorResult};
 pub use sqlrustgo_optimizer::Optimizer as QueryOptimizer;
 pub use sqlrustgo_parser::lexer::tokenize;
 pub use sqlrustgo_parser::{parse, Lexer, Statement, Token};
-pub use sqlrustgo_planner::{LogicalPlan, Optimizer, PhysicalPlan, Planner};
+pub use sqlrustgo_planner::{
+    AggregateExec, Column, DataType, DeleteExec, Expr, Field, FilterExec, HashJoinExec,
+    IndexScanExec, LimitExec, LogicalPlan, Operator, Optimizer, PhysicalPlan, Planner,
+    ProjectionExec, Schema, SeqScanExec, SortExec,
+};
 pub use sqlrustgo_storage::{
     BPlusTree, BufferPool, FileStorage, MemoryStorage, Page, StorageEngine,
 };
