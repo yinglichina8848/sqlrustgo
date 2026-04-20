@@ -412,7 +412,33 @@ impl Parser {
         };
         let isolation_level = if self.current() == Some(&Token::Isolation) {
             self.next();
-            Some(self.parse_isolation_level()?)
+            self.expect(Token::Level)?;
+            Some(self.parse_isolation_level_value()?)
+        } else if self.current() == Some(&Token::Serializable) {
+            self.next();
+            Some(IsolationLevel::Serializable)
+        } else if self.current() == Some(&Token::Repeatable) {
+            self.next();
+            Some(IsolationLevel::SnapshotIsolation)
+        } else if self.current() == Some(&Token::Read) {
+            self.next();
+            match self.current() {
+                Some(Token::Committed) => {
+                    self.next();
+                    Some(IsolationLevel::ReadCommitted)
+                }
+                Some(Token::Uncommitted) => {
+                    self.next();
+                    Some(IsolationLevel::ReadUncommitted)
+                }
+                Some(t) => {
+                    return Err(format!(
+                        "Expected COMMITTED or UNCOMMITTED after READ, got {:?}",
+                        t
+                    ))
+                }
+                None => return Err("Unexpected end of input after READ".to_string()),
+            }
         } else {
             None
         };
@@ -453,7 +479,8 @@ impl Parser {
         self.expect(Token::Transaction)?;
         let isolation_level = if self.current() == Some(&Token::Isolation) {
             self.next();
-            Some(self.parse_isolation_level()?)
+            self.expect(Token::Level)?;
+            Some(self.parse_isolation_level_value()?)
         } else {
             None
         };
@@ -465,14 +492,15 @@ impl Parser {
     fn parse_set_transaction(&mut self) -> Result<Statement, String> {
         self.expect(Token::Set)?;
         self.expect(Token::Transaction)?;
-        let isolation_level = self.parse_isolation_level()?;
+        self.expect(Token::Isolation)?;
+        self.expect(Token::Level)?;
+        let isolation_level = self.parse_isolation_level_value()?;
         Ok(Statement::Transaction(
             TransactionStatement::SetTransaction { isolation_level },
         ))
     }
 
-    fn parse_isolation_level(&mut self) -> Result<IsolationLevel, String> {
-        self.expect(Token::Level)?;
+    fn parse_isolation_level_value(&mut self) -> Result<IsolationLevel, String> {
         match self.current() {
             Some(Token::Serializable) => {
                 self.next();
@@ -501,7 +529,7 @@ impl Parser {
                 }
             }
             Some(t) => Err(format!("Unexpected isolation level keyword: {:?}", t)),
-            None => Err("Unexpected end of input".to_string()),
+            None => Err("Unexpected end of input after READ".to_string()),
         }
     }
 

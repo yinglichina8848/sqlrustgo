@@ -294,6 +294,7 @@ impl<'a> Lexer<'a> {
                     "TRANSACTION" => Token::Transaction,
                     "WORK" => Token::Work,
                     "SAVEPOINT" => Token::Savepoint,
+                    "START" => Token::Start,
                     "RELEASE" => Token::Release,
                     "ISOLATION" => Token::Isolation,
                     "LEVEL" => Token::Level,
