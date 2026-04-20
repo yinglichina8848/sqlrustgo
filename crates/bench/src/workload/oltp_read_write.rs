@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 
 use crate::db::Database;
 
@@ -64,9 +64,10 @@ impl Default for OltpReadWrite {
 
 #[async_trait]
 impl crate::workload::Workload for OltpReadWrite {
-    async fn execute(&self, _db: &dyn Database) -> anyhow::Result<()> {
-        // TODO: Implement read write
-        todo!("OLTP Read Write not yet implemented")
+    async fn execute(&self, db: &dyn Database) -> anyhow::Result<()> {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let sql = self.generate_sql(&mut rng);
+        db.execute(&sql).await
     }
 
     fn name(&self) -> &str {
