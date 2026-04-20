@@ -1,16 +1,16 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-use std::sync::Arc;
+use sqlrustgo::ExecutionEngine;
+use sqlrustgo::MemoryStorage;
 
-fn setup_engine(size: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+fn setup_engine(size: usize) -> ExecutionEngine<MemoryStorage> {
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE orders (id INTEGER, amount INTEGER)").unwrap())
+        .execute("CREATE TABLE orders (id INTEGER, amount INTEGER)")
         .unwrap();
 
     for i in 0..size {
         engine
-            .execute(parse(&format!("INSERT INTO orders VALUES ({}, {})", i, i * 10)).unwrap())
+            .execute(&format!("INSERT INTO orders VALUES ({}, {})", i, i * 10))
             .unwrap();
     }
     engine
@@ -25,7 +25,7 @@ fn bench_aggregate_count(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("count_star", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT COUNT(*) FROM orders").unwrap())
+                    .execute("SELECT COUNT(*) FROM orders")
                     .unwrap()
             });
         });
@@ -43,7 +43,7 @@ fn bench_aggregate_sum(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("sum_amount", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT SUM(amount) FROM orders").unwrap())
+                    .execute("SELECT SUM(amount) FROM orders")
                     .unwrap()
             });
         });
@@ -61,7 +61,7 @@ fn bench_aggregate_avg(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("avg_amount", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT AVG(amount) FROM orders").unwrap())
+                    .execute("SELECT AVG(amount) FROM orders")
                     .unwrap()
             });
         });
@@ -79,7 +79,7 @@ fn bench_aggregate_min_max(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("min_amount", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT MIN(amount) FROM orders").unwrap())
+                    .execute("SELECT MIN(amount) FROM orders")
                     .unwrap()
             });
         });
@@ -87,7 +87,7 @@ fn bench_aggregate_min_max(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("max_amount", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT MAX(amount) FROM orders").unwrap())
+                    .execute("SELECT MAX(amount) FROM orders")
                     .unwrap()
             });
         });
@@ -106,7 +106,7 @@ fn bench_aggregate_multiple(c: &mut Criterion) {
             b.iter(|| {
                 engine
                     .execute(
-                        parse("SELECT COUNT(*), SUM(amount), AVG(amount) FROM orders").unwrap(),
+                        "SELECT COUNT(*), SUM(amount), AVG(amount) FROM orders",
                     )
                     .unwrap()
             });
