@@ -2,6 +2,7 @@
 
 use crate::db::Database;
 use async_trait::async_trait;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -11,23 +12,21 @@ pub struct SqlRustGoDB {
 }
 
 impl SqlRustGoDB {
-    /// Create a new SQLRustGo adapter
     pub async fn new(addr: &str) -> anyhow::Result<Self> {
         Ok(Self {
             addr: addr.to_string(),
         })
     }
 
-    /// Execute a query via TCP
     async fn execute_query(&self, sql: &str) -> anyhow::Result<()> {
         let mut stream = TcpStream::connect(&self.addr).await?;
 
-        // Send query
+        stream.set_nodelay(true)?;
+
         stream.write_all(sql.as_bytes()).await?;
         stream.write_all(b"\n").await?;
 
-        // Read response (simple version)
-        let mut buf = [0u8; 1024];
+        let mut buf = [0u8; 256];
         let _ = stream.read(&mut buf).await?;
 
         Ok(())
