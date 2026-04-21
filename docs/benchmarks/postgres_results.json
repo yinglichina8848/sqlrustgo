@@ -1,0 +1,57 @@
+[
+  {
+    "test_name": "oltp_read_only",
+    "database": "PostgreSQL",
+    "threads": 16,
+    "table_size": 100000,
+    "tps": 5814.17,
+    "qps": 93026.71,
+    "avg_latency_ms": 2.75,
+    "max_latency_ms": 6.67,
+    "p99_latency_ms": 3.49
+  },
+  {
+    "test_name": "oltp_write_only",
+    "database": "PostgreSQL",
+    "threads": 16,
+    "table_size": 100000,
+    "tps": 215.43,
+    "qps": 1344.0,
+    "avg_latency_ms": 74.24,
+    "max_latency_ms": 2027.32,
+    "p99_latency_ms": 1013.6
+  },
+  {
+    "test_name": "oltp_read_write",
+    "database": "PostgreSQL",
+    "threads": 16,
+    "table_size": 100000,
+    "tps": 1092.53,
+    "qps": 22689.83,
+    "avg_latency_ms": 14.64,
+    "max_latency_ms": 1107.3,
+    "p99_latency_ms": 17.63
+  },
+  {
+    "test_name": "oltp_point_select",
+    "database": "PostgreSQL",
+    "threads": 32,
+    "table_size": 100000,
+    "tps": 285128.42,
+    "qps": 285128.42,
+    "avg_latency_ms": 0.11,
+    "max_latency_ms": 2.94,
+    "p99_latency_ms": 0.13
+  },
+  {
+    "test_name": "oltp_read_write_high",
+    "database": "PostgreSQL",
+    "threads": 64,
+    "table_size": 100000,
+    "tps": 36.33,
+    "qps": 849.36,
+    "avg_latency_ms": 1748.96,
+    "max_latency_ms": 26286.58,
+    "p99_latency_ms": 12163.09
+  }
+]
