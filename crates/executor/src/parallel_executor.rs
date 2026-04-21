@@ -8,6 +8,7 @@ use crate::ExecutorResult;
 use sqlrustgo_planner::{AggregateExec, AggregateFunction, HashJoinExec, JoinType, PhysicalPlan};
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -331,6 +332,49 @@ impl ParallelVolcanoExecutor {
                     right_schema,
                 );
                 self.extend_with_left_unmatched(left, &matched)
+            }
+            JoinType::Full => {
+                let all_matched = Self::hash_inner_join_fallback(
+                    left,
+                    right,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+                let matched_keys: HashSet<Vec<Value>> = all_matched
+                    .iter()
+                    .map(|row| row.iter().skip(left_schema.fields.len()).cloned().collect())
+                    .collect();
+                let left_len = left_schema.fields.len();
+                let right_len = right_schema.fields.len();
+                let left_only: Vec<Vec<Value>> = left
+                    .iter()
+                    .filter(|lrow| {
+                        let key: Vec<Value> = lrow.iter().cloned().collect();
+                        !matched_keys.contains(&key)
+                    })
+                    .map(|lrow| {
+                        let mut row = lrow.clone();
+                        row.extend(vec![Value::Null; right_len]);
+                        row
+                    })
+                    .collect();
+                let right_only: Vec<Vec<Value>> = right
+                    .iter()
+                    .filter(|rrow| {
+                        let key: Vec<Value> = rrow.iter().cloned().collect();
+                        !matched_keys.contains(&key)
+                    })
+                    .map(|rrow| {
+                        let mut row = vec![Value::Null; left_len];
+                        row.extend(rrow.clone());
+                        row
+                    })
+                    .collect();
+                let mut results = all_matched;
+                results.extend(left_only);
+                results.extend(right_only);
+                results
             }
             _ => {
                 // Fallback to single-threaded for other join types
