@@ -47,6 +47,7 @@ pub fn create_embeddings_table(storage: &mut dyn StorageEngine) -> SqlResult<()>
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         })?;
     }
     Ok(())
