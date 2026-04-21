@@ -118,6 +118,7 @@ impl StorageAdapter {
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
 
         // Create table schema
