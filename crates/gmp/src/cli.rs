@@ -289,7 +289,7 @@ impl GmpCliState {
                     if let Ok(doc_id) =
                         gmp.import_document(&doc.title, &doc.doc_type, &doc.content, &kw)
                     {
-                        Self::patch_embedding(storage, doc_id, emb.clone());
+                        let _ = Self::patch_embedding(storage, doc_id, emb.clone());
                     }
                 }
             }
