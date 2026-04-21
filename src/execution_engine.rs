@@ -411,6 +411,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Get table info
         let table_info = storage.get_table_info(&select.table)?;
 
+        // Handle JOIN clause if present - detect and return clear error
+        if select.join_clause.is_some() {
+            return Err(SqlError::ExecutionError(
+                "JOINs are not yet fully supported in ExecutionEngine::execute_select. Use LocalExecutor directly.".to_string(),
+            ));
+        }
+
         // Scan all rows
         let mut rows = storage.scan(&select.table)?;
 

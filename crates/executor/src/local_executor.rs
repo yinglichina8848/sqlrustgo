@@ -708,6 +708,69 @@ impl<'a> LocalExecutor<'a> {
 
                 Ok(ExecutorResult::new(results, 0))
             }
+            JoinType::Full => {
+                use std::collections::HashSet;
+
+                let matched = hash_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+
+                let matched_right_keys: HashSet<Vec<Value>> = matched
+                    .iter()
+                    .map(|row| row.iter().skip(left_schema.fields.len()).cloned().collect())
+                    .collect();
+
+                let left_only: Vec<Vec<Value>> = left_result
+                    .rows
+                    .iter()
+                    .filter(|lrow| {
+                        !matched.iter().any(|m| {
+                            m.iter().take(lrow.len()).cloned().collect::<Vec<_>>()
+                                == lrow.iter().cloned().collect::<Vec<_>>()
+                        })
+                    })
+                    .map(|lrow| {
+                        let mut row = lrow.clone();
+                        row.extend(vec![Value::Null; right_schema.fields.len()]);
+                        row
+                    })
+                    .collect();
+
+                let right_only: Vec<Vec<Value>> = right_result
+                    .rows
+                    .iter()
+                    .filter(|rrow| {
+                        let key: Vec<Value> = rrow.iter().cloned().collect();
+                        !matched_right_keys.contains(&key)
+                    })
+                    .map(|rrow| {
+                        let mut row = vec![Value::Null; left_schema.fields.len()];
+                        row.extend(rrow.clone());
+                        row
+                    })
+                    .collect();
+
+                let mut results = matched;
+                results.extend(left_only);
+                results.extend(right_only);
+
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "full_outer_join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                Ok(ExecutorResult::new(results, 0))
+            }
             _ => {
                 let row_count = 0;
                 let duration = start.elapsed();
