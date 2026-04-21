@@ -125,11 +125,7 @@ fn bench_cbo_index_vs_scan(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("high_selectivity", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE id = 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE id = 50").unwrap());
         });
     }
 
@@ -139,11 +135,7 @@ fn bench_cbo_index_vs_scan(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("low_selectivity", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE value > 10")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE value > 10").unwrap());
         });
     }
 
@@ -224,9 +216,7 @@ fn bench_cbo_complex_query(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("subquery", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(
-                        "SELECT * FROM t1 WHERE id IN (SELECT id FROM t1 WHERE value > 50)"
-                    )
+                    .execute("SELECT * FROM t1 WHERE id IN (SELECT id FROM t1 WHERE value > 50)")
                     .unwrap()
             });
         });
@@ -248,20 +238,12 @@ fn bench_vectorization_batch(c: &mut Criterion) {
 
         // Batch processing test
         group.bench_with_input(BenchmarkId::new("batch_scan", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT id, value FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT id, value FROM t1").unwrap());
         });
 
         // SIMD-like operations test
         group.bench_with_input(BenchmarkId::new("simd_filter", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE value > 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE value > 50").unwrap());
         });
     }
 

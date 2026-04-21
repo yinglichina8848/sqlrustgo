@@ -10,9 +10,7 @@ fn setup_engine_with_rows(count: usize) -> ExecutionEngine<MemoryStorage> {
 
     // Create table
     engine
-        .execute(
-            "CREATE TABLE bench_data (id INTEGER, name TEXT, age INTEGER, value INTEGER)",
-        )
+        .execute("CREATE TABLE bench_data (id INTEGER, name TEXT, age INTEGER, value INTEGER)")
         .unwrap();
 
     // Insert rows using batch insert
@@ -42,11 +40,7 @@ fn bench_10k_select_all(c: &mut Criterion) {
     let mut engine = setup_engine_with_rows(10000);
 
     c.bench_function("10k_select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM bench_data")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM bench_data").unwrap());
     });
 }
 
@@ -67,11 +61,7 @@ fn bench_100k_select_all(c: &mut Criterion) {
     let mut engine = setup_engine_with_rows(100000);
 
     c.bench_function("100k_select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM bench_data")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM bench_data").unwrap());
     });
 }
 

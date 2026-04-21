@@ -5,9 +5,7 @@ fn bench_end_to_end_select(c: &mut Criterion) {
     let mut engine = ExecutionEngine::with_memory();
 
     engine
-        .execute(
-            "CREATE TABLE e2e_users (id INTEGER, name TEXT, age INTEGER, email TEXT)",
-        )
+        .execute("CREATE TABLE e2e_users (id INTEGER, name TEXT, age INTEGER, email TEXT)")
         .unwrap();
 
     for i in 0..1000 {
@@ -25,11 +23,7 @@ fn bench_end_to_end_select(c: &mut Criterion) {
     let mut group = c.benchmark_group("e2e_select");
 
     group.bench_function("select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM e2e_users")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM e2e_users").unwrap());
     });
 
     group.bench_function("select_where", |b| {
@@ -41,11 +35,7 @@ fn bench_end_to_end_select(c: &mut Criterion) {
     });
 
     group.bench_function("select_projection", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT name, email FROM e2e_users")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT name, email FROM e2e_users").unwrap());
     });
 
     group.bench_function("select_order_by", |b| {
@@ -57,11 +47,7 @@ fn bench_end_to_end_select(c: &mut Criterion) {
     });
 
     group.bench_function("select_limit", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM e2e_users LIMIT 10")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM e2e_users LIMIT 10").unwrap());
     });
 
     group.finish();
@@ -79,12 +65,10 @@ fn bench_end_to_end_insert(c: &mut Criterion) {
                     .unwrap();
                 for i in 0..size {
                     engine
-                        .execute(
-                            &format!(
-                                "INSERT INTO e2e_insert VALUES ({}, 'value{}')",
-                                i, i
-                            ),
-                        )
+                        .execute(&format!(
+                            "INSERT INTO e2e_insert VALUES ({}, 'value{}')",
+                            i, i
+                        ))
                         .unwrap();
                 }
             });
@@ -133,21 +117,15 @@ fn bench_end_to_end_transaction(c: &mut Criterion) {
 
             for i in 0..10 {
                 engine
-                    .execute(
-                        &format!("INSERT INTO e2e_tx VALUES ({}, 'tx{}')", i, i),
-                    )
+                    .execute(&format!("INSERT INTO e2e_tx VALUES ({}, 'tx{}')", i, i))
                     .unwrap();
             }
 
-            engine
-                .execute("SELECT * FROM e2e_tx")
-                .unwrap();
+            engine.execute("SELECT * FROM e2e_tx").unwrap();
             engine
                 .execute("UPDATE e2e_tx SET value = 'updated' WHERE id < 5")
                 .unwrap();
-            engine
-                .execute("SELECT COUNT(*) FROM e2e_tx")
-                .unwrap();
+            engine.execute("SELECT COUNT(*) FROM e2e_tx").unwrap();
         });
     });
 }
@@ -155,9 +133,7 @@ fn bench_end_to_end_transaction(c: &mut Criterion) {
 fn bench_end_to_end_join(c: &mut Criterion) {
     let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(
-            "CREATE TABLE e2e_orders (id INTEGER, user_id INTEGER, amount INTEGER)",
-        )
+        .execute("CREATE TABLE e2e_orders (id INTEGER, user_id INTEGER, amount INTEGER)")
         .unwrap();
     engine
         .execute("CREATE TABLE e2e_customers (id INTEGER, name TEXT)")
@@ -165,25 +141,21 @@ fn bench_end_to_end_join(c: &mut Criterion) {
 
     for i in 0..500 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO e2e_orders VALUES ({}, {}, {})",
-                    i,
-                    i % 100,
-                    i * 10
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO e2e_orders VALUES ({}, {}, {})",
+                i,
+                i % 100,
+                i * 10
+            ))
             .unwrap();
     }
 
     for i in 0..100 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO e2e_customers VALUES ({}, 'customer{}')",
-                    i, i
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO e2e_customers VALUES ({}, 'customer{}')",
+                i, i
+            ))
             .unwrap();
     }
 
@@ -201,16 +173,14 @@ fn bench_end_to_end_complex(c: &mut Criterion) {
 
     for i in 0..1000 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO events VALUES ({}, {}, 'event_type_{}', {}, {})",
-                    i,
-                    i % 100,
-                    i % 5,
-                    i * 10,
-                    i
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO events VALUES ({}, {}, 'event_type_{}', {}, {})",
+                i,
+                i % 100,
+                i % 5,
+                i * 10,
+                i
+            ))
             .unwrap();
     }
 

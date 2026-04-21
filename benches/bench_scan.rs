@@ -14,14 +14,12 @@ fn setup_engine_with_data(rows: usize) -> ExecutionEngine<MemoryStorage> {
 
     for i in 0..rows {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO scan_bench VALUES ({}, 'name_{}', {})",
-                    i,
-                    i % 1000,
-                    i
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO scan_bench VALUES ({}, 'name_{}', {})",
+                i,
+                i % 1000,
+                i
+            ))
             .unwrap();
     }
 
@@ -32,11 +30,7 @@ fn bench_scan_1k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(1_000);
 
     c.bench_function("scan_1k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM scan_bench")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -44,11 +38,7 @@ fn bench_scan_10k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(10_000);
 
     c.bench_function("scan_10k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM scan_bench")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -56,11 +46,7 @@ fn bench_scan_100k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(100_000);
 
     c.bench_function("scan_100k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM scan_bench")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -89,11 +75,7 @@ fn bench_scan_projection(c: &mut Criterion) {
         let mut engine = setup_engine_with_data(size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT id, value FROM scan_bench")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT id, value FROM scan_bench").unwrap());
         });
     }
 
