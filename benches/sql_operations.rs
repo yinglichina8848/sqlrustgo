@@ -9,9 +9,7 @@ fn bench_parse_select(c: &mut Criterion) {
 
 fn bench_execute_select(c: &mut Criterion) {
     let mut engine = ExecutionEngine::with_memory();
-    engine
-        .execute("CREATE TABLE users (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE users (id INTEGER)").unwrap();
     for i in 0..10 {
         engine
             .execute(&format!("INSERT INTO users VALUES ({i})"))
@@ -19,19 +17,13 @@ fn bench_execute_select(c: &mut Criterion) {
     }
 
     c.bench_function("execute_select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM users")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM users").unwrap());
     });
 }
 
 fn bench_execute_insert(c: &mut Criterion) {
     let mut engine = ExecutionEngine::with_memory();
-    engine
-        .execute("CREATE TABLE bench (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE bench (id INTEGER)").unwrap();
 
     c.bench_function("execute_insert_single", |b| {
         let mut counter = 0;
@@ -56,11 +48,7 @@ fn bench_execute_aggregate(c: &mut Criterion) {
     }
 
     c.bench_function("execute_count", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT COUNT(*) FROM orders")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT COUNT(*) FROM orders").unwrap());
     });
 }
 

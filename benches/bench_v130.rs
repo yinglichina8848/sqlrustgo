@@ -56,11 +56,7 @@ fn bench_tablescan_projection(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("select_columns", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT id, value FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT id, value FROM t1").unwrap());
         });
     }
 
@@ -79,11 +75,7 @@ fn bench_filter_equality(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("eq", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE id = 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE id = 50").unwrap());
         });
     }
 
@@ -98,11 +90,7 @@ fn bench_filter_range(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("gt", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE value > 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE value > 50").unwrap());
         });
     }
 
@@ -159,11 +147,7 @@ fn bench_aggregate_count(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("count", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT COUNT(*) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT COUNT(*) FROM t1").unwrap());
         });
     }
 
@@ -178,11 +162,7 @@ fn bench_aggregate_sum(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("sum", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT SUM(value) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT SUM(value) FROM t1").unwrap());
         });
     }
 
@@ -197,11 +177,7 @@ fn bench_aggregate_avg(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("avg", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT AVG(value) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT AVG(value) FROM t1").unwrap());
         });
     }
 

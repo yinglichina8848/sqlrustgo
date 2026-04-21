@@ -54,12 +54,10 @@ fn bench_query_latency(c: &mut Criterion) {
 
     for i in 0..100 {
         engine
-            .execute(
-                &format!(
-                    "INSERT INTO latency_test VALUES ({}, 'value{}')",
-                    i, i
-                ),
-            )
+            .execute(&format!(
+                "INSERT INTO latency_test VALUES ({}, 'value{}')",
+                i, i
+            ))
             .unwrap();
     }
 
@@ -80,18 +78,14 @@ fn bench_query_throughput(c: &mut Criterion) {
 
     for i in 0..1000 {
         engine
-            .execute(
-                &format!("INSERT INTO throughput_test VALUES ({})", i),
-            )
+            .execute(&format!("INSERT INTO throughput_test VALUES ({})", i))
             .unwrap();
     }
 
     c.bench_function("query_throughput", |b| {
         b.iter(|| {
             for _ in 0..100 {
-                engine
-                    .execute("SELECT * FROM throughput_test")
-                    .unwrap();
+                engine.execute("SELECT * FROM throughput_test").unwrap();
             }
         });
     });
@@ -105,9 +99,7 @@ fn bench_concurrent_queries(c: &mut Criterion) {
 
     for i in 0..100 {
         engine
-            .execute(
-                &format!("INSERT INTO concurrent_test VALUES ({})", i),
-            )
+            .execute(&format!("INSERT INTO concurrent_test VALUES ({})", i))
             .unwrap();
     }
 
@@ -118,9 +110,7 @@ fn bench_concurrent_queries(c: &mut Criterion) {
                     thread::spawn(|| {
                         let mut eng = sqlrustgo::ExecutionEngine::with_memory();
                         for _ in 0..10 {
-                            let _ = eng.execute(
-                                "SELECT * FROM concurrent_test",
-                            );
+                            let _ = eng.execute("SELECT * FROM concurrent_test");
                         }
                     })
                 })

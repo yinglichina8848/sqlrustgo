@@ -23,11 +23,7 @@ fn bench_aggregate_count(c: &mut Criterion) {
         let mut engine = setup_engine(size);
 
         group.bench_with_input(BenchmarkId::new("count_star", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT COUNT(*) FROM orders")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT COUNT(*) FROM orders").unwrap());
         });
     }
 
@@ -41,11 +37,7 @@ fn bench_aggregate_sum(c: &mut Criterion) {
         let mut engine = setup_engine(size);
 
         group.bench_with_input(BenchmarkId::new("sum_amount", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT SUM(amount) FROM orders")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT SUM(amount) FROM orders").unwrap());
         });
     }
 
@@ -59,11 +51,7 @@ fn bench_aggregate_avg(c: &mut Criterion) {
         let mut engine = setup_engine(size);
 
         group.bench_with_input(BenchmarkId::new("avg_amount", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT AVG(amount) FROM orders")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT AVG(amount) FROM orders").unwrap());
         });
     }
 
@@ -77,19 +65,11 @@ fn bench_aggregate_min_max(c: &mut Criterion) {
         let mut engine = setup_engine(size);
 
         group.bench_with_input(BenchmarkId::new("min_amount", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT MIN(amount) FROM orders")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT MIN(amount) FROM orders").unwrap());
         });
 
         group.bench_with_input(BenchmarkId::new("max_amount", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT MAX(amount) FROM orders")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT MAX(amount) FROM orders").unwrap());
         });
     }
 
@@ -105,9 +85,7 @@ fn bench_aggregate_multiple(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("count_sum_avg", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(
-                        "SELECT COUNT(*), SUM(amount), AVG(amount) FROM orders",
-                    )
+                    .execute("SELECT COUNT(*), SUM(amount), AVG(amount) FROM orders")
                     .unwrap()
             });
         });

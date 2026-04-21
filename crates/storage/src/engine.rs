@@ -145,7 +145,8 @@ impl PartitionInfo {
 }
 
 fn calculate_hash(data: &[u8]) -> u32 {
-    data.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32).wrapping_mul(31))
+    data.iter()
+        .fold(0u32, |acc, &b| acc.wrapping_add(b as u32).wrapping_mul(31))
 }
 
 /// Table metadata
