@@ -42,6 +42,10 @@ pub struct BenchArgs {
     #[arg(long)]
     pub sqlite_path: Option<String>,
 
+    /// MySQL server address (when using mysql)
+    #[arg(long, default_value = "127.0.0.1:3306")]
+    pub mysql_addr: String,
+
     /// SQLRustGo TCP server address
     #[arg(long, default_value = "127.0.0.1:4000")]
     pub sqlrustgo_addr: String,
