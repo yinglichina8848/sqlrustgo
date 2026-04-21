@@ -30,7 +30,11 @@ fn setup_table(engine: &mut ExecutionEngine<MemoryStorage>, table_name: &str, ro
     }
 }
 
-fn setup_join_tables(engine: &mut ExecutionEngine<MemoryStorage>, left_rows: usize, right_rows: usize) {
+fn setup_join_tables(
+    engine: &mut ExecutionEngine<MemoryStorage>,
+    left_rows: usize,
+    right_rows: usize,
+) {
     engine
         .execute("CREATE TABLE t1 (id INTEGER, value INTEGER)")
         .unwrap();
@@ -78,11 +82,7 @@ fn bench_tablescan_projection(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("select_columns", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT id, value FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT id, value FROM t1").unwrap());
         });
     }
 
@@ -101,11 +101,7 @@ fn bench_filter_equality(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("eq", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE id = 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE id = 50").unwrap());
         });
     }
 
@@ -120,11 +116,7 @@ fn bench_filter_range(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("gt", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT * FROM t1 WHERE value > 50")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT * FROM t1 WHERE value > 50").unwrap());
         });
     }
 
@@ -164,9 +156,7 @@ fn bench_hashjoin_inner(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("inner_join", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(
-                        "SELECT t1.id, t1.value, t2.name FROM t1 JOIN t2 ON t1.id = t2.id"
-                    )
+                    .execute("SELECT t1.id, t1.value, t2.name FROM t1 JOIN t2 ON t1.id = t2.id")
                     .unwrap()
             });
         });
@@ -186,7 +176,7 @@ fn bench_hashjoin_left(c: &mut Criterion) {
             b.iter(|| {
                 engine
                     .execute(
-                        "SELECT t1.id, t1.value, t2.name FROM t1 LEFT JOIN t2 ON t1.id = t2.id"
+                        "SELECT t1.id, t1.value, t2.name FROM t1 LEFT JOIN t2 ON t1.id = t2.id",
                     )
                     .unwrap()
             });
@@ -204,11 +194,7 @@ fn bench_hashjoin_cross(c: &mut Criterion) {
         setup_join_tables(&mut engine, size, size);
 
         group.bench_with_input(BenchmarkId::new("cross_join", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT t1.id, t2.id FROM t1, t2")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT t1.id, t2.id FROM t1, t2").unwrap());
         });
     }
 
@@ -227,11 +213,7 @@ fn bench_aggregate_count(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("count", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT COUNT(*) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT COUNT(*) FROM t1").unwrap());
         });
     }
 
@@ -246,11 +228,7 @@ fn bench_aggregate_sum(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("sum", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT SUM(value) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT SUM(value) FROM t1").unwrap());
         });
     }
 
@@ -265,11 +243,7 @@ fn bench_aggregate_avg(c: &mut Criterion) {
         setup_table(&mut engine, "t1", size);
 
         group.bench_with_input(BenchmarkId::new("avg", size), &size, |b, _| {
-            b.iter(|| {
-                engine
-                    .execute("SELECT AVG(value) FROM t1")
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT AVG(value) FROM t1").unwrap());
         });
     }
 
@@ -309,9 +283,7 @@ fn bench_complex_query_1(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("filter_aggregate", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(
-                        "SELECT value, COUNT(*) FROM t1 WHERE id > 10 GROUP BY value"
-                    )
+                    .execute("SELECT value, COUNT(*) FROM t1 WHERE id > 10 GROUP BY value")
                     .unwrap()
             });
         });
@@ -330,9 +302,7 @@ fn bench_complex_query_2(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("subquery", size), &size, |b, _| {
             b.iter(|| {
                 engine
-                    .execute(
-                        "SELECT * FROM t1 WHERE id IN (SELECT id FROM t1 WHERE value > 50)"
-                    )
+                    .execute("SELECT * FROM t1 WHERE id IN (SELECT id FROM t1 WHERE value > 50)")
                     .unwrap()
             });
         });

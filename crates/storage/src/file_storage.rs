@@ -525,7 +525,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -569,7 +569,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -608,7 +608,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -655,7 +655,7 @@ mod tests {
                 ],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![
                 vec![Value::Integer(1), Value::Integer(100)],
@@ -713,7 +713,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -761,7 +761,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -800,7 +800,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
         };
@@ -869,7 +869,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -906,7 +906,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -981,7 +981,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -1025,7 +1025,7 @@ mod tests {
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
-                    partition_info: None,
+                partition_info: None,
             },
             rows: vec![],
         };
@@ -1121,7 +1121,7 @@ mod tests {
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
-                    partition_info: None,
+            partition_info: None,
         };
         storage.create_table(&table_info).unwrap();
 
@@ -1153,7 +1153,7 @@ mod tests {
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
-                    partition_info: None,
+            partition_info: None,
         };
         storage.create_table(&table_info).unwrap();
 
@@ -1185,7 +1185,7 @@ mod tests {
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
-                    partition_info: None,
+            partition_info: None,
         };
         storage.create_table(&table_info).unwrap();
 
