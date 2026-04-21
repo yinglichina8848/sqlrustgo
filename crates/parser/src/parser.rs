@@ -561,6 +561,7 @@ impl Parser {
             Some(t) => return Err(format!("Expected table name, got {:?}", t)),
             None => return Err("Expected table name".to_string()),
         };
+        self.expect(Token::LParen)?;
         let columns = self.parse_column_list()?;
         Ok(Statement::CreateIndex(CreateIndexStatement {
             name: index_name,
