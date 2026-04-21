@@ -22,11 +22,7 @@ fn bench_executor_select_where(c: &mut Criterion) {
     let mut group = c.benchmark_group("executor_select");
 
     group.bench_function("select_all_1k", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT * FROM users")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM users").unwrap());
     });
 
     group.bench_function("select_where_id_1k", |b| {
@@ -130,11 +126,7 @@ fn bench_executor_delete(c: &mut Criterion) {
     });
 
     group.bench_function("delete_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("DELETE FROM bench_delete")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("DELETE FROM bench_delete").unwrap());
     });
 
     group.finish();
@@ -160,27 +152,15 @@ fn bench_executor_aggregate(c: &mut Criterion) {
     let mut group = c.benchmark_group("executor_aggregate");
 
     group.bench_function("count_all", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT COUNT(*) FROM orders")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT COUNT(*) FROM orders").unwrap());
     });
 
     group.bench_function("sum_amount", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT SUM(amount) FROM orders")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT SUM(amount) FROM orders").unwrap());
     });
 
     group.bench_function("avg_amount", |b| {
-        b.iter(|| {
-            engine
-                .execute("SELECT AVG(amount) FROM orders")
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT AVG(amount) FROM orders").unwrap());
     });
 
     group.bench_function("group_by_category", |b| {

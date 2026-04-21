@@ -7,11 +7,11 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use sqlrustgo_storage::{
-    engine::{ColumnDefinition, TableInfo, StorageEngine},
+    engine::{ColumnDefinition, StorageEngine, TableInfo},
     file_storage::FileStorage,
 };
-use std::hint::black_box;
 use std::fs::remove_dir_all;
+use std::hint::black_box;
 use std::path::PathBuf;
 
 /// Generate test records for benchmarking
@@ -168,21 +168,16 @@ fn bench_buffer_vs_direct(c: &mut Criterion) {
 
     for size in [10, 50, 100, 500, 1000].iter() {
         // Direct write (buffering disabled)
-        let temp_dir_direct =
-            std::env::temp_dir().join(format!("sqlrustgo_bench_direct_{}", size));
+        let temp_dir_direct = std::env::temp_dir().join(format!("sqlrustgo_bench_direct_{}", size));
         let _ = remove_dir_all(&temp_dir_direct);
 
-        group.bench_with_input(
-            BenchmarkId::new("direct", size),
-            size,
-            |b, &size| {
-                let mut storage = setup_test_storage(&temp_dir_direct, 100, false);
-                b.iter(|| {
-                    let records = generate_records(size);
-                    let _ = storage.insert("test_table", records);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("direct", size), size, |b, &size| {
+            let mut storage = setup_test_storage(&temp_dir_direct, 100, false);
+            b.iter(|| {
+                let records = generate_records(size);
+                let _ = storage.insert("test_table", records);
+            });
+        });
 
         let _ = remove_dir_all(&temp_dir_direct);
 
@@ -191,17 +186,13 @@ fn bench_buffer_vs_direct(c: &mut Criterion) {
             std::env::temp_dir().join(format!("sqlrustgo_bench_buffered_{}", size));
         let _ = remove_dir_all(&temp_dir_buffered);
 
-        group.bench_with_input(
-            BenchmarkId::new("buffered", size),
-            size,
-            |b, &size| {
-                let mut storage = setup_test_storage(&temp_dir_buffered, 100, true);
-                b.iter(|| {
-                    let records = generate_records(size);
-                    let _ = storage.insert("test_table", records);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("buffered", size), size, |b, &size| {
+            let mut storage = setup_test_storage(&temp_dir_buffered, 100, true);
+            b.iter(|| {
+                let records = generate_records(size);
+                let _ = storage.insert("test_table", records);
+            });
+        });
 
         let _ = remove_dir_all(&temp_dir_buffered);
     }
@@ -226,8 +217,7 @@ fn bench_buffer_flush(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             b.iter(|| {
                 // Reset and pre-fill for each iteration
-                let mut s =
-                    setup_test_storage(&temp_dir, 10000, true);
+                let mut s = setup_test_storage(&temp_dir, 10000, true);
                 let pre_records = generate_records(size);
                 let _ = s.insert("test_table", pre_records);
 
