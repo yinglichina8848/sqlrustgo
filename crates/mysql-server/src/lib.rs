@@ -379,6 +379,7 @@ impl ExecutionEngine {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         })?;
         Ok(ExecutorResult::empty())
     }

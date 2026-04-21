@@ -897,6 +897,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            partition_info: None,
         };
         storage.create_table(&info)?;
         Ok(ExecutorResult::empty())
