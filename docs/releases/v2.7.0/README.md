@@ -1,75 +1,127 @@
 # v2.7.0 文档索引
 
-> 版本: `v2.7.0`  
-> 代号: `Production+Compliance`  
-> 当前状态: `规划中`（计划从 `alpha` 启动）  
-> 最后更新: 2026-04-19
+> **版本**: v2.7.0
+> **代号**: Enterprise Resilience
+> **状态**: ✅ GA 已发布 (2026-04-22)
+> **最后更新**: 2026-04-22
 
 ---
 
-## 一、版本定位
+## 版本概述
 
-`v2.7.0` 是 SQLRustGo 的生产化版本，目标是：
+v2.7.0 是 SQLRustGo 迈向 **企业级韧性 (Enterprise Resilience)** 的关键版本。本版本重点实现 WAL 崩溃恢复、外键稳定性增强、备份恢复机制、审计证据链等企业级功能。
 
-1. 达到 MySQL 5.7 普通中小企业生产可用水平（必要子集）
-2. 支持 GMP 合规审核场景的多路检索
-3. 可集成 QMD（全文/语义/重排）能力
+### 版本目标
+
+| 目标 | 说明 |
+|------|------|
+| 企业级可靠性 | WAL 崩溃恢复、72h 稳定性验证 |
+| 数据完整性 | FK 稳定性、审计证据链 |
+| 运维能力 | 备份恢复、统一搜索 API、GMP Top10 |
+| 性能优化 | 性能回归修复、混合排序 |
+
+### 核心功能
+
+| 功能 | 状态 | PR |
+|------|------|-----|
+| WAL 崩溃恢复 (T-01) | ✅ | - |
+| FK 稳定性增强 (T-02) | ✅ | - |
+| 备份恢复演练 (T-03) | ✅ | - |
+| qmd-bridge 统一检索层 (T-04) | ✅ | #1713 |
+| 统一检索 API (T-05) | ✅ | #1714 |
+| 混合检索重排 (T-06) | ✅ | #1714 |
+| GMP Top 10 审核查询 (T-07) | ✅ | #1714 |
+| 审计证据链 (T-08) | ✅ | #1718 |
 
 ---
 
-## 二、核心目标
+## 文档清单
 
-### 2.1 生产能力目标
-
-1. SQL 主路径稳定可用（DDL/DML/JOIN/GROUP BY/HAVING/子查询）
-2. 事务/WAL/恢复链路完整
-3. 约束与索引主路径可用
-4. 备份恢复、监控、慢查询与连接管理可用
-
-### 2.2 检索能力目标
-
-1. 全文检索（关键词/BM25）
-2. 语义检索（向量召回 + 重排）
-3. 图检索（关系追溯/影响路径）
-4. 混合检索（统一入口与证据包输出）
-
----
-
-## 三、文档清单
+### 必选文档
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
-| [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | 版本定义与分阶段开发计划 | ✅ |
-| [VERSION_PLAN.md](./VERSION_PLAN.md) | 里程碑、任务矩阵、交付节奏 | ✅ |
-| [TEST_PLAN.md](./TEST_PLAN.md) | 全面测试计划（单测/集成/性能/恢复） | ✅ |
-| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | Alpha/Beta/RC/GA 门禁清单 | ✅ |
+| [README.md](./README.md) | 文档索引 | ✅ |
+| [CHANGELOG.md](./CHANGELOG.md) | 变更日志 | ✅ |
+| [RELEASE_NOTES.md](./RELEASE_NOTES.md) | 发布说明 | ✅ |
+| [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) | 升级指南 | ✅ |
+| [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | 部署指南 | ✅ |
+| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | 开发指南 | ✅ |
+| [TEST_PLAN.md](./TEST_PLAN.md) | 测试计划 | ✅ |
+| [TEST_MANUAL.md](./TEST_MANUAL.md) | 测试手册 | ✅ |
+| [EVALUATION_REPORT.md](./EVALUATION_REPORT.md) | 版本评估报告 | ✅ |
+| [DOCUMENT_AUDIT.md](./DOCUMENT_AUDIT.md) | 文档审计报告 | ✅ |
+| [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) | 功能矩阵 | ✅ |
+| [COVERAGE_REPORT.md](./COVERAGE_REPORT.md) | 覆盖率报告 | ✅ |
+| [SECURITY_ANALYSIS.md](./SECURITY_ANALYSIS.md) | 安全分析 | ✅ |
+| [SECURITY_REPORT.md](./SECURITY_REPORT.md) | 安全报告 | ✅ |
+| [PERFORMANCE_TARGETS.md](./PERFORMANCE_TARGETS.md) | 性能目标 | ✅ |
+| [PERFORMANCE_REPORT.md](./PERFORMANCE_REPORT.md) | 性能报告 | ✅ |
+| [QUICK_START.md](./QUICK_START.md) | 快速开始 | ✅ |
+| [INSTALL.md](./INSTALL.md) | 安装说明 | ✅ |
+| [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) | API 文档 | ✅ |
+| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | 门禁检查清单 | ✅ |
+
+### OO 架构文档
+
+| 文档 | 说明 | 状态 |
+|------|------|------|
+| [oo/README.md](./oo/README.md) | OO 文档索引 | ✅ |
+| [oo/architecture/ARCHITECTURE_V2.7.md](./oo/architecture/ARCHITECTURE_V2.7.md) | 架构设计 | ✅ |
+| [oo/modules/README.md](./oo/modules/README.md) | 模块设计索引 | ✅ |
+| [oo/reports/PERFORMANCE_ANALYSIS.md](./oo/reports/PERFORMANCE_ANALYSIS.md) | 性能分析 | ✅ |
+| [oo/reports/SQL92_COMPLIANCE.md](./oo/reports/SQL92_COMPLIANCE.md) | SQL 合规报告 | ✅ |
+| [oo/user-guide/USER_MANUAL.md](./oo/user-guide/USER_MANUAL.md) | 用户手册 | ✅ |
+
+### 测试报告
+
+| 文档 | 说明 | 状态 |
+|------|------|------|
+| [report/GA_TEST_REPORT.md](./report/GA_TEST_REPORT.md) | GA 测试报告 | ✅ |
+| [report/RC_TEST_REPORT.md](./report/RC_TEST_REPORT.md) | RC 测试报告 | ✅ |
+| [report/BETA_TEST_REPORT.md](./report/BETA_TEST_REPORT.md) | Beta 测试报告 | ✅ |
+
+### 设计文档
+
+| 文档 | 说明 | 状态 |
+|------|------|------|
+| [qmd-bridge-design.md](./qmd-bridge-design.md) | QMD Bridge 设计 | ✅ |
+| [gmp-top10-scenarios.md](./gmp-top10-scenarios.md) | GMP Top10 场景 | ✅ |
+| [STABILITY_REPORT.md](./STABILITY_REPORT.md) | 稳定性报告 | ✅ |
+| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | 架构决策 | ✅ |
 
 ---
 
-## 四、阶段路线
+## 发布信息
 
-1. `Phase A`: 内核生产化（事务、约束、恢复、门禁基线）
-2. `Phase B`: 检索融合（lex/vec/graph/hybrid + qmd-bridge）
-3. `Phase C`: GMP 场景化（Top 10 审核查询 + 证据链）
-4. `Phase D`: RC/GA 冲刺（性能、安全、长稳、发布冻结）
+| 信息 | 内容 |
+|------|------|
+| 版本 | v2.7.0 |
+| 代号 | Enterprise Resilience |
+| 发布日期 | 2026-04-22 |
+| Git Tag | v2.7.0 |
+| 主分支 | main |
+| 开发分支 | develop/v2.7.0 |
+
+### 发布 PR
+
+| PR | 说明 |
+|-----|------|
+| #1729 | chore: v2.7.0 GA release |
+| #1718 | feat(gmp): evidence module T-08 |
+| #1714 | feat: unified search API T-04/T-05/T-06 |
+| #1713 | feat: qmd-bridge T-04 |
 
 ---
 
-## 五、计划时间线
-
-| 里程碑 | 计划日期 | 目标 |
-|--------|----------|------|
-| v2.7.0-alpha | 2026-06-15 | 完成 Phase A |
-| v2.7.0-beta | 2026-07-15 | 完成 Phase B/C 核心能力 |
-| v2.7.0-rc1 | 2026-08-01 | 完成 Phase D 核心门禁 |
-| v2.7.0-ga | 2026-08-20 | 全部门禁通过并发布 |
-
----
-
-## 六、相关文档
+## 相关文档
 
 1. [v2.6.0 文档索引](../v2.6.0/README.md)
 2. [长期路线图](../LONG_TERM_ROADMAP.md)
 3. [版本演化计划](../VERSION_ROADMAP.md)
 4. [GMP 开发计划](../../gmp-audit-db-development-plan.md)
-5. [GMP 二次评估](../../gmp-audit-db-evaluation-report.md)
+
+---
+
+*文档索引 v2.7.0*
+*最后更新: 2026-04-22*
