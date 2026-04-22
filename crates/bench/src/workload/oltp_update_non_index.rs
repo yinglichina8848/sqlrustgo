@@ -9,6 +9,7 @@ use rand::{Rng, SeedableRng};
 use crate::db::Database;
 
 /// Update non-index workload - update on non-indexed column 'c'
+#[allow(dead_code)]
 pub struct OltpUpdateNonIndex {
     max_id: u64,
     statements_per_tx: usize,

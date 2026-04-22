@@ -10,6 +10,7 @@ use rand::{Rng, SeedableRng};
 use crate::db::Database;
 
 /// Mixed workload - combines read and write operations
+#[allow(dead_code)]
 pub struct OltpMixed {
     max_id: u64,
     statements_per_tx: usize,

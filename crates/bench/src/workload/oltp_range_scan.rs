@@ -9,6 +9,7 @@ use rand::{Rng, SeedableRng};
 use crate::db::Database;
 
 /// Range scan workload - range scan by indexed column 'k'
+#[allow(dead_code)]
 pub struct OltpRangeScan {
     max_id: u64,
     range_size: u64,

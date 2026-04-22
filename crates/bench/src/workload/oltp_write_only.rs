@@ -11,6 +11,7 @@ use rand::SeedableRng;
 use crate::db::Database;
 
 /// Write-only workload - only write operations
+#[allow(dead_code)]
 pub struct OltpWriteOnly {
     max_id: u64,
     statements_per_tx: usize,

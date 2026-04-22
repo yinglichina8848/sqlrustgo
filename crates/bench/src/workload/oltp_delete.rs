@@ -9,6 +9,7 @@ use rand::{Rng, SeedableRng};
 use crate::db::Database;
 
 /// Delete workload - delete operations
+#[allow(dead_code)]
 pub struct OltpDelete {
     max_id: u64,
     statements_per_tx: usize,

@@ -9,6 +9,7 @@ use rand::{Rng, SeedableRng};
 use crate::db::Database;
 
 /// Update index workload - update on indexed column 'k'
+#[allow(dead_code)]
 pub struct OltpUpdateIndex {
     max_id: u64,
     statements_per_tx: usize,
