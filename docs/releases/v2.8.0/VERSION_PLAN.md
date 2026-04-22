@@ -19,7 +19,7 @@
 
 ### 1.2 功能目标
 
-- 🔄 FULL OUTER JOIN 修复 (执行器部分未完成)
+- ✅ FULL OUTER JOIN 修复 (执行器已实现，3/3 测试通过)
 - ✅ TRUNCATE/REPLACE INTO 支持
 - ✅ 窗口函数完善
 - ⏳ 分区表完整支持
@@ -38,7 +38,7 @@
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-11 | FULL OUTER JOIN 修复 | P0 | ✅ 完成 | 3d | 用户确认完成 |
+| T-11 | FULL OUTER JOIN 修复 | P0 | ✅ 完成 | 3d | 解析器 ✅，执行器 ✅ (3/3 测试通过) |
 | T-12 | TRUNCATE/REPLACE 支持 | P0 | ✅ 完成 | 2d | 解析器 ✅，执行器 ✅ |
 | T-13 | 窗口函数完善 | P1 | ✅ 完成 | 4d | 已实现 RowNumber/Rank 等 |
 | T-23 | 分区表完整支持 | P0 | ⏳ 未开始 | 5d | |
@@ -57,7 +57,7 @@
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
 | T-14 | SIMD 向量化加速 | P0 | ✅ 完成 | 8d | crates/vector/src/simd_explicit.rs，5 个测试通过 |
-| T-15 | Hash Join 并行化 | P1 | ⚠️ 部分实现 | 5d | parallel_executor.rs 存在但未集成 (private fields) |
+| T-15 | Hash Join 并行化 | P1 | ⚠️ 未集成 | 5d | parallel_executor.rs 存在但未集成 (private fields) |
 | T-16 | 查询计划器优化 | P1 | ✅ 完成 | 4d | 81 planner tests 通过 |
 
 ### Phase D: 安全加固 (Week 13-16)
@@ -84,7 +84,7 @@
 v2.8.0 开发计划
 │
 ├── Week 1-4 (04/23-05/20)
-│   ├── T-11: FULL OUTER JOIN 修复 (🔄 解析器完成，执行器待完成)
+│   ├── T-11: FULL OUTER JOIN 修复 (✅ 完成 - 3/3 测试通过)
 │   ├── T-12: TRUNCATE/REPLACE 支持 (✅ 完成)
 │   ├── T-13: 窗口函数完善 (✅ 完成)
 │   ├── T-23: 分区表完整支持 (⏳ 未开始)
