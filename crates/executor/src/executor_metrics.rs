@@ -335,4 +335,158 @@ mod tests {
         assert_eq!(metrics.queries_by_type("UPDATE"), 1);
         assert_eq!(metrics.queries_by_type("DELETE"), 1);
     }
+
+    #[test]
+    fn test_record_rows() {
+        let metrics = ExecutorMetrics::new();
+        metrics.record_rows(100);
+        assert_eq!(metrics.rows_processed(), 100);
+    }
+
+    #[test]
+    fn test_record_rows_by_type() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_rows_by_type("SELECT", 50);
+        assert_eq!(metrics.rows_processed(), 50);
+    }
+
+    #[test]
+    fn test_get_metric_queries_total() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("queries_total");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_queries_failed() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_error();
+        let metric = metrics.get_metric("queries_failed");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_queries_success() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("queries_success");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_rows_processed() {
+        let metrics = ExecutorMetrics::new();
+        metrics.record_rows(100);
+        let metric = metrics.get_metric("rows_processed");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_query_duration_ms() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("query_duration_ms");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_avg_query_duration_ms() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("avg_query_duration_ms");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_success_rate() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("success_rate");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_execution_count() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        let metric = metrics.get_metric("execution_count");
+        assert!(metric.is_some());
+    }
+
+    #[test]
+    fn test_get_metric_unknown() {
+        let metrics = ExecutorMetrics::new();
+        let metric = metrics.get_metric("unknown_metric");
+        assert!(metric.is_none());
+    }
+
+    #[test]
+    fn test_get_metric_names() {
+        let metrics = ExecutorMetrics::new();
+        let names = metrics.get_metric_names();
+        assert!(names.contains(&"queries_total".to_string()));
+        assert!(names.contains(&"queries_failed".to_string()));
+        assert!(names.contains(&"success_rate".to_string()));
+    }
+
+    #[test]
+    fn test_reset() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_query("SELECT", 100);
+        metrics.record_error();
+        metrics.reset();
+        assert_eq!(metrics.queries_total(), 0);
+        assert_eq!(metrics.queries_failed(), 0);
+        assert_eq!(metrics.query_duration_ns(), 0);
+    }
+
+    #[test]
+    fn test_record_error_with_type() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_error_with_type("timeout");
+        assert_eq!(metrics.queries_failed(), 1);
+    }
+
+    #[test]
+    fn test_record_bytes_read_not_supported() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_bytes_read(1024);
+    }
+
+    #[test]
+    fn test_record_bytes_written_not_supported() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_bytes_written(1024);
+    }
+
+    #[test]
+    fn test_record_cache_hit_not_supported() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_cache_hit();
+    }
+
+    #[test]
+    fn test_record_cache_miss_not_supported() {
+        let mut metrics = ExecutorMetrics::new();
+        metrics.record_cache_miss();
+    }
+
+    #[test]
+    fn test_executor_metrics_timer_multiple() {
+        let mut metrics = ExecutorMetrics::new();
+        {
+            let mut timer1 = ExecutorMetricsTimer::new(&mut metrics, "SELECT");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            timer1.stop();
+
+            let mut timer2 = ExecutorMetricsTimer::new(&mut metrics, "INSERT");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            timer2.stop();
+        }
+        assert_eq!(metrics.queries_total(), 2);
+        assert_eq!(metrics.queries_by_type("SELECT"), 1);
+        assert_eq!(metrics.queries_by_type("INSERT"), 1);
+    }
 }
