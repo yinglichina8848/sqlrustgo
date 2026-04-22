@@ -4,9 +4,9 @@
 
 ## Branch Strategy
 
-- **Main development branch**: `develop/v2.6.0`
+- **Main development branch**: `develop/v2.8.0`
 - **DO NOT modify `main` branch directly**
-- Create feature branches from `develop/v2.6.0`
+- Create feature branches from `develop/v2.8.0`
 - Use git worktrees for isolated feature work: `git worktree add .worktrees/<name> -b feature/<name>`
 
 ## Essential Commands
@@ -109,6 +109,22 @@ Key crates in `crates/`:
 - `AGENT.md` - Issue-specific guide (DiskGraphStore implementation)
 - `ARCHITECTURE_RULES.md` - Architecture decisions
 - `BRANCH_GOVERNANCE.md` - Branch and release workflow
+- `docs/governance/ISSUE_CLOSING_VERIFICATION.md` - **Issue 关闭验证流程 (强制执行)**
+
+## Issue 关闭规则 (强制)
+
+**禁止手动关闭没有 PR 合并的 Issue。**
+
+关闭 Issue 前必须验证：
+```bash
+# 1. 检查是否有 PR 关闭该 Issue
+gh issue view <id> --json closedByPullRequestsReferences
+
+# 结果非空 → 可以关闭
+# 结果为空 → 禁止手动关闭，除非任务取消
+```
+
+详见: `docs/governance/ISSUE_CLOSING_VERIFICATION.md`
 
 ## Test Execution Notes
 
