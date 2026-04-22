@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **版本**: alpha/v2.6.0
+- **版本**: alpha/v2.7.0
 
-## [2.6.0] - TBD (Alpha)
+## [2.6.0] - 2026-04-22 (GA)
 
 ### 目标
 
