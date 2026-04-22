@@ -489,26 +489,14 @@ mod tests {
     #[test]
     fn test_select_best_path_with_all_hybrid_costs() {
         let model = UnifiedCostModel::default_model(128, 10000);
-        let (path, cost) = model.select_best_path(
-            100.0,
-            500.0,
-            200.0,
-            Some(30.0),
-            Some(25.0),
-        );
+        let (path, cost) = model.select_best_path(100.0, 500.0, 200.0, Some(30.0), Some(25.0));
         assert_eq!(path, ExecutionPath::HybridSqlGraph);
     }
 
     #[test]
     fn test_select_best_path_all_invalid_fallback() {
         let model = UnifiedCostModel::default_model(128, 10000);
-        let (path, cost) = model.select_best_path(
-            f64::MAX,
-            f64::MAX,
-            f64::MAX,
-            None,
-            None,
-        );
+        let (path, cost) = model.select_best_path(f64::MAX, f64::MAX, f64::MAX, None, None);
         assert_eq!(path, ExecutionPath::Sql);
         assert_eq!(cost, f64::MAX);
     }
@@ -516,13 +504,7 @@ mod tests {
     #[test]
     fn test_select_best_path_some_invalid() {
         let model = UnifiedCostModel::default_model(128, 10000);
-        let (path, cost) = model.select_best_path(
-            100.0,
-            f64::MAX,
-            50.0,
-            None,
-            None,
-        );
+        let (path, cost) = model.select_best_path(100.0, f64::MAX, 50.0, None, None);
         assert_eq!(path, ExecutionPath::Graph);
         assert_eq!(cost, 50.0);
     }

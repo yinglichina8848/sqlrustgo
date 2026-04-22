@@ -179,10 +179,10 @@ impl SqliteBackend {
         let gmp_path = gmp_db_path();
         let graph_path = graph_db_path();
 
-        let gmp_conn = Connection::open(&gmp_path)
-            .map_err(|e| format!("failed to open gmp.db: {}", e))?;
-        let graph_conn = Connection::open(&graph_path)
-            .map_err(|e| format!("failed to open graph.db: {}", e))?;
+        let gmp_conn =
+            Connection::open(&gmp_path).map_err(|e| format!("failed to open gmp.db: {}", e))?;
+        let graph_conn =
+            Connection::open(&graph_path).map_err(|e| format!("failed to open graph.db: {}", e))?;
 
         Ok(Self {
             gmp_conn: Mutex::new(gmp_conn),
@@ -199,8 +199,11 @@ impl SqliteBackend {
 impl StorageBackend for SqliteBackend {
     fn init(&self) -> Result<(), String> {
         // GMP schema: documents + embeddings
-        self.gmp_conn.lock().unwrap().execute_batch(
-            r#"
+        self.gmp_conn
+            .lock()
+            .unwrap()
+            .execute_batch(
+                r#"
                 CREATE TABLE IF NOT EXISTS gmp_documents (
                     id            INTEGER PRIMARY KEY AUTOINCREMENT,
                     title         TEXT NOT NULL,
@@ -221,11 +224,15 @@ impl StorageBackend for SqliteBackend {
                     updated_at  INTEGER NOT NULL
                 );
             "#,
-        ).map_err(|e| format!("gmp init error: {}", e))?;
+            )
+            .map_err(|e| format!("gmp init error: {}", e))?;
 
         // Graph schema
-        self.graph_conn.lock().unwrap().execute_batch(
-            r#"
+        self.graph_conn
+            .lock()
+            .unwrap()
+            .execute_batch(
+                r#"
                 CREATE TABLE IF NOT EXISTS graph_nodes (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     name        TEXT NOT NULL,
@@ -253,7 +260,8 @@ impl StorageBackend for SqliteBackend {
                 CREATE INDEX IF NOT EXISTS idx_edge_src  ON graph_edges(src);
                 CREATE INDEX IF NOT EXISTS idx_edge_dst  ON graph_edges(dst);
             "#,
-        ).map_err(|e| format!("graph init error: {}", e))?;
+            )
+            .map_err(|e| format!("graph init error: {}", e))?;
 
         Ok(())
     }
@@ -324,7 +332,8 @@ impl StorageBackend for SqliteBackend {
 
     fn save_document(&self, doc: &DocumentRecord) -> Result<i64, String> {
         let keywords_json = serde_json::to_string(&doc.keywords).unwrap_or_else(|_| "[]".into());
-        let properties_json = serde_json::to_string(&doc.properties).unwrap_or_else(|_| "{}".into());
+        let properties_json =
+            serde_json::to_string(&doc.properties).unwrap_or_else(|_| "{}".into());
         self.gmp_conn.lock().unwrap()
             .execute(
                 r#"INSERT INTO gmp_documents
@@ -343,7 +352,10 @@ impl StorageBackend for SqliteBackend {
             )
             .map_err(|e| e.to_string())?;
 
-        let doc_id = self.gmp_conn.lock().unwrap()
+        let doc_id = self
+            .gmp_conn
+            .lock()
+            .unwrap()
             .query_row(
                 "SELECT id FROM gmp_documents WHERE title=?1 AND doc_type=?2 LIMIT 1",
                 params![doc.title, doc.doc_type],
@@ -395,22 +407,29 @@ impl StorageBackend for SqliteBackend {
     }
 
     fn save_node(&self, node: &NodeRecord) -> Result<i64, String> {
-        let props_json =
-            serde_json::to_string(&node.properties).unwrap_or_else(|_| "{}".into());
-        self.graph_conn.lock().unwrap()
+        let props_json = serde_json::to_string(&node.properties).unwrap_or_else(|_| "{}".into());
+        self.graph_conn
+            .lock()
+            .unwrap()
             .execute(
                 "INSERT INTO graph_nodes (name, node_type, properties, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)
                  ON CONFLICT(node_type, name) DO UPDATE SET
                  properties=excluded.properties, updated_at=excluded.updated_at",
                 params![
-                    node.name, node.node_type, props_json,
-                    node.created_at, node.updated_at,
+                    node.name,
+                    node.node_type,
+                    props_json,
+                    node.created_at,
+                    node.updated_at,
                 ],
             )
             .map_err(|e| e.to_string())?;
 
-        let node_id = self.graph_conn.lock().unwrap()
+        let node_id = self
+            .graph_conn
+            .lock()
+            .unwrap()
             .query_row(
                 "SELECT id FROM graph_nodes WHERE node_type=?1 AND name=?2 LIMIT 1",
                 params![node.node_type, node.name],
@@ -449,19 +468,27 @@ impl StorageBackend for SqliteBackend {
     }
 
     fn save_edge(&self, edge: &EdgeRecord) -> Result<i64, String> {
-        let props_json =
-            serde_json::to_string(&edge.properties).unwrap_or_else(|_| "{}".into());
-        self.graph_conn.lock().unwrap()
+        let props_json = serde_json::to_string(&edge.properties).unwrap_or_else(|_| "{}".into());
+        self.graph_conn
+            .lock()
+            .unwrap()
             .execute(
                 "INSERT OR REPLACE INTO graph_edges (src, dst, edge_type, properties, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
-                    edge.src, edge.dst, edge.edge_type, props_json, edge.created_at,
+                    edge.src,
+                    edge.dst,
+                    edge.edge_type,
+                    props_json,
+                    edge.created_at,
                 ],
             )
             .map_err(|e| e.to_string())?;
 
-        let edge_id = self.graph_conn.lock().unwrap()
+        let edge_id = self
+            .graph_conn
+            .lock()
+            .unwrap()
             .query_row(
                 "SELECT id FROM graph_edges WHERE src=?1 AND dst=?2 AND edge_type=?3 LIMIT 1",
                 params![edge.src, edge.dst, edge.edge_type],
@@ -530,25 +557,24 @@ impl StorageBackend for SqliteBackend {
     }
 
     fn get_node(&self, node_type: &str, name: &str) -> Result<Option<NodeRecord>, String> {
-        let result = self.graph_conn.lock().unwrap()
-            .query_row(
-                "SELECT id, name, node_type, properties, created_at, updated_at
+        let result = self.graph_conn.lock().unwrap().query_row(
+            "SELECT id, name, node_type, properties, created_at, updated_at
                  FROM graph_nodes WHERE node_type=?1 AND name=?2 LIMIT 1",
-                params![node_type, name],
-                |row| {
-                    let props_str: String = row.get(3)?;
-                    let properties = serde_json::from_str(&props_str)
-                        .unwrap_or(serde_json::Value::Object(Default::default()));
-                    Ok(NodeRecord {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        node_type: row.get(2)?,
-                        properties,
-                        created_at: row.get(4)?,
-                        updated_at: row.get(5)?,
-                    })
-                },
-            );
+            params![node_type, name],
+            |row| {
+                let props_str: String = row.get(3)?;
+                let properties = serde_json::from_str(&props_str)
+                    .unwrap_or(serde_json::Value::Object(Default::default()));
+                Ok(NodeRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    node_type: row.get(2)?,
+                    properties,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
+        );
 
         match result {
             Ok(node) => Ok(Some(node)),
@@ -561,12 +587,11 @@ impl StorageBackend for SqliteBackend {
 // Private helper impl (Mutex forces us to duplicate logic)
 impl SqliteBackend {
     fn get_node_id_internal(&self, node_type: &str, name: &str) -> Result<Option<i64>, String> {
-        let result = self.graph_conn.lock().unwrap()
-            .query_row(
-                "SELECT id FROM graph_nodes WHERE node_type=?1 AND name=?2 LIMIT 1",
-                params![node_type, name],
-                |row| row.get::<_, i64>(0),
-            );
+        let result = self.graph_conn.lock().unwrap().query_row(
+            "SELECT id FROM graph_nodes WHERE node_type=?1 AND name=?2 LIMIT 1",
+            params![node_type, name],
+            |row| row.get::<_, i64>(0),
+        );
 
         match result {
             Ok(id) => Ok(Some(id)),

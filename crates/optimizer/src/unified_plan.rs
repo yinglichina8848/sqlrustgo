@@ -581,10 +581,7 @@ mod tests {
             table_name: "users".to_string(),
             projection: None,
         });
-        let plan = UnifiedPlan::Limit {
-            limit: 10,
-            input,
-        };
+        let plan = UnifiedPlan::Limit { limit: 10, input };
         assert_eq!(plan.estimate_cardinality(), 10);
     }
 

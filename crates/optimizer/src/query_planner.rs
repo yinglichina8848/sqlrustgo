@@ -572,7 +572,10 @@ mod tests {
             projection: None,
         };
         let plan = UnifiedPlan::Projection {
-            expr: vec![Expr::Column("id".to_string()), Expr::Column("name".to_string())],
+            expr: vec![
+                Expr::Column("id".to_string()),
+                Expr::Column("name".to_string()),
+            ],
             input: Box::new(input),
         };
 
@@ -664,7 +667,10 @@ mod tests {
             projection: None,
         };
         let plan = UnifiedPlan::Projection {
-            expr: vec![Expr::Column("id".to_string()), Expr::Column("name".to_string())],
+            expr: vec![
+                Expr::Column("id".to_string()),
+                Expr::Column("name".to_string()),
+            ],
             input: Box::new(input),
         };
 
@@ -768,11 +774,7 @@ mod tests {
 
     #[test]
     fn test_plan_alternative_new() {
-        let alt = PlanAlternative::new(
-            ExecutionPath::Vector,
-            UnifiedPlan::EmptyRelation,
-            50.0,
-        );
+        let alt = PlanAlternative::new(ExecutionPath::Vector, UnifiedPlan::EmptyRelation, 50.0);
         assert_eq!(alt.cost, 50.0);
         assert_eq!(alt.path, ExecutionPath::Vector);
         assert_eq!(alt.estimated_latency_ms, 5.0);

@@ -155,7 +155,10 @@ mod tests {
     fn test_analyze_in_predicate_returns_none() {
         let pred = Predicate::In(
             Box::new(Expr::Column("id".to_string())),
-            vec![Expr::Value(Value::Integer(1)), Expr::Value(Value::Integer(2))],
+            vec![
+                Expr::Value(Value::Integer(1)),
+                Expr::Value(Value::Integer(2)),
+            ],
         );
         let result = analyze_predicate_for_index(&pred);
         assert!(result.is_none());

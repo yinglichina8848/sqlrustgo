@@ -22,8 +22,10 @@ fn create_engine() -> MemoryExecutionEngine {
 
 fn setup_tables(engine: &mut MemoryExecutionEngine) {
     let _ = engine.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, age INTEGER)");
-    let _ = engine.execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER, user_id INTEGER, amount INTEGER)");
-    let _ = engine.execute("CREATE TABLE IF NOT EXISTS products (id INTEGER, name TEXT, price INTEGER)");
+    let _ = engine
+        .execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER, user_id INTEGER, amount INTEGER)");
+    let _ = engine
+        .execute("CREATE TABLE IF NOT EXISTS products (id INTEGER, name TEXT, price INTEGER)");
 }
 
 fn cleanup_tables(engine: &mut MemoryExecutionEngine) {
@@ -157,9 +159,7 @@ fn test_qps_delete() {
     for i in 0..BENCHMARK_ITERATIONS {
         let _ = engine.execute(&format!(
             "INSERT INTO users VALUES ({}, 'bench_{}', {})",
-            i,
-            i,
-            30
+            i, i, 30
         ));
     }
 
@@ -303,7 +303,8 @@ fn test_qps_concurrent_mixed() {
                     let query_type = (thread_id + i) % 4;
                     match query_type {
                         0 => {
-                            let _ = engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
+                            let _ = engine
+                                .execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
                         }
                         1 => {
                             let _ = engine.execute(&format!(
@@ -354,9 +355,8 @@ fn test_qps_complex_where() {
     let start = Instant::now();
 
     for _ in 0..BENCHMARK_ITERATIONS {
-        let _ = engine.execute(
-            "SELECT * FROM users WHERE age > 30 AND age < 60 AND name LIKE '%user_5%'",
-        );
+        let _ = engine
+            .execute("SELECT * FROM users WHERE age > 30 AND age < 60 AND name LIKE '%user_5%'");
     }
 
     let elapsed = start.elapsed();
