@@ -714,7 +714,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 }
                 results
             }
-            JoinType::Inner => unreachable!(),
         };
 
         let row_count = matched_results.len();
@@ -733,7 +732,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         table_info
                             .columns
                             .iter()
-                            .position(|c| &c.name == col_name)
+                            .position(|c| c.name == col_name)
                             .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}.{}' not found in {}", qualifier, col_name, table_name)))
                     } else {
                         // Qualifier doesn't match this table - column not in this table
