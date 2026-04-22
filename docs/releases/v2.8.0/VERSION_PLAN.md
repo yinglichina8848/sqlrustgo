@@ -170,6 +170,10 @@ v2.8.0 开发计划
 - [v2.8.0 README](./README.md)
 - [v2.8.0 Issue](https://github.com/minzuuniversity/sqlrustgo/issues/1731)
 - [v2.7.0 综合评估报告](../v2.7.0/COMPREHENSIVE_EVALUATION_REPORT.md)
+- [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) - 发布门禁
+- [DISTRIBUTED_TEST_DESIGN.md](./DISTRIBUTED_TEST_DESIGN.md) - 分布式测试
+- [TEST_PLAN.md](./TEST_PLAN.md) - 测试计划
+- [PERFORMANCE_TARGETS.md](./PERFORMANCE_TARGETS.md) - 性能目标
 
 ---
 

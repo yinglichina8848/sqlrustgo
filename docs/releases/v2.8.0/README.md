@@ -52,8 +52,11 @@
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
-| [VERSION_PLAN.md](./VERSION_PLAN.md) | 里程碑、任务矩阵、交付节奏 | ⏳ 规划中 |
-| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | Alpha/Beta/RC/GA 门禁清单 | ⏳ 规划中 |
+| [VERSION_PLAN.md](./VERSION_PLAN.md) | 里程碑、任务矩阵、交付节奏 | ✅ |
+| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | Alpha/Beta/RC/GA 门禁清单 | ✅ |
+| [DISTRIBUTED_TEST_DESIGN.md](./DISTRIBUTED_TEST_DESIGN.md) | 分布式测试设计 | ✅ |
+| [TEST_PLAN.md](./TEST_PLAN.md) | 完整测试计划 | ✅ |
+| [PERFORMANCE_TARGETS.md](./PERFORMANCE_TARGETS.md) | 性能目标 | ✅ |
 
 ---
 
