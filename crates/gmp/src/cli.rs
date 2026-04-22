@@ -532,7 +532,7 @@ impl GmpCliState {
         let neighbor_ids: Vec<NodeId> = match rel_type {
             Some(_rt) => {
                 let out = graph.neighbors_by_edge_label(nid, rel_type.unwrap());
-                let incoming = graph.incoming_neighbors_by_edge_label(nid, rel_type.unwrap());
+                let incoming = graph.neighbors_by_edge_label(nid, rel_type.unwrap());
                 out.into_iter().chain(incoming).collect()
             }
             None => {
