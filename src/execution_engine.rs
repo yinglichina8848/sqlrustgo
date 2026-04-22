@@ -16,6 +16,7 @@ use sqlrustgo_parser::parser::{
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
     InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
+    TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::{
@@ -335,6 +336,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Delete(ref delete) => self.execute_delete(delete),
             Statement::CreateTable(ref create) => self.execute_create_table(create),
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
+            Statement::Truncate(ref truncate) => self.execute_truncate(truncate),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(ref analyze) => {
                 let table_name = analyze.table_name.as_ref().ok_or_else(|| {
@@ -631,6 +633,24 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             all_records.push(record);
         }
 
+        // For REPLACE INTO: if insert.values has a unique/key conflict, delete old row first
+        if insert.is_replace {
+            {
+                let mut storage = self.storage.write().unwrap();
+                for record in &all_records {
+                    // Find existing rows with matching unique key (primary key or unique index)
+                    let existing_rows = storage.scan(&table_name)?;
+                    for existing_row in existing_rows {
+                        if self.record_matches_unique_key(&existing_row, record, &table_info) {
+                            // Delete the existing row
+                            storage.delete(&table_name, &[])?;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // Execute BEFORE INSERT triggers
         let trigger_executor = TriggerExecutor::new(self.storage.clone());
         let before_triggers = trigger_executor.get_triggers_for_operation(
@@ -675,6 +695,29 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
 
         Ok(ExecutorResult::new(vec![], insert.values.len()))
+    }
+
+    /// Check if a new record matches an existing row based on primary key or unique constraints
+    fn record_matches_unique_key(
+        &self,
+        existing: &[Value],
+        new: &[Value],
+        table_info: &TableInfo,
+    ) -> bool {
+        // Find primary key column(s)
+        for (col_idx, col) in table_info.columns.iter().enumerate() {
+            if col.primary_key {
+                // Compare by primary key column index
+                if col_idx < existing.len() && col_idx < new.len() {
+                    if existing[col_idx] != new[col_idx] {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
@@ -906,6 +949,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_drop_table(&self, drop: &DropTableStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
         storage.drop_table(&drop.name)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_truncate(&self, truncate: &TruncateStatement) -> SqlResult<ExecutorResult> {
+        let mut storage = self.storage.write().unwrap();
+        // Check if table exists
+        if !storage.has_table(&truncate.name) {
+            return Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                truncate.name
+            )));
+        }
+        // Delete all rows but keep the table structure
+        // Using empty filter slice to delete all rows
+        storage.delete(&truncate.name, &[])?;
         Ok(ExecutorResult::empty())
     }
 

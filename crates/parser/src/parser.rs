@@ -28,6 +28,7 @@ pub enum Statement {
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
     DropTable(DropTableStatement),
+    Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
@@ -225,6 +226,7 @@ pub struct InsertStatement {
     pub columns: Vec<String>,
     pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
     pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
+    pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
 }
 
 /// UPDATE statement
@@ -253,6 +255,12 @@ pub struct CreateTableStatement {
 /// DROP TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStatement {
+    pub name: String,
+}
+
+/// TRUNCATE TABLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct TruncateStatement {
     pub name: String,
 }
 
@@ -371,11 +379,12 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Result<Statement, String> {
         match self.current() {
             Some(Token::Select) => self.parse_select(),
-            Some(Token::Insert) => self.parse_insert(),
+            Some(Token::Insert) | Some(Token::Replace) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
             Some(Token::Create) => self.parse_create(),
             Some(Token::Drop) => self.parse_drop_table(),
+            Some(Token::Truncate) => self.parse_truncate(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::With) => self.parse_with_select(),
             Some(Token::Alter) => self.parse_alter_table(),
@@ -1273,7 +1282,15 @@ impl Parser {
     }
 
     fn parse_insert(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Insert)?;
+        // Check for REPLACE INTO (MySQL compatibility) - consume Replace token if present
+        let is_replace = if matches!(self.current(), Some(Token::Replace)) {
+            self.next(); // consume Replace
+            true
+        } else {
+            self.expect(Token::Insert)?;
+            false
+        };
+
         self.expect(Token::Into)?;
 
         let table = match self.next() {
@@ -1394,6 +1411,7 @@ impl Parser {
             columns,
             values,
             select,
+            is_replace,
         }))
     }
 
@@ -2014,6 +2032,17 @@ impl Parser {
         Ok(Statement::DropTable(DropTableStatement { name }))
     }
 
+    fn parse_truncate(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Truncate)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        Ok(Statement::Truncate(TruncateStatement { name }))
+    }
+
     fn parse_analyze(&mut self) -> Result<Statement, String> {
         self.expect(Token::Analyze)?;
 
@@ -2287,6 +2316,37 @@ mod tests {
                 let select = i.select.as_ref().unwrap();
                 assert_eq!(select.table, "old_users");
                 assert!(select.where_clause.is_some());
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_replace_into() {
+        let result = parse("REPLACE INTO users VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert!(i.is_replace, "REPLACE INTO should set is_replace to true");
+                assert_eq!(i.values.len(), 1); // 1 row
+                assert_eq!(i.values[0].len(), 2); // 2 values per row
+            }
+            _ => panic!("Expected INSERT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_replace_into_with_columns() {
+        let result = parse("REPLACE INTO users (id, name) VALUES (1, 'Alice')");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Insert(i) => {
+                assert_eq!(i.table, "users");
+                assert!(i.is_replace, "REPLACE INTO should set is_replace to true");
+                assert_eq!(i.columns, vec!["id", "name"]);
+                assert_eq!(i.values.len(), 1); // 1 row
+                assert_eq!(i.values[0].len(), 2); // 2 values
             }
             _ => panic!("Expected INSERT statement"),
         }
