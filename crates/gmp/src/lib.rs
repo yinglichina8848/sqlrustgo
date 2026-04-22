@@ -52,6 +52,7 @@ pub mod document;
 pub mod embedding;
 pub mod persist_sqlite;
 pub mod report;
+pub mod scenarios;
 pub mod semantic_embedding;
 pub mod sql_api;
 pub mod vector_search;
