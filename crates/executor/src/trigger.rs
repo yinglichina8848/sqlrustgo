@@ -1284,14 +1284,17 @@ mod tests {
     fn test_value_to_sql_literal_text() {
         assert_eq!(Value::Text("hello".to_string()).to_sql_string(), "hello");
         assert_eq!(Value::Text("".to_string()).to_sql_string(), "");
-        assert_eq!(Value::Text("O'Reilly".to_string()).to_sql_string(), "O'Reilly");
+        assert_eq!(
+            Value::Text("O'Reilly".to_string()).to_sql_string(),
+            "O'Reilly"
+        );
     }
 
     #[test]
     fn test_split_body_statements_empty() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("");
         assert!(statements.is_empty());
     }
@@ -1300,7 +1303,7 @@ mod tests {
     fn test_split_body_statements_single_stmt() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.col = 1");
         assert_eq!(statements.len(), 1);
         assert_eq!(statements[0], "SET NEW.col = 1");
@@ -1310,7 +1313,7 @@ mod tests {
     fn test_split_body_statements_multiple() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.col1 = 1; SET NEW.col2 = 2");
         assert_eq!(statements.len(), 2);
         assert_eq!(statements[0], "SET NEW.col1 = 1");
@@ -1321,7 +1324,7 @@ mod tests {
     fn test_split_body_statements_with_strings() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.text = 'hello; world'");
         assert_eq!(statements.len(), 1);
         assert_eq!(statements[0], "SET NEW.text = 'hello; world'");
@@ -1331,7 +1334,7 @@ mod tests {
     fn test_split_body_statements_with_escaped_quotes() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.text = 'hello\\' world'");
         assert_eq!(statements.len(), 1);
     }
@@ -1340,7 +1343,7 @@ mod tests {
     fn test_split_body_statements_begin_end() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("BEGIN SET NEW.col = 1; END");
         assert_eq!(statements.len(), 1);
         assert_eq!(statements[0], "BEGIN SET NEW.col = 1");
@@ -1350,7 +1353,7 @@ mod tests {
     fn test_split_body_statements_with_backslash_escape() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.text = 'hello\\nworld'");
         assert_eq!(statements.len(), 1);
     }
@@ -1359,12 +1362,9 @@ mod tests {
     fn test_expand_row_variables_new_references() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(1),
-            Value::Float(10.0),
-        ];
-        
+
+        let new_row = vec![Value::Integer(1), Value::Float(10.0)];
+
         let expanded = executor.expand_row_variables("NEW.id", "orders", None, Some(&new_row));
         assert_eq!(expanded, "1");
     }
@@ -1373,12 +1373,9 @@ mod tests {
     fn test_expand_row_variables_old_references() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let old_row = vec![
-            Value::Integer(1),
-            Value::Float(10.0),
-        ];
-        
+
+        let old_row = vec![Value::Integer(1), Value::Float(10.0)];
+
         let expanded = executor.expand_row_variables("OLD.id", "orders", Some(&old_row), None);
         assert_eq!(expanded, "1");
     }
@@ -1387,12 +1384,9 @@ mod tests {
     fn test_expand_row_variables_uppercase_column() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(42),
-            Value::Float(10.0),
-        ];
-        
+
+        let new_row = vec![Value::Integer(42), Value::Float(10.0)];
+
         let expanded = executor.expand_row_variables("NEW.ID", "orders", None, Some(&new_row));
         assert_eq!(expanded, "42");
     }
@@ -1401,13 +1395,11 @@ mod tests {
     fn test_expand_row_variables_no_matching_column() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(1),
-            Value::Float(10.0),
-        ];
-        
-        let expanded = executor.expand_row_variables("NEW.nonexistent", "orders", None, Some(&new_row));
+
+        let new_row = vec![Value::Integer(1), Value::Float(10.0)];
+
+        let expanded =
+            executor.expand_row_variables("NEW.nonexistent", "orders", None, Some(&new_row));
         assert_eq!(expanded, "NEW.nonexistent");
     }
 
@@ -1415,55 +1407,94 @@ mod tests {
     fn test_evaluate_simple_expression_integer() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("42"), Some(Value::Integer(42)));
-        assert_eq!(executor.evaluate_simple_expression("-10"), Some(Value::Integer(-10)));
-        assert_eq!(executor.evaluate_simple_expression("0"), Some(Value::Integer(0)));
+
+        assert_eq!(
+            executor.evaluate_simple_expression("42"),
+            Some(Value::Integer(42))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("-10"),
+            Some(Value::Integer(-10))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("0"),
+            Some(Value::Integer(0))
+        );
     }
 
     #[test]
     fn test_evaluate_simple_expression_float() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("3.14"), Some(Value::Float(3.14)));
-        assert_eq!(executor.evaluate_simple_expression("-1.5"), Some(Value::Float(-1.5)));
+
+        assert_eq!(
+            executor.evaluate_simple_expression("3.14"),
+            Some(Value::Float(3.14))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("-1.5"),
+            Some(Value::Float(-1.5))
+        );
     }
 
     #[test]
     fn test_evaluate_simple_expression_string() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("'hello'"), Some(Value::Text("hello".to_string())));
-        assert_eq!(executor.evaluate_simple_expression("'test string'"), Some(Value::Text("test string".to_string())));
+
+        assert_eq!(
+            executor.evaluate_simple_expression("'hello'"),
+            Some(Value::Text("hello".to_string()))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("'test string'"),
+            Some(Value::Text("test string".to_string()))
+        );
     }
 
     #[test]
     fn test_evaluate_simple_expression_boolean() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("TRUE"), Some(Value::Boolean(true)));
-        assert_eq!(executor.evaluate_simple_expression("true"), Some(Value::Boolean(true)));
-        assert_eq!(executor.evaluate_simple_expression("FALSE"), Some(Value::Boolean(false)));
-        assert_eq!(executor.evaluate_simple_expression("false"), Some(Value::Boolean(false)));
+
+        assert_eq!(
+            executor.evaluate_simple_expression("TRUE"),
+            Some(Value::Boolean(true))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("true"),
+            Some(Value::Boolean(true))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("FALSE"),
+            Some(Value::Boolean(false))
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("false"),
+            Some(Value::Boolean(false))
+        );
     }
 
     #[test]
     fn test_evaluate_simple_expression_null() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("NULL"), Some(Value::Null));
-        assert_eq!(executor.evaluate_simple_expression("null"), Some(Value::Null));
+
+        assert_eq!(
+            executor.evaluate_simple_expression("NULL"),
+            Some(Value::Null)
+        );
+        assert_eq!(
+            executor.evaluate_simple_expression("null"),
+            Some(Value::Null)
+        );
     }
 
     #[test]
     fn test_evaluate_simple_expression_new_col_reference() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.evaluate_simple_expression("NEW.id * 10");
         assert_eq!(result, Some(Value::Integer(10)));
     }
@@ -1472,8 +1503,11 @@ mod tests {
     fn test_evaluate_simple_expression_unsupported() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        assert_eq!(executor.evaluate_simple_expression("column1 + column2"), None);
+
+        assert_eq!(
+            executor.evaluate_simple_expression("column1 + column2"),
+            None
+        );
         assert_eq!(executor.evaluate_simple_expression("unknown_func()"), None);
     }
 
@@ -1481,7 +1515,7 @@ mod tests {
     fn test_parse_simple_set_assignments_basic() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.parse_simple_set_assignments("SET NEW.col = 42");
         assert!(result.is_some());
         let assignments = result.unwrap();
@@ -1493,7 +1527,7 @@ mod tests {
     fn test_parse_simple_set_assignments_old_reference() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.parse_simple_set_assignments("SET NEW.total = OLD.price");
         assert_eq!(result, None);
     }
@@ -1502,7 +1536,7 @@ mod tests {
     fn test_parse_simple_set_assignments_multiple() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.parse_simple_set_assignments("SET NEW.col1 = 1; SET NEW.col2 = 2");
         assert!(result.is_some());
         let assignments = result.unwrap();
@@ -1514,7 +1548,7 @@ mod tests {
     fn test_parse_simple_set_assignments_no_new_reference() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.parse_simple_set_assignments("SELECT * FROM table");
         assert_eq!(result, None);
     }
@@ -1523,13 +1557,11 @@ mod tests {
     fn test_expand_insert_values_basic() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(1),
-            Value::Text("test".to_string()),
-        ];
-        
-        let expanded = executor.expand_insert_values("INSERT INTO t VALUES (NEW[0], NEW[1])", Some(&new_row));
+
+        let new_row = vec![Value::Integer(1), Value::Text("test".to_string())];
+
+        let expanded =
+            executor.expand_insert_values("INSERT INTO t VALUES (NEW[0], NEW[1])", Some(&new_row));
         assert!(expanded.contains("1"));
         assert!(expanded.contains("test"));
     }
@@ -1538,13 +1570,11 @@ mod tests {
     fn test_expand_insert_values_with_new_id() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(42),
-            Value::Text("test".to_string()),
-        ];
-        
-        let expanded = executor.expand_insert_values("INSERT INTO t VALUES (NEW.id)", Some(&new_row));
+
+        let new_row = vec![Value::Integer(42), Value::Text("test".to_string())];
+
+        let expanded =
+            executor.expand_insert_values("INSERT INTO t VALUES (NEW.id)", Some(&new_row));
         assert!(expanded.contains("42"));
     }
 
@@ -1552,7 +1582,7 @@ mod tests {
     fn test_expand_insert_values_no_new_row() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let sql = "INSERT INTO t VALUES (1)";
         let expanded = executor.expand_insert_values(sql, None);
         assert_eq!(expanded, sql);
@@ -1562,13 +1592,11 @@ mod tests {
     fn test_expand_update_values() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let new_row = vec![
-            Value::Integer(1),
-            Value::Float(10.0),
-        ];
-        
-        let expanded = executor.expand_update_values("UPDATE t SET col = NEW.price", "orders", Some(&new_row));
+
+        let new_row = vec![Value::Integer(1), Value::Float(10.0)];
+
+        let expanded =
+            executor.expand_update_values("UPDATE t SET col = NEW.price", "orders", Some(&new_row));
         assert!(expanded.contains("10"));
     }
 
@@ -1576,13 +1604,14 @@ mod tests {
     fn test_expand_delete_values() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let old_row = vec![
-            Value::Integer(1),
-            Value::Float(10.0),
-        ];
-        
-        let expanded = executor.expand_delete_values("DELETE FROM t WHERE id = OLD.id", "orders", Some(&old_row));
+
+        let old_row = vec![Value::Integer(1), Value::Float(10.0)];
+
+        let expanded = executor.expand_delete_values(
+            "DELETE FROM t WHERE id = OLD.id",
+            "orders",
+            Some(&old_row),
+        );
         assert!(expanded.contains("1"));
     }
 
@@ -1590,7 +1619,7 @@ mod tests {
     fn test_expression_to_value_literal_null() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let expr = Expression::Literal("NULL".to_string());
         let result = executor.expression_to_value(&expr, None);
@@ -1601,7 +1630,7 @@ mod tests {
     fn test_expression_to_value_literal_integer() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let expr = Expression::Literal("42".to_string());
         let result = executor.expression_to_value(&expr, None);
@@ -1612,7 +1641,7 @@ mod tests {
     fn test_expression_to_value_literal_float() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let expr = Expression::Literal("3.14".to_string());
         let result = executor.expression_to_value(&expr, None);
@@ -1623,7 +1652,7 @@ mod tests {
     fn test_expression_to_value_literal_string() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let expr = Expression::Literal("'hello'".to_string());
         let result = executor.expression_to_value(&expr, None);
@@ -1634,10 +1663,10 @@ mod tests {
     fn test_expression_to_value_identifier_new_id() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let new_row = vec![Value::Integer(42), Value::Text("test".to_string())];
-        
+
         let expr = Expression::Identifier("NEW.id".to_string());
         let result = executor.expression_to_value(&expr, Some(&new_row));
         assert_eq!(result, Value::Integer(42));
@@ -1647,10 +1676,10 @@ mod tests {
     fn test_expression_to_value_identifier_new_col1() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let new_row = vec![Value::Integer(42), Value::Text("test".to_string())];
-        
+
         let expr = Expression::Identifier("NEW.col1".to_string());
         let result = executor.expression_to_value(&expr, Some(&new_row));
         assert_eq!(result, Value::Text("test".to_string()));
@@ -1660,7 +1689,7 @@ mod tests {
     fn test_expression_to_value_complex_expression() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         use sqlrustgo_parser::Expression;
         let expr = Expression::BinaryOp(
             Box::new(Expression::Literal("1".to_string())),
@@ -1675,7 +1704,7 @@ mod tests {
     fn test_execute_trigger_sql_empty() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.execute_trigger_sql("", "orders", None, None);
         assert!(result.is_ok());
     }
@@ -1684,8 +1713,9 @@ mod tests {
     fn test_execute_trigger_sql_unrecognized() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
-        let result = executor.execute_trigger_sql("REVOKE ALL ON table FROM user", "orders", None, None);
+
+        let result =
+            executor.execute_trigger_sql("REVOKE ALL ON table FROM user", "orders", None, None);
         assert!(result.is_ok());
     }
 
@@ -1693,7 +1723,7 @@ mod tests {
     fn test_execute_trigger_sql_whitespace() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.execute_trigger_sql("   ", "orders", None, None);
         assert!(result.is_ok());
     }
@@ -1702,7 +1732,7 @@ mod tests {
     fn test_execute_trigger_body_no_statements() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let trigger = StorageTriggerInfo {
             name: "empty_trigger".to_string(),
             table_name: "orders".to_string(),
@@ -1710,8 +1740,13 @@ mod tests {
             event: StorageTriggerEvent::Insert,
             body: "".to_string(),
         };
-        
-        let new_row = vec![Value::Integer(1), Value::Float(10.0), Value::Integer(5), Value::Null];
+
+        let new_row = vec![
+            Value::Integer(1),
+            Value::Float(10.0),
+            Value::Integer(5),
+            Value::Null,
+        ];
         let result = executor.execute_trigger_body(&trigger, "orders", None, Some(&new_row));
         assert!(result.is_ok());
     }
@@ -1720,7 +1755,7 @@ mod tests {
     fn test_execute_trigger_body_with_set_statement() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let trigger = StorageTriggerInfo {
             name: "set_trigger".to_string(),
             table_name: "orders".to_string(),
@@ -1728,14 +1763,14 @@ mod tests {
             event: StorageTriggerEvent::Insert,
             body: "SET NEW.total = NEW.price * NEW.quantity".to_string(),
         };
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Null,
         ];
-        
+
         let result = executor.execute_trigger_body(&trigger, "orders", None, Some(&new_row));
         assert!(result.is_ok());
     }
@@ -1754,7 +1789,7 @@ mod tests {
     fn test_trigger_execution_result_debug() {
         let unmodified = TriggerExecutionResult::Unmodified;
         assert_eq!(format!("{:?}", unmodified), "Unmodified");
-        
+
         let modified = TriggerExecutionResult::ModifiedNewRow(vec![Value::Integer(1)]);
         assert!(format!("{:?}", modified).contains("ModifiedNewRow"));
     }
@@ -1763,14 +1798,14 @@ mod tests {
     fn test_execute_triggers_before_insert() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Null,
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Insert,
             TriggerTiming::Before,
@@ -1786,14 +1821,14 @@ mod tests {
     fn test_execute_triggers_after_insert() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Insert,
             TriggerTiming::After,
@@ -1808,7 +1843,7 @@ mod tests {
     fn test_execute_triggers_before_update() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let old_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
@@ -1821,7 +1856,7 @@ mod tests {
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Update,
             TriggerTiming::Before,
@@ -1836,7 +1871,7 @@ mod tests {
     fn test_execute_triggers_after_update() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let old_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
@@ -1849,7 +1884,7 @@ mod tests {
             Value::Integer(5),
             Value::Float(60.0),
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Update,
             TriggerTiming::After,
@@ -1864,14 +1899,14 @@ mod tests {
     fn test_execute_triggers_before_delete() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let old_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Delete,
             TriggerTiming::Before,
@@ -1886,14 +1921,14 @@ mod tests {
     fn test_execute_triggers_after_delete() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let old_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Delete,
             TriggerTiming::After,
@@ -1908,7 +1943,7 @@ mod tests {
     fn test_execute_triggers_no_new_row_for_insert() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Insert,
             TriggerTiming::Before,
@@ -1924,7 +1959,7 @@ mod tests {
     fn test_execute_triggers_no_old_row_for_delete() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let result = executor.execute_triggers(
             TriggerEvent::Delete,
             TriggerTiming::Before,
@@ -1939,19 +1974,15 @@ mod tests {
     fn test_execute_trigger_set_with_valid_assignments() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Null,
         ];
-        
-        let result = executor.execute_trigger_set(
-            "SET NEW.total = 100",
-            "orders",
-            &new_row,
-        );
+
+        let result = executor.execute_trigger_set("SET NEW.total = 100", "orders", &new_row);
         assert!(result.is_ok());
     }
 
@@ -1959,19 +1990,15 @@ mod tests {
     fn test_execute_trigger_set_with_invalid_assignments() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Null,
         ];
-        
-        let result = executor.execute_trigger_set(
-            "SET total = 100",
-            "orders",
-            &new_row,
-        );
+
+        let result = executor.execute_trigger_set("SET total = 100", "orders", &new_row);
         assert!(result.is_ok());
     }
 
@@ -1979,19 +2006,16 @@ mod tests {
     fn test_execute_trigger_select_validates_columns() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
-        let result = executor.execute_trigger_select(
-            "SELECT id FROM orders",
-            "orders",
-            Some(&new_row),
-        );
+
+        let result =
+            executor.execute_trigger_select("SELECT id FROM orders", "orders", Some(&new_row));
         assert!(result.is_ok());
     }
 
@@ -1999,19 +2023,15 @@ mod tests {
     fn test_execute_trigger_select_with_literal_expression() {
         let mut storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let new_row = vec![
             Value::Integer(1),
             Value::Float(10.0),
             Value::Integer(5),
             Value::Float(50.0),
         ];
-        
-        let result = executor.execute_trigger_select(
-            "SELECT 42",
-            "orders",
-            Some(&new_row),
-        );
+
+        let result = executor.execute_trigger_select("SELECT 42", "orders", Some(&new_row));
         assert!(result.is_ok());
     }
 
@@ -2019,7 +2039,7 @@ mod tests {
     fn test_split_body_with_trailing_semicolon() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.col = 1;");
         assert_eq!(statements.len(), 1);
         assert_eq!(statements[0], "SET NEW.col = 1");
@@ -2029,7 +2049,7 @@ mod tests {
     fn test_split_body_with_multiple_semicolons() {
         let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
-        
+
         let statements = executor.split_body_statements("SET NEW.col1 = 1;;; SET NEW.col2 = 2");
         assert_eq!(statements.len(), 2);
     }

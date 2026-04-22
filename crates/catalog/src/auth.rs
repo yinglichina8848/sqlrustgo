@@ -1212,11 +1212,7 @@ mod tests {
         auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
             .unwrap();
 
-        let result = auth.check_privilege(
-            &identity,
-            &ObjectRef::table("users"),
-            Privilege::Read,
-        );
+        let result = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
         assert!(result.is_ok());
     }
 
@@ -1228,11 +1224,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        let result = auth.check_privilege(
-            &identity,
-            &ObjectRef::table("secret"),
-            Privilege::Read,
-        );
+        let result = auth.check_privilege(&identity, &ObjectRef::table("secret"), Privilege::Read);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -1254,19 +1246,10 @@ mod tests {
         auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
             .unwrap();
 
-        let result = auth.revoke_privilege(
-            &identity,
-            Privilege::Read,
-            ObjectType::Table,
-            "users",
-        );
+        let result = auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "users");
         assert!(result.is_ok());
 
-        let check = auth.check_privilege(
-            &identity,
-            &ObjectRef::table("users"),
-            Privilege::Read,
-        );
+        let check = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
         assert!(check.is_err());
     }
 
@@ -1278,12 +1261,8 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        let result = auth.revoke_privilege(
-            &identity,
-            Privilege::Read,
-            ObjectType::Table,
-            "nonexistent",
-        );
+        let result =
+            auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "nonexistent");
         assert!(result.is_ok());
     }
 
@@ -1329,12 +1308,7 @@ mod tests {
         auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
             .unwrap();
 
-        let result = auth.has_grant_option(
-            &identity,
-            Privilege::Read,
-            ObjectType::Table,
-            "users",
-        );
+        let result = auth.has_grant_option(&identity, Privilege::Read, ObjectType::Table, "users");
         assert!(!result);
     }
 
