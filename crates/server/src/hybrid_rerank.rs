@@ -279,9 +279,9 @@ impl HybridReranker {
             let vector_rank = vector_ranks.get(result.id.as_str()).copied().unwrap_or(0);
             let graph_rank = graph_ranks.get(result.id.as_str()).copied().unwrap_or(0);
 
-            let sql_contrib = if sql_rank > 0 { w.sql as f32 / (k + sql_rank) as f32 } else { 0.0 };
-            let vector_contrib = if vector_rank > 0 { w.vector as f32 / (k + vector_rank) as f32 } else { 0.0 };
-            let graph_contrib = if graph_rank > 0 { w.graph as f32 / (k + graph_rank) as f32 } else { 0.0 };
+            let sql_contrib = if sql_rank > 0 { w.sql / (k + sql_rank) as f32 } else { 0.0 };
+            let vector_contrib = if vector_rank > 0 { w.vector / (k + vector_rank) as f32 } else { 0.0 };
+            let graph_contrib = if graph_rank > 0 { w.graph / (k + graph_rank) as f32 } else { 0.0 };
 
             let multi_match = if result.sources.len() > 1 { w.multi_match_bonus } else { 0.0 };
             let final_score = sql_contrib + vector_contrib + graph_contrib + multi_match;
