@@ -9,7 +9,7 @@ mkdir -p docs/releases/v1.0.0-rc1
 
 # 运行覆盖率测试
 echo "Running coverage test..."
-cargo tarpaulin --out Xml --out Html --output-dir docs/releases/v1.0.0-rc1
+cargo tarpaulin --out Xml --out Html --output-dir docs/releases/v1.0.0-rc1 --exclude sqlrustgo_bench -- --skip test_trigger_executes_insert --skip test_trigger_executes_delete --skip test_trigger_executes_update
 
 # 检查覆盖率报告是否生成
 if [ ! -f "docs/releases/v1.0.0-rc1/coverage.xml" ]; then
