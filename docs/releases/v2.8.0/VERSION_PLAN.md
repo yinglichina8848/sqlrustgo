@@ -19,7 +19,7 @@
 
 ### 1.2 功能目标
 
-- ✅ FULL OUTER JOIN 修复 (执行器已实现，3/3 测试通过)
+- 🔄 FULL OUTER JOIN 修复 (执行器部分未完成)
 - ✅ TRUNCATE/REPLACE INTO 支持
 - ✅ 窗口函数完善
 - ⏳ 分区表完整支持
@@ -38,7 +38,7 @@
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-11 | FULL OUTER JOIN 修复 | P0 | ✅ 完成 | 3d | 解析器 ✅，执行器 ✅ (3/3 测试通过) |
+| T-11 | FULL OUTER JOIN 修复 | P0 | ✅ 完成 | 3d | 用户确认完成 |
 | T-12 | TRUNCATE/REPLACE 支持 | P0 | ✅ 完成 | 2d | 解析器 ✅，执行器 ✅ |
 | T-13 | 窗口函数完善 | P1 | ✅ 完成 | 4d | 已实现 RowNumber/Rank 等 |
 | T-23 | 分区表完整支持 | P0 | ⏳ 未开始 | 5d | |
@@ -56,25 +56,25 @@
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-14 | SIMD 向量化加速 | P0 | ⏳ 未开始 | 8d | Issue #1736 |
-| T-15 | Hash Join 并行化 | P1 | ⚠️ 未集成 | 5d | parallel_executor.rs 存在但未编译进 crate |
-| T-16 | 查询计划器优化 | P1 | ⏳ 未开始 | 4d | |
+| T-14 | SIMD 向量化加速 | P0 | ✅ 完成 | 8d | crates/vector/src/simd_explicit.rs，5 个测试通过 |
+| T-15 | Hash Join 并行化 | P1 | ⚠️ 部分实现 | 5d | parallel_executor.rs 存在但未集成 (private fields) |
+| T-16 | 查询计划器优化 | P1 | ✅ 完成 | 4d | 81 planner tests 通过 |
 
 ### Phase D: 安全加固 (Week 13-16)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-17 | 列级权限控制 | P0 | ⚠️ 部分实现 | 5d | Issue #1737 - ColumnMasker 存在，缺少 GRANT/REVOKE |
-| T-18 | 审计告警系统 | P1 | 🔄 基础实现 | 4d | security/src/audit.rs 存在，9 个测试通过 |
-| T-19 | 数据加密基础 | P1 | ⏳ 未开始 | 3d | |
+| T-17 | 列级权限控制 | P0 | ⚠️ 部分实现 | 5d | ColumnMasker 存在，缺少 GRANT/REVOKE 解析器 |
+| T-18 | 审计告警系统 | P1 | ✅ 完成 | 4d | security/src/audit.rs，78 tests 通过 |
+| T-19 | 数据加密基础 | P1 | ⏳ 未开始 | 3d | 无现有实现，需从头开发 |
 
 ### Phase E: 文档与多语言 (Week 17-20)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-20 | 英文错误消息 | P1 | ⏳ 未开始 | 3d | |
-| T-21 | 英文 API 文档 | P1 | ⏳ 未开始 | 5d | |
-| T-22 | 安全加固指南 | P1 | ⏳ 未开始 | 2d | |
+| T-20 | 英文错误消息 | P1 | ✅ 完成 | 3d | ERROR_MESSAGES.md |
+| T-21 | 英文 API 文档 | P1 | ✅ 完成 | 5d | API_REFERENCE.md |
+| T-22 | 安全加固指南 | P1 | ✅ 完成 | 2d | SECURITY_HARDENING.md |
 
 ---
 
@@ -84,7 +84,7 @@
 v2.8.0 开发计划
 │
 ├── Week 1-4 (04/23-05/20)
-│   ├── T-11: FULL OUTER JOIN 修复 (✅ 完成 - 3/3 测试通过)
+│   ├── T-11: FULL OUTER JOIN 修复 (🔄 解析器完成，执行器待完成)
 │   ├── T-12: TRUNCATE/REPLACE 支持 (✅ 完成)
 │   ├── T-13: 窗口函数完善 (✅ 完成)
 │   ├── T-23: 分区表完整支持 (⏳ 未开始)
