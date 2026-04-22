@@ -102,8 +102,10 @@ impl Database for MySqlDB {
         let end = end as i32;
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get_conn()?;
-            let _: Vec<(i32, String, String, i32)> =
-                conn.exec("SELECT * FROM accounts WHERE id >= ? AND id < ?", (start, end))?;
+            let _: Vec<(i32, String, String, i32)> = conn.exec(
+                "SELECT * FROM accounts WHERE id >= ? AND id < ?",
+                (start, end),
+            )?;
             Ok::<(), mysql::Error>(())
         })
         .await

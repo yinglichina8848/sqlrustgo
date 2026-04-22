@@ -69,6 +69,7 @@ impl SimpleExecutor {
                         .collect(),
                     foreign_keys: vec![],
                     unique_constraints: vec![],
+                    partition_info: None,
                 };
                 self.storage
                     .create_table(&info)
