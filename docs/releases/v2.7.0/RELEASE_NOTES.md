@@ -182,7 +182,7 @@ Status: ✅ PASS
 **配置变更**:
 - WAL 相关配置项已重命名，请参考 `WAL_CONFIG_MIGRATION.md`
 
-详见 [UPGRADE_GUIDE_v2.7.0.md](./UPGRADE_GUIDE_v2.7.0.md)
+详见 [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md)
 
 ---
 
@@ -208,7 +208,7 @@ Status: ✅ PASS
 - [版本计划](./VERSION_PLAN.md)
 - [门禁检查清单](./RELEASE_GATE_CHECKLIST.md)
 - [测试计划](./TEST_PLAN.md)
-- [升级指南](./UPGRADE_GUIDE_v2.7.0.md)
+- [升级指南](./UPGRADE_GUIDE.md)
 - [WAL 配置迁移](./WAL_CONFIG_MIGRATION.md)
 - [功能集成状态](./INTEGRATION_STATUS.md)
 - [性能目标](./PERFORMANCE_TARGETS.md)
