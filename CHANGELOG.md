@@ -5,13 +5,13 @@ SQLRustGo 的所有显着更改都将记录在此文件中。
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [未发布]
+## [2.7.0] - 2026-04-22 (GA)
 
-### Added
+### 目标
 
-- **版本**: alpha/v2.7.0
+企业级韧性版本，实现 WAL 崩溃恢复、外键稳定性增强、备份恢复机制、审计证据链等企业级功能。
 
-### Phase A-C 已完成 (2026-04-22)
+### 已完成
 
 | 功能 | PR | 状态 |
 |------|-----|------|
@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | T-06 混合检索重排 (RRF/Linear/Composite) | #1714 | ✅ |
 | T-07 GMP Top 10 审核查询模板 | #1714 | ✅ |
 | T-08 审计证据链 (防篡改哈希链) | #1718 | ✅ |
+
+### 发布 PR
+
+- [#1729](https://github.com/minzuuniversity/sqlrustgo/pull/1729) - chore: v2.7.0 GA release
 
 ## [2.6.0] - 2026-04-22 (GA)
 
