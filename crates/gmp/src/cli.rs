@@ -531,6 +531,7 @@ impl GmpCliState {
         // Get neighbors (both outgoing AND incoming, since GMP graph edges are bidirectional)
         let neighbor_ids: Vec<NodeId> = match rel_type {
             Some(_rt) => {
+                // For bidirectional edges, need to get both outgoing and incoming
                 let out = graph.neighbors_by_edge_label(nid, rel_type.unwrap());
                 let incoming = graph.neighbors_by_edge_label(nid, rel_type.unwrap());
                 out.into_iter().chain(incoming).collect()

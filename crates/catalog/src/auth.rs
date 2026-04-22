@@ -1146,4 +1146,401 @@ mod tests {
         let debug_str = format!("{:?}", cred);
         assert!(debug_str.contains("ScramCredential"));
     }
+
+    #[test]
+    fn test_grant_role_to_user() {
+        let mut auth = AuthManager::new();
+        let role_id = auth.create_role("admin", None).unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let result = auth.grant_role_to_user(0, role_id, 0);
+        assert!(result.is_ok());
+
+        let roles = auth.get_user_roles(0);
+        assert_eq!(roles.len(), 1);
+        assert_eq!(roles[0].name, "admin");
+    }
+
+    #[test]
+    fn test_grant_role_to_nonexistent_role() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let result = auth.grant_role_to_user(0, 999, 0);
+        assert!(matches!(
+            result,
+            Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_get_user_roles_recursive() {
+        let mut auth = AuthManager::new();
+        let admin_id = auth.create_role("admin", None).unwrap();
+        let editor_id = auth.create_role("editor", Some(admin_id)).unwrap();
+        let viewer_id = auth.create_role("viewer", Some(editor_id)).unwrap();
+
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+        auth.grant_role_to_user(0, viewer_id, 0).unwrap();
+
+        let roles = auth.get_user_roles_recursive(0);
+        assert!(roles.contains(&viewer_id));
+        assert!(roles.contains(&editor_id));
+        assert!(roles.contains(&admin_id));
+    }
+
+    #[test]
+    fn test_check_privilege_with_wildcard() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        let result = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_check_privilege_denied() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let result = auth.check_privilege(&identity, &ObjectRef::table("secret"), Privilege::Read);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            AuthError {
+                code: AuthErrorCode::PermissionDenied,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_revoke_privilege() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        let result = auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "users");
+        assert!(result.is_ok());
+
+        let check = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
+        assert!(check.is_err());
+    }
+
+    #[test]
+    fn test_revoke_privilege_not_found() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        let result =
+            auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "nonexistent");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_drop_role() {
+        let mut auth = AuthManager::new();
+        let role_id = auth.create_role("admin", None).unwrap();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+        auth.grant_role_to_user(0, role_id, 0).unwrap();
+
+        let result = auth.drop_role(role_id);
+        assert!(result.is_ok());
+
+        let roles = auth.get_role(role_id);
+        assert!(roles.is_none());
+    }
+
+    #[test]
+    fn test_drop_role_not_found() {
+        let mut auth = AuthManager::new();
+
+        let result = auth.drop_role(999);
+        assert!(matches!(
+            result,
+            Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_has_grant_option() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        let result = auth.has_grant_option(&identity, Privilege::Read, ObjectType::Table, "users");
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_list_users_and_roles() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+        auth.create_role("admin", None).unwrap();
+
+        let users = auth.list_users();
+        assert_eq!(users.len(), 1);
+
+        let roles = auth.list_roles();
+        assert_eq!(roles.len(), 1);
+    }
+
+    #[test]
+    fn test_list_grants() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        let password_hash = hash_password("pass");
+
+        auth.create_user(&identity, &password_hash).unwrap();
+
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        let grants = auth.list_grants();
+        assert_eq!(grants.len(), 1);
+    }
+
+    #[test]
+    fn test_duplicate_role_error() {
+        let mut auth = AuthManager::new();
+        auth.create_role("admin", None).unwrap();
+
+        let result = auth.create_role("admin", None);
+        assert!(matches!(
+            result,
+            Err(AuthError {
+                code: AuthErrorCode::DuplicateRole,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_create_role_with_invalid_parent() {
+        let mut auth = AuthManager::new();
+
+        let result = auth.create_role("child", Some(999));
+        assert!(matches!(
+            result,
+            Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_object_ref_table() {
+        let table = ObjectRef::table("users");
+        assert_eq!(table.object_type, ObjectType::Table);
+        assert_eq!(table.object_name, "users");
+        assert!(table.column_name.is_none());
+    }
+
+    #[test]
+    fn test_object_ref_column() {
+        let column = ObjectRef::column("users", "id");
+        assert_eq!(column.object_type, ObjectType::Column);
+        assert_eq!(column.object_name, "users");
+        assert_eq!(column.column_name, Some("id".to_string()));
+    }
+
+    #[test]
+    fn test_object_ref_database() {
+        let db = ObjectRef::database("mydb");
+        assert_eq!(db.object_type, ObjectType::Database);
+        assert_eq!(db.object_name, "mydb");
+        assert!(db.column_name.is_none());
+    }
+
+    #[test]
+    fn test_object_ref_matches() {
+        let table1 = ObjectRef::table("users");
+        let table2 = ObjectRef::table("users");
+        let table3 = ObjectRef::table("orders");
+
+        assert!(table1.matches(&table2));
+        assert!(!table1.matches(&table3));
+    }
+
+    #[test]
+    fn test_privilege_grant_matches() {
+        let grant = PrivilegeGrant::new(
+            1,
+            GranteeType::User,
+            0,
+            Privilege::Read,
+            ObjectType::Table,
+            "users".to_string(),
+            0,
+        );
+
+        assert!(grant.matches(Privilege::Read, &ObjectRef::table("users")));
+        assert!(!grant.matches(Privilege::Insert, &ObjectRef::table("users")));
+    }
+
+    #[test]
+    fn test_privilege_grant_matches_all() {
+        let grant = PrivilegeGrant::new(
+            1,
+            GranteeType::User,
+            0,
+            Privilege::All,
+            ObjectType::Database,
+            "*".to_string(),
+            0,
+        );
+
+        assert!(grant.matches(Privilege::Read, &ObjectRef::database("anything")));
+        assert!(grant.matches(Privilege::Insert, &ObjectRef::database("anything")));
+    }
+
+    #[test]
+    fn test_privilege_grant_matches_wildcard_database() {
+        let grant = PrivilegeGrant::new(
+            1,
+            GranteeType::User,
+            0,
+            Privilege::Read,
+            ObjectType::Database,
+            "%".to_string(),
+            0,
+        );
+
+        assert!(grant.matches(Privilege::Read, &ObjectRef::database("anything")));
+    }
+
+    #[test]
+    fn test_object_type_from_str() {
+        assert_eq!(ObjectType::from_str("TABLE"), Some(ObjectType::Table));
+        assert_eq!(ObjectType::from_str("DATABASE"), Some(ObjectType::Database));
+        assert_eq!(ObjectType::from_str("SCHEMA"), Some(ObjectType::Database));
+        assert_eq!(ObjectType::from_str("COLUMN"), Some(ObjectType::Column));
+        assert_eq!(ObjectType::from_str("INVALID"), None);
+    }
+
+    #[test]
+    fn test_grantee_type() {
+        assert_eq!(format!("{:?}", GranteeType::User), "User");
+        assert_eq!(format!("{:?}", GranteeType::Role), "Role");
+    }
+
+    #[test]
+    fn test_auth_error_display() {
+        let err = AuthError {
+            code: AuthErrorCode::AuthenticationFailed,
+            message: "test error".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Auth error"));
+        assert!(display.contains("test error"));
+    }
+
+    #[test]
+    fn test_privilege_display() {
+        assert_eq!(format!("{}", Privilege::Read), "READ");
+        assert_eq!(format!("{}", Privilege::Insert), "INSERT");
+        assert_eq!(format!("{}", Privilege::All), "ALL");
+    }
+
+    #[test]
+    fn test_constant_time_eq() {
+        assert!(constant_time_eq(b"test", b"test"));
+        assert!(!constant_time_eq(b"test", b"Test"));
+        assert!(!constant_time_eq(b"test", b"test1"));
+        assert!(!constant_time_eq(b"", b"test"));
+    }
+
+    #[test]
+    fn test_hash_password() {
+        let hash1 = hash_password("password");
+        let hash2 = hash_password("password");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_verify_password() {
+        let hash = hash_password("secret");
+        assert!(verify_password("secret", &hash));
+        assert!(!verify_password("wrong", &hash));
+    }
+
+    #[test]
+    fn test_all_users_iterator() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        auth.create_user(&identity, "hash").unwrap();
+
+        let users: Vec<_> = auth.all_users().collect();
+        assert_eq!(users.len(), 1);
+    }
+
+    #[test]
+    fn test_all_privileges_iterator() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        auth.create_user(&identity, "hash").unwrap();
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
+            .unwrap();
+
+        let privs: Vec<_> = auth.all_privileges().collect();
+        assert_eq!(privs.len(), 1);
+    }
+
+    #[test]
+    fn test_get_user_privileges() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        auth.create_user(&identity, "hash").unwrap();
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
+            .unwrap();
+        auth.grant_privilege(&identity, Privilege::Insert, ObjectType::Table, "t1", 0)
+            .unwrap();
+
+        let privs = auth.get_user_privileges(&identity);
+        assert_eq!(privs.len(), 2);
+    }
 }
