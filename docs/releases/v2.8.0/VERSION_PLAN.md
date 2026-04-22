@@ -19,21 +19,16 @@
 
 ### 1.2 功能目标
 
-- 🔄 FULL OUTER JOIN 修复 (执行器部分未完成 - blocked by parser/planner type gap)
+- 🔄 FULL OUTER JOIN 修复 (执行器部分未完成)
 - ✅ TRUNCATE/REPLACE INTO 支持
 - ✅ 窗口函数完善
-- ✅ 审计告警系统 (78 tests pass)
-- ✅ 英文错误消息
-- ✅ 英文 API 文档
-- ✅ 安全加固指南
 - ⏳ 分区表完整支持
 - ⏳ 主从复制完善
 - ⏳ 基础故障转移
 - ⏳ 基础负载均衡
 - ⏳ 读写分离路由
 - ⏳ SIMD 向量化加速
-- ⏳ 列级权限控制 (ColumnMasker 存在，缺少 GRANT/REVOKE)
-- ⏳ 数据加密基础
+- ⏳ 列级权限控制
 
 ---
 
@@ -43,7 +38,7 @@
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-11 | FULL OUTER JOIN 修复 | P0 | 🔄 部分完成 | 3d | 解析器 ✅，执行器 🔲 (blocked: parser/planner type gap) |
+| T-11 | FULL OUTER JOIN 修复 | P0 | 🔄 部分完成 | 3d | 解析器 ✅，执行器 🔲 (测试仍 ignored) |
 | T-12 | TRUNCATE/REPLACE 支持 | P0 | ✅ 完成 | 2d | 解析器 ✅，执行器 ✅ |
 | T-13 | 窗口函数完善 | P1 | ✅ 完成 | 4d | 已实现 RowNumber/Rank 等 |
 | T-23 | 分区表完整支持 | P0 | ⏳ 未开始 | 5d | |
@@ -62,24 +57,24 @@
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
 | T-14 | SIMD 向量化加速 | P0 | ⏳ 未开始 | 8d | Issue #1736 |
-| T-15 | Hash Join 并行化 | P1 | ⚠️ 未集成 | 5d | parallel_executor.rs 存在但有集成障碍 (private fields, missing methods) |
+| T-15 | Hash Join 并行化 | P1 | ⚠️ 未集成 | 5d | parallel_executor.rs 存在但未编译进 crate |
 | T-16 | 查询计划器优化 | P1 | ⏳ 未开始 | 4d | |
 
 ### Phase D: 安全加固 (Week 13-16)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-17 | 列级权限控制 | P0 | ⚠️ 部分实现 | 5d | Issue #1737 - ColumnMasker 存在，缺少 GRANT/REVOKE 解析器 |
-| T-18 | 审计告警系统 | P1 | ✅ 验证通过 | 4d | security/src/audit.rs 存在，78 个测试通过 |
+| T-17 | 列级权限控制 | P0 | ⚠️ 部分实现 | 5d | Issue #1737 - ColumnMasker 存在，缺少 GRANT/REVOKE |
+| T-18 | 审计告警系统 | P1 | 🔄 基础实现 | 4d | security/src/audit.rs 存在，9 个测试通过 |
 | T-19 | 数据加密基础 | P1 | ⏳ 未开始 | 3d | |
 
 ### Phase E: 文档与多语言 (Week 17-20)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-20 | 英文错误消息 | P1 | ✅ 完成 | 3d | |
-| T-21 | 英文 API 文档 | P1 | ✅ 完成 | 5d | |
-| T-22 | 安全加固指南 | P1 | ✅ 完成 | 2d | |
+| T-20 | 英文错误消息 | P1 | ⏳ 未开始 | 3d | |
+| T-21 | 英文 API 文档 | P1 | ⏳ 未开始 | 5d | |
+| T-22 | 安全加固指南 | P1 | ⏳ 未开始 | 2d | |
 
 ---
 
