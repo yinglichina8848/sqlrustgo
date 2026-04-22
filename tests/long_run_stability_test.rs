@@ -23,7 +23,8 @@ fn create_engine() -> MemoryExecutionEngine {
 
 /// Create test table
 fn setup_table(engine: &mut MemoryExecutionEngine) {
-    let _ = engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+    let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
+    let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
 }
 
 /// Clean up test table
@@ -125,8 +126,9 @@ fn test_concurrent_read_write_stability() {
     // Create initial table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ =
-            engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+            engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
 
     let mut handles = vec![];
@@ -202,8 +204,9 @@ fn test_repeated_create_drop_stability() {
     let start = Instant::now();
 
     for i in 0..100 {
+        let _ = engine.execute(&format!("DROP TABLE IF EXISTS test_table_{}", i));
         let create_result = engine.execute(&format!(
-            "CREATE TABLE IF NOT EXISTS test_table_{} (id INTEGER, name TEXT)",
+            "CREATE TABLE test_table_{} (id INTEGER, name TEXT)",
             i
         ));
         assert!(
@@ -240,8 +243,9 @@ fn test_memory_stability_under_load() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ =
-            engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+            engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
 
     let start = Instant::now();
@@ -288,7 +292,8 @@ fn test_table_info_consistency_under_load() {
 
     for _ in 0..STABILITY_ITERATIONS {
         // Create table
-        let _ = engine.execute("CREATE TABLE IF NOT EXISTS info_test (id INTEGER, value TEXT)");
+        let _ = engine.execute("DROP TABLE IF EXISTS info_test");
+        let _ = engine.execute("CREATE TABLE info_test (id INTEGER, value TEXT)");
 
         // List tables
         let _ = engine.execute("SHOW TABLES");
@@ -347,8 +352,9 @@ fn test_interleaved_read_write_consistency() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ =
-            engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+            engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
 
     let mut handles = vec![];
@@ -389,8 +395,9 @@ fn test_rapid_burst_writes() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ =
-            engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+            engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
 
     let start = Instant::now();
@@ -439,8 +446,9 @@ fn test_stress_table_operations() {
 
     // Create 20 tables, insert 50 rows each
     for table_id in 0..20 {
+        let _ = engine.execute(&format!("DROP TABLE IF EXISTS stress_t{}", table_id));
         let _ = engine.execute(&format!(
-            "CREATE TABLE IF NOT EXISTS stress_t{} (id INTEGER, value TEXT)",
+            "CREATE TABLE stress_t{} (id INTEGER, value TEXT)",
             table_id
         ));
 
