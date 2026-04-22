@@ -2028,4 +2028,120 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().rows.is_empty());
     }
+
+    #[test]
+    fn test_execute_hash_join_full_outer() {
+        use sqlrustgo_planner::HashJoinExec;
+
+        let mut storage = MemoryStorage::new();
+
+        // Create t1 table
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "t1".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "name".to_string(),
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                ..Default::default()
+            })
+            .unwrap();
+
+        // Create t2 table
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "t2".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "value".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                ..Default::default()
+            })
+            .unwrap();
+
+        // Insert into t1
+        storage
+            .insert(
+                "t1",
+                vec![
+                    vec![Value::Integer(1), Value::Text("a".to_string())],
+                    vec![Value::Integer(2), Value::Text("b".to_string())],
+                    vec![Value::Integer(3), Value::Text("c".to_string())],
+                ],
+            )
+            .unwrap();
+
+        // Insert into t2
+        storage
+            .insert(
+                "t2",
+                vec![
+                    vec![Value::Integer(1), Value::Integer(100)],
+                    vec![Value::Integer(2), Value::Integer(200)],
+                    vec![Value::Integer(4), Value::Integer(400)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let left_scan = SeqScanExec::new("t1".to_string(), left_schema);
+        let right_scan = SeqScanExec::new("t2".to_string(), right_schema);
+
+        let join_condition = Expr::binary_expr(
+            Expr::column("id"),
+            Operator::Eq,
+            Expr::column("id"),
+        );
+
+        let hash_join = HashJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Full,
+            Some(join_condition),
+            output_schema,
+        );
+
+        let result = executor.execute(&hash_join);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+
+        // Should have 4 rows: (1,a,1,100), (2,b,2,200), (3,c,NULL,NULL), (NULL,NULL,4,400)
+        assert_eq!(result.rows.len(), 4);
+    }
 }
