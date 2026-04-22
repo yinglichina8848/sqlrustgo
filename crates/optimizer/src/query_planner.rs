@@ -405,6 +405,7 @@ impl QueryPlanResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::{BinaryOperator, Expr, JoinType};
     use crate::unified_plan::{GraphScanType, VectorScanType};
 
     #[test]
@@ -523,5 +524,304 @@ mod tests {
     fn test_plan_alternative_latency() {
         let alt = PlanAlternative::new(ExecutionPath::Sql, UnifiedPlan::EmptyRelation, 100.0);
         assert_eq!(alt.estimated_latency_ms, 10.0); // 100 * 0.1
+    }
+
+    #[test]
+    fn test_plan_with_disabled_cache() {
+        let mut config = QueryPlannerConfig::default();
+        config.enable_cache = false;
+        let planner = QueryPlanner::new(config, UnifiedCostModel::default_model(128, 10000));
+        assert_eq!(planner.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_plan_with_custom_config() {
+        let mut config = QueryPlannerConfig::default();
+        config.max_alternatives = 5;
+        config.enable_visualization = true;
+        config.default_vector_dim = 256;
+        let planner = QueryPlanner::new(config, UnifiedCostModel::default_model(256, 10000));
+        assert_eq!(planner.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_plan_filter() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column("id".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Literal("1".to_string())),
+            },
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT * FROM users WHERE id = 1", plan);
+        assert_eq!(result.selected_plan.type_name(), "Filter");
+    }
+
+    #[test]
+    fn test_plan_projection() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Projection {
+            expr: vec![Expr::Column("id".to_string()), Expr::Column("name".to_string())],
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT id, name FROM users", plan);
+        assert_eq!(result.selected_plan.type_name(), "Projection");
+    }
+
+    #[test]
+    fn test_plan_join() {
+        let mut planner = QueryPlanner::with_defaults();
+        let left = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let right = UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Join {
+            join_type: JoinType::Inner,
+            condition: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Column("user_id".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Column("id".to_string())),
+            }),
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+
+        let result = planner.plan("SELECT * FROM users JOIN orders", plan);
+        assert_eq!(result.selected_plan.type_name(), "Join");
+    }
+
+    #[test]
+    fn test_plan_limit() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Limit {
+            limit: 10,
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT * FROM users LIMIT 10", plan);
+        assert_eq!(result.selected_plan.type_name(), "Limit");
+    }
+
+    #[test]
+    fn test_plan_result_debug() {
+        let mut planner = QueryPlanner::with_defaults();
+        let plan = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let result = planner.plan("SELECT * FROM users", plan);
+        let debug_str = format!("{:?}", result);
+        assert!(debug_str.contains("QueryPlanResult"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_filter() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Column("id".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Literal("1".to_string())),
+            },
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT * FROM users WHERE id = 1", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("Filter"));
+        assert!(viz.contains("Selected Path"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_projection() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Projection {
+            expr: vec![Expr::Column("id".to_string()), Expr::Column("name".to_string())],
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT id, name FROM users", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("Projection"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_join() {
+        let mut planner = QueryPlanner::with_defaults();
+        let left = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let right = UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Join {
+            join_type: JoinType::Inner,
+            condition: Some(Expr::Column("user_id".to_string())),
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+
+        let result = planner.plan("SELECT * FROM users JOIN orders", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("Join"));
+        assert!(viz.contains("Inner"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_limit() {
+        let mut planner = QueryPlanner::with_defaults();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Limit {
+            limit: 10,
+            input: Box::new(input),
+        };
+
+        let result = planner.plan("SELECT * FROM users LIMIT 10", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("Limit"));
+        assert!(viz.contains("10"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_vector_scan() {
+        let mut planner = QueryPlanner::with_defaults();
+        let plan = UnifiedPlan::VectorScan {
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Knn { k: 10 },
+            limit: Some(10),
+        };
+
+        let result = planner.plan("SELECT * FROM embeddings", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("VectorScan"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_graph_scan() {
+        let mut planner = QueryPlanner::with_defaults();
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social_graph".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user_123".to_string()),
+        };
+
+        let result = planner.plan("MATCH (u:User)-[:KNOWS]->(v) FROM user_123", plan);
+        let viz = result.visualize_text();
+        assert!(viz.contains("GraphScan"));
+    }
+
+    #[test]
+    fn test_visualize_text_with_empty_relation() {
+        let result = QueryPlanResult {
+            query: "SELECT 1".to_string(),
+            selected_plan: UnifiedPlan::EmptyRelation,
+            alternatives: vec![],
+            path_selection: PathSelection {
+                recommended_path: ExecutionPath::Sql,
+                estimated_cost: 0.0,
+                sql_cost: 0.0,
+                vector_cost: 0.0,
+                graph_cost: 0.0,
+                hybrid_sql_vector_cost: None,
+                hybrid_sql_graph_cost: None,
+                reasoning: String::new(),
+            },
+            from_cache: false,
+        };
+        let viz = result.visualize_text();
+        assert!(viz.contains("EmptyRelation"));
+    }
+
+    #[test]
+    fn test_plan_alternative_new() {
+        let alt = PlanAlternative::new(
+            ExecutionPath::Vector,
+            UnifiedPlan::EmptyRelation,
+            50.0,
+        );
+        assert_eq!(alt.cost, 50.0);
+        assert_eq!(alt.path, ExecutionPath::Vector);
+        assert_eq!(alt.estimated_latency_ms, 5.0);
+    }
+
+    #[test]
+    fn test_path_selection_debug() {
+        let path_selection = PathSelection {
+            recommended_path: ExecutionPath::Sql,
+            estimated_cost: 100.0,
+            sql_cost: 100.0,
+            vector_cost: 200.0,
+            graph_cost: 300.0,
+            hybrid_sql_vector_cost: Some(150.0),
+            hybrid_sql_graph_cost: None,
+            reasoning: String::new(),
+        };
+        let debug_str = format!("{:?}", path_selection);
+        assert!(!debug_str.is_empty());
+    }
+
+    #[test]
+    fn test_plan_alternatives_with_multiple() {
+        let mut config = QueryPlannerConfig::default();
+        config.max_alternatives = 5;
+        let planner = QueryPlanner::new(config, UnifiedCostModel::default_model(128, 10000));
+        assert_eq!(planner.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_plan_alternatives_sql_cheapest() {
+        let mut planner = QueryPlanner::with_defaults();
+        let plan = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+
+        let result = planner.plan("SELECT * FROM users", plan);
+        assert_eq!(result.path_selection.recommended_path, ExecutionPath::Sql);
+    }
+
+    #[test]
+    fn test_plan_config_enable_visualization() {
+        let mut config = QueryPlannerConfig::default();
+        config.enable_visualization = true;
+        config.default_vector_dim = 512;
+        config.default_graph_size = 50000;
+        assert!(config.enable_visualization);
+        assert_eq!(config.default_vector_dim, 512);
+        assert_eq!(config.default_graph_size, 50000);
     }
 }

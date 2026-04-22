@@ -365,4 +365,239 @@ mod tests {
         assert!(plan.is_vector_op());
         assert!(!plan.is_sql_only());
     }
+
+    #[test]
+    fn test_index_scan_cardinality() {
+        let plan = UnifiedPlan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx_id".to_string(),
+            predicate: None,
+        };
+        assert_eq!(plan.estimate_cardinality(), 100);
+        assert_eq!(plan.type_name(), "IndexScan");
+    }
+
+    #[test]
+    fn test_filter_cardinality() {
+        let input = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Filter {
+            predicate: Expr::Column("active".to_string()),
+            input,
+        };
+        assert_eq!(plan.estimate_cardinality(), 500);
+    }
+
+    #[test]
+    fn test_aggregate_cardinality() {
+        let input = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Aggregate {
+            group_by: vec![Expr::Column("department".to_string())],
+            aggregates: vec![Expr::Column("salary".to_string())],
+            input,
+        };
+        assert_eq!(plan.estimate_cardinality(), 100);
+    }
+
+    #[test]
+    fn test_sort_cardinality() {
+        let input = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Sort {
+            expr: vec![Expr::Column("name".to_string())],
+            input,
+        };
+        assert_eq!(plan.estimate_cardinality(), 1000);
+    }
+
+    #[test]
+    fn test_graph_scan_traversal_cardinality() {
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 5 },
+            start_node: Some("user1".to_string()),
+        };
+        let card = plan.estimate_cardinality();
+        assert!(card > 0);
+        assert_eq!(plan.type_name(), "GraphScan");
+    }
+
+    #[test]
+    fn test_graph_scan_pattern_match_cardinality() {
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::PatternMatch {
+                pattern: GraphPattern {
+                    node_labels: vec!["User".to_string()],
+                    edge_labels: vec!["KNOWS".to_string()],
+                    path_pattern: "(a)-[:KNOWS]->(b)".to_string(),
+                },
+            },
+            start_node: None,
+        };
+        assert_eq!(plan.estimate_cardinality(), 100);
+    }
+
+    #[test]
+    fn test_graph_scan_reachability_cardinality() {
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Reachability {
+                target: "user2".to_string(),
+            },
+            start_node: Some("user1".to_string()),
+        };
+        assert_eq!(plan.estimate_cardinality(), 1);
+    }
+
+    #[test]
+    fn test_graph_scan_shortest_path_cardinality() {
+        let plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::ShortestPath {
+                target: "user2".to_string(),
+            },
+            start_node: Some("user1".to_string()),
+        };
+        assert_eq!(plan.estimate_cardinality(), 1);
+    }
+
+    #[test]
+    fn test_hybrid_graph_scan() {
+        let plan = UnifiedPlan::HybridGraphScan {
+            sql_filter: Some(Expr::Column("active".to_string())),
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user1".to_string()),
+        };
+        assert!(plan.is_graph_op());
+        assert_eq!(plan.estimate_cardinality(), 100);
+        assert_eq!(plan.type_name(), "HybridGraphScan");
+    }
+
+    #[test]
+    fn test_sql_graph_join() {
+        let sql_plan = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let graph_plan = Box::new(UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: None,
+        });
+        let plan = UnifiedPlan::SqlGraphJoin {
+            sql_plan,
+            graph_plan,
+            join_condition: Expr::Column("user_id".to_string()),
+        };
+        assert!(plan.is_graph_op());
+        assert_eq!(plan.type_name(), "SqlGraphJoin");
+    }
+
+    #[test]
+    fn test_vector_graph_join() {
+        let vector_plan = Box::new(UnifiedPlan::VectorScan {
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(5),
+        });
+        let graph_plan = Box::new(UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: None,
+        });
+        let plan = UnifiedPlan::VectorGraphJoin {
+            vector_plan,
+            graph_plan,
+            join_condition: Expr::Column("entity_id".to_string()),
+        };
+        assert!(plan.is_vector_op());
+        assert!(plan.is_graph_op());
+        assert_eq!(plan.type_name(), "VectorGraphJoin");
+    }
+
+    #[test]
+    fn test_empty_relation_cardinality() {
+        let plan = UnifiedPlan::EmptyRelation;
+        assert_eq!(plan.estimate_cardinality(), 0);
+        assert_eq!(plan.type_name(), "EmptyRelation");
+    }
+
+    #[test]
+    fn test_vector_scan_without_limit() {
+        let plan = UnifiedPlan::VectorScan {
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Ann { threshold: 0.8 },
+            limit: None,
+        };
+        assert_eq!(plan.estimate_cardinality(), 100);
+    }
+
+    #[test]
+    fn test_hybrid_vector_scan_without_limit() {
+        let plan = UnifiedPlan::HybridVectorScan {
+            sql_filter: None,
+            vector_index: "embeddings_idx".to_string(),
+            query_vector: vec![0.1; 128],
+            scan_type: VectorScanType::Similarity { threshold: 0.9 },
+            limit: None,
+        };
+        assert_eq!(plan.estimate_cardinality(), 100);
+    }
+
+    #[test]
+    fn test_join_cardinality() {
+        let left = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let right = Box::new(UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Join {
+            left,
+            right,
+            join_type: JoinType::Inner,
+            condition: Some(Expr::Column("user_id".to_string())),
+        };
+        let card = plan.estimate_cardinality();
+        assert!(card > 0);
+    }
+
+    #[test]
+    fn test_limit_smaller_than_input() {
+        let input = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Limit {
+            limit: 10,
+            input,
+        };
+        assert_eq!(plan.estimate_cardinality(), 10);
+    }
+
+    #[test]
+    fn test_limit_larger_than_input() {
+        let input = Box::new(UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        });
+        let plan = UnifiedPlan::Limit {
+            limit: 10000,
+            input,
+        };
+        assert_eq!(plan.estimate_cardinality(), 1000);
+    }
 }
