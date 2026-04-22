@@ -34,6 +34,8 @@ pub enum Token {
     Grant,
     Revoke,
     Analyze,
+    Truncate,
+    Replace,
 
     // Constraint keywords
     Foreign,
@@ -213,6 +215,8 @@ impl fmt::Display for Token {
             Token::Grant => write!(f, "GRANT"),
             Token::Revoke => write!(f, "REVOKE"),
             Token::Analyze => write!(f, "ANALYZE"),
+            Token::Truncate => write!(f, "TRUNCATE"),
+            Token::Replace => write!(f, "REPLACE"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
@@ -377,6 +381,7 @@ pub fn is_keyword(s: &str) -> bool {
             | "WITH"
             | "RECURSIVE"
             | "AS"
+            | "TRUNCATE"
     )
 }
 
@@ -409,6 +414,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ROLLBACK" => Some(Token::Rollback),
         "GRANT" => Some(Token::Grant),
         "REVOKE" => Some(Token::Revoke),
+        "ANALYZE" => Some(Token::Analyze),
+        "TRUNCATE" => Some(Token::Truncate),
+        "REPLACE" => Some(Token::Replace),
         "INTEGER" => Some(Token::Integer),
         "TEXT" => Some(Token::Text),
         "FLOAT" => Some(Token::Float),

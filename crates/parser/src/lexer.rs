@@ -321,6 +321,7 @@ impl<'a> Lexer<'a> {
                     "ROLLUP" => Token::Rollup,
                     "CUBE" => Token::Cube,
                     "ASOF" => Token::AsOf,
+                    "REPLACE" => Token::Replace,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
                     "OVER" => Token::Over,
