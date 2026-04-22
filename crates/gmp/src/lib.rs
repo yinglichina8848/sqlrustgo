@@ -50,6 +50,7 @@ pub mod audit;
 pub mod compliance;
 pub mod document;
 pub mod embedding;
+pub mod persist_sqlite;
 pub mod report;
 pub mod semantic_embedding;
 pub mod sql_api;
