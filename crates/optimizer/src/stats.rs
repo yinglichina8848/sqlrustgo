@@ -696,4 +696,283 @@ mod tests {
         let rows = provider.estimated_rows("nonexistent");
         assert_eq!(rows, 0);
     }
+
+    #[test]
+    fn test_table_stats_with_column_stats_hashmap() {
+        let mut column_stats = HashMap::new();
+        column_stats.insert(
+            "id".to_string(),
+            ColumnStats::new("id").with_distinct_count(100),
+        );
+        column_stats.insert(
+            "name".to_string(),
+            ColumnStats::new("name").with_distinct_count(50),
+        );
+
+        let stats = TableStats::new("users")
+            .with_row_count(1000)
+            .with_column_stats(column_stats);
+
+        assert_eq!(stats.column_stats.len(), 2);
+        assert_eq!(stats.column("id").unwrap().distinct_count, 100);
+        assert_eq!(stats.column("name").unwrap().distinct_count, 50);
+    }
+
+    #[test]
+    fn test_table_stats_estimate_selectivity_default() {
+        let stats = TableStats::new("users");
+        let selectivity = stats.estimate_selectivity("nonexistent");
+        assert_eq!(selectivity, 0.1);
+    }
+
+    #[test]
+    fn test_in_memory_provider_get_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        let stats = TableStats::new("users").with_row_count(100);
+        provider.add_stats(stats);
+
+        assert!(provider.has_stats("users"));
+        assert!(!provider.has_stats("orders"));
+    }
+
+    #[test]
+    fn test_column_stats_range_selectivity() {
+        let stats = ColumnStats::new("age").with_distinct_count(100);
+        let selectivity = stats.range_selectivity(&Value::Integer(20), &Value::Integer(30));
+        assert_eq!(selectivity, 0.33);
+    }
+
+    #[test]
+    fn test_stats_error_table_not_found() {
+        let err = StatsError::TableNotFound("test_table".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("test_table"));
+        assert!(display.contains("Statistics not found"));
+    }
+
+    #[test]
+    fn test_stats_error_invalid_stats() {
+        let err = StatsError::InvalidStats("invalid data".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("invalid data"));
+        assert!(display.contains("Invalid statistics"));
+    }
+
+    #[test]
+    fn test_stats_error_update_failed() {
+        let err = StatsError::UpdateFailed("update failed".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("update failed"));
+        assert!(display.contains("Update statistics failed"));
+    }
+
+    #[test]
+    fn test_default_stats_collector_new() {
+        let collector = DefaultStatsCollector::new();
+        assert_eq!(format!("{:?}", collector), "DefaultStatsCollector");
+    }
+
+    #[test]
+    fn test_in_memory_statistics_provider_debug() {
+        let provider = InMemoryStatisticsProvider::new();
+        let debug_str = format!("{:?}", provider);
+        assert!(debug_str.contains("InMemoryStatisticsProvider"));
+    }
+
+    #[test]
+    fn test_table_stats_debug() {
+        let stats = TableStats::new("users").with_row_count(100);
+        let debug_str = format!("{:?}", stats);
+        assert!(debug_str.contains("users"));
+        assert!(debug_str.contains("100"));
+    }
+
+    #[test]
+    fn test_column_stats_debug() {
+        let stats = ColumnStats::new("id").with_distinct_count(100);
+        let debug_str = format!("{:?}", stats);
+        assert!(debug_str.contains("id"));
+    }
+
+    #[test]
+    fn test_provider_column_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        let col_stats = ColumnStats::new("id").with_distinct_count(100);
+        let table_stats = TableStats::new("users")
+            .with_row_count(1000)
+            .add_column_stats(col_stats);
+        provider.add_stats(table_stats);
+
+        let result = provider.column_stats("users", "id");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().distinct_count, 100);
+    }
+
+    #[test]
+    fn test_provider_column_stats_not_found() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        let stats = TableStats::new("users").with_row_count(100);
+        provider.add_stats(stats);
+
+        let result = provider.column_stats("users", "nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_provider_selectivity_default() {
+        let provider = InMemoryStatisticsProvider::new();
+        let selectivity = provider.selectivity("nonexistent", "nonexistent");
+        assert_eq!(selectivity, 0.1);
+    }
+
+    #[test]
+    fn test_provider_has_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        assert!(!provider.has_stats("users"));
+
+        provider.add_stats(TableStats::new("users"));
+        assert!(provider.has_stats("users"));
+    }
+
+    #[test]
+    fn test_column_stats_named_constructor() {
+        let stats = ColumnStats::new("test_col");
+        assert_eq!(stats.column_name, "test_col");
+    }
+
+    #[test]
+    fn test_column_stats_builder_pattern() {
+        let stats = ColumnStats::new("price")
+            .with_distinct_count(200)
+            .with_null_count(5)
+            .with_range(Some(Value::Float(0.0)), Some(Value::Float(999.99)))
+            .with_average(49.99);
+        assert_eq!(stats.distinct_count, 200);
+        assert_eq!(stats.null_count, 5);
+    }
+
+    #[test]
+    fn test_table_stats_builder_pattern() {
+        let stats = TableStats::new("orders")
+            .with_row_count(5000)
+            .with_size_bytes(250_000)
+            .with_last_updated(1234567890);
+        assert_eq!(stats.row_count, 5000);
+        assert_eq!(stats.size_bytes, 250_000);
+    }
+
+    #[test]
+    fn test_in_memory_provider_table_stats_via_get() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users").with_row_count(100));
+        assert!(provider.table_stats("users").is_some());
+    }
+
+    #[test]
+    fn test_in_memory_provider_get_stats_not_found() {
+        let provider = InMemoryStatisticsProvider::new();
+        assert!(provider.table_stats("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_column_stats_eq_selectivity_large_distinct() {
+        let stats = ColumnStats::new("uuid").with_distinct_count(1_000_000);
+        let selectivity = stats.eq_selectivity();
+        assert!(selectivity < 0.00001);
+    }
+
+    #[test]
+    fn test_column_stats_eq_selectivity_small_distinct() {
+        let stats = ColumnStats::new("status").with_distinct_count(2);
+        let selectivity = stats.eq_selectivity();
+        assert_eq!(selectivity, 0.5);
+    }
+
+    #[test]
+    fn test_estimated_rows_with_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("products").with_row_count(500));
+        assert_eq!(provider.estimated_rows("products"), 500);
+    }
+
+    #[test]
+    fn test_in_memory_provider_clear_stats() {
+        let mut provider = InMemoryStatisticsProvider::new();
+        provider.add_stats(TableStats::new("users"));
+        provider.remove_stats("users");
+        assert!(!provider.has_stats("users"));
+    }
+
+    #[test]
+    fn test_table_stats_with_multiple_columns() {
+        let col1 = ColumnStats::new("id").with_distinct_count(1000);
+        let col2 = ColumnStats::new("name").with_distinct_count(500);
+        let col3 = ColumnStats::new("email").with_distinct_count(800);
+
+        let stats = TableStats::new("users")
+            .with_row_count(10000)
+            .add_column_stats(col1)
+            .add_column_stats(col2)
+            .add_column_stats(col3);
+
+        assert_eq!(stats.column_stats.len(), 3);
+        assert!(stats.column("id").is_some());
+        assert!(stats.column("name").is_some());
+        assert!(stats.column("email").is_some());
+    }
+
+    #[test]
+    fn test_stats_error_debug() {
+        let err = StatsError::TableNotFound("test".to_string());
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("TableNotFound"));
+    }
+
+    #[test]
+    fn test_stats_result_is_ok() {
+        let ok: StatsResult<i32> = Ok(42);
+        assert!(ok.is_ok());
+        assert_eq!(ok.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_stats_result_is_err() {
+        let err: StatsResult<i32> = Err(StatsError::TableNotFound("test".to_string()));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_default_stats_collector_debug() {
+        let collector = DefaultStatsCollector::new();
+        let debug = format!("{:?}", collector);
+        assert!(debug.contains("DefaultStatsCollector"));
+    }
+
+    #[test]
+    fn test_in_memory_provider_debug() {
+        let provider = InMemoryStatisticsProvider::new();
+        let debug = format!("{:?}", provider);
+        assert!(debug.contains("InMemoryStatisticsProvider"));
+    }
+
+    #[test]
+    fn test_stats_error_update_failed_display() {
+        let err = StatsError::UpdateFailed("disk full".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("disk full"));
+        assert!(display.contains("Update statistics failed"));
+    }
+
+    #[test]
+    fn test_column_stats_range_selectivity_edge_cases() {
+        let stats = ColumnStats::new("value");
+        let sel = stats.range_selectivity(&Value::Integer(0), &Value::Integer(100));
+        assert_eq!(sel, 0.33);
+    }
+
+    #[test]
+    fn test_table_stats_size_bytes() {
+        let stats = TableStats::new("large_table").with_size_bytes(1_000_000_000);
+        assert_eq!(stats.size_bytes, 1_000_000_000);
+    }
 }

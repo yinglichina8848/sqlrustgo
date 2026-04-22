@@ -4,22 +4,55 @@ set -e
 
 echo "=== Running Coverage Gate Check ==="
 
-# 创建覆盖率报告目录
-mkdir -p docs/releases/v1.0.0-rc1
+COVERAGE_DIR="docs/releases/v2.7.0"
+mkdir -p "$COVERAGE_DIR"
 
-# 运行覆盖率测试
-echo "Running coverage test..."
-cargo tarpaulin --out Xml --out Html --output-dir docs/releases/v1.0.0-rc1 --exclude sqlrustgo_bench -- --skip test_trigger_executes_insert --skip test_trigger_executes_delete --skip test_trigger_executes_update
+MODE="${1:-full}"
+
+PROBLEMATIC_TESTS=(
+    "test_trigger_executes_insert"
+    "test_trigger_executes_delete"
+    "test_trigger_executes_update"
+)
+
+SKIP_ARGS=""
+for test in "${PROBLEMATIC_TESTS[@]}"; do
+    SKIP_ARGS="$SKIP_ARGS --skip $test"
+done
+
+echo "Mode: $MODE"
+echo "Skipping problematic tests under tarpaulin: ${PROBLEMATIC_TESTS[*]}"
+
+if [ "$MODE" = "incremental" ]; then
+    echo "Running incremental coverage..."
+    CHANGED_CRATES=$(git diff --name-only | cut -d/ -f2 | sort -u | grep -E "^crates/" | cut -d/ -f2 || true)
+    if [ -z "$CHANGED_CRATES" ]; then
+        echo "No crate changes detected, using full coverage"
+        MODE="full"
+    else
+        echo "Changed crates: $CHANGED_CRATES"
+        PKGS=""
+        for crate in $CHANGED_CRATES; do
+            PKGS="$PKGS -p sqlrustgo-$crate"
+        done
+        cargo tarpaulin --out Xml --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS $PKGS
+    fi
+fi
+
+if [ "$MODE" = "full" ]; then
+    echo "Running full coverage test..."
+    cargo tarpaulin --out Xml --out Html --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS
+fi
 
 # 检查覆盖率报告是否生成
-if [ ! -f "docs/releases/v1.0.0-rc1/coverage.xml" ]; then
+if [ ! -f "$COVERAGE_DIR/coverage.xml" ]; then
     echo "❌ Coverage report not generated"
     exit 1
 fi
 
 # 提取覆盖率百分比
 echo "Extracting coverage percentage..."
-COVERAGE=$(grep -oP 'line-rate="\K[0-9.]+' docs/releases/v1.0.0-rc1/coverage.xml)
+COVERAGE=$(grep -oP 'line-rate="\K[0-9.]+' "$COVERAGE_DIR/coverage.xml")
 
 if [ -z "$COVERAGE" ]; then
     echo "❌ Failed to extract coverage percentage"
@@ -39,12 +72,11 @@ if [ "$COVERAGE_INT" -lt "$REQUIRED" ]; then
 fi
 
 echo "✅ Coverage check passed!"
-echo "Coverage report saved to: docs/releases/v1.0.0-rc1/coverage.html"
-echo "Coverage XML saved to: docs/releases/v1.0.0-rc1/coverage.xml"
+echo "Coverage report saved to: $COVERAGE_DIR/coverage.html"
+echo "Coverage XML saved to: $COVERAGE_DIR/coverage.xml"
 
-# 生成覆盖率摘要
 echo "Generating coverage summary..."
-cat > docs/releases/v1.0.0-rc1/coverage-summary.md << EOF
+cat > "$COVERAGE_DIR/coverage-summary.md" << EOF
 # Coverage Report Summary
 
 ## Coverage Statistics
@@ -61,6 +93,7 @@ cat > docs/releases/v1.0.0-rc1/coverage-summary.md << EOF
 ## Test Details
 
 - **Test Command**: cargo tarpaulin --out Xml --out Html
+- **Mode**: $MODE
 - **Test Date**: $(date)
 
 ## Conclusion
@@ -68,5 +101,5 @@ cat > docs/releases/v1.0.0-rc1/coverage-summary.md << EOF
 Coverage meets the required threshold of ${REQUIRED}% or higher.
 EOF
 
-echo "✅ Coverage summary generated: docs/releases/v1.0.0-rc1/coverage-summary.md"
+echo "✅ Coverage summary generated: $COVERAGE_DIR/coverage-summary.md"
 echo "=== Coverage Gate Check Complete ==="
