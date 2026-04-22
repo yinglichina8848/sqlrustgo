@@ -360,6 +360,7 @@ impl TpchBenchmark {
                 ],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
+                partition_info: None,
             })
             .ok();
 
@@ -400,6 +401,7 @@ impl TpchBenchmark {
                 ],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
+                partition_info: None,
             })
             .ok();
 
