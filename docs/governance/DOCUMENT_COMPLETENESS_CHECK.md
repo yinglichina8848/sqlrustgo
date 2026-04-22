@@ -1,7 +1,8 @@
 # 文档完整性检查与补全提示词
 
-**版本**: v1.0.0
+**版本**: v1.1.0
 **创建日期**: 2026-04-19
+**最后更新**: 2026-04-22
 **适用范围**: 版本发布前文档自查
 
 ---
@@ -41,6 +42,9 @@
 | oo/README.md | ✅ | OO 文档索引 |
 | oo/architecture/ARCHITECTURE_VX.Y.md | ✅ | 版本架构设计 |
 | oo/user-guide/USER_MANUAL.md | ✅ | 用户手册 |
+| oo/user-guide/GMP_USER_GUIDE.md | ✅ | GMP 用户指南 (v2.7.0+) |
+| oo/user-guide/GRAPH_SEARCH_USER_GUIDE.md | ✅ | 图检索用户指南 (v2.7.0+) |
+| oo/user-guide/VECTOR_SEARCH_USER_GUIDE.md | ✅ | 向量检索用户指南 (v2.7.0+) |
 | oo/reports/PERFORMANCE_ANALYSIS.md | ✅ | 性能分析 |
 | oo/reports/SQL92_COMPLIANCE.md | ✅ | SQL 合规报告 |
 
@@ -190,8 +194,53 @@ ls -la docs/releases/v(X-1).Y.Z/ | wc -l
 | v2.5.0 文档 | 参考标准 |
 | v2.6.0 文档 | 参考标准 |
 | DOCUMENT_AUDIT.md | 审计模板 |
+| DOCUMENT_REVIEW_WORKFLOW.md | 文档审查流程规范 |
 
 ---
 
-*文档检查与补全提示词 v1.0.0*
-*最后更新: 2026-04-19*
+## 八、v2.7.0+ 用户文档要求
+
+> **生效版本**: v2.7.0 及以后版本
+
+### 8.1 用户指南必选项
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 主用户手册 | `oo/user-guide/USER_MANUAL.md` | SQL 基础操作、配置说明 |
+| GMP 用户指南 | `oo/user-guide/GMP_USER_GUIDE.md` | GMP 审计功能使用 |
+| 图检索用户指南 | `oo/user-guide/GRAPH_SEARCH_USER_GUIDE.md` | 图引擎、Cypher 查询 |
+| 向量检索用户指南 | `oo/user-guide/VECTOR_SEARCH_USER_GUIDE.md` | 向量索引、混合检索 |
+
+### 8.2 用户指南内容要求
+
+每个用户指南必须包含：
+
+| 内容 | 说明 |
+|------|------|
+| 概述 | 功能介绍、核心概念 |
+| 快速开始 | 基础用法示例代码 |
+| 详细 API | 所有公共 API 的使用说明 |
+| 配置 | 相关的配置选项 |
+| 最佳实践 | 性能优化、注意事项 |
+| 故障排查 | 常见问题与解决方案 |
+| API 参考 | 公共 API 列表 |
+
+### 8.3 用户指南链接检查
+
+在 `oo/README.md` 和 `oo/user-guide/USER_MANUAL.md` 中必须包含其他用户指南的链接：
+
+```markdown
+## 用户指南
+
+| 文档 | 说明 |
+|------|------|
+| [USER_MANUAL.md](./user-guide/USER_MANUAL.md) | 用户手册 |
+| [GMP_USER_GUIDE.md](./user-guide/GMP_USER_GUIDE.md) | GMP 用户指南 |
+| [GRAPH_SEARCH_USER_GUIDE.md](./user-guide/GRAPH_SEARCH_USER_GUIDE.md) | 图检索用户指南 |
+| [VECTOR_SEARCH_USER_GUIDE.md](./user-guide/VECTOR_SEARCH_USER_GUIDE.md) | 向量检索用户指南 |
+```
+
+---
+
+*文档检查与补全提示词 v1.1.0*
+*最后更新: 2026-04-22*
