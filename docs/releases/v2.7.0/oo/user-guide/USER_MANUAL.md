@@ -143,6 +143,11 @@ CREATE TABLE orders (
 
 ## 4. 检索功能
 
+详细用户指南请参考：
+- [GMP 用户指南](./GMP_USER_GUIDE.md) - GMP 审计与合规
+- [图检索用户指南](./GRAPH_SEARCH_USER_GUIDE.md) - 图引擎与 Cypher
+- [向量检索用户指南](./VECTOR_SEARCH_USER_GUIDE.md) - 向量索引与混合检索
+
 ### 4.1 全文检索 (lex)
 
 ```sql
@@ -183,6 +188,8 @@ WHERE HYBRID_SEARCH(
 ---
 
 ## 5. GMP 审计支持
+
+详细 GMP 用户指南请参考：[GMP 用户指南](./GMP_USER_GUIDE.md)
 
 ### 5.1 审计查询
 
