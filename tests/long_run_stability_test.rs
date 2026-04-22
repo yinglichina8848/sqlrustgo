@@ -23,7 +23,7 @@ fn create_engine() -> MemoryExecutionEngine {
 
 /// Create test table
 fn setup_table(engine: &mut MemoryExecutionEngine) {
-    let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
+    let _ = engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
 }
 
 /// Clean up test table
@@ -50,7 +50,12 @@ fn test_sustained_write_load() {
     for iteration in 0..STABILITY_ITERATIONS {
         let result = engine.execute(&format!(
             "INSERT INTO stability_test VALUES ({}, 'value_{}')",
+<<<<<<< HEAD
+            iteration,
+            iteration
+=======
             iteration, iteration
+>>>>>>> origin/develop/v2.6.0
         ));
 
         assert!(
@@ -70,9 +75,13 @@ fn test_sustained_write_load() {
     );
 
     // Verify all inserts
+<<<<<<< HEAD
+    let _result = engine.execute("SELECT COUNT(*) FROM stability_test").unwrap();
+=======
     let _result = engine
         .execute("SELECT COUNT(*) FROM stability_test")
         .unwrap();
+>>>>>>> origin/develop/v2.6.0
     cleanup_table(&mut engine);
 }
 
@@ -125,7 +134,13 @@ fn test_concurrent_read_write_stability() {
     // Create initial table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+<<<<<<< HEAD
+        let _ = engine.execute(
+            "CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)",
+        );
+=======
         let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
+>>>>>>> origin/develop/v2.6.0
     }
 
     let mut handles = vec![];
@@ -185,10 +200,14 @@ fn test_concurrent_read_write_stability() {
         writes, reads, errors
     );
 
+<<<<<<< HEAD
+    assert_eq!(errors, 0, "No errors should occur during concurrent operations");
+=======
     assert_eq!(
         errors, 0,
         "No errors should occur during concurrent operations"
     );
+>>>>>>> origin/develop/v2.6.0
 }
 
 /// Test 4: Repeated Create/Drop Stability
@@ -205,6 +224,12 @@ fn test_repeated_create_drop_stability() {
             "CREATE TABLE IF NOT EXISTS test_table_{} (id INTEGER, name TEXT)",
             i
         ));
+<<<<<<< HEAD
+        assert!(create_result.is_ok(), "Create should succeed at iteration {}", i);
+
+        let drop_result = engine.execute(&format!("DROP TABLE IF EXISTS test_table_{}", i));
+        assert!(drop_result.is_ok(), "Drop should succeed at iteration {}", i);
+=======
         assert!(
             create_result.is_ok(),
             "Create should succeed at iteration {}",
@@ -217,6 +242,7 @@ fn test_repeated_create_drop_stability() {
             "Drop should succeed at iteration {}",
             i
         );
+>>>>>>> origin/develop/v2.6.0
     }
 
     let elapsed = start.elapsed();
@@ -239,8 +265,14 @@ fn test_memory_stability_under_load() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+<<<<<<< HEAD
+        let _ = engine.execute(
+            "CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)",
+        );
+=======
         let _ =
             engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+>>>>>>> origin/develop/v2.6.0
     }
 
     let start = Instant::now();
@@ -287,7 +319,13 @@ fn test_table_info_consistency_under_load() {
 
     for _ in 0..STABILITY_ITERATIONS {
         // Create table
+<<<<<<< HEAD
+        let _ = engine.execute(
+            "CREATE TABLE IF NOT EXISTS info_test (id INTEGER, value TEXT)",
+        );
+=======
         let _ = engine.execute("CREATE TABLE IF NOT EXISTS info_test (id INTEGER, value TEXT)");
+>>>>>>> origin/develop/v2.6.0
 
         // List tables
         let _ = engine.execute("SHOW TABLES");
@@ -318,7 +356,14 @@ fn test_list_tables_stability() {
 
     // Create 50 tables
     for i in 0..50 {
+<<<<<<< HEAD
+        let _ = engine.execute(&format!(
+            "CREATE TABLE IF NOT EXISTS t{} (id INTEGER)",
+            i
+        ));
+=======
         let _ = engine.execute(&format!("CREATE TABLE IF NOT EXISTS t{} (id INTEGER)", i));
+>>>>>>> origin/develop/v2.6.0
     }
 
     let start = Instant::now();
@@ -346,8 +391,14 @@ fn test_interleaved_read_write_consistency() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+<<<<<<< HEAD
+        let _ = engine.execute(
+            "CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)",
+        );
+=======
         let _ =
             engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+>>>>>>> origin/develop/v2.6.0
     }
 
     let mut handles = vec![];
@@ -388,8 +439,14 @@ fn test_rapid_burst_writes() {
     // Create table
     {
         let mut engine = MemoryExecutionEngine::new(storage.clone());
+<<<<<<< HEAD
+        let _ = engine.execute(
+            "CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)",
+        );
+=======
         let _ =
             engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
+>>>>>>> origin/develop/v2.6.0
     }
 
     let start = Instant::now();
@@ -438,6 +495,18 @@ fn test_stress_table_operations() {
 
     // Create 20 tables, insert 50 rows each
     for table_id in 0..20 {
+<<<<<<< HEAD
+        let _ = engine.execute(&format!(
+            "CREATE TABLE IF NOT EXISTS stress_t{} (id INTEGER, value TEXT)",
+            table_id
+        ));
+
+        for row_id in 0..50 {
+            let _ = engine.execute(&format!(
+                "INSERT INTO stress_t{} VALUES ({}, 'table_{}_row_{}')",
+                table_id, table_id * 1000 + row_id, table_id, row_id
+            ));
+=======
         let sql = format!("CREATE TABLE t{} (id INTEGER, val INTEGER)", table_id);
         let create_result = engine.execute(&sql);
         if create_result.is_err() {
@@ -452,13 +521,19 @@ fn test_stress_table_operations() {
                 row_id
             );
             let _ = engine.execute(&insert_sql);
+>>>>>>> origin/develop/v2.6.0
         }
     }
 
     // Verify all tables
     for table_id in 0..20 {
+<<<<<<< HEAD
+        let result = engine.execute(&format!("SELECT COUNT(*) FROM stress_t{}", table_id));
+        assert!(result.is_ok(), "Table stress_t{} should exist", table_id);
+=======
         let result = engine.execute(&format!("SELECT COUNT(*) FROM t{}", table_id));
         assert!(result.is_ok(), "Table t{} should exist", table_id);
+>>>>>>> origin/develop/v2.6.0
     }
 
     let elapsed = start.elapsed();
@@ -473,6 +548,12 @@ fn test_stress_table_operations() {
 
     // Cleanup
     for table_id in 0..20 {
+<<<<<<< HEAD
+        let _ = engine.execute(&format!("DROP TABLE IF EXISTS stress_t{}", table_id));
+    }
+}
+=======
         let _ = engine.execute(&format!("DROP TABLE IF EXISTS t{}", table_id));
     }
 }
+>>>>>>> origin/develop/v2.6.0
