@@ -300,7 +300,8 @@ impl TriggerExecutor {
                     let val = &new[i];
                     let replacement = self.value_to_sql_literal(val);
                     *result = result.replace(&format!("NEW.{}", col.name), &replacement);
-                    *result = result.replace(&format!("NEW.{}", col.name.to_uppercase()), &replacement);
+                    *result =
+                        result.replace(&format!("NEW.{}", col.name.to_uppercase()), &replacement);
                 }
             }
         }
@@ -311,7 +312,8 @@ impl TriggerExecutor {
                     let val = &old[i];
                     let replacement = self.value_to_sql_literal(val);
                     *result = result.replace(&format!("OLD.{}", col.name), &replacement);
-                    *result = result.replace(&format!("OLD.{}", col.name.to_uppercase()), &replacement);
+                    *result =
+                        result.replace(&format!("OLD.{}", col.name.to_uppercase()), &replacement);
                 }
             }
         }
@@ -616,6 +618,29 @@ impl TriggerExecutor {
                     }
                 } else {
                     Value::Text(name.clone())
+                }
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.expression_to_value(left, new_row);
+                let right_val = self.expression_to_value(right, new_row);
+                match (left_val, op.as_str(), right_val) {
+                    (Value::Integer(l), "+", Value::Integer(r)) => Value::Integer(l + r),
+                    (Value::Integer(l), "-", Value::Integer(r)) => Value::Integer(l - r),
+                    (Value::Integer(l), "*", Value::Integer(r)) => Value::Integer(l * r),
+                    (Value::Integer(l), "/", Value::Integer(r)) if r != 0 => Value::Integer(l / r),
+                    (Value::Float(l), "+", Value::Float(r)) => Value::Float(l + r),
+                    (Value::Float(l), "-", Value::Float(r)) => Value::Float(l - r),
+                    (Value::Float(l), "*", Value::Float(r)) => Value::Float(l * r),
+                    (Value::Float(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l / r),
+                    (Value::Integer(l), "+", Value::Float(r)) => Value::Float(l as f64 + r),
+                    (Value::Float(l), "+", Value::Integer(r)) => Value::Float(l + r as f64),
+                    (Value::Integer(l), "-", Value::Float(r)) => Value::Float(l as f64 - r),
+                    (Value::Float(l), "-", Value::Integer(r)) => Value::Float(l - r as f64),
+                    (Value::Integer(l), "*", Value::Float(r)) => Value::Float(l as f64 * r),
+                    (Value::Float(l), "*", Value::Integer(r)) => Value::Float(l * r as f64),
+                    (Value::Integer(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l as f64 / r),
+                    (Value::Float(l), "/", Value::Integer(r)) if r != 0 => Value::Float(l / r as f64),
+                    _ => Value::Null,
                 }
             }
             _ => Value::Null,
@@ -1739,7 +1764,7 @@ mod tests {
             Box::new(Expression::Literal("2".to_string())),
         );
         let result = executor.expression_to_value(&expr, None);
-        assert_eq!(result, Value::Null);
+        assert_eq!(result, Value::Integer(3));
     }
 
     #[test]
