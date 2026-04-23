@@ -253,7 +253,6 @@ fn test_filter_null_column_vs_value() {
 }
 
 #[test]
-#[ignore = "Parser does not support IS NULL syntax - parser bug, not executor"]
 fn test_filter_is_null() {
     let mut engine = create_engine();
     engine
@@ -293,7 +292,7 @@ fn test_filter_is_not_null() {
 }
 
 #[test]
-#[ignore = "Parser does not support NOT (expr) syntax - parser issue"]
+#[ignore = "Parser does not support NOT (expr) syntax - NOT implementation is Phase 2"]
 fn test_filter_not_null_comparison() {
     let mut engine = create_engine();
     engine
