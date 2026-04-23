@@ -817,12 +817,26 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             all_records.clone()
         };
 
-        // Validate FK constraints and insert
+        // Validate FK and CHECK constraints, then insert
         {
             let mut storage = self.storage.write().unwrap();
+            let col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
             for record in &processed_records {
                 if !table_info.foreign_keys.is_empty() {
                     validate_foreign_keys(&*storage, &table_info, record, &insert.columns)?;
+                }
+                // Validate CHECK constraints
+                if !table_info.check_constraints.is_empty() {
+                    for constraint in &table_info.check_constraints {
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        if !valid {
+                            return Err(format!(
+                                "CHECK constraint '{}' violated: {}",
+                                constraint.name.as_deref().unwrap_or("unnamed"),
+                                constraint.expression
+                            ).into());
+                        }
+                    }
                 }
             }
             storage.insert(&table_name, processed_records)?;
@@ -1087,6 +1101,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         storage.create_table(&info)?;
