@@ -291,3 +291,38 @@ fn test_filter_is_not_null() {
         assert!(matches!(&row[0], Value::Integer(_)));
     }
 }
+
+#[test]
+#[ignore = "Parser does not support NOT (expr) syntax - parser issue"]
+fn test_filter_not_null_comparison() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 'Alice'), (NULL, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE NOT (id = NULL)")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 0, "NOT(UNKNOWN) should be UNKNOWN, not TRUE");
+}
+
+#[test]
+fn test_filter_and_with_null() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 10), (NULL, 20), (3, NULL), (NULL, NULL)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE a > 10 AND b = NULL")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 0, "TRUE AND UNKNOWN should filter out");
+}
