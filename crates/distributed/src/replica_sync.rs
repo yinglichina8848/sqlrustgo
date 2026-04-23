@@ -592,4 +592,133 @@ mod tests {
         assert_eq!(cloned.batch_size, config.batch_size);
         assert_eq!(cloned.sync_interval_ms, config.sync_interval_ms);
     }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_zero_total() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            start_lsn: 100,
+            end_lsn: 100,
+            current_lsn: 100,
+        };
+        assert_eq!(progress.completion_ratio(), 1.0);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_at_start() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 0,
+        };
+        assert_eq!(progress.completion_ratio(), 0.0);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_at_end() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 1000,
+            records_transferred: 100,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 1000,
+        };
+        assert_eq!(progress.completion_ratio(), 1.0);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_in_middle() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 500,
+            records_transferred: 50,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 500,
+        };
+        assert_eq!(progress.completion_ratio(), 0.5);
+    }
+
+    #[test]
+    fn test_sync_config_custom_values() {
+        let config = SyncConfig {
+            batch_size: 5000,
+            sync_interval_ms: 200,
+            timeout_ms: 30000,
+            retry_attempts: 10,
+        };
+        assert_eq!(config.batch_size, 5000);
+        assert_eq!(config.sync_interval_ms, 200);
+        assert_eq!(config.timeout_ms, 30000);
+        assert_eq!(config.retry_attempts, 10);
+    }
+
+    #[tokio::test]
+    async fn test_sync_progress_get() {
+        let router = create_test_router();
+        let mut sync = ReplicaSynchronizer::new(router);
+
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 0,
+        };
+        sync.active_syncs.insert(1, progress);
+
+        let retrieved = sync.get_sync_progress(1);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().shard_id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_active_syncs_with_data() {
+        let router = create_test_router();
+        let mut sync = ReplicaSynchronizer::new(router);
+
+        let progress1 = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 100,
+            records_transferred: 10,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 100,
+        };
+        let progress2 = SyncProgress {
+            shard_id: 2,
+            source_node: 1,
+            target_node: 3,
+            bytes_transferred: 200,
+            records_transferred: 20,
+            start_lsn: 0,
+            end_lsn: 2000,
+            current_lsn: 200,
+        };
+
+        sync.active_syncs.insert(1, progress1);
+        sync.active_syncs.insert(2, progress2);
+
+        let all_syncs = sync.get_all_active_syncs();
+        assert_eq!(all_syncs.len(), 2);
+    }
 }

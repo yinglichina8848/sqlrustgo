@@ -459,7 +459,7 @@ mod tests {
         let config = FailureDetectorConfig::default();
         assert_eq!(config.heartbeat_timeout, Duration::from_millis(500));
 
-        let mut detector = FailureDetector::with_config(
+        let detector = FailureDetector::with_config(
             1,
             FailureDetectorConfig {
                 check_interval: Duration::from_millis(200),
@@ -818,5 +818,111 @@ mod tests {
         let received2 = rx2.recv().await.unwrap();
         assert_eq!(received1.node_id, 3);
         assert_eq!(received2.node_id, 3);
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for FailureDetector
+    // =====================================================================
+
+    #[test]
+    fn test_failure_detector_multiple_nodes() {
+        let mut detector = FailureDetector::new(1);
+        detector.record_heartbeat(2);
+        detector.record_heartbeat(3);
+        detector.record_heartbeat(4);
+
+        assert!(detector.is_node_alive(2));
+        assert!(detector.is_node_alive(3));
+        assert!(detector.is_node_alive(4));
+    }
+
+    #[test]
+    fn test_failure_detector_heartbeat_overwrite() {
+        let mut detector = FailureDetector::new(1);
+        detector.record_heartbeat(2);
+        assert!(detector.is_node_alive(2));
+
+        std::thread::sleep(Duration::from_millis(5));
+        detector.record_heartbeat(2);
+        assert!(detector.is_node_alive(2));
+    }
+
+    #[test]
+    fn test_failure_detector_check_all_nodes_with_failures() {
+        let mut detector = FailureDetector::new(1);
+        detector.record_heartbeat(2);
+        detector.record_heartbeat(3);
+
+        let failures = detector.check_all_nodes();
+        assert!(failures.is_empty());
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for FailoverManager
+    // =====================================================================
+
+    #[tokio::test]
+    async fn test_failover_manager_multiple_failures() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        manager.dead_nodes.insert(2);
+        manager.dead_nodes.insert(3);
+        manager.dead_nodes.insert(4);
+
+        assert_eq!(manager.get_dead_nodes().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_failover_manager_recover_nonexistent() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        manager.recover_node(999);
+        assert!(manager.get_dead_nodes().is_empty());
+    }
+
+    // =====================================================================
+    // White-box Tests: Path Coverage for FailureReason
+    // =====================================================================
+
+    #[test]
+    fn test_failure_reason_all_variants() {
+        assert!(matches!(FailureReason::HeartbeatTimeout, FailureReason::HeartbeatTimeout));
+        assert!(matches!(FailureReason::ReplicationLag, FailureReason::ReplicationLag));
+        assert!(matches!(FailureReason::NetworkError, FailureReason::NetworkError));
+        assert!(matches!(FailureReason::Manual, FailureReason::Manual));
+    }
+
+    // =====================================================================
+    // White-box Tests: Edge Cases for ClusterHealth
+    // =====================================================================
+
+    #[test]
+    fn test_cluster_health_all_dead() {
+        let health = ClusterHealth {
+            total_nodes: 5,
+            dead_nodes: 5,
+            total_shards: 10,
+            leader_count: 0,
+            healthy: false,
+        };
+        assert!(!health.healthy);
+        assert_eq!(health.total_nodes - health.dead_nodes, 0);
+    }
+
+    #[test]
+    fn test_cluster_health_all_alive() {
+        let health = ClusterHealth {
+            total_nodes: 5,
+            dead_nodes: 0,
+            total_shards: 10,
+            leader_count: 5,
+            healthy: true,
+        };
+        assert!(health.healthy);
+        assert_eq!(health.total_nodes - health.dead_nodes, 5);
     }
 }

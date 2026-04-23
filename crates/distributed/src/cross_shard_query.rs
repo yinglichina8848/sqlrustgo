@@ -164,7 +164,7 @@ mod tests {
     fn test_query_router_new() {
         let manager = ShardManager::new();
         let router = QueryRouter::new(manager, 1);
-        assert_eq!(router.is_local_shard(0), false);
+        assert!(!router.is_local_shard(0));
     }
 
     #[test]
@@ -374,5 +374,131 @@ mod tests {
         let router = QueryRouter::new(manager, 1);
         let nodes = router.get_all_shard_nodes();
         assert_eq!(nodes.len(), 1);
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for QueryRouter
+    // =====================================================================
+
+    #[test]
+    fn test_query_router_get_shard_nodes_unknown_shard() {
+        let mut manager = ShardManager::new();
+        let info = ShardInfo::new(0, 1);
+        manager.create_shard(info);
+
+        let router = QueryRouter::new(manager, 1);
+        let node = router.get_shard_nodes(999);
+        assert!(node.is_none());
+    }
+
+    #[test]
+    fn test_query_router_get_all_shard_nodes_multiple_shards() {
+        let mut manager = ShardManager::new();
+        let info1 = ShardInfo::new(0, 1);
+        let info2 = ShardInfo::new(1, 2);
+        let info3 = ShardInfo::new(2, 1);
+        manager.create_shard(info1);
+        manager.create_shard(info2);
+        manager.create_shard(info3);
+
+        let router = QueryRouter::new(manager, 1);
+        let nodes = router.get_all_shard_nodes();
+        assert_eq!(nodes.len(), 3);
+    }
+
+    #[test]
+    fn test_query_router_is_local_shard_same_node() {
+        let mut manager = ShardManager::new();
+        let info = ShardInfo::new(0, 5);
+        let info2 = ShardInfo::new(1, 5);
+        manager.create_shard(info);
+        manager.create_shard(info2);
+
+        let router = QueryRouter::new(manager, 5);
+        assert!(router.is_local_shard(0));
+        assert!(router.is_local_shard(1));
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for CrossShardQueryExecutor
+    // =====================================================================
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_scatter_gather_empty_query() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let nodes = vec![(1u64, 0u64)];
+        let result = executor.scatter_gather_vector_search(&nodes, &[], 10).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_scatter_gather_large_k() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let nodes = vec![(1u64, 0u64), (2u64, 1u64)];
+        let result = executor.scatter_gather_vector_search(&nodes, &[0.1, 0.2], 1000).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_broadcast_insert_multiple_nodes() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let nodes = vec![(1u64, 0u64), (2u64, 0u64), (3u64, 1u64)];
+        let results = executor.broadcast_vector_insert(&nodes, 42, &[0.1, 0.2, 0.3]).await;
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_execute_vector_search_all_shards_empty() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let shard_to_node = HashMap::new();
+        let result = executor.execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_execute_vector_search_single_shard() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let mut shard_to_node = HashMap::new();
+        shard_to_node.insert(0, 1);
+        let result = executor.execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10).await;
+        assert!(result.is_ok());
+    }
+
+    // =====================================================================
+    // White-box Tests: Edge Cases
+    // =====================================================================
+
+    #[test]
+    fn test_query_router_with_zero_node_id() {
+        let mut manager = ShardManager::new();
+        let info = ShardInfo::new(0, 0);
+        manager.create_shard(info);
+
+        let router = QueryRouter::new(manager, 0);
+        assert!(router.is_local_shard(0));
+    }
+
+    #[test]
+    fn test_query_router_with_many_shards() {
+        let mut manager = ShardManager::new();
+        for i in 0..10 {
+            let info = ShardInfo::new(i, i % 3);
+            manager.create_shard(info);
+        }
+
+        let router = QueryRouter::new(manager, 1);
+        let nodes = router.get_all_shard_nodes();
+        assert_eq!(nodes.len(), 10);
     }
 }

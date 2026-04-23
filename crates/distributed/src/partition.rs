@@ -672,4 +672,137 @@ mod tests {
         let debug_str = format!("{:?}", value);
         assert!(debug_str.contains("42"));
     }
+
+    #[test]
+    fn test_hash_partition_negative_integer() {
+        let value = PartitionValue::Integer(-42);
+        let result = hash_partition(&value, 8);
+        assert_eq!(result, 42 % 8);
+    }
+
+    #[test]
+    fn test_range_partition_empty_boundaries() {
+        let value = PartitionValue::Integer(100);
+        let result = range_partition(&value, &[]);
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_range_partition_text_value_returns_none() {
+        let value = PartitionValue::Text(100);
+        let result = range_partition(&value, &[10, 20, 30]);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_range_partition_at_boundary() {
+        let value = PartitionValue::Integer(10);
+        let result = range_partition(&value, &[10, 20, 30]);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_range_partition_beyond_all_boundaries() {
+        let value = PartitionValue::Integer(100);
+        let result = range_partition(&value, &[10, 20, 30]);
+        assert_eq!(result, Some(3));
+    }
+
+    #[test]
+    fn test_key_partition_with_multiple_columns() {
+        let columns = vec!["col1".to_string(), "col2".to_string(), "col3".to_string()];
+        let value = PartitionValue::Integer(10);
+        let result = key_partition(&value, &columns, 8);
+        assert!(result < 8);
+    }
+
+    #[test]
+    fn test_key_partition_text_with_single_column() {
+        let columns = vec!["col1".to_string()];
+        let value = PartitionValue::Text(42);
+        let result = key_partition(&value, &columns, 8);
+        assert_eq!(result, 42 % 8);
+    }
+
+    #[test]
+    fn test_list_partition_empty_partitions() {
+        let value = PartitionValue::Integer(10);
+        let result = list_partition(&value, &[]);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_list_partition_text_value_returns_none() {
+        let partitions = vec![ListPartition {
+            id: 1,
+            values: vec![1, 2, 3],
+        }];
+        let value = PartitionValue::Text(100);
+        let result = list_partition(&value, &partitions);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_list_partition_not_found() {
+        let partitions = vec![ListPartition {
+            id: 1,
+            values: vec![1, 2, 3],
+        }];
+        let value = PartitionValue::Integer(10);
+        let result = list_partition(&value, &partitions);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_list_partition_found() {
+        let partitions = vec![
+            ListPartition { id: 0, values: vec![1, 2] },
+            ListPartition { id: 1, values: vec![10, 20] },
+            ListPartition { id: 2, values: vec![100, 200] },
+        ];
+        let value = PartitionValue::Integer(20);
+        let result = list_partition(&value, &partitions);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_partition_pruner_new() {
+        let key = PartitionKey::new_hash("id", 4);
+        let pruner = PartitionPruner::new(key);
+        assert_eq!(pruner.partition_key.total_partitions(), 4);
+    }
+
+    #[test]
+    fn test_partition_pruner_prune_for_value_returns_single() {
+        let key = PartitionKey::new_hash("id", 4);
+        let pruner = PartitionPruner::new(key);
+        let value = PartitionValue::Integer(10);
+        let result = pruner.prune_for_value(&value);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_partition_pruner_prune_for_range_hash_strategy() {
+        let key = PartitionKey::new_hash("id", 4);
+        let pruner = PartitionPruner::new(key);
+        let result = pruner.prune_for_range(0, 100);
+        assert_eq!(result.len(), 4);
+    }
+
+    #[test]
+    fn test_partition_pruner_prune_for_range_returns_relevant() {
+        let key = PartitionKey::new_range("id", vec![10, 20, 30]);
+        let pruner = PartitionPruner::new(key);
+        let result = pruner.prune_for_range(15, 25);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_calculate_hash_deterministic() {
+        let hash1 = calculate_hash("test");
+        let hash2 = calculate_hash("test");
+        let hash3 = calculate_hash("other");
+        assert_eq!(hash1, hash2);
+        assert_ne!(hash1, hash3);
+    }
 }
