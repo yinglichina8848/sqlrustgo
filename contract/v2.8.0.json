@@ -466,6 +466,15 @@
     "status": "string — VERIFIED or FAIL"
   },
 
+  "self_audit": {
+    "script": "scripts/self_audit.py",
+    "runs_determinism_check": true,
+    "reproduces_proof": true,
+    "simulates_attack_vectors": ["AV1", "AV2", "AV3", "AV4", "AV5", "AV6", "AV7", "AV8", "AV9"],
+    "audit_report": "audit_report.json",
+    "frequency": "On-demand (before major releases)"
+  },
+
   "roadmap": {
     "v2.9.0": {
       "target": "Semantic verification",
