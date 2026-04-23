@@ -323,3 +323,41 @@ impl Default for ClientPool {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_pool_new() {
+        let pool = ClientPool::new();
+        assert!(pool.clients.try_read().is_ok());
+    }
+
+    #[test]
+    fn test_client_pool_default() {
+        let pool = ClientPool::default();
+        assert!(pool.clients.try_read().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_client_pool_get_client_empty() {
+        let pool = ClientPool::new();
+        let client = pool.get_client(1).await;
+        assert!(client.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_pool_remove_client_empty() {
+        let pool = ClientPool::new();
+        let removed = pool.remove_client(1).await;
+        assert!(removed.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_pool_health_check_empty() {
+        let pool = ClientPool::new();
+        let health = pool.health_check_all().await;
+        assert!(health.is_empty());
+    }
+}
