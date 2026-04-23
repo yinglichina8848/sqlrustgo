@@ -714,7 +714,10 @@ mod tests {
 
     #[test]
     fn test_two_pc_message_debug() {
-        let msg = TwoPCMessage::Prepare { tx_id: 1, coordinator_id: 100 };
+        let msg = TwoPCMessage::Prepare {
+            tx_id: 1,
+            coordinator_id: 100,
+        };
         let debug_str = format!("{:?}", msg);
         assert!(debug_str.contains("Prepare"));
 
@@ -725,13 +728,19 @@ mod tests {
 
     #[test]
     fn test_two_pc_message_serialization() {
-        let msg = TwoPCMessage::Prepare { tx_id: 42, coordinator_id: 1 };
+        let msg = TwoPCMessage::Prepare {
+            tx_id: 42,
+            coordinator_id: 1,
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("Prepare"));
 
         let parsed: TwoPCMessage = serde_json::from_str(&json).unwrap();
         match parsed {
-            TwoPCMessage::Prepare { tx_id, coordinator_id: _ } => assert_eq!(tx_id, 42),
+            TwoPCMessage::Prepare {
+                tx_id,
+                coordinator_id: _,
+            } => assert_eq!(tx_id, 42),
             _ => panic!("Expected Prepare"),
         }
     }
@@ -754,21 +763,31 @@ mod tests {
 
     #[test]
     fn test_two_pc_message_commit_response() {
-        let msg = TwoPCMessage::CommitResponse { tx_id: 1, node_id: 2, success: true };
+        let msg = TwoPCMessage::CommitResponse {
+            tx_id: 1,
+            node_id: 2,
+            success: true,
+        };
         let debug_str = format!("{:?}", msg);
         assert!(debug_str.contains("CommitResponse"));
     }
 
     #[test]
     fn test_two_pc_message_abort() {
-        let msg = TwoPCMessage::Abort { tx_id: 1, reason: "timeout".to_string() };
+        let msg = TwoPCMessage::Abort {
+            tx_id: 1,
+            reason: "timeout".to_string(),
+        };
         let debug_str = format!("{:?}", msg);
         assert!(debug_str.contains("Abort"));
     }
 
     #[test]
     fn test_two_pc_message_abort_response() {
-        let msg = TwoPCMessage::AbortResponse { tx_id: 1, node_id: 2 };
+        let msg = TwoPCMessage::AbortResponse {
+            tx_id: 1,
+            node_id: 2,
+        };
         let debug_str = format!("{:?}", msg);
         assert!(debug_str.contains("AbortResponse"));
     }
@@ -953,7 +972,12 @@ mod tests {
         });
 
         // Should not trigger commit/abort yet (waiting for all votes)
-        assert!(responses.is_empty() || !responses.iter().any(|(_n, m)| matches!(m, TwoPCMessage::Commit { .. })));
+        assert!(
+            responses.is_empty()
+                || !responses
+                    .iter()
+                    .any(|(_n, m)| matches!(m, TwoPCMessage::Commit { .. }))
+        );
     }
 
     #[test]
@@ -979,9 +1003,14 @@ mod tests {
         assert_eq!(responses.len(), 2);
         for (_, msg) in responses {
             match msg {
-                TwoPCMessage::Abort { tx_id: abort_tx_id, reason } => {
+                TwoPCMessage::Abort {
+                    tx_id: abort_tx_id,
+                    reason,
+                } => {
                     assert_eq!(abort_tx_id, tx_id);
-                    assert!(reason.contains("Disk full") || reason.contains("Participant voted No"));
+                    assert!(
+                        reason.contains("Disk full") || reason.contains("Participant voted No")
+                    );
                 }
                 _ => panic!("Expected Abort message"),
             }
@@ -1019,7 +1048,9 @@ mod tests {
         assert_eq!(responses.len(), 2);
         for (_, msg) in responses {
             match msg {
-                TwoPCMessage::Commit { tx_id: commit_tx_id } => {
+                TwoPCMessage::Commit {
+                    tx_id: commit_tx_id,
+                } => {
                     assert_eq!(commit_tx_id, tx_id);
                 }
                 _ => panic!("Expected Commit message"),
@@ -1157,7 +1188,10 @@ mod tests {
         let (coordinator_id, msg) = &responses[0];
         assert_eq!(*coordinator_id, 1);
         match msg {
-            TwoPCMessage::AbortResponse { tx_id: abort_tx_id, node_id: response_node_id } => {
+            TwoPCMessage::AbortResponse {
+                tx_id: abort_tx_id,
+                node_id: response_node_id,
+            } => {
                 assert_eq!(*abort_tx_id, tx_id);
                 assert_eq!(*response_node_id, 1);
             }
@@ -1193,10 +1227,7 @@ mod tests {
             tx.state = TransactionState::Aborting;
         }
 
-        let responses = tpc.handle_message(TwoPCMessage::AbortResponse {
-            tx_id,
-            node_id: 2,
-        });
+        let responses = tpc.handle_message(TwoPCMessage::AbortResponse { tx_id, node_id: 2 });
 
         // Should be handled
         assert!(responses.is_empty());
@@ -1378,7 +1409,10 @@ mod tests {
         }
 
         let result = tpc.prepare(tx_id);
-        assert!(matches!(result, Err(TwoPCError::InvalidState(TransactionState::Preparing))));
+        assert!(matches!(
+            result,
+            Err(TwoPCError::InvalidState(TransactionState::Preparing))
+        ));
     }
 
     #[test]
@@ -1393,7 +1427,10 @@ mod tests {
         }
 
         let result = tpc.prepare(tx_id);
-        assert!(matches!(result, Err(TwoPCError::InvalidState(TransactionState::Prepared))));
+        assert!(matches!(
+            result,
+            Err(TwoPCError::InvalidState(TransactionState::Prepared))
+        ));
     }
 
     #[test]
@@ -1408,7 +1445,10 @@ mod tests {
         }
 
         let result = tpc.prepare(tx_id);
-        assert!(matches!(result, Err(TwoPCError::InvalidState(TransactionState::Committed))));
+        assert!(matches!(
+            result,
+            Err(TwoPCError::InvalidState(TransactionState::Committed))
+        ));
     }
 
     #[test]
@@ -1423,7 +1463,10 @@ mod tests {
         }
 
         let result = tpc.prepare(tx_id);
-        assert!(matches!(result, Err(TwoPCError::InvalidState(TransactionState::Aborted))));
+        assert!(matches!(
+            result,
+            Err(TwoPCError::InvalidState(TransactionState::Aborted))
+        ));
     }
 
     // =====================================================================

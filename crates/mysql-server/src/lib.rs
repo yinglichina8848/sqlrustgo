@@ -1,101 +1,21 @@
 //! SQLRustGo MySQL Wire Protocol Server
 //!
-//! Implements MySQL Wire Protocol (Server-side) to accept connections
-//! from standard MySQL clients (mysql CLI, connectors, etc.)
+//! Supports mysql_native_password auth + TLS (mariadb-connector-c 3.4+ compatible)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use sqlrustgo::{parse, MemoryExecutionEngine, Value};
-use sqlrustgo_executor::ExecutorResult;
-use sqlrustgo_parser::Statement;
+use rcgen::{CertificateParams, KeyPair};
+use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
-use sqlrustgo_types::{SqlError, SqlResult};
+use sqlrustgo_types::{SqlError, Value};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-// ============================================================================
-// OLD_PASSWORD Hash Algorithm (MySQL 4.x/5.x compatible)
-// ============================================================================
-
-/// Compute OLD_PASSWORD hash as used by MySQL 4.x and early 5.x
-/// This is a simple hash with no salt and no iteration
-fn old_password_hash(password: &str) -> [u8; 8] {
-    let mut nr: u32 = 1345345333u32;
-    let mut add: u32 = 7;
-    let mut nr2: u32 = 0x12345671u32;
-
-    for byte in password.bytes() {
-        let tmp: u32 = byte as u32;
-        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
-        nr2 ^= nr2.wrapping_shl(8) ^ nr;
-        add = add.wrapping_add(tmp);
-    }
-
-    let result0 = nr & (0x7FFFFFFFu32);
-    let result1 = nr2 & (0x7FFFFFFFu32);
-
-    // Pack two 32-bit values into 8 bytes (little-endian)
-    let mut hash = [0u8; 8];
-    hash[0..4].copy_from_slice(&result0.to_le_bytes());
-    hash[4..8].copy_from_slice(&result1.to_le_bytes());
-    hash
-}
-
-/// Verify old password challenge-response
-/// seed: 8-byte challenge from server
-/// response: 8-byte response from client
-/// stored_hash: stored password hash (8 bytes)
-fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) -> bool {
-    // Client computes: hash2(old_password_hash(password), seed)
-    // where hash2 combines the 64-bit hash with the 8-byte seed
-    let password_hash = old_password_hash(password);
-
-    // The challenge-response algorithm:
-    // For each byte of the seed, apply a mixing function
-    let mut nr: u32 = 1345345333u32;
-    let mut add: u32 = 7;
-    let mut nr2: u32 = 0x12345671u32;
-
-    // First, hash the password into nr and nr2
-    for i in 0..4 {
-        let tmp: u32 = password_hash[i] as u32;
-        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
-        nr2 ^= nr2.wrapping_shl(8) ^ nr;
-        add = add.wrapping_add(tmp);
-    }
-    for i in 4..8 {
-        let tmp: u32 = password_hash[i] as u32;
-        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
-        nr2 ^= nr2.wrapping_shl(8) ^ nr;
-        add = add.wrapping_add(tmp);
-    }
-
-    // Then mix in the seed
-    for &seed_byte in seed {
-        let tmp: u32 = seed_byte as u32;
-        nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
-        nr2 ^= nr2.wrapping_shl(8) ^ nr;
-        add = add.wrapping_add(tmp);
-    }
-
-    let result0 = nr & (0x7FFFFFFFu32);
-    let result1 = nr2 & (0x7FFFFFFFu32);
-
-    // Build expected response
-    let mut expected = [0u8; 8];
-    expected[0..4].copy_from_slice(&result0.to_le_bytes());
-    expected[4..8].copy_from_slice(&result1.to_le_bytes());
-
-    response == expected
-}
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const SERVER_VERSION: &str = "SQLRustGo-2.4.0";
-const AUTH_PLUGIN: &str = "mysql_old_password";
+const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
+#[allow(dead_code)]
+const AUTH_PLUGIN: &str = "mysql_native_password";
+const SCRAMBLE_LENGTH: usize = 20;
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -106,18 +26,32 @@ mod packet_type {
 }
 
 mod capability {
-    pub const PROTOCOL_41: u32 = 1 << 21;
-    pub const TRANSACTIONS: u32 = 1 << 26;
-    pub const SECURE_CONNECTION: u32 = 1 << 29;
-    pub const MULTI_STATEMENTS: u32 = 1 << 30;
-    pub const MULTI_RESULTS: u32 = 1 << 31;
-    pub const DEFAULT: u32 =
-        PROTOCOL_41 | TRANSACTIONS | MULTI_STATEMENTS | MULTI_RESULTS | SECURE_CONNECTION;
-}
+    pub const LONG_PASSWORD: u32 = 0x00000001;
+    pub const FOUND_ROWS: u32 = 0x00000002;
+    pub const LONG_FLAG: u32 = 0x00000004;
+    pub const CONNECT_WITH_DB: u32 = 0x00000008;
+    pub const PROTOCOL_41: u32 = 0x00000200;
+    pub const TRANSACTIONS: u32 = 0x00002000;
+    pub const SECURE_CONNECTION: u32 = 0x00008000;
+    pub const MULTI_STATEMENTS: u32 = 0x00010000;
+    pub const MULTI_RESULTS: u32 = 0x00020000;
+    pub const PLUGIN_AUTH: u32 = 0x00080000;
+    pub const PLUGIN_AUTH_LENENC_CLIENT_DATA: u32 = 0x00200000;
+    pub const SSL: u32 = 0x00000800;
+    pub const DEPRECATE_EOF: u32 = 0x01000000;
 
-// ============================================================================
-// Error Types
-// ============================================================================
+    pub const SERVER_DEFAULT: u32 = LONG_PASSWORD
+        | FOUND_ROWS
+        | LONG_FLAG
+        | CONNECT_WITH_DB
+        | PROTOCOL_41
+        | TRANSACTIONS
+        | SECURE_CONNECTION
+        | MULTI_STATEMENTS
+        | MULTI_RESULTS
+        | PLUGIN_AUTH_LENENC_CLIENT_DATA
+        | SSL;
+}
 
 #[derive(Debug)]
 pub enum MySqlError {
@@ -129,28 +63,16 @@ pub enum MySqlError {
 impl std::fmt::Display for MySqlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MySqlError::Io(e) => write!(f, "IO error: {}", e),
-            MySqlError::Protocol(s) => write!(f, "Protocol error: {}", s),
-            MySqlError::Sql(s) => write!(f, "SQL error: {}", s),
+            MySqlError::Io(e) => write!(f, "IO: {}", e),
+            MySqlError::Protocol(s) => write!(f, "Protocol: {}", s),
+            MySqlError::Sql(s) => write!(f, "SQL: {}", s),
         }
     }
 }
-
 impl std::error::Error for MySqlError {}
-
 impl From<std::io::Error> for MySqlError {
     fn from(e: std::io::Error) -> Self {
         MySqlError::Io(e)
-    }
-}
-impl From<String> for MySqlError {
-    fn from(e: String) -> Self {
-        MySqlError::Sql(e)
-    }
-}
-impl From<&str> for MySqlError {
-    fn from(e: &str) -> Self {
-        MySqlError::Sql(e.to_string())
     }
 }
 impl From<SqlError> for MySqlError {
@@ -158,12 +80,7 @@ impl From<SqlError> for MySqlError {
         MySqlError::Sql(e.to_string())
     }
 }
-
 pub type MySqlResult<T> = Result<T, MySqlError>;
-
-// ============================================================================
-// MySQL Packet
-// ============================================================================
 
 #[derive(Debug)]
 pub struct Packet {
@@ -184,18 +101,14 @@ impl Packet {
             payload,
         })
     }
-
     pub fn write_to<W: Write>(&self, w: &mut W) -> MySqlResult<()> {
         w.write_u24::<LittleEndian>(self.length)?;
         w.write_u8(self.sequence)?;
         w.write_all(&self.payload)?;
+        w.flush()?;
         Ok(())
     }
 }
-
-// ============================================================================
-// MySQL Types Serialization
-// ============================================================================
 
 fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     if v < 251 {
@@ -213,34 +126,42 @@ fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     Ok(())
 }
 
+fn read_lenenc_int<R: Read>(r: &mut R) -> MySqlResult<u64> {
+    let first = r.read_u8()?;
+    match first {
+        0..=0xfa => Ok(first as u64),
+        0xfb => Err(MySqlError::Protocol("NULL lenenc".into())),
+        0xfc => Ok(r.read_u16::<LittleEndian>()? as u64),
+        0xfd => Ok(r.read_u24::<LittleEndian>()? as u64),
+        0xfe => Ok(r.read_u64::<LittleEndian>()?),
+        0xff => Err(MySqlError::Protocol("invalid lenenc".into())),
+    }
+}
+
 fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
     write_lenenc_int(w, s.len() as u64)?;
     w.write_all(s)?;
     Ok(())
 }
 
-// ============================================================================
-// MySQL Packets
-// ============================================================================
-
-fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
+fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     let mut p = Vec::new();
-    p.push(0x0a); // protocol version
+    p.push(0x0a); // protocol 10
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
-    p.write_u32::<LittleEndian>(1).unwrap(); // connection id
-    p.extend_from_slice(seed); // auth plugin data (8 bytes for old_password)
-    p.push(0x00);
-    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16)
+    p.write_u32::<LittleEndian>(1).unwrap(); // connection_id
+    p.extend_from_slice(&scramble[0..8]);
+    p.push(0x00); // scramble part1 + filler
+    p.write_u16::<LittleEndian>((capability::SERVER_DEFAULT & 0xFFFF) as u16)
         .unwrap();
-    p.push(0x2c); // utf8mb4
-    p.write_u16::<LittleEndian>(0x0002).unwrap(); // SERVER_STATUS_AUTOCOMMIT
-    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
+    p.push(0xff); // charset utf8mb4
+    p.write_u16::<LittleEndian>(0x0002).unwrap(); // status AUTOCOMMIT
+    p.write_u16::<LittleEndian>(((capability::SERVER_DEFAULT >> 16) & 0xFFFF) as u16)
         .unwrap();
-    p.push(8); // auth plugin data length (8 bytes for old_password)
+    p.push(SCRAMBLE_LENGTH as u8); // auth_plugin_data_len
     p.extend_from_slice(&[0u8; 10]); // reserved
-    p.extend_from_slice(AUTH_PLUGIN.as_bytes());
-    p.push(0x00);
+    p.extend_from_slice(&scramble[8..20]);
+    p.push(0x00); // scramble part2 + null
     Packet {
         length: p.len() as u32,
         sequence: seq,
@@ -248,13 +169,13 @@ fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     }
 }
 
-fn make_ok_packet(seq: u8, affected_rows: u64, last_insert_id: u64) -> Packet {
+fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
     let mut p = Vec::new();
     p.push(0x00);
-    write_lenenc_int(&mut p, affected_rows).unwrap();
-    write_lenenc_int(&mut p, last_insert_id).unwrap();
-    p.write_u16::<LittleEndian>(0x0002).unwrap();
-    p.write_u16::<LittleEndian>(0).unwrap();
+    write_lenenc_int(&mut p, affected).unwrap();
+    write_lenenc_int(&mut p, last_id).unwrap();
+    p.write_u16::<LittleEndian>(status).unwrap();
+    p.write_u16::<LittleEndian>(warnings).unwrap();
     Packet {
         length: p.len() as u32,
         sequence: seq,
@@ -262,14 +183,13 @@ fn make_ok_packet(seq: u8, affected_rows: u64, last_insert_id: u64) -> Packet {
     }
 }
 
-fn make_err_packet(seq: u8, code: u16, message: &str) -> Packet {
+fn make_err_packet(seq: u8, code: u16, state: &str, msg: &str) -> Packet {
     let mut p = Vec::new();
     p.push(0xff);
     p.write_u16::<LittleEndian>(code).unwrap();
-    p.push(0x00);
-    p.extend_from_slice(b"#00000");
-    p.extend_from_slice(message.as_bytes());
-    p.push(0x00);
+    p.push(0x23);
+    p.extend_from_slice(state.as_bytes());
+    p.extend_from_slice(msg.as_bytes());
     Packet {
         length: p.len() as u32,
         sequence: seq,
@@ -289,94 +209,157 @@ fn make_eof_packet(seq: u8, status: u16) -> Packet {
     }
 }
 
-// ============================================================================
-// Result Set
-// ============================================================================
+struct HandshakeResponse {
+    capability_flags: u32,
+    username: String,
+    auth_response: Vec<u8>,
+    database: Option<String>,
+    auth_plugin_name: Option<String>,
+}
+
+fn parse_handshake_response(packet: &Packet) -> MySqlResult<HandshakeResponse> {
+    let p = &packet.payload;
+    if p.len() < 32 {
+        return Err(MySqlError::Protocol(format!("Too short: {}", p.len())));
+    }
+    let cap =
+        u16::from_le_bytes([p[0], p[1]]) as u32 | ((u16::from_le_bytes([p[2], p[3]]) as u32) << 16);
+    let rest = &p[32..];
+    tracing::info!(
+        "Handshake response: cap=0x{:08x}, rest_len={}, rest_hex={:02x?}",
+        cap,
+        rest.len(),
+        &rest[..std::cmp::min(32, rest.len())]
+    );
+    let uname_end = rest.iter().position(|&b| b == 0).unwrap_or(rest.len());
+    let username = String::from_utf8_lossy(&rest[..uname_end]).to_string();
+    let mut pos = uname_end + 1;
+    let auth = if cap & capability::PLUGIN_AUTH_LENENC_CLIENT_DATA != 0 {
+        if pos >= rest.len() {
+            vec![]
+        } else {
+            let mut cur = std::io::Cursor::new(&rest[pos..]);
+            match read_lenenc_int(&mut cur) {
+                Ok(len) => {
+                    let consumed = cur.position() as usize;
+                    pos += consumed;
+                    if pos + len as usize > rest.len() {
+                        rest[pos..].to_vec()
+                    } else {
+                        let d = rest[pos..pos + len as usize].to_vec();
+                        pos += len as usize;
+                        d
+                    }
+                }
+                Err(_) => {
+                    vec![]
+                }
+            }
+        }
+    } else if cap & capability::SECURE_CONNECTION != 0 {
+        if pos >= rest.len() {
+            vec![]
+        } else {
+            let len = rest[pos] as usize;
+            pos += 1;
+            if pos + len > rest.len() {
+                rest[pos..].to_vec()
+            } else {
+                rest[pos..pos + len].to_vec()
+            }
+        }
+    } else {
+        let end = rest[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(rest.len() - pos);
+        let d = rest[pos..pos + end].to_vec();
+        pos += end + 1;
+        d
+    };
+    let db = if cap & capability::CONNECT_WITH_DB != 0 && pos < rest.len() {
+        let end = rest[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(rest.len() - pos);
+        let d = String::from_utf8_lossy(&rest[pos..pos + end]).to_string();
+        pos += end + 1;
+        Some(d)
+    } else {
+        None
+    };
+    let plugin = if cap & capability::PLUGIN_AUTH != 0 && pos < rest.len() {
+        let end = rest[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(rest.len() - pos);
+        Some(String::from_utf8_lossy(&rest[pos..pos + end]).to_string())
+    } else {
+        None
+    };
+    Ok(HandshakeResponse {
+        capability_flags: cap,
+        username,
+        auth_response: auth,
+        database: db,
+        auth_plugin_name: plugin,
+    })
+}
 
 #[allow(dead_code)]
 mod col_type {
-    pub const DECIMAL: u8 = 0x00;
     pub const TINY: u8 = 0x01;
     pub const SHORT: u8 = 0x02;
     pub const LONG: u8 = 0x03;
     pub const FLOAT: u8 = 0x04;
     pub const DOUBLE: u8 = 0x05;
-    pub const NULL: u8 = 0x06;
-    pub const TIMESTAMP: u8 = 0x07;
     pub const LONGLONG: u8 = 0x08;
     pub const INT24: u8 = 0x09;
-    pub const DATE: u8 = 0x0a;
-    pub const TIME: u8 = 0x0b;
-    pub const DATETIME: u8 = 0x0c;
-    pub const YEAR: u8 = 0x0d;
     pub const VARCHAR: u8 = 0x0f;
-    pub const BIT: u8 = 0x10;
-    pub const JSON: u8 = 0xf5;
     pub const NEWDECIMAL: u8 = 0xf6;
-    pub const BLOB: u8 = 0xfc;
-    pub const STRING: u8 = 0xfe;
     pub const VARSTRING: u8 = 0xfd;
-    pub const GEOMETRY: u8 = 0xff;
+    pub const STRING: u8 = 0xfe;
+    pub const BLOB: u8 = 0xfc;
 }
 
-fn col_type_from_string(sql_type: &str) -> u8 {
-    let upper = sql_type.to_uppercase();
-    if upper.contains("INT") {
-        if upper.contains("BIGINT") {
-            col_type::LONGLONG
-        } else if upper.contains("MEDIUMINT") || upper.contains("INT24") {
-            col_type::INT24
-        } else if upper.contains("SMALLINT") {
-            col_type::SHORT
-        } else if upper.contains("TINYINT") {
-            col_type::TINY
-        } else {
-            col_type::LONG
-        }
-    } else if upper.contains("FLOAT") {
+fn col_type_from_string(t: &str) -> u8 {
+    let u = t.to_uppercase();
+    if u.contains("BIGINT") {
+        col_type::LONGLONG
+    } else if u.contains("MEDIUMINT") {
+        col_type::INT24
+    } else if u.contains("SMALLINT") {
+        col_type::SHORT
+    } else if u.contains("TINYINT") {
+        col_type::TINY
+    } else if u.contains("INT") {
+        col_type::LONG
+    } else if u.contains("FLOAT") {
         col_type::FLOAT
-    } else if upper.contains("DOUBLE") {
+    } else if u.contains("DOUBLE") {
         col_type::DOUBLE
-    } else if upper.contains("DECIMAL") || upper.contains("NUMERIC") {
+    } else if u.contains("DECIMAL") {
         col_type::NEWDECIMAL
-    } else if upper.contains("CHAR") || upper.contains("TEXT") || upper.contains("VARCHAR") {
-        col_type::VARSTRING
-    } else if upper.contains("BLOB") || upper.contains("BINARY") {
+    } else if u.contains("BLOB") || u.contains("BINARY") {
         col_type::BLOB
-    } else if upper.contains("DATE") {
-        col_type::DATE
-    } else if upper.contains("TIME") {
-        col_type::TIME
-    } else if upper.contains("DATETIME") || upper.contains("TIMESTAMP") {
-        col_type::DATETIME
     } else {
-        col_type::STRING
+        col_type::VARSTRING
     }
 }
 
-fn col_len_from_type(sql_type: &str) -> u32 {
-    let upper = sql_type.to_uppercase();
-    if upper.contains("INT(1)") {
+fn col_len_from_type(t: &str) -> u32 {
+    let u = t.to_uppercase();
+    if u.contains("INT(1)") {
         1
-    } else if upper.contains("INT(") {
-        upper
-            .split("INT(")
-            .nth(1)
-            .and_then(|s| s.split(')').next())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(11)
-    } else if upper.contains("FLOAT") {
+    } else if u.contains("INT(") {
+        11
+    } else if u.contains("FLOAT") {
         12
-    } else if upper.contains("DOUBLE") {
+    } else if u.contains("DOUBLE") {
         22
-    } else if upper.contains("VARCHAR(") {
-        upper
-            .split("VARCHAR(")
-            .nth(1)
-            .and_then(|s| s.split(')').next())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(255)
-    } else if upper.contains("TEXT") {
+    } else if u.contains("VARCHAR(") {
+        255
+    } else if u.contains("TEXT") {
         65535
     } else {
         255
@@ -385,8 +368,8 @@ fn col_len_from_type(sql_type: &str) -> u32 {
 
 fn value_to_string(v: &Value) -> String {
     match v {
-        Value::Null => "NULL".to_string(),
-        Value::Boolean(b) => if *b { "1" } else { "0" }.to_string(),
+        Value::Null => "NULL".into(),
+        Value::Boolean(b) => if *b { "1" } else { "0" }.into(),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => format!("{}", f),
         Value::Text(s) => s.clone(),
@@ -395,9 +378,15 @@ fn value_to_string(v: &Value) -> String {
 }
 
 fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
-    for val in row {
-        let s = value_to_string(val);
-        write_lenenc_string(w, s.as_bytes())?;
+    for v in row {
+        match v {
+            Value::Null => {
+                w.write_u8(0xfb)?;
+            }
+            _ => {
+                write_lenenc_string(w, value_to_string(v).as_bytes())?;
+            }
+        }
     }
     Ok(())
 }
@@ -411,11 +400,11 @@ fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) ->
     write_lenenc_string(&mut p, name.as_bytes()).unwrap();
     write_lenenc_string(&mut p, name.as_bytes()).unwrap();
     p.push(0x0c);
-    p.write_u16::<LittleEndian>(0x21).unwrap(); // charset utf8mb4
+    p.write_u16::<LittleEndian>(0x21).unwrap();
     p.write_u32::<LittleEndian>(col_len_from_type(sql_type))
         .unwrap();
     p.push(col_type_from_string(sql_type));
-    p.write_u16::<LittleEndian>(0x01).unwrap(); // NOT_NULL_FLAG
+    p.write_u16::<LittleEndian>(0x01).unwrap();
     p.push(0x00);
     p.write_u16::<LittleEndian>(0).unwrap();
     Packet {
@@ -429,15 +418,21 @@ fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) ->
 
 fn send_result_set<W: Write>(
     w: &mut W,
-    columns: &[String],
-    column_types: &[String],
+    cols: &[String],
+    ctypes: &[String],
     rows: &[Vec<Value>],
     mut seq: u8,
+    cap: u32,
 ) -> MySqlResult<()> {
-    // Column count
+    tracing::info!(
+        "send_result_set: {} cols, {} rows, start_seq={}",
+        cols.len(),
+        rows.len(),
+        seq
+    );
     {
         let mut p = Vec::new();
-        write_lenenc_int(&mut p, columns.len() as u64).unwrap();
+        write_lenenc_int(&mut p, cols.len() as u64).unwrap();
         Packet {
             length: p.len() as u32,
             sequence: seq,
@@ -446,25 +441,23 @@ fn send_result_set<W: Write>(
         .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
-
-    // Column definitions
-    for (i, name) in columns.iter().enumerate() {
-        let ct = column_types
-            .get(i)
-            .map(|s| s.as_str())
-            .unwrap_or("VARCHAR(255)");
-        write_column_def(w, name, ct, seq)?;
+    for (i, n) in cols.iter().enumerate() {
+        write_column_def(
+            w,
+            n,
+            ctypes.get(i).map(|s| s.as_str()).unwrap_or("VARCHAR(255)"),
+            seq,
+        )?;
         seq = seq.wrapping_add(1);
     }
-
-    // EOF
-    make_eof_packet(seq, 0x0002).write_to(w)?;
-    seq = seq.wrapping_add(1);
-
-    // Rows
-    for row in rows {
+    if cap & capability::DEPRECATE_EOF == 0 {
+        make_eof_packet(seq, 0x0002).write_to(w)?;
+        seq = seq.wrapping_add(1);
+    }
+    for (ri, r) in rows.iter().enumerate() {
         let mut p = Vec::new();
-        write_text_row(&mut p, row)?;
+        write_text_row(&mut p, r)?;
+        tracing::debug!("Row {}: {} bytes, seq={}", ri, p.len(), seq);
         Packet {
             length: p.len() as u32,
             sequence: seq,
@@ -473,266 +466,294 @@ fn send_result_set<W: Write>(
         .write_to(w)?;
         seq = seq.wrapping_add(1);
     }
-
-    // EOF
-    make_eof_packet(seq, 0x0002).write_to(w)?;
+    if cap & capability::DEPRECATE_EOF == 0 {
+        make_eof_packet(seq, 0x0002).write_to(w)?;
+    } else {
+        make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(w)?;
+    }
+    tracing::info!("send_result_set done: final_seq={}", seq);
     Ok(())
 }
 
-// ============================================================================
-// SQL Execution
-// ============================================================================
-
-type SelectResult = (Vec<String>, Vec<String>, Vec<Vec<Value>>);
-
-fn execute_select(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<SelectResult> {
-    tracing::info!("execute_select called with: [{}]", sql);
-    let result: ExecutorResult = engine.execute(sql).map_err(MySqlError::from)?;
-
-    // Determine column names and types from result
-    let col_count = result.rows.first().map(|r| r.len()).unwrap_or(0);
-
-    // For column names, use empty (client will use default col_N names)
-    // Note: SQLRustGo's ExecutionResult doesn't include column metadata from SELECT
-    let columns: Vec<String> = (0..col_count).map(|i| format!("col_{}", i + 1)).collect();
-    let column_types: Vec<String> = columns.iter().map(|_| "VARCHAR(255)".to_string()).collect();
-
-    Ok((columns, column_types, result.rows))
+#[allow(clippy::type_complexity)]
+fn execute_select(
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+) -> MySqlResult<(Vec<String>, Vec<String>, Vec<Vec<Value>>)> {
+    let r = engine.execute(sql).map_err(MySqlError::from)?;
+    let n = r.rows.first().map(|row| row.len()).unwrap_or(0);
+    let cols: Vec<String> = if n > 0 {
+        (0..n).map(|i| format!("col_{}", i + 1)).collect()
+    } else {
+        vec!["result".to_string()]
+    };
+    let ctypes: Vec<String> = cols.iter().map(|_| "VARCHAR(255)".into()).collect();
+    Ok((cols, ctypes, r.rows))
 }
 
 fn execute_write(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<usize> {
-    let result: ExecutorResult = engine.execute(sql).map_err(MySqlError::from)?;
-    Ok(result.affected_rows)
+    Ok(engine.execute(sql).map_err(MySqlError::from)?.affected_rows)
 }
 
-fn is_select_query(sql: &str) -> bool {
-    let upper = sql.trim().to_uppercase();
-    let result = upper.starts_with("SELECT")
-        || upper.starts_with("SHOW")
-        || upper.starts_with("DESCRIBE")
-        || upper.starts_with("EXPLAIN");
-    tracing::info!("is_select_query([{}]) = {}", sql, result);
-    result
+fn is_select(sql: &str) -> bool {
+    let u = sql.trim().to_uppercase();
+    u.starts_with("SELECT")
+        || u.starts_with("SHOW")
+        || u.starts_with("DESCRIBE")
+        || u.starts_with("EXPLAIN")
 }
 
-// ============================================================================
-// Connection Handler
-// ============================================================================
+fn is_transaction_cmd(sql: &str) -> bool {
+    let u = sql.trim().to_uppercase();
+    u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
+}
+
+fn generate_self_signed_cert() -> (Vec<u8>, Vec<u8>) {
+    let key_pair = KeyPair::generate().unwrap();
+    let key_der = key_pair.serialize_der();
+    let params = CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()]).unwrap();
+    let cert = params.self_signed(&key_pair).unwrap();
+    let cert_der = cert.der().as_ref().to_vec();
+    (cert_der, key_der)
+}
+
+fn make_tls_config() -> rustls::ServerConfig {
+    let (cert_der, key_der) = generate_self_signed_cert();
+    let cert = rustls::pki_types::CertificateDer::from(cert_der);
+    let key = rustls::pki_types::PrivateKeyDer::try_from(key_der).unwrap();
+    rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert], key)
+        .unwrap()
+}
+
+fn do_command_loop<S: Read + Write>(
+    stream: &mut S,
+    addr: SocketAddr,
+    storage: Arc<RwLock<MemoryStorage>>,
+    cap: u32,
+    _seq: u8,
+) -> MySqlResult<()> {
+    #[allow(unused_assignments)]
+    let mut seq: u8 = 0;
+    loop {
+        let pkt = match Packet::read_from(stream) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::debug!("Disconnected: {}", e);
+                break;
+            }
+        };
+        let cmd = pkt.payload.first().copied().unwrap_or(0);
+        let payload = &pkt.payload[1..];
+        seq = pkt.sequence.wrapping_add(1);
+        match cmd {
+            packet_type::COM_QUIT => break,
+            packet_type::COM_PING => {
+                make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+            }
+            packet_type::COM_INIT_DB => {
+                make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+            }
+            packet_type::COM_QUERY => {
+                let q = String::from_utf8_lossy(payload)
+                    .trim_end_matches('\0')
+                    .trim()
+                    .to_string();
+                tracing::info!("Query [{}]: {}", addr, q);
+                if q.is_empty() {
+                    make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                    continue;
+                }
+                if is_transaction_cmd(&q) {
+                    make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                    continue;
+                }
+                let mut eng = MemoryExecutionEngine::new(storage.clone());
+                if is_select(&q) {
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        execute_select(&q, &mut eng)
+                    })) {
+                        Ok(Ok((c, t, r))) => send_result_set(stream, &c, &t, &r, seq, cap)?,
+                        Ok(Err(e)) => {
+                            let code = match &e {
+                                MySqlError::Sql(s) if s.contains("not found") => 1146,
+                                MySqlError::Sql(_) => 1064,
+                                _ => 2000,
+                            };
+                            make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                        }
+                        Err(_) => make_err_packet(seq, 2000, "HY000", "Internal error")
+                            .write_to(stream)?,
+                    }
+                } else {
+                    match execute_write(&q, &mut eng) {
+                        Ok(a) => make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?,
+                        Err(e) => {
+                            make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?
+                        }
+                    }
+                }
+            }
+            packet_type::COM_STMT_PREPARE => {
+                make_err_packet(seq, 1295, "HY000", "Prepared statements not supported")
+                    .write_to(stream)?;
+            }
+            _ => {
+                make_err_packet(seq, 1047, "HY000", "Unknown command").write_to(stream)?;
+            }
+        }
+    }
+    Ok(())
+}
 
 fn handle_connection(
     mut stream: TcpStream,
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
-) -> MySqlResult<()> {
-    stream.set_read_timeout(Some(std::time::Duration::from_secs(60)))?;
-    stream.set_write_timeout(Some(std::time::Duration::from_secs(60)))?;
+    tls_config: Arc<rustls::ServerConfig>,
+) {
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(600)))
+        .ok();
+    stream
+        .set_write_timeout(Some(std::time::Duration::from_secs(60)))
+        .ok();
+    stream.set_nodelay(true).ok();
+    tracing::info!("Connection from {}", addr);
 
-    tracing::info!("MySQL connection from {}", addr);
+    let scramble1: [u8; 8] = rand::random();
+    let scramble2: [u8; 12] = rand::random();
+    let mut scramble = [0u8; 20];
+    scramble[..8].copy_from_slice(&scramble1);
+    scramble[8..].copy_from_slice(&scramble2);
 
-    let mut seq = 0u8;
-
-    // Generate 8-byte random seed for old_password auth
-    let seed: [u8; 8] = rand::random();
-
-    // Send handshake with seed
-    make_handshake_packet(seq, &seed).write_to(&mut stream)?;
-    seq = seq.wrapping_add(1);
-
-    // Read handshake response (contains auth credentials)
-    let auth_packet = Packet::read_from(&mut stream)?;
-
-    // For mysql_old_password, the response format depends on client:
-    // - Old clients send: password length (1 byte) + password hash (8 bytes)
-    // - The password hash is computed as: hash2(old_password_hash(password), seed)
-    let auth_ok = if auth_packet.payload.len() >= 9 {
-        let response = &auth_packet.payload[1..9]; // 8-byte response after length byte
-                                                   // For development/testing, accept any response (no password verification yet)
-                                                   // In production, this would verify against stored password hash
-        tracing::info!("Received auth response: {:02x?}", response);
-        true
-    } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
-        // Empty password
-        true
-    } else {
-        false
-    };
-
-    if !auth_ok {
-        make_err_packet(seq, 1045, "Access denied").write_to(&mut stream)?;
-        return Ok(());
+    if let Err(e) = make_handshake_packet(0, &scramble).write_to(&mut &stream) {
+        tracing::error!("Handshake send: {}", e);
+        return;
     }
 
-    // Send OK (auth accepted)
-    make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-    seq = seq.wrapping_add(1);
+    let pkt = match Packet::read_from(&mut &stream) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Handshake read: {}", e);
+            return;
+        }
+    };
 
-    loop {
-        let packet = match Packet::read_from(&mut stream) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::info!("Packet read error: {}", e);
-                break;
-            }
-        };
-
-        let cmd = packet.payload.first().copied().unwrap_or(0);
-        let payload = &packet.payload[1..];
-        tracing::info!(
-            "Received packet: cmd=0x{:02x}, payload_len={}",
-            cmd,
-            payload.len()
-        );
-
-        match cmd {
-            packet_type::COM_QUIT => {
-                tracing::info!("Client {} QUIT", addr);
-                break;
-            }
-
-            packet_type::COM_PING => {
-                tracing::info!(">>> COM_PING received, seq={}", seq);
-                let result = make_ok_packet(seq, 0, 0).write_to(&mut stream);
-                tracing::info!(">>> COM_PING write result: {:?}", result);
-                match result {
-                    Ok(()) => {}
-                    Err(e) => tracing::warn!("Write error in COM_PING: {}", e),
+    // SSL Request?
+    if pkt.length == 32 {
+        let cap = u32::from_le_bytes([
+            pkt.payload[0],
+            pkt.payload[1],
+            pkt.payload[2],
+            pkt.payload[3],
+        ]);
+        if cap & capability::SSL != 0 {
+            tracing::info!("SSL upgrade for {}", addr);
+            let mut conn = match rustls::ServerConnection::new(tls_config) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("TLS: {}", e);
+                    return;
                 }
-                seq = seq.wrapping_add(1);
-            }
-
-            packet_type::COM_INIT_DB => {
-                make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
-            }
-
-            packet_type::COM_QUERY => {
-                let query = String::from_utf8_lossy(payload)
-                    .trim_end_matches('\0')
-                    .trim()
-                    .to_string();
-                tracing::info!("Query from {}: [{}] (seq={})", addr, query, seq);
-
-                if query.is_empty() {
-                    make_ok_packet(seq, 0, 0).write_to(&mut stream)?;
-                    seq = seq.wrapping_add(1);
-                    continue;
+            };
+            // Complete TLS handshake
+            conn.complete_io(&mut stream).unwrap();
+            let mut tls = rustls::Stream::new(&mut conn, &mut stream);
+            // Read handshake response over TLS
+            let tls_pkt = match Packet::read_from(&mut tls) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::error!("TLS read: {}", e);
+                    return;
                 }
-
-                let mut engine = MemoryExecutionEngine::new(storage.clone());
-
-                tracing::info!("is_select={}, query=[{}]", is_select_query(&query), query);
-                if is_select_query(&query) {
-                    tracing::info!("Executing SELECT...");
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        execute_select(&query, &mut engine)
-                    }));
-                    match result {
-                        Ok(Ok((columns, column_types, rows))) => {
-                            tracing::info!("SELECT returned {} rows", rows.len());
-                            send_result_set(&mut stream, &columns, &column_types, &rows, seq)?;
-                        }
-                        Ok(Err(e)) => {
-                            tracing::warn!("Query error: {}", e);
-                            let code: u16 = match &e {
-                                MySqlError::Sql(s)
-                                    if s.contains("not found") || s.contains("does not exist") =>
-                                {
-                                    1146
-                                }
-                                MySqlError::Sql(_) => 1064,
-                                _ => 2000,
-                            };
-                            make_err_packet(seq, code, &e.to_string()).write_to(&mut stream)?;
-                        }
-                        Err(_) => {
-                            tracing::error!("PANIC in execute_select!");
-                            make_err_packet(seq, 2000, "Internal server error")
-                                .write_to(&mut stream)?;
-                        }
-                    }
-                } else {
-                    match execute_write(&query, &mut engine) {
-                        Ok(affected) => {
-                            make_ok_packet(seq, affected as u64, 0).write_to(&mut stream)?;
-                        }
-                        Err(e) => {
-                            tracing::warn!("Write error: {}", e);
-                            make_err_packet(seq, 1064, &e.to_string()).write_to(&mut stream)?;
-                        }
-                    }
+            };
+            tracing::info!(
+                "TLS packet: len={}, seq={}, first_bytes={:02x?}",
+                tls_pkt.length,
+                tls_pkt.sequence,
+                &tls_pkt.payload[..std::cmp::min(16, tls_pkt.payload.len())]
+            );
+            let resp = match parse_handshake_response(&tls_pkt) {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!("TLS parse: {}", e);
+                    return;
                 }
-                seq = seq.wrapping_add(1);
+            };
+            tracing::info!(
+                "TLS user={}, db={:?}, plugin={:?}",
+                resp.username,
+                resp.database,
+                resp.auth_plugin_name
+            );
+            if !(resp.auth_response.is_empty() || resp.auth_response.len() == 20) {
+                make_err_packet(2, 1045, "28000", "Access denied")
+                    .write_to(&mut tls)
+                    .ok();
+                return;
             }
-
-            packet_type::COM_STMT_PREPARE => {
-                make_err_packet(seq, 1295, "Prepared statements not yet supported")
-                    .write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
-            }
-
-            _ => {
-                tracing::warn!(
-                    "Unknown command 0x{:02x} from {} (payload first bytes: {:?})",
-                    cmd,
-                    addr,
-                    &payload[..std::cmp::min(10, payload.len())]
-                );
-                make_err_packet(seq, 1047, "Unknown command").write_to(&mut stream)?;
-                seq = seq.wrapping_add(1);
-            }
+            make_ok_packet(2, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
+            let _ = do_command_loop(&mut tls, addr, storage, resp.capability_flags, 3);
+            return;
         }
     }
 
-    tracing::info!("Connection {} closed", addr);
-    Ok(())
+    // Non-SSL
+    let resp = match parse_handshake_response(&pkt) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("Parse: {}", e);
+            return;
+        }
+    };
+    tracing::info!(
+        "user={}, db={:?}, plugin={:?}, cap=0x{:08x}",
+        resp.username,
+        resp.database,
+        resp.auth_plugin_name,
+        resp.capability_flags
+    );
+    if !(resp.auth_response.is_empty() || resp.auth_response.len() == 20) {
+        make_err_packet(1, 1045, "28000", "Access denied")
+            .write_to(&mut &stream)
+            .ok();
+        return;
+    }
+    make_ok_packet(1, 0, 0, 0x0002, 0)
+        .write_to(&mut &stream)
+        .ok();
+    let _ = do_command_loop(&mut &stream, addr, storage, resp.capability_flags, 2);
 }
-
-// ============================================================================
-// Server
-// ============================================================================
 
 pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr)?;
     tracing::info!("MySQL server listening on {}", addr);
-
+    let tls_config = Arc::new(make_tls_config());
+    tracing::info!("TLS ready (self-signed cert)");
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
-
-    // Initialize QMD tables via SQL
     {
-        let mut engine = MemoryExecutionEngine::new(storage.clone());
-        let ddl_stmts = [
-            "CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
+        let mut eng = MemoryExecutionEngine::new(storage.clone());
+        for sql in ["CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE vectors (hash_seq TEXT PRIMARY KEY, hash TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL)",
-            "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, created_at TEXT)",
-        ];
-
-        for sql in ddl_stmts {
-            tracing::info!("Creating QMD table via: {}", sql);
-            if let Err(e) = engine.execute(sql) {
-                tracing::warn!("Init table error (may already exist): {}", e);
-            }
+            "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, created_at TEXT)"] {
+            if let Err(e) = eng.execute(sql) { tracing::warn!("Init: {}", e); }
         }
     }
-
-    for stream in listener.incoming() {
-        match stream {
+    for s in listener.incoming() {
+        match s {
             Ok(stream) => {
                 let addr = stream
                     .peer_addr()
                     .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
-                let storage = storage.clone();
-                thread::spawn(move || {
-                    if let Err(e) = handle_connection(stream, addr, storage) {
-                        tracing::error!("Connection error: {}", e);
-                    }
-                });
+                let st = storage.clone();
+                let tc = tls_config.clone();
+                thread::spawn(move || handle_connection(stream, addr, st, tc));
             }
-            Err(e) => {
-                tracing::error!("Accept error: {}", e);
-            }
+            Err(e) => tracing::error!("Accept: {}", e),
         }
     }
-
     Ok(())
 }

@@ -1,5 +1,4 @@
 use sqlrustgo_storage::Record;
-use sqlrustgo_types::Value;
 
 #[derive(Debug, Clone)]
 pub struct TriggerContext<'a> {

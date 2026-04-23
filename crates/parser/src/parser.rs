@@ -1943,10 +1943,12 @@ impl Parser {
                     let value = match self.current() {
                         Some(Token::Values) => {
                             self.next(); // consume VALUES
-                            // Check for VALUES LESS THAN (expr)
-                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS") {
+                                         // Check for VALUES LESS THAN (expr)
+                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS")
+                            {
                                 self.next(); // consume LESS
-                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN") {
+                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN")
+                                {
                                     self.next(); // consume THAN
                                     if matches!(self.current(), Some(Token::LParen)) {
                                         self.next(); // consume LParen
