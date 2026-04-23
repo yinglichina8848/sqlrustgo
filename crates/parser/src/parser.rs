@@ -294,6 +294,39 @@ pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
     pub constraints: Vec<TableConstraint>,
+    pub partition: Option<PartitionDefinition>,
+}
+
+/// Partition definition for table partitioning
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartitionDefinition {
+    pub strategy: PartitionStrategy,
+    pub columns: Vec<String>,
+    pub partitions: Vec<PartitionSpec>,
+}
+
+/// Partition strategy (RANGE, LIST, KEY)
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartitionStrategy {
+    Range,
+    List,
+    Key,
+}
+
+/// Partition specification (individual partition definition)
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartitionSpec {
+    pub name: String,
+    pub value: PartitionValue,
+}
+
+/// Value in partition (for RANGE/LIST)
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartitionValue {
+    Value(String),
+    Max,
+    Min,
+    Values,
 }
 
 /// DROP TABLE statement
@@ -1396,35 +1429,13 @@ impl Parser {
                             self.next();
                             break;
                         }
-                        Some(Token::Identifier(name)) => {
-                            row.push(Expression::Identifier(name.clone()));
-                            self.next();
-                        }
-                        Some(Token::NumberLiteral(n)) => {
-                            row.push(Expression::Literal(n.clone()));
-                            self.next();
-                        }
-                        Some(Token::StringLiteral(s)) => {
-                            row.push(Expression::Literal(format!("'{}'", s)));
-                            self.next();
-                        }
                         Some(Token::Comma) => {
                             self.next();
                         }
-                        Some(Token::Null) => {
-                            row.push(Expression::Literal("NULL".to_string()));
-                            self.next();
+                        _ => {
+                            let expr = self.parse_expression()?;
+                            row.push(expr);
                         }
-                        Some(Token::Minus) => {
-                            self.next();
-                            if let Some(Token::NumberLiteral(n)) = self.current() {
-                                row.push(Expression::Literal(format!("-{}", n)));
-                                self.next();
-                            } else {
-                                return Err("Expected number after -".to_string());
-                            }
-                        }
-                        _ => return Err("Expected value".to_string()),
                     }
                 }
                 values.push(row);
@@ -1490,23 +1501,8 @@ impl Parser {
             }
             self.next(); // consume =
 
-            // Parse value
-            let value = match self.current() {
-                Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-                Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-                Some(Token::Null) => Expression::Literal("NULL".to_string()),
-                Some(Token::Minus) => {
-                    self.next();
-                    if let Some(Token::NumberLiteral(n)) = self.current() {
-                        Expression::Literal(format!("-{}", n))
-                    } else {
-                        return Err("Expected number after -".to_string());
-                    }
-                }
-                _ => return Err("Expected value in SET clause".to_string()),
-            };
-            self.next();
+            // Parse value - use parse_expression to support binary operations
+            let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
 
@@ -1569,7 +1565,7 @@ impl Parser {
     }
 
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
-        let left = self.parse_primary_expression()?;
+        let left = self.parse_additive_expression()?;
 
         if matches!(self.current(), Some(Token::In)) {
             self.next();
@@ -1640,6 +1636,40 @@ impl Parser {
                 Box::new(right),
             ))
         }
+    }
+
+    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+            let op = match self.current() {
+                Some(Token::Plus) => "+",
+                Some(Token::Minus) => "-",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_multiplicative_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_primary_expression()?;
+
+        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+            let op = match self.current() {
+                Some(Token::Star) => "*",
+                Some(Token::Slash) => "/",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_primary_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
@@ -1848,11 +1878,123 @@ impl Parser {
             }
         }
 
+        // Parse PARTITION BY clause (if present)
+        let partition = if matches!(self.current(), Some(Token::Partition)) {
+            Some(self.parse_partition_definition()?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
+            partition,
         }))
+    }
+
+    /// Parse PARTITION BY clause for table partitioning
+    fn parse_partition_definition(&mut self) -> Result<PartitionDefinition, String> {
+        // Consume PARTITION
+        self.expect(Token::Partition)?;
+        self.expect(Token::By)?;
+
+        // Parse strategy (RANGE, LIST, or KEY)
+        let strategy = match self.current() {
+            Some(Token::Range) => {
+                self.next();
+                PartitionStrategy::Range
+            }
+            Some(Token::List) => {
+                self.next();
+                PartitionStrategy::List
+            }
+            Some(Token::Key) => {
+                self.next();
+                PartitionStrategy::Key
+            }
+            Some(Token::Identifier(s)) => {
+                let s = s.to_uppercase();
+                self.next();
+                match s.as_str() {
+                    "RANGE" => PartitionStrategy::Range,
+                    "LIST" => PartitionStrategy::List,
+                    "KEY" => PartitionStrategy::Key,
+                    _ => return Err(format!("Unknown partition strategy: {}", s)),
+                }
+            }
+            _ => return Err("Expected RANGE, LIST, or KEY after PARTITION BY".to_string()),
+        };
+
+        // Parse partition column(s)
+        self.expect(Token::LParen)?;
+        let columns = self.parse_column_list()?;
+        self.expect(Token::RParen)?;
+
+        // Parse individual partition definitions
+        self.expect(Token::LParen)?;
+        let mut partitions = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(name)) => {
+                    let name = name.clone();
+                    self.next();
+
+                    // Expect VALUES for LIST/RANGE, or just partition definition
+                    let value = match self.current() {
+                        Some(Token::Values) => {
+                            self.next();
+                            PartitionValue::Values
+                        }
+                        Some(Token::Less) => {
+                            self.next();
+                            if matches!(self.current(), Some(Token::Maxvalue)) {
+                                self.next();
+                                PartitionValue::Max
+                            } else if matches!(self.current(), Some(Token::Minvalue)) {
+                                self.next();
+                                PartitionValue::Min
+                            } else {
+                                PartitionValue::Value("LESS THAN".to_string())
+                            }
+                        }
+                        Some(Token::Equal) => {
+                            self.next();
+                            match self.current() {
+                                Some(Token::NumberLiteral(n)) => {
+                                    let n = n.clone();
+                                    self.next();
+                                    PartitionValue::Value(n)
+                                }
+                                Some(Token::StringLiteral(s)) => {
+                                    let s = s.clone();
+                                    self.next();
+                                    PartitionValue::Value(s)
+                                }
+                                _ => PartitionValue::Values,
+                            }
+                        }
+                        _ => PartitionValue::Values,
+                    };
+
+                    partitions.push(PartitionSpec { name, value });
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                _ => break,
+            }
+        }
+
+        Ok(PartitionDefinition {
+            strategy,
+            columns,
+            partitions,
+        })
     }
 
     fn parse_column_definition(&mut self) -> Result<ColumnDefinition, String> {
@@ -2880,6 +3022,59 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_create_table_with_range_partition() {
+        let result = parse("CREATE TABLE sales (id INTEGER, amount INTEGER) PARTITION BY RANGE (id) (PARTITION p1 VALUES LESS THAN (1000))");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(ref c) => {
+                assert_eq!(c.name, "sales");
+                assert!(c.partition.is_some());
+                let part = c.partition.as_ref().unwrap();
+                assert!(matches!(part.strategy, PartitionStrategy::Range));
+                assert_eq!(part.columns, vec!["id"]);
+                assert_eq!(part.partitions.len(), 1);
+                assert_eq!(part.partitions[0].name, "p1");
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_table_with_list_partition() {
+        // VALUES IN is not yet supported, use VALUES instead
+        let result = parse("CREATE TABLE orders (region TEXT, amount INTEGER) PARTITION BY LIST (region) (PARTITION north VALUES)");
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(ref c) => {
+                assert_eq!(c.name, "orders");
+                assert!(c.partition.is_some());
+                let part = c.partition.as_ref().unwrap();
+                assert!(matches!(part.strategy, PartitionStrategy::List));
+                assert_eq!(part.columns, vec!["region"]);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_table_with_key_partition() {
+        let result = parse(
+            "CREATE TABLE users (id INTEGER, name TEXT) PARTITION BY KEY (id) (PARTITION p1)",
+        );
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Statement::CreateTable(ref c) => {
+                assert_eq!(c.name, "users");
+                assert!(c.partition.is_some());
+                let part = c.partition.as_ref().unwrap();
+                assert!(matches!(part.strategy, PartitionStrategy::Key));
+                assert_eq!(part.columns, vec!["id"]);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_aggregate_count() {
         let result = parse("SELECT COUNT(*) FROM users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
@@ -3511,7 +3706,10 @@ fn test_debug_having() {
                 assert_eq!(s.table, "users");
                 // ORDER BY field exists but is currently empty (not yet implemented)
                 // This test documents the current behavior
-                assert!(s.order_by.is_empty(), "ORDER BY not yet implemented, expected empty");
+                assert!(
+                    s.order_by.is_empty(),
+                    "ORDER BY not yet implemented, expected empty"
+                );
             }
             _ => panic!("Expected SELECT statement"),
         }
