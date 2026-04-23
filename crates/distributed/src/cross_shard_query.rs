@@ -153,3 +153,115 @@ impl QueryRouter {
             .unwrap_or(false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grpc_client::ClientPool;
+    use crate::shard_manager::{ShardInfo, ShardManager};
+
+    #[test]
+    fn test_query_router_new() {
+        let manager = ShardManager::new();
+        let router = QueryRouter::new(manager, 1);
+        assert_eq!(router.is_local_shard(0), false);
+    }
+
+    #[test]
+    fn test_query_router_get_shard_nodes() {
+        let mut manager = ShardManager::new();
+        let info = ShardInfo::new(0, 1);
+        manager.create_shard(info);
+
+        let router = QueryRouter::new(manager, 1);
+        let node = router.get_shard_nodes(0);
+        assert_eq!(node, Some(1));
+    }
+
+    #[test]
+    fn test_query_router_get_all_shard_nodes() {
+        let mut manager = ShardManager::new();
+        let info = ShardInfo::new(0, 1);
+        manager.create_shard(info);
+
+        let router = QueryRouter::new(manager, 1);
+        let all_nodes = router.get_all_shard_nodes();
+        assert_eq!(all_nodes.len(), 1);
+        assert_eq!(all_nodes[0].0, 1);
+        assert_eq!(all_nodes[0].1, 0);
+    }
+
+    #[test]
+    fn test_query_router_is_local_shard() {
+        let mut manager1 = ShardManager::new();
+        let info = ShardInfo::new(0, 1);
+        manager1.create_shard(info);
+
+        let router = QueryRouter::new(manager1, 1);
+        assert!(router.is_local_shard(0));
+
+        let mut manager2 = ShardManager::new();
+        let info2 = ShardInfo::new(0, 1);
+        manager2.create_shard(info2);
+        let router2 = QueryRouter::new(manager2, 2);
+        assert!(!router2.is_local_shard(0));
+    }
+
+    #[test]
+    fn test_query_router_is_local_shard_nonexistent() {
+        let manager = ShardManager::new();
+        let router = QueryRouter::new(manager, 1);
+        assert!(!router.is_local_shard(999));
+    }
+
+    #[test]
+    fn test_cross_shard_query_executor_new() {
+        let pool = ClientPool::new();
+        let _executor = CrossShardQueryExecutor::new(pool);
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_health_check() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+        let health = executor.health_check_nodes().await;
+        assert!(health.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_broadcast_insert() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let nodes = vec![(1u64, 0u64), (2u64, 0u64)];
+        let results = executor.broadcast_vector_insert(&nodes, 1, &[0.1, 0.2, 0.3]).await;
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_scatter_gather_empty() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let nodes = vec![];
+        let result = executor
+            .scatter_gather_vector_search(&nodes, &[0.1, 0.2], 10)
+            .await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cross_shard_query_executor_vector_search_empty() {
+        let pool = ClientPool::new();
+        let executor = CrossShardQueryExecutor::new(pool);
+
+        let shard_to_node = HashMap::new();
+        let result = executor
+            .execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10)
+            .await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+}

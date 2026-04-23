@@ -347,9 +347,7 @@ impl FailoverNotifier {
         }
     }
 
-    pub async fn subscribe(
-        &self,
-    ) -> tokio::sync::mpsc::Receiver<FailureEvent> {
+    pub async fn subscribe(&self) -> tokio::sync::mpsc::Receiver<FailureEvent> {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         self.subscribers.write().await.push(tx);
         rx
@@ -470,7 +468,10 @@ mod tests {
                 failure_threshold: 5,
             },
         );
-        assert_eq!(detector.get_config().heartbeat_timeout, Duration::from_millis(1000));
+        assert_eq!(
+            detector.get_config().heartbeat_timeout,
+            Duration::from_millis(1000)
+        );
     }
 
     #[test]
@@ -517,5 +518,139 @@ mod tests {
 
         let received = rx.recv().await.unwrap();
         assert_eq!(received.node_id, 2);
+    }
+
+    #[test]
+    fn test_failover_config_default() {
+        let config = FailoverConfig::default();
+        assert_eq!(config.election_timeout, Duration::from_millis(300));
+        assert_eq!(config.heartbeat_interval, Duration::from_millis(50));
+        assert_eq!(config.max_replication_lag_ms, 100);
+    }
+
+    #[test]
+    fn test_failover_config_custom() {
+        let config = FailoverConfig {
+            election_timeout: Duration::from_millis(500),
+            heartbeat_interval: Duration::from_millis(100),
+            max_replication_lag_ms: 200,
+        };
+        assert_eq!(config.election_timeout, Duration::from_millis(500));
+        assert_eq!(config.heartbeat_interval, Duration::from_millis(100));
+        assert_eq!(config.max_replication_lag_ms, 200);
+    }
+
+    #[tokio::test]
+    async fn test_failover_manager_with_config() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let config = FailoverConfig::default();
+        let manager = FailoverManager::with_config(1, shard_manager, replica_manager, config);
+
+        assert!(manager.get_dead_nodes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_failover_manager_handle_own_failure() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        let result = manager.handle_node_failure(1).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_failover_manager_get_cluster_health_not_healthy() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        let health = manager.get_cluster_health().await;
+        assert!(!health.healthy);
+    }
+
+    #[test]
+    fn test_failure_detector_set_check_interval() {
+        let mut detector = FailureDetector::new(1);
+        detector.set_check_interval(Duration::from_millis(500));
+        assert_eq!(detector.get_config().check_interval, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_failure_detector_set_heartbeat_timeout() {
+        let mut detector = FailureDetector::new(1);
+        detector.set_heartbeat_timeout(Duration::from_millis(1000));
+        assert_eq!(detector.get_config().heartbeat_timeout, Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_failure_detector_check_all_nodes_empty() {
+        let detector = FailureDetector::new(1);
+        let failures = detector.check_all_nodes();
+        assert!(failures.is_empty());
+    }
+
+    #[test]
+    fn test_failure_event_debug() {
+        let event = FailureEvent {
+            node_id: 1,
+            detected_at: Instant::now(),
+            reason: FailureReason::HeartbeatTimeout,
+        };
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("node_id: 1"));
+    }
+
+    #[test]
+    fn test_failure_reason_debug() {
+        assert_eq!(format!("{:?}", FailureReason::HeartbeatTimeout), "HeartbeatTimeout");
+        assert_eq!(format!("{:?}", FailureReason::ReplicationLag), "ReplicationLag");
+        assert_eq!(format!("{:?}", FailureReason::NetworkError), "NetworkError");
+        assert_eq!(format!("{:?}", FailureReason::Manual), "Manual");
+    }
+
+    #[test]
+    fn test_cluster_health_debug() {
+        let health = ClusterHealth {
+            total_nodes: 5,
+            dead_nodes: 1,
+            total_shards: 10,
+            leader_count: 3,
+            healthy: false,
+        };
+        let debug_str = format!("{:?}", health);
+        assert!(debug_str.contains("total_nodes: 5"));
+        assert!(debug_str.contains("healthy: false"));
+    }
+
+    #[test]
+    fn test_failure_detector_config_default() {
+        let config = FailureDetectorConfig::default();
+        assert_eq!(config.check_interval, Duration::from_millis(100));
+        assert_eq!(config.heartbeat_timeout, Duration::from_millis(500));
+        assert_eq!(config.max_replication_lag_ms, 1000);
+        assert_eq!(config.failure_threshold, 3);
+    }
+
+    #[test]
+    fn test_failure_detector_config_custom() {
+        let config = FailureDetectorConfig {
+            check_interval: Duration::from_millis(200),
+            heartbeat_timeout: Duration::from_millis(1000),
+            max_replication_lag_ms: 500,
+            failure_threshold: 5,
+        };
+        assert_eq!(config.check_interval, Duration::from_millis(200));
+        assert_eq!(config.heartbeat_timeout, Duration::from_millis(1000));
+        assert_eq!(config.max_replication_lag_ms, 500);
+        assert_eq!(config.failure_threshold, 5);
+    }
+
+    #[test]
+    fn test_failure_detector_debug() {
+        let detector = FailureDetector::new(1);
+        let debug_str = format!("{:?}", detector);
+        assert!(debug_str.contains("node_id: 1"));
     }
 }

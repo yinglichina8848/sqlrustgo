@@ -663,4 +663,92 @@ mod tests {
         assert_eq!(p2.vote, Some(Vote::No));
         assert_eq!(p2.error, Some("Error".to_string()));
     }
+
+    #[test]
+    fn test_participant_debug() {
+        let p = Participant::new(2, 1);
+        let debug_str = format!("{:?}", p);
+        assert!(debug_str.contains("node_id: 2"));
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[test]
+    fn test_transaction_state_debug() {
+        assert_eq!(format!("{:?}", TransactionState::Init), "Init");
+        assert_eq!(format!("{:?}", TransactionState::Preparing), "Preparing");
+        assert_eq!(format!("{:?}", TransactionState::Prepared), "Prepared");
+        assert_eq!(format!("{:?}", TransactionState::Committing), "Committing");
+        assert_eq!(format!("{:?}", TransactionState::Committed), "Committed");
+        assert_eq!(format!("{:?}", TransactionState::Aborting), "Aborting");
+        assert_eq!(format!("{:?}", TransactionState::Aborted), "Aborted");
+    }
+
+    #[test]
+    fn test_vote_debug() {
+        assert_eq!(format!("{:?}", Vote::Yes), "Yes");
+        assert_eq!(format!("{:?}", Vote::No), "No");
+    }
+
+    #[test]
+    fn test_two_pc_error_display() {
+        let err = TwoPCError::TransactionNotFound(123);
+        assert!(err.to_string().contains("123"));
+
+        let err2 = TwoPCError::InvalidState(TransactionState::Init);
+        assert!(err2.to_string().contains("Init"));
+
+        let err3 = TwoPCError::ParticipantRejected {
+            node_id: 42,
+            reason: "error".to_string(),
+        };
+        assert!(err3.to_string().contains("42"));
+        assert!(err3.to_string().contains("error"));
+    }
+
+    #[test]
+    fn test_two_pc_error_debug() {
+        let err = TwoPCError::TransactionNotFound(123);
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("TransactionNotFound"));
+    }
+
+    #[test]
+    fn test_two_pc_message_debug() {
+        let msg = TwoPCMessage::Prepare { tx_id: 1, coordinator_id: 100 };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("Prepare"));
+
+        let msg2 = TwoPCMessage::Commit { tx_id: 1 };
+        let debug_str2 = format!("{:?}", msg2);
+        assert!(debug_str2.contains("Commit"));
+    }
+
+    #[test]
+    fn test_two_pc_message_serialization() {
+        let msg = TwoPCMessage::Prepare { tx_id: 42, coordinator_id: 1 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("Prepare"));
+
+        let parsed: TwoPCMessage = serde_json::from_str(&json).unwrap();
+        match parsed {
+            TwoPCMessage::Prepare { tx_id, coordinator_id: _ } => assert_eq!(tx_id, 42),
+            _ => panic!("Expected Prepare"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_state_serialization() {
+        let state = TransactionState::Prepared;
+        let json = serde_json::to_string(&state).unwrap();
+        let parsed: TransactionState = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, TransactionState::Prepared);
+    }
+
+    #[test]
+    fn test_vote_serialization() {
+        let vote = Vote::Yes;
+        let json = serde_json::to_string(&vote).unwrap();
+        let parsed: Vote = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, Vote::Yes);
+    }
 }

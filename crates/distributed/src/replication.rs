@@ -325,7 +325,9 @@ pub struct GtidSet {
 
 impl GtidSet {
     pub fn new() -> Self {
-        Self { intervals: Vec::new() }
+        Self {
+            intervals: Vec::new(),
+        }
     }
 
     pub fn add_interval(&mut self, interval: GtidInterval) {
@@ -475,7 +477,11 @@ pub struct GtidEvent {
 
 impl GtidEvent {
     pub fn new(sid: u64, gno: u64, server_id: u32) -> Self {
-        Self { sid, gno, server_id }
+        Self {
+            sid,
+            gno,
+            server_id,
+        }
     }
 }
 
@@ -745,6 +751,217 @@ mod tests {
         assert!(pos > 0);
     }
 
+    #[test]
+    fn test_binlog_manager_disable() {
+        let manager = BinlogManager::new(1);
+        assert!(manager.is_enabled());
+
+        manager.disable();
+        assert!(!manager.is_enabled());
+
+        manager.enable();
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_binlog_manager_default() {
+        let manager = BinlogManager::default();
+        let status = manager.get_status();
+        assert_eq!(status.server_id, 1);
+        assert_eq!(status.file, "mysql-bin.000001");
+        assert_eq!(status.position, 4);
+    }
+
+    #[tokio::test]
+    async fn test_binlog_rotate() {
+        let manager = BinlogManager::new(1);
+
+        let result = manager.rotate("mysql-bin.000002".to_string()).await;
+        assert!(result.is_ok());
+
+        let status = manager.get_status();
+        assert_eq!(status.file, "mysql-bin.000002");
+        assert_eq!(status.position, 4);
+    }
+
+    #[tokio::test]
+    async fn test_binlog_get_events() {
+        let manager = BinlogManager::new(1);
+
+        for i in 0..5 {
+            let event = BinlogEvent {
+                event_type: BinlogEventType::Query,
+                server_id: 1,
+                log_pos: i as u64,
+                timestamp: 1234567890 + i,
+                database: "test".to_string(),
+                table: None,
+                sql: Some(format!("SELECT {}", i)),
+                affected_rows: 0,
+            };
+            manager.write_event(event).await.unwrap();
+        }
+
+        let events = manager.get_events(3).await;
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn test_binlog_status_debug() {
+        let status = BinlogStatus {
+            file: "mysql-bin.000001".to_string(),
+            position: 100,
+            server_id: 1,
+            enabled: true,
+        };
+
+        let debug_str = format!("{:?}", status);
+        assert!(debug_str.contains("mysql-bin.000001"));
+    }
+
+    #[test]
+    fn test_replication_role_debug() {
+        assert_eq!(format!("{:?}", ReplicationRole::Master), "Master");
+        assert_eq!(format!("{:?}", ReplicationRole::Slave), "Slave");
+        assert_eq!(format!("{:?}", ReplicationRole::Standalone), "Standalone");
+    }
+
+    #[test]
+    fn test_binlog_event_type_debug() {
+        assert_eq!(format!("{:?}", BinlogEventType::Query), "Query");
+        assert_eq!(format!("{:?}", BinlogEventType::WriteRows), "WriteRows");
+        assert_eq!(format!("{:?}", BinlogEventType::UpdateRows), "UpdateRows");
+        assert_eq!(format!("{:?}", BinlogEventType::DeleteRows), "DeleteRows");
+    }
+
+    #[test]
+    fn test_replication_config_default() {
+        let config = ReplicationConfig::default();
+
+        assert_eq!(config.server_id, 1);
+        assert_eq!(config.role, ReplicationRole::Standalone);
+        assert!(config.master_host.is_none());
+        assert!(config.master_port.is_none());
+        assert!(config.master_user.is_none());
+        assert!(config.relay_log_dir.is_none());
+        assert!(config.read_only);
+        assert!(!config.gtid_mode);
+    }
+
+    #[test]
+    fn test_replication_config_custom() {
+        let config = ReplicationConfig {
+            server_id: 42,
+            role: ReplicationRole::Slave,
+            master_host: Some("master.example.com".to_string()),
+            master_port: Some(3306),
+            master_user: Some("repl_user".to_string()),
+            relay_log_dir: Some("/var/log/mysql".to_string()),
+            read_only: false,
+            gtid_mode: true,
+        };
+
+        assert_eq!(config.server_id, 42);
+        assert_eq!(config.role, ReplicationRole::Slave);
+        assert_eq!(config.master_host, Some("master.example.com".to_string()));
+        assert_eq!(config.master_port, Some(3306));
+        assert!(config.gtid_mode);
+    }
+
+    #[test]
+    fn test_replication_state_with_config() {
+        let config = ReplicationConfig {
+            server_id: 100,
+            role: ReplicationRole::Master,
+            ..Default::default()
+        };
+        let state = ReplicationState::with_config(config);
+
+        assert_eq!(state.config().server_id, 100);
+        assert_eq!(state.config().role, ReplicationRole::Master);
+    }
+
+    #[test]
+    fn test_replication_state_update_config() {
+        let state = ReplicationState::new();
+
+        let new_config = ReplicationConfig {
+            server_id: 200,
+            role: ReplicationRole::Slave,
+            master_host: Some("master.example.com".to_string()),
+            ..Default::default()
+        };
+        state.update_config(new_config);
+
+        let config = state.config();
+        assert_eq!(config.server_id, 200);
+        assert_eq!(config.role, ReplicationRole::Slave);
+    }
+
+    #[test]
+    fn test_get_master_status_not_master() {
+        let state = ReplicationState::new();
+        let status = state.get_master_status();
+        assert!(status.is_none());
+    }
+
+    #[test]
+    fn test_get_master_status_as_master() {
+        let state = ReplicationState::new();
+        state.update_config(ReplicationConfig {
+            role: ReplicationRole::Master,
+            ..Default::default()
+        });
+
+        let status = state.get_master_status();
+        assert!(status.is_some());
+
+        let status = status.unwrap();
+        assert_eq!(status.file, "mysql-bin.000001");
+    }
+
+    #[test]
+    fn test_get_slave_status_not_slave() {
+        let state = ReplicationState::new();
+        let status = state.get_slave_status();
+        assert!(status.is_none());
+    }
+
+    #[test]
+    fn test_slave_status_debug() {
+        let status = SlaveStatus {
+            master_host: "master.example.com".to_string(),
+            master_port: 3306,
+            master_user: "repl".to_string(),
+            read_only: true,
+            slave_io_running: true,
+            slave_sql_running: true,
+            last_error: None,
+            seconds_behind_master: Some(0),
+            relay_log_file: "relay-bin.000001".to_string(),
+            relay_log_pos: 100,
+            master_log_file: "mysql-bin.000001".to_string(),
+            read_master_log_pos: 500,
+        };
+
+        let debug_str = format!("{:?}", status);
+        assert!(debug_str.contains("master.example.com"));
+    }
+
+    #[test]
+    fn test_master_status_debug() {
+        let status = MasterStatus {
+            file: "mysql-bin.000001".to_string(),
+            position: 1000,
+            binlog_do_db: vec!["db1".to_string()],
+            binlog_ignore_db: vec!["db2".to_string()],
+            executed_gtid_set: "1-10".to_string(),
+        };
+
+        let debug_str = format!("{:?}", status);
+        assert!(debug_str.contains("mysql-bin.000001"));
+    }
+
     // GTID tests
     #[test]
     fn test_gtid_interval_contains() {
@@ -760,6 +977,34 @@ mod tests {
     fn test_gtid_interval_len() {
         let interval = GtidInterval::new(1, 10, 20);
         assert_eq!(interval.len(), 11);
+    }
+
+    #[test]
+    fn test_gtid_interval_empty() {
+        let interval = GtidInterval::new(1, 10, 9);
+        assert!(interval.is_empty());
+    }
+
+    #[test]
+    fn test_gtid_interval_debug() {
+        let interval = GtidInterval::new(1, 10, 20);
+        let debug_str = format!("{:?}", interval);
+        assert!(debug_str.contains("sid: 1"));
+    }
+
+    #[test]
+    fn test_gtid_interval_clone() {
+        let interval = GtidInterval::new(1, 10, 20);
+        let cloned = interval.clone();
+        assert_eq!(cloned.sid, interval.sid);
+        assert_eq!(cloned.start, interval.start);
+        assert_eq!(cloned.end, interval.end);
+    }
+
+    #[test]
+    fn test_gtid_set_new() {
+        let set = GtidSet::new();
+        assert_eq!(set.len(), 0);
     }
 
     #[test]
@@ -790,6 +1035,15 @@ mod tests {
     }
 
     #[test]
+    fn test_gtid_set_clone() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 10));
+
+        let cloned = set.clone();
+        assert!(cloned.contains(1, 5));
+    }
+
+    #[test]
     fn test_gtid_manager_add_and_check() {
         let manager = GtidManager::new(1);
         manager.add_gtid(1, 100);
@@ -812,6 +1066,12 @@ mod tests {
     }
 
     #[test]
+    fn test_gtid_manager_get_server_id() {
+        let manager = GtidManager::new(42);
+        assert_eq!(manager.get_server_id(), 42);
+    }
+
+    #[test]
     fn test_gtid_set_display() {
         let mut set = GtidSet::new();
         set.add_interval(GtidInterval::new(1, 1, 10));
@@ -822,11 +1082,47 @@ mod tests {
         assert!(display.contains("5-15"));
     }
 
+    #[test]
+    fn test_gtid_event_debug() {
+        let event = GtidEvent {
+            sid: 1,
+            gno: 100,
+            server_id: 42,
+        };
+
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("sid: 1"));
+    }
+
+    #[test]
+    fn test_binlog_event_debug() {
+        let event = BinlogEvent {
+            event_type: BinlogEventType::Query,
+            server_id: 1,
+            log_pos: 100,
+            timestamp: 1234567890,
+            database: "test".to_string(),
+            table: Some("users".to_string()),
+            sql: Some("SELECT 1".to_string()),
+            affected_rows: 0,
+        };
+
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("test"));
+    }
+
     // Semi-sync tests
     #[test]
     fn test_semi_sync_state_default() {
         let state = SemiSyncState::default();
         assert_eq!(state, SemiSyncState::Off);
+    }
+
+    #[test]
+    fn test_semi_sync_state_variants() {
+        assert_eq!(format!("{:?}", SemiSyncState::Off), "Off");
+        assert_eq!(format!("{:?}", SemiSyncState::WaitServer), "WaitServer");
+        assert_eq!(format!("{:?}", SemiSyncState::WaitSlave), "WaitSlave");
     }
 
     #[test]
@@ -887,12 +1183,26 @@ mod tests {
     }
 
     #[test]
+    fn test_semi_sync_replica_debug() {
+        let replica = SemiSyncReplica::new(1);
+        let debug_str = format!("{:?}", replica);
+        assert!(debug_str.contains("node_id: 1"));
+    }
+
+    #[test]
     fn test_semi_sync_error_display() {
         let err = SemiSyncError::ack_timeout(123);
         assert!(err.message.contains("123"));
 
         let err2 = SemiSyncError::no_replica();
         assert!(err2.message.contains("No semi-sync replica"));
+    }
+
+    #[test]
+    fn test_semi_sync_error_clone() {
+        let err = SemiSyncError::ack_timeout(100);
+        let cloned = err.clone();
+        assert!(cloned.message.contains("100"));
     }
 
     #[test]
@@ -905,5 +1215,55 @@ mod tests {
         manager.set_ack_timeout_ms(1000);
         assert_eq!(manager.get_wait_timeout_ms(), 10000);
         assert_eq!(manager.get_ack_timeout_ms(), 1000);
+    }
+
+    #[test]
+    fn test_semi_sync_manager_remove_nonexistent_replica() {
+        let manager = SemiSyncManager::new();
+        manager.add_replica(1);
+        manager.remove_replica(99);
+        assert_eq!(manager.get_replica_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_binlog_write_disabled() {
+        let manager = BinlogManager::new(1);
+        manager.disable();
+
+        let event = BinlogEvent {
+            event_type: BinlogEventType::Query,
+            server_id: 1,
+            log_pos: 0,
+            timestamp: 1234567890,
+            database: "test".to_string(),
+            table: None,
+            sql: Some("SELECT 1".to_string()),
+            affected_rows: 0,
+        };
+
+        let result = manager.write_event(event).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gtid_set_len() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 10));
+        assert_eq!(set.len(), 10);
+
+        set.add_interval(GtidInterval::new(2, 1, 5));
+        assert_eq!(set.len(), 15);
+    }
+
+    #[test]
+    fn test_gtid_set_contains_after_merge() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 5));
+        set.add_interval(GtidInterval::new(1, 4, 8));
+
+        assert!(set.contains(1, 3));
+        assert!(set.contains(1, 5));
+        assert!(set.contains(1, 6));
+        assert!(set.contains(1, 8));
     }
 }
