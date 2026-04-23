@@ -828,4 +828,81 @@ mod tests {
         assert_eq!(request.query.len(), 4);
         assert_eq!(request.top_k, 50);
     }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for MockVectorStorage
+    // =====================================================================
+
+    #[test]
+    fn test_mock_vector_storage_search_with_zero_vector() {
+        let storage = MockVectorStorage::new();
+        let results = storage.search(0, &[0.0, 0.0], 10);
+        assert!(results.is_ok());
+    }
+
+    #[test]
+    fn test_mock_vector_storage_delete_existing() {
+        let mut storage = MockVectorStorage::new();
+        storage.insert(0, 1, vec![1.0, 2.0]).unwrap();
+        let result = storage.delete(0, 1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_vector_storage_delete_nonexistent() {
+        let mut storage = MockVectorStorage::new();
+        let result = storage.delete(0, 999);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_vector_storage_search_multiple_results() {
+        let mut storage = MockVectorStorage::new();
+        for i in 0..10 {
+            storage.insert(0, i, vec![i as f32, 0.0]).unwrap();
+        }
+        let results = storage.search(0, &[5.0, 0.0], 3);
+        assert!(results.is_ok());
+        assert!(results.unwrap().len() <= 3);
+    }
+
+    // =====================================================================
+    // White-box Tests: Response Edge Cases
+    // =====================================================================
+
+    #[test]
+    fn test_search_vectors_response_with_multiple_results() {
+        let response = SearchVectorsResponse {
+            results: vec![
+                SearchResult { id: 1, score: 0.9, record: None },
+                SearchResult { id: 2, score: 0.8, record: None },
+                SearchResult { id: 3, score: 0.7, record: None },
+            ],
+            error: String::new(),
+        };
+        assert_eq!(response.results.len(), 3);
+        assert!(response.error.is_empty());
+    }
+
+    #[test]
+    fn test_create_node_response_failure() {
+        let response = CreateNodeResponse {
+            node_id: 0,
+            success: false,
+            error: "Invalid label".to_string(),
+        };
+        assert!(!response.success);
+        assert!(response.error.contains("Invalid"));
+    }
+
+    #[test]
+    fn test_health_check_response_healthy() {
+        let response = HealthCheckResponse {
+            healthy: true,
+            node_id: 1,
+            uptime_ms: 3600000,
+        };
+        assert!(response.healthy);
+        assert_eq!(response.node_id, 1);
+    }
 }
