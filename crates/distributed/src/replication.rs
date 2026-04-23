@@ -1266,4 +1266,100 @@ mod tests {
         assert!(set.contains(1, 6));
         assert!(set.contains(1, 8));
     }
+
+    #[test]
+    fn test_gtid_set_empty() {
+        let set = GtidSet::new();
+        assert_eq!(set.len(), 0);
+        assert!(!set.contains(1, 1));
+    }
+
+    #[test]
+    fn test_gtid_set_multiple_intervals() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 3));
+        set.add_interval(GtidInterval::new(2, 10, 15));
+        assert_eq!(set.len(), 9);
+    }
+
+    #[test]
+    fn test_gtid_set_does_not_contain() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 5, 10));
+        assert!(!set.contains(1, 3));
+        assert!(!set.contains(1, 11));
+        assert!(!set.contains(2, 5));
+    }
+
+    #[test]
+    fn test_gtid_interval_new() {
+        let interval = GtidInterval::new(1, 5, 10);
+        assert_eq!(interval.sid, 1);
+        assert_eq!(interval.start, 5);
+        assert_eq!(interval.end, 10);
+    }
+
+    #[test]
+    fn test_gtid_interval_is_empty() {
+        let interval = GtidInterval::new(1, 5, 3);
+        assert!(interval.is_empty());
+    }
+
+    #[test]
+    fn test_binlog_event_type_variants() {
+        assert!(matches!(BinlogEventType::Query, BinlogEventType::Query));
+        assert!(matches!(BinlogEventType::WriteRows, BinlogEventType::WriteRows));
+        assert!(matches!(BinlogEventType::UpdateRows, BinlogEventType::UpdateRows));
+        assert!(matches!(BinlogEventType::DeleteRows, BinlogEventType::DeleteRows));
+    }
+
+    #[test]
+    fn test_binlog_manager_new() {
+        let manager = BinlogManager::new(1);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_semi_sync_manager_enable() {
+        let manager = SemiSyncManager::new();
+        manager.enable();
+        assert!(matches!(manager.get_state(), SemiSyncState::WaitServer));
+    }
+
+    #[test]
+    fn test_semi_sync_manager_disable() {
+        let manager = SemiSyncManager::new();
+        manager.disable();
+        assert!(matches!(manager.get_state(), SemiSyncState::Off));
+    }
+
+    #[test]
+    fn test_semi_sync_manager_add_and_remove_replica() {
+        let manager = SemiSyncManager::new();
+        manager.add_replica(1);
+        manager.add_replica(2);
+        assert_eq!(manager.get_replica_count(), 2);
+        manager.remove_replica(1);
+        assert_eq!(manager.get_replica_count(), 1);
+    }
+
+    #[test]
+    fn test_semi_sync_manager_get_wait_count() {
+        let manager = SemiSyncManager::new();
+        assert_eq!(manager.get_wait_count(), 1);
+        manager.set_wait_count(3);
+        assert_eq!(manager.get_wait_count(), 3);
+    }
+
+    #[test]
+    fn test_semi_sync_manager_get_ack_timeout() {
+        let manager = SemiSyncManager::with_config(5000, 2, 500);
+        assert_eq!(manager.get_ack_timeout_ms(), 500);
+    }
+
+    #[test]
+    fn test_semi_sync_error_message() {
+        let err = SemiSyncError::ack_timeout(99);
+        assert!(err.message.contains("99"));
+    }
 }
