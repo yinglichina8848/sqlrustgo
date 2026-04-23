@@ -1501,7 +1501,6 @@ impl Parser {
             }
             self.next(); // consume =
 
-            // Parse value - use parse_expression to support binary operations
             let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
@@ -1559,6 +1558,40 @@ impl Parser {
             self.next(); // consume AND
             let right = self.parse_comparison_expression()?;
             left = Expression::BinaryOp(Box::new(left), "AND".to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+            let op = match self.current() {
+                Some(Token::Plus) => "+",
+                Some(Token::Minus) => "-",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_multiplicative_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_primary_expression()?;
+
+        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+            let op = match self.current() {
+                Some(Token::Star) => "*",
+                Some(Token::Slash) => "/",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_primary_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
         }
 
         Ok(left)
