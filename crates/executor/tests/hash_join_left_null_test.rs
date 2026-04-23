@@ -115,8 +115,9 @@ fn test_left_join_no_matches_returns_all_left_with_null() {
     }
 }
 
-// #[test]
-fn _test_left_join_null_keys_do_not_match() {
+#[test]
+#[ignore = "Known bug: HashJoinExec incorrectly matches NULL = NULL, violates SQL three-valued logic"]
+fn test_left_join_null_keys_do_not_match() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
