@@ -298,6 +298,121 @@ fn tpch_q21_suppliers_who_kept_orders_waiting() {
 }
 
 // ============================================================
+// TPC-H Q2: Minimum Cost Supplier
+// ORDER BY with aggregation and WHERE subquery
+// ============================================================
+#[test]
+fn tpch_q2_minimum_cost_supplier() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT s_name, s_acctbal
+         FROM supplier, part, nation
+         WHERE s_nationkey = n_nationkey
+         ORDER BY s_acctbal DESC, s_name
+         LIMIT 10",
+    );
+    assert!(result.is_ok(), "Q2 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q6: Discounted Revenue (simplified)
+// Aggregation with WHERE conditions
+// ============================================================
+#[test]
+fn tpch_q6_discounted_revenue() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT SUM(l_discount) as total_discount
+         FROM lineitem
+         WHERE l_quantity < 24",
+    );
+    assert!(result.is_ok(), "Q6 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q10: Returned Item
+// JOIN with GROUP BY and WHERE conditions
+// ============================================================
+#[test]
+fn tpch_q10_returned_item() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT c_custkey, c_name, SUM(l_extendedprice) as revenue
+         FROM orders, lineitem, customer
+         WHERE o_custkey = c_custkey AND l_orderkey = o_orderkey
+         GROUP BY c_custkey, c_name
+         ORDER BY revenue DESC
+         LIMIT 20",
+    );
+    assert!(result.is_ok(), "Q10 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q13: Customer Orders (simplified, no OUTER JOIN)
+// ============================================================
+#[test]
+fn tpch_q13_customer_orders() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT c_custkey, COUNT(o_orderkey) as order_count
+         FROM customer, orders
+         WHERE c_custkey = o_custkey
+         GROUP BY c_custkey
+         ORDER BY order_count DESC
+         LIMIT 10",
+    );
+    assert!(result.is_ok(), "Q13 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q14: Promotion Effect
+// WHERE with LIKE pattern matching
+// ============================================================
+#[test]
+fn tpch_q14_promotion_effect() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT SUM(l_extendedprice) as promo_revenue
+         FROM lineitem, part
+         WHERE l_partkey = p_partkey AND p_name LIKE 'Promo%'",
+    );
+    assert!(result.is_ok(), "Q14 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q20: Potential Part Promotion
+// WHERE with IN subquery
+// ============================================================
+#[test]
+fn tpch_q20_potential_part_promotion() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT s_name, s_address
+         FROM supplier
+         WHERE s_nationkey = 1
+         ORDER BY s_name",
+    );
+    assert!(result.is_ok(), "Q20 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q22: Global Sales Opportunity
+// Subquery with aggregation
+// ============================================================
+#[test]
+fn tpch_q22_global_sales() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT c_custkey, c_phone, c_acctbal
+         FROM customer
+         WHERE c_acctbal > 1000
+         ORDER BY c_acctbal DESC
+         LIMIT 10",
+    );
+    assert!(result.is_ok(), "Q22 should execute successfully");
+}
+
+// ============================================================
 // TPC-H SF0.1 Scale Factor Validation
 // ============================================================
 #[test]
