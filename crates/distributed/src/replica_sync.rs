@@ -302,4 +302,294 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.bytes_transferred, 0);
     }
+
+    #[test]
+    fn test_sync_config_default() {
+        let config = SyncConfig::default();
+
+        assert_eq!(config.batch_size, 1000);
+        assert_eq!(config.sync_interval_ms, 100);
+        assert_eq!(config.timeout_ms, 5000);
+        assert_eq!(config.retry_attempts, 3);
+    }
+
+    #[test]
+    fn test_sync_config_with_custom_values() {
+        let config = SyncConfig {
+            batch_size: 500,
+            sync_interval_ms: 200,
+            timeout_ms: 10000,
+            retry_attempts: 5,
+        };
+
+        assert_eq!(config.batch_size, 500);
+        assert_eq!(config.sync_interval_ms, 200);
+        assert_eq!(config.timeout_ms, 10000);
+        assert_eq!(config.retry_attempts, 5);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 5000,
+            records_transferred: 500,
+            start_lsn: 1000,
+            end_lsn: 2000,
+            current_lsn: 1500,
+        };
+
+        assert_eq!(progress.completion_ratio(), 0.5);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_zero_delta() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            start_lsn: 1000,
+            end_lsn: 1000,
+            current_lsn: 1000,
+        };
+
+        assert_eq!(progress.completion_ratio(), 1.0);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_start() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            start_lsn: 1000,
+            end_lsn: 2000,
+            current_lsn: 1000,
+        };
+
+        assert_eq!(progress.completion_ratio(), 0.0);
+    }
+
+    #[test]
+    fn test_sync_progress_completion_ratio_complete() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 10000,
+            records_transferred: 1000,
+            start_lsn: 1000,
+            end_lsn: 2000,
+            current_lsn: 2000,
+        };
+
+        assert_eq!(progress.completion_ratio(), 1.0);
+    }
+
+    #[test]
+    fn test_sync_result_fields() {
+        let result = SyncResult {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 10000,
+            records_transferred: 1000,
+            duration_ms: 500,
+            success: true,
+        };
+
+        assert_eq!(result.shard_id, 1);
+        assert_eq!(result.source_node, 1);
+        assert_eq!(result.target_node, 2);
+        assert_eq!(result.bytes_transferred, 10000);
+        assert_eq!(result.records_transferred, 1000);
+        assert_eq!(result.duration_ms, 500);
+        assert!(result.success);
+    }
+
+    #[test]
+    fn test_sync_result_failure() {
+        let result = SyncResult {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 0,
+            records_transferred: 0,
+            duration_ms: 100,
+            success: false,
+        };
+
+        assert!(!result.success);
+    }
+
+    #[tokio::test]
+    async fn test_replica_synchronizer_new() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+
+        assert_eq!(sync.get_lsn(999), 0);
+    }
+
+    #[tokio::test]
+    async fn test_replica_synchronizer_with_config() {
+        let router = create_test_router();
+        let config = SyncConfig {
+            batch_size: 500,
+            sync_interval_ms: 200,
+            timeout_ms: 10000,
+            retry_attempts: 5,
+        };
+        let sync = ReplicaSynchronizer::with_config(router, config);
+
+        assert_eq!(sync.get_lsn(1), 0);
+    }
+
+    #[tokio::test]
+    async fn test_update_multiple_lsns() {
+        let router = create_test_router();
+        let mut sync = ReplicaSynchronizer::new(router);
+
+        sync.update_lsn(1, 100);
+        sync.update_lsn(2, 200);
+        sync.update_lsn(3, 300);
+
+        assert_eq!(sync.get_lsn(1), 100);
+        assert_eq!(sync.get_lsn(2), 200);
+        assert_eq!(sync.get_lsn(3), 300);
+        assert_eq!(sync.get_lsn(999), 0);
+    }
+
+    #[tokio::test]
+    async fn test_update_lsn_overwrites() {
+        let router = create_test_router();
+        let mut sync = ReplicaSynchronizer::new(router);
+
+        sync.update_lsn(1, 100);
+        sync.update_lsn(1, 150);
+        sync.update_lsn(1, 200);
+
+        assert_eq!(sync.get_lsn(1), 200);
+    }
+
+    #[tokio::test]
+    async fn test_get_sync_progress_empty() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+
+        assert!(sync.get_sync_progress(1).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_all_active_syncs_empty() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+
+        assert!(sync.get_all_active_syncs().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_progress_debug() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 1000,
+            records_transferred: 100,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 500,
+        };
+
+        let debug_str = format!("{:?}", progress);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_config_debug() {
+        let config = SyncConfig::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("batch_size: 1000"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_result_debug() {
+        let result = SyncResult {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 1000,
+            records_transferred: 100,
+            duration_ms: 50,
+            success: true,
+        };
+
+        let debug_str = format!("{:?}", result);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_coordinator_new() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+        let coordinator = SyncCoordinator::new(sync);
+
+        let active_syncs = coordinator.synchronizer.get_all_active_syncs();
+        assert!(active_syncs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_coordinator_schedule_sync() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+        let mut coordinator = SyncCoordinator::new(sync);
+
+        coordinator.schedule_sync(1, 2);
+        coordinator.schedule_sync(2, 3);
+
+        let active_syncs = coordinator.synchronizer.get_all_active_syncs();
+        assert!(active_syncs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_coordinator_process_pending_empty() {
+        let router = create_test_router();
+        let sync = ReplicaSynchronizer::new(router);
+        let mut coordinator = SyncCoordinator::new(sync);
+
+        let results = coordinator.process_pending_syncs().await;
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_sync_progress_clone() {
+        let progress = SyncProgress {
+            shard_id: 1,
+            source_node: 1,
+            target_node: 2,
+            bytes_transferred: 1000,
+            records_transferred: 100,
+            start_lsn: 0,
+            end_lsn: 1000,
+            current_lsn: 500,
+        };
+
+        let cloned = progress.clone();
+        assert_eq!(cloned.shard_id, progress.shard_id);
+        assert_eq!(cloned.source_node, progress.source_node);
+        assert_eq!(cloned.target_node, progress.target_node);
+    }
+
+    #[test]
+    fn test_sync_config_clone() {
+        let config = SyncConfig::default();
+        let cloned = config.clone();
+        assert_eq!(cloned.batch_size, config.batch_size);
+        assert_eq!(cloned.sync_interval_ms, config.sync_interval_ms);
+    }
 }

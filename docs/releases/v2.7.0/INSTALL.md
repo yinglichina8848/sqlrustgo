@@ -163,7 +163,8 @@ rustup self uninstall
 ## 7. 下一步
 
 - [快速开始](./QUICK_START.md)
-- [用户手册](./oo/user-guide/USER_MANUAL.md)
+- [客户端连接指南](./CLIENT_CONNECTION.md)
+- [REST API 参考](./API_REFERENCE.md)
 - [升级指南](./UPGRADE_GUIDE.md)
 
 ---

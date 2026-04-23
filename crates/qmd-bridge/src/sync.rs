@@ -41,11 +41,9 @@ impl SyncManager {
         })?;
 
         Ok(SyncStatus {
-            last_sync: state.last_sync
-                .map(|i| {
-                    i.elapsed()
-                        .as_secs() as i64
-                })
+            last_sync: state
+                .last_sync
+                .map(|i| i.elapsed().as_secs() as i64)
                 .unwrap_or(0),
             items_synced: state.items_synced,
             state: state.state,

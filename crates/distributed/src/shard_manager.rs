@@ -326,6 +326,71 @@ mod tests {
         manager.create_shard(ShardInfo::new(0, 1));
         assert_eq!(manager.num_shards(), 1);
         manager.remove_node_from_shard(0, 1);
-        assert_eq!(manager.num_shards(), 1); // shard still exists, just no nodes
+        assert_eq!(manager.num_shards(), 1);
+    }
+
+    #[test]
+    fn test_shard_info_fields() {
+        let shard = ShardInfo::new(5, 10);
+        assert_eq!(shard.shard_id, 5);
+        assert_eq!(shard.primary_node(), Some(10));
+        assert_eq!(shard.replicas().len(), 1);
+        assert_eq!(shard.status, ShardStatus::Active);
+    }
+
+    #[test]
+    fn test_shard_info_status() {
+        let mut shard = ShardInfo::new(0, 1);
+        assert_eq!(shard.status, ShardStatus::Active);
+
+        shard.status = ShardStatus::Migrating;
+        assert_eq!(shard.status, ShardStatus::Migrating);
+
+        shard.status = ShardStatus::Readonly;
+        assert_eq!(shard.status, ShardStatus::Readonly);
+
+        shard.status = ShardStatus::Offline;
+        assert_eq!(shard.status, ShardStatus::Offline);
+    }
+
+    #[test]
+    fn test_shard_status_debug() {
+        assert_eq!(format!("{:?}", ShardStatus::Active), "Active");
+        assert_eq!(format!("{:?}", ShardStatus::Migrating), "Migrating");
+        assert_eq!(format!("{:?}", ShardStatus::Readonly), "Readonly");
+        assert_eq!(format!("{:?}", ShardStatus::Offline), "Offline");
+    }
+
+    #[test]
+    fn test_shard_info_debug() {
+        let shard = ShardInfo::new(1, 2);
+        let debug_str = format!("{:?}", shard);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[test]
+    fn test_shard_info_promote_first_replica() {
+        let mut shard = ShardInfo::new(0, 1);
+        shard.add_replica(2);
+        shard.add_replica(3);
+        shard.promote_replica(1);
+        assert_eq!(shard.primary_node(), Some(1));
+    }
+
+    #[test]
+    fn test_shard_manager_get_shards_by_node() {
+        let mut manager = ShardManager::new();
+        manager.create_shard(ShardInfo::new(0, 1));
+        manager.create_shard(ShardInfo::new(1, 2));
+
+        let shards = manager.get_shards_by_node(999);
+        assert!(shards.is_empty());
+    }
+
+    #[test]
+    fn test_partition_rule_debug() {
+        let rule = PartitionRule::new("users", PartitionKey::new_hash("user_id", 8));
+        let debug_str = format!("{:?}", rule);
+        assert!(debug_str.contains("users"));
     }
 }

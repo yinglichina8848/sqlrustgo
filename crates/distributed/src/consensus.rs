@@ -191,4 +191,234 @@ mod tests {
         assert_eq!(manager.get_primary(999), None);
         assert_eq!(manager.get_shard_state(999), None);
     }
+
+    #[test]
+    fn test_operation_to_entry_data_insert() {
+        let op = Operation::Insert {
+            key: "key1".to_string(),
+            value: vec![1, 2, 3],
+        };
+
+        let entry_data = op.to_entry_data(100);
+        match entry_data {
+            RaftEntryData::Transaction { tx_id } => assert_eq!(tx_id, 100),
+            _ => panic!("Expected Transaction"),
+        }
+    }
+
+    #[test]
+    fn test_operation_to_entry_data_delete() {
+        let op = Operation::Delete {
+            key: "key1".to_string(),
+        };
+
+        let entry_data = op.to_entry_data(200);
+        match entry_data {
+            RaftEntryData::Transaction { tx_id } => assert_eq!(tx_id, 200),
+            _ => panic!("Expected Transaction"),
+        }
+    }
+
+    #[test]
+    fn test_operation_to_entry_data_update() {
+        let op = Operation::Update {
+            key: "key1".to_string(),
+            value: vec![4, 5, 6],
+        };
+
+        let entry_data = op.to_entry_data(300);
+        match entry_data {
+            RaftEntryData::Transaction { tx_id } => assert_eq!(tx_id, 300),
+            _ => panic!("Expected Transaction"),
+        }
+    }
+
+    #[test]
+    fn test_operation_debug() {
+        let op = Operation::Insert {
+            key: "test".to_string(),
+            value: vec![1],
+        };
+
+        let debug_str = format!("{:?}", op);
+        assert!(debug_str.contains("Insert"));
+    }
+
+    #[test]
+    fn test_register_shard_filters_self() {
+        let mut manager = ShardReplicaManager::new(2);
+        manager.register_shard(1, vec![1, 2, 3]);
+
+        assert_eq!(manager.get_shard_state(1), Some(RaftState::Follower));
+    }
+
+    #[test]
+    fn test_is_primary_false_when_not_primary() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+
+        assert!(!manager.is_primary(0));
+    }
+
+    #[test]
+    fn test_is_primary_true_when_primary() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.become_leader(0).unwrap();
+
+        assert!(manager.is_primary(0));
+    }
+
+    #[test]
+    fn test_is_primary_nonexistent_shard() {
+        let manager = ShardReplicaManager::new(1);
+
+        assert!(!manager.is_primary(999));
+    }
+
+    #[test]
+    fn test_replicate_operation_as_leader() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.become_leader(0).unwrap();
+
+        let op = Operation::Insert {
+            key: "key1".to_string(),
+            value: vec![1, 2, 3],
+        };
+
+        let result = manager.replicate_operation(0, op);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_replicate_operation_not_leader_error() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+
+        let op = Operation::Delete {
+            key: "key1".to_string(),
+        };
+
+        let result = manager.replicate_operation(0, op);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_replicate_operation_nonexistent_shard() {
+        let mut manager = ShardReplicaManager::new(1);
+
+        let op = Operation::Insert {
+            key: "key1".to_string(),
+            value: vec![1],
+        };
+
+        let result = manager.replicate_operation(999, op);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_handle_vote_response_granted() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+
+        manager.become_leader(0).unwrap();
+        let became_leader = manager.handle_vote_response(0, true).unwrap();
+
+        assert!(became_leader);
+    }
+
+    #[test]
+    fn test_handle_vote_response_denied() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+
+        let became_leader = manager.handle_vote_response(0, false).unwrap();
+
+        assert!(!became_leader);
+    }
+
+    #[test]
+    fn test_handle_vote_response_nonexistent_shard() {
+        let mut manager = ShardReplicaManager::new(1);
+
+        let result = manager.handle_vote_response(999, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_all_leaders_empty() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+
+        let leaders = manager.get_all_leaders();
+        assert!(leaders.is_empty());
+    }
+
+    #[test]
+    fn test_get_all_leaders_some() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.register_shard(1, vec![1, 2, 3]);
+        manager.become_leader(0).unwrap();
+        manager.become_leader(1).unwrap();
+
+        let leaders = manager.get_all_leaders();
+        assert_eq!(leaders.len(), 2);
+        assert!(leaders.contains(&0));
+        assert!(leaders.contains(&1));
+    }
+
+    #[test]
+    fn test_get_leader_count() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.register_shard(1, vec![1, 2, 3]);
+        manager.become_leader(0).unwrap();
+
+        assert_eq!(manager.get_leader_count(), 1);
+    }
+
+    #[test]
+    fn test_get_follower_count() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.register_shard(1, vec![1, 2, 3]);
+        manager.become_leader(0).unwrap();
+
+        assert_eq!(manager.get_follower_count(), 1);
+    }
+
+    #[test]
+    fn test_become_leader_error() {
+        let mut manager = ShardReplicaManager::new(1);
+
+        let result = manager.become_leader(999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_shard_state_nonexistent() {
+        let manager = ShardReplicaManager::new(1);
+
+        assert_eq!(manager.get_shard_state(999), None);
+    }
+
+    #[test]
+    fn test_is_leader_nonexistent_shard() {
+        let manager = ShardReplicaManager::new(1);
+
+        assert!(!manager.is_leader(999));
+    }
+
+    #[test]
+    fn test_register_multiple_shards() {
+        let mut manager = ShardReplicaManager::new(1);
+        manager.register_shard(0, vec![1, 2, 3]);
+        manager.register_shard(1, vec![1, 2, 3]);
+        manager.register_shard(2, vec![1, 2, 3]);
+
+        assert_eq!(manager.get_leader_count(), 0);
+        assert_eq!(manager.get_follower_count(), 3);
+    }
 }

@@ -46,13 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("MySQL protocol server for SQLRustGo");
     tracing::info!("Accepts standard MySQL client connections");
 
-    let monitoring_port = if args.monitoring_port == 0 {
-        None
-    } else {
-        Some(args.monitoring_port)
-    };
-
-    run_server(&args.host, args.port, monitoring_port)?;
+    run_server(&args.host, args.port)?;
 
     Ok(())
 }

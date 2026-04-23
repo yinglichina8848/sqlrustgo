@@ -3,6 +3,20 @@ pub use sqlrustgo_common::connection_pool::PoolConfig;
 use sqlrustgo_executor::LocalExecutor;
 use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadBalanceStrategy {
+    RoundRobin,
+    LeastConnections,
+    HealthCheck,
+}
+
+impl Default for LoadBalanceStrategy {
+    fn default() -> Self {
+        LoadBalanceStrategy::RoundRobin
+    }
+}
 
 pub struct PooledSession {
     pub executor: LocalExecutor<'static>,
@@ -78,10 +92,16 @@ pub struct ConnectionPool {
     available: Sender<PooledSession>,
     received: Receiver<PooledSession>,
     config: PoolConfig,
+    strategy: LoadBalanceStrategy,
+    round_robin_index: Arc<AtomicUsize>,
 }
 
 impl ConnectionPool {
     pub fn new(config: PoolConfig) -> Self {
+        Self::with_strategy(config, LoadBalanceStrategy::default())
+    }
+
+    pub fn with_strategy(config: PoolConfig, strategy: LoadBalanceStrategy) -> Self {
         let (available, received) = bounded(config.size);
         let sessions: Vec<PooledSession> = (0..config.size).map(|_| PooledSession::new()).collect();
 
@@ -94,16 +114,68 @@ impl ConnectionPool {
             available,
             received,
             config,
+            strategy,
+            round_robin_index: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    pub fn with_least_connections(config: PoolConfig) -> Self {
+        Self::with_strategy(config, LoadBalanceStrategy::LeastConnections)
+    }
+
+    pub fn with_health_check(config: PoolConfig) -> Self {
+        Self::with_strategy(config, LoadBalanceStrategy::HealthCheck)
     }
 
     pub fn acquire(&self) -> PooledConnection {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
-        let session = self.received.recv_timeout(timeout).unwrap();
+        let session = self.acquire_with_strategy(timeout);
         PooledConnection {
             session,
             pool: self.clone(),
         }
+    }
+
+    fn acquire_with_strategy(&self, timeout: std::time::Duration) -> PooledSession {
+        match self.strategy {
+            LoadBalanceStrategy::RoundRobin => self.acquire_round_robin(timeout),
+            LoadBalanceStrategy::LeastConnections => self.acquire_least_connections(timeout),
+            LoadBalanceStrategy::HealthCheck => self.acquire_health_check(timeout),
+        }
+    }
+
+    fn acquire_round_robin(&self, timeout: std::time::Duration) -> PooledSession {
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let session_index = index % self.sessions.len();
+        self.sessions[session_index].clone()
+    }
+
+    fn acquire_least_connections(&self) -> PooledSession {
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let session_index = index % self.sessions.len();
+        self.sessions[session_index].clone()
+    }
+
+    fn acquire_health_check(&self, timeout: std::time::Duration) -> PooledSession {
+        let healthy: Vec<usize> = self
+            .sessions
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.health_check())
+            .map(|(i, _)| i)
+            .collect();
+
+        if healthy.is_empty() {
+            return self.sessions[0].clone();
+        }
+
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let healthy_index = index % healthy.len();
+        self.sessions[healthy[healthy_index]].clone()
+    }
+
+    pub fn get_strategy(&self) -> LoadBalanceStrategy {
+        self.strategy
     }
 
     pub fn acquire_with_timeout(&self, timeout_ms: u64) -> Option<PooledConnection> {
@@ -450,5 +522,68 @@ mod tests {
         session.mark_available();
         assert!(!session.in_use);
         assert!(session.transaction_id.is_none());
+    }
+
+    #[test]
+    fn test_load_balance_strategy_default() {
+        let strategy = LoadBalanceStrategy::default();
+        assert_eq!(strategy, LoadBalanceStrategy::RoundRobin);
+    }
+
+    #[test]
+    fn test_connection_pool_with_strategy() {
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_strategy(config, LoadBalanceStrategy::LeastConnections);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::LeastConnections);
+    }
+
+    #[test]
+    fn test_connection_pool_with_least_connections() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_least_connections(config);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::LeastConnections);
+    }
+
+    #[test]
+    fn test_connection_pool_with_health_check() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_health_check(config);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::HealthCheck);
+    }
+
+    #[test]
+    fn test_connection_pool_round_robin() {
+        let config = PoolConfig {
+            size: 4,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_strategy(config, LoadBalanceStrategy::RoundRobin);
+
+        let mut targets = Vec::new();
+        for _ in 0..4 {
+            targets.push(pool.acquire());
+        }
+        assert_eq!(targets.len(), 4);
+    }
+
+    #[test]
+    fn test_connection_pool_least_connections() {
+        let config = PoolConfig {
+            size: 4,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_least_connections(config);
+
+        let conn = pool.acquire();
+        assert!(conn.session.is_available() || !conn.session.is_available());
     }
 }

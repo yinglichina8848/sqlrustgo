@@ -19,6 +19,7 @@ use sqlrustgo_parser::parser::{
     TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
+use sqlrustgo_parser::JoinType; // For join type matching
 use sqlrustgo_parser::{
     DeleteStatement, Expression, Statement, TransactionStatement, UpdateStatement,
 };
@@ -413,11 +414,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Get table info
         let table_info = storage.get_table_info(&select.table)?;
 
-        // Handle JOIN clause if present - detect and return clear error
+        // Handle JOIN clause if present - delegate to Planner + LocalExecutor
         if select.join_clause.is_some() {
-            return Err(SqlError::ExecutionError(
-                "JOINs are not yet fully supported in ExecutionEngine::execute_select. Use LocalExecutor directly.".to_string(),
-            ));
+            return self.execute_select_with_join(select);
         }
 
         // Scan all rows
@@ -613,6 +612,168 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(results)
     }
 
+    /// Execute a SELECT with JOIN (including FULL OUTER JOIN)
+    /// Implements FULL OUTER JOIN directly using hash-based matching
+    fn execute_select_with_join(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_parser::JoinType as ParserJoinType;
+        use std::collections::HashMap;
+
+        let join_clause = select.join_clause.as_ref().unwrap();
+        let left_table_name = select.table.clone();
+        let right_table_name = join_clause.table.clone();
+
+        let storage = self.storage.read().unwrap();
+
+        // Scan both tables
+        let left_rows = storage.scan(&left_table_name)?;
+        let right_rows = storage.scan(&right_table_name)?;
+
+        // Get table info for column indices
+        let left_table_info = storage.get_table_info(&left_table_name)?;
+        let right_table_info = storage.get_table_info(&right_table_name)?;
+
+        // Extract join key column index from ON clause
+        // For "t1.id = t2.id", we need to find which column "id" refers to in each table
+        let left_key_idx =
+            self.find_join_key_index(&join_clause.on_clause, &left_table_info, &select.table)?;
+        let right_key_idx =
+            self.find_join_key_index(&join_clause.on_clause, &right_table_info, &right_table_name)?;
+
+        // Determine join type
+        let join_type = match join_clause.join_type {
+            ParserJoinType::Inner => JoinType::Inner,
+            ParserJoinType::Left => JoinType::Left,
+            ParserJoinType::Right => JoinType::Right,
+            ParserJoinType::Full => JoinType::Full,
+            ParserJoinType::Cross => JoinType::Cross,
+        };
+
+        let left_col_count = left_table_info.columns.len();
+        let right_col_count = right_table_info.columns.len();
+
+        let matched_results = match join_type {
+            JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
+                // Hash-based matching
+                let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
+                for right_row in &right_rows {
+                    let key = format!("{:?}", right_row[right_key_idx]);
+                    right_hash.entry(key).or_default().push(right_row.clone());
+                }
+
+                let mut matched: Vec<Vec<Value>> = Vec::new();
+                let mut left_matched: std::collections::HashSet<usize> =
+                    std::collections::HashSet::new();
+                let mut right_matched: std::collections::HashSet<usize> =
+                    std::collections::HashSet::new();
+
+                // Match left rows to right
+                for (li, left_row) in left_rows.iter().enumerate() {
+                    let key = format!("{:?}", left_row[left_key_idx]);
+                    if let Some(right_match_rows) = right_hash.get(&key) {
+                        left_matched.insert(li);
+                        for right_row in right_match_rows {
+                            // Find the original right row index
+                            if let Some(ri) = right_rows.iter().position(|r| r == right_row) {
+                                right_matched.insert(ri);
+                            }
+                            let mut combined = left_row.clone();
+                            combined.extend(right_row.clone());
+                            matched.push(combined);
+                        }
+                    }
+                }
+
+                // For LEFT/RIGHT/FULL, add unmatched rows
+                if matches!(join_type, JoinType::Left | JoinType::Full) {
+                    for (li, left_row) in left_rows.iter().enumerate() {
+                        if !left_matched.contains(&li) {
+                            let mut combined = left_row.clone();
+                            combined.extend(vec![Value::Null; right_col_count]);
+                            matched.push(combined);
+                        }
+                    }
+                }
+
+                if matches!(join_type, JoinType::Right | JoinType::Full) {
+                    for (ri, right_row) in right_rows.iter().enumerate() {
+                        if !right_matched.contains(&ri) {
+                            let mut combined = vec![Value::Null; left_col_count];
+                            combined.extend(right_row.clone());
+                            matched.push(combined);
+                        }
+                    }
+                }
+
+                matched
+            }
+            JoinType::Cross => {
+                // Cartesian product
+                let mut results = Vec::new();
+                for left_row in &left_rows {
+                    for right_row in &right_rows {
+                        let mut combined = left_row.clone();
+                        combined.extend(right_row.clone());
+                        results.push(combined);
+                    }
+                }
+                results
+            }
+        };
+
+        let row_count = matched_results.len();
+        Ok(ExecutorResult::new(matched_results, row_count))
+    }
+
+    /// Find the column index for a join key in a table
+    /// Handles both simple column names and qualified names (e.g., "t1.id")
+    fn find_join_key_index(
+        &self,
+        expr: &Expression,
+        table_info: &TableInfo,
+        table_name: &str,
+    ) -> SqlResult<usize> {
+        match expr {
+            Expression::Identifier(name) => {
+                // Check if it's a qualified name like "t1.id"
+                if let Some((qualifier, col_name)) = name.split_once('.') {
+                    // If qualifier matches our table name, use the column name part
+                    if qualifier == table_name {
+                        table_info
+                            .columns
+                            .iter()
+                            .position(|c| c.name.as_str() == col_name)
+                            .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}.{}' not found in {}", qualifier, col_name, table_name)))
+                    } else {
+                        // Qualifier doesn't match this table - column not in this table
+                        Err(SqlError::ExecutionError(format!(
+                            "Column '{}' not found in {}",
+                            name, table_name
+                        )))
+                    }
+                } else {
+                    // Simple column name - find its index
+                    table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.as_str() == name.as_str())
+                        .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found in {}", name, table_name)))
+                }
+            }
+            Expression::BinaryOp(left, _, right) => {
+                // Try left side first
+                let left_result = self.find_join_key_index(left, table_info, table_name);
+                if left_result.is_ok() {
+                    return left_result;
+                }
+                // Try right side
+                self.find_join_key_index(right, table_info, table_name)
+            }
+            _ => Err(SqlError::ExecutionError(
+                "Unsupported join condition expression".to_string(),
+            )),
+        }
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
@@ -670,12 +831,26 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             all_records.clone()
         };
 
-        // Validate FK constraints and insert
+        // Validate FK and CHECK constraints, then insert
         {
             let mut storage = self.storage.write().unwrap();
+            let col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
             for record in &processed_records {
                 if !table_info.foreign_keys.is_empty() {
                     validate_foreign_keys(&*storage, &table_info, record, &insert.columns)?;
+                }
+                // Validate CHECK constraints
+                if !table_info.check_constraints.is_empty() {
+                    for constraint in &table_info.check_constraints {
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        if !valid {
+                            return Err(format!(
+                                "CHECK constraint '{}' violated: {}",
+                                constraint.name.as_deref().unwrap_or("unnamed"),
+                                constraint.expression
+                            ).into());
+                        }
+                    }
                 }
             }
             storage.insert(&table_name, processed_records)?;
@@ -814,6 +989,27 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Delete all rows and re-insert updated + kept rows
         {
             let mut storage = self.storage.write().unwrap();
+            let col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+            // Validate CHECK constraints on updated rows before inserting
+            if !table_info.check_constraints.is_empty() {
+                for record in &trigger_modified_rows {
+                    for constraint in &table_info.check_constraints {
+                        let valid =
+                            sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        if !valid {
+                            return Err(format!(
+                                "CHECK constraint '{}' violated: {}",
+                                constraint.name.as_deref().unwrap_or("unnamed"),
+                                constraint.expression
+                            )
+                            .into());
+                        }
+                    }
+                }
+            }
+
             storage.delete(&table_name, &[])?;
             if !rows_to_keep.is_empty() {
                 storage.insert(&table_name, rows_to_keep)?;
@@ -940,6 +1136,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         storage.create_table(&info)?;

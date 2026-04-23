@@ -3,6 +3,7 @@
 //! This module provides trigger execution functionality for SQL triggers.
 //! Triggers are executed before or after INSERT, UPDATE, or DELETE operations.
 
+use crate::trigger_eval;
 use sqlrustgo_parser::parse;
 use sqlrustgo_storage::{
     Record, StorageEngine, TriggerEvent as StorageTriggerEvent, TriggerInfo,
@@ -278,34 +279,54 @@ impl TriggerExecutor {
     ) -> String {
         let mut result = sql.to_string();
 
-        if let Some(new) = new_row {
+        if new_row.is_some() || old_row.is_some() {
             if let Ok(info) = self.storage.read().unwrap().get_table_info(table_name) {
-                for (i, col) in info.columns.iter().enumerate() {
-                    if i < new.len() {
-                        let val = &new[i];
-                        let replacement = self.value_to_sql_literal(val);
-                        result = result.replace(&format!("NEW.{}", col.name), &replacement);
-                        result = result
-                            .replace(&format!("NEW.{}", col.name.to_uppercase()), &replacement);
-                    }
+                self.do_expand_row_variables(&mut result, &info, old_row, new_row);
+            }
+        }
+
+        result
+    }
+
+    fn do_expand_row_variables(
+        &self,
+        result: &mut String,
+        info: &sqlrustgo_storage::TableInfo,
+        old_row: Option<&Record>,
+        new_row: Option<&Record>,
+    ) {
+        if let Some(new) = new_row {
+            for (i, col) in info.columns.iter().enumerate() {
+                if i < new.len() {
+                    let val = &new[i];
+                    let replacement = self.value_to_sql_literal(val);
+                    *result = result.replace(&format!("NEW.{}", col.name), &replacement);
+                    *result = result.replace(&format!("NEW.{}", col.name.to_uppercase()), &replacement);
                 }
             }
         }
 
         if let Some(old) = old_row {
-            if let Ok(info) = self.storage.read().unwrap().get_table_info(table_name) {
-                for (i, col) in info.columns.iter().enumerate() {
-                    if i < old.len() {
-                        let val = &old[i];
-                        let replacement = self.value_to_sql_literal(val);
-                        result = result.replace(&format!("OLD.{}", col.name), &replacement);
-                        result = result
-                            .replace(&format!("OLD.{}", col.name.to_uppercase()), &replacement);
-                    }
+            for (i, col) in info.columns.iter().enumerate() {
+                if i < old.len() {
+                    let val = &old[i];
+                    let replacement = self.value_to_sql_literal(val);
+                    *result = result.replace(&format!("OLD.{}", col.name), &replacement);
+                    *result = result.replace(&format!("OLD.{}", col.name.to_uppercase()), &replacement);
                 }
             }
         }
+    }
 
+    fn expand_row_variables_with_info(
+        &self,
+        sql: &str,
+        info: &sqlrustgo_storage::TableInfo,
+        old_row: Option<&Record>,
+        new_row: Option<&Record>,
+    ) -> String {
+        let mut result = sql.to_string();
+        self.do_expand_row_variables(&mut result, info, old_row, new_row);
         result
     }
 
@@ -370,12 +391,16 @@ impl TriggerExecutor {
         if let sqlrustgo_parser::Statement::Insert(insert) = statement {
             let table_name = &insert.table;
             let table_info = storage.get_table_info(table_name)?;
+            let target_col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
             let num_cols = table_info.columns.len();
+
+            let trigger_ctx = trigger_eval::TriggerContext::new(new_row, None);
 
             for values in &insert.values {
                 let mut record = Vec::new();
                 for expr in values {
-                    let val = self.expression_to_value(expr, new_row);
+                    let eval_ctx = trigger_eval::EvalContext::new(&trigger_ctx, None);
+                    let val = trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
                     record.push(val);
                 }
                 while record.len() < num_cols {
@@ -394,10 +419,11 @@ impl TriggerExecutor {
         trigger_table: &str,
         new_row: Option<&Record>,
     ) -> SqlResult<()> {
-        let mut storage = self.storage.write().unwrap();
         let expanded = self.expand_update_values(sql, trigger_table, new_row);
         let statement = parse(&expanded)
             .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        let mut storage = self.storage.write().unwrap();
 
         if let sqlrustgo_parser::Statement::Update(update) = statement {
             let table_name = &update.table;
@@ -430,10 +456,12 @@ impl TriggerExecutor {
         trigger_table: &str,
         old_row: Option<&Record>,
     ) -> SqlResult<()> {
-        let mut storage = self.storage.write().unwrap();
-        let expanded = self.expand_delete_values(sql, trigger_table, old_row);
+        let table_info = self.storage.read().unwrap().get_table_info(trigger_table)?;
+        let expanded = self.expand_delete_values_with_info(sql, &table_info, old_row);
         let statement = parse(&expanded)
             .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
+
+        let mut storage = self.storage.write().unwrap();
 
         if let sqlrustgo_parser::Statement::Delete(delete) = statement {
             storage.delete(&delete.table, &[])?;
@@ -522,7 +550,7 @@ impl TriggerExecutor {
         }
     }
 
-    /// Expand SET clause values in UPDATE with NEW.row values
+    #[allow(dead_code)]
     fn expand_update_values(
         &self,
         sql: &str,
@@ -532,7 +560,16 @@ impl TriggerExecutor {
         self.expand_row_variables(sql, table_name, None, new_row)
     }
 
-    /// Expand WHERE clause values in DELETE with OLD.row values
+    fn expand_update_values_with_info(
+        &self,
+        sql: &str,
+        table_info: &sqlrustgo_storage::TableInfo,
+        new_row: Option<&Record>,
+    ) -> String {
+        self.expand_row_variables_with_info(sql, table_info, None, new_row)
+    }
+
+    #[allow(dead_code)]
     fn expand_delete_values(
         &self,
         sql: &str,
@@ -540,6 +577,15 @@ impl TriggerExecutor {
         old_row: Option<&Record>,
     ) -> String {
         self.expand_row_variables(sql, table_name, old_row, None)
+    }
+
+    fn expand_delete_values_with_info(
+        &self,
+        sql: &str,
+        table_info: &sqlrustgo_storage::TableInfo,
+        old_row: Option<&Record>,
+    ) -> String {
+        self.expand_row_variables_with_info(sql, table_info, old_row, None)
     }
 
     /// Convert parser Expression to Value
