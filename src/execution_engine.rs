@@ -975,6 +975,27 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Delete all rows and re-insert updated + kept rows
         {
             let mut storage = self.storage.write().unwrap();
+            let col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
+
+            // Validate CHECK constraints on updated rows before inserting
+            if !table_info.check_constraints.is_empty() {
+                for record in &trigger_modified_rows {
+                    for constraint in &table_info.check_constraints {
+                        let valid =
+                            sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        if !valid {
+                            return Err(format!(
+                                "CHECK constraint '{}' violated: {}",
+                                constraint.name.as_deref().unwrap_or("unnamed"),
+                                constraint.expression
+                            )
+                            .into());
+                        }
+                    }
+                }
+            }
+
             storage.delete(&table_name, &[])?;
             if !rows_to_keep.is_empty() {
                 storage.insert(&table_name, rows_to_keep)?;
