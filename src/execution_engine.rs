@@ -742,7 +742,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             .columns
                             .iter()
                             .position(|c| c.name.as_str() == col_name)
-                            .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}.{}' not found in {}", qualifier, col_name, table_name)))
+                            .ok_or_else(|| {
+                                SqlError::ExecutionError(format!(
+                                    "Column '{}.{}' not found in {}",
+                                    qualifier, col_name, table_name
+                                ))
+                            })
                     } else {
                         // Qualifier doesn't match this table - column not in this table
                         Err(SqlError::ExecutionError(format!(
@@ -756,7 +761,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .columns
                         .iter()
                         .position(|c| c.name.as_str() == name.as_str())
-                        .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found in {}", name, table_name)))
+                        .ok_or_else(|| {
+                            SqlError::ExecutionError(format!(
+                                "Column '{}' not found in {}",
+                                name, table_name
+                            ))
+                        })
                 }
             }
             Expression::BinaryOp(left, _, right) => {
@@ -834,7 +844,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Validate FK and CHECK constraints, then insert
         {
             let mut storage = self.storage.write().unwrap();
-            let col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
+            let col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
             for record in &processed_records {
                 if !table_info.foreign_keys.is_empty() {
                     validate_foreign_keys(&*storage, &table_info, record, &insert.columns)?;
@@ -842,13 +853,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 // Validate CHECK constraints
                 if !table_info.check_constraints.is_empty() {
                     for constraint in &table_info.check_constraints {
-                        let valid = sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(
+                            constraint, &col_names, record,
+                        )?;
                         if !valid {
                             return Err(format!(
                                 "CHECK constraint '{}' violated: {}",
                                 constraint.name.as_deref().unwrap_or("unnamed"),
                                 constraint.expression
-                            ).into());
+                            )
+                            .into());
                         }
                     }
                 }
@@ -996,8 +1010,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             if !table_info.check_constraints.is_empty() {
                 for record in &trigger_modified_rows {
                     for constraint in &table_info.check_constraints {
-                        let valid =
-                            sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(
+                            constraint, &col_names, record,
+                        )?;
                         if !valid {
                             return Err(format!(
                                 "CHECK constraint '{}' violated: {}",

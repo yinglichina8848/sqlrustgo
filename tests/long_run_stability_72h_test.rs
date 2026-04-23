@@ -8,11 +8,14 @@
 
 use sqlrustgo::{ExecutionEngine, MemoryExecutionEngine};
 use sqlrustgo_storage::{FileStorage, MemoryStorage};
-use std::sync::{Arc, RwLock, atomic::{AtomicBool, AtomicI64, Ordering}};
-use std::time::{Duration, Instant};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, AtomicI64, Ordering},
+    Arc, RwLock,
+};
+use std::time::{Duration, Instant};
 
 const CONCURRENT_THREADS: usize = 8;
 const TEST_DURATION_HOURS: u64 = 72;
@@ -40,12 +43,15 @@ fn setup_memory_table(engine: &mut MemoryExecutionEngine) {
 }
 
 fn log_progress(test_name: &str, message: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(LOG_FILE)
-    {
-        writeln!(file, "[{:?}] {}: {}", std::time::SystemTime::now(), test_name, message).ok();
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(LOG_FILE) {
+        writeln!(
+            file,
+            "[{:?}] {}: {}",
+            std::time::SystemTime::now(),
+            test_name,
+            message
+        )
+        .ok();
     }
 }
 
@@ -67,7 +73,9 @@ fn get_process_stats() -> (u64, f64) {
                         if let Ok(uptime_secs) = first.parse::<f64>() {
                             let clk_tck: f64 = 100.0;
                             if let Some(start_time_idx) = content.find("pow(") {
-                                if let Some(st) = content[start_time_idx..].split_whitespace().nth(1) {
+                                if let Some(st) =
+                                    content[start_time_idx..].split_whitespace().nth(1)
+                                {
                                     if let Ok(st_usec) = st.parse::<u64>() {
                                         let start_secs = st_usec as f64 / 1_000_000.0 / clk_tck;
                                         let secs = uptime_secs - start_secs;
@@ -107,13 +115,21 @@ fn log_system_stats(test_name: &str, ops_count: i64, elapsed_secs: u64, remainin
     let disk_bytes = get_disk_usage("test_results_72h");
     let disk_mb = disk_bytes / 1024 / 1024;
 
-    log_progress(test_name, &format!(
-        "STATS|ops={}|elapsed={}s|remaining={}s|RSS={}MB|cpu={:.1}%|disk={}MB",
-        ops_count, elapsed_secs, remaining_secs, rss_mb, cpu_pct, disk_mb
-    ));
+    log_progress(
+        test_name,
+        &format!(
+            "STATS|ops={}|elapsed={}s|remaining={}s|RSS={}MB|cpu={:.1}%|disk={}MB",
+            ops_count, elapsed_secs, remaining_secs, rss_mb, cpu_pct, disk_mb
+        ),
+    );
 }
 
-fn spawn_monitor_thread(test_name: String, ops_counter: Arc<AtomicI64>, running: Arc<AtomicBool>, duration: Duration) {
+fn spawn_monitor_thread(
+    test_name: String,
+    ops_counter: Arc<AtomicI64>,
+    running: Arc<AtomicBool>,
+    duration: Duration,
+) {
     std::thread::spawn(move || {
         let start = Instant::now();
         while running.load(Ordering::Relaxed) && start.elapsed() < duration {
@@ -137,14 +153,22 @@ fn test_sustained_write_72h() {
     let ops_counter = Arc::new(AtomicI64::new(0));
     let running = Arc::new(AtomicBool::new(true));
 
-    log_progress("test_sustained_write_72h", "Starting 72h write test (FileStorage with circular buffer)");
+    log_progress(
+        "test_sustained_write_72h",
+        "Starting 72h write test (FileStorage with circular buffer)",
+    );
 
     let mut engine = create_engine();
     setup_table(&mut engine);
 
     let ops_counter_clone = Arc::clone(&ops_counter);
     let running_clone = Arc::clone(&running);
-    spawn_monitor_thread("test_sustained_write_72h".to_string(), ops_counter_clone, running_clone, duration);
+    spawn_monitor_thread(
+        "test_sustained_write_72h".to_string(),
+        ops_counter_clone,
+        running_clone,
+        duration,
+    );
 
     let mut total_inserted = 0i64;
     const CIRCULAR_SIZE: i64 = 100_000;
@@ -156,20 +180,31 @@ fn test_sustained_write_72h() {
             "INSERT INTO stability_test VALUES ({}, 'value_{}')",
             circular_id, total_inserted
         ));
-        assert!(result.is_ok(), "Insert should succeed at iteration {}", total_inserted);
+        assert!(
+            result.is_ok(),
+            "Insert should succeed at iteration {}",
+            total_inserted
+        );
         total_inserted += 1;
         ops_counter.fetch_add(1, Ordering::Relaxed);
 
         if total_inserted % 10000 == 0 {
             let elapsed = start.elapsed().as_secs();
             let remaining = duration.as_secs().saturating_sub(elapsed);
-            log_progress("test_sustained_write_72h",
-                &format!("Progress: {} iterations (circular id: {}), elapsed: {}s, remaining: {}s",
-                    total_inserted, circular_id, elapsed, remaining));
+            log_progress(
+                "test_sustained_write_72h",
+                &format!(
+                    "Progress: {} iterations (circular id: {}), elapsed: {}s, remaining: {}s",
+                    total_inserted, circular_id, elapsed, remaining
+                ),
+            );
         }
 
         if total_inserted > 0 && total_inserted % CIRCULAR_SIZE == 0 {
-            log_progress("test_sustained_write_72h", "Circular buffer full - truncating table");
+            log_progress(
+                "test_sustained_write_72h",
+                "Circular buffer full - truncating table",
+            );
             let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
             setup_table(&mut engine);
         }
@@ -179,10 +214,18 @@ fn test_sustained_write_72h() {
     let elapsed = start.elapsed();
     let ops_per_sec = total_inserted as f64 / elapsed.as_secs_f64();
 
-    log_progress("test_sustained_write_72h",
-        &format!("Completed: {} iterations in {:?}, ops/sec: {:.2}", total_inserted, elapsed, ops_per_sec));
+    log_progress(
+        "test_sustained_write_72h",
+        &format!(
+            "Completed: {} iterations in {:?}, ops/sec: {:.2}",
+            total_inserted, elapsed, ops_per_sec
+        ),
+    );
 
-    println!("72h Write Test Complete: {} iterations, {:.2} ops/sec", total_inserted, ops_per_sec);
+    println!(
+        "72h Write Test Complete: {} iterations, {:.2} ops/sec",
+        total_inserted, ops_per_sec
+    );
 }
 
 #[test]
@@ -194,7 +237,10 @@ fn test_sustained_write_concurrent_72h() {
     let counter = Arc::new(AtomicI64::new(0));
     let running = Arc::new(AtomicBool::new(true));
 
-    log_progress("test_sustained_write_concurrent_72h", "Starting 72h concurrent write test (8 threads)");
+    log_progress(
+        "test_sustained_write_concurrent_72h",
+        "Starting 72h concurrent write test (8 threads)",
+    );
 
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     let mut engine = create_memory_engine();
@@ -202,7 +248,12 @@ fn test_sustained_write_concurrent_72h() {
 
     let ops_counter_clone = Arc::clone(&ops_counter);
     let running_clone = Arc::clone(&running);
-    spawn_monitor_thread("test_sustained_write_concurrent_72h".to_string(), ops_counter_clone, running_clone, duration);
+    spawn_monitor_thread(
+        "test_sustained_write_concurrent_72h".to_string(),
+        ops_counter_clone,
+        running_clone,
+        duration,
+    );
 
     let mut handles = vec![];
     for i in 0..CONCURRENT_THREADS {
@@ -238,10 +289,18 @@ fn test_sustained_write_concurrent_72h() {
     let elapsed = start.elapsed();
     let ops_per_sec = total_inserted as f64 / elapsed.as_secs_f64();
 
-    log_progress("test_sustained_write_concurrent_72h",
-        &format!("Completed: {} iterations in {:?}, ops/sec: {:.2}", total_inserted, elapsed, ops_per_sec));
+    log_progress(
+        "test_sustained_write_concurrent_72h",
+        &format!(
+            "Completed: {} iterations in {:?}, ops/sec: {:.2}",
+            total_inserted, elapsed, ops_per_sec
+        ),
+    );
 
-    println!("72h Concurrent Write Test Complete: {} iterations, {:.2} ops/sec", total_inserted, ops_per_sec);
+    println!(
+        "72h Concurrent Write Test Complete: {} iterations, {:.2} ops/sec",
+        total_inserted, ops_per_sec
+    );
 }
 
 #[test]
@@ -252,16 +311,25 @@ fn test_sustained_read_72h() {
     let mut engine = create_memory_engine();
     setup_memory_table(&mut engine);
 
-    log_progress("test_sustained_read_72h", "Populating table with initial data...");
+    log_progress(
+        "test_sustained_read_72h",
+        "Populating table with initial data...",
+    );
     for i in 0..10000 {
-        let result = engine.execute(&format!("INSERT INTO stability_test VALUES ({}, 'value_{}')", i, i));
+        let result = engine.execute(&format!(
+            "INSERT INTO stability_test VALUES ({}, 'value_{}')",
+            i, i
+        ));
         assert!(result.is_ok());
     }
 
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     for i in 0..10000 {
         let mut eng = MemoryExecutionEngine::new(Arc::clone(&storage));
-        let _ = eng.execute(&format!("INSERT INTO stability_test VALUES ({}, 'value_{}')", i, i));
+        let _ = eng.execute(&format!(
+            "INSERT INTO stability_test VALUES ({}, 'value_{}')",
+            i, i
+        ));
     }
 
     let start = Instant::now();
@@ -270,7 +338,12 @@ fn test_sustained_read_72h() {
 
     let ops_counter_clone = Arc::clone(&ops_counter);
     let running_clone = Arc::clone(&running);
-    spawn_monitor_thread("test_sustained_read_72h".to_string(), ops_counter_clone, running_clone, duration);
+    spawn_monitor_thread(
+        "test_sustained_read_72h".to_string(),
+        ops_counter_clone,
+        running_clone,
+        duration,
+    );
 
     let mut handles = vec![];
     for _ in 0..CONCURRENT_THREADS {
@@ -296,10 +369,18 @@ fn test_sustained_read_72h() {
     let elapsed = start.elapsed();
     let ops_per_sec = total_read as f64 / elapsed.as_secs_f64();
 
-    log_progress("test_sustained_read_72h",
-        &format!("Completed: {} reads in {:?}, ops/sec: {:.2}", total_read, elapsed, ops_per_sec));
+    log_progress(
+        "test_sustained_read_72h",
+        &format!(
+            "Completed: {} reads in {:?}, ops/sec: {:.2}",
+            total_read, elapsed, ops_per_sec
+        ),
+    );
 
-    println!("72h Read Test Complete: {} reads, {:.2} ops/sec", total_read, ops_per_sec);
+    println!(
+        "72h Read Test Complete: {} reads, {:.2} ops/sec",
+        total_read, ops_per_sec
+    );
 }
 
 #[test]
@@ -308,7 +389,10 @@ fn test_concurrent_read_write_72h() {
     let duration = Duration::from_secs(TEST_DURATION_HOURS * 3600);
     let start = Instant::now();
 
-    log_progress("test_concurrent_read_write_72h", "Starting 72h concurrent test");
+    log_progress(
+        "test_concurrent_read_write_72h",
+        "Starting 72h concurrent test",
+    );
 
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     let counter = Arc::new(AtomicI64::new(0));
@@ -318,7 +402,12 @@ fn test_concurrent_read_write_72h() {
     let ops_counter = Arc::new(AtomicI64::new(0));
     let ops_counter_clone = Arc::clone(&ops_counter);
     let running_clone = Arc::clone(&running);
-    spawn_monitor_thread("test_concurrent_read_write_72h".to_string(), ops_counter_clone, running_clone, duration);
+    spawn_monitor_thread(
+        "test_concurrent_read_write_72h".to_string(),
+        ops_counter_clone,
+        running_clone,
+        duration,
+    );
 
     let writer_counter = Arc::clone(&counter);
     let writer_storage = Arc::clone(&storage);
@@ -366,8 +455,16 @@ fn test_concurrent_read_write_72h() {
     let total_writes = counter.load(Ordering::Relaxed);
     let elapsed = start.elapsed();
 
-    log_progress("test_concurrent_read_write_72h",
-        &format!("Completed: {} writes, {} reads in {:?}", total_writes, total_reads, elapsed));
+    log_progress(
+        "test_concurrent_read_write_72h",
+        &format!(
+            "Completed: {} writes, {} reads in {:?}",
+            total_writes, total_reads, elapsed
+        ),
+    );
 
-    println!("72h Concurrent Test: {} writes, {} reads", total_writes, total_reads);
+    println!(
+        "72h Concurrent Test: {} writes, {} reads",
+        total_writes, total_reads
+    );
 }

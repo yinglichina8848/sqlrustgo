@@ -618,6 +618,7 @@ impl TriggerExecutor {
         self.expand_row_variables(sql, table_name, None, new_row)
     }
 
+    #[allow(dead_code)]
     fn expand_update_values_with_info(
         &self,
         sql: &str,
@@ -647,6 +648,7 @@ impl TriggerExecutor {
     }
 
     /// Convert parser Expression to Value
+    #[allow(dead_code)]
     fn expression_to_value(
         &self,
         expr: &sqlrustgo_parser::Expression,
