@@ -165,9 +165,10 @@ mod tests {
         let mut buf = Vec::new();
         write_lenenc_int(&mut buf, 0x1000000).unwrap();
         assert_eq!(buf[0], 0xfe);
-        assert_eq!(u64::from_le_bytes([
-            buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8],
-        ]), 0x1000000);
+        assert_eq!(
+            u64::from_le_bytes([buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8],]),
+            0x1000000
+        );
     }
 
     // Test read_lenenc_int branches
@@ -198,7 +199,8 @@ mod tests {
     #[test]
     fn test_read_lenenc_int_8bytes() {
         // Branch: 0xfe with u64 value
-        let mut reader = std::io::Cursor::new(&[0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]); // 0x10000000000 in little-endian
+        let mut reader =
+            std::io::Cursor::new(&[0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]); // 0x10000000000 in little-endian
         let val = read_lenenc_int(&mut reader).unwrap();
         assert_eq!(val, 0x10000000000);
     }
@@ -234,7 +236,7 @@ mod tests {
         let pkt = make_ok_packet(1, 5, 10, 0x0002, 0);
         assert_eq!(pkt.sequence, 1);
         assert_eq!(pkt.payload[0], 0x00); // OK packet type
-        // Verify it can be written without error
+                                          // Verify it can be written without error
         let mut buf = Vec::new();
         pkt.write_to(&mut buf).unwrap();
     }
@@ -257,7 +259,7 @@ mod tests {
         let pkt = make_eof_packet(2, 0x0002);
         assert_eq!(pkt.sequence, 2);
         assert_eq!(pkt.payload[0], 0xfe); // EOF packet type
-        // Verify it can be written without error
+                                          // Verify it can be written without error
         let mut buf = Vec::new();
         pkt.write_to(&mut buf).unwrap();
     }
@@ -269,7 +271,7 @@ mod tests {
         let pkt = make_handshake_packet(0, &scramble);
         assert_eq!(pkt.sequence, 0);
         assert_eq!(pkt.payload[0], 0x0a); // Protocol version 10
-        // Verify it can be written without error
+                                          // Verify it can be written without error
         let mut buf = Vec::new();
         pkt.write_to(&mut buf).unwrap();
     }
@@ -849,7 +851,6 @@ fn do_command_loop<S: Read + Write>(
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     continue;
                 }
-                tracing::debug!("Query about to execute: {}", q);
                 let mut eng = MemoryExecutionEngine::new(storage.clone());
                 if is_select(&q) {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -970,7 +971,11 @@ fn handle_connection(
                 resp.auth_plugin_name,
                 resp.auth_response.len()
             );
-            tracing::info!("Auth check: is_empty={}, len=20? {}", resp.auth_response.is_empty(), resp.auth_response.len() == 20);
+            tracing::info!(
+                "Auth check: is_empty={}, len=20? {}",
+                resp.auth_response.is_empty(),
+                resp.auth_response.len() == 20
+            );
             if SKIP_AUTH {
                 tracing::info!("SKIP_AUTH enabled, accepting connection");
             } else if !(resp.auth_response.is_empty() || resp.auth_response.len() == 20) {
@@ -1027,7 +1032,7 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
     tracing::info!("MySQL server listening on {}", addr);
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
-    
+
     // Create a SINGLE shared storage for ALL connections
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
     {

@@ -293,6 +293,7 @@ pub struct DeleteStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStatement {
     pub name: String,
+    pub if_not_exists: bool,
     pub columns: Vec<ColumnDefinition>,
     pub constraints: Vec<TableConstraint>,
     pub partition: Option<PartitionDefinition>,
@@ -334,6 +335,7 @@ pub enum PartitionValue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStatement {
     pub name: String,
+    pub if_exists: bool,
 }
 
 /// TRUNCATE TABLE statement
@@ -1801,6 +1803,17 @@ impl Parser {
             self.next(); // consume CREATE if not already consumed
         }
         self.expect(Token::Table)?;
+
+        // Check for IF NOT EXISTS
+        let if_not_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next(); // consume IF
+            self.expect(Token::Not)?;
+            self.expect(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -1895,6 +1908,7 @@ impl Parser {
 
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
+            if_not_exists,
             columns,
             constraints,
             partition,
@@ -2300,12 +2314,22 @@ impl Parser {
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
         self.expect(Token::Drop)?;
         self.expect(Token::Table)?;
+
+        // Check for IF EXISTS
+        let if_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next(); // consume IF
+            self.expect(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
         };
 
-        Ok(Statement::DropTable(DropTableStatement { name }))
+        Ok(Statement::DropTable(DropTableStatement { name, if_exists }))
     }
 
     fn parse_truncate(&mut self) -> Result<Statement, String> {
