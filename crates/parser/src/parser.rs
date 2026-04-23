@@ -56,6 +56,7 @@ pub struct CreateIndexStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub unique: bool,
+    pub fulltext: bool,
 }
 
 /// ALTER TABLE statement
@@ -625,7 +626,12 @@ impl Parser {
         self.expect(Token::Create)?;
         match self.current() {
             Some(Token::Table) => self.parse_create_table(),
-            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
+            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(false),
+            Some(Token::Fulltext) => {
+                self.next(); // consume FULLTEXT
+                self.expect(Token::Index)?;
+                self.parse_create_index(true)
+            }
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(t) => Err(format!(
@@ -636,8 +642,10 @@ impl Parser {
         }
     }
 
-    fn parse_create_index(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Index)?;
+    fn parse_create_index(&mut self, is_fulltext: bool) -> Result<Statement, String> {
+        if !is_fulltext {
+            self.expect(Token::Index)?;
+        }
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
             Some(t) => return Err(format!("Expected index name, got {:?}", t)),
@@ -656,6 +664,7 @@ impl Parser {
             table: table_name,
             columns,
             unique: false,
+            fulltext: is_fulltext,
         }))
     }
 
@@ -1925,10 +1934,32 @@ impl Parser {
             _ => return Err("Expected RANGE, LIST, or KEY after PARTITION BY".to_string()),
         };
 
-        // Parse partition column(s)
+        // Parse partition column(s) - inline to avoid consuming RParen twice
         self.expect(Token::LParen)?;
-        let columns = self.parse_column_list()?;
-        self.expect(Token::RParen)?;
+        let mut partition_cols = Vec::new();
+        loop {
+            match self.next() {
+                Some(Token::Identifier(name)) => {
+                    partition_cols.push(name);
+                    match self.current() {
+                        Some(Token::Comma) => {
+                            self.next();
+                            continue;
+                        }
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        _ => return Err("Expected ',' or ')' after column name".to_string()),
+                    }
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name".to_string()),
+            }
+        }
 
         // Parse individual partition definitions
         self.expect(Token::LParen)?;
@@ -1943,10 +1974,12 @@ impl Parser {
                     let value = match self.current() {
                         Some(Token::Values) => {
                             self.next(); // consume VALUES
-                            // Check for VALUES LESS THAN (expr)
-                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS") {
+                                         // Check for VALUES LESS THAN (expr)
+                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS")
+                            {
                                 self.next(); // consume LESS
-                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN") {
+                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN")
+                                {
                                     self.next(); // consume THAN
                                     if matches!(self.current(), Some(Token::LParen)) {
                                         self.next(); // consume LParen
@@ -2034,6 +2067,9 @@ impl Parser {
                     self.next();
                     break;
                 }
+                Some(Token::Partition) => {
+                    self.next();
+                }
                 Some(Token::Comma) => {
                     self.next();
                 }
@@ -2043,7 +2079,7 @@ impl Parser {
 
         Ok(PartitionDefinition {
             strategy,
-            columns,
+            columns: partition_cols,
             partitions,
         })
     }
@@ -3155,6 +3191,38 @@ mod tests {
                 assert_eq!(s.aggregates[0].func, AggregateFunction::Sum);
             }
             _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_fulltext_index() {
+        let sql = "CREATE FULLTEXT INDEX ft_idx ON articles(content)";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed: {:?}", result.as_ref().err());
+        match result.unwrap() {
+            Statement::CreateIndex(idx) => {
+                assert_eq!(idx.name, "ft_idx");
+                assert_eq!(idx.table, "articles");
+                assert_eq!(idx.columns, vec!["content"]);
+                assert!(idx.fulltext);
+            }
+            _ => panic!("Expected CREATE INDEX statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_regular_index() {
+        let sql = "CREATE INDEX idx ON articles(title)";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed: {:?}", result.as_ref().err());
+        match result.unwrap() {
+            Statement::CreateIndex(idx) => {
+                assert_eq!(idx.name, "idx");
+                assert_eq!(idx.table, "articles");
+                assert_eq!(idx.columns, vec!["title"]);
+                assert!(!idx.fulltext);
+            }
+            _ => panic!("Expected CREATE INDEX statement"),
         }
     }
 
