@@ -220,4 +220,154 @@ mod tests {
         assert!(cache.get(&make_key("q1", 1)).is_some());
         assert!(cache.get(&make_key("q3", 3)).is_some());
     }
+
+    #[test]
+    fn test_get_disabled_cache() {
+        let config = QueryCacheConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let mut cache = QueryCache::new(config);
+        cache.put(make_key("SELECT 1", 1), make_entry(1), vec![]);
+        assert!(cache.get(&make_key("SELECT 1", 1)).is_none());
+    }
+
+    #[test]
+    fn test_get_benchmark_mode() {
+        let config = QueryCacheConfig {
+            benchmark_mode: true,
+            ..Default::default()
+        };
+        let mut cache = QueryCache::new(config);
+        cache.put(make_key("SELECT 1", 1), make_entry(1), vec![]);
+        assert!(cache.get(&make_key("SELECT 1", 1)).is_none());
+    }
+
+    #[test]
+    fn test_put_disabled_cache() {
+        let config = QueryCacheConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let mut cache = QueryCache::new(config);
+        cache.put(make_key("SELECT 1", 1), make_entry(1), vec![]);
+        assert_eq!(cache.stats().entries, 0);
+    }
+
+    #[test]
+    fn test_put_benchmark_mode() {
+        let config = QueryCacheConfig {
+            benchmark_mode: true,
+            ..Default::default()
+        };
+        let mut cache = QueryCache::new(config);
+        cache.put(make_key("SELECT 1", 1), make_entry(1), vec![]);
+        assert_eq!(cache.stats().entries, 0);
+    }
+
+    #[test]
+    fn test_put_replaces_existing() {
+        let mut cache = QueryCache::new(QueryCacheConfig::default());
+        cache.put(make_key("q1", 1), make_entry(1), vec![]);
+        cache.put(make_key("q1", 1), make_entry(2), vec![]);
+        assert_eq!(cache.stats().entries, 1);
+    }
+
+    #[test]
+    fn test_invalidate_table() {
+        let mut cache = QueryCache::new(QueryCacheConfig::default());
+        cache.put(make_key("q1", 1), make_entry(1), vec!["users".to_string()]);
+        cache.put(make_key("q2", 2), make_entry(2), vec!["users".to_string()]);
+        cache.put(make_key("q3", 3), make_entry(3), vec!["orders".to_string()]);
+
+        cache.invalidate_table("users");
+
+        assert_eq!(cache.stats().entries, 1);
+        assert!(cache.get(&make_key("q1", 1)).is_none());
+        assert!(cache.get(&make_key("q2", 2)).is_none());
+        assert!(cache.get(&make_key("q3", 3)).is_some());
+    }
+
+    #[test]
+    fn test_invalidate_nonexistent_table() {
+        let mut cache = QueryCache::new(QueryCacheConfig::default());
+        cache.put(make_key("q1", 1), make_entry(1), vec!["users".to_string()]);
+        cache.invalidate_table("nonexistent");
+        assert_eq!(cache.stats().entries, 1);
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut cache = QueryCache::new(QueryCacheConfig::default());
+        cache.put(make_key("q1", 1), make_entry(1), vec!["users".to_string()]);
+        cache.put(make_key("q2", 2), make_entry(2), vec!["orders".to_string()]);
+
+        cache.clear();
+
+        assert_eq!(cache.stats().entries, 0);
+        assert_eq!(cache.stats().memory_bytes, 0);
+    }
+
+    #[test]
+    fn test_stats() {
+        let config = QueryCacheConfig::default();
+        let cache = QueryCache::new(config);
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 0);
+        assert_eq!(stats.memory_bytes, 0);
+        assert_eq!(stats.table_count, 0);
+    }
+
+    #[test]
+    fn test_should_cache_empty_rows() {
+        let result = crate::ExecutorResult::new(vec![], 0);
+        assert!(!should_cache(&result));
+    }
+
+    #[test]
+    fn test_should_cache_too_many_rows() {
+        let rows: Vec<Vec<Value>> = (0..1001).map(|i| vec![Value::Integer(i)]).collect();
+        let result = crate::ExecutorResult::new(rows, 1001);
+        assert!(!should_cache(&result));
+    }
+
+    #[test]
+    fn test_should_cache_valid() {
+        let rows = vec![vec![Value::Integer(1)], vec![Value::Integer(2)]];
+        let result = crate::ExecutorResult::new(rows, 2);
+        assert!(should_cache(&result));
+    }
+
+    #[test]
+    fn test_find_lru_entry_empty() {
+        let cache = QueryCache::new(QueryCacheConfig::default());
+        let lru = cache.find_lru_entry();
+        assert!(lru.is_none());
+    }
+
+    #[test]
+    fn test_cache_with_table_index() {
+        let mut cache = QueryCache::new(QueryCacheConfig::default());
+        cache.put(make_key("q1", 1), make_entry(1), vec!["users".to_string(), "orders".to_string()]);
+        cache.put(make_key("q2", 2), make_entry(2), vec!["users".to_string()]);
+
+        assert_eq!(cache.stats().table_count, 2);
+        cache.invalidate_table("orders");
+        assert_eq!(cache.stats().entries, 1);
+    }
+
+    #[test]
+    fn test_memory_eviction() {
+        let config = QueryCacheConfig {
+            max_memory_bytes: 128,
+            ..Default::default()
+        };
+        let mut cache = QueryCache::new(config);
+
+        for i in 0..10 {
+            cache.put(make_key(&format!("q{}", i), i as i64), make_entry(i), vec![]);
+        }
+
+        assert!(cache.stats().entries < 10);
+    }
 }

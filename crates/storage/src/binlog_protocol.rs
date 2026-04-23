@@ -208,4 +208,171 @@ mod tests {
             _ => panic!("Expected BinlogData"),
         }
     }
+
+    #[test]
+    fn test_binlog_protocol_constants() {
+        assert_eq!(BinlogProtocol::VERSION, 1);
+        assert_eq!(BinlogProtocol::DEFAULT_MASTER_PORT, 3333);
+        assert_eq!(BinlogProtocol::HEARTBEAT_INTERVAL_MS, 1000);
+        assert_eq!(BinlogProtocol::CONNECTION_TIMEOUT_MS, 5000);
+        assert_eq!(BinlogProtocol::MAX_RETRY_ATTEMPTS, 3);
+        assert_eq!(BinlogProtocol::RETRY_BASE_DELAY_MS, 1000);
+        assert_eq!(BinlogProtocol::MAX_RETRY_DELAY_MS, 30000);
+    }
+
+    #[test]
+    fn test_binlog_protocol_default() {
+        let protocol = BinlogProtocol::default();
+        assert_eq!(protocol.version, 1);
+    }
+
+    #[test]
+    fn test_error_message_serialization() {
+        let msg = ReplicationMessage::Error {
+            code: 1234,
+            message: "Connection refused".to_string(),
+        };
+        let bytes = msg.serialize();
+        let parsed = ReplicationMessage::deserialize(&bytes).unwrap();
+        match parsed {
+            ReplicationMessage::Error { code, message } => {
+                assert_eq!(code, 1234);
+                assert_eq!(message, "Connection refused");
+            }
+            _ => panic!("Expected Error"),
+        }
+    }
+
+    #[test]
+    fn test_eof_message() {
+        let msg = ReplicationMessage::EOF;
+        let bytes = msg.serialize();
+        let parsed = ReplicationMessage::deserialize(&bytes).unwrap();
+        match parsed {
+            ReplicationMessage::EOF => {}
+            _ => panic!("Expected EOF"),
+        }
+    }
+
+    #[test]
+    fn test_binlog_pos_request_response() {
+        let req = ReplicationMessage::BinlogPosRequest {
+            file: "binlog.000001".to_string(),
+            pos: 100,
+        };
+        let bytes = req.serialize();
+        let parsed = ReplicationMessage::deserialize(&bytes).unwrap();
+        match parsed {
+            ReplicationMessage::BinlogPosRequest { file, pos } => {
+                assert_eq!(file, "binlog.000001");
+                assert_eq!(pos, 100);
+            }
+            _ => panic!("Expected BinlogPosRequest"),
+        }
+
+        let resp = ReplicationMessage::BinlogPosResponse {
+            file: "binlog.000002".to_string(),
+            pos: 200,
+        };
+        let bytes = resp.serialize();
+        let parsed = ReplicationMessage::deserialize(&bytes).unwrap();
+        match parsed {
+            ReplicationMessage::BinlogPosResponse { file, pos } => {
+                assert_eq!(file, "binlog.000002");
+                assert_eq!(pos, 200);
+            }
+            _ => panic!("Expected BinlogPosResponse"),
+        }
+    }
+
+    #[test]
+    fn test_heartbeat_ack_serialization() {
+        let msg = ReplicationMessage::HeartbeatAck { lsn: 999 };
+        let bytes = msg.serialize();
+        let parsed = ReplicationMessage::deserialize(&bytes).unwrap();
+        match parsed {
+            ReplicationMessage::HeartbeatAck { lsn } => {
+                assert_eq!(lsn, 999);
+            }
+            _ => panic!("Expected HeartbeatAck"),
+        }
+    }
+
+    #[test]
+    fn test_binlog_event_data_with_row_data() {
+        let event = BinlogEventData {
+            event_type: 3,
+            tx_id: 200,
+            table_id: 5,
+            database: "mydb".to_string(),
+            table: "orders".to_string(),
+            sql: None,
+            row_data: Some(vec![0x01, 0x02, 0x03]),
+            lsn: 1000,
+            timestamp: 1234567890,
+        };
+        assert_eq!(event.event_type, 3);
+        assert_eq!(event.tx_id, 200);
+        assert!(event.row_data.is_some());
+    }
+
+    #[test]
+    fn test_binlog_event_data_debug() {
+        let event = BinlogEventData {
+            event_type: 1,
+            tx_id: 50,
+            table_id: 3,
+            database: "db".to_string(),
+            table: "t".to_string(),
+            sql: Some("SELECT 1".to_string()),
+            row_data: None,
+            lsn: 100,
+            timestamp: 1000,
+        };
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("tx_id: 50"));
+    }
+
+    #[test]
+    fn test_replication_message_debug() {
+        let msg = ReplicationMessage::HandshakeRequest {
+            slave_id: 1,
+            host: "localhost".to_string(),
+            port: 3306,
+            replication_protocol_version: 1,
+        };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("HandshakeRequest"));
+    }
+
+    #[test]
+    fn test_deserialize_invalid_data() {
+        let invalid_data = vec![0x00, 0x01, 0x02];
+        let result = ReplicationMessage::deserialize(&invalid_data);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_serialize_deserialize_roundtrip() {
+        let messages = vec![
+            ReplicationMessage::HandshakeRequest {
+                slave_id: 1,
+                host: "host1".to_string(),
+                port: 3306,
+                replication_protocol_version: 1,
+            },
+            ReplicationMessage::Heartbeat {
+                lsn: 100,
+                timestamp: 1000,
+            },
+            ReplicationMessage::EOF,
+        ];
+
+        for msg in messages {
+            let bytes = msg.serialize();
+            let parsed = ReplicationMessage::deserialize(&bytes);
+            assert!(parsed.is_some());
+            assert_eq!(parsed.unwrap(), msg);
+        }
+    }
 }

@@ -2071,9 +2071,6 @@ impl Parser {
                     self.next();
                     break;
                 }
-                Some(Token::Partition) => {
-                    self.next();
-                }
                 Some(Token::Comma) => {
                     self.next();
                 }
