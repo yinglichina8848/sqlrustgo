@@ -263,6 +263,7 @@ impl<'a> Lexer<'a> {
                     "NOT" => Token::Not,
                     "EXISTS" => Token::Exists,
                     "IN" => Token::In,
+                    "IS" => Token::Is,
                     "ALL" => Token::All,
                     "ANY" => Token::Any,
                     "SOME" => Token::Some,

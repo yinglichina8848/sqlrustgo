@@ -1249,6 +1249,14 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
+            sqlrustgo_parser::Expression::IsNull(inner) => {
+                let val = self.expression_to_value(inner, ctx);
+                Value::Boolean(matches!(val, Value::Null))
+            }
+            sqlrustgo_parser::Expression::IsNotNull(inner) => {
+                let val = self.expression_to_value(inner, ctx);
+                Value::Boolean(!matches!(val, Value::Null))
+            }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
         }
     }

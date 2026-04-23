@@ -1577,7 +1577,23 @@ fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInf
             evaluate_where_clause(left, row, table_info)
                 || evaluate_where_clause(right, row, table_info)
         }
-        // Handle IS NULL
+        // Handle IS NULL (new AST form)
+        Expression::IsNull(inner) => {
+            if let Ok(val) = evaluate_expression(inner, row, table_info) {
+                matches!(val, Value::Null)
+            } else {
+                false
+            }
+        }
+        // Handle IS NOT NULL (new AST form)
+        Expression::IsNotNull(inner) => {
+            if let Ok(val) = evaluate_expression(inner, row, table_info) {
+                !matches!(val, Value::Null)
+            } else {
+                false
+            }
+        }
+        // Handle IS NULL (legacy BinaryOp form)
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
@@ -1591,7 +1607,7 @@ fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInf
             }
             false
         }
-        // Handle IS NOT NULL
+        // Handle IS NOT NULL (legacy BinaryOp form)
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS NOT"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
@@ -1678,6 +1694,14 @@ fn evaluate_expression(
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             Ok(evaluate_binary_op(&left_val, &right_val, op))
+        }
+        Expression::IsNull(inner) => {
+            let val = evaluate_expression(inner, row, table_info)?;
+            Ok(Value::Boolean(matches!(val, Value::Null)))
+        }
+        Expression::IsNotNull(inner) => {
+            let val = evaluate_expression(inner, row, table_info)?;
+            Ok(Value::Boolean(!matches!(val, Value::Null)))
         }
         _ => Ok(Value::Null),
     }
