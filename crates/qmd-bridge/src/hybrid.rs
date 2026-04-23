@@ -176,7 +176,11 @@ impl HybridSearcher {
         }
 
         // Sort by combined score
-        combined.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        combined.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         combined.truncate(self.config.limit);
@@ -216,21 +220,17 @@ mod tests {
     fn test_hybrid_rerank() {
         let searcher = HybridSearcher::new();
 
-        let vector_results = vec![
-            SearchResult {
-                id: "1".to_string(),
-                score: 0.9,
-                data: create_test_qmd_data("1", vec![0.1, 0.2]),
-            },
-        ];
+        let vector_results = vec![SearchResult {
+            id: "1".to_string(),
+            score: 0.9,
+            data: create_test_qmd_data("1", vec![0.1, 0.2]),
+        }];
 
-        let graph_results = vec![
-            SearchResult {
-                id: "2".to_string(),
-                score: 0.8,
-                data: create_test_qmd_data("2", vec![0.3, 0.4]),
-            },
-        ];
+        let graph_results = vec![SearchResult {
+            id: "2".to_string(),
+            score: 0.8,
+            data: create_test_qmd_data("2", vec![0.3, 0.4]),
+        }];
 
         let text_results = vec![];
 
