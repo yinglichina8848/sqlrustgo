@@ -110,6 +110,16 @@ impl ShardRouter {
             crate::partition::PartitionStrategy::Range { boundaries } => {
                 self.route_range_boundary(table, key_column, start, end, boundaries)
             }
+            crate::partition::PartitionStrategy::Key { columns: _, num_partitions } => {
+                self.route_hash_range(table, key_column, start, end, *num_partitions)
+            }
+            crate::partition::PartitionStrategy::List { partitions } => {
+                let all_shards: Vec<u64> = partitions.iter().map(|p| p.id).collect();
+                Ok(RoutedPlan::distributed(
+                    vec![],
+                    all_shards,
+                ))
+            }
         }
     }
 
@@ -251,6 +261,8 @@ impl ShardRouter {
             crate::partition::PartitionStrategy::Range { boundaries } => {
                 boundaries.len() as u64 + 1
             }
+            crate::partition::PartitionStrategy::Key { num_partitions, .. } => *num_partitions,
+            crate::partition::PartitionStrategy::List { partitions } => partitions.len() as u64,
         };
 
         let mut queries = Vec::new();
@@ -318,9 +330,165 @@ impl std::fmt::Display for RouterError {
 
 impl std::error::Error for RouterError {}
 
+// ============================================================================
+// Read/Write Split Routing
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct ShardReadQuery {
+    pub shard_id: ShardId,
+    pub replica_node_id: NodeId,
+    pub original_sql: String,
+    pub consistency_level: ConsistencyLevel,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum ConsistencyLevel {
+    Strong,
+    #[default]
+    Eventual,
+    Session,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShardWriteQuery {
+    pub shard_id: ShardId,
+    pub primary_node_id: NodeId,
+    pub original_sql: String,
+}
+
+pub struct ReadWriteShardRouter {
+    shard_router: ShardRouter,
+    prefer_replica: bool,
+}
+
+impl ReadWriteShardRouter {
+    pub fn new(shard_router: ShardRouter) -> Self {
+        Self {
+            shard_router,
+            prefer_replica: true,
+        }
+    }
+
+    pub fn with_primary_preference(shard_router: ShardRouter) -> Self {
+        Self {
+            shard_router,
+            prefer_replica: false,
+        }
+    }
+
+    pub fn route_read(
+        &self,
+        table: &str,
+        key_column: &str,
+        key_value: PartitionValue,
+    ) -> Result<ShardReadQuery, RouterError> {
+        let shard_id = self.get_shard_id(table, key_value)?;
+        let replica_node_id = self.get_replica_node(shard_id)?;
+
+        Ok(ShardReadQuery {
+            shard_id,
+            replica_node_id,
+            original_sql: format!("SELECT * FROM {} WHERE {} = ?", table, key_column),
+            consistency_level: ConsistencyLevel::default(),
+        })
+    }
+
+    pub fn route_read_with_consistency(
+        &self,
+        table: &str,
+        key_column: &str,
+        key_value: PartitionValue,
+        consistency: ConsistencyLevel,
+    ) -> Result<ShardReadQuery, RouterError> {
+        let shard_id = self.get_shard_id(table, key_value)?;
+
+        let replica_node_id = match consistency {
+            ConsistencyLevel::Strong => self.get_primary_node(shard_id)?,
+            _ => self.get_replica_node(shard_id)?,
+        };
+
+        Ok(ShardReadQuery {
+            shard_id,
+            replica_node_id,
+            original_sql: format!("SELECT * FROM {} WHERE {} = ?", table, key_column),
+            consistency_level: consistency,
+        })
+    }
+
+    pub fn route_write(
+        &self,
+        table: &str,
+        _key_column: &str,
+        key_value: PartitionValue,
+        sql: &str,
+    ) -> Result<ShardWriteQuery, RouterError> {
+        let shard_id = self.get_shard_id(table, key_value)?;
+        let primary_node_id = self.get_primary_node(shard_id)?;
+
+        Ok(ShardWriteQuery {
+            shard_id,
+            primary_node_id,
+            original_sql: sql.to_string(),
+        })
+    }
+
+    fn get_shard_id(
+        &self,
+        table: &str,
+        key_value: PartitionValue,
+    ) -> Result<ShardId, RouterError> {
+        let partition_key = self
+            .shard_router
+            .get_shard_manager()
+            .get_partition_key(table)
+            .ok_or_else(|| RouterError::NoPartitionRule(table.to_string()))?;
+
+        partition_key
+            .partition(&key_value)
+            .ok_or(RouterError::InvalidPartitionKey(table.to_string()))
+    }
+
+    fn get_primary_node(&self, shard_id: ShardId) -> Result<NodeId, RouterError> {
+        let shard = self
+            .shard_router
+            .get_shard(shard_id)
+            .ok_or(RouterError::ShardNotFound(shard_id))?;
+
+        shard
+            .primary_node()
+            .ok_or(RouterError::NoReplicaAvailable(shard_id))
+    }
+
+    fn get_replica_node(&self, shard_id: ShardId) -> Result<NodeId, RouterError> {
+        let shard = self
+            .shard_router
+            .get_shard(shard_id)
+            .ok_or(RouterError::ShardNotFound(shard_id))?;
+
+        if shard.replica_nodes.is_empty() {
+            return shard
+                .primary_node()
+                .ok_or(RouterError::NoReplicaAvailable(shard_id));
+        }
+
+        Ok(shard.replica_nodes[0])
+    }
+
+    pub fn get_shard_router(&self) -> &ShardRouter {
+        &self.shard_router
+    }
+
+    pub fn set_prefer_replica(&mut self, prefer: bool) {
+        self.prefer_replica = prefer;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::partition::{ListPartition, PartitionKey};
+    use crate::shard_manager::PartitionRule;
 
     fn create_test_router() -> ShardRouter {
         let mut manager = ShardManager::new();
@@ -359,5 +527,186 @@ mod tests {
 
         let result = router.route_point_query("orders", "id", PartitionValue::Integer(5));
         assert!(matches!(result, Err(RouterError::NoPartitionRule(_))));
+    }
+
+    #[test]
+    fn test_route_with_key_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2];
+        manager.initialize_table_shards("users", 4, &nodes);
+
+        let rule = PartitionRule::new(
+            "users",
+            PartitionKey::new_key(vec!["tenant_id".to_string(), "region".to_string()], 4),
+        );
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_point_query("users", "tenant_id", PartitionValue::Integer(10));
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert!(query.shard_id < 4);
+    }
+
+    #[test]
+    fn test_route_with_list_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2, 3];
+        manager.initialize_table_shards("regions", 3, &nodes);
+
+        let partitions = vec![
+            ListPartition { id: 0, values: vec![1, 2, 3] },
+            ListPartition { id: 1, values: vec![4, 5, 6] },
+            ListPartition { id: 2, values: vec![7, 8, 9] },
+        ];
+        let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_point_query("regions", "region_id", PartitionValue::Integer(3));
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert_eq!(query.shard_id, 0);
+    }
+
+    #[test]
+    fn test_route_range_with_key_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2];
+        manager.initialize_table_shards("users", 4, &nodes);
+
+        let rule = PartitionRule::new(
+            "users",
+            PartitionKey::new_key(vec!["tenant_id".to_string()], 4),
+        );
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_range_query("users", "tenant_id", 0, 10);
+        assert!(result.is_ok());
+        let plan = result.unwrap();
+        assert!(plan.is_distributed);
+    }
+
+    #[test]
+    fn test_route_range_with_list_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2, 3];
+        manager.initialize_table_shards("regions", 3, &nodes);
+
+        let partitions = vec![
+            ListPartition { id: 0, values: vec![1, 2, 3] },
+            ListPartition { id: 1, values: vec![4, 5, 6] },
+        ];
+        let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_range_query("regions", "region_id", 1, 6);
+        assert!(result.is_ok());
+        let plan = result.unwrap();
+        assert!(plan.is_distributed);
+        assert_eq!(plan.involved_shards.len(), 2);
+    }
+
+    #[test]
+    fn test_route_to_all_shards_with_key_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2];
+        manager.initialize_table_shards("users", 4, &nodes);
+
+        let rule = PartitionRule::new(
+            "users",
+            PartitionKey::new_key(vec!["tenant_id".to_string()], 4),
+        );
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_to_all_shards("SELECT * FROM users", "users");
+        assert!(result.is_ok());
+        let plan = result.unwrap();
+        assert!(plan.is_distributed);
+        assert_eq!(plan.queries.len(), 4);
+    }
+
+    #[test]
+    fn test_route_to_all_shards_with_list_partition() {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2, 3];
+        manager.initialize_table_shards("regions", 3, &nodes);
+
+        let partitions = vec![
+            ListPartition { id: 0, values: vec![1, 2] },
+            ListPartition { id: 1, values: vec![3, 4] },
+            ListPartition { id: 2, values: vec![5, 6] },
+        ];
+        let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
+        manager.add_partition_rule(rule);
+
+        let router = ShardRouter::new(manager, 1);
+        let result = router.route_to_all_shards("SELECT * FROM regions", "regions");
+        assert!(result.is_ok());
+        let plan = result.unwrap();
+        assert!(plan.is_distributed);
+        assert_eq!(plan.queries.len(), 3);
+    }
+
+    // ReadWriteShardRouter tests
+    fn create_test_rw_router() -> ReadWriteShardRouter {
+        let mut manager = ShardManager::new();
+        let nodes = vec![1, 2, 3];
+        manager.initialize_table_shards("users", 4, &nodes);
+        let router = ShardRouter::new(manager, 1);
+        ReadWriteShardRouter::new(router)
+    }
+
+    #[test]
+    fn test_read_write_shard_router_route_read() {
+        let rw_router = create_test_rw_router();
+        let result = rw_router.route_read("users", "id", PartitionValue::Integer(5));
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert_eq!(query.shard_id, 1);
+    }
+
+    #[test]
+    fn test_read_write_shard_router_route_write() {
+        let rw_router = create_test_rw_router();
+        let result = rw_router.route_write("users", "id", PartitionValue::Integer(5), "UPDATE users SET name = 'test' WHERE id = 5");
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert_eq!(query.shard_id, 1);
+        assert_eq!(query.primary_node_id, 2);
+    }
+
+    #[test]
+    fn test_read_write_shard_router_consistency_level_default() {
+        let query = ShardReadQuery {
+            shard_id: 0,
+            replica_node_id: 1,
+            original_sql: "SELECT * FROM users".to_string(),
+            consistency_level: ConsistencyLevel::default(),
+        };
+        assert!(matches!(query.consistency_level, ConsistencyLevel::Eventual));
+    }
+
+    #[test]
+    fn test_read_write_shard_router_with_strong_consistency() {
+        let rw_router = create_test_rw_router();
+        let result = rw_router.route_read_with_consistency(
+            "users",
+            "id",
+            PartitionValue::Integer(5),
+            ConsistencyLevel::Strong,
+        );
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert!(matches!(query.consistency_level, ConsistencyLevel::Strong));
+    }
+
+    #[test]
+    fn test_read_write_shard_router_get_shard_router() {
+        let rw_router = create_test_rw_router();
+        let _router = rw_router.get_shard_router();
     }
 }

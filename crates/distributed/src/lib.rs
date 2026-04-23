@@ -45,7 +45,7 @@ pub use replication::{
     ReplicationRole, ReplicationState, SlaveStatus,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
-pub use shard_router::{RoutedPlan, RoutedQuery, RouterError, ShardRouter};
+pub use shard_router::{ConsistencyLevel, ReadWriteShardRouter, RoutedPlan, RoutedQuery, RouterError, ShardReadQuery, ShardRouter, ShardWriteQuery};
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
