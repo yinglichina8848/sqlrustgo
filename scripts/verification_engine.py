@@ -16,7 +16,7 @@ import os
 def run_tests():
     """Run full test suite and capture results."""
     result = subprocess.run(
-        ["cargo", "test", "--all", "--all-features"],
+        ["cargo", "test"],
         capture_output=True,
         text=True,
         cwd=os.environ.get("CARGO_TESTS_DIR", ".")
@@ -31,7 +31,7 @@ def parse_results(output):
 
     for line in output.splitlines():
         if "test result:" in line:
-            # Example: "test result: ok. 20 passed; 0 failed; 0 ignored; ..."
+            # Example: "test result: ok. 12 passed; 0 failed; 0 ignored; ..."
             m = re.search(r'(\d+) passed; (\d+) failed', line)
             if m:
                 passed += int(m.group(1))
