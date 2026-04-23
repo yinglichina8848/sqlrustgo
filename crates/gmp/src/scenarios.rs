@@ -98,46 +98,25 @@ impl GmpScenario {
                 ]
             }
             GmpScenario::RecommendationSystem => {
-                vec![
-                    "(user)-[:prefers]->(item)",
-                    "(item)-[:category]->(cat)",
-                ]
+                vec!["(user)-[:prefers]->(item)", "(item)-[:category]->(cat)"]
             }
             GmpScenario::SupplyChainTracking => {
-                vec![
-                    "(p)-[:supplied_by]->(s)",
-                    "(s)-[:supplied_by]->(s2)",
-                ]
+                vec!["(p)-[:supplied_by]->(s)", "(s)-[:supplied_by]->(s2)"]
             }
             GmpScenario::OrganizationAnalysis => {
-                vec![
-                    "(e)-[:reports_to]->(m)",
-                    "(m)-[:reports_to]->(m2)",
-                ]
+                vec!["(e)-[:reports_to]->(m)", "(m)-[:reports_to]->(m2)"]
             }
             GmpScenario::SecurityThreatAnalysis => {
-                vec![
-                    "(h1)-[:connects]->(h2)",
-                    "(h2)-[:exploits]->(v)",
-                ]
+                vec!["(h1)-[:connects]->(h2)", "(h2)-[:exploits]->(v)"]
             }
             GmpScenario::BioinformaticsRetrieval => {
-                vec![
-                    "(p1)-[:interacts_with]->(p2)",
-                    "(p2)-[:pathway]->(pw)",
-                ]
+                vec!["(p1)-[:interacts_with]->(p2)", "(p2)-[:pathway]->(pw)"]
             }
             GmpScenario::FinancialRiskControl => {
-                vec![
-                    "(c1)-[:guarantees]->(c2)",
-                    "(c2)-[:guarantees]->(c3)",
-                ]
+                vec!["(c1)-[:guarantees]->(c2)", "(c2)-[:guarantees]->(c3)"]
             }
             GmpScenario::LogisticsOptimization => {
-                vec![
-                    "(l1)-[:route_to]->(l2)",
-                    "(l2)-[:route_to]->(l3)",
-                ]
+                vec!["(l1)-[:route_to]->(l2)", "(l2)-[:route_to]->(l3)"]
             }
         }
     }
@@ -373,7 +352,10 @@ mod tests {
 
     #[test]
     fn test_scenario_names() {
-        assert_eq!(GmpScenario::SocialFriendRecommendation.name(), "Social Friend Recommendation");
+        assert_eq!(
+            GmpScenario::SocialFriendRecommendation.name(),
+            "Social Friend Recommendation"
+        );
         assert_eq!(GmpScenario::FraudDetection.name(), "Fraud Detection");
     }
 
@@ -430,7 +412,6 @@ mod tests {
         assert!(patterns.contains(&"(e2)-[:relation]->(e3)"));
     }
 
-
     #[test]
     fn test_all_scenarios_have_patterns() {
         let scenarios: Vec<GmpScenario> = vec![
@@ -448,7 +429,11 @@ mod tests {
 
         for scenario in scenarios {
             let patterns = scenario.required_patterns();
-            assert!(!patterns.is_empty(), "Scenario {:?} should have patterns", scenario);
+            assert!(
+                !patterns.is_empty(),
+                "Scenario {:?} should have patterns",
+                scenario
+            );
         }
     }
 }

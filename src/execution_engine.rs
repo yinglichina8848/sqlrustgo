@@ -11,7 +11,6 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
-use sqlrustgo_parser::JoinType;  // For join type matching
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
@@ -20,6 +19,7 @@ use sqlrustgo_parser::parser::{
     TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
+use sqlrustgo_parser::JoinType; // For join type matching
 use sqlrustgo_parser::{
     DeleteStatement, Expression, Statement, TransactionStatement, UpdateStatement,
 };
@@ -634,8 +634,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         // Extract join key column index from ON clause
         // For "t1.id = t2.id", we need to find which column "id" refers to in each table
-        let left_key_idx = self.find_join_key_index(&join_clause.on_clause, &left_table_info, &select.table)?;
-        let right_key_idx = self.find_join_key_index(&join_clause.on_clause, &right_table_info, &right_table_name)?;
+        let left_key_idx =
+            self.find_join_key_index(&join_clause.on_clause, &left_table_info, &select.table)?;
+        let right_key_idx =
+            self.find_join_key_index(&join_clause.on_clause, &right_table_info, &right_table_name)?;
 
         // Determine join type
         let join_type = match join_clause.join_type {
@@ -659,8 +661,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 }
 
                 let mut matched: Vec<Vec<Value>> = Vec::new();
-                let mut left_matched: std::collections::HashSet<usize> = std::collections::HashSet::new();
-                let mut right_matched: std::collections::HashSet<usize> = std::collections::HashSet::new();
+                let mut left_matched: std::collections::HashSet<usize> =
+                    std::collections::HashSet::new();
+                let mut right_matched: std::collections::HashSet<usize> =
+                    std::collections::HashSet::new();
 
                 // Match left rows to right
                 for (li, left_row) in left_rows.iter().enumerate() {
@@ -722,7 +726,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Find the column index for a join key in a table
     /// Handles both simple column names and qualified names (e.g., "t1.id")
-    fn find_join_key_index(&self, expr: &Expression, table_info: &TableInfo, table_name: &str) -> SqlResult<usize> {
+    fn find_join_key_index(
+        &self,
+        expr: &Expression,
+        table_info: &TableInfo,
+        table_name: &str,
+    ) -> SqlResult<usize> {
         match expr {
             Expression::Identifier(name) => {
                 // Check if it's a qualified name like "t1.id"
@@ -736,7 +745,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}.{}' not found in {}", qualifier, col_name, table_name)))
                     } else {
                         // Qualifier doesn't match this table - column not in this table
-                        Err(SqlError::ExecutionError(format!("Column '{}' not found in {}", name, table_name)))
+                        Err(SqlError::ExecutionError(format!(
+                            "Column '{}' not found in {}",
+                            name, table_name
+                        )))
                     }
                 } else {
                     // Simple column name - find its index
@@ -756,7 +768,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 // Try right side
                 self.find_join_key_index(right, table_info, table_name)
             }
-            _ => Err(SqlError::ExecutionError("Unsupported join condition expression".to_string())),
+            _ => Err(SqlError::ExecutionError(
+                "Unsupported join condition expression".to_string(),
+            )),
         }
     }
 
@@ -1968,5 +1982,3 @@ mod tests {
         assert_eq!(optimal[0], "t3");
     }
 }
-
-

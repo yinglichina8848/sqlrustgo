@@ -37,6 +37,8 @@ pub enum Statement {
     Union(UnionStatement),
     CreateTrigger(CreateTriggerStatement),
     Transaction(TransactionStatement),
+    Grant(GrantStatement),
+    Revoke(RevokeStatement),
 }
 
 /// UNION statement
@@ -150,6 +152,48 @@ pub struct WithSelect {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
     pub table_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrantStatement {
+    pub privileges: Vec<Privilege>,
+    pub columns: Vec<String>,
+    pub object_type: ObjectType,
+    pub object_name: String,
+    pub recipients: Vec<String>,
+    pub with_grant_option: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RevokeStatement {
+    pub privileges: Vec<Privilege>,
+    pub columns: Vec<String>,
+    pub object_type: ObjectType,
+    pub object_name: String,
+    pub from_users: Vec<String>,
+    pub grant_option_for: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Privilege {
+    Select,
+    Insert,
+    Update,
+    Delete,
+    Read,
+    Write,
+    Execute,
+    Usage,
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectType {
+    Table,
+    Database,
+    Procedure,
+    Function,
+    Column,
 }
 
 /// Join type
@@ -394,6 +438,8 @@ impl Parser {
             | Some(Token::Rollback)
             | Some(Token::Set)
             | Some(Token::Start) => self.parse_transaction(),
+            Some(Token::Grant) => self.parse_grant(),
+            Some(Token::Revoke) => self.parse_revoke(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -2057,6 +2103,324 @@ impl Parser {
         };
 
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+    }
+
+    fn parse_grant(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Grant)?;
+
+        let mut privileges = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Select) => {
+                    privileges.push(Privilege::Select);
+                    self.next();
+                }
+                Some(Token::Insert) => {
+                    privileges.push(Privilege::Insert);
+                    self.next();
+                }
+                Some(Token::Update) => {
+                    privileges.push(Privilege::Update);
+                    self.next();
+                }
+                Some(Token::Delete) => {
+                    privileges.push(Privilege::Delete);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "READ" => {
+                    privileges.push(Privilege::Read);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "WRITE" => {
+                    privileges.push(Privilege::Write);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "ALL" => {
+                    privileges.push(Privilege::All);
+                    self.next();
+                    break;
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "EXECUTE" => {
+                    privileges.push(Privilege::Execute);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "USAGE" => {
+                    privileges.push(Privilege::Usage);
+                    self.next();
+                }
+                _ => break,
+            }
+
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        let mut columns = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        columns.push(name.clone());
+                        self.next();
+                    }
+                    _ => return Err("Expected column name".to_string()),
+                }
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next();
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        self.expect(Token::On)?;
+
+        let object_type = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "TABLE" => {
+                self.next();
+                ObjectType::Table
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                ObjectType::Database
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "PROCEDURE" => {
+                self.next();
+                ObjectType::Procedure
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "FUNCTION" => {
+                self.next();
+                ObjectType::Function
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "COLUMN" => {
+                self.next();
+                ObjectType::Column
+            }
+            _ => ObjectType::Table,
+        };
+
+        let object_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected object name, got {:?}", t)),
+            None => return Err("Expected object name".to_string()),
+        };
+
+        self.expect(Token::To)?;
+
+        let mut recipients = Vec::new();
+        loop {
+            match self.next() {
+                Some(Token::Identifier(name)) => {
+                    recipients.push(name);
+                }
+                Some(t) => return Err(format!("Expected recipient user, got {:?}", t)),
+                None => return Err("Expected recipient user".to_string()),
+            }
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        let with_grant_option = if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "WITH" {
+                self.next();
+                if let Some(Token::Identifier(grant_str)) = self.current() {
+                    if grant_str.to_uppercase() == "GRANT" {
+                        self.next();
+                        if let Some(Token::Identifier(option_str)) = self.current() {
+                            if option_str.to_uppercase() == "OPTION" {
+                                self.next();
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        Ok(Statement::Grant(GrantStatement {
+            privileges,
+            columns,
+            object_type,
+            object_name,
+            recipients,
+            with_grant_option,
+        }))
+    }
+
+    fn parse_revoke(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Revoke)?;
+
+        let grant_option_for = if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "GRANT" {
+                self.next();
+                if let Some(Token::Identifier(option_str)) = self.current() {
+                    if option_str.to_uppercase() == "OPTION" {
+                        self.next();
+                        if let Some(Token::Identifier(for_str)) = self.current() {
+                            if for_str.to_uppercase() == "FOR" {
+                                self.next();
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        let mut privileges = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Select) => {
+                    privileges.push(Privilege::Select);
+                    self.next();
+                }
+                Some(Token::Insert) => {
+                    privileges.push(Privilege::Insert);
+                    self.next();
+                }
+                Some(Token::Update) => {
+                    privileges.push(Privilege::Update);
+                    self.next();
+                }
+                Some(Token::Delete) => {
+                    privileges.push(Privilege::Delete);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "READ" => {
+                    privileges.push(Privilege::Read);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "WRITE" => {
+                    privileges.push(Privilege::Write);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "ALL" => {
+                    privileges.push(Privilege::All);
+                    self.next();
+                    break;
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "EXECUTE" => {
+                    privileges.push(Privilege::Execute);
+                    self.next();
+                }
+                Some(Token::Identifier(name)) if name.to_uppercase() == "USAGE" => {
+                    privileges.push(Privilege::Usage);
+                    self.next();
+                }
+                _ => break,
+            }
+
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        let mut columns = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        columns.push(name.clone());
+                        self.next();
+                    }
+                    _ => return Err("Expected column name".to_string()),
+                }
+                if !matches!(self.current(), Some(Token::Comma)) {
+                    break;
+                }
+                self.next();
+            }
+            self.expect(Token::RParen)?;
+        }
+
+        self.expect(Token::On)?;
+
+        let object_type = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "TABLE" => {
+                self.next();
+                ObjectType::Table
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                ObjectType::Database
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "PROCEDURE" => {
+                self.next();
+                ObjectType::Procedure
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "FUNCTION" => {
+                self.next();
+                ObjectType::Function
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "COLUMN" => {
+                self.next();
+                ObjectType::Column
+            }
+            _ => ObjectType::Table,
+        };
+
+        let object_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected object name, got {:?}", t)),
+            None => return Err("Expected object name".to_string()),
+        };
+
+        self.expect(Token::From)?;
+
+        let mut from_users = Vec::new();
+        loop {
+            match self.next() {
+                Some(Token::Identifier(name)) => {
+                    from_users.push(name);
+                }
+                Some(t) => return Err(format!("Expected user, got {:?}", t)),
+                None => return Err("Expected user".to_string()),
+            }
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
+            }
+            self.next();
+        }
+
+        Ok(Statement::Revoke(RevokeStatement {
+            privileges,
+            columns,
+            object_type,
+            object_name,
+            from_users,
+            grant_option_for,
+        }))
     }
 
     fn parse_call(&mut self) -> Result<Statement, String> {
