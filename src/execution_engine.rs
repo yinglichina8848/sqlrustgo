@@ -1636,44 +1636,24 @@ fn evaluate_binary_comparison(
     let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
     let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
 
-    let op_upper = op.to_uppercase();
-    match op_upper.as_str() {
-        "=" | "==" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => left_val == right_val,
-            }
-        }
-        "!=" | "<>" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => left_val != right_val,
-            }
-        }
-        ">" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => compare_values(&left_val, &right_val) > 0,
-            }
-        }
-        ">=" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => compare_values(&left_val, &right_val) >= 0,
-            }
-        }
-        "<" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => compare_values(&left_val, &right_val) < 0,
-            }
-        }
-        "<=" => {
-            match (&left_val, &right_val) {
-                (Value::Null, _) | (_, Value::Null) => false,
-                _ => compare_values(&left_val, &right_val) <= 0,
-            }
-        }
+    sql_compare(op, &left_val, &right_val)
+}
+
+/// SQL comparison operator
+/// Returns false if either operand is NULL (UNKNOWN semantics)
+/// This is Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
+fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
+    if matches!(left, Value::Null) || matches!(right, Value::Null) {
+        return false;
+    }
+
+    match op.to_uppercase().as_str() {
+        "=" | "==" => left == right,
+        "!=" | "<>" => left != right,
+        ">" => compare_values(left, right) > 0,
+        ">=" => compare_values(left, right) >= 0,
+        "<" => compare_values(left, right) < 0,
+        "<=" => compare_values(left, right) <= 0,
         _ => false,
     }
 }
