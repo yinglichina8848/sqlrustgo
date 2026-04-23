@@ -654,8 +654,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let matched_results = match join_type {
             JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
                 // Hash-based matching
+                // SQL semantics: NULL = NULL is UNKNOWN (not a match), so skip NULL keys
                 let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
                 for right_row in &right_rows {
+                    if matches!(right_row[right_key_idx], Value::Null) {
+                        // NULL keys can never match in a join
+                        continue;
+                    }
                     let key = format!("{:?}", right_row[right_key_idx]);
                     right_hash.entry(key).or_default().push(right_row.clone());
                 }
@@ -668,6 +673,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 // Match left rows to right
                 for (li, left_row) in left_rows.iter().enumerate() {
+                    // SQL semantics: NULL keys never match
+                    if matches!(left_row[left_key_idx], Value::Null) {
+                        // For LEFT JOIN, this row will be added as unmatched later
+                        continue;
+                    }
                     let key = format!("{:?}", left_row[left_key_idx]);
                     if let Some(right_match_rows) = right_hash.get(&key) {
                         left_matched.insert(li);
