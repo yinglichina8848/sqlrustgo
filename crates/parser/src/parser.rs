@@ -1966,6 +1966,10 @@ impl Parser {
         let mut partitions = Vec::new();
         loop {
             match self.current() {
+                Some(Token::Partition) => {
+                    // Skip PARTITION keyword
+                    self.next();
+                }
                 Some(Token::Identifier(name)) => {
                     let name = name.clone();
                     self.next();
