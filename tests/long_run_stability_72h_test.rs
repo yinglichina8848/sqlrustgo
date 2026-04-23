@@ -39,10 +39,6 @@ fn setup_memory_table(engine: &mut MemoryExecutionEngine) {
     let _ = engine.execute("CREATE TABLE IF NOT EXISTS stability_test (id INTEGER, value TEXT)");
 }
 
-fn cleanup_table(engine: &mut ExecutionEngine<FileStorage>) {
-    let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
-}
-
 fn log_progress(test_name: &str, message: &str) {
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
