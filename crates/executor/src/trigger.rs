@@ -555,6 +555,7 @@ impl TriggerExecutor {
         self.expand_row_variables(sql, table_name, None, new_row)
     }
 
+    #[allow(dead_code)]
     fn expand_update_values_with_info(
         &self,
         sql: &str,

@@ -139,6 +139,19 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Estimate memory size in bytes
+    /// Used for query cache memory accounting
+    pub fn estimate_memory_size(&self) -> usize {
+        match self {
+            Value::Null => 0,
+            Value::Boolean(_) => 1,
+            Value::Integer(_) => 8,
+            Value::Float(_) => 8,
+            Value::Text(s) => s.len(),
+            Value::Blob(b) => b.len(),
+        }
+    }
 }
 
 impl fmt::Display for Value {

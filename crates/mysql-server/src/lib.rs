@@ -3,6 +3,10 @@
 //! Implements MySQL Wire Protocol (Server-side) to accept connections
 //! from standard MySQL clients (mysql CLI, connectors, etc.)
 
+#![allow(unused)]
+
+pub mod monitoring;
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use sqlrustgo::{parse, MemoryExecutionEngine, Value};
 use sqlrustgo_executor::ExecutorResult;
@@ -20,6 +24,7 @@ use std::thread;
 
 /// Compute OLD_PASSWORD hash as used by MySQL 4.x and early 5.x
 /// This is a simple hash with no salt and no iteration
+#[allow(dead_code)]
 fn old_password_hash(password: &str) -> [u8; 8] {
     let mut nr: u32 = 1345345333u32;
     let mut add: u32 = 7;
@@ -46,6 +51,7 @@ fn old_password_hash(password: &str) -> [u8; 8] {
 /// seed: 8-byte challenge from server
 /// response: 8-byte response from client
 /// stored_hash: stored password hash (8 bytes)
+#[allow(dead_code)]
 fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) -> bool {
     // Client computes: hash2(old_password_hash(password), seed)
     // where hash2 combines the 64-bit hash with the 8-byte seed
@@ -58,14 +64,14 @@ fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) ->
     let mut nr2: u32 = 0x12345671u32;
 
     // First, hash the password into nr and nr2
-    for i in 0..4 {
-        let tmp: u32 = password_hash[i] as u32;
+    for byte in password_hash.iter().take(4) {
+        let tmp: u32 = *byte as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
     }
-    for i in 4..8 {
-        let tmp: u32 = password_hash[i] as u32;
+    for byte in password_hash.iter().skip(4) {
+        let tmp: u32 = *byte as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
