@@ -421,7 +421,8 @@ mod tests {
             if let Some(edges) = self.edges.get_mut(&from) {
                 edges.push((edge_id, to, label.to_string()));
             } else {
-                self.edges.insert(from, vec![(edge_id, to, label.to_string())]);
+                self.edges
+                    .insert(from, vec![(edge_id, to, label.to_string())]);
             }
             Ok(edge_id)
         }
@@ -814,7 +815,10 @@ mod tests {
         };
         assert!(response.found);
         assert_eq!(response.label, "Person");
-        assert_eq!(response.properties.unwrap().properties.get("age"), Some(&"30".to_string()));
+        assert_eq!(
+            response.properties.unwrap().properties.get("age"),
+            Some(&"30".to_string())
+        );
     }
 
     #[test]
@@ -874,9 +878,21 @@ mod tests {
     fn test_search_vectors_response_with_multiple_results() {
         let response = SearchVectorsResponse {
             results: vec![
-                SearchResult { id: 1, score: 0.9, record: None },
-                SearchResult { id: 2, score: 0.8, record: None },
-                SearchResult { id: 3, score: 0.7, record: None },
+                SearchResult {
+                    id: 1,
+                    score: 0.9,
+                    record: None,
+                },
+                SearchResult {
+                    id: 2,
+                    score: 0.8,
+                    record: None,
+                },
+                SearchResult {
+                    id: 3,
+                    score: 0.7,
+                    record: None,
+                },
             ],
             error: String::new(),
         };

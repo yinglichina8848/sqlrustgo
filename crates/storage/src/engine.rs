@@ -51,11 +51,7 @@ pub fn evaluate_check_constraint(
 
 /// Evaluate a SQL expression against a record
 /// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
-fn evaluate_sql_expression(
-    expr: &str,
-    columns: &[String],
-    record: &[Value],
-) -> SqlResult<bool> {
+fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
     let expr = expr.trim();
 
     // Handle AND/OR
@@ -69,7 +65,7 @@ fn evaluate_sql_expression(
         let left = &expr[..idx];
         let right = &expr[idx + 2..];
         return Ok(evaluate_sql_expression(left.trim(), columns, record)?
-               || evaluate_sql_expression(right.trim(), columns, record)?);
+            || evaluate_sql_expression(right.trim(), columns, record)?);
     }
 
     // Handle NOT
@@ -95,14 +91,22 @@ fn evaluate_sql_expression(
     }
 
     // Handle comparisons: column op value
-    for (op, check) in &[(">=", "gte"), ("<=", "lte"), ("!=", "neq"), ("<>", "neq"),
-                           ("=", "eq"), ("==", "eq"), (">", "gt"), ("<", "lt")] {
+    for (op, check) in &[
+        (">=", "gte"),
+        ("<=", "lte"),
+        ("!=", "neq"),
+        ("<>", "neq"),
+        ("=", "eq"),
+        ("==", "eq"),
+        (">", "gt"),
+        ("<", "lt"),
+    ] {
         if let Some(idx) = expr.find(op) {
             let col_name = expr[..idx].trim();
             let value_str = expr[idx + op.len()..].trim();
 
             if let Some(col_val) = get_column_value(col_name, columns, record) {
-                return compare_values(&col_val, value_str, check);
+                return compare_values(col_val, value_str, check);
             }
             break;
         }
@@ -134,9 +138,15 @@ fn find_top_level_op(expr: &str, op: &str) -> Option<usize> {
 
     for (i, c) in expr.char_indices() {
         match c {
-            '(' => { depth += 1; }
-            ')' => { depth -= 1; }
-            '\'' => { in_string = !in_string; }
+            '(' => {
+                depth += 1;
+            }
+            ')' => {
+                depth -= 1;
+            }
+            '\'' => {
+                in_string = !in_string;
+            }
             _ if !in_string && depth == 0 => {
                 if upper[i..].starts_with(&op_upper) {
                     return Some(i);
@@ -149,7 +159,11 @@ fn find_top_level_op(expr: &str, op: &str) -> Option<usize> {
 }
 
 /// Get column value by name (case-insensitive)
-fn get_column_value<'a>(name: &str, columns: &'a [String], record: &'a [Value]) -> Option<&'a Value> {
+fn get_column_value<'a>(
+    name: &str,
+    columns: &'a [String],
+    record: &'a [Value],
+) -> Option<&'a Value> {
     // Remove quotes if present
     let name = name.trim().trim_matches(|c| c == '\'' || c == '"');
 
@@ -216,10 +230,10 @@ fn compare_values(col_val: &Value, compare_with: &str, op: &str) -> SqlResult<bo
                 }
                 Value::Text(s) => {
                     return Ok(match op {
-                        "gt" => *s > cmp_str.to_string(),
-                        "gte" => *s >= cmp_str.to_string(),
-                        "lt" => *s < cmp_str.to_string(),
-                        "lte" => *s <= cmp_str.to_string(),
+                        "gt" => s.as_str() > cmp_str,
+                        "gte" => s.as_str() >= cmp_str,
+                        "lt" => s.as_str() < cmp_str,
+                        "lte" => s.as_str() <= cmp_str,
                         _ => false,
                     });
                 }

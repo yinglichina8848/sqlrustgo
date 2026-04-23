@@ -51,8 +51,7 @@ fn parse_literal(s: &str) -> Value {
 fn resolve_identifier(name: &str, ctx: &EvalContext) -> Value {
     let name_upper = name.to_uppercase();
 
-    if name_upper.starts_with("NEW.") {
-        let col_name = &name_upper[4..];
+    if let Some(col_name) = name_upper.strip_prefix("NEW.") {
         if let Some(new_row) = ctx.trigger().new_row() {
             if let Some(cols) = ctx.trigger().new_col_names() {
                 if let Some(idx) = cols.iter().position(|c| c.eq_ignore_ascii_case(col_name)) {
@@ -65,8 +64,7 @@ fn resolve_identifier(name: &str, ctx: &EvalContext) -> Value {
         return Value::Null;
     }
 
-    if name_upper.starts_with("OLD.") {
-        let col_name = &name_upper[4..];
+    if let Some(col_name) = name_upper.strip_prefix("OLD.") {
         if let Some(old_row) = ctx.trigger().old_row() {
             if let Some(cols) = ctx.trigger().old_col_names() {
                 if let Some(idx) = cols.iter().position(|c| c.eq_ignore_ascii_case(col_name)) {
