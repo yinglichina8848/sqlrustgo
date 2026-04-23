@@ -913,8 +913,8 @@ fn hash_inner_join(
                     .collect(),
             );
 
-            if condition
-                .evaluate(&combined, &full_schema)
+            let eval_result = condition.evaluate(&combined, &full_schema);
+            if eval_result
                 .map(|v| v.to_bool())
                 .unwrap_or(false)
             {
