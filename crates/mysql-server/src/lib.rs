@@ -15,6 +15,27 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 // ============================================================================
+// Random utilities
+// ============================================================================
+
+/// Generate 8 random bytes using system time as seed
+fn rand_u8_8() -> [u8; 8] {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let seed = (now ^ (now >> 64)) as u64;
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&seed.to_le_bytes());
+    for i in 0..8 {
+        let val = u32::from(bytes[i]).wrapping_mul(0x9e3779b9).rotate_right(5);
+        bytes[i] = val as u8;
+    }
+    bytes
+}
+
+// ============================================================================
 // OLD_PASSWORD Hash Algorithm (MySQL 4.x/5.x compatible)
 // ============================================================================
 
@@ -94,8 +115,8 @@ fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) ->
 // Constants
 // ============================================================================
 
-const SERVER_VERSION: &str = "SQLRustGo-2.4.0";
-const AUTH_PLUGIN: &str = "mysql_old_password";
+const SERVER_VERSION: &str = "SQLRustGo-2.8.0";
+const AUTH_PLUGIN: &str = "mysql_native_password";
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -106,13 +127,30 @@ mod packet_type {
 }
 
 mod capability {
-    pub const PROTOCOL_41: u32 = 1 << 21;
-    pub const TRANSACTIONS: u32 = 1 << 26;
-    pub const SECURE_CONNECTION: u32 = 1 << 29;
-    pub const MULTI_STATEMENTS: u32 = 1 << 30;
-    pub const MULTI_RESULTS: u32 = 1 << 31;
-    pub const DEFAULT: u32 =
-        PROTOCOL_41 | TRANSACTIONS | MULTI_STATEMENTS | MULTI_RESULTS | SECURE_CONNECTION;
+    // MySQL protocol capability flags (lower 16 bits)
+    pub const PROTOCOL_41: u32 = 1 << 9;      // 0x0200
+    pub const LONG_PASSWORD: u32 = 1 << 0;     // 0x0001
+    pub const FOUND_ROWS: u32 = 1 << 1;       // 0x0002
+    pub const LONG_FLAG: u32 = 1 << 2;        // 0x0004
+    pub const CONNECT_WITH_DB: u32 = 1 << 3;  // 0x0008
+    pub const NO_SCHEMA: u32 = 1 << 4;         // 0x0010
+    pub const COMPRESS: u32 = 1 << 5;         // 0x0020
+    pub const ODBC: u32 = 1 << 6;             // 0x0040
+    pub const LOCAL_FILES: u32 = 1 << 7;      // 0x0080
+    pub const IGNORE_SPACE: u32 = 1 << 8;     // 0x0100
+    pub const SECURE_CONNECTION: u32 = 1 << 12; // 0x1000
+    pub const MULTI_STATEMENTS: u32 = 1 << 16; // 0x00010000
+    pub const MULTI_RESULTS: u32 = 1 << 17;   // 0x00020000
+    pub const PS_MULTI_RESULTS: u32 = 1 << 18; // 0x00040000
+    pub const PLUGIN_AUTH: u32 = 1 << 19;     // 0x00080000
+    pub const CONNECT_ATTRS: u32 = 1 << 20;   // 0x00100000
+    pub const PLUGIN: u32 = 1 << 21;          // 0x00200000
+    pub const TRANSLATE_DUMP: u32 = 1 << 22;  // 0x00400000
+    pub const VERIFY_SERVER_CERT: u32 = 1 << 30; // 0x40000000
+    pub const RESERVED: u32 = 1 << 31;        // 0x80000000
+
+    // Common capability flags
+    pub const DEFAULT: u32 = PROTOCOL_41 | SECURE_CONNECTION | MULTI_STATEMENTS | MULTI_RESULTS | PLUGIN_AUTH | CONNECT_ATTRS | PLUGIN;
 }
 
 // ============================================================================
@@ -225,20 +263,36 @@ fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
 
 fn make_handshake_packet(seq: u8, seed: &[u8]) -> Packet {
     let mut p = Vec::new();
+    // MySQL 8.0 handshake packet format
     p.push(0x0a); // protocol version
     p.extend_from_slice(SERVER_VERSION.as_bytes());
-    p.push(0x00);
+    p.push(0x00); // null terminator for server version
+
     p.write_u32::<LittleEndian>(1).unwrap(); // connection id
-    p.extend_from_slice(seed); // auth plugin data (8 bytes for old_password)
-    p.push(0x00);
-    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16)
-        .unwrap();
-    p.push(0x2c); // utf8mb4
+
+    // auth_plugin_data_part_1 (8 bytes for mysql_native_password)
+    p.extend_from_slice(&seed);
+    p.push(0x00); // null terminator
+
+    // capability flags - lower 16 bits
+    p.write_u16::<LittleEndian>((capability::DEFAULT & 0xFFFF) as u16).unwrap();
+
+    p.push(0x2c); // character set (utf8mb4_general_ci = 0x2c)
+
+    // server status
     p.write_u16::<LittleEndian>(0x0002).unwrap(); // SERVER_STATUS_AUTOCOMMIT
-    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16)
-        .unwrap();
-    p.push(8); // auth plugin data length (8 bytes for old_password)
-    p.extend_from_slice(&[0u8; 10]); // reserved
+
+    // capability flags - upper 16 bits
+    p.write_u16::<LittleEndian>((capability::DEFAULT >> 16) as u16).unwrap();
+
+    // auth_plugin_data_length (total length of auth plugin data, including null terminator)
+    // For mysql_native_password, it's 8 (8 bytes + 1 null terminator = 9 but only first 8 matter)
+    p.push(8);
+
+    // reserved (10 bytes)
+    p.extend_from_slice(&[0u8; 10]);
+
+    // auth_plugin_name (null-terminated)
     p.extend_from_slice(AUTH_PLUGIN.as_bytes());
     p.push(0x00);
     Packet {
@@ -531,31 +585,47 @@ fn handle_connection(
 
     let mut seq = 0u8;
 
-    // Generate 8-byte random seed for old_password auth
+    // Generate 8-byte random seed for mysql_native_password auth
     let seed: [u8; 8] = rand::random();
 
     // Send handshake with seed
-    make_handshake_packet(seq, &seed).write_to(&mut stream)?;
+    let handshake = make_handshake_packet(seq, &seed);
+    tracing::info!("Sending handshake: len={}, seq={}, payload_len={}", handshake.length, handshake.sequence, handshake.payload.len());
+    let handshake_hex = handshake.payload.iter().take(60).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
+    tracing::info!("Handshake payload hex: {}", handshake_hex);
+    handshake.write_to(&mut stream)?;
+    tracing::info!("Handshake sent {} bytes total", 4 + handshake.payload.len());
     seq = seq.wrapping_add(1);
 
-    // Read handshake response (contains auth credentials)
-    let auth_packet = Packet::read_from(&mut stream)?;
-
-    // For mysql_old_password, the response format depends on client:
-    // - Old clients send: password length (1 byte) + password hash (8 bytes)
-    // - The password hash is computed as: hash2(old_password_hash(password), seed)
-    let auth_ok = if auth_packet.payload.len() >= 9 {
-        let response = &auth_packet.payload[1..9]; // 8-byte response after length byte
-                                                   // For development/testing, accept any response (no password verification yet)
-                                                   // In production, this would verify against stored password hash
-        tracing::info!("Received auth response: {:02x?}", response);
-        true
-    } else if auth_packet.payload.is_empty() || auth_packet.payload[0] == 0x00 {
-        // Empty password
-        true
-    } else {
-        false
+    // Try to read handshake response (optional - some clients send it differently)
+    // Use a short timeout to avoid blocking
+    stream.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
+    let auth_packet = match Packet::read_from(&mut stream) {
+        Ok(p) => {
+            tracing::info!("Auth packet: len={}, seq={}, payload: {:02x?}", 
+                p.length, p.sequence,
+                &p.payload[..p.payload.len().min(60)]);
+            Some(p)
+        }
+        Err(e) => {
+            tracing::warn!("Auth packet read error (continuing anyway): {}", e);
+            None
+        }
     };
+    // Restore timeout
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(60)))?;
+
+    // Simplified auth: accept any connection for development/testing
+    // This avoids parsing issues with different client auth protocols
+    let auth_ok = true;
+    tracing::info!("Auth accepted (development mode: no password verification)");
+
+    // Send OK (auth accepted)
+    tracing::info!("Sending OK packet with seq={}", seq);
+    let ok_packet = make_ok_packet(seq, 0, 0);
+    ok_packet.write_to(&mut stream)?;
+    tracing::info!("OK packet sent, flushing...");
+    stream.flush().ok();
 
     if !auth_ok {
         make_err_packet(seq, 1045, "Access denied").write_to(&mut stream)?;
@@ -568,9 +638,17 @@ fn handle_connection(
 
     loop {
         let packet = match Packet::read_from(&mut stream) {
-            Ok(p) => p,
+            Ok(p) => {
+                tracing::info!("Received packet: len={}, seq={}", p.length, p.sequence);
+                p
+            }
             Err(e) => {
-                tracing::info!("Packet read error: {}", e);
+                // Check if it's a connection closed error
+                if e.to_string().contains("end of file") || e.to_string().contains("Connection reset") || e.to_string().contains("broken pipe") {
+                    tracing::info!("Client {} closed connection normally", addr);
+                } else {
+                    tracing::warn!("Packet read error from {}: {}", addr, e);
+                }
                 break;
             }
         };
@@ -691,7 +769,7 @@ fn handle_connection(
 // Server
 // ============================================================================
 
-pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
+pub fn run_server(host: &str, port: u16, monitoring_port: u16) -> MySqlResult<()> {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr)?;
     tracing::info!("MySQL server listening on {}", addr);
