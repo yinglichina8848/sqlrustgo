@@ -261,6 +261,7 @@ impl<'a> Lexer<'a> {
                     "AND" => Token::And,
                     "OR" => Token::Or,
                     "NOT" => Token::Not,
+                    "IF" => Token::If,
                     "EXISTS" => Token::Exists,
                     "IN" => Token::In,
                     "ALL" => Token::All,
