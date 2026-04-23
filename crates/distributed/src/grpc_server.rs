@@ -764,6 +764,7 @@ mod tests {
 
     #[test]
     fn test_insert_vector_request_with_metadata() {
+        use crate::proto::distributed::VectorRecord;
         let mut metadata = HashMap::new();
         metadata.insert("key".to_string(), "value".to_string());
         let request = InsertVectorRequest {
