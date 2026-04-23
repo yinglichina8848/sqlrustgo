@@ -3,6 +3,7 @@
 //! This module provides trigger execution functionality for SQL triggers.
 //! Triggers are executed before or after INSERT, UPDATE, or DELETE operations.
 
+use crate::trigger_eval;
 use sqlrustgo_parser::parse;
 use sqlrustgo_storage::{
     Record, StorageEngine, TriggerEvent as StorageTriggerEvent, TriggerInfo,
@@ -390,12 +391,16 @@ impl TriggerExecutor {
         if let sqlrustgo_parser::Statement::Insert(insert) = statement {
             let table_name = &insert.table;
             let table_info = storage.get_table_info(table_name)?;
+            let target_col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
             let num_cols = table_info.columns.len();
+
+            let trigger_ctx = trigger_eval::TriggerContext::new(new_row, None);
 
             for values in &insert.values {
                 let mut record = Vec::new();
                 for expr in values {
-                    let val = self.expression_to_value(expr, new_row);
+                    let eval_ctx = trigger_eval::EvalContext::new(&trigger_ctx, None);
+                    let val = trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
                     record.push(val);
                 }
                 while record.len() < num_cols {
