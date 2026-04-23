@@ -243,6 +243,7 @@ impl DataRestorer {
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
 
@@ -310,6 +311,7 @@ impl DataRestorer {
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
 
@@ -356,6 +358,7 @@ impl DataRestorer {
                         columns: vec![],
                         foreign_keys: vec![],
                         unique_constraints: vec![],
+                        check_constraints: vec![],
                         partition_info: None,
                     };
                     storage.create_table(&table_info)?;
