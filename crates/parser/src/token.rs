@@ -56,6 +56,9 @@ pub enum Token {
     Any,
     Some,
 
+    // Conditional keywords
+    If,
+
     // CTE keywords
     With,
     Recursive,
@@ -235,6 +238,7 @@ impl fmt::Display for Token {
             Token::Action => write!(f, "ACTION"),
             Token::Default => write!(f, "DEFAULT"),
             Token::Exists => write!(f, "EXISTS"),
+            Token::If => write!(f, "IF"),
             Token::In => write!(f, "IN"),
             Token::All => write!(f, "ALL"),
             Token::Any => write!(f, "ANY"),
