@@ -110,15 +110,13 @@ impl ShardRouter {
             crate::partition::PartitionStrategy::Range { boundaries } => {
                 self.route_range_boundary(table, key_column, start, end, boundaries)
             }
-            crate::partition::PartitionStrategy::Key { columns: _, num_partitions } => {
-                self.route_hash_range(table, key_column, start, end, *num_partitions)
-            }
+            crate::partition::PartitionStrategy::Key {
+                columns: _,
+                num_partitions,
+            } => self.route_hash_range(table, key_column, start, end, *num_partitions),
             crate::partition::PartitionStrategy::List { partitions } => {
                 let all_shards: Vec<u64> = partitions.iter().map(|p| p.id).collect();
-                Ok(RoutedPlan::distributed(
-                    vec![],
-                    all_shards,
-                ))
+                Ok(RoutedPlan::distributed(vec![], all_shards))
             }
         }
     }
@@ -433,11 +431,7 @@ impl ReadWriteShardRouter {
         })
     }
 
-    fn get_shard_id(
-        &self,
-        table: &str,
-        key_value: PartitionValue,
-    ) -> Result<ShardId, RouterError> {
+    fn get_shard_id(&self, table: &str, key_value: PartitionValue) -> Result<ShardId, RouterError> {
         let partition_key = self
             .shard_router
             .get_shard_manager()
@@ -555,9 +549,18 @@ mod tests {
         manager.initialize_table_shards("regions", 3, &nodes);
 
         let partitions = vec![
-            ListPartition { id: 0, values: vec![1, 2, 3] },
-            ListPartition { id: 1, values: vec![4, 5, 6] },
-            ListPartition { id: 2, values: vec![7, 8, 9] },
+            ListPartition {
+                id: 0,
+                values: vec![1, 2, 3],
+            },
+            ListPartition {
+                id: 1,
+                values: vec![4, 5, 6],
+            },
+            ListPartition {
+                id: 2,
+                values: vec![7, 8, 9],
+            },
         ];
         let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
         manager.add_partition_rule(rule);
@@ -595,8 +598,14 @@ mod tests {
         manager.initialize_table_shards("regions", 3, &nodes);
 
         let partitions = vec![
-            ListPartition { id: 0, values: vec![1, 2, 3] },
-            ListPartition { id: 1, values: vec![4, 5, 6] },
+            ListPartition {
+                id: 0,
+                values: vec![1, 2, 3],
+            },
+            ListPartition {
+                id: 1,
+                values: vec![4, 5, 6],
+            },
         ];
         let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
         manager.add_partition_rule(rule);
@@ -636,9 +645,18 @@ mod tests {
         manager.initialize_table_shards("regions", 3, &nodes);
 
         let partitions = vec![
-            ListPartition { id: 0, values: vec![1, 2] },
-            ListPartition { id: 1, values: vec![3, 4] },
-            ListPartition { id: 2, values: vec![5, 6] },
+            ListPartition {
+                id: 0,
+                values: vec![1, 2],
+            },
+            ListPartition {
+                id: 1,
+                values: vec![3, 4],
+            },
+            ListPartition {
+                id: 2,
+                values: vec![5, 6],
+            },
         ];
         let rule = PartitionRule::new("regions", PartitionKey::new_list("region_id", partitions));
         manager.add_partition_rule(rule);
@@ -672,7 +690,12 @@ mod tests {
     #[test]
     fn test_read_write_shard_router_route_write() {
         let rw_router = create_test_rw_router();
-        let result = rw_router.route_write("users", "id", PartitionValue::Integer(5), "UPDATE users SET name = 'test' WHERE id = 5");
+        let result = rw_router.route_write(
+            "users",
+            "id",
+            PartitionValue::Integer(5),
+            "UPDATE users SET name = 'test' WHERE id = 5",
+        );
         assert!(result.is_ok());
         let query = result.unwrap();
         assert_eq!(query.shard_id, 1);
@@ -687,7 +710,10 @@ mod tests {
             original_sql: "SELECT * FROM users".to_string(),
             consistency_level: ConsistencyLevel::default(),
         };
-        assert!(matches!(query.consistency_level, ConsistencyLevel::Eventual));
+        assert!(matches!(
+            query.consistency_level,
+            ConsistencyLevel::Eventual
+        ));
     }
 
     #[test]
@@ -708,5 +734,125 @@ mod tests {
     fn test_read_write_shard_router_get_shard_router() {
         let rw_router = create_test_rw_router();
         let _router = rw_router.get_shard_router();
+    }
+
+    #[test]
+    fn test_router_error_display() {
+        let err = RouterError::NoPartitionRule("users".to_string());
+        assert!(err.to_string().contains("users"));
+
+        let err2 = RouterError::ShardNotFound(42);
+        assert!(err2.to_string().contains("42"));
+
+        let err3 = RouterError::NoReplicaAvailable(99);
+        assert!(err3.to_string().contains("99"));
+    }
+
+    #[test]
+    fn test_routed_query_debug() {
+        let query = RoutedQuery {
+            shard_id: 1,
+            node_id: 2,
+            original_sql: "SELECT * FROM users".to_string(),
+        };
+
+        let debug_str = format!("{:?}", query);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[test]
+    fn test_routed_plan_single() {
+        let plan = RoutedPlan::single(1, 2, "SELECT * FROM users".to_string());
+
+        assert!(!plan.is_distributed);
+        assert_eq!(plan.queries.len(), 1);
+        assert_eq!(plan.involved_shards.len(), 1);
+    }
+
+    #[test]
+    fn test_routed_plan_distributed() {
+        let queries = vec![
+            RoutedQuery {
+                shard_id: 0,
+                node_id: 1,
+                original_sql: "SELECT * FROM users WHERE id = 1".to_string(),
+            },
+            RoutedQuery {
+                shard_id: 1,
+                node_id: 2,
+                original_sql: "SELECT * FROM users WHERE id = 5".to_string(),
+            },
+        ];
+        let plan = RoutedPlan::distributed(queries, vec![0, 1]);
+
+        assert!(plan.is_distributed);
+        assert_eq!(plan.queries.len(), 2);
+        assert_eq!(plan.involved_shards.len(), 2);
+    }
+
+    #[test]
+    fn test_shard_read_query_debug() {
+        let query = ShardReadQuery {
+            shard_id: 1,
+            replica_node_id: 2,
+            original_sql: "SELECT * FROM users".to_string(),
+            consistency_level: ConsistencyLevel::Eventual,
+        };
+
+        let debug_str = format!("{:?}", query);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[test]
+    fn test_shard_write_query_debug() {
+        let query = ShardWriteQuery {
+            shard_id: 1,
+            primary_node_id: 2,
+            original_sql: "INSERT INTO users VALUES (1)".to_string(),
+        };
+
+        let debug_str = format!("{:?}", query);
+        assert!(debug_str.contains("shard_id: 1"));
+    }
+
+    #[test]
+    fn test_consistency_level_debug() {
+        assert_eq!(format!("{:?}", ConsistencyLevel::Eventual), "Eventual");
+        assert_eq!(format!("{:?}", ConsistencyLevel::Strong), "Strong");
+        assert_eq!(format!("{:?}", ConsistencyLevel::Session), "Session");
+    }
+
+    #[test]
+    fn test_route_point_query_no_rule() {
+        let router = create_test_router();
+
+        let result = router.route_point_query("unknown_table", "id", PartitionValue::Integer(5));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_write_shard_router_route_read_no_rule() {
+        let rw_router = create_test_rw_router();
+        let result = rw_router.route_read("unknown", "id", PartitionValue::Integer(5));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_write_shard_router_route_write_no_rule() {
+        let rw_router = create_test_rw_router();
+        let result = rw_router.route_write(
+            "unknown",
+            "id",
+            PartitionValue::Integer(5),
+            "INSERT INTO unknown VALUES (1)",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_write_shard_router_set_prefer_replica() {
+        let mut rw_router = create_test_rw_router();
+        rw_router.set_prefer_replica(true);
+        rw_router.set_prefer_replica(false);
     }
 }
