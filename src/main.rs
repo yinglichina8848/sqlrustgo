@@ -2,5 +2,5 @@
 
 fn main() {
     sqlrustgo::init();
-    println!("SQLRustGo v1.2.0");
+    println!("SQLRustGo v2.8.0");
 }
