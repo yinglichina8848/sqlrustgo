@@ -1068,3 +1068,199 @@ fn handle_request(line: &str, state: &GmpCliState) -> Result<Response, String> {
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_response_ok() {
+        let data = serde_json::json!({"key": "value"});
+        let response = Response::ok(data, 100);
+        assert!(response.success);
+        assert!(response.data.is_some());
+        assert!(response.error.is_none());
+        assert_eq!(response.time_ms, 100);
+    }
+
+    #[test]
+    fn test_response_err() {
+        let response = Response::err("Test error".to_string(), 50);
+        assert!(!response.success);
+        assert!(response.data.is_none());
+        assert!(response.error.is_some());
+        assert_eq!(response.error.as_ref().unwrap(), "Test error");
+        assert_eq!(response.time_ms, 50);
+    }
+
+    #[test]
+    fn test_response_serialization() {
+        let response = Response::ok(serde_json::json!([1, 2, 3]), 10);
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"time_ms\":10"));
+    }
+
+    #[test]
+    fn test_node_view_serialization() {
+        let node = NodeView {
+            id: "1".to_string(),
+            node_type: "User".to_string(),
+            name: "Alice".to_string(),
+            props: serde_json::json!({"age": 30}),
+        };
+        let json = serde_json::to_string(&node).unwrap();
+        assert!(json.contains("\"id\":\"1\""));
+        assert!(json.contains("\"node_type\":\"User\""));
+    }
+
+    #[test]
+    fn test_neighbor_view_serialization() {
+        let neighbor = NeighborView {
+            id: "2".to_string(),
+            node_type: "User".to_string(),
+            name: "Bob".to_string(),
+            rel_type: "KNOWS".to_string(),
+            props: serde_json::json!({}),
+        };
+        let json = serde_json::to_string(&neighbor).unwrap();
+        assert!(json.contains("\"rel_type\":\"KNOWS\""));
+    }
+
+    #[test]
+    fn test_graph_neighbors_result() {
+        let result = GraphNeighborsResult {
+            center: NodeView {
+                id: "1".to_string(),
+                node_type: "User".to_string(),
+                name: "Alice".to_string(),
+                props: serde_json::json!({}),
+            },
+            neighbors: vec![
+                NeighborView {
+                    id: "2".to_string(),
+                    node_type: "User".to_string(),
+                    name: "Bob".to_string(),
+                    rel_type: "KNOWS".to_string(),
+                    props: serde_json::json!({}),
+                },
+            ],
+        };
+        assert_eq!(result.neighbors.len(), 1);
+        assert_eq!(result.center.name, "Alice");
+    }
+
+    #[test]
+    fn test_request_ping_deserialize() {
+        let json = r#"{"cmd":"Ping"}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::Ping => {}
+            _ => panic!("Expected Ping"),
+        }
+    }
+
+    #[test]
+    fn test_request_vector_search_deserialize() {
+        let json = r#"{"cmd":"VectorSearch","query":"test","top_k":5}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::VectorSearch { query, top_k } => {
+                assert_eq!(query, "test");
+                assert_eq!(top_k, 5);
+            }
+            _ => panic!("Expected VectorSearch"),
+        }
+    }
+
+    #[test]
+    fn test_request_import_doc_deserialize() {
+        let json = r#"{"cmd":"ImportDoc","title":"Doc1","doc_type":"manual","content":"content","keywords":["k1"],"properties":null}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::ImportDoc { title, doc_type, .. } => {
+                assert_eq!(title, "Doc1");
+                assert_eq!(doc_type, "manual");
+            }
+            _ => panic!("Expected ImportDoc"),
+        }
+    }
+
+    #[test]
+    fn test_request_upsert_node_deserialize() {
+        let json = r#"{"cmd":"UpsertNode","node_type":"Person","name":"Alice","code":null,"properties":null}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::UpsertNode { node_type, name, .. } => {
+                assert_eq!(node_type, "Person");
+                assert_eq!(name, "Alice");
+            }
+            _ => panic!("Expected UpsertNode"),
+        }
+    }
+
+    #[test]
+    fn test_request_upsert_edge_deserialize() {
+        let json = r#"{"cmd":"UpsertEdge","from_name":"A","from_type":"Person","to_name":"B","to_type":"Person","rel_type":"KNOWS","weight":1.0}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::UpsertEdge { rel_type, weight, .. } => {
+                assert_eq!(rel_type, "KNOWS");
+                assert_eq!(weight, Some(1.0));
+            }
+            _ => panic!("Expected UpsertEdge"),
+        }
+    }
+
+    #[test]
+    fn test_request_graph_neighbors_deserialize() {
+        let json = r#"{"cmd":"GraphNeighbors","node_type":"Person","node_name":"Alice","rel_type":"KNOWS"}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::GraphNeighbors { node_name, rel_type, .. } => {
+                assert_eq!(node_name, "Alice");
+                assert_eq!(rel_type, Some("KNOWS".to_string()));
+            }
+            _ => panic!("Expected GraphNeighbors"),
+        }
+    }
+
+    #[test]
+    fn test_request_list_nodes_deserialize() {
+        let json = r#"{"cmd":"ListNodes","node_type":"Person"}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::ListNodes { node_type } => {
+                assert_eq!(node_type, Some("Person".to_string()));
+            }
+            _ => panic!("Expected ListNodes"),
+        }
+    }
+
+    #[test]
+    fn test_request_sql_search_deserialize() {
+        let json = r#"{"cmd":"SqlSearch","query":"test","department":"IT","category":null,"chapter":null,"top_k":10}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::SqlSearch { query, department, top_k, .. } => {
+                assert_eq!(query, "test");
+                assert_eq!(department, Some("IT".to_string()));
+                assert_eq!(top_k, 10);
+            }
+            _ => panic!("Expected SqlSearch"),
+        }
+    }
+
+    #[test]
+    fn test_request_triple_search_deserialize() {
+        let json = r#"{"cmd":"TripleSearch","query":"test","top_k":5}"#;
+        let req: Request = serde_json::from_str(json).unwrap();
+        match req {
+            Request::TripleSearch { query, top_k } => {
+                assert_eq!(query, "test");
+                assert_eq!(top_k, 5);
+            }
+            _ => panic!("Expected TripleSearch"),
+        }
+    }
+}
