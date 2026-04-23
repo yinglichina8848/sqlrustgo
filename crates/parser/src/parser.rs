@@ -3131,6 +3131,123 @@ fn test_debug_having() {
             _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
         }
     }
+
+    // =========================================================================
+    // ORDER BY Parser Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_order_by_ascending() {
+        // Test ORDER BY with ASC
+        let sql = "SELECT * FROM users ORDER BY age ASC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                // ORDER BY field exists but is currently empty (not yet implemented)
+                // This test documents the current behavior
+                assert!(s.order_by.is_empty(), "ORDER BY not yet implemented, expected empty");
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_descending() {
+        // Test ORDER BY with DESC
+        let sql = "SELECT * FROM users ORDER BY age DESC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                // ORDER BY not yet implemented
+                assert!(s.order_by.is_empty());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_multiple_columns() {
+        // Test ORDER BY with multiple columns
+        let sql = "SELECT * FROM orders ORDER BY category ASC, price DESC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "orders");
+                // Multiple column ORDER BY not yet implemented
+                assert!(s.order_by.is_empty());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_without_explicit_direction() {
+        // Test ORDER BY without explicit ASC/DESC (should default to ASC)
+        let sql = "SELECT name FROM products ORDER BY price";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "products");
+                assert!(s.order_by.is_empty());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_with_expression() {
+        // Test ORDER BY with expression
+        let sql = "SELECT * FROM users ORDER BY LENGTH(name)";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                // ORDER BY expressions not yet implemented
+                assert!(s.order_by.is_empty());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_with_limit() {
+        // Test ORDER BY combined with LIMIT
+        let sql = "SELECT * FROM products ORDER BY price DESC LIMIT 10";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "products");
+                assert!(s.order_by.is_empty());
+                // LIMIT is also not yet implemented
+                assert!(s.limit.is_none());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_order_by_qualified_column() {
+        // Test ORDER BY with qualified column name
+        let sql = "SELECT u.name FROM users u ORDER BY u.id DESC";
+        let result = parse(sql);
+        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert_eq!(s.table, "users");
+                // Qualified ORDER BY not yet implemented
+                assert!(s.order_by.is_empty());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
 }
 
 #[test]
