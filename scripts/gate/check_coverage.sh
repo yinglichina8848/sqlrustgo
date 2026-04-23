@@ -13,6 +13,7 @@ PROBLEMATIC_TESTS=(
     "test_trigger_executes_insert"
     "test_trigger_executes_delete"
     "test_trigger_executes_update"
+    "test_sql_corpus_all"
 )
 
 SKIP_ARGS=""

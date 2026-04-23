@@ -229,11 +229,13 @@ impl HybridReranker {
         let mut graph_ranks: HashMap<&str, usize> = HashMap::new();
 
         // Sort by score descending and assign ranks
-        let mut sql_sorted: Vec<_> = results.iter()
+        let mut sql_sorted: Vec<_> = results
+            .iter()
             .filter(|r| r.mode_scores.contains_key(&SearchMode::Sql))
             .collect();
         sql_sorted.sort_by(|a, b| {
-            b.mode_scores.get(&SearchMode::Sql)
+            b.mode_scores
+                .get(&SearchMode::Sql)
                 .unwrap_or(&0.0)
                 .partial_cmp(a.mode_scores.get(&SearchMode::Sql).unwrap_or(&0.0))
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -242,11 +244,13 @@ impl HybridReranker {
             sql_ranks.insert(r.id.as_str(), i + 1);
         }
 
-        let mut vector_sorted: Vec<_> = results.iter()
+        let mut vector_sorted: Vec<_> = results
+            .iter()
             .filter(|r| r.mode_scores.contains_key(&SearchMode::Vector))
             .collect();
         vector_sorted.sort_by(|a, b| {
-            b.mode_scores.get(&SearchMode::Vector)
+            b.mode_scores
+                .get(&SearchMode::Vector)
                 .unwrap_or(&0.0)
                 .partial_cmp(a.mode_scores.get(&SearchMode::Vector).unwrap_or(&0.0))
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -255,11 +259,13 @@ impl HybridReranker {
             vector_ranks.insert(r.id.as_str(), i + 1);
         }
 
-        let mut graph_sorted: Vec<_> = results.iter()
+        let mut graph_sorted: Vec<_> = results
+            .iter()
             .filter(|r| r.mode_scores.contains_key(&SearchMode::Graph))
             .collect();
         graph_sorted.sort_by(|a, b| {
-            b.mode_scores.get(&SearchMode::Graph)
+            b.mode_scores
+                .get(&SearchMode::Graph)
                 .unwrap_or(&0.0)
                 .partial_cmp(a.mode_scores.get(&SearchMode::Graph).unwrap_or(&0.0))
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -272,43 +278,66 @@ impl HybridReranker {
         let k = 60; // standard RRF constant
         let w = &self.config.mode_weights;
 
-        let mut rrf_scores: HashMap<String, (f32, Vec<SearchMode>, ScoreBreakdown)> = HashMap::new();
+        let mut rrf_scores: HashMap<String, (f32, Vec<SearchMode>, ScoreBreakdown)> =
+            HashMap::new();
 
         for result in &results {
             let sql_rank = sql_ranks.get(result.id.as_str()).copied().unwrap_or(0);
             let vector_rank = vector_ranks.get(result.id.as_str()).copied().unwrap_or(0);
             let graph_rank = graph_ranks.get(result.id.as_str()).copied().unwrap_or(0);
 
-            let sql_contrib = if sql_rank > 0 { w.sql / (k + sql_rank) as f32 } else { 0.0 };
-            let vector_contrib = if vector_rank > 0 { w.vector / (k + vector_rank) as f32 } else { 0.0 };
-            let graph_contrib = if graph_rank > 0 { w.graph / (k + graph_rank) as f32 } else { 0.0 };
+            let sql_contrib = if sql_rank > 0 {
+                w.sql / (k + sql_rank) as f32
+            } else {
+                0.0
+            };
+            let vector_contrib = if vector_rank > 0 {
+                w.vector / (k + vector_rank) as f32
+            } else {
+                0.0
+            };
+            let graph_contrib = if graph_rank > 0 {
+                w.graph / (k + graph_rank) as f32
+            } else {
+                0.0
+            };
 
-            let multi_match = if result.sources.len() > 1 { w.multi_match_bonus } else { 0.0 };
+            let multi_match = if result.sources.len() > 1 {
+                w.multi_match_bonus
+            } else {
+                0.0
+            };
             let final_score = sql_contrib + vector_contrib + graph_contrib + multi_match;
 
-            rrf_scores.insert(result.id.clone(), (
-                final_score,
-                result.sources.clone(),
-                ScoreBreakdown {
-                    sql_score: result.mode_scores.get(&SearchMode::Sql).copied(),
-                    vector_score: result.mode_scores.get(&SearchMode::Vector).copied(),
-                    graph_score: result.mode_scores.get(&SearchMode::Graph).copied(),
-                    multi_match_bonus: multi_match,
+            rrf_scores.insert(
+                result.id.clone(),
+                (
                     final_score,
-                },
-            ));
+                    result.sources.clone(),
+                    ScoreBreakdown {
+                        sql_score: result.mode_scores.get(&SearchMode::Sql).copied(),
+                        vector_score: result.mode_scores.get(&SearchMode::Vector).copied(),
+                        graph_score: result.mode_scores.get(&SearchMode::Graph).copied(),
+                        multi_match_bonus: multi_match,
+                        final_score,
+                    },
+                ),
+            );
         }
 
         // Sort by RRF score and take top_k
-        let mut items: Vec<_> = rrf_scores.into_iter()
-            .map(|(id, (combined_score, source_modes, breakdown))| RerankedItem {
-                id,
-                combined_score,
-                source_modes,
-                result_type: "document".to_string(),
-                score_breakdown: breakdown,
-                metadata: None,
-            })
+        let mut items: Vec<_> = rrf_scores
+            .into_iter()
+            .map(
+                |(id, (combined_score, source_modes, breakdown))| RerankedItem {
+                    id,
+                    combined_score,
+                    source_modes,
+                    result_type: "document".to_string(),
+                    score_breakdown: breakdown,
+                    metadata: None,
+                },
+            )
             .collect();
 
         items.sort_by(|a, b| {
@@ -333,13 +362,17 @@ impl HybridReranker {
 
         for result in results {
             let entry = combined.entry(result.id.clone()).or_insert_with(|| {
-                (0.0, result.sources.clone(), ScoreBreakdown {
-                    sql_score: None,
-                    vector_score: None,
-                    graph_score: None,
-                    multi_match_bonus: 0.0,
-                    final_score: 0.0,
-                })
+                (
+                    0.0,
+                    result.sources.clone(),
+                    ScoreBreakdown {
+                        sql_score: None,
+                        vector_score: None,
+                        graph_score: None,
+                        multi_match_bonus: 0.0,
+                        final_score: 0.0,
+                    },
+                )
             });
 
             if let Some(&sql_score) = result.mode_scores.get(&SearchMode::Sql) {
@@ -362,15 +395,18 @@ impl HybridReranker {
             entry.2.final_score = entry.0;
         }
 
-        let mut items: Vec<_> = combined.into_iter()
-            .map(|(id, (combined_score, source_modes, breakdown))| RerankedItem {
-                id,
-                combined_score,
-                source_modes,
-                result_type: "document".to_string(),
-                score_breakdown: breakdown,
-                metadata: None,
-            })
+        let mut items: Vec<_> = combined
+            .into_iter()
+            .map(
+                |(id, (combined_score, source_modes, breakdown))| RerankedItem {
+                    id,
+                    combined_score,
+                    source_modes,
+                    result_type: "document".to_string(),
+                    score_breakdown: breakdown,
+                    metadata: None,
+                },
+            )
             .collect();
 
         items.sort_by(|a, b| {
@@ -392,7 +428,8 @@ impl HybridReranker {
         // Use RRF as base, then boost by raw scores
         let rrf_items = self.reciprocal_rank_fusion(results);
 
-        rrf_items.into_iter()
+        rrf_items
+            .into_iter()
             .map(|mut item| {
                 // Calculate boost from average original score
                 let mut score_sum = 0.0;

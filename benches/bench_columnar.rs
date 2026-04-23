@@ -7,9 +7,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 // Stub benchmark - actual columnar storage benchmarks require a module that doesn't exist
 fn bench_stub(c: &mut Criterion) {
-    c.benchmark_group("columnar_stub").bench_function("noop", |b| {
-        b.iter(|| {});
-    });
+    c.benchmark_group("columnar_stub")
+        .bench_function("noop", |b| {
+            b.iter(|| {});
+        });
 }
 
 criterion_group!(benches, bench_stub);
