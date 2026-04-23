@@ -31,6 +31,13 @@ pub struct UniqueConstraint {
     pub columns: Vec<String>,
 }
 
+/// Check constraint definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckConstraint {
+    pub name: Option<String>,
+    pub expression: String,
+}
+
 /// Trigger timing: BEFORE or AFTER
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerTiming {
@@ -158,6 +165,8 @@ pub struct TableInfo {
     pub foreign_keys: Vec<ForeignKeyConstraint>,
     #[serde(default)]
     pub unique_constraints: Vec<UniqueConstraint>,
+    #[serde(default)]
+    pub check_constraints: Vec<CheckConstraint>,
     #[serde(skip)]
     pub partition_info: Option<PartitionInfo>,
 }
@@ -475,6 +484,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         storage.create_table(&info).unwrap();
@@ -518,6 +528,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
 
@@ -542,6 +553,7 @@ mod tests {
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
 
@@ -597,6 +609,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         let info2 = TableInfo {
@@ -604,6 +617,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         storage.create_table(&info1).unwrap();
@@ -625,6 +639,7 @@ mod tests {
             columns: vec![],
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
         storage.create_table(&info).unwrap();

@@ -135,6 +135,7 @@ impl BinaryTableStorage {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         };
 
