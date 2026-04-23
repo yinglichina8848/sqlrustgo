@@ -50,6 +50,8 @@
 
 ## 三、文档清单
 
+### 核心文档
+
 | 文档 | 说明 | 状态 |
 |------|------|------|
 | [VERSION_PLAN.md](./VERSION_PLAN.md) | 里程碑、任务矩阵、交付节奏 | ✅ |
@@ -57,6 +59,21 @@
 | [DISTRIBUTED_TEST_DESIGN.md](./DISTRIBUTED_TEST_DESIGN.md) | 分布式测试设计 | ✅ |
 | [TEST_PLAN.md](./TEST_PLAN.md) | 完整测试计划 | ✅ |
 | [PERFORMANCE_TARGETS.md](./PERFORMANCE_TARGETS.md) | 性能目标 | ✅ |
+| [API_REFERENCE.md](./API_REFERENCE.md) | REST API 参考 | ✅ |
+| [ERROR_MESSAGES.md](./ERROR_MESSAGES.md) | 错误消息参考 | ✅ |
+| [SECURITY_HARDENING.md](./SECURITY_HARDENING.md) | 安全加固指南 | ✅ |
+
+### 用户指南
+
+| 文档 | 说明 | 状态 |
+|------|------|------|
+| [QUICK_START.md](./QUICK_START.md) | 快速开始 | ✅ |
+| [CLIENT_CONNECTION.md](./CLIENT_CONNECTION.md) | 客户端连接指南 | ✅ |
+| [user-guide/USER_MANUAL.md](./user-guide/USER_MANUAL.md) | 用户手册 | ✅ |
+| [user-guide/README.md](./user-guide/README.md) | 用户指南索引 | ✅ |
+| [user-guide/GMP_USER_GUIDE.md](./user-guide/GMP_USER_GUIDE.md) | GMP 用户指南 | ✅ |
+| [user-guide/GRAPH_SEARCH_USER_GUIDE.md](./user-guide/GRAPH_SEARCH_USER_GUIDE.md) | 图检索用户指南 | ✅ |
+| [user-guide/VECTOR_SEARCH_USER_GUIDE.md](./user-guide/VECTOR_SEARCH_USER_GUIDE.md) | 向量检索用户指南 | ✅ |
 
 ---
 
