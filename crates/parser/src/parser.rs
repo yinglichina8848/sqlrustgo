@@ -56,6 +56,7 @@ pub struct CreateIndexStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub unique: bool,
+    pub fulltext: bool,
 }
 
 /// ALTER TABLE statement
@@ -637,7 +638,15 @@ impl Parser {
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Index)?;
+        // Check for FULLTEXT modifier
+        let is_fulltext = matches!(self.current(), Some(Token::Fulltext));
+        if is_fulltext {
+            self.next(); // consume FULLTEXT
+            self.expect(Token::Index)?;
+        } else {
+            self.expect(Token::Index)?;
+        }
+
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
             Some(t) => return Err(format!("Expected index name, got {:?}", t)),
@@ -656,6 +665,7 @@ impl Parser {
             table: table_name,
             columns,
             unique: false,
+            fulltext: is_fulltext,
         }))
     }
 
@@ -1927,14 +1937,33 @@ impl Parser {
 
         // Parse partition column(s)
         self.expect(Token::LParen)?;
-        let columns = self.parse_column_list()?;
-        self.expect(Token::RParen)?;
+        let mut partition_cols = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(name)) => {
+                    partition_cols.push(name.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next(); // consume RParen
+                    break;
+                }
+                _ => break,
+            }
+        }
 
         // Parse individual partition definitions
         self.expect(Token::LParen)?;
         let mut partitions = Vec::new();
         loop {
             match self.current() {
+                Some(Token::Partition) => {
+                    // Skip PARTITION keyword, next token is the partition name
+                    self.next();
+                }
                 Some(Token::Identifier(name)) => {
                     let name = name.clone();
                     self.next();
@@ -1943,10 +1972,12 @@ impl Parser {
                     let value = match self.current() {
                         Some(Token::Values) => {
                             self.next(); // consume VALUES
-                            // Check for VALUES LESS THAN (expr)
-                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS") {
+                                         // Check for VALUES LESS THAN (expr)
+                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS")
+                            {
                                 self.next(); // consume LESS
-                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN") {
+                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN")
+                                {
                                     self.next(); // consume THAN
                                     if matches!(self.current(), Some(Token::LParen)) {
                                         self.next(); // consume LParen
@@ -2043,7 +2074,7 @@ impl Parser {
 
         Ok(PartitionDefinition {
             strategy,
-            columns,
+            columns: partition_cols,
             partitions,
         })
     }
