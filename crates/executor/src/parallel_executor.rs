@@ -478,7 +478,13 @@ impl ParallelVolcanoExecutor {
             let left_val = l.evaluate(left, left_schema);
             let right_val = r.evaluate(right, right_schema);
             match (left_val, right_val, op) {
-                (Some(v1), Some(v2), sqlrustgo_planner::Operator::Eq) => v1 == v2,
+                (Some(v1), Some(v2), sqlrustgo_planner::Operator::Eq) => {
+                    match (&v1, &v2) {
+                        // SQL semantics: NULL = anything → not a match (UNKNOWN)
+                        (Value::Null, _) | (_, Value::Null) => false,
+                        _ => v1 == v2,
+                    }
+                }
                 _ => false,
             }
         } else {
