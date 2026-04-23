@@ -164,7 +164,7 @@ mod tests {
     fn test_query_router_new() {
         let manager = ShardManager::new();
         let router = QueryRouter::new(manager, 1);
-        assert_eq!(router.is_local_shard(0), false);
+        assert!(!router.is_local_shard(0));
     }
 
     #[test]

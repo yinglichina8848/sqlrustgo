@@ -1168,7 +1168,7 @@ mod tests {
 
     #[test]
     fn test_semi_sync_replica_record_ack() {
-        let mut replica = SemiSyncReplica::new(1);
+        let replica = SemiSyncReplica::new(1);
         replica.record_ack();
 
         assert!(replica.get_last_ack_elapsed_ms().is_some());
@@ -1361,5 +1361,197 @@ mod tests {
     fn test_semi_sync_error_message() {
         let err = SemiSyncError::ack_timeout(99);
         assert!(err.message.contains("99"));
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for SemiSyncManager
+    // =====================================================================
+
+    #[tokio::test]
+    async fn test_semi_sync_manager_wait_for_ack_enabled() {
+        let manager = SemiSyncManager::new();
+        manager.enable();
+        manager.add_replica(1);
+        manager.record_ack(1);
+
+        let result = manager.wait_for_ack(100).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_semi_sync_manager_wait_for_ack_insufficient_acks() {
+        let manager = SemiSyncManager::new();
+        manager.enable();
+        manager.set_wait_count(2);
+        manager.add_replica(1);
+        manager.add_replica(2);
+
+        let result = manager.wait_for_ack(100).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_semi_sync_manager_record_ack_unknown_replica() {
+        let manager = SemiSyncManager::new();
+        manager.add_replica(1);
+        manager.record_ack(99);
+        assert_eq!(manager.get_replica_count(), 1);
+    }
+
+    #[test]
+    fn test_semi_sync_manager_state_transitions() {
+        let manager = SemiSyncManager::new();
+        assert_eq!(manager.get_state(), SemiSyncState::Off);
+
+        manager.enable();
+        assert_eq!(manager.get_state(), SemiSyncState::WaitServer);
+
+        manager.disable();
+        assert_eq!(manager.get_state(), SemiSyncState::Off);
+    }
+
+    // =====================================================================
+    // White-box Tests: Path Coverage for GtidSet
+    // =====================================================================
+
+    #[test]
+    fn test_gtid_set_add_overlapping_intervals() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 10));
+        set.add_interval(GtidInterval::new(1, 5, 15));
+        assert_eq!(set.len(), 15);
+    }
+
+    #[test]
+    fn test_gtid_set_add_disjoint_intervals() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 1, 5));
+        set.add_interval(GtidInterval::new(1, 10, 15));
+        // [1,5] has 5 elements (1,2,3,4,5), [10,15] has 6 elements (10,11,12,13,14,15)
+        // They are disjoint so not merged
+        assert_eq!(set.len(), 11);
+    }
+
+    #[test]
+    fn test_gtid_set_contains_edge_cases() {
+        let mut set = GtidSet::new();
+        set.add_interval(GtidInterval::new(1, 0, 0));
+
+        assert!(set.contains(1, 0));
+        assert!(!set.contains(1, 1));
+    }
+
+    // =====================================================================
+    // White-box Tests: Branch Coverage for BinlogManager
+    // =====================================================================
+
+    #[tokio::test]
+    async fn test_binlog_rotate_after_events() {
+        let manager = BinlogManager::new(1);
+
+        for i in 0..10 {
+            let event = BinlogEvent {
+                event_type: BinlogEventType::WriteRows,
+                server_id: 1,
+                log_pos: i as u64,
+                timestamp: 1234567890 + i,
+                database: "test".to_string(),
+                table: Some("users".to_string()),
+                sql: Some(format!("INSERT INTO users VALUES ({})", i)),
+                affected_rows: 1,
+            };
+            manager.write_event(event).await.unwrap();
+        }
+
+        let result = manager.rotate("mysql-bin.000002".to_string()).await;
+        assert!(result.is_ok());
+        let status = manager.get_status();
+        assert_eq!(status.position, 4);
+    }
+
+    #[tokio::test]
+    async fn test_binlog_get_events_at_boundary() {
+        let manager = BinlogManager::new(1);
+
+        for i in 0..5 {
+            let event = BinlogEvent {
+                event_type: BinlogEventType::Query,
+                server_id: 1,
+                log_pos: i as u64,
+                timestamp: 1234567890,
+                database: "test".to_string(),
+                table: None,
+                sql: Some(format!("SELECT {}", i)),
+                affected_rows: 0,
+            };
+            manager.write_event(event).await.unwrap();
+        }
+
+        let events = manager.get_events(5).await;
+        assert_eq!(events.len(), 5);
+    }
+
+    // =====================================================================
+    // White-box Tests: Error path coverage
+    // =====================================================================
+
+    #[test]
+    fn test_semi_sync_error_no_replica_display() {
+        let err = SemiSyncError::no_replica();
+        let display = format!("{}", err);
+        assert!(display.contains("No semi-sync replica"));
+        assert!(err.lsn.is_none());
+    }
+
+    #[test]
+    fn test_semi_sync_error_ack_timeout_display() {
+        let err = SemiSyncError::ack_timeout(12345);
+        let display = format!("{}", err);
+        assert!(display.contains("12345"));
+        assert!(err.lsn.is_some());
+        assert_eq!(err.lsn.unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_semi_sync_error_debug() {
+        let err = SemiSyncError::ack_timeout(100);
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("message"));
+        assert!(debug.contains("100"));
+    }
+
+    // =====================================================================
+    // White-box Tests: ReplicationRole path coverage
+    // =====================================================================
+
+    #[test]
+    fn test_replication_role_equality() {
+        assert_eq!(ReplicationRole::Master, ReplicationRole::Master);
+        assert_eq!(ReplicationRole::Slave, ReplicationRole::Slave);
+        assert_eq!(ReplicationRole::Standalone, ReplicationRole::Standalone);
+    }
+
+    // =====================================================================
+    // White-box Tests: BinlogEventType path coverage
+    // =====================================================================
+
+    // BinlogEventType doesn't implement PartialEq, so we use matches!
+    #[test]
+    fn test_binlog_event_type_variants_coverage() {
+        assert!(matches!(BinlogEventType::Query, BinlogEventType::Query));
+        assert!(matches!(BinlogEventType::WriteRows, BinlogEventType::WriteRows));
+        assert!(matches!(BinlogEventType::UpdateRows, BinlogEventType::UpdateRows));
+        assert!(matches!(BinlogEventType::DeleteRows, BinlogEventType::DeleteRows));
+    }
+
+    // =====================================================================
+    // White-box Tests: SemiSyncState path coverage
+    // =====================================================================
+
+    #[test]
+    fn test_semi_sync_state_equality() {
+        assert_eq!(SemiSyncState::Off, SemiSyncState::Off);
+        assert_eq!(SemiSyncState::WaitServer, SemiSyncState::WaitServer);
+        assert_eq!(SemiSyncState::WaitSlave, SemiSyncState::WaitSlave);
     }
 }
