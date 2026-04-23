@@ -38,6 +38,210 @@ pub struct CheckConstraint {
     pub expression: String,
 }
 
+/// Evaluate a CHECK constraint expression against a record
+/// The expression is stored as a string like "age >= 0" or "name IS NOT NULL"
+/// Returns Ok(true) if constraint is satisfied, Ok(false) if not, Err on parse error
+pub fn evaluate_check_constraint(
+    constraint: &CheckConstraint,
+    columns: &[String],
+    record: &[Value],
+) -> SqlResult<bool> {
+    evaluate_sql_expression(&constraint.expression, columns, record)
+}
+
+/// Evaluate a SQL expression against a record
+/// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
+fn evaluate_sql_expression(
+    expr: &str,
+    columns: &[String],
+    record: &[Value],
+) -> SqlResult<bool> {
+    let expr = expr.trim();
+
+    // Handle AND/OR
+    if let Some(idx) = find_top_level_op(expr, "AND") {
+        let left = &expr[..idx];
+        let right = &expr[idx + 3..];
+        return Ok(evaluate_sql_expression(left.trim(), columns, record)?
+            && evaluate_sql_expression(right.trim(), columns, record)?);
+    }
+    if let Some(idx) = find_top_level_op(expr, "OR") {
+        let left = &expr[..idx];
+        let right = &expr[idx + 2..];
+        return Ok(evaluate_sql_expression(left.trim(), columns, record)?
+               || evaluate_sql_expression(right.trim(), columns, record)?);
+    }
+
+    // Handle NOT
+    if expr.to_uppercase().starts_with("NOT ") {
+        let inner = &expr[4..].trim();
+        return Ok(!evaluate_sql_expression(inner, columns, record)?);
+    }
+
+    // Handle IS NULL / IS NOT NULL
+    if let Some(idx) = expr.to_uppercase().find(" IS NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(val) = get_column_value(col_name, columns, record) {
+            return Ok(matches!(val, Value::Null));
+        }
+        return Ok(true); // column not found, assume OK
+    }
+    if let Some(idx) = expr.to_uppercase().find(" IS NOT NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(val) = get_column_value(col_name, columns, record) {
+            return Ok(!matches!(val, Value::Null));
+        }
+        return Ok(false);
+    }
+
+    // Handle comparisons: column op value
+    for (op, check) in &[(">=", "gte"), ("<=", "lte"), ("!=", "neq"), ("<>", "neq"),
+                           ("=", "eq"), ("==", "eq"), (">", "gt"), ("<", "lt")] {
+        if let Some(idx) = expr.find(op) {
+            let col_name = expr[..idx].trim();
+            let value_str = expr[idx + op.len()..].trim();
+
+            if let Some(col_val) = get_column_value(col_name, columns, record) {
+                return compare_values(&col_val, value_str, check);
+            }
+            break;
+        }
+    }
+
+    // If no comparison found, try to evaluate as a literal boolean or column existence check
+    let upper = expr.to_uppercase();
+    if upper == "TRUE" || upper == "1" {
+        return Ok(true);
+    }
+    if upper == "FALSE" || upper == "0" {
+        return Ok(false);
+    }
+
+    // Treat as column name - check if not null
+    if let Some(val) = get_column_value(expr, columns, record) {
+        return Ok(!matches!(val, Value::Null) && !is_zero_or_empty(val));
+    }
+
+    Err(format!("Cannot evaluate CHECK expression: {}", expr).into())
+}
+
+/// Find top-level operator (not inside quotes or parentheses)
+fn find_top_level_op(expr: &str, op: &str) -> Option<usize> {
+    let upper = expr.to_uppercase();
+    let op_upper = op.to_uppercase();
+    let mut depth = 0;
+    let mut in_string = false;
+
+    for (i, c) in expr.char_indices() {
+        match c {
+            '(' => { depth += 1; }
+            ')' => { depth -= 1; }
+            '\'' => { in_string = !in_string; }
+            _ if !in_string && depth == 0 => {
+                if upper[i..].starts_with(&op_upper) {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Get column value by name (case-insensitive)
+fn get_column_value<'a>(name: &str, columns: &'a [String], record: &'a [Value]) -> Option<&'a Value> {
+    // Remove quotes if present
+    let name = name.trim().trim_matches(|c| c == '\'' || c == '"');
+
+    for (i, col) in columns.iter().enumerate() {
+        if col.eq_ignore_ascii_case(name) {
+            return record.get(i);
+        }
+    }
+    None
+}
+
+/// Compare column value with string representation
+fn compare_values(col_val: &Value, compare_with: &str, op: &str) -> SqlResult<bool> {
+    let cmp_str = compare_with.trim().trim_matches(|c| c == '\'' || c == '"');
+
+    match op {
+        "eq" => match col_val {
+            Value::Null => Ok(false),
+            Value::Integer(i) => {
+                if let Ok(cmp) = cmp_str.parse::<i64>() {
+                    Ok(*i == cmp)
+                } else {
+                    Ok(false)
+                }
+            }
+            Value::Float(f) => {
+                if let Ok(cmp) = cmp_str.parse::<f64>() {
+                    Ok(*f == cmp)
+                } else {
+                    Ok(false)
+                }
+            }
+            Value::Text(s) => Ok(s == cmp_str),
+            Value::Boolean(b) => {
+                let cmp_bool = cmp_str.eq_ignore_ascii_case("true") || cmp_str == "1";
+                Ok(*b == cmp_bool)
+            }
+            Value::Blob(_) => Ok(false),
+        },
+        "neq" => Ok(!compare_values(col_val, compare_with, "eq")?),
+        "gt" | "gte" | "lt" | "lte" => {
+            match col_val {
+                Value::Integer(i) => {
+                    if let Ok(cmp) = cmp_str.parse::<i64>() {
+                        return Ok(match op {
+                            "gt" => *i > cmp,
+                            "gte" => *i >= cmp,
+                            "lt" => *i < cmp,
+                            "lte" => *i <= cmp,
+                            _ => false,
+                        });
+                    }
+                }
+                Value::Float(f) => {
+                    if let Ok(cmp) = cmp_str.parse::<f64>() {
+                        return Ok(match op {
+                            "gt" => *f > cmp,
+                            "gte" => *f >= cmp,
+                            "lt" => *f < cmp,
+                            "lte" => *f <= cmp,
+                            _ => false,
+                        });
+                    }
+                }
+                Value::Text(s) => {
+                    return Ok(match op {
+                        "gt" => *s > cmp_str.to_string(),
+                        "gte" => *s >= cmp_str.to_string(),
+                        "lt" => *s < cmp_str.to_string(),
+                        "lte" => *s <= cmp_str.to_string(),
+                        _ => false,
+                    });
+                }
+                _ => {}
+            }
+            Err(format!("Cannot compare {} with {}", col_val, cmp_str).into())
+        }
+        _ => Err(format!("Unknown operator: {}", op).into()),
+    }
+}
+
+fn is_zero_or_empty(val: &Value) -> bool {
+    match val {
+        Value::Integer(i) => *i == 0,
+        Value::Float(f) => *f == 0.0,
+        Value::Text(s) => s.is_empty(),
+        Value::Boolean(b) => !*b,
+        Value::Null => true,
+        Value::Blob(_) => false,
+    }
+}
+
 /// Trigger timing: BEFORE or AFTER
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerTiming {
@@ -651,5 +855,89 @@ mod tests {
         let storage = MemoryStorage::new();
         let result = storage.get_table_info("nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_evaluate_sql_expression_integer_comparison() {
+        let columns = vec!["age".to_string(), "name".to_string()];
+        let record = vec![Value::Integer(25), Value::Text("Alice".to_string())];
+
+        // age > 18
+        let result = evaluate_sql_expression("age > 18", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // age >= 25
+        let result = evaluate_sql_expression("age >= 25", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // age < 18
+        let result = evaluate_sql_expression("age < 18", &columns, &record);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+
+        // age = 25
+        let result = evaluate_sql_expression("age = 25", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // age <> 30
+        let result = evaluate_sql_expression("age <> 30", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_sql_expression_boolean_and_logical_ops() {
+        let columns = vec!["age".to_string(), "active".to_string()];
+        let record = vec![Value::Integer(25), Value::Boolean(true)];
+
+        // age > 18 AND active = true
+        let result = evaluate_sql_expression("age > 18 AND active = true", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // age < 18 OR active = true
+        let result = evaluate_sql_expression("age < 18 OR active = true", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // NOT active = false
+        let result = evaluate_sql_expression("NOT active = false", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_sql_expression_null_handling() {
+        let columns = vec!["age".to_string(), "email".to_string()];
+        let record = vec![Value::Null, Value::Text("test@test.com".to_string())];
+
+        // age IS NOT NULL should be false
+        let result = evaluate_sql_expression("age IS NOT NULL", &columns, &record);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+
+        // email IS NOT NULL should be true
+        let result = evaluate_sql_expression("email IS NOT NULL", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_sql_expression_text_comparison() {
+        let columns = vec!["name".to_string()];
+        let record = vec![Value::Text("Alice".to_string())];
+
+        // name = 'Alice'
+        let result = evaluate_sql_expression("name = 'Alice'", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        // name <> 'Bob'
+        let result = evaluate_sql_expression("name <> 'Bob'", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
     }
 }

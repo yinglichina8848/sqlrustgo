@@ -274,6 +274,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         })?;
     }
@@ -305,6 +306,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         })?;
     }
@@ -330,6 +332,7 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             columns,
             foreign_keys: vec![],
             unique_constraints: vec![],
+            check_constraints: vec![],
             partition_info: None,
         })?;
     }
