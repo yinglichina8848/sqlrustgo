@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/version-v2.7.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.8.0--alpha-blue" alt="Version">
   <img src="https://img.shields.io/badge/branch-main-green" alt="Branch">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
