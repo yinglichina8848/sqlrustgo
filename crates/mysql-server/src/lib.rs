@@ -176,6 +176,7 @@ impl Packet {
     pub fn read_from<R: Read>(r: &mut R) -> MySqlResult<Self> {
         let length = r.read_u24::<LittleEndian>()?;
         let sequence = r.read_u8()?;
+        tracing::debug!("Packet header: length={}, seq={}", length, sequence);
         let mut payload = vec![0u8; length as usize];
         r.read_exact(&mut payload)?;
         Ok(Self {
@@ -186,9 +187,11 @@ impl Packet {
     }
 
     pub fn write_to<W: Write>(&self, w: &mut W) -> MySqlResult<()> {
+        tracing::debug!("Sending packet: length={}, seq={}", self.length, self.sequence);
         w.write_u24::<LittleEndian>(self.length)?;
         w.write_u8(self.sequence)?;
         w.write_all(&self.payload)?;
+        w.flush()?;
         Ok(())
     }
 }
