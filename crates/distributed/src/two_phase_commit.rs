@@ -751,4 +751,134 @@ mod tests {
         let parsed: Vote = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, Vote::Yes);
     }
+
+    #[test]
+    fn test_two_pc_message_commit_response() {
+        let msg = TwoPCMessage::CommitResponse { tx_id: 1, node_id: 2, success: true };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("CommitResponse"));
+    }
+
+    #[test]
+    fn test_two_pc_message_abort() {
+        let msg = TwoPCMessage::Abort { tx_id: 1, reason: "timeout".to_string() };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("Abort"));
+    }
+
+    #[test]
+    fn test_two_pc_message_abort_response() {
+        let msg = TwoPCMessage::AbortResponse { tx_id: 1, node_id: 2 };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("AbortResponse"));
+    }
+
+    #[test]
+    fn test_two_pc_message_ack() {
+        let msg = TwoPCMessage::Ack { tx_id: 1 };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("Ack"));
+    }
+
+    #[test]
+    fn test_two_phase_commit_new() {
+        let tpc = TwoPhaseCommit::new(1, true);
+        assert_eq!(tpc.num_active_transactions(), 0);
+    }
+
+    #[test]
+    fn test_two_phase_commit_with_coordinator() {
+        let tpc = TwoPhaseCommit::new(42, true);
+        assert_eq!(tpc.num_active_transactions(), 0);
+    }
+
+    #[test]
+    fn test_two_phase_commit_num_active_transactions() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+        tpc.begin_transaction(participants);
+        assert_eq!(tpc.num_active_transactions(), 1);
+    }
+
+    #[test]
+    fn test_two_phase_commit_get_transaction() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+        let tx_id = tpc.begin_transaction(participants);
+        let tx = tpc.get_transaction(tx_id);
+        assert!(tx.is_some());
+    }
+
+    #[test]
+    fn test_two_phase_commit_get_transaction_none() {
+        let tpc = TwoPhaseCommit::new(1, true);
+        let tx = tpc.get_transaction(999);
+        assert!(tx.is_none());
+    }
+
+    #[test]
+    fn test_two_phase_commit_force_abort_timed_out() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+        let tx_id = tpc.begin_transaction(participants);
+        if let Some(tx) = tpc.get_transaction_mut(tx_id) {
+            tx.last_update_ms = 0;
+        }
+        let commands = tpc.force_abort_timed_out();
+        assert_eq!(commands.len(), 1);
+    }
+
+    #[test]
+    fn test_two_phase_commit_cleanup_completed() {
+        let mut tpc = TwoPhaseCommit::new(1, true);
+        let participants = vec![Participant::new(2, 0)];
+        let tx_id = tpc.begin_transaction(participants);
+        if let Some(tx) = tpc.get_transaction_mut(tx_id) {
+            tx.set_committed();
+        }
+        tpc.cleanup_completed();
+        assert_eq!(tpc.num_active_transactions(), 0);
+    }
+
+    #[test]
+    fn test_distributed_transaction_new() {
+        let participants = vec![Participant::new(2, 0)];
+        let tx = DistributedTransaction::new(1, 100, participants);
+        assert_eq!(tx.tx_id, 1);
+        assert_eq!(tx.coordinator_id, 100);
+        assert_eq!(tx.state, TransactionState::Init);
+    }
+
+    #[test]
+    fn test_distributed_transaction_set_aborted() {
+        let participants = vec![Participant::new(2, 0)];
+        let mut tx = DistributedTransaction::new(1, 1, participants);
+        tx.set_aborted("test");
+        assert_eq!(tx.state, TransactionState::Aborted);
+        assert!(tx.error_reason.is_some());
+    }
+
+    #[test]
+    fn test_distributed_transaction_set_committed() {
+        let participants = vec![Participant::new(2, 0)];
+        let mut tx = DistributedTransaction::new(1, 1, participants);
+        tx.set_committed();
+        assert_eq!(tx.state, TransactionState::Committed);
+    }
+
+    #[test]
+    fn test_distributed_transaction_is_timed_out() {
+        let participants = vec![Participant::new(2, 0)];
+        let mut tx = DistributedTransaction::new(1, 1, participants);
+        tx.timeout_ms = 1; // 1 second (current_timestamp is in seconds)
+        std::thread::sleep(Duration::from_secs(2));
+        assert!(tx.is_timed_out());
+    }
+
+    #[test]
+    fn test_distributed_transaction_not_timed_out() {
+        let participants = vec![Participant::new(2, 0)];
+        let tx = DistributedTransaction::new(1, 1, participants);
+        assert!(!tx.is_timed_out());
+    }
 }
