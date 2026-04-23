@@ -217,7 +217,6 @@ fn test_left_join_mixed_null_and_normal_keys() {
 }
 
 #[test]
-#[ignore = "Filter NULL semantics not yet implemented - see issue #1833"]
 fn test_filter_with_null_comparison() {
     let mut engine = create_engine();
     engine
@@ -254,7 +253,7 @@ fn test_filter_null_column_vs_value() {
 }
 
 #[test]
-#[ignore = "Filter NULL semantics not yet implemented - see issue #1833"]
+#[ignore = "Parser does not support IS NULL syntax - parser bug, not executor"]
 fn test_filter_is_null() {
     let mut engine = create_engine();
     engine
