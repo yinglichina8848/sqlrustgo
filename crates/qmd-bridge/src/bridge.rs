@@ -58,18 +58,20 @@ impl Default for QmdBridgeImpl {
 
 impl QmdBridge for QmdBridgeImpl {
     fn sync_to_qmd(&self, data: &QmdData) -> QmdResult<()> {
-        let mut storage = self.storage.lock().map_err(|e| {
-            QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut storage = self
+            .storage
+            .lock()
+            .map_err(|e| QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e)))?;
         storage.push(data.clone());
         tracing::info!(id = %data.id, "Synced data to QMD");
         Ok(())
     }
 
     fn sync_batch_to_qmd(&self, data: &[QmdData]) -> QmdResult<()> {
-        let mut storage = self.storage.lock().map_err(|e| {
-            QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut storage = self
+            .storage
+            .lock()
+            .map_err(|e| QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e)))?;
         for item in data {
             tracing::debug!(id = %item.id, "Syncing batch item");
             storage.push(item.clone());
@@ -79,25 +81,25 @@ impl QmdBridge for QmdBridgeImpl {
     }
 
     fn search_from_qmd(&self, query: &QmdQuery) -> QmdResult<Vec<SearchResult>> {
-        let storage = self.storage.lock().map_err(|e| {
-            QmdBridgeError::Search(format!("Failed to acquire lock: {}", e))
-        })?;
+        let storage = self
+            .storage
+            .lock()
+            .map_err(|e| QmdBridgeError::Search(format!("Failed to acquire lock: {}", e)))?;
 
         let mut results = Vec::new();
         for data in storage.iter() {
             // Apply filters
-            let passes_filter = query.filters.is_empty()
-                || {
-                    query.filters.iter().all(|f| {
-                        data.metadata
-                            .get(&f.field)
-                            .map_or(false, |v| match f.operator {
-                                FilterOperator::Eq => v == &f.value,
-                                FilterOperator::Contains => v.contains(&f.value),
-                                _ => false,
-                            })
-                    })
-                };
+            let passes_filter = query.filters.is_empty() || {
+                query.filters.iter().all(|f| {
+                    data.metadata
+                        .get(&f.field)
+                        .map_or(false, |v| match f.operator {
+                            FilterOperator::Eq => v == &f.value,
+                            FilterOperator::Contains => v.contains(&f.value),
+                            _ => false,
+                        })
+                })
+            };
 
             if passes_filter {
                 results.push(SearchResult {
@@ -122,9 +124,10 @@ impl QmdBridge for QmdBridgeImpl {
     fn hybrid_search(&self, query: &HybridQuery) -> QmdResult<HybridResult> {
         // Perform vector search if query vector is provided
         let vector_results = if let Some(ref vec) = query.vector {
-            let storage = self.storage.lock().map_err(|e| {
-                QmdBridgeError::Search(format!("Failed to acquire lock: {}", e))
-            })?;
+            let storage = self
+                .storage
+                .lock()
+                .map_err(|e| QmdBridgeError::Search(format!("Failed to acquire lock: {}", e)))?;
 
             let mut results = Vec::new();
             for data in storage.iter() {
@@ -191,9 +194,10 @@ impl QmdBridge for QmdBridgeImpl {
     }
 
     fn sync_status(&self) -> QmdResult<SyncStatus> {
-        let storage = self.storage.lock().map_err(|e| {
-            QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e))
-        })?;
+        let storage = self
+            .storage
+            .lock()
+            .map_err(|e| QmdBridgeError::Sync(format!("Failed to acquire lock: {}", e)))?;
 
         Ok(SyncStatus {
             last_sync: std::time::SystemTime::now()

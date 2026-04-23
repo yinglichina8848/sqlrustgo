@@ -360,4 +360,275 @@ mod tests {
         let health = pool.health_check_all().await;
         assert!(health.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_client_pool_get_client_after_remove() {
+        let pool = ClientPool::new();
+        let removed = pool.remove_client(1).await;
+        assert!(removed.is_none());
+        let client = pool.get_client(1).await;
+        assert!(client.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_pool_multiple_clients() {
+        let pool = ClientPool::new();
+        let result1 = pool.remove_client(1).await;
+        let result2 = pool.remove_client(2).await;
+        let result3 = pool.remove_client(3).await;
+        assert!(result1.is_none());
+        assert!(result2.is_none());
+        assert!(result3.is_none());
+    }
+
+    #[test]
+    fn test_vector_record_creation() {
+        let record = VectorRecord {
+            id: 123,
+            vector: vec![1.0, 2.0, 3.0],
+            metadata: HashMap::new(),
+        };
+        assert_eq!(record.id, 123);
+        assert_eq!(record.vector.len(), 3);
+        assert!(record.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_property_map_creation() {
+        let mut props = HashMap::new();
+        props.insert("name".to_string(), "test".to_string());
+        let property_map = PropertyMap { properties: props.clone() };
+        assert_eq!(property_map.properties.get("name"), Some(&"test".to_string()));
+    }
+
+    #[test]
+    fn test_insert_vector_request() {
+        let request = InsertVectorRequest {
+            shard_id: 1,
+            record: Some(VectorRecord {
+                id: 42,
+                vector: vec![0.1, 0.2],
+                metadata: HashMap::new(),
+            }),
+        };
+        assert_eq!(request.shard_id, 1);
+        assert!(request.record.is_some());
+        assert_eq!(request.record.as_ref().unwrap().id, 42);
+    }
+
+    #[test]
+    fn test_search_vectors_request() {
+        let request = SearchVectorsRequest {
+            shard_id: 5,
+            query: vec![1.0, 2.0, 3.0],
+            top_k: 10,
+        };
+        assert_eq!(request.shard_id, 5);
+        assert_eq!(request.query.len(), 3);
+        assert_eq!(request.top_k, 10);
+    }
+
+    #[test]
+    fn test_delete_vector_request() {
+        let request = DeleteVectorRequest {
+            shard_id: 3,
+            vector_id: 100,
+        };
+        assert_eq!(request.shard_id, 3);
+        assert_eq!(request.vector_id, 100);
+    }
+
+    #[test]
+    fn test_create_node_request() {
+        let request = CreateNodeRequest {
+            shard_id: 2,
+            label: "User".to_string(),
+            properties: Some(PropertyMap {
+                properties: HashMap::new(),
+            }),
+        };
+        assert_eq!(request.shard_id, 2);
+        assert_eq!(request.label, "User");
+        assert!(request.properties.is_some());
+    }
+
+    #[test]
+    fn test_get_node_request() {
+        let request = GetNodeRequest { node_id: 55 };
+        assert_eq!(request.node_id, 55);
+    }
+
+    #[test]
+    fn test_delete_node_request() {
+        let request = DeleteNodeRequest { node_id: 77 };
+        assert_eq!(request.node_id, 77);
+    }
+
+    #[test]
+    fn test_create_edge_request() {
+        let request = CreateEdgeRequest {
+            from_node: 10,
+            to_node: 20,
+            label: "KNOWS".to_string(),
+            properties: Some(PropertyMap {
+                properties: HashMap::new(),
+            }),
+        };
+        assert_eq!(request.from_node, 10);
+        assert_eq!(request.to_node, 20);
+        assert_eq!(request.label, "KNOWS");
+    }
+
+    #[test]
+    fn test_get_edges_request() {
+        let request = GetEdgesRequest { node_id: 33 };
+        assert_eq!(request.node_id, 33);
+    }
+
+    #[test]
+    fn test_search_result_creation() {
+        let result = SearchResult {
+            id: 1,
+            score: 0.95,
+            record: None,
+        };
+        assert_eq!(result.id, 1);
+        assert_eq!(result.score, 0.95);
+    }
+
+    #[test]
+    fn test_search_vectors_response_empty() {
+        let response = SearchVectorsResponse {
+            results: vec![],
+            error: String::new(),
+        };
+        assert!(response.results.is_empty());
+        assert!(response.error.is_empty());
+    }
+
+    #[test]
+    fn test_search_vectors_response_with_error() {
+        let response = SearchVectorsResponse {
+            results: vec![],
+            error: "Server error".to_string(),
+        };
+        assert!(response.results.is_empty());
+        assert_eq!(response.error, "Server error");
+    }
+
+    #[test]
+    fn test_insert_vector_response_success() {
+        let response = InsertVectorResponse {
+            success: true,
+            error: String::new(),
+        };
+        assert!(response.success);
+        assert!(response.error.is_empty());
+    }
+
+    #[test]
+    fn test_insert_vector_response_failure() {
+        let response = InsertVectorResponse {
+            success: false,
+            error: "Shard not found".to_string(),
+        };
+        assert!(!response.success);
+        assert_eq!(response.error, "Shard not found");
+    }
+
+    #[test]
+    fn test_delete_vector_response_success() {
+        let response = DeleteVectorResponse {
+            success: true,
+            error: String::new(),
+        };
+        assert!(response.success);
+    }
+
+    #[test]
+    fn test_create_node_response_success() {
+        let response = CreateNodeResponse {
+            node_id: 123,
+            success: true,
+            error: String::new(),
+        };
+        assert!(response.success);
+        assert_eq!(response.node_id, 123);
+    }
+
+    #[test]
+    fn test_create_node_response_failure() {
+        let response = CreateNodeResponse {
+            node_id: 0,
+            success: false,
+            error: "Invalid label".to_string(),
+        };
+        assert!(!response.success);
+        assert_eq!(response.error, "Invalid label");
+    }
+
+    #[test]
+    fn test_get_node_response_found() {
+        let response = GetNodeResponse {
+            node_id: 42,
+            label: "Person".to_string(),
+            properties: Some(PropertyMap {
+                properties: HashMap::new(),
+            }),
+            found: true,
+        };
+        assert!(response.found);
+        assert_eq!(response.label, "Person");
+    }
+
+    #[test]
+    fn test_get_node_response_not_found() {
+        let response = GetNodeResponse {
+            node_id: 0,
+            label: String::new(),
+            properties: None,
+            found: false,
+        };
+        assert!(!response.found);
+    }
+
+    #[test]
+    fn test_delete_node_response_success() {
+        let response = DeleteNodeResponse {
+            success: true,
+            error: String::new(),
+        };
+        assert!(response.success);
+    }
+
+    #[test]
+    fn test_create_edge_response_success() {
+        let response = CreateEdgeResponse {
+            edge_id: 999,
+            success: true,
+            error: String::new(),
+        };
+        assert!(response.success);
+        assert_eq!(response.edge_id, 999);
+    }
+
+    #[test]
+    fn test_create_edge_response_failure() {
+        let response = CreateEdgeResponse {
+            edge_id: 0,
+            success: false,
+            error: "Node not found".to_string(),
+        };
+        assert!(!response.success);
+    }
+
+    #[test]
+    fn test_get_edges_response_empty() {
+        let response = GetEdgesResponse {
+            edges: vec![],
+            error: String::new(),
+        };
+        assert!(response.edges.is_empty());
+        assert!(response.error.is_empty());
+    }
 }
