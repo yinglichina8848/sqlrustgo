@@ -453,4 +453,129 @@ mod tests {
         assert!(metrics.contains("sqlrustgo_queries_total 1"));
         assert!(metrics.contains("sqlrustgo_query_duration_seconds_count 1"));
     }
+
+    #[test]
+    fn test_memory_stats_update() {
+        let mut stats = MemoryStats::new();
+        assert_eq!(stats.current_memory, 0);
+        assert_eq!(stats.peak_memory, 0);
+
+        stats.update(100);
+        assert_eq!(stats.current_memory, 100);
+        assert_eq!(stats.peak_memory, 100);
+
+        stats.update(50);
+        assert_eq!(stats.current_memory, 50);
+        assert_eq!(stats.peak_memory, 100);
+
+        stats.update(200);
+        assert_eq!(stats.current_memory, 200);
+        assert_eq!(stats.peak_memory, 200);
+    }
+
+    #[test]
+    fn test_memory_stats_default() {
+        let stats = MemoryStats::default();
+        assert_eq!(stats.current_memory, 0);
+        assert_eq!(stats.peak_memory, 0);
+        assert_eq!(stats.allocation_count, 0);
+    }
+
+    #[test]
+    fn test_slow_query_config_default() {
+        let config = SlowQueryConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.long_query_time, 1.0);
+    }
+
+    #[test]
+    fn test_slow_query_entry() {
+        let entry = SlowQueryEntry {
+            query: "SELECT 1".to_string(),
+            execution_time: 0.5,
+            timestamp: 1234567890,
+            connection_id: 1,
+        };
+        assert_eq!(entry.query, "SELECT 1");
+        assert_eq!(entry.execution_time, 0.5);
+    }
+
+    #[test]
+    fn test_query_stats_new() {
+        let stats = QueryStats::new();
+        assert_eq!(stats.total_queries, 0);
+        assert_eq!(stats.slow_queries, 0);
+    }
+
+    #[test]
+    fn test_query_stats_record_query() {
+        let stats = QueryStats::new();
+        stats.record_query("SELECT", 0.5, false);
+        stats.record_query("INSERT", 2.0, true);
+        assert_eq!(stats.total_queries, 2);
+        assert_eq!(stats.slow_queries, 1);
+    }
+
+    #[test]
+    fn test_connection_stats_new() {
+        let stats = ConnectionStats::new();
+        assert_eq!(stats.active_connections, 0);
+        assert_eq!(stats.total_connections, 0);
+        assert_eq!(stats.peak_connections, 0);
+    }
+
+    #[test]
+    fn test_performance_monitor_new() {
+        let monitor = PerformanceMonitor::new();
+        assert!(monitor.query_stats.read().unwrap().total_queries == 0);
+        assert!(monitor.connection_stats.read().unwrap().active_connections == 0);
+    }
+
+    #[test]
+    fn test_set_slow_query_enabled() {
+        let monitor = create_monitor();
+        monitor.set_long_query_time(0.5);
+
+        monitor.set_slow_query_enabled(false);
+        monitor.record_query("SELECT sleep(1)", "SELECT", 1.0, 1);
+        let slow_queries = monitor.get_slow_queries(10);
+        assert_eq!(slow_queries.len(), 0);
+
+        monitor.set_slow_query_enabled(true);
+        monitor.record_query("SELECT sleep(1)", "SELECT", 1.0, 1);
+        let slow_queries = monitor.get_slow_queries(10);
+        assert_eq!(slow_queries.len(), 1);
+    }
+
+    #[test]
+    fn test_get_slow_queries_limit() {
+        let monitor = create_monitor();
+        monitor.set_long_query_time(0.0);
+
+        for i in 0..100 {
+            monitor.record_query(&format!("SELECT {}", i), "SELECT", 1.0, 1);
+        }
+
+        let slow_queries = monitor.get_slow_queries(10);
+        assert_eq!(slow_queries.len(), 10);
+    }
+
+    #[test]
+    fn test_reset_stats() {
+        let monitor = create_monitor();
+        monitor.record_query("SELECT 1", "SELECT", 0.5, 1);
+        monitor.record_connection_opened();
+
+        monitor.reset_stats();
+
+        assert_eq!(monitor.query_stats.read().unwrap().total_queries, 0);
+        assert_eq!(monitor.connection_stats.read().unwrap().total_connections, 0);
+    }
+
+    #[test]
+    fn test_memory_stats_debug() {
+        let stats = MemoryStats::new();
+        let debug_str = format!("{:?}", stats);
+        assert!(debug_str.contains("MemoryStats"));
+    }
 }
