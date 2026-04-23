@@ -76,13 +76,13 @@ fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) ->
 
     // First, hash the password into nr and nr2
     for i in 0..4 {
-        let tmp: u32 = password_hash[i];
+        let tmp: u32 = password_hash[i] as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
     }
     for i in 4..8 {
-        let tmp: u32 = password_hash[i];
+        let tmp: u32 = password_hash[i] as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
@@ -552,7 +552,7 @@ fn handle_connection(
     let mut seq = 0u8;
 
     // Generate 8-byte random seed for old_password auth
-    let seed = rand_u8_8();
+    let seed: [u8; 8] = rand::random();
 
     // Send handshake with seed
     make_handshake_packet(seq, &seed).write_to(&mut stream)?;
