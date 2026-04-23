@@ -82,6 +82,285 @@ impl From<SqlError> for MySqlError {
 }
 pub type MySqlResult<T> = Result<T, MySqlError>;
 
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test Packet serialization - roundtrip
+    #[test]
+    fn test_packet_roundtrip() {
+        let pkt = Packet {
+            length: 5,
+            sequence: 3,
+            payload: vec![1, 2, 3, 4, 5],
+        };
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+
+        // Verify header: 3 bytes length + 1 byte sequence
+        assert_eq!(buf.len(), 4 + 5);
+        assert_eq!(buf[0], 5); // length byte 0
+        assert_eq!(buf[1], 0); // length byte 1
+        assert_eq!(buf[2], 0); // length byte 2
+        assert_eq!(buf[3], 3); // sequence
+
+        let mut reader = std::io::Cursor::new(&buf);
+        let read_pkt = Packet::read_from(&mut reader).unwrap();
+        assert_eq!(read_pkt.length, pkt.length);
+        assert_eq!(read_pkt.sequence, pkt.sequence);
+        assert_eq!(read_pkt.payload, pkt.payload);
+    }
+
+    // Test Packet with empty payload
+    #[test]
+    fn test_packet_empty_payload() {
+        let pkt = Packet {
+            length: 0,
+            sequence: 0,
+            payload: vec![],
+        };
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+        let mut reader = std::io::Cursor::new(&buf);
+        let read_pkt = Packet::read_from(&mut reader).unwrap();
+        assert_eq!(read_pkt.length, 0);
+        assert!(read_pkt.payload.is_empty());
+    }
+
+    // Test length-encoded integer branches
+    #[test]
+    fn test_write_lenenc_int_1byte() {
+        // Branch: v < 251 (1 byte)
+        let mut buf = Vec::new();
+        write_lenenc_int(&mut buf, 100).unwrap();
+        assert_eq!(buf, vec![100]);
+    }
+
+    #[test]
+    fn test_write_lenenc_int_2bytes() {
+        // Branch: 251 <= v < 0x10000 (3 bytes: 0xfc + u16)
+        let mut buf = Vec::new();
+        write_lenenc_int(&mut buf, 300).unwrap();
+        assert_eq!(buf[0], 0xfc);
+        assert_eq!(u16::from_le_bytes([buf[1], buf[2]]), 300);
+    }
+
+    #[test]
+    fn test_write_lenenc_int_3bytes() {
+        // Branch: 0x10000 <= v < 0x1000000 (4 bytes: 0xfd + u24)
+        let mut buf = Vec::new();
+        write_lenenc_int(&mut buf, 0x10000).unwrap();
+        assert_eq!(buf[0], 0xfd);
+        assert_eq!(u32::from_le_bytes([buf[1], buf[2], buf[3], 0]), 0x10000);
+    }
+
+    #[test]
+    fn test_write_lenenc_int_8bytes() {
+        // Branch: v >= 0x1000000 (9 bytes: 0xfe + u64)
+        let mut buf = Vec::new();
+        write_lenenc_int(&mut buf, 0x1000000).unwrap();
+        assert_eq!(buf[0], 0xfe);
+        assert_eq!(u64::from_le_bytes([
+            buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8],
+        ]), 0x1000000);
+    }
+
+    // Test read_lenenc_int branches
+    #[test]
+    fn test_read_lenenc_int_1byte() {
+        // Branch: 0..=0xfa
+        let mut reader = std::io::Cursor::new(&[100u8]);
+        let val = read_lenenc_int(&mut reader).unwrap();
+        assert_eq!(val, 100);
+    }
+
+    #[test]
+    fn test_read_lenenc_int_2bytes() {
+        // Branch: 0xfc
+        let mut reader = std::io::Cursor::new(&[0xfc, 0x2c, 0x01]); // 300 in little-endian
+        let val = read_lenenc_int(&mut reader).unwrap();
+        assert_eq!(val, 300);
+    }
+
+    #[test]
+    fn test_read_lenenc_int_3bytes() {
+        // Branch: 0xfd
+        let mut reader = std::io::Cursor::new(&[0xfd, 0x00, 0x00, 0x01]); // 0x10000 in little-endian
+        let val = read_lenenc_int(&mut reader).unwrap();
+        assert_eq!(val, 0x10000);
+    }
+
+    #[test]
+    fn test_read_lenenc_int_8bytes() {
+        // Branch: 0xfe with u64 value
+        let mut reader = std::io::Cursor::new(&[0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]); // 0x10000000000 in little-endian
+        let val = read_lenenc_int(&mut reader).unwrap();
+        assert_eq!(val, 0x10000000000);
+    }
+
+    #[test]
+    fn test_read_lenenc_int_0xfb_error() {
+        // Branch: 0xfb = NULL
+        let mut reader = std::io::Cursor::new(&[0xfbu8]);
+        let result = read_lenenc_int(&mut reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_lenenc_int_0xff_error() {
+        // Branch: 0xff = invalid
+        let mut reader = std::io::Cursor::new(&[0xffu8]);
+        let result = read_lenenc_int(&mut reader);
+        assert!(result.is_err());
+    }
+
+    // Test length-encoded string
+    #[test]
+    fn test_write_lenenc_string() {
+        let mut buf = Vec::new();
+        write_lenenc_string(&mut buf, b"hello").unwrap();
+        assert_eq!(buf[0], 5); // length prefix
+        assert_eq!(&buf[1..], b"hello");
+    }
+
+    // Test make_ok_packet structure
+    #[test]
+    fn test_make_ok_packet() {
+        let pkt = make_ok_packet(1, 5, 10, 0x0002, 0);
+        assert_eq!(pkt.sequence, 1);
+        assert_eq!(pkt.payload[0], 0x00); // OK packet type
+        // Verify it can be written without error
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+    }
+
+    // Test make_err_packet structure
+    #[test]
+    fn test_make_err_packet() {
+        let pkt = make_err_packet(1, 1146, "42S02", "Table not found");
+        assert_eq!(pkt.sequence, 1);
+        assert_eq!(pkt.payload[0], 0xff); // ERR packet type
+        assert_eq!(u16::from_le_bytes([pkt.payload[1], pkt.payload[2]]), 1146);
+        // Verify it can be written without error
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+    }
+
+    // Test make_eof_packet structure
+    #[test]
+    fn test_make_eof_packet() {
+        let pkt = make_eof_packet(2, 0x0002);
+        assert_eq!(pkt.sequence, 2);
+        assert_eq!(pkt.payload[0], 0xfe); // EOF packet type
+        // Verify it can be written without error
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+    }
+
+    // Test make_handshake_packet structure
+    #[test]
+    fn test_make_handshake_packet() {
+        let scramble = [1u8; 20];
+        let pkt = make_handshake_packet(0, &scramble);
+        assert_eq!(pkt.sequence, 0);
+        assert_eq!(pkt.payload[0], 0x0a); // Protocol version 10
+        // Verify it can be written without error
+        let mut buf = Vec::new();
+        pkt.write_to(&mut buf).unwrap();
+    }
+
+    // Test is_select function branches
+    #[test]
+    fn test_is_select() {
+        assert!(is_select("SELECT * FROM t"));
+        assert!(is_select("SELECT"));
+        assert!(is_select("SELECT a FROM t WHERE id = 1"));
+        assert!(is_select("  SELECT * FROM t"));
+        assert!(is_select("SHOW TABLES"));
+        assert!(is_select("SHOW"));
+        assert!(is_select("DESCRIBE t"));
+        assert!(is_select("EXPLAIN SELECT * FROM t"));
+        assert!(!is_select("INSERT INTO t VALUES(1)"));
+        assert!(!is_select("UPDATE t SET a = 1"));
+        assert!(!is_select("DELETE FROM t"));
+        assert!(!is_select("DROP TABLE t"));
+    }
+
+    // Test is_transaction_cmd function branches
+    #[test]
+    fn test_is_transaction_cmd() {
+        assert!(is_transaction_cmd("BEGIN"));
+        assert!(is_transaction_cmd("COMMIT"));
+        assert!(is_transaction_cmd("ROLLBACK"));
+        assert!(is_transaction_cmd("START TRANSACTION"));
+        assert!(is_transaction_cmd("begin"));
+        assert!(is_transaction_cmd("BEGIN "));
+        assert!(is_transaction_cmd("  BEGIN"));
+        assert!(!is_transaction_cmd("BEGINWORK"));
+        assert!(!is_transaction_cmd("BEGIN TRANSACTION")); // different from START TRANSACTION
+        assert!(!is_transaction_cmd("SELECT * FROM t"));
+        assert!(!is_transaction_cmd(""));
+    }
+
+    // Test parse_handshake_response - too short
+    #[test]
+    fn test_parse_handshake_response_too_short() {
+        let pkt = Packet {
+            length: 10,
+            sequence: 0,
+            payload: vec![0; 10],
+        };
+        let result = parse_handshake_response(&pkt);
+        assert!(result.is_err());
+    }
+
+    // Test parse_handshake_response - minimal valid response
+    #[test]
+    fn test_parse_handshake_response_minimal() {
+        let mut payload = vec![0u8; 64];
+        // capability_flags (4 bytes) at offset 0-3
+        payload[0] = 0x01; // LONG_PASSWORD
+        payload[1] = 0x00;
+        payload[2] = 0x00;
+        payload[3] = 0x00;
+        // username (null-terminated) starting at offset 32
+        payload[32] = b't';
+        payload[33] = b'e';
+        payload[34] = b's';
+        payload[35] = b't';
+        payload[36] = 0x00; // null terminator
+
+        let pkt = Packet {
+            length: payload.len() as u32,
+            sequence: 1,
+            payload,
+        };
+        let result = parse_handshake_response(&pkt);
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(resp.username, "test");
+        assert_eq!(resp.capability_flags, 0x01);
+    }
+
+    // Test MySqlError Display
+    #[test]
+    fn test_mysql_error_display() {
+        let err = MySqlError::Protocol("test error".to_string());
+        assert_eq!(format!("{}", err), "Protocol: test error");
+
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "io error");
+        let err = MySqlError::Io(io_err);
+        assert_eq!(format!("{}", err), "IO: io error");
+
+        let err = MySqlError::Sql("sql error".to_string());
+        assert_eq!(format!("{}", err), "SQL: sql error");
+    }
+}
+
 #[derive(Debug)]
 pub struct Packet {
     pub length: u32,
