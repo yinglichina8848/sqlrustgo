@@ -310,10 +310,42 @@ impl StorageEngine for MemoryStorage {
     fn update(
         &mut self,
         table: &str,
-        _filters: &[Value],
-        _updates: &[(usize, Value)],
+        filters: &[Value],
+        updates: &[(usize, Value)],
     ) -> SqlResult<usize> {
-        Ok(self.tables.get(table).map(|r| r.len()).unwrap_or(0))
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+
+        let mut count = 0;
+
+        // If filters is empty, update all rows
+        // If filters has values, match first column against first filter value
+        if filters.is_empty() {
+            for record in records.iter_mut() {
+                for &(col_idx, ref new_val) in updates {
+                    if col_idx < record.len() {
+                        record[col_idx] = new_val.clone();
+                    }
+                }
+                count += 1;
+            }
+        } else if let Some(filter_val) = filters.first() {
+            for record in records.iter_mut() {
+                // Check if first column matches filter value
+                let matches = record.first().map(|v| v == filter_val).unwrap_or(false);
+                if matches {
+                    for &(col_idx, ref new_val) in updates {
+                        if col_idx < record.len() {
+                            record[col_idx] = new_val.clone();
+                        }
+                    }
+                    count += 1;
+                }
+            }
+        }
+
+        Ok(count)
     }
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {

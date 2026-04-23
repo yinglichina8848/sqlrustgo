@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(args.monitoring_port)
     };
 
-    run_server(&args.host, args.port, monitoring_port)?;
+    run_server(&args.host, args.port)?;
 
     Ok(())
 }

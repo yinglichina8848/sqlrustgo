@@ -4,7 +4,7 @@
 //! from standard MySQL clients (mysql CLI, connectors, etc.)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use sqlrustgo::{parse, Value};
+use sqlrustgo::{parse, MemoryExecutionEngine, Value};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::MemoryStorage;
@@ -13,23 +13,6 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
-
-// Execution Engine Stub
-#[allow(dead_code)]
-struct ExecutionEngine {
-    storage: Arc<RwLock<MemoryStorage>>,
-}
-
-impl ExecutionEngine {
-    fn new(storage: Arc<RwLock<MemoryStorage>>) -> Self {
-        Self { storage }
-    }
-
-    fn execute(&mut self, stmt: Statement) -> SqlResult<ExecutorResult> {
-        tracing::info!("ExecutionEngine.execute called for statement: {:?}", stmt);
-        Ok(ExecutorResult::new(vec![], 0))
-    }
-}
 
 // ============================================================================
 // OLD_PASSWORD Hash Algorithm (MySQL 4.x/5.x compatible)
@@ -76,13 +59,13 @@ fn verify_old_password_response(seed: &[u8], response: &[u8], password: &str) ->
 
     // First, hash the password into nr and nr2
     for i in 0..4 {
-        let tmp: u32 = password_hash[i];
+        let tmp: u32 = password_hash[i] as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
     }
     for i in 4..8 {
-        let tmp: u32 = password_hash[i];
+        let tmp: u32 = password_hash[i] as u32;
         nr ^= (((nr & 63) + add) * tmp) + (nr << 8);
         nr2 ^= nr2.wrapping_shl(8) ^ nr;
         add = add.wrapping_add(tmp);
@@ -502,11 +485,9 @@ fn send_result_set<W: Write>(
 
 type SelectResult = (Vec<String>, Vec<String>, Vec<Vec<Value>>);
 
-fn execute_select(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<SelectResult> {
+fn execute_select(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<SelectResult> {
     tracing::info!("execute_select called with: [{}]", sql);
-    let statement: Statement = parse(sql).map_err(MySqlError::Sql)?;
-    tracing::info!("parse done, executing...");
-    let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
+    let result: ExecutorResult = engine.execute(sql).map_err(MySqlError::from)?;
 
     // Determine column names and types from result
     let col_count = result.rows.first().map(|r| r.len()).unwrap_or(0);
@@ -519,9 +500,8 @@ fn execute_select(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<Select
     Ok((columns, column_types, result.rows))
 }
 
-fn execute_write(sql: &str, engine: &mut ExecutionEngine) -> MySqlResult<usize> {
-    let statement: Statement = parse(sql).map_err(MySqlError::Sql)?;
-    let result: ExecutorResult = engine.execute(statement).map_err(MySqlError::from)?;
+fn execute_write(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<usize> {
+    let result: ExecutorResult = engine.execute(sql).map_err(MySqlError::from)?;
     Ok(result.affected_rows)
 }
 
@@ -552,7 +532,7 @@ fn handle_connection(
     let mut seq = 0u8;
 
     // Generate 8-byte random seed for old_password auth
-    let seed = rand_u8_8();
+    let seed: [u8; 8] = rand::random();
 
     // Send handshake with seed
     make_handshake_packet(seq, &seed).write_to(&mut stream)?;
@@ -638,7 +618,7 @@ fn handle_connection(
                     continue;
                 }
 
-                let mut engine = ExecutionEngine::new(storage.clone());
+                let mut engine = MemoryExecutionEngine::new(storage.clone());
 
                 tracing::info!("is_select={}, query=[{}]", is_select_query(&query), query);
                 if is_select_query(&query) {
@@ -720,7 +700,7 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
 
     // Initialize QMD tables via SQL
     {
-        let mut engine = ExecutionEngine::new(storage.clone());
+        let mut engine = MemoryExecutionEngine::new(storage.clone());
         let ddl_stmts = [
             "CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE vectors (hash_seq TEXT PRIMARY KEY, hash TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL)",
@@ -728,20 +708,9 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
         ];
 
         for sql in ddl_stmts {
-            match parse(sql) {
-                Ok(stmt) => {
-                    if let Err(e) = engine.execute(stmt) {
-                        tracing::warn!("Init table error (may already exist): {}", e);
-                    } else {
-                        tracing::info!(
-                            "Created table via: {}",
-                            sql.split_whitespace().nth(2).unwrap_or("?")
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Parse error for '{}': {}", sql, e);
-                }
+            tracing::info!("Creating QMD table via: {}", sql);
+            if let Err(e) = engine.execute(sql) {
+                tracing::warn!("Init table error (may already exist): {}", e);
             }
         }
     }
