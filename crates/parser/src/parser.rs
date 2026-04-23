@@ -1396,35 +1396,13 @@ impl Parser {
                             self.next();
                             break;
                         }
-                        Some(Token::Identifier(name)) => {
-                            row.push(Expression::Identifier(name.clone()));
-                            self.next();
-                        }
-                        Some(Token::NumberLiteral(n)) => {
-                            row.push(Expression::Literal(n.clone()));
-                            self.next();
-                        }
-                        Some(Token::StringLiteral(s)) => {
-                            row.push(Expression::Literal(format!("'{}'", s)));
-                            self.next();
-                        }
                         Some(Token::Comma) => {
                             self.next();
                         }
-                        Some(Token::Null) => {
-                            row.push(Expression::Literal("NULL".to_string()));
-                            self.next();
+                        _ => {
+                            let expr = self.parse_expression()?;
+                            row.push(expr);
                         }
-                        Some(Token::Minus) => {
-                            self.next();
-                            if let Some(Token::NumberLiteral(n)) = self.current() {
-                                row.push(Expression::Literal(format!("-{}", n)));
-                                self.next();
-                            } else {
-                                return Err("Expected number after -".to_string());
-                            }
-                        }
-                        _ => return Err("Expected value".to_string()),
                     }
                 }
                 values.push(row);
@@ -1490,23 +1468,8 @@ impl Parser {
             }
             self.next(); // consume =
 
-            // Parse value
-            let value = match self.current() {
-                Some(Token::Identifier(name)) => Expression::Identifier(name.clone()),
-                Some(Token::NumberLiteral(n)) => Expression::Literal(n.clone()),
-                Some(Token::StringLiteral(s)) => Expression::Literal(format!("'{}'", s)),
-                Some(Token::Null) => Expression::Literal("NULL".to_string()),
-                Some(Token::Minus) => {
-                    self.next();
-                    if let Some(Token::NumberLiteral(n)) = self.current() {
-                        Expression::Literal(format!("-{}", n))
-                    } else {
-                        return Err("Expected number after -".to_string());
-                    }
-                }
-                _ => return Err("Expected value in SET clause".to_string()),
-            };
-            self.next();
+            // Parse value - use parse_expression to support binary operations
+            let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
 
@@ -1569,7 +1532,7 @@ impl Parser {
     }
 
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
-        let left = self.parse_primary_expression()?;
+        let left = self.parse_additive_expression()?;
 
         if matches!(self.current(), Some(Token::In)) {
             self.next();
@@ -1640,6 +1603,40 @@ impl Parser {
                 Box::new(right),
             ))
         }
+    }
+
+    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+            let op = match self.current() {
+                Some(Token::Plus) => "+",
+                Some(Token::Minus) => "-",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_multiplicative_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_primary_expression()?;
+
+        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+            let op = match self.current() {
+                Some(Token::Star) => "*",
+                Some(Token::Slash) => "/",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_primary_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)

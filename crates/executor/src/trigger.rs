@@ -211,7 +211,8 @@ impl TriggerExecutor {
 
         let statements = self.split_body_statements(body);
         for stmt in statements {
-            let expanded = self.expand_row_variables(&stmt, &trigger.table_name, old_row, new_row);
+            let expanded =
+                self.expand_row_variables_for_parse(&stmt, &trigger.table_name, old_row, new_row);
             self.execute_trigger_sql(&expanded, table, old_row, new_row)?;
         }
 
@@ -276,7 +277,7 @@ impl TriggerExecutor {
         old_row: Option<&Record>,
         new_row: Option<&Record>,
     ) -> String {
-        let mut result = sql.to_string();
+        let mut result = sql.replace(". ", ".");
 
         if new_row.is_some() || old_row.is_some() {
             if let Ok(info) = self.storage.read().unwrap().get_table_info(table_name) {
@@ -285,6 +286,16 @@ impl TriggerExecutor {
         }
 
         result
+    }
+
+    fn expand_row_variables_for_parse(
+        &self,
+        sql: &str,
+        _table_name: &str,
+        _old_row: Option<&Record>,
+        _new_row: Option<&Record>,
+    ) -> String {
+        sql.replace(". ", ".")
     }
 
     fn do_expand_row_variables(
@@ -392,12 +403,18 @@ impl TriggerExecutor {
         if let sqlrustgo_parser::Statement::Insert(insert) = statement {
             let table_name = &insert.table;
             let table_info = storage.get_table_info(table_name)?;
+            let target_col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
             let num_cols = table_info.columns.len();
+
+            let trigger_ctx = crate::trigger_eval::TriggerContext::new(new_row, None);
 
             for values in &insert.values {
                 let mut record = Vec::new();
+                let eval_ctx = crate::trigger_eval::EvalContext::new(&trigger_ctx, None)
+                    .with_target_col_names(target_col_names.clone());
                 for expr in values {
-                    let val = self.expression_to_value(expr, new_row);
+                    let val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
                     record.push(val);
                 }
                 while record.len() < num_cols {
@@ -416,8 +433,8 @@ impl TriggerExecutor {
         trigger_table: &str,
         new_row: Option<&Record>,
     ) -> SqlResult<()> {
-        let expanded = self.expand_update_values(sql, trigger_table, new_row);
-        let statement = parse(&expanded)
+        let normalized = sql.replace(". ", ".");
+        let statement = parse(&normalized)
             .map_err(|e| SqlError::ExecutionError(format!("Parse error: {}", e)))?;
 
         let mut storage = self.storage.write().unwrap();
@@ -425,23 +442,66 @@ impl TriggerExecutor {
         if let sqlrustgo_parser::Statement::Update(update) = statement {
             let table_name = &update.table;
             let table_info = storage.get_table_info(table_name)?;
+            let target_col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
 
-            let set_col_indices: Vec<(usize, Value)> = update
-                .set_clauses
+            let trigger_table_info = storage.get_table_info(trigger_table)?;
+            let trigger_col_names: Vec<String> = trigger_table_info
+                .columns
                 .iter()
-                .filter_map(|(col_name, expr)| {
-                    let col_idx = table_info
-                        .columns
-                        .iter()
-                        .position(|c| c.name.eq_ignore_ascii_case(col_name));
-                    col_idx.map(|idx| {
-                        let val = self.expression_to_value(expr, new_row);
-                        (idx, val)
-                    })
-                })
+                .map(|c| c.name.clone())
                 .collect();
 
-            storage.update(table_name, &[], &set_col_indices)?;
+            let set_clauses: Vec<(String, sqlrustgo_parser::Expression)> =
+                update.set_clauses.clone();
+
+            if set_clauses.is_empty() {
+                return Ok(());
+            }
+
+            let where_expr = update.where_clause.clone();
+            let all_rows = storage.scan(table_name)?;
+            let mut modified_rows = Vec::new();
+            let mut has_match = false;
+
+            for row in all_rows {
+                let trigger_ctx = crate::trigger_eval::TriggerContext::new(new_row, None)
+                    .with_new_col_names(trigger_col_names.clone());
+                let eval_ctx = crate::trigger_eval::EvalContext::new(&trigger_ctx, Some(&row))
+                    .with_target_col_names(target_col_names.clone());
+                let mut updated_row = row.clone();
+
+                if let Some(ref where_cond) = where_expr {
+                    let where_result =
+                        crate::trigger_eval::expression_to_bool(where_cond, &eval_ctx, None);
+                    if !where_result {
+                        modified_rows.push(row);
+                        continue;
+                    }
+                }
+
+                has_match = true;
+                for (col_name, expr) in &set_clauses {
+                    if let Some(col_idx) = table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                    {
+                        let new_val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, None);
+                        if col_idx < updated_row.len() {
+                            updated_row[col_idx] = new_val;
+                        }
+                    }
+                }
+                modified_rows.push(updated_row);
+            }
+
+            if has_match {
+                storage.delete(table_name, &[])?;
+                if !modified_rows.is_empty() {
+                    storage.insert(table_name, modified_rows)?;
+                }
+            }
         }
         Ok(())
     }
@@ -584,67 +644,6 @@ impl TriggerExecutor {
         old_row: Option<&Record>,
     ) -> String {
         self.expand_row_variables_with_info(sql, table_info, old_row, None)
-    }
-
-    /// Convert parser Expression to Value
-    fn expression_to_value(
-        &self,
-        expr: &sqlrustgo_parser::Expression,
-        new_row: Option<&Record>,
-    ) -> Value {
-        match expr {
-            sqlrustgo_parser::Expression::Literal(s) => {
-                let s = s.trim();
-                if s.eq_ignore_ascii_case("NULL") {
-                    Value::Null
-                } else if let Ok(n) = s.parse::<i64>() {
-                    Value::Integer(n)
-                } else if let Ok(f) = s.parse::<f64>() {
-                    Value::Float(f)
-                } else if s.starts_with('\'') && s.ends_with('\'') {
-                    Value::Text(s[1..s.len() - 1].to_string())
-                } else {
-                    Value::Text(s.to_string())
-                }
-            }
-            sqlrustgo_parser::Expression::Identifier(name) => {
-                if let Some(new) = new_row {
-                    if name.eq_ignore_ascii_case("NEW.id") && !new.is_empty() {
-                        new[0].clone()
-                    } else if name.eq_ignore_ascii_case("NEW.col1") && new.len() > 1 {
-                        new[1].clone()
-                    } else {
-                        Value::Text(name.clone())
-                    }
-                } else {
-                    Value::Text(name.clone())
-                }
-            }
-            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
-                let left_val = self.expression_to_value(left, new_row);
-                let right_val = self.expression_to_value(right, new_row);
-                match (left_val, op.as_str(), right_val) {
-                    (Value::Integer(l), "+", Value::Integer(r)) => Value::Integer(l + r),
-                    (Value::Integer(l), "-", Value::Integer(r)) => Value::Integer(l - r),
-                    (Value::Integer(l), "*", Value::Integer(r)) => Value::Integer(l * r),
-                    (Value::Integer(l), "/", Value::Integer(r)) if r != 0 => Value::Integer(l / r),
-                    (Value::Float(l), "+", Value::Float(r)) => Value::Float(l + r),
-                    (Value::Float(l), "-", Value::Float(r)) => Value::Float(l - r),
-                    (Value::Float(l), "*", Value::Float(r)) => Value::Float(l * r),
-                    (Value::Float(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l / r),
-                    (Value::Integer(l), "+", Value::Float(r)) => Value::Float(l as f64 + r),
-                    (Value::Float(l), "+", Value::Integer(r)) => Value::Float(l + r as f64),
-                    (Value::Integer(l), "-", Value::Float(r)) => Value::Float(l as f64 - r),
-                    (Value::Float(l), "-", Value::Integer(r)) => Value::Float(l - r as f64),
-                    (Value::Integer(l), "*", Value::Float(r)) => Value::Float(l as f64 * r),
-                    (Value::Float(l), "*", Value::Integer(r)) => Value::Float(l * r as f64),
-                    (Value::Integer(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l as f64 / r),
-                    (Value::Float(l), "/", Value::Integer(r)) if r != 0 => Value::Float(l / r as f64),
-                    _ => Value::Null,
-                }
-            }
-            _ => Value::Null,
-        }
     }
 
     /// Parse simple SET NEW.col = value assignments
