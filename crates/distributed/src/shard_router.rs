@@ -993,4 +993,46 @@ mod tests {
         let debug_str = format!("{:?}", plan);
         assert!(debug_str.contains("is_distributed"));
     }
+
+    #[test]
+    fn test_routed_plan_single_is_not_distributed() {
+        let plan = RoutedPlan::single(1, 2, "SELECT * FROM users".to_string());
+        assert!(!plan.is_distributed);
+        assert_eq!(plan.involved_shards.len(), 1);
+    }
+
+    #[test]
+    fn test_consistency_level_variants() {
+        assert!(matches!(ConsistencyLevel::Strong, ConsistencyLevel::Strong));
+        assert!(matches!(ConsistencyLevel::Eventual, ConsistencyLevel::Eventual));
+        assert!(matches!(ConsistencyLevel::Session, ConsistencyLevel::Session));
+    }
+
+    #[test]
+    fn test_consistency_level_default() {
+        let level = ConsistencyLevel::default();
+        assert!(matches!(level, ConsistencyLevel::Eventual));
+    }
+
+    #[test]
+    fn test_routed_plan_single_query_count() {
+        let plan = RoutedPlan::single(1, 2, "SELECT 1".to_string());
+        assert_eq!(plan.queries.len(), 1);
+    }
+
+    #[test]
+    fn test_routed_plan_involved_shards() {
+        let plan = RoutedPlan::single(5, 10, "SELECT 1".to_string());
+        assert_eq!(plan.involved_shards, vec![5]);
+    }
+
+    #[test]
+    fn test_query_key_debug() {
+        let key = QueryKey {
+            table: "users".to_string(),
+            value: PartitionValue::Integer(42),
+        };
+        let debug_str = format!("{:?}", key);
+        assert!(debug_str.contains("users"));
+    }
 }

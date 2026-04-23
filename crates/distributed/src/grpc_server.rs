@@ -707,4 +707,125 @@ mod tests {
         };
         assert!(!response.healthy);
     }
+
+    #[test]
+    fn test_mock_vector_storage_search_empty_shard() {
+        let mut storage = MockVectorStorage::new();
+        storage.insert(0, 1, vec![1.0, 0.0]).unwrap();
+        let results = storage.search(999, &[1.0, 0.0], 10);
+        assert!(results.is_ok());
+    }
+
+    #[test]
+    fn test_mock_vector_storage_insert_multiple() {
+        let mut storage = MockVectorStorage::new();
+        for i in 0..5 {
+            let result = storage.insert(0, i, vec![i as f32, 0.0]);
+            assert!(result.is_ok());
+        }
+        assert_eq!(storage.vectors.len(), 5);
+    }
+
+    #[test]
+    fn test_mock_graph_storage_multiple_nodes() {
+        let mut storage = MockGraphStorage::new();
+        storage.create_node(0, "User", HashMap::new()).unwrap();
+        storage.create_node(0, "Product", HashMap::new()).unwrap();
+        storage.create_node(0, "Order", HashMap::new()).unwrap();
+        assert_eq!(storage.nodes.len(), 3);
+    }
+
+    #[test]
+    fn test_mock_graph_storage_get_node_after_update() {
+        let mut storage = MockGraphStorage::new();
+        storage.create_node(0, "User", HashMap::new()).unwrap();
+        let mut props = HashMap::new();
+        props.insert("name".to_string(), "John".to_string());
+        storage.create_node(0, "User", props).unwrap();
+        assert_eq!(storage.nodes.len(), 2);
+    }
+
+    #[test]
+    fn test_search_result_with_record() {
+        use crate::proto::distributed::VectorRecord;
+        let result = SearchResult {
+            id: 10,
+            score: 0.85,
+            record: Some(VectorRecord {
+                id: 10,
+                vector: vec![1.0, 2.0, 3.0],
+                metadata: HashMap::new(),
+            }),
+        };
+        assert_eq!(result.id, 10);
+        assert_eq!(result.score, 0.85);
+        assert!(result.record.is_some());
+    }
+
+    #[test]
+    fn test_insert_vector_request_with_metadata() {
+        use crate::proto::distributed::VectorRecord;
+        let mut metadata = HashMap::new();
+        metadata.insert("key".to_string(), "value".to_string());
+        let request = InsertVectorRequest {
+            shard_id: 5,
+            record: Some(VectorRecord {
+                id: 42,
+                vector: vec![0.1, 0.2],
+                metadata,
+            }),
+        };
+        assert_eq!(request.shard_id, 5);
+        assert!(request.record.is_some());
+        let record = request.record.unwrap();
+        assert_eq!(record.metadata.get("key"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_delete_vector_response_with_error() {
+        let response = DeleteVectorResponse {
+            success: false,
+            error: "Shard unavailable".to_string(),
+        };
+        assert!(!response.success);
+        assert_eq!(response.error, "Shard unavailable");
+    }
+
+    #[test]
+    fn test_create_edge_response_with_error() {
+        let response = CreateEdgeResponse {
+            edge_id: 0,
+            success: false,
+            error: "Target node not found".to_string(),
+        };
+        assert!(!response.success);
+        assert!(response.error.contains("not found"));
+    }
+
+    #[test]
+    fn test_get_node_response_with_properties() {
+        let mut props = HashMap::new();
+        props.insert("age".to_string(), "30".to_string());
+        let response = GetNodeResponse {
+            node_id: 5,
+            label: "Person".to_string(),
+            properties: Some(PropertyMap { properties: props }),
+            found: true,
+        };
+        assert!(response.found);
+        assert_eq!(response.label, "Person");
+        assert_eq!(response.properties.unwrap().properties.get("age"), Some(&"30".to_string()));
+    }
+
+    #[test]
+    fn test_search_vectors_request_fields() {
+        let request = SearchVectorsRequest {
+            shard_id: 1,
+            query: vec![0.1, 0.2, 0.3, 0.4],
+            top_k: 50,
+        };
+        assert_eq!(request.shard_id, 1);
+        assert_eq!(request.query.len(), 4);
+        assert_eq!(request.top_k, 50);
+    }
 }
