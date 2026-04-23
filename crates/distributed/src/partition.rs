@@ -10,6 +10,20 @@ use std::hash::{Hash, Hasher};
 pub enum PartitionStrategy {
     Hash { num_shards: u64 },
     Range { boundaries: Vec<i64> },
+    Key { columns: Vec<String>, num_partitions: u64 },
+    List { partitions: Vec<ListPartition> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardInfo {
+    pub id: u64,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListPartition {
+    pub id: u64,
+    pub values: Vec<i64>,
 }
 
 impl Default for PartitionStrategy {
@@ -39,10 +53,35 @@ impl PartitionKey {
         }
     }
 
+    pub fn new_key(columns: Vec<String>, num_partitions: u64) -> Self {
+        Self {
+            column: columns.first().cloned().unwrap_or_default(),
+            strategy: PartitionStrategy::Key { columns, num_partitions },
+        }
+    }
+
+    pub fn new_list(column: &str, partitions: Vec<ListPartition>) -> Self {
+        Self {
+            column: column.to_string(),
+            strategy: PartitionStrategy::List { partitions },
+        }
+    }
+
     pub fn partition(&self, value: &PartitionValue) -> Option<u64> {
         match &self.strategy {
             PartitionStrategy::Hash { num_shards } => Some(hash_partition(value, *num_shards)),
             PartitionStrategy::Range { boundaries } => range_partition(value, boundaries),
+            PartitionStrategy::Key { columns: _, num_partitions } => {
+                Some(hash_partition(value, *num_partitions))
+            }
+            PartitionStrategy::List { partitions } => {
+                // For list partitioning, distribute across all partitions
+                if partitions.is_empty() {
+                    None
+                } else {
+                    Some(hash_partition(value, partitions.len() as u64) % partitions.len() as u64)
+                }
+            }
         }
     }
 }
