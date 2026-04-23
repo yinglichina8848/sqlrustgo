@@ -1625,6 +1625,7 @@ fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInf
 }
 
 /// Evaluate a binary comparison expression
+/// SQL semantics: any comparison with NULL returns UNKNOWN (false for WHERE filtering)
 fn evaluate_binary_comparison(
     left: &Expression,
     op: &str,
@@ -1635,13 +1636,44 @@ fn evaluate_binary_comparison(
     let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
     let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
 
-    match op.to_uppercase().as_str() {
-        "=" | "==" | "IS" => left_val == right_val,
-        "!=" | "<>" => left_val != right_val,
-        ">" => compare_values(&left_val, &right_val) > 0,
-        ">=" => compare_values(&left_val, &right_val) >= 0,
-        "<" => compare_values(&left_val, &right_val) < 0,
-        "<=" => compare_values(&left_val, &right_val) <= 0,
+    let op_upper = op.to_uppercase();
+    match op_upper.as_str() {
+        "=" | "==" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => left_val == right_val,
+            }
+        }
+        "!=" | "<>" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => left_val != right_val,
+            }
+        }
+        ">" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => compare_values(&left_val, &right_val) > 0,
+            }
+        }
+        ">=" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => compare_values(&left_val, &right_val) >= 0,
+            }
+        }
+        "<" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => compare_values(&left_val, &right_val) < 0,
+            }
+        }
+        "<=" => {
+            match (&left_val, &right_val) {
+                (Value::Null, _) | (_, Value::Null) => false,
+                _ => compare_values(&left_val, &right_val) <= 0,
+            }
+        }
         _ => false,
     }
 }
