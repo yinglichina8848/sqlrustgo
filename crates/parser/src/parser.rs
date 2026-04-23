@@ -1900,6 +1900,35 @@ impl Parser {
 
         // Parse strategy (RANGE, LIST, or KEY)
         let strategy = match self.current() {
+            Some(Token::Partition) => {
+                // PARTITION keyword was already consumed, get next token
+                self.next();
+                match self.current() {
+                    Some(Token::Range) => {
+                        self.next();
+                        PartitionStrategy::Range
+                    }
+                    Some(Token::List) => {
+                        self.next();
+                        PartitionStrategy::List
+                    }
+                    Some(Token::Key) => {
+                        self.next();
+                        PartitionStrategy::Key
+                    }
+                    Some(Token::Identifier(s)) => {
+                        let s = s.to_uppercase();
+                        self.next();
+                        match s.as_str() {
+                            "RANGE" => PartitionStrategy::Range,
+                            "LIST" => PartitionStrategy::List,
+                            "KEY" => PartitionStrategy::Key,
+                            _ => return Err(format!("Unknown partition strategy: {}", s)),
+                        }
+                    }
+                    _ => return Err("Expected RANGE, LIST, or KEY after PARTITION".to_string()),
+                }
+            }
             Some(Token::Range) => {
                 self.next();
                 PartitionStrategy::Range
@@ -1927,14 +1956,33 @@ impl Parser {
 
         // Parse partition column(s)
         self.expect(Token::LParen)?;
-        let columns = self.parse_column_list()?;
-        self.expect(Token::RParen)?;
+        let mut partition_cols = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(name)) => {
+                    partition_cols.push(name.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next(); // consume RParen
+                    break;
+                }
+                _ => break,
+            }
+        }
 
         // Parse individual partition definitions
         self.expect(Token::LParen)?;
         let mut partitions = Vec::new();
         loop {
             match self.current() {
+                Some(Token::Partition) => {
+                    // Skip PARTITION keyword, next token is the partition name
+                    self.next();
+                }
                 Some(Token::Identifier(name)) => {
                     let name = name.clone();
                     self.next();
@@ -1943,10 +1991,12 @@ impl Parser {
                     let value = match self.current() {
                         Some(Token::Values) => {
                             self.next(); // consume VALUES
-                            // Check for VALUES LESS THAN (expr)
-                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS") {
+                                         // Check for VALUES LESS THAN (expr)
+                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS")
+                            {
                                 self.next(); // consume LESS
-                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN") {
+                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN")
+                                {
                                     self.next(); // consume THAN
                                     if matches!(self.current(), Some(Token::LParen)) {
                                         self.next(); // consume LParen
@@ -2043,7 +2093,7 @@ impl Parser {
 
         Ok(PartitionDefinition {
             strategy,
-            columns,
+            columns: partition_cols,
             partitions,
         })
     }
