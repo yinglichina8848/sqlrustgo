@@ -57,7 +57,7 @@ fn get_process_stats() -> (u64, f64) {
     let mut cpu_pct: f64 = 0.0;
 
     if let Ok(content) = std::fs::read_to_string(&stat_file) {
-        if let Some(last) = content.split(')').last() {
+        if let Some(last) = content.split(')').next_back() {
             let parts: Vec<&str> = last.split_whitespace().collect();
             if parts.len() >= 24 {
                 let utime: u64 = parts[11].parse().unwrap_or(0);
