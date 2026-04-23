@@ -116,7 +116,6 @@ fn test_left_join_no_matches_returns_all_left_with_null() {
 }
 
 #[test]
-#[ignore = "Known bug: HashJoinExec incorrectly matches NULL = NULL, violates SQL three-valued logic"]
 fn test_left_join_null_keys_do_not_match() {
     let mut engine = create_engine();
     engine
@@ -171,5 +170,125 @@ fn test_left_join_multiple_right_matches() {
     for row in &result.rows {
         assert_eq!(row[0], Value::Integer(1));
         assert_eq!(row[1], Value::Text("Alice".to_string()));
+    }
+}
+
+#[test]
+fn test_left_join_mixed_null_and_normal_keys() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE t2 (id INTEGER, value TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t1 VALUES (NULL, 'Alice'), (10, 'Bob')")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t2 VALUES (NULL, 'X'), (10, 'Y')")
+        .unwrap();
+
+    let result = engine
+        .execute(
+            "SELECT t1.id, t1.name, t2.id, t2.value FROM t1 LEFT JOIN t2 ON t1.id = t2.id",
+        )
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 2);
+
+    let null_row = result.rows.iter().find(|r| matches!(&r[1], Value::Text(s) if s == "Alice"));
+    let normal_row = result.rows.iter().find(|r| matches!(&r[1], Value::Text(s) if s == "Bob"));
+
+    assert!(null_row.is_some(), "Alice row should exist");
+    assert!(normal_row.is_some(), "Bob row should exist");
+
+    if let Some(row) = null_row {
+        assert!(matches!(&row[0], Value::Null));
+        assert!(matches!(&row[2], Value::Null));
+        assert!(matches!(&row[3], Value::Null));
+    }
+
+    if let Some(row) = normal_row {
+        assert_eq!(row[0], Value::Integer(10));
+        assert_eq!(row[2], Value::Integer(10));
+        assert_eq!(row[3], Value::Text("Y".to_string()));
+    }
+}
+
+#[test]
+#[ignore = "Filter NULL semantics not yet implemented - see issue #1833"]
+fn test_filter_with_null_comparison() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 'Alice'), (NULL, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE id = NULL")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 0, "WHERE col = NULL should return 0 rows");
+}
+
+#[test]
+fn test_filter_null_column_vs_value() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 10), (NULL, 20), (3, NULL), (NULL, NULL)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE a = 1")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0][0], Value::Integer(1));
+    assert_eq!(result.rows[0][1], Value::Integer(10));
+}
+
+#[test]
+#[ignore = "Filter NULL semantics not yet implemented - see issue #1833"]
+fn test_filter_is_null() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 'Alice'), (NULL, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE id IS NULL")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    assert!(matches!(&result.rows[0][0], Value::Null));
+    assert_eq!(result.rows[0][1], Value::Text("Bob".to_string()));
+}
+
+#[test]
+fn test_filter_is_not_null() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 'Alice'), (NULL, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE id IS NOT NULL")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 2);
+    for row in &result.rows {
+        assert!(matches!(&row[0], Value::Integer(_)));
     }
 }
