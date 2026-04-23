@@ -1671,40 +1671,6 @@ impl Parser {
         }
     }
 
-    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_multiplicative_expression()?;
-
-        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
-            let op = match self.current() {
-                Some(Token::Plus) => "+",
-                Some(Token::Minus) => "-",
-                _ => break,
-            };
-            self.next();
-            let right = self.parse_multiplicative_expression()?;
-            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
-        }
-
-        Ok(left)
-    }
-
-    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_primary_expression()?;
-
-        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
-            let op = match self.current() {
-                Some(Token::Star) => "*",
-                Some(Token::Slash) => "/",
-                _ => break,
-            };
-            self.next();
-            let right = self.parse_primary_expression()?;
-            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
-        }
-
-        Ok(left)
-    }
-
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
@@ -1973,22 +1939,74 @@ impl Parser {
                     let name = name.clone();
                     self.next();
 
-                    // Expect VALUES for LIST/RANGE, or just partition definition
+                    // Check if it's a VALUES clause or just partition name
                     let value = match self.current() {
                         Some(Token::Values) => {
-                            self.next();
-                            PartitionValue::Values
+                            self.next(); // consume VALUES
+                            // Check for VALUES LESS THAN (expr)
+                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS") {
+                                self.next(); // consume LESS
+                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN") {
+                                    self.next(); // consume THAN
+                                    if matches!(self.current(), Some(Token::LParen)) {
+                                        self.next(); // consume LParen
+                                        let val = match self.current() {
+                                            Some(Token::NumberLiteral(n)) => {
+                                                let v = n.clone();
+                                                self.next();
+                                                v
+                                            }
+                                            Some(Token::StringLiteral(s)) => {
+                                                let v = s.clone();
+                                                self.next();
+                                                v
+                                            }
+                                            Some(Token::Identifier(s)) => {
+                                                let v = s.clone();
+                                                self.next();
+                                                v
+                                            }
+                                            _ => "".to_string(),
+                                        };
+                                        self.expect(Token::RParen)?;
+                                        PartitionValue::Value(val)
+                                    } else {
+                                        PartitionValue::Values
+                                    }
+                                } else {
+                                    PartitionValue::Values
+                                }
+                            } else {
+                                PartitionValue::Values
+                            }
                         }
                         Some(Token::Less) => {
                             self.next();
-                            if matches!(self.current(), Some(Token::Maxvalue)) {
-                                self.next();
-                                PartitionValue::Max
-                            } else if matches!(self.current(), Some(Token::Minvalue)) {
-                                self.next();
-                                PartitionValue::Min
+                            // Handle < (expr)
+                            if matches!(self.current(), Some(Token::LParen)) {
+                                self.next(); // consume LParen
+                                let val = match self.current() {
+                                    Some(Token::NumberLiteral(n)) => {
+                                        let v = n.clone();
+                                        self.next();
+                                        v
+                                    }
+                                    Some(Token::StringLiteral(s)) => {
+                                        let v = s.clone();
+                                        self.next();
+                                        v
+                                    }
+                                    Some(Token::Identifier(s)) => {
+                                        let v = s.clone();
+                                        self.next();
+                                        v
+                                    }
+                                    _ => "".to_string(),
+                                };
+                                self.expect(Token::RParen)?;
+                                PartitionValue::Value(val)
                             } else {
-                                PartitionValue::Value("LESS THAN".to_string())
+                                PartitionValue::Value("LESS".to_string())
                             }
                         }
                         Some(Token::Equal) => {
@@ -3056,7 +3074,11 @@ mod tests {
 
     #[test]
     fn test_parse_create_table_with_range_partition() {
-        let result = parse("CREATE TABLE sales (id INTEGER, amount INTEGER) PARTITION BY RANGE (id) (PARTITION p1 VALUES LESS THAN (1000))");
+        let sql = "CREATE TABLE sales (id INTEGER, amount INTEGER) PARTITION BY RANGE (id) (PARTITION p1 VALUES LESS THAN (1000))";
+        let result = parse(sql);
+        if result.is_err() {
+            eprintln!("PARSE ERROR: {:?}", result.as_ref().err());
+        }
         assert!(result.is_ok());
         match result.unwrap() {
             Statement::CreateTable(ref c) => {
