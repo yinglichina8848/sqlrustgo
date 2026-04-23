@@ -1456,4 +1456,18 @@ impl StorageEngine for FileStorage {
             .map(|((t, c), _idx)| (c.clone(), format!("{}_idx_{}", t, c)))
             .collect()
     }
+
+    fn create_database(&mut self, name: &str) -> SqlResult<()> {
+        let _ = name;
+        Ok(())
+    }
+
+    fn list_databases(&self) -> Vec<String> {
+        vec!["default".to_string()]
+    }
+
+    fn use_database(&mut self, name: &str) -> SqlResult<()> {
+        let _ = name;
+        Ok(())
+    }
 }

@@ -12,11 +12,11 @@ use sqlrustgo_executor::trigger::{
 };
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
-    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    AggregateCall, AggregateFunction, CallStatement, CreateDatabaseStatement, CreateIndexStatement,
+    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DescribeStatement,
+    DropTableStatement, InsertStatement, SelectStatement, ShowDatabasesStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement, UseStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -396,6 +396,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
+            Statement::CreateDatabase(ref create_db) => self.execute_create_database(create_db),
+            Statement::ShowDatabases(_) => self.execute_show_databases(),
+            Statement::Use(ref use_stmt) => self.execute_use(use_stmt),
+            Statement::Describe(ref desc) => self.execute_describe(desc),
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
@@ -1162,6 +1166,54 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let mut storage = self.storage.write().unwrap();
         storage.drop_table(&drop.name)?;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_create_database(
+        &self,
+        create_db: &CreateDatabaseStatement,
+    ) -> SqlResult<ExecutorResult> {
+        let mut storage = self.storage.write().unwrap();
+        storage.create_database(&create_db.name)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_show_databases(&self) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let databases = storage.list_databases();
+        let rows: Vec<Vec<Value>> = databases
+            .into_iter()
+            .map(|name| vec![Value::Text(name)])
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    fn execute_use(&self, use_stmt: &UseStatement) -> SqlResult<ExecutorResult> {
+        let mut storage = self.storage.write().unwrap();
+        storage.use_database(&use_stmt.database)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_describe(&self, desc: &DescribeStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let table_info = storage.get_table_info(&desc.table)?;
+        let rows: Vec<Vec<Value>> = table_info
+            .columns
+            .iter()
+            .map(|col| {
+                vec![
+                    Value::Text(col.name.clone()),
+                    Value::Text(col.data_type.clone()),
+                    Value::Text(if col.nullable {
+                        "YES".to_string()
+                    } else {
+                        "NO".to_string()
+                    }),
+                    Value::Text("".to_string()),
+                    Value::Text("".to_string()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
     }
 
     fn execute_truncate(&self, truncate: &TruncateStatement) -> SqlResult<ExecutorResult> {

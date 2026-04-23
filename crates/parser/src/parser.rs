@@ -39,6 +39,10 @@ pub enum Statement {
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
+    CreateDatabase(CreateDatabaseStatement),
+    ShowDatabases(ShowDatabasesStatement),
+    Use(UseStatement),
+    Describe(DescribeStatement),
 }
 
 /// UNION statement
@@ -338,6 +342,29 @@ pub struct DropTableStatement {
     pub if_exists: bool,
 }
 
+/// CREATE DATABASE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStatement {
+    pub name: String,
+    pub if_not_exists: bool,
+}
+
+/// SHOW DATABASES statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowDatabasesStatement {}
+
+/// USE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct UseStatement {
+    pub database: String,
+}
+
+/// DESCRIBE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeStatement {
+    pub table: String,
+}
+
 /// TRUNCATE TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct TruncateStatement {
@@ -476,6 +503,9 @@ impl Parser {
             | Some(Token::Start) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
+            Some(Token::Show) => self.parse_show(),
+            Some(Token::Use) => self.parse_use(),
+            Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -636,12 +666,79 @@ impl Parser {
             }
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
+            Some(Token::Database) => self.parse_create_database(),
             Some(t) => Err(format!(
                 "Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE, got {:?}",
                 t
             )),
             None => Err("Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE".to_string()),
         }
+    }
+
+    fn parse_create_database(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Database)?;
+
+        let if_not_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            self.expect(Token::Not)?;
+            self.expect(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected database name".to_string()),
+        };
+
+        Ok(Statement::CreateDatabase(CreateDatabaseStatement {
+            name,
+            if_not_exists,
+        }))
+    }
+
+    fn parse_show(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Show)?;
+
+        match self.current() {
+            Some(Token::Databases) => {
+                self.next();
+                Ok(Statement::ShowDatabases(ShowDatabasesStatement {}))
+            }
+            Some(t) => Err(format!("Expected DATABASES after SHOW, got {:?}", t)),
+            None => Err("Expected DATABASES after SHOW".to_string()),
+        }
+    }
+
+    fn parse_use(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Use)?;
+
+        let database = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected database name".to_string()),
+        };
+
+        Ok(Statement::Use(UseStatement { database }))
+    }
+
+    fn parse_describe(&mut self) -> Result<Statement, String> {
+        match self.current() {
+            Some(Token::Describe) => self.next(),
+            Some(Token::Desc) => self.next(),
+            _ => return Err("Expected DESCRIBE or DESC".to_string()),
+        };
+
+        let table = match self.current() {
+            Some(Token::Identifier(name)) => {
+                let name = name.clone();
+                self.next();
+                name
+            }
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        Ok(Statement::Describe(DescribeStatement { table }))
     }
 
     fn parse_create_index(&mut self, is_fulltext: bool) -> Result<Statement, String> {

@@ -1049,9 +1049,16 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
                 let addr = stream
                     .peer_addr()
                     .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
+                tracing::info!("Accepted connection from {}", addr);
                 let st = storage.clone();
                 let tc = tls_config.clone();
-                thread::spawn(move || handle_connection(stream, addr, st, tc));
+                thread::spawn(move || {
+                    if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        handle_connection(stream, addr, st, tc)
+                    })) {
+                        tracing::error!("Connection handler panicked: {:?}", e);
+                    }
+                });
             }
             Err(e) => tracing::error!("Accept: {}", e),
         }

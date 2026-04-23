@@ -113,6 +113,14 @@ pub enum Token {
     Rollup,
     Cube,
 
+    // MySQL specific keywords
+    Database,
+    Databases,
+    Show,
+    Use,
+    Describe,
+    Desc,
+
     // Transaction keywords
     Transaction,
     Work,
@@ -300,6 +308,12 @@ impl fmt::Display for Token {
             Token::Grouping => write!(f, "GROUPING"),
             Token::Rollup => write!(f, "ROLLUP"),
             Token::Cube => write!(f, "CUBE"),
+            Token::Database => write!(f, "DATABASE"),
+            Token::Databases => write!(f, "DATABASES"),
+            Token::Show => write!(f, "SHOW"),
+            Token::Use => write!(f, "USE"),
+            Token::Describe => write!(f, "DESCRIBE"),
+            Token::Desc => write!(f, "DESC"),
             Token::AsOf => write!(f, "ASOF"),
             Token::Window => write!(f, "WINDOW"),
             Token::Partition => write!(f, "PARTITION"),

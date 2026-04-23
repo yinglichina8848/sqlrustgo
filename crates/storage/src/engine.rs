@@ -485,6 +485,15 @@ pub trait StorageEngine: Send + Sync {
 
     /// Check if a view exists
     fn has_view(&self, name: &str) -> bool;
+
+    /// Create a database
+    fn create_database(&mut self, name: &str) -> SqlResult<()>;
+
+    /// List all databases
+    fn list_databases(&self) -> Vec<String>;
+
+    /// Use a database
+    fn use_database(&mut self, name: &str) -> SqlResult<()>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -493,15 +502,21 @@ pub struct MemoryStorage {
     table_infos: HashMap<String, TableInfo>,
     triggers: HashMap<String, TriggerInfo>,
     views: HashSet<String>,
+    current_database: String,
+    databases: HashSet<String>,
 }
 
 impl MemoryStorage {
     pub fn new() -> Self {
+        let mut databases = HashSet::new();
+        databases.insert("default".to_string());
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
             triggers: HashMap::new(),
             views: HashSet::new(),
+            current_database: "default".to_string(),
+            databases,
         }
     }
 }
@@ -669,6 +684,32 @@ impl StorageEngine for MemoryStorage {
 
     fn list_indexes(&self, _table: &str) -> Vec<(String, String)> {
         Vec::new()
+    }
+
+    fn create_database(&mut self, name: &str) -> SqlResult<()> {
+        if self.databases.contains(name) {
+            return Err(SqlError::ExecutionError(format!(
+                "Database '{}' already exists",
+                name
+            )));
+        }
+        self.databases.insert(name.to_string());
+        Ok(())
+    }
+
+    fn list_databases(&self) -> Vec<String> {
+        self.databases.iter().cloned().collect()
+    }
+
+    fn use_database(&mut self, name: &str) -> SqlResult<()> {
+        if !self.databases.contains(name) {
+            return Err(SqlError::ExecutionError(format!(
+                "Unknown database '{}'",
+                name
+            )));
+        }
+        self.current_database = name.to_string();
+        Ok(())
     }
 }
 
