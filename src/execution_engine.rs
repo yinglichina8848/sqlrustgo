@@ -1565,94 +1565,69 @@ fn validate_foreign_keys(
 
 /// Evaluate a WHERE clause expression against a row
 /// Returns true if the row matches the WHERE condition
-fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+/// Evaluate a predicate expression to a boolean result
+/// Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
+/// All NULL handling is centralized here - no NULL logic in individual operators
+fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
     match expr {
-        // Handle AND conditions
+        // AND short-circuits on false
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            evaluate_where_clause(left, row, table_info)
-                && evaluate_where_clause(right, row, table_info)
+            eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
         }
-        // Handle OR conditions
+        // OR short-circuits on true
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            evaluate_where_clause(left, row, table_info)
-                || evaluate_where_clause(right, row, table_info)
+            eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
         }
-        // Handle IS NULL (new AST form)
+        // IS NULL - always goes through evaluate_expression for value extraction
         Expression::IsNull(inner) => {
-            if let Ok(val) = evaluate_expression(inner, row, table_info) {
-                matches!(val, Value::Null)
-            } else {
-                false
+            match evaluate_expression(inner, row, table_info) {
+                Ok(val) => matches!(val, Value::Null),
+                Err(_) => false,
             }
         }
-        // Handle IS NOT NULL (new AST form)
+        // IS NOT NULL
         Expression::IsNotNull(inner) => {
-            if let Ok(val) = evaluate_expression(inner, row, table_info) {
-                !matches!(val, Value::Null)
-            } else {
-                false
+            match evaluate_expression(inner, row, table_info) {
+                Ok(val) => !matches!(val, Value::Null),
+                Err(_) => false,
             }
         }
-        // Handle IS NULL (legacy BinaryOp form)
+        // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
+            eval_predicate(&Expression::IsNull(left.clone()), row, table_info)
         }
-        // Handle IS NOT NULL (legacy BinaryOp form)
+        // Legacy IS NOT NULL
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS NOT"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return !matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
+            eval_predicate(&Expression::IsNotNull(left.clone()), row, table_info)
         }
-        // Handle comparison operators (=, !=, >, <, >=, <=)
+        // All comparison operators go through sql_compare
         Expression::BinaryOp(left, op, right) => {
-            evaluate_binary_comparison(left, op, right, row, table_info)
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+            sql_compare(op, &left_val, &right_val)
         }
-        // For other expressions, try to evaluate as a condition
+        // For other expressions, evaluate and check if truthy
         _ => {
-            if let Ok(val) = evaluate_expression(expr, row, table_info) {
-                if let Value::Boolean(b) = val {
-                    b
-                } else {
-                    val != Value::Null
+            match evaluate_expression(expr, row, table_info) {
+                Ok(val) => {
+                    matches!(val, Value::Boolean(true))
                 }
-            } else {
-                false
+                Err(_) => false,
             }
         }
     }
 }
 
-/// Evaluate a binary comparison expression
-/// SQL semantics: any comparison with NULL returns UNKNOWN (false for WHERE filtering)
-fn evaluate_binary_comparison(
-    left: &Expression,
-    op: &str,
-    right: &Expression,
-    row: &[Value],
-    table_info: &TableInfo,
-) -> bool {
-    let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
-    let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
-
-    sql_compare(op, &left_val, &right_val)
+/// Legacy alias for compatibility
+#[allow(dead_code)]
+fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+    eval_predicate(expr, row, table_info)
 }
 
 /// SQL comparison operator
