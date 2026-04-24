@@ -391,4 +391,82 @@ mod tests {
         assert_eq!(config.health_check_interval, Duration::from_secs(5));
         assert_eq!(config.failover_threshold, 3);
     }
+
+    #[test]
+    fn test_node_type_clone() {
+        let node_type = NodeType::Master;
+        let cloned = node_type.clone();
+        assert_eq!(cloned, NodeType::Master);
+    }
+
+    #[test]
+    fn test_failover_state_clone() {
+        let state = FailoverState::Normal;
+        let cloned = state.clone();
+        assert_eq!(cloned, FailoverState::Normal);
+    }
+
+    #[test]
+    fn test_failover_state_variants() {
+        assert_eq!(format!("{:?}", FailoverState::Normal), "Normal");
+        assert_eq!(format!("{:?}", FailoverState::MasterUnreachable), "MasterUnreachable");
+        assert_eq!(format!("{:?}", FailoverState::ElectionInProgress), "ElectionInProgress");
+        assert_eq!(format!("{:?}", FailoverState::NewMasterPromoted), "NewMasterPromoted");
+    }
+
+    #[test]
+    fn test_node_info_update_last_seen() {
+        let addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+        let mut node = NodeInfo::new(addr, NodeType::Slave, 50);
+        let initial = node.last_seen;
+
+        std::thread::sleep(Duration::from_millis(10));
+        node.update_last_seen();
+
+        assert!(node.last_seen > initial);
+    }
+
+    #[test]
+    fn test_node_info_with_different_priorities() {
+        let addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+
+        let master = NodeInfo::new(addr, NodeType::Master, 100);
+        let slave = NodeInfo::new(addr, NodeType::Slave, 50);
+
+        assert_eq!(master.priority, 100);
+        assert_eq!(slave.priority, 50);
+        assert_eq!(master.node_type, NodeType::Master);
+        assert_eq!(slave.node_type, NodeType::Slave);
+    }
+
+    #[test]
+    fn test_failover_config_custom() {
+        let config = FailoverConfig {
+            health_check_interval: Duration::from_secs(10),
+            election_timeout: Duration::from_secs(20),
+            failover_threshold: 5,
+            retry_base_delay: Duration::from_secs(2),
+            max_retry_delay: Duration::from_secs(60),
+        };
+        assert_eq!(config.health_check_interval, Duration::from_secs(10));
+        assert_eq!(config.election_timeout, Duration::from_secs(20));
+        assert_eq!(config.failover_threshold, 5);
+        assert_eq!(config.retry_base_delay, Duration::from_secs(2));
+        assert_eq!(config.max_retry_delay, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_failover_config_max_retry_delay_greater_than_base() {
+        let config = FailoverConfig::default();
+        assert!(config.max_retry_delay >= config.retry_base_delay);
+    }
+
+    #[test]
+    fn test_node_info_debug() {
+        let addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+        let node = NodeInfo::new(addr, NodeType::Master, 100);
+        let debug_str = format!("{:?}", node);
+        assert!(debug_str.contains("Master"));
+        assert!(debug_str.contains("127.0.0.1"));
+    }
 }

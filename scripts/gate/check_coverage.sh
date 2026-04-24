@@ -16,6 +16,8 @@ PROBLEMATIC_TESTS=(
     "test_sql_corpus_all"
 )
 
+CRATE_FEATURES="aes256"
+
 SKIP_ARGS=""
 for test in "${PROBLEMATIC_TESTS[@]}"; do
     SKIP_ARGS="$SKIP_ARGS --skip $test"
@@ -36,13 +38,13 @@ if [ "$MODE" = "incremental" ]; then
         for crate in $CHANGED_CRATES; do
             PKGS="$PKGS -p sqlrustgo-$crate"
         done
-        cargo tarpaulin --out Xml --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS $PKGS
+        cargo tarpaulin --features "$CRATE_FEATURES" --out Xml --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS $PKGS
     fi
 fi
 
 if [ "$MODE" = "full" ]; then
     echo "Running full coverage test..."
-    cargo tarpaulin --out Xml --out Html --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS
+    cargo tarpaulin --features "$CRATE_FEATURES" --out Xml --out Html --output-dir "$COVERAGE_DIR" -- $SKIP_ARGS
 fi
 
 # 检查覆盖率报告是否生成

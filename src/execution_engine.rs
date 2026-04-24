@@ -12,11 +12,11 @@ use sqlrustgo_executor::trigger::{
 };
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
-    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    AggregateCall, AggregateFunction, CallStatement, CreateDatabaseStatement, CreateIndexStatement,
+    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DescribeStatement,
+    DropTableStatement, InsertStatement, SelectStatement, ShowDatabasesStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement, UseStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -396,6 +396,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
+            Statement::CreateDatabase(ref create_db) => self.execute_create_database(create_db),
+            Statement::ShowDatabases(_) => self.execute_show_databases(),
+            Statement::Use(ref use_stmt) => self.execute_use(use_stmt),
+            Statement::Describe(ref desc) => self.execute_describe(desc),
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
@@ -742,7 +746,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             .columns
                             .iter()
                             .position(|c| c.name.as_str() == col_name)
-                            .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}.{}' not found in {}", qualifier, col_name, table_name)))
+                            .ok_or_else(|| {
+                                SqlError::ExecutionError(format!(
+                                    "Column '{}.{}' not found in {}",
+                                    qualifier, col_name, table_name
+                                ))
+                            })
                     } else {
                         // Qualifier doesn't match this table - column not in this table
                         Err(SqlError::ExecutionError(format!(
@@ -756,7 +765,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .columns
                         .iter()
                         .position(|c| c.name.as_str() == name.as_str())
-                        .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found in {}", name, table_name)))
+                        .ok_or_else(|| {
+                            SqlError::ExecutionError(format!(
+                                "Column '{}' not found in {}",
+                                name, table_name
+                            ))
+                        })
                 }
             }
             Expression::BinaryOp(left, _, right) => {
@@ -834,7 +848,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Validate FK and CHECK constraints, then insert
         {
             let mut storage = self.storage.write().unwrap();
-            let col_names: Vec<String> = table_info.columns.iter().map(|c| c.name.clone()).collect();
+            let col_names: Vec<String> =
+                table_info.columns.iter().map(|c| c.name.clone()).collect();
             for record in &processed_records {
                 if !table_info.foreign_keys.is_empty() {
                     validate_foreign_keys(&*storage, &table_info, record, &insert.columns)?;
@@ -842,13 +857,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 // Validate CHECK constraints
                 if !table_info.check_constraints.is_empty() {
                     for constraint in &table_info.check_constraints {
-                        let valid = sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(
+                            constraint, &col_names, record,
+                        )?;
                         if !valid {
                             return Err(format!(
                                 "CHECK constraint '{}' violated: {}",
                                 constraint.name.as_deref().unwrap_or("unnamed"),
                                 constraint.expression
-                            ).into());
+                            )
+                            .into());
                         }
                     }
                 }
@@ -996,8 +1014,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             if !table_info.check_constraints.is_empty() {
                 for record in &trigger_modified_rows {
                     for constraint in &table_info.check_constraints {
-                        let valid =
-                            sqlrustgo_storage::evaluate_check_constraint(constraint, &col_names, record)?;
+                        let valid = sqlrustgo_storage::evaluate_check_constraint(
+                            constraint, &col_names, record,
+                        )?;
                         if !valid {
                             return Err(format!(
                                 "CHECK constraint '{}' violated: {}",
@@ -1147,6 +1166,54 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let mut storage = self.storage.write().unwrap();
         storage.drop_table(&drop.name)?;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_create_database(
+        &self,
+        create_db: &CreateDatabaseStatement,
+    ) -> SqlResult<ExecutorResult> {
+        let mut storage = self.storage.write().unwrap();
+        storage.create_database(&create_db.name)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_show_databases(&self) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let databases = storage.list_databases();
+        let rows: Vec<Vec<Value>> = databases
+            .into_iter()
+            .map(|name| vec![Value::Text(name)])
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    fn execute_use(&self, use_stmt: &UseStatement) -> SqlResult<ExecutorResult> {
+        let mut storage = self.storage.write().unwrap();
+        storage.use_database(&use_stmt.database)?;
+        Ok(ExecutorResult::empty())
+    }
+
+    fn execute_describe(&self, desc: &DescribeStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let table_info = storage.get_table_info(&desc.table)?;
+        let rows: Vec<Vec<Value>> = table_info
+            .columns
+            .iter()
+            .map(|col| {
+                vec![
+                    Value::Text(col.name.clone()),
+                    Value::Text(col.data_type.clone()),
+                    Value::Text(if col.nullable {
+                        "YES".to_string()
+                    } else {
+                        "NO".to_string()
+                    }),
+                    Value::Text("".to_string()),
+                    Value::Text("".to_string()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
     }
 
     fn execute_truncate(&self, truncate: &TruncateStatement) -> SqlResult<ExecutorResult> {

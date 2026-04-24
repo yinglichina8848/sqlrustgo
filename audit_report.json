@@ -1,0 +1,175 @@
+{
+  "audit_version": "2.8.1",
+  "audit_time": "2026-04-24T00:16:46.852940+00:00",
+  "contract_version": "2.8.0",
+  "system_status": "WEAKENED",
+  "status_symbol": "\ud83d\udfe1",
+  "critical_failures": [],
+  "warnings": [
+    "[AV9] AV9 DETECTED: Runs [2, 3] differ from run 1"
+  ],
+  "info": [
+    "[R1] No test files modified",
+    "[R2] No new #[ignore]",
+    "[R3] Proof is CI-provenance",
+    "[R5] Baseline verified",
+    "[PROOF_VS_REALITY] Proof matches independent execution",
+    "[R4] All tests passed (226/226)",
+    "[R6] Test count maintained (226 >= 226)",
+    "[R6_STRICT] Exact test count (226 == 226)",
+    "[AV2] No partial execution detected",
+    "[AV6] Found 43 #[ignore] (grandfathered from v2.7.0; R2 monitors for new)"
+  ],
+  "checks": [
+    {
+      "rule": "R1",
+      "passed": true,
+      "message": "No test files modified",
+      "severity": "CRITICAL",
+      "evidence": {
+        "changed_files": [],
+        "baseline": "origin/develop/v2.8.0"
+      }
+    },
+    {
+      "rule": "R2",
+      "passed": true,
+      "message": "No new #[ignore]",
+      "severity": "CRITICAL",
+      "evidence": {
+        "new_ignores": [],
+        "baseline": "origin/develop/v2.8.0"
+      }
+    },
+    {
+      "rule": "R3",
+      "passed": true,
+      "message": "Proof is CI-provenance",
+      "severity": "CRITICAL",
+      "evidence": {
+        "generated_by": "verification_engine.py",
+        "source": "CI execution (not PR declaration)",
+        "valid": true
+      }
+    },
+    {
+      "rule": "R5",
+      "passed": true,
+      "message": "Baseline verified",
+      "severity": "CRITICAL",
+      "evidence": {
+        "baseline_verified": true,
+        "passed": 226,
+        "failed": 0,
+        "expected_bv": true,
+        "consistent": true
+      }
+    },
+    {
+      "rule": "PROOF_VS_REALITY",
+      "passed": true,
+      "message": "Proof matches independent execution",
+      "severity": "CRITICAL",
+      "evidence": {
+        "proof": {
+          "passed": 226,
+          "failed": 0
+        },
+        "reality": {
+          "passed": 226,
+          "failed": 0
+        },
+        "passed_match": true,
+        "failed_match": true
+      }
+    },
+    {
+      "rule": "R4",
+      "passed": true,
+      "message": "All tests passed (226/226)",
+      "severity": "CRITICAL",
+      "evidence": {
+        "passed": 226,
+        "failed": 0,
+        "ignored": 0,
+        "required": {
+          "passed": 226,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    },
+    {
+      "rule": "R6",
+      "passed": true,
+      "message": "Test count maintained (226 >= 226)",
+      "severity": "HIGH",
+      "evidence": {
+        "passed": 226,
+        "required_min": 226
+      }
+    },
+    {
+      "rule": "R6_STRICT",
+      "passed": true,
+      "message": "Exact test count (226 == 226)",
+      "severity": "CRITICAL",
+      "evidence": {
+        "passed": 226,
+        "expected": 226,
+        "gap": 0
+      }
+    },
+    {
+      "rule": "AV2",
+      "passed": true,
+      "message": "No partial execution detected",
+      "severity": "CRITICAL",
+      "evidence": {
+        "passed": 226,
+        "baseline": 226,
+        "missing": 0
+      }
+    },
+    {
+      "rule": "AV6",
+      "passed": true,
+      "message": "Found 43 #[ignore] (grandfathered from v2.7.0; R2 monitors for new)",
+      "severity": "INFO",
+      "evidence": {
+        "total_count": 43,
+        "note": "Total ignore count. R2 diff-check catches new ignores. AV6 is for visibility."
+      }
+    },
+    {
+      "rule": "AV9",
+      "passed": false,
+      "message": "AV9 DETECTED: Runs [2, 3] differ from run 1",
+      "severity": "MEDIUM",
+      "evidence": {
+        "run_count": 3,
+        "inconsistent_runs": [
+          2,
+          3
+        ],
+        "run_details": [
+          {
+            "run": 1,
+            "passed": 226,
+            "failed": 0
+          },
+          {
+            "run": 2,
+            "passed": null,
+            "failed": null
+          },
+          {
+            "run": 3,
+            "passed": null,
+            "failed": null
+          }
+        ]
+      }
+    }
+  ]
+}
