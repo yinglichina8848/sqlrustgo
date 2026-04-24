@@ -1,40 +1,28 @@
 #!/usr/bin/env bash
 #===============================================================================
-# Hermes Gate Engine v0.1
-# SQLRustGo 可执行规则系统
+# Hermes Gate Engine v0.2
+# Architecture: Gate (pre-merge) + CI/Proof/Audit (ground truth)
+#
+# Layer 1 — BLOCKING (system state gates):
+#   PROOF_VERIFIED  → checks verification_report.json baseline_verified
+#   AUDIT_TRUSTED   → checks audit_report.json status == TRUSTED
+#
+# Layer 2 — PR hygiene (static checks):
+#   REQUIRE_ISSUE, SQL_SEMANTIC_TEST, ROADMAP_PRIORITY, TEST_COMPLETENESS
+#
+# Exit codes: 0=PASS, 1=FAIL, 2=BLOCK, 3=ERROR
 #===============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RULES_FILE="${SCRIPT_DIR}/../rules/core.json"
-ROADMAP_FILE="docs/roadmap.json"
+VERIFICATION_REPORT="${3:-docs/versions/v2.8.0/verification_report.json}"
+AUDIT_REPORT="${4:-docs/versions/v2.8.0/audit_report.json}"
 
 #-------------------------------------------------------------------------------
-# Input parsing
+# Helpers
 #-------------------------------------------------------------------------------
-PR_BODY=""
-PR_LABELS=""
-CHANGED_FILES=""
-ROADMAP_CONTENT=""
-
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --pr-body)
-                PR_BODY="$2"; shift 2 ;;
-            --pr-labels)
-                PR_LABELS="$2"; shift 2 ;;
-            --changed-files)
-                CHANGED_FILES="$2"; shift 2 ;;
-            --roadmap)
-                ROADMAP_CONTENT="$2"; shift 2 ;;
-            *)
-                echo "Unknown option: $1" >&2; exit 3 ;;
-        esac
-    done
-}
-
 get_exit_code() {
     case "$1" in
         PASS) echo 0 ;;
@@ -45,8 +33,57 @@ get_exit_code() {
     esac
 }
 
+json_val() {
+    local file="$1"
+    local key="$2"
+    # Extract JSON value without jq dependency
+    if [[ ! -f "$file" ]]; then
+        echo ""
+        return
+    fi
+    grep -o "\"$key\"[[:space:]]*:[[:space:]]*[^,}]*" "$file" 2>/dev/null \
+        | sed 's/.*:[[:space:]]*//' \
+        | tr -d ' "'
+}
+
 #-------------------------------------------------------------------------------
-# Rule evaluators
+# Layer 1: System State Gates (BLOCK by default — no proof = no merge)
+#-------------------------------------------------------------------------------
+
+eval_PROOF_VERIFIED() {
+    if [[ ! -f "$VERIFICATION_REPORT" ]]; then
+        echo "BLOCK (verification_report.json not found)"
+        return
+    fi
+
+    local baseline_verified
+    baseline_verified=$(json_val "$VERIFICATION_REPORT" "baseline_verified")
+
+    if [[ "$baseline_verified" == "true" ]]; then
+        echo "PASS"
+    else
+        echo "BLOCK (baseline_verified=$baseline_verified, expected=true)"
+    fi
+}
+
+eval_AUDIT_TRUSTED() {
+    if [[ ! -f "$AUDIT_REPORT" ]]; then
+        echo "BLOCK (audit_report.json not found)"
+        return
+    fi
+
+    local status
+    status=$(json_val "$AUDIT_REPORT" "status")
+
+    if [[ "$status" == "TRUSTED" ]]; then
+        echo "PASS"
+    else
+        echo "BLOCK (status=$status, expected=TRUSTED)"
+    fi
+}
+
+#-------------------------------------------------------------------------------
+# Layer 2: PR Hygiene Checks
 #-------------------------------------------------------------------------------
 
 eval_REQUIRE_ISSUE() {
@@ -64,10 +101,9 @@ eval_REQUIRE_ISSUE() {
 
 eval_SQL_SEMANTIC_TEST() {
     local changed_files="$1"
-
-    # Check if any SQL-related files changed
     local sql_pattern="executor|parser|planner|storage"
     local sql_changed=false
+
     for f in $changed_files; do
         case "$f" in
             *executor*|*parser*|*planner*|*storage*)
@@ -81,7 +117,7 @@ eval_SQL_SEMANTIC_TEST() {
         return
     fi
 
-    # SQL changed — require NULL and JOIN+WHERE tests
+    # SQL changed — require NULL and JOIN+WHERE tests exist in test files
     local null_test=false
     local join_test=false
 
@@ -91,12 +127,8 @@ eval_SQL_SEMANTIC_TEST() {
     for f in $test_files; do
         local content
         content=$(cat "$f" 2>/dev/null || true)
-        if echo "$content" | grep -qiE "null"; then
-            null_test=true
-        fi
-        if echo "$content" | grep -qiE "join|where"; then
-            join_test=true
-        fi
+        echo "$content" | grep -qiE "null" && null_test=true
+        echo "$content" | grep -qiE "join|where" && join_test=true
     done
 
     if [[ "$null_test" == "true" && "$join_test" == "true" ]]; then
@@ -112,23 +144,21 @@ eval_SQL_SEMANTIC_TEST() {
 
 eval_ROADMAP_PRIORITY() {
     local pr_labels="$1"
+    local roadmap="docs/roadmap.json"
 
     if ! echo "$pr_labels" | grep -qiE "P1|P2"; then
         echo "PASS"
         return
     fi
 
-    # Check P0 completeness
-    local roadmap_path="${ROADMAP_CONTENT:-$ROADMAP_FILE}"
-    if [[ ! -f "$roadmap_path" ]]; then
+    if [[ ! -f "$roadmap" ]]; then
         echo "PASS"
         return
     fi
 
-    # Check for unfinished P0 issues
-    if grep -q "P0" "$roadmap_path" 2>/dev/null; then
-        # Simple check: if file has "P0" and "open" or "in_progress" nearby
-        if grep -E '"priority".*"P0".*"status".*"(open|in_progress|blocked)"' "$roadmap_path" >/dev/null 2>&1; then
+    # Block if P0 exists and is unfinished
+    if grep -q "P0" "$roadmap" 2>/dev/null; then
+        if grep -E '"priority".*"P0".*"status".*"(open|in_progress|blocked)"' "$roadmap" >/dev/null 2>&1; then
             echo "BLOCK"
             return
         fi
@@ -154,7 +184,6 @@ eval_TEST_COMPLETENESS() {
         return
     fi
 
-    # Check test coverage categories
     local test_files
     test_files=$(find . -name "*.rs" -path "*/tests/*" 2>/dev/null | head -50 || true)
     local happy=false edge=false regression=false
@@ -180,43 +209,54 @@ eval_TEST_COMPLETENESS() {
 }
 
 #-------------------------------------------------------------------------------
-# Main gate logic
+# Main
 #-------------------------------------------------------------------------------
 run_gate() {
-    parse_args "$@"
+    local pr_body="${1:-}"
+    local pr_labels="${2:-}"
+    local changed_files="${3:-}"
 
     echo ""
     echo "=============================================="
-    echo "           Hermes Gate v0.1"
+    echo "           Hermes Gate v0.2"
     echo "=============================================="
     echo ""
 
     local final_decision="PASS"
 
-    # Rule 1: REQUIRE_ISSUE
-    local r1
-    r1=$(eval_REQUIRE_ISSUE "$PR_BODY")
-    echo "[REQUIRE_ISSUE] $r1"
-    [[ "$r1" == "FAIL"* ]] && final_decision="FAIL"
+    # ── Layer 1: System State (BLOCKING) ──────────────────────────────────────
+    echo "--- System State Gates ---"
 
-    # Rule 2: SQL_SEMANTIC_TEST
-    local r2
-    r2=$(eval_SQL_SEMANTIC_TEST "$CHANGED_FILES")
-    echo "[SQL_SEMANTIC_TEST] $r2"
-    [[ "$r2" == "FAIL"* ]] && final_decision="FAIL"
+    local r1 r2
+    r1=$(eval_PROOF_VERIFIED)
+    echo "[PROOF_VERIFIED] $r1"
+    [[ "$r1" == "BLOCK"* ]] && final_decision="BLOCK"
+
+    r2=$(eval_AUDIT_TRUSTED)
+    echo "[AUDIT_TRUSTED] $r2"
     [[ "$r2" == "BLOCK"* ]] && final_decision="BLOCK"
 
-    # Rule 3: ROADMAP_PRIORITY
-    local r3
-    r3=$(eval_ROADMAP_PRIORITY "$PR_LABELS")
-    echo "[ROADMAP_PRIORITY] $r3"
-    [[ "$r3" == "BLOCK"* ]] && final_decision="BLOCK"
+    # ── Layer 2: PR Hygiene ───────────────────────────────────────────────────
+    echo ""
+    echo "--- PR Hygiene Gates ---"
 
-    # Rule 4: TEST_COMPLETENESS
-    local r4
-    r4=$(eval_TEST_COMPLETENESS "$CHANGED_FILES")
-    echo "[TEST_COMPLETENESS] $r4"
+    local r3 r4 r5 r6
+
+    r3=$(eval_REQUIRE_ISSUE "$pr_body")
+    echo "[REQUIRE_ISSUE] $r3"
+    [[ "$r3" == "FAIL"* && "$final_decision" != "BLOCK" ]] && final_decision="FAIL"
+
+    r4=$(eval_SQL_SEMANTIC_TEST "$changed_files")
+    echo "[SQL_SEMANTIC_TEST] $r4"
     [[ "$r4" == "FAIL"* && "$final_decision" != "BLOCK" ]] && final_decision="FAIL"
+
+    r5=$(eval_ROADMAP_PRIORITY "$pr_labels")
+    echo "[ROADMAP_PRIORITY] $r5"
+    [[ "$r5" == "BLOCK"* ]] && final_decision="BLOCK"
+
+    r6=$(eval_TEST_COMPLETENESS "$changed_files")
+    echo "[TEST_COMPLETENESS] $r6"
+    [[ "$r6" == "FAIL"* && "$final_decision" != "BLOCK" ]] && final_decision="FAIL"
 
     echo ""
     echo "=============================================="
