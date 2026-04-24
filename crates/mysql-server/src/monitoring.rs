@@ -9,7 +9,7 @@
 #![allow(clippy::len_zero, clippy::comparison_to_empty)]
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -152,7 +152,7 @@ pub struct PerformanceMonitor {
     /// Memory statistics
     pub memory_stats: RwLock<MemoryStats>,
     /// Slow query log entries
-    pub slow_query_log: RwLock<Vec<SlowQueryEntry>>,
+    pub slow_query_log: RwLock<VecDeque<SlowQueryEntry>>,
 }
 
 impl Default for PerformanceMonitor {
@@ -168,7 +168,7 @@ impl PerformanceMonitor {
             query_stats: RwLock::new(QueryStats::new()),
             connection_stats: RwLock::new(ConnectionStats::new()),
             memory_stats: RwLock::new(MemoryStats::new()),
-            slow_query_log: RwLock::new(Vec::new()),
+            slow_query_log: RwLock::new(VecDeque::new()),
         }
     }
 
@@ -218,7 +218,7 @@ impl PerformanceMonitor {
 
             // Keep only last 1000 slow queries
             if log.len() > 1000 {
-                log.remove(0);
+                log.pop_front();
             }
         }
     }
@@ -358,6 +358,13 @@ impl PerformanceMonitor {
                 "threshold_seconds": slow_config.long_query_time,
             }
         })
+    }
+
+    pub fn reset_stats(&self) {
+        *self.query_stats.write().unwrap() = QueryStats::new();
+        *self.connection_stats.write().unwrap() = ConnectionStats::new();
+        *self.memory_stats.write().unwrap() = MemoryStats::new();
+        self.slow_query_log.write().unwrap().clear();
     }
 }
 

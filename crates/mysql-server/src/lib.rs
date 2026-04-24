@@ -428,22 +428,24 @@ fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
 
 fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     let mut p = Vec::new();
-    p.push(0x0a); // protocol 10
+    p.push(0x0a);
     p.extend_from_slice(SERVER_VERSION.as_bytes());
     p.push(0x00);
-    p.write_u32::<LittleEndian>(1).unwrap(); // connection_id
+    p.write_u32::<LittleEndian>(1).unwrap();
     p.extend_from_slice(&scramble[0..8]);
-    p.push(0x00); // scramble part1 + filler
+    p.push(0x00);
     p.write_u16::<LittleEndian>((capability::SERVER_DEFAULT & 0xFFFF) as u16)
         .unwrap();
-    p.push(0xff); // charset utf8mb4
-    p.write_u16::<LittleEndian>(0x0002).unwrap(); // status AUTOCOMMIT
+    p.push(0xff);
+    p.write_u16::<LittleEndian>(0x0002).unwrap();
     p.write_u16::<LittleEndian>(((capability::SERVER_DEFAULT >> 16) & 0xFFFF) as u16)
         .unwrap();
-    p.push(SCRAMBLE_LENGTH as u8); // auth_plugin_data_len
-    p.extend_from_slice(&[0u8; 10]); // reserved
+    p.push(SCRAMBLE_LENGTH as u8);
+    p.extend_from_slice(&[0u8; 10]);
     p.extend_from_slice(&scramble[8..20]);
-    p.push(0x00); // scramble part2 + null
+    p.push(0x00);
+    p.extend_from_slice(AUTH_PLUGIN.as_bytes());
+    p.push(0x00);
     Packet {
         length: p.len() as u32,
         sequence: seq,
