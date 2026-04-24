@@ -445,7 +445,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 return Ok(ExecutorResult::new(vec![agg_values], 1));
             } else {
-                // GROUP BY - group rows first
                 let mut groups: std::collections::HashMap<String, Vec<Vec<Value>>> =
                     std::collections::HashMap::new();
                 for row in &rows {
@@ -457,17 +456,94 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     groups.entry(key).or_default().push(row.clone());
                 }
 
-                let mut agg_result_rows: Vec<Vec<Value>> = groups
-                    .values()
-                    .map(|group_rows| {
-                        self.compute_aggregates(&select.aggregates, group_rows, &table_info)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+                let mut agg_result_rows: Vec<Vec<Value>> = Vec::new();
+                let mut group_keys: Vec<Vec<Value>> = Vec::new();
 
-                // Apply HAVING clause if present (filters aggregated groups)
+                for (key, group_rows) in groups.iter() {
+                    let key_values: Vec<Value> = key
+                        .split('\x00')
+                        .map(|s| {
+                            if s == "NULL" {
+                                Value::Null
+                            } else if let Ok(n) = s.parse::<i64>() {
+                                Value::Integer(n)
+                            } else {
+                                Value::Text(s.to_string())
+                            }
+                        })
+                        .collect();
+                    let agg_values = self.compute_aggregates(&select.aggregates, group_rows, &table_info)?;
+                    let mut combined = key_values.clone();
+                    combined.extend(agg_values);
+                    group_keys.push(key_values);
+                    agg_result_rows.push(combined);
+                }
+
                 if let Some(ref having_expr) = select.having {
+                    let mut having_columns: Vec<ColumnDefinition> = Vec::new();
+                    for group_expr in group_exprs {
+                        let col_name = expression_to_string(group_expr);
+                        having_columns.push(ColumnDefinition {
+                            name: col_name,
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                            primary_key: false,
+                        });
+                    }
+                    for agg in &select.aggregates {
+                        let name = match agg.func {
+                            AggregateFunction::Count => {
+                                if agg.args.is_empty() {
+                                    "COUNT(*)".to_string()
+                                } else {
+                                    format!("COUNT({})", agg.args.iter()
+                                        .map(expression_to_string)
+                                        .collect::<Vec<_>>()
+                                        .join(", "))
+                                }
+                            }
+                            AggregateFunction::Sum => {
+                                format!("SUM({})", agg.args.iter()
+                                    .map(expression_to_string)
+                                    .collect::<Vec<_>>()
+                                    .join(", "))
+                            }
+                            AggregateFunction::Avg => {
+                                format!("AVG({})", agg.args.iter()
+                                    .map(expression_to_string)
+                                    .collect::<Vec<_>>()
+                                    .join(", "))
+                            }
+                            AggregateFunction::Min => {
+                                format!("MIN({})", agg.args.iter()
+                                    .map(expression_to_string)
+                                    .collect::<Vec<_>>()
+                                    .join(", "))
+                            }
+                            AggregateFunction::Max => {
+                                format!("MAX({})", agg.args.iter()
+                                    .map(expression_to_string)
+                                    .collect::<Vec<_>>()
+                                    .join(", "))
+                            }
+                        };
+                        having_columns.push(ColumnDefinition {
+                            name,
+                            data_type: "INTEGER".to_string(),
+                            nullable: false,
+                            primary_key: false,
+                        });
+                    }
+                    let having_table_info = TableInfo {
+                        name: table_info.name.clone(),
+                        columns: having_columns,
+                        foreign_keys: vec![],
+                        unique_constraints: vec![],
+                        check_constraints: vec![],
+                        partition_info: None,
+                    };
                     agg_result_rows
-                        .retain(|row| evaluate_where_clause(having_expr, row, &table_info));
+                        .retain(|row| evaluate_where_clause(having_expr, row, &having_table_info));
                 }
 
                 let row_count = agg_result_rows.len();
@@ -559,7 +635,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     }
                 }
                 AggregateFunction::Sum => {
-                    let sum: i64 = values
+                    let int_values: Vec<i64> = values
                         .iter()
                         .filter_map(|v| {
                             if let Value::Integer(n) = v {
@@ -568,8 +644,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                                 None
                             }
                         })
-                        .sum();
-                    Value::Integer(sum)
+                        .collect();
+                    if int_values.is_empty() {
+                        Value::Null
+                    } else {
+                        Value::Integer(int_values.iter().sum())
+                    }
                 }
                 AggregateFunction::Avg => {
                     let sum: i64 = values
@@ -1498,6 +1578,61 @@ impl ExecutionEngine<MemoryStorage> {
     }
 }
 
+fn expression_to_string(expr: &sqlrustgo_parser::Expression) -> String {
+    match expr {
+        sqlrustgo_parser::Expression::Literal(s) => s.clone(),
+        sqlrustgo_parser::Expression::Identifier(name) => name.clone(),
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            format!("({} {} {})", expression_to_string(left), op, expression_to_string(right))
+        }
+        sqlrustgo_parser::Expression::IsNull(inner) => {
+            format!("{} IS NULL", expression_to_string(inner))
+        }
+        sqlrustgo_parser::Expression::IsNotNull(inner) => {
+            format!("{} IS NOT NULL", expression_to_string(inner))
+        }
+        sqlrustgo_parser::Expression::Aggregate(agg) => {
+            match agg.func {
+                sqlrustgo_parser::AggregateFunction::Count => {
+                    if agg.args.is_empty() {
+                        "COUNT(*)".to_string()
+                    } else {
+                        format!("COUNT({})", agg.args.iter()
+                            .map(expression_to_string)
+                            .collect::<Vec<_>>()
+                            .join(", "))
+                    }
+                }
+                sqlrustgo_parser::AggregateFunction::Sum => {
+                    format!("SUM({})", agg.args.iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", "))
+                }
+                sqlrustgo_parser::AggregateFunction::Avg => {
+                    format!("AVG({})", agg.args.iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", "))
+                }
+                sqlrustgo_parser::AggregateFunction::Min => {
+                    format!("MIN({})", agg.args.iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", "))
+                }
+                sqlrustgo_parser::AggregateFunction::Max => {
+                    format!("MAX({})", agg.args.iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", "))
+                }
+            }
+        }
+        _ => "?".to_string(),
+    }
+}
+
 /// Convert a parser Expression to a Value (simple literal evaluation)
 fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
     match expr {
@@ -1703,7 +1838,6 @@ fn evaluate_expression(
             if let Some(col_idx) = find_column_index(name, table_info) {
                 Ok(row.get(col_idx).cloned().unwrap_or(Value::Null))
             } else {
-                // If column not found, treat as literal value
                 Ok(expression_to_value(expr))
             }
         }
@@ -1716,9 +1850,13 @@ fn evaluate_expression(
             let val = evaluate_expression(inner, row, table_info)?;
             Ok(Value::Boolean(matches!(val, Value::Null)))
         }
-        Expression::IsNotNull(inner) => {
-            let val = evaluate_expression(inner, row, table_info)?;
-            Ok(Value::Boolean(!matches!(val, Value::Null)))
+        Expression::Aggregate(agg) => {
+            let agg_name = expression_to_string(&Expression::Aggregate(agg.clone()));
+            if let Some(col_idx) = find_column_index(&agg_name, table_info) {
+                Ok(row.get(col_idx).cloned().unwrap_or(Value::Null))
+            } else {
+                Err(format!("Aggregate not found in schema: {}", agg_name))
+            }
         }
         _ => Ok(Value::Null),
     }
