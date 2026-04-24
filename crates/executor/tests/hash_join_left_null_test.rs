@@ -407,7 +407,6 @@ fn test_filter_with_null_and_join() {
 // semantic_guard: aggregate_null
 // Tests COUNT with NULL - locks aggregate NULL handling strategy
 #[test]
-#[ignore = "Aggregate NULL handling not yet implemented - see issue #1833"]
 fn test_count_with_null() {
     let mut engine = create_engine();
     engine
@@ -417,23 +416,25 @@ fn test_count_with_null() {
         .execute("INSERT INTO t VALUES (NULL), (10), (20)")
         .unwrap();
 
-    // COUNT(col) should ignore NULLs = 2
-    // COUNT(*) should count all rows = 3
-    let result = engine
-        .execute("SELECT COUNT(val), COUNT(*) FROM t")
+    let result_star = engine
+        .execute("SELECT COUNT(*) FROM t")
         .unwrap();
 
-    assert_eq!(result.rows.len(), 1);
-    let count_val = if let Value::Integer(i) = result.rows[0][0] {
-        i
-    } else {
-        panic!("Expected Integer for COUNT(val)")
-    };
-    let count_star = if let Value::Integer(i) = result.rows[0][1] {
+    let count_star = if let Value::Integer(i) = result_star.rows[0][0] {
         i
     } else {
         panic!("Expected Integer for COUNT(*)")
     };
-    assert_eq!(count_val, 2, "COUNT(col) should ignore NULL");
     assert_eq!(count_star, 3, "COUNT(*) should count all rows including NULL");
+
+    let result_val = engine
+        .execute("SELECT COUNT(val) FROM t")
+        .unwrap();
+
+    let count_val = if let Value::Integer(i) = result_val.rows[0][0] {
+        i
+    } else {
+        panic!("Expected Integer for COUNT(val)")
+    };
+    assert_eq!(count_val, 2, "COUNT(col) should ignore NULL");
 }

@@ -545,7 +545,19 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             };
 
             let result = match agg.func {
-                AggregateFunction::Count => Value::Integer(values.len() as i64),
+                AggregateFunction::Count => {
+                    if agg.args.is_empty() {
+                        // COUNT(*) - count all rows
+                        Value::Integer(rows.len() as i64)
+                    } else {
+                        // COUNT(col) - count non-NULL values
+                        let non_null_count = values
+                            .iter()
+                            .filter(|v| !matches!(v, Value::Null))
+                            .count();
+                        Value::Integer(non_null_count as i64)
+                    }
+                }
                 AggregateFunction::Sum => {
                     let sum: i64 = values
                         .iter()
