@@ -438,3 +438,103 @@ fn test_count_with_null() {
     };
     assert_eq!(count_val, 2, "COUNT(col) should ignore NULL");
 }
+
+// Top 5 Semantic Risk Tests (Phase 1 Completeness)
+
+// Risk 1: JOIN + WHERE + AGGREGATE combination
+// Tests: SELECT COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NOT NULL
+#[test]
+#[ignore = "execute_select_with_join does not handle aggregates - known gap"]
+fn test_semantic_join_where_aggregate() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
+    engine.execute("CREATE TABLE t2 (id INTEGER)").unwrap();
+    engine.execute("INSERT INTO t1 VALUES (1), (2), (3)").unwrap();
+    engine.execute("INSERT INTO t2 VALUES (2), (3)").unwrap();
+
+    let result = engine
+        .execute("SELECT COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NOT NULL")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    let count = if let Value::Integer(i) = result.rows[0][0] {
+        i
+    } else {
+        panic!("Expected Integer")
+    };
+    assert_eq!(count, 2, "JOIN+WHERE+Aggregate: t2.id=2,3 matched and pass IS NOT NULL");
+}
+
+// Risk 2: HAVING with GROUP BY (schema mismatch check)
+#[test]
+fn test_semantic_having_with_group_by() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (dept INTEGER, val INTEGER)").unwrap();
+    engine.execute("INSERT INTO t VALUES (1, 10), (1, 20), (2, 30)").unwrap();
+
+    let result = engine
+        .execute("SELECT dept, COUNT(*) as cnt FROM t GROUP BY dept HAVING COUNT(*) > 1")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    let dept = if let Value::Integer(i) = result.rows[0][0] {
+        i
+    } else {
+        panic!("Expected Integer for dept")
+    };
+    assert_eq!(dept, 1, "Only dept=1 has COUNT(*) > 1 (2 rows)");
+}
+
+// Risk 3: Aggregate with all NULL values
+#[test]
+fn test_semantic_aggregate_all_null() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
+    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+
+    let result = engine.execute("SELECT SUM(val), AVG(val), MIN(val), MAX(val), COUNT(val) FROM t").unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    // All aggregates of all-NULL should return NULL
+    assert!(matches!(result.rows[0][0], Value::Null), "SUM of all NULL should be NULL");
+    assert!(matches!(result.rows[0][1], Value::Null), "AVG of all NULL should be NULL");
+    assert!(matches!(result.rows[0][2], Value::Null), "MIN of all NULL should be NULL");
+    assert!(matches!(result.rows[0][3], Value::Null), "MAX of all NULL should be NULL");
+    assert_eq!(result.rows[0][4], Value::Integer(0), "COUNT of all NULL should be 0");
+}
+
+// Risk 4: GROUP BY with NULL keys
+#[test]
+fn test_semantic_group_by_null_key() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (k INTEGER, v INTEGER)").unwrap();
+    engine.execute("INSERT INTO t VALUES (NULL, 1), (NULL, 2), (1, 3)").unwrap();
+
+    let result = engine.execute("SELECT k, COUNT(*) FROM t GROUP BY k").unwrap();
+
+    assert_eq!(result.rows.len(), 2);
+    // Should have: NULL group (count=2), 1 group (count=1)
+    let has_null_group = result.rows.iter().any(|r| matches!(r[0], Value::Null) && r[1] == Value::Integer(2));
+    let has_one_group = result.rows.iter().any(|r| r[0] == Value::Integer(1) && r[1] == Value::Integer(1));
+    assert!(has_null_group, "Should have NULL group with count=2");
+    assert!(has_one_group, "Should have group k=1 with count=1");
+}
+
+// Risk 5: Filter + Aggregate order (WHERE applied before aggregate)
+#[test]
+fn test_semantic_filter_before_aggregate() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
+    engine.execute("INSERT INTO t VALUES (5), (15), (25), (35)").unwrap();
+
+    let result = engine.execute("SELECT COUNT(*) FROM t WHERE val > 10").unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    let count = if let Value::Integer(i) = result.rows[0][0] {
+        i
+    } else {
+        panic!("Expected Integer")
+    };
+    // val > 10: 15, 25, 35 = 3 rows
+    assert_eq!(count, 3, "COUNT after WHERE filter should count filtered rows only");
+}
