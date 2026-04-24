@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "R1": {"enabled": true, "name": "Test Immutability"},
+    "R2": {"enabled": true, "name": "Ignore Injection Prevention"},
+    "R3": {"enabled": true, "name": "Proof Authenticity"},
+    "R4": {"enabled": true, "name": "Full Execution Requirement"},
+    "R5": {"enabled": true, "name": "Baseline Verification"},
+    "R6": {"enabled": true, "name": "Test Count Monotonicity"},
+    "R7": {"enabled": true, "name": "CI Workflow Integrity"}
+  }
+}
