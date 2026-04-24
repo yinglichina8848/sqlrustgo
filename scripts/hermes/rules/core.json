@@ -1,193 +1,139 @@
 {
-  "version": "0.2",
+  "version": "0.3",
   "schema": "hermes-core-v1",
-  "rules": [
-    {
-      "id": "PROOF_VERIFIED",
-      "description": "PRs are only acceptable when the system has a VERIFIED baseline. Prevents merging onto an unproven system state.",
-      "version": "1.0",
-      "condition": {
-        "type": "ALWAYS"
-      },
-      "proof_check": {
-        "report_path": "docs/versions/v2.8.0/verification_report.json",
-        "required_field": "baseline_verified",
-        "required_value": "true",
-        "fallback": "BLOCK"
-      },
-      "action": "BLOCK",
-      "severity": "CRITICAL",
-      "blocking": true,
-      "message": "System baseline is not VERIFIED. Run verification_engine before merging."
-    },
-    {
-      "id": "AUDIT_TRUSTED",
-      "description": "PRs require a passing self-audit, proving CI path and Audit path agree (detects AV4 tampering).",
-      "version": "1.0",
-      "condition": {
-        "type": "ALWAYS"
-      },
-      "audit_check": {
-        "report_path": "docs/versions/v2.8.0/audit_report.json",
-        "required_field": "status",
-        "required_value": "TRUSTED",
-        "fallback": "BLOCK"
-      },
-      "action": "BLOCK",
-      "severity": "CRITICAL",
-      "blocking": true,
-      "message": "Self-audit is not TRUSTED. Run self_audit.py before merging."
-    },
-    {
-      "id": "REQUIRE_ISSUE",
-      "description": "PR must be linked to an ISSUE, otherwise FAIL",
-      "version": "1.0",
-      "condition": {
-        "type": "AND",
-        "checks": [
-          {
-            "field": "pr_body",
-            "operator": "REGEX",
-            "value": "closes?\\s+#\\d+|fixes?\\s+#\\d+|refs?\\s+#\\d+"
-          }
-        ]
-      },
-      "action": "FAIL",
-      "severity": "CRITICAL",
-      "blocking": true,
-      "message": "PR must reference an ISSUE (e.g. 'Closes #1234')"
-    },
-    {
-      "id": "SQL_SEMANTIC_TEST",
-      "description": "If modifying executor/SQL logic, must include NULL and JOIN+WHERE tests",
-      "version": "1.0",
-      "condition": {
-        "type": "OR",
-        "checks": [
-          {
-            "field": "changed_files",
-            "operator": "CONTAINS",
-            "value": "executor"
-          },
-          {
-            "field": "changed_files",
-            "operator": "CONTAINS",
-            "value": "parser"
-          },
-          {
-            "field": "changed_files",
-            "operator": "CONTAINS",
-            "value": "planner"
-          },
-          {
-            "field": "changed_files",
-            "operator": "CONTAINS",
-            "value": "storage"
-          }
-        ]
-      },
-      "required_tests": {
-        "NULL_test": {
-          "description": "NULL three-value logic tests must exist",
-          "severity": "CRITICAL"
-        },
-        "JOIN_WHERE_test": {
-          "description": "JOIN + WHERE tests must exist",
-          "severity": "CRITICAL"
-        }
-      },
-      "action": "FAIL",
-      "severity": "CRITICAL",
-      "blocking": true,
-      "message": "SQL/executor changes require NULL logic tests AND JOIN+WHERE tests. Run full test suite for ground truth."
-    },
-    {
-      "id": "ROADMAP_PRIORITY",
-      "description": "Block P1/P2 PRs when P0 issues are incomplete",
-      "version": "1.0",
-      "condition": {
-        "type": "OR",
-        "checks": [
-          {
-            "field": "pr_labels",
-            "operator": "CONTAINS",
-            "value": "P1"
-          },
-          {
-            "field": "pr_labels",
-            "operator": "CONTAINS",
-            "value": "P2"
-          }
-        ]
-      },
-      "p0_gate": {
-        "type": "FILE_EXISTS",
-        "path": "docs/roadmap.json",
-        "check_unfinished_p0": true,
-        "severity": "CRITICAL"
-      },
-      "action": "BLOCK",
-      "severity": "HIGH",
-      "blocking": true,
-      "message": "P1/P2 PR blocked: unfinished P0 issues exist in roadmap"
-    },
-    {
-      "id": "TEST_COMPLETENESS",
-      "description": "Every code PR must include happy path, edge case, and regression tests",
-      "version": "1.0",
-      "condition": {
-        "type": "AND",
-        "checks": [
-          {
-            "field": "changed_files",
-            "operator": "NOT_CONTAINS",
-            "value": "*.md"
-          },
-          {
-            "field": "changed_files",
-            "operator": "NOT_CONTAINS",
-            "value": "docs/"
-          },
-          {
-            "field": "changed_files",
-            "operator": "NOT_CONTAINS",
-            "value": "wiki/"
-          }
-        ]
-      },
-      "required_test_categories": {
-        "happy_path": {
-          "description": "Happy-path / smoke test",
-          "severity": "HIGH"
-        },
-        "edge_case": {
-          "description": "Edge-case / boundary test",
-          "severity": "HIGH"
-        },
-        "regression": {
-          "description": "Regression test for bug fixes",
-          "severity": "HIGH"
-        }
-      },
-      "action": "FAIL",
-      "severity": "HIGH",
-      "blocking": true,
-      "message": "PR must include happy-path, edge-case, and regression tests. Semantic correctness is verified by CI, not by this gate."
+  "description": "Gate rules auto-generated from contract/v2.8.0.json. R1-R7 mapped to executable checks.",
+  "commit_binding": {
+    "required": true,
+    "description": "All proof/audit artifacts must carry commit SHA. Artifacts from different commits are STALE.",
+    "field": "commit",
+    "comparison": "STRICT_EQUAL"
+  },
+  "auto_trigger": {
+    "audit": {
+      "enabled": true,
+      "command": "python3 scripts/self_audit.py",
+      "output": "docs/versions/v2.8.0/audit_report.json",
+      "condition": "report missing OR report.commit != HEAD"
     }
-  ],
+  },
+  "contract_rules": {
+    "R1": {
+      "name": "Test Immutability",
+      "description": "PRs cannot modify test files",
+      "check": "git diff --name-only HEAD~1..HEAD | grep -E '^tests/'",
+      "on_violation": "FAIL",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "R2": {
+      "name": "Ignore Injection Prevention",
+      "description": "PRs cannot add new #[ignore] annotations",
+      "check": "git diff HEAD~1..HEAD -- '*.rs' | grep -E '^\\+.*#\\[ignore\\]'",
+      "on_violation": "FAIL",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "R3": {
+      "name": "Proof Authenticity",
+      "description": "Proof must be CI-generated, not PR-submitted",
+      "check": "verification_report.json exists AND commit matches HEAD",
+      "on_violation": "BLOCK",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "R4": {
+      "name": "Full Execution Requirement",
+      "description": "All baseline tests must pass (226 passed, 0 failed, 0 ignored)",
+      "check": "cargo test exited 0 AND test_counts match baseline",
+      "on_violation": "BLOCK",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "R5": {
+      "name": "Baseline Verification",
+      "description": "baseline_verified must be true",
+      "check": "verification_report.json.baseline_verified == true",
+      "on_violation": "BLOCK",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "R6": {
+      "name": "Test Count Monotonicity",
+      "description": "Test count cannot decrease (minimum 226 passed)",
+      "check": "verification_report.json.passed >= 226",
+      "on_violation": "BLOCK",
+      "severity": "HIGH",
+      "blocking": true
+    },
+    "R7": {
+      "name": "CI Workflow Integrity",
+      "description": "CI workflow files cannot be modified by PR",
+      "check": "git diff HEAD~1..HEAD --name-only | grep -E '^\\.github/workflows'",
+      "on_violation": "WARN",
+      "severity": "HIGH",
+      "blocking": false
+    }
+  },
+  "hygiene_rules": {
+    "REQUIRE_ISSUE": {
+      "description": "PR must reference an ISSUE",
+      "check": "pr_body contains 'Closes #N' or 'Fixes #N'",
+      "on_violation": "FAIL",
+      "severity": "CRITICAL",
+      "blocking": true
+    },
+    "SQL_SEMANTIC_TEST": {
+      "description": "SQL/executor changes require NULL and JOIN tests (text check only; CI is ground truth)",
+      "check": "changed_files contains executor|parser|planner|storage → NULL tests exist",
+      "on_violation": "FAIL",
+      "severity": "HIGH",
+      "blocking": true,
+      "disclaimer": "Semantic correctness is verified by CI, not by this gate"
+    },
+    "ROADMAP_PRIORITY": {
+      "description": "Block P1/P2 PRs when P0 issues are incomplete",
+      "check": "pr_labels contains P1|P2 AND docs/roadmap.json has unfinished P0",
+      "on_violation": "BLOCK",
+      "severity": "HIGH",
+      "blocking": true
+    },
+    "TEST_COMPLETENESS": {
+      "description": "Code PRs must include happy-path, edge-case, regression tests (text check only; CI is ground truth)",
+      "check": "changed_files non-doc → test categories exist",
+      "on_violation": "FAIL",
+      "severity": "HIGH",
+      "blocking": true,
+      "disclaimer": "Test quality is verified by CI, not by this gate"
+    }
+  },
+  "report_validators": {
+    "json_integrity": {
+      "description": "Report files must be valid JSON",
+      "check": "python3 -c 'import json; json.load(open(path))'",
+      "on_violation": "ERROR",
+      "severity": "CRITICAL"
+    },
+    "commit_freshness": {
+      "description": "Report commit must match HEAD",
+      "check": "report.commit == $(git rev-parse HEAD)",
+      "on_violation": "BLOCK",
+      "severity": "CRITICAL"
+    }
+  },
   "exit_codes": {
     "PASS": 0,
     "FAIL": 1,
     "BLOCK": 2,
-    "ERROR": 3
+    "WARN": 3,
+    "ERROR": 4
   },
   "architecture": {
-    "description": "Gate runs BEFORE CI. Gate checks structure/hygiene. CI + proof + audit provide ground truth.",
+    "description": "Gate v0.3: Contract-driven + Commit-bound + Auto-trigger Audit. Gate reads contract/v2.8.0.json to dynamically generate R1-R7 checks. All artifacts must carry current HEAD commit SHA.",
     "layers": [
-      "hermes_gate.sh (gate check, pre-merge)",
-      "cargo test (ground truth, CI)",
-      "verification_engine.py (proof generation)",
-      "self_audit.py (independent audit)"
+      "hermes_gate.sh (gate, reads contract.json, enforces R1-R7 + hygiene)",
+      "python3 scripts/self_audit.py (audit, auto-triggered if stale)",
+      "cargo test (ground truth)",
+      "verification_engine.py (proof generation)"
     ]
   }
 }
