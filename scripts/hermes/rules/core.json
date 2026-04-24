@@ -1,0 +1,151 @@
+{
+  "version": "0.1",
+  "schema": "hermes-core-v1",
+  "rules": [
+    {
+      "id": "REQUIRE_ISSUE",
+      "description": "PR must be linked to an ISSUE, otherwise FAIL",
+      "version": "1.0",
+      "condition": {
+        "type": "AND",
+        "checks": [
+          {
+            "field": "pr_body",
+            "operator": "REGEX",
+            "value": "(?i)closes?\\s+#\\d+|fixes?\\s+#\\d+|refs?\\s+#\\d+"
+          }
+        ]
+      },
+      "action": "FAIL",
+      "severity": "CRITICAL",
+      "blocking": true,
+      "message": "PR must reference an ISSUE (e.g. 'Closes #1234')"
+    },
+    {
+      "id": "SQL_SEMANTIC_TEST",
+      "description": "If modifying executor/SQL logic, must include NULL and JOIN+WHERE tests",
+      "version": "1.0",
+      "condition": {
+        "type": "OR",
+        "checks": [
+          {
+            "field": "changed_files",
+            "operator": "GLOB",
+            "value": "**/executor/**/*.rs"
+          },
+          {
+            "field": "changed_files",
+            "operator": "GLOB",
+            "value": "**/parser/**/*.rs"
+          },
+          {
+            "field": "changed_files",
+            "operator": "GLOB",
+            "value": "**/planner/**/*.rs"
+          },
+          {
+            "field": "changed_files",
+            "operator": "GLOB",
+            "value": "**/storage/**/*.rs"
+          }
+        ]
+      },
+      "required_tests": {
+        "NULL_test": {
+          "pattern": "(?i)null.*test|test.*null",
+          "files": "**/tests/**/*.rs",
+          "required": true
+        },
+        "JOIN_WHERE_test": {
+          "pattern": "(?i)join.*test|test.*join|where.*test|test.*where",
+          "files": "**/tests/**/*.rs",
+          "required": true
+        }
+      },
+      "action": "FAIL",
+      "severity": "CRITICAL",
+      "blocking": true,
+      "message": "SQL/SQL executor changes require NULL logic tests AND JOIN+WHERE tests"
+    },
+    {
+      "id": "ROADMAP_PRIORITY",
+      "description": "Block P1/P2 PRs when P0 issues are incomplete",
+      "version": "1.0",
+      "condition": {
+        "type": "OR",
+        "checks": [
+          {
+            "field": "pr_labels",
+            "operator": "CONTAINS",
+            "value": "P1"
+          },
+          {
+            "field": "pr_labels",
+            "operator": "CONTAINS",
+            "value": "P2"
+          }
+        ]
+      },
+      "p0_gate": {
+        "type": "FILE_EXISTS",
+        "path": "docs/roadmap.json",
+        "check_unfinished_p0": true,
+        "severity": "CRITICAL",
+        "message": "P0 issues are incomplete — P1/P2 PRs are blocked"
+      },
+      "action": "BLOCK",
+      "severity": "HIGH",
+      "blocking": true,
+      "message": "P1/P2 PR blocked: unfinished P0 issues exist"
+    },
+    {
+      "id": "TEST_COMPLETENESS",
+      "description": "Every PR must include happy path, edge case, and regression tests",
+      "version": "1.0",
+      "condition": {
+        "type": "AND",
+        "checks": [
+          {
+            "field": "changed_files",
+            "operator": "NOT_GLOB",
+            "value": "**/*.md"
+          },
+          {
+            "field": "changed_files",
+            "operator": "NOT_GLOB",
+            "value": "**/docs/**"
+          },
+          {
+            "field": "changed_files",
+            "operator": "NOT_GLOB",
+            "value": "**/wiki/**"
+          }
+        ]
+      },
+      "required_test_categories": {
+        "happy_path": {
+          "pattern": "(?i)happy|success|basic|smoke",
+          "required": true
+        },
+        "edge_case": {
+          "pattern": "(?i)edge|boundary|极限|边界",
+          "required": true
+        },
+        "regression": {
+          "pattern": "(?i)regress|regression|bug.*fix|fix.*bug",
+          "required": true
+        }
+      },
+      "action": "FAIL",
+      "severity": "HIGH",
+      "blocking": true,
+      "message": "PR must include: happy path test, edge case test, and regression test"
+    }
+  ],
+  "exit_codes": {
+    "PASS": 0,
+    "FAIL": 1,
+    "BLOCK": 2,
+    "ERROR": 3
+  }
+}
