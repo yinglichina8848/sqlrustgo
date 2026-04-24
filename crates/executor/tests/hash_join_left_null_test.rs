@@ -441,7 +441,6 @@ fn test_count_with_null() {
 // Risk 1: JOIN + WHERE + AGGREGATE combination
 // Tests: SELECT COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NOT NULL
 #[test]
-#[ignore = "execute_select_with_join does not handle aggregates - known gap"]
 fn test_semantic_join_where_aggregate() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
@@ -583,5 +582,98 @@ fn test_semantic_filter_before_aggregate() {
     assert_eq!(
         count, 3,
         "COUNT after WHERE filter should count filtered rows only"
+    );
+}
+
+// Risk 6: JOIN + GROUP BY + HAVING (ultimate semantic test)
+// Tests: SELECT t1.id, COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id GROUP BY t1.id HAVING COUNT(t2.id) > 0
+#[test]
+fn test_semantic_join_group_by_having() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE t2 (id INTEGER, value INTEGER)")
+        .unwrap();
+    // t1: rows with id=1, 2, 3 (3 has no matching t2)
+    engine
+        .execute("INSERT INTO t1 VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+    // t2: only matches for id=1 and id=2
+    engine
+        .execute("INSERT INTO t2 VALUES (1, 100), (1, 200), (2, 50)")
+        .unwrap();
+
+    // Expected:
+    // - t1.id=1: COUNT(t2.id) = 2, HAVING COUNT(t2.id) > 0 => TRUE, included
+    // - t1.id=2: COUNT(t2.id) = 1, HAVING COUNT(t2.id) > 0 => TRUE, included
+    // - t1.id=3: COUNT(t2.id) = 0, HAVING COUNT(t2.id) > 0 => FALSE, excluded
+    let result = engine
+        .execute(
+            "SELECT t1.id, COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id GROUP BY t1.id HAVING COUNT(t2.id) > 0",
+        )
+        .unwrap();
+
+    assert_eq!(
+        result.rows.len(),
+        2,
+        "Only id=1 and id=2 should have COUNT(t2.id) > 0"
+    );
+    // Verify the results are id=1 and id=2
+    let has_id_1 = result
+        .rows
+        .iter()
+        .any(|r| r[0] == Value::Integer(1) && r[1] == Value::Integer(2));
+    let has_id_2 = result
+        .rows
+        .iter()
+        .any(|r| r[0] == Value::Integer(2) && r[1] == Value::Integer(1));
+    assert!(has_id_1, "id=1 should have COUNT(t2.id)=2");
+    assert!(has_id_2, "id=2 should have COUNT(t2.id)=1");
+}
+
+// Risk 6b: JOIN + GROUP BY + HAVING with NULL values in join key
+#[test]
+fn test_semantic_join_group_by_having_null_key() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE t2 (id INTEGER, value INTEGER)")
+        .unwrap();
+    // t1: includes NULL id
+    engine
+        .execute("INSERT INTO t1 VALUES (1, 'Alice'), (NULL, 'Bob'), (2, 'Charlie')")
+        .unwrap();
+    // t2: only matches for id=1 and id=2, not NULL
+    engine
+        .execute("INSERT INTO t2 VALUES (1, 100), (2, 50)")
+        .unwrap();
+
+    // Expected:
+    // - id=1: COUNT(t2.id) = 1 > 0 => included
+    // - id=NULL: COUNT(t2.id) = 0 > 0 => FALSE, excluded (LEFT JOIN gives NULL matches, COUNT doesn't count NULL)
+    // - id=2: COUNT(t2.id) = 1 > 0 => included
+    let result = engine
+        .execute(
+            "SELECT t1.id, COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id GROUP BY t1.id HAVING COUNT(t2.id) > 0",
+        )
+        .unwrap();
+
+    assert_eq!(
+        result.rows.len(),
+        2,
+        "Only id=1 and id=2 should have COUNT(t2.id) > 0"
+    );
+    let has_id_1 = result.rows.iter().any(|r| r[0] == Value::Integer(1));
+    let has_id_2 = result.rows.iter().any(|r| r[0] == Value::Integer(2));
+    let has_null = result.rows.iter().any(|r| matches!(r[0], Value::Null));
+    assert!(has_id_1, "id=1 should be present");
+    assert!(has_id_2, "id=2 should be present");
+    assert!(
+        !has_null,
+        "NULL id should NOT be in result (COUNT=0 fails HAVING)"
     );
 }
