@@ -174,7 +174,8 @@ fn setup_engine() -> MemoryExecutionEngine {
         engine
             .execute(&format!(
                 "INSERT INTO nation VALUES ({}, 'Nation{}')",
-                i as i64, i
+                i as i64,
+                i
             ))
             .expect("insert nation");
     }
@@ -184,7 +185,8 @@ fn setup_engine() -> MemoryExecutionEngine {
         engine
             .execute(&format!(
                 "INSERT INTO region VALUES ({}, 'Region{}')",
-                i as i64, i
+                i as i64,
+                i
             ))
             .expect("insert region");
     }
@@ -509,7 +511,8 @@ fn tpch_basic_like() {
 #[test]
 fn tpch_basic_between() {
     let mut engine = setup_engine();
-    let result = engine.execute("SELECT * FROM lineitem WHERE l_quantity BETWEEN 10 AND 50");
+    let result =
+        engine.execute("SELECT * FROM lineitem WHERE l_quantity BETWEEN 10 AND 50");
     assert!(result.is_ok(), "BETWEEN should work");
 }
 

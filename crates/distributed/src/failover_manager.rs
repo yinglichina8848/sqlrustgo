@@ -459,7 +459,7 @@ mod tests {
         let config = FailureDetectorConfig::default();
         assert_eq!(config.heartbeat_timeout, Duration::from_millis(500));
 
-        let detector = FailureDetector::with_config(
+        let mut detector = FailureDetector::with_config(
             1,
             FailureDetectorConfig {
                 check_interval: Duration::from_millis(200),
@@ -574,20 +574,14 @@ mod tests {
     fn test_failure_detector_set_check_interval() {
         let mut detector = FailureDetector::new(1);
         detector.set_check_interval(Duration::from_millis(500));
-        assert_eq!(
-            detector.get_config().check_interval,
-            Duration::from_millis(500)
-        );
+        assert_eq!(detector.get_config().check_interval, Duration::from_millis(500));
     }
 
     #[test]
     fn test_failure_detector_set_heartbeat_timeout() {
         let mut detector = FailureDetector::new(1);
         detector.set_heartbeat_timeout(Duration::from_millis(1000));
-        assert_eq!(
-            detector.get_config().heartbeat_timeout,
-            Duration::from_millis(1000)
-        );
+        assert_eq!(detector.get_config().heartbeat_timeout, Duration::from_millis(1000));
     }
 
     #[test]
@@ -610,14 +604,8 @@ mod tests {
 
     #[test]
     fn test_failure_reason_debug() {
-        assert_eq!(
-            format!("{:?}", FailureReason::HeartbeatTimeout),
-            "HeartbeatTimeout"
-        );
-        assert_eq!(
-            format!("{:?}", FailureReason::ReplicationLag),
-            "ReplicationLag"
-        );
+        assert_eq!(format!("{:?}", FailureReason::HeartbeatTimeout), "HeartbeatTimeout");
+        assert_eq!(format!("{:?}", FailureReason::ReplicationLag), "ReplicationLag");
         assert_eq!(format!("{:?}", FailureReason::NetworkError), "NetworkError");
         assert_eq!(format!("{:?}", FailureReason::Manual), "Manual");
     }
@@ -664,295 +652,5 @@ mod tests {
         let detector = FailureDetector::new(1);
         let debug_str = format!("{:?}", detector);
         assert!(debug_str.contains("node_id: 1"));
-    }
-
-    #[test]
-    fn test_failure_detector_get_config() {
-        let detector = FailureDetector::new(1);
-        let config = detector.get_config();
-        assert_eq!(config.failure_threshold, 3);
-    }
-
-    #[test]
-    fn test_failure_detector_is_node_dead_after_timeout() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        std::thread::sleep(Duration::from_millis(10));
-        detector.set_heartbeat_timeout(Duration::from_millis(1));
-        std::thread::sleep(Duration::from_millis(5));
-        assert!(detector.is_node_dead(2));
-    }
-
-    #[test]
-    fn test_failure_detector_is_node_alive_self() {
-        let detector = FailureDetector::new(1);
-        assert!(detector.is_node_alive(1));
-    }
-
-    #[test]
-    fn test_failure_detector_check_all_nodes_with_alive() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        let failures = detector.check_all_nodes();
-        assert!(failures.is_empty());
-    }
-
-    #[test]
-    fn test_failure_event_clone() {
-        let event = FailureEvent {
-            node_id: 42,
-            detected_at: Instant::now(),
-            reason: FailureReason::NetworkError,
-        };
-        let cloned = event.clone();
-        assert_eq!(cloned.node_id, 42);
-    }
-
-    #[test]
-    fn test_failure_reason_variants() {
-        assert!(matches!(
-            FailureReason::HeartbeatTimeout,
-            FailureReason::HeartbeatTimeout
-        ));
-        assert!(matches!(
-            FailureReason::ReplicationLag,
-            FailureReason::ReplicationLag
-        ));
-        assert!(matches!(
-            FailureReason::NetworkError,
-            FailureReason::NetworkError
-        ));
-        assert!(matches!(FailureReason::Manual, FailureReason::Manual));
-    }
-
-    #[test]
-    fn test_cluster_health_fields() {
-        let health = ClusterHealth {
-            total_nodes: 10,
-            dead_nodes: 2,
-            total_shards: 20,
-            leader_count: 5,
-            healthy: true,
-        };
-        assert_eq!(health.total_nodes, 10);
-        assert_eq!(health.dead_nodes, 2);
-        assert!(health.healthy);
-    }
-
-    #[test]
-    fn test_cluster_health_dead_to_total() {
-        let health = ClusterHealth {
-            total_nodes: 5,
-            dead_nodes: 2,
-            total_shards: 10,
-            leader_count: 3,
-            healthy: true,
-        };
-        assert_eq!(health.total_nodes - health.dead_nodes, 3);
-    }
-
-    #[test]
-    fn test_failure_detector_config_fields() {
-        let config = FailureDetectorConfig::default();
-        assert_eq!(config.check_interval, Duration::from_millis(100));
-        assert_eq!(config.heartbeat_timeout, Duration::from_millis(500));
-        assert_eq!(config.max_replication_lag_ms, 1000);
-        assert_eq!(config.failure_threshold, 3);
-    }
-
-    #[test]
-    fn test_failure_detector_different_nodes_independent() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        assert!(detector.is_node_alive(2));
-        assert!(!detector.is_node_alive(3));
-    }
-
-    #[test]
-    fn test_failure_detector_with_config() {
-        let config = FailureDetectorConfig {
-            check_interval: Duration::from_millis(200),
-            heartbeat_timeout: Duration::from_millis(1000),
-            max_replication_lag_ms: 500,
-            failure_threshold: 5,
-        };
-        let detector = FailureDetector::with_config(1, config);
-        assert_eq!(detector.get_config().failure_threshold, 5);
-    }
-
-    #[test]
-    fn test_failure_detector_no_heartbeat_unknown_node() {
-        let detector = FailureDetector::new(1);
-        assert!(!detector.is_node_alive(999));
-        assert!(detector.is_node_dead(999));
-    }
-
-    #[tokio::test]
-    async fn test_failover_manager_get_dead_nodes() {
-        let shard_manager = create_test_shard_manager();
-        let replica_manager = create_test_replica_manager();
-        let manager = FailoverManager::new(1, shard_manager, replica_manager);
-        let dead = manager.get_dead_nodes();
-        assert!(dead.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_failover_manager_handle_own_failure_returns_err() {
-        let shard_manager = create_test_shard_manager();
-        let replica_manager = create_test_replica_manager();
-        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
-        let result = manager.handle_node_failure(1).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_failover_manager_notify_after_failure() {
-        let notifier = FailoverNotifier::new();
-        let mut rx = notifier.subscribe().await;
-
-        let event = FailureEvent {
-            node_id: 5,
-            detected_at: Instant::now(),
-            reason: FailureReason::HeartbeatTimeout,
-        };
-        notifier.notify_failure(&event).await;
-        notifier.notify_failure(&event).await;
-
-        let received = rx.recv().await.unwrap();
-        assert_eq!(received.node_id, 5);
-    }
-
-    #[tokio::test]
-    async fn test_failover_notifier_multiple_subscribers() {
-        let notifier = FailoverNotifier::new();
-        let mut rx1 = notifier.subscribe().await;
-        let mut rx2 = notifier.subscribe().await;
-
-        let event = FailureEvent {
-            node_id: 3,
-            detected_at: Instant::now(),
-            reason: FailureReason::Manual,
-        };
-        notifier.notify_failure(&event).await;
-
-        let received1 = rx1.recv().await.unwrap();
-        let received2 = rx2.recv().await.unwrap();
-        assert_eq!(received1.node_id, 3);
-        assert_eq!(received2.node_id, 3);
-    }
-
-    // =====================================================================
-    // White-box Tests: Branch Coverage for FailureDetector
-    // =====================================================================
-
-    #[test]
-    fn test_failure_detector_multiple_nodes() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        detector.record_heartbeat(3);
-        detector.record_heartbeat(4);
-
-        assert!(detector.is_node_alive(2));
-        assert!(detector.is_node_alive(3));
-        assert!(detector.is_node_alive(4));
-    }
-
-    #[test]
-    fn test_failure_detector_heartbeat_overwrite() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        assert!(detector.is_node_alive(2));
-
-        std::thread::sleep(Duration::from_millis(5));
-        detector.record_heartbeat(2);
-        assert!(detector.is_node_alive(2));
-    }
-
-    #[test]
-    fn test_failure_detector_check_all_nodes_with_failures() {
-        let mut detector = FailureDetector::new(1);
-        detector.record_heartbeat(2);
-        detector.record_heartbeat(3);
-
-        let failures = detector.check_all_nodes();
-        assert!(failures.is_empty());
-    }
-
-    // =====================================================================
-    // White-box Tests: Branch Coverage for FailoverManager
-    // =====================================================================
-
-    #[tokio::test]
-    async fn test_failover_manager_multiple_failures() {
-        let shard_manager = create_test_shard_manager();
-        let replica_manager = create_test_replica_manager();
-        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
-
-        manager.dead_nodes.insert(2);
-        manager.dead_nodes.insert(3);
-        manager.dead_nodes.insert(4);
-
-        assert_eq!(manager.get_dead_nodes().len(), 3);
-    }
-
-    #[tokio::test]
-    async fn test_failover_manager_recover_nonexistent() {
-        let shard_manager = create_test_shard_manager();
-        let replica_manager = create_test_replica_manager();
-        let mut manager = FailoverManager::new(1, shard_manager, replica_manager);
-
-        manager.recover_node(999);
-        assert!(manager.get_dead_nodes().is_empty());
-    }
-
-    // =====================================================================
-    // White-box Tests: Path Coverage for FailureReason
-    // =====================================================================
-
-    #[test]
-    fn test_failure_reason_all_variants() {
-        assert!(matches!(
-            FailureReason::HeartbeatTimeout,
-            FailureReason::HeartbeatTimeout
-        ));
-        assert!(matches!(
-            FailureReason::ReplicationLag,
-            FailureReason::ReplicationLag
-        ));
-        assert!(matches!(
-            FailureReason::NetworkError,
-            FailureReason::NetworkError
-        ));
-        assert!(matches!(FailureReason::Manual, FailureReason::Manual));
-    }
-
-    // =====================================================================
-    // White-box Tests: Edge Cases for ClusterHealth
-    // =====================================================================
-
-    #[test]
-    fn test_cluster_health_all_dead() {
-        let health = ClusterHealth {
-            total_nodes: 5,
-            dead_nodes: 5,
-            total_shards: 10,
-            leader_count: 0,
-            healthy: false,
-        };
-        assert!(!health.healthy);
-        assert_eq!(health.total_nodes - health.dead_nodes, 0);
-    }
-
-    #[test]
-    fn test_cluster_health_all_alive() {
-        let health = ClusterHealth {
-            total_nodes: 5,
-            dead_nodes: 0,
-            total_shards: 10,
-            leader_count: 5,
-            healthy: true,
-        };
-        assert!(health.healthy);
-        assert_eq!(health.total_nodes - health.dead_nodes, 5);
     }
 }

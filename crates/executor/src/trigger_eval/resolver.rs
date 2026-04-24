@@ -1,10 +1,10 @@
-use super::context::EvalContext;
 use sqlrustgo_types::Value;
+use super::context::EvalContext;
 
 pub fn resolve_column(
-    _name: &str,
-    _ctx: &EvalContext,
-    _column_names: Option<&[String]>,
+    name: &str,
+    ctx: &EvalContext,
+    column_names: Option<&[String]>,
 ) -> Option<Value> {
     None
 }

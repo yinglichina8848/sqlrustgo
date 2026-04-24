@@ -186,8 +186,7 @@ fn oltp_mixed() {
         if engine
             .execute(&format!(
                 "INSERT INTO sbtest1 VALUES ({}, {}, 'mixed', 'pad')",
-                new_id,
-                i % 1000
+                new_id, i % 1000
             ))
             .is_ok()
         {
@@ -226,7 +225,10 @@ fn oltp_bulk_insert() {
         }
     }
 
-    assert_eq!(success_count, iterations, "All bulk inserts should succeed");
+    assert_eq!(
+        success_count, iterations,
+        "All bulk inserts should succeed"
+    );
 
     let result = engine.execute("SELECT COUNT(*) FROM bulk_test");
     assert!(result.is_ok(), "COUNT should succeed");
@@ -237,8 +239,9 @@ fn oltp_aggregation() {
     let mut engine = setup_engine();
     setup_sbtest(&mut engine);
 
-    let result =
-        engine.execute("SELECT k, COUNT(*) as cnt FROM sbtest1 GROUP BY k ORDER BY k LIMIT 10");
+    let result = engine.execute(
+        "SELECT k, COUNT(*) as cnt FROM sbtest1 GROUP BY k ORDER BY k LIMIT 10",
+    );
 
     assert!(result.is_ok(), "Aggregation should succeed");
 
