@@ -28,18 +28,34 @@ def parse_test_results(output):
     return passed, failed
 
 
+def load_verification_report():
+    try:
+        with open("verification_report.json") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+
 def generate_audit_report(exit_code, output):
-    passed, failed = parse_test_results(output)
-    status = "TRUSTED" if exit_code == 0 and failed == 0 else "WEAKENED"
+    audit_passed, audit_failed = parse_test_results(output)
+    verification = load_verification_report()
+    proof_match = False
+
+    if verification and verification.get("passed") == audit_passed:
+        proof_match = True
+
+    status = "TRUSTED" if exit_code == 0 and audit_failed == 0 and proof_match else "WEAKENED"
 
     report = {
         "audit_version": "1.0",
         "generated_by": "self_audit.py",
-        "source": "CI execution",
-        "passed": passed,
-        "failed": failed,
+        "source": "CI execution (dual-path audit)",
+        "passed": audit_passed,
+        "failed": audit_failed,
         "exit_code": exit_code,
-        "status": status
+        "status": status,
+        "verification_passed": verification.get("passed") if verification else None,
+        "proof_match": proof_match
     }
 
     with open("audit_report.json", "w") as f:
@@ -52,10 +68,10 @@ def generate_audit_report(exit_code, output):
     print("=" * 50)
 
     if status == "WEAKENED":
-        print(f"AUDIT WEAKENED: {failed} test(s) failed")
+        print(f"AUDIT WEAKENED: proof_match={proof_match}")
         sys.exit(1)
     else:
-        print(f"AUDIT TRUSTED: {passed} tests passed")
+        print(f"AUDIT TRUSTED: {audit_passed} tests passed, proof_match={proof_match}")
         sys.exit(0)
 
 
