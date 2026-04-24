@@ -52,6 +52,7 @@ pub enum Token {
     // Subquery keywords
     Exists,
     In,
+    Is,
     All,
     Any,
     Some,
@@ -240,6 +241,7 @@ impl fmt::Display for Token {
             Token::Exists => write!(f, "EXISTS"),
             Token::If => write!(f, "IF"),
             Token::In => write!(f, "IN"),
+            Token::Is => write!(f, "IS"),
             Token::All => write!(f, "ALL"),
             Token::Any => write!(f, "ANY"),
             Token::Some => write!(f, "SOME"),
@@ -456,6 +458,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DEFAULT" => Some(Token::Default),
         "EXISTS" => Some(Token::Exists),
         "IN" => Some(Token::In),
+        "IS" => Some(Token::Is),
         "ALL" => Some(Token::All),
         "ANY" => Some(Token::Any),
         "SOME" => Some(Token::Some),

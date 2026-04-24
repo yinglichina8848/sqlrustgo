@@ -264,6 +264,7 @@ impl<'a> Lexer<'a> {
                     "IF" => Token::If,
                     "EXISTS" => Token::Exists,
                     "IN" => Token::In,
+                    "IS" => Token::Is,
                     "ALL" => Token::All,
                     "ANY" => Token::Any,
                     "SOME" => Token::Some,
