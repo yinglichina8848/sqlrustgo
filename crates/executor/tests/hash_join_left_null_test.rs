@@ -325,3 +325,115 @@ fn test_filter_and_with_null() {
 
     assert_eq!(result.rows.len(), 0, "TRUE AND UNKNOWN should filter out");
 }
+
+// semantic_guard: join_null_filter
+// Tests JOIN + IS NULL combination - locks NULL handling across join and filter paths
+#[test]
+fn test_join_with_is_null_filter() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t1 (id INTEGER)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE t2 (id INTEGER, data TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t1 VALUES (1), (2), (3)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t2 VALUES (2, 'B')")
+        .unwrap();
+
+    // t1 LEFT JOIN t2: rows 1, 2, 3 (row 1 and 3 have NULL t2.id)
+    // WHERE t2.id IS NULL: only rows where t2.id is NULL (rows 1, 3)
+    let result = engine
+        .execute(
+            "SELECT t1.id FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NULL",
+        )
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 2);
+    let ids: Vec<i64> = result
+        .rows
+        .iter()
+        .map(|r| {
+            if let Value::Integer(i) = r[0] {
+                i
+            } else {
+                panic!("Expected Integer")
+            }
+        })
+        .collect();
+    assert!(ids.contains(&1));
+    assert!(ids.contains(&3));
+}
+
+// semantic_guard: filter_join_combination
+// Tests filter + JOIN combination with NULL handling in both paths
+#[test]
+fn test_filter_with_null_and_join() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t1 (id INTEGER)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE t2 (id INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t1 VALUES (1), (2), (3), (NULL)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t2 VALUES (2), (3), (NULL)")
+        .unwrap();
+
+    // t1 LEFT JOIN t2 ON t1.id = t2.id
+    // WHERE t1.id > 1 AND t2.id IS NULL
+    // t1 rows: 2, 3 match t2; NULL and 1 don't match
+    // After join: 2, 3 have matches; NULL and 1 have NULL t2.id
+    // WHERE t1.id > 1: keeps 2, 3
+    // WHERE t2.id IS NULL: keeps rows where t2.id is NULL
+    // Result: 1 row (t1.id=3, t2.id=NULL because 3 doesn't match t2's 3)
+    // Wait - t1.id=3 has t2.id=3 match, not NULL
+    // So result should be: t1.id=1 with t2.id=NULL
+    let result = engine
+        .execute(
+            "SELECT t1.id, t2.id FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t1.id > 1 AND t2.id IS NULL",
+        )
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 0, "t1.id=2,3 matched t2, only t1.id=1 has NULL t2.id but fails t1.id > 1");
+}
+
+// semantic_guard: aggregate_null
+// Tests COUNT with NULL - locks aggregate NULL handling strategy
+#[test]
+#[ignore = "Aggregate NULL handling not yet implemented - see issue #1833"]
+fn test_count_with_null() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (val INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (10), (20)")
+        .unwrap();
+
+    // COUNT(col) should ignore NULLs = 2
+    // COUNT(*) should count all rows = 3
+    let result = engine
+        .execute("SELECT COUNT(val), COUNT(*) FROM t")
+        .unwrap();
+
+    assert_eq!(result.rows.len(), 1);
+    let count_val = if let Value::Integer(i) = result.rows[0][0] {
+        i
+    } else {
+        panic!("Expected Integer for COUNT(val)")
+    };
+    let count_star = if let Value::Integer(i) = result.rows[0][1] {
+        i
+    } else {
+        panic!("Expected Integer for COUNT(*)")
+    };
+    assert_eq!(count_val, 2, "COUNT(col) should ignore NULL");
+    assert_eq!(count_star, 3, "COUNT(*) should count all rows including NULL");
+}

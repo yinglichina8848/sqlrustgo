@@ -651,7 +651,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let left_col_count = left_table_info.columns.len();
         let right_col_count = right_table_info.columns.len();
 
-        let matched_results = match join_type {
+        let mut matched_results = match join_type {
             JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
                 // Hash-based matching
                 // SQL semantics: NULL = NULL is UNKNOWN (not a match), so skip NULL keys
@@ -729,6 +729,36 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 results
             }
         };
+
+        // Apply WHERE clause filter if present
+        if let Some(ref where_expr) = select.where_clause {
+            // Build combined table info for the join result
+            let mut combined_columns: Vec<ColumnDefinition> = left_table_info
+            .columns
+            .iter()
+            .map(|c| ColumnDefinition {
+                name: format!("{}.{}", left_table_name, c.name),
+                data_type: c.data_type.clone(),
+                nullable: c.nullable,
+                primary_key: c.primary_key,
+            })
+            .collect();
+        combined_columns.extend(right_table_info.columns.iter().map(|c| ColumnDefinition {
+            name: format!("{}.{}", right_table_name, c.name),
+            data_type: c.data_type.clone(),
+            nullable: c.nullable,
+            primary_key: c.primary_key,
+        }));
+        let combined_table_info = TableInfo {
+            name: format!("{}_join_{}", left_table_name, right_table_name),
+            columns: combined_columns,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+            matched_results.retain(|row| eval_predicate(where_expr, row, &combined_table_info));
+        }
 
         let row_count = matched_results.len();
         Ok(ExecutorResult::new(matched_results, row_count))
@@ -1767,11 +1797,30 @@ fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
 }
 
 /// Find the index of a column in the table info
+/// For JOIN queries with combined tables, handles qualified names like "t2.id"
+/// by routing to the correct portion of the combined schema.
+/// Combined table naming: left_table.col, right_table.col
 fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    table_info
-        .columns
-        .iter()
-        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    // Handle qualified names in JOIN context (e.g., "t1.id" or "t2.id")
+    if let Some((qualifier, col)) = col_name.split_once('.') {
+        // In JOIN combined table, columns are named as "left_table.col" and "right_table.col"
+        // Look for exact match with qualifier
+        for (i, c) in table_info.columns.iter().enumerate() {
+            if c.name.eq_ignore_ascii_case(col_name) {
+                return Some(i);
+            }
+        }
+        // Fallback: strip qualifier and find first match (for non-JOIN queries)
+        table_info
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(col))
+    } else {
+        table_info
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    }
 }
 
 #[cfg(test)]
