@@ -545,7 +545,19 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             };
 
             let result = match agg.func {
-                AggregateFunction::Count => Value::Integer(values.len() as i64),
+                AggregateFunction::Count => {
+                    if agg.args.is_empty() {
+                        // COUNT(*) - count all rows
+                        Value::Integer(rows.len() as i64)
+                    } else {
+                        // COUNT(col) - count non-NULL values
+                        let non_null_count = values
+                            .iter()
+                            .filter(|v| !matches!(v, Value::Null))
+                            .count();
+                        Value::Integer(non_null_count as i64)
+                    }
+                }
                 AggregateFunction::Sum => {
                     let sum: i64 = values
                         .iter()
@@ -651,7 +663,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let left_col_count = left_table_info.columns.len();
         let right_col_count = right_table_info.columns.len();
 
-        let matched_results = match join_type {
+        let mut matched_results = match join_type {
             JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
                 // Hash-based matching
                 // SQL semantics: NULL = NULL is UNKNOWN (not a match), so skip NULL keys
@@ -729,6 +741,36 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 results
             }
         };
+
+        // Apply WHERE clause filter if present
+        if let Some(ref where_expr) = select.where_clause {
+            // Build combined table info for the join result
+            let mut combined_columns: Vec<ColumnDefinition> = left_table_info
+            .columns
+            .iter()
+            .map(|c| ColumnDefinition {
+                name: format!("{}.{}", left_table_name, c.name),
+                data_type: c.data_type.clone(),
+                nullable: c.nullable,
+                primary_key: c.primary_key,
+            })
+            .collect();
+        combined_columns.extend(right_table_info.columns.iter().map(|c| ColumnDefinition {
+            name: format!("{}.{}", right_table_name, c.name),
+            data_type: c.data_type.clone(),
+            nullable: c.nullable,
+            primary_key: c.primary_key,
+        }));
+        let combined_table_info = TableInfo {
+            name: format!("{}_join_{}", left_table_name, right_table_name),
+            columns: combined_columns,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+            matched_results.retain(|row| eval_predicate(where_expr, row, &combined_table_info));
+        }
 
         let row_count = matched_results.len();
         Ok(ExecutorResult::new(matched_results, row_count))
@@ -1565,83 +1607,86 @@ fn validate_foreign_keys(
 
 /// Evaluate a WHERE clause expression against a row
 /// Returns true if the row matches the WHERE condition
-fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+/// Evaluate a predicate expression to a boolean result
+/// Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
+/// All NULL handling is centralized here - no NULL logic in individual operators
+fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
     match expr {
-        // Handle AND conditions
+        // AND short-circuits on false
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            evaluate_where_clause(left, row, table_info)
-                && evaluate_where_clause(right, row, table_info)
+            eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
         }
-        // Handle OR conditions
+        // OR short-circuits on true
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            evaluate_where_clause(left, row, table_info)
-                || evaluate_where_clause(right, row, table_info)
+            eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
         }
-        // Handle IS NULL
+        // IS NULL - always goes through evaluate_expression for value extraction
+        Expression::IsNull(inner) => {
+            match evaluate_expression(inner, row, table_info) {
+                Ok(val) => matches!(val, Value::Null),
+                Err(_) => false,
+            }
+        }
+        // IS NOT NULL
+        Expression::IsNotNull(inner) => {
+            match evaluate_expression(inner, row, table_info) {
+                Ok(val) => !matches!(val, Value::Null),
+                Err(_) => false,
+            }
+        }
+        // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
+            eval_predicate(&Expression::IsNull(left.clone()), row, table_info)
         }
-        // Handle IS NOT NULL
+        // Legacy IS NOT NULL
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS NOT"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            if let Expression::Identifier(col_name) = left.as_ref() {
-                if let Some(col_idx) = find_column_index(col_name, table_info) {
-                    if let Some(row_val) = row.get(col_idx) {
-                        return !matches!(row_val, Value::Null);
-                    }
-                }
-            }
-            false
+            eval_predicate(&Expression::IsNotNull(left.clone()), row, table_info)
         }
-        // Handle comparison operators (=, !=, >, <, >=, <=)
+        // All comparison operators go through sql_compare
         Expression::BinaryOp(left, op, right) => {
-            evaluate_binary_comparison(left, op, right, row, table_info)
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+            sql_compare(op, &left_val, &right_val)
         }
-        // For other expressions, try to evaluate as a condition
+        // For other expressions, evaluate and check if truthy
         _ => {
-            if let Ok(val) = evaluate_expression(expr, row, table_info) {
-                if let Value::Boolean(b) = val {
-                    b
-                } else {
-                    val != Value::Null
+            match evaluate_expression(expr, row, table_info) {
+                Ok(val) => {
+                    matches!(val, Value::Boolean(true))
                 }
-            } else {
-                false
+                Err(_) => false,
             }
         }
     }
 }
 
-/// Evaluate a binary comparison expression
-fn evaluate_binary_comparison(
-    left: &Expression,
-    op: &str,
-    right: &Expression,
-    row: &[Value],
-    table_info: &TableInfo,
-) -> bool {
-    let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
-    let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+/// Legacy alias for compatibility
+#[allow(dead_code)]
+fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+    eval_predicate(expr, row, table_info)
+}
+
+/// SQL comparison operator
+/// Returns false if either operand is NULL (UNKNOWN semantics)
+/// This is Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
+fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
+    if matches!(left, Value::Null) || matches!(right, Value::Null) {
+        return false;
+    }
 
     match op.to_uppercase().as_str() {
-        "=" | "==" | "IS" => left_val == right_val,
-        "!=" | "<>" => left_val != right_val,
-        ">" => compare_values(&left_val, &right_val) > 0,
-        ">=" => compare_values(&left_val, &right_val) >= 0,
-        "<" => compare_values(&left_val, &right_val) < 0,
-        "<=" => compare_values(&left_val, &right_val) <= 0,
+        "=" | "==" => left == right,
+        "!=" | "<>" => left != right,
+        ">" => compare_values(left, right) > 0,
+        ">=" => compare_values(left, right) >= 0,
+        "<" => compare_values(left, right) < 0,
+        "<=" => compare_values(left, right) <= 0,
         _ => false,
     }
 }
@@ -1666,6 +1711,14 @@ fn evaluate_expression(
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             Ok(evaluate_binary_op(&left_val, &right_val, op))
+        }
+        Expression::IsNull(inner) => {
+            let val = evaluate_expression(inner, row, table_info)?;
+            Ok(Value::Boolean(matches!(val, Value::Null)))
+        }
+        Expression::IsNotNull(inner) => {
+            let val = evaluate_expression(inner, row, table_info)?;
+            Ok(Value::Boolean(!matches!(val, Value::Null)))
         }
         _ => Ok(Value::Null),
     }
@@ -1756,11 +1809,30 @@ fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
 }
 
 /// Find the index of a column in the table info
+/// For JOIN queries with combined tables, handles qualified names like "t2.id"
+/// by routing to the correct portion of the combined schema.
+/// Combined table naming: left_table.col, right_table.col
 fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    table_info
-        .columns
-        .iter()
-        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    // Handle qualified names in JOIN context (e.g., "t1.id" or "t2.id")
+    if let Some((qualifier, col)) = col_name.split_once('.') {
+        // In JOIN combined table, columns are named as "left_table.col" and "right_table.col"
+        // Look for exact match with qualifier
+        for (i, c) in table_info.columns.iter().enumerate() {
+            if c.name.eq_ignore_ascii_case(col_name) {
+                return Some(i);
+            }
+        }
+        // Fallback: strip qualifier and find first match (for non-JOIN queries)
+        table_info
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(col))
+    } else {
+        table_info
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    }
 }
 
 #[cfg(test)]
