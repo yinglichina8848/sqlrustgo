@@ -22,7 +22,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置
-REPO_URL="https://github.com/minzuuniversity/sqlrustgo"
+REPO_URL="http://192.168.0.252:3000/openclaw/sqlrustgo"
 VERSION="${VERSION:-1.0.0}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BINARY_NAME="sqlrustgo"

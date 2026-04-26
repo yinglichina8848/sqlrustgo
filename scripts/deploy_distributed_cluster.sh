@@ -49,7 +49,7 @@ sync_repo() {
         git fetch origin "$FEATURE_BRANCH"
         git checkout "$FEATURE_BRANCH"
     else
-        ssh "$ip" "cd /tmp && rm -rf sqlrustgo && git clone --depth 1 https://github.com/minzuuniversity/sqlrustgo.git sqlrustgo"
+        ssh "$ip" "cd /tmp && rm -rf sqlrustgo && git clone --depth 1 http://192.168.0.252:3000/openclaw/sqlrustgo.git sqlrustgo"
         ssh "$ip" "cd /tmp/sqlrustgo && git fetch origin && git checkout $FEATURE_BRANCH"
     fi
 }
