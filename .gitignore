@@ -1,22 +1,7 @@
-# Build artifacts
-target/
-Cargo.lock
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Local data
-*.db
-*.log
-.worktrees/
-*.tbl
-data/tpch-sf01/
-data/tpch-sf01-generated/
-.worktrees/
-/worktrees/
+gate_report.json
+verification_report.json
+audit_report.json
+test_report.json
+test_report.log
+__pycache__/
+*.pyc
