@@ -1,0 +1,83 @@
+name: Hermes Pipeline
+run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
+
+on:
+  push:
+    branches:
+      - 'develop/*'
+      - 'feature/*'
+      - 'fix/*'
+  pull_request:
+    branches:
+      - main
+      - 'develop/*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --all-features
+      - name: Archive binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: sqlrustgo-bin
+          path: target/debug/sqlrustgo
+
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: cargo test --all-features 2>&1 | tee test_report.log
+      - name: Test summary
+        run: |
+          PASS=$(grep -c 'test result: ok' test_report.log || echo 0)
+          FAIL=$(grep -c 'test result: FAILED' test_report.log || echo 0)
+          echo "{\"passed\": $([ $FAIL -eq 0 ] && echo 'true' || echo 'false'), \"total\": $((PASS+FAIL))}" > test_report.json
+
+  gate:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          rustup component add clippy rustfmt 2>/dev/null || true
+      - name: Run Gate
+        run: |
+          chmod +x gate/hermes_gate.sh
+          bash gate/hermes_gate.sh
+      - name: Upload gate report
+        uses: actions/upload-artifact@v3
+        with:
+          name: gate-report
+          path: gate_report.json
+
+  verify:
+    needs: [gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run verification
+        run: python3 verify/verification_engine.py
+      - name: Upload verification report
+        uses: actions/upload-artifact@v3
+        with:
+          name: verification-report
+          path: verification_report.json
+
+  audit:
+    needs: [verify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run audit
+        run: python3 audit/self_audit.py
+      - name: Upload audit report
+        uses: actions/upload-artifact@v3
+        with:
+          name: audit-report
+          path: audit_report.json
