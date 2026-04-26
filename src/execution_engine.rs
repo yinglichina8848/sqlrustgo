@@ -405,40 +405,34 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
 
-        // Handle SELECT without FROM (e.g., SELECT 1, SELECT 'hello', SELECT NULL)
         if select.table.is_empty() {
-            // Return empty result for SELECT without table reference
             return Ok(ExecutorResult::new(vec![], 0));
         }
 
-        // Get table info
-        let table_info = storage.get_table_info(&select.table)?;
+        // Step 1: FROM/JOIN - get initial rows and schema
+        let (mut rows, table_info) = if select.join_clause.is_some() {
+            self.execute_join(select)?
+        } else {
+            let rows = storage.scan(&select.table)?;
+            let table_info = storage.get_table_info(&select.table)?;
+            (rows, table_info)
+        };
 
-        // Handle JOIN clause if present - delegate to Planner + LocalExecutor
-        if select.join_clause.is_some() {
-            return self.execute_select_with_join(select);
-        }
-
-        // Scan all rows
-        let mut rows = storage.scan(&select.table)?;
-
-        // Apply WHERE clause filter
+        // Step 2: WHERE
         if let Some(ref where_expr) = select.where_clause {
-            rows.retain(|row| evaluate_where_clause(where_expr, row, &table_info));
+            rows.retain(|row| eval_predicate(where_expr, row, &table_info));
         }
 
-        // Handle aggregate functions
+        // Step 3: GROUP BY + AGGREGATE
         if !select.aggregates.is_empty() {
-            // Group rows by GROUP BY expressions
             let group_exprs = &select.group_by;
             if group_exprs.is_empty() {
-                // No GROUP BY - compute aggregates over all filtered rows
                 let mut agg_values =
                     self.compute_aggregates(&select.aggregates, &rows, &table_info)?;
 
-                // Apply HAVING clause if present
                 if let Some(ref having_expr) = select.having {
-                    if !evaluate_where_clause(having_expr, &agg_values, &table_info) {
+                    let having_schema = build_aggregate_schema(&[], &select.aggregates)?;
+                    if !eval_predicate(having_expr, &agg_values, &having_schema) {
                         return Ok(ExecutorResult::new(vec![], 0));
                     }
                 }
@@ -457,7 +451,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 }
 
                 let mut agg_result_rows: Vec<Vec<Value>> = Vec::new();
-                let mut group_keys: Vec<Vec<Value>> = Vec::new();
 
                 for (key, group_rows) in groups.iter() {
                     let key_values: Vec<Value> = key
@@ -472,132 +465,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             }
                         })
                         .collect();
-                    let agg_values = self.compute_aggregates(&select.aggregates, group_rows, &table_info)?;
-                    let mut combined = key_values.clone();
+                    let agg_values =
+                        self.compute_aggregates(&select.aggregates, group_rows, &table_info)?;
+                    let mut combined = key_values;
                     combined.extend(agg_values);
-                    group_keys.push(key_values);
                     agg_result_rows.push(combined);
                 }
 
                 if let Some(ref having_expr) = select.having {
-                    let mut having_columns: Vec<ColumnDefinition> = Vec::new();
-                    for group_expr in group_exprs {
-                        let col_name = expression_to_string(group_expr);
-                        having_columns.push(ColumnDefinition {
-                            name: col_name,
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
-                            primary_key: false,
-                        });
-                    }
-                    for agg in &select.aggregates {
-                        let name = match agg.func {
-                            AggregateFunction::Count => {
-                                if agg.args.is_empty() {
-                                    "COUNT(*)".to_string()
-                                } else {
-                                    format!("COUNT({})", agg.args.iter()
-                                        .map(expression_to_string)
-                                        .collect::<Vec<_>>()
-                                        .join(", "))
-                                }
-                            }
-                            AggregateFunction::Sum => {
-                                format!("SUM({})", agg.args.iter()
-                                    .map(expression_to_string)
-                                    .collect::<Vec<_>>()
-                                    .join(", "))
-                            }
-                            AggregateFunction::Avg => {
-                                format!("AVG({})", agg.args.iter()
-                                    .map(expression_to_string)
-                                    .collect::<Vec<_>>()
-                                    .join(", "))
-                            }
-                            AggregateFunction::Min => {
-                                format!("MIN({})", agg.args.iter()
-                                    .map(expression_to_string)
-                                    .collect::<Vec<_>>()
-                                    .join(", "))
-                            }
-                            AggregateFunction::Max => {
-                                format!("MAX({})", agg.args.iter()
-                                    .map(expression_to_string)
-                                    .collect::<Vec<_>>()
-                                    .join(", "))
-                            }
-                        };
-                        having_columns.push(ColumnDefinition {
-                            name,
-                            data_type: "INTEGER".to_string(),
-                            nullable: false,
-                            primary_key: false,
-                        });
-                    }
-                    let having_table_info = TableInfo {
-                        name: table_info.name.clone(),
-                        columns: having_columns,
-                        foreign_keys: vec![],
-                        unique_constraints: vec![],
-                        check_constraints: vec![],
-                        partition_info: None,
-                    };
-                    agg_result_rows
-                        .retain(|row| evaluate_where_clause(having_expr, row, &having_table_info));
+                    let having_schema = build_aggregate_schema(group_exprs, &select.aggregates)?;
+                    agg_result_rows.retain(|row| eval_predicate(having_expr, row, &having_schema));
                 }
 
                 let row_count = agg_result_rows.len();
                 return Ok(ExecutorResult::new(agg_result_rows, row_count));
             }
-        }
-
-        let row_count = rows.len();
-
-        // Apply ORDER BY
-        if !select.order_by.is_empty() {
-            let order_exprs = &select.order_by;
-            rows.sort_by(|a, b| {
-                for expr in order_exprs {
-                    let a_val = evaluate_expression(&expr.expression, a, &table_info)
-                        .unwrap_or(Value::Null);
-                    let b_val = evaluate_expression(&expr.expression, b, &table_info)
-                        .unwrap_or(Value::Null);
-                    let cmp = compare_values_for_sort(&a_val, &b_val);
-                    let result = if expr.ascending { cmp } else { -cmp };
-                    if result != 0 {
-                        return if result < 0 {
-                            std::cmp::Ordering::Less
-                        } else {
-                            std::cmp::Ordering::Greater
-                        };
-                    }
-                }
-                std::cmp::Ordering::Equal
-            });
-        }
-
-        // Apply OFFSET
-        if let Some(offset_n) = select.offset {
-            let offset_n = offset_n as usize;
-            if offset_n < rows.len() {
-                rows = rows[offset_n..].to_vec();
-            } else {
-                rows.clear();
-            }
-        }
-
-        // Apply LIMIT
-        if let Some(limit_n) = select.limit {
-            let limit_n = limit_n as usize;
-            if limit_n < rows.len() {
-                rows.truncate(limit_n);
-            }
-        }
-
-        // Apply DISTINCT - remove duplicate rows
-        if select.distinct {
-            rows.sort();
-            rows.dedup();
         }
 
         let row_count = rows.len();
@@ -627,10 +509,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         Value::Integer(rows.len() as i64)
                     } else {
                         // COUNT(col) - count non-NULL values
-                        let non_null_count = values
-                            .iter()
-                            .filter(|v| !matches!(v, Value::Null))
-                            .count();
+                        let non_null_count =
+                            values.iter().filter(|v| !matches!(v, Value::Null)).count();
                         Value::Integer(non_null_count as i64)
                     }
                 }
@@ -704,9 +584,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(results)
     }
 
-    /// Execute a SELECT with JOIN (including FULL OUTER JOIN)
-    /// Implements FULL OUTER JOIN directly using hash-based matching
-    fn execute_select_with_join(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
+    /// Execute JOIN and return (rows, combined_schema)
+    /// This function only generates joined rows, does NOT apply WHERE/AGG/HAVING
+    fn execute_join(&self, select: &SelectStatement) -> SqlResult<(Vec<Vec<Value>>, TableInfo)> {
         use sqlrustgo_parser::JoinType as ParserJoinType;
         use std::collections::HashMap;
 
@@ -809,7 +689,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 matched
             }
             JoinType::Cross => {
-                // Cartesian product
                 let mut results = Vec::new();
                 for left_row in &left_rows {
                     for right_row in &right_rows {
@@ -822,38 +701,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         };
 
-        // Apply WHERE clause filter if present
-        if let Some(ref where_expr) = select.where_clause {
-            // Build combined table info for the join result
-            let mut combined_columns: Vec<ColumnDefinition> = left_table_info
-            .columns
-            .iter()
-            .map(|c| ColumnDefinition {
-                name: format!("{}.{}", left_table_name, c.name),
-                data_type: c.data_type.clone(),
-                nullable: c.nullable,
-                primary_key: c.primary_key,
-            })
-            .collect();
-        combined_columns.extend(right_table_info.columns.iter().map(|c| ColumnDefinition {
-            name: format!("{}.{}", right_table_name, c.name),
-            data_type: c.data_type.clone(),
-            nullable: c.nullable,
-            primary_key: c.primary_key,
-        }));
-        let combined_table_info = TableInfo {
-            name: format!("{}_join_{}", left_table_name, right_table_name),
-            columns: combined_columns,
-            foreign_keys: vec![],
-            unique_constraints: vec![],
-            check_constraints: vec![],
-            partition_info: None,
-        };
-            matched_results.retain(|row| eval_predicate(where_expr, row, &combined_table_info));
-        }
-
-        let row_count = matched_results.len();
-        Ok(ExecutorResult::new(matched_results, row_count))
+        let combined_schema =
+            build_combined_schema(&left_table_info, &right_table_name, &right_table_info)?;
+        Ok((matched_results, combined_schema))
     }
 
     /// Find the column index for a join key in a table
@@ -1583,7 +1433,12 @@ fn expression_to_string(expr: &sqlrustgo_parser::Expression) -> String {
         sqlrustgo_parser::Expression::Literal(s) => s.clone(),
         sqlrustgo_parser::Expression::Identifier(name) => name.clone(),
         sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
-            format!("({} {} {})", expression_to_string(left), op, expression_to_string(right))
+            format!(
+                "({} {} {})",
+                expression_to_string(left),
+                op,
+                expression_to_string(right)
+            )
         }
         sqlrustgo_parser::Expression::IsNull(inner) => {
             format!("{} IS NULL", expression_to_string(inner))
@@ -1591,44 +1446,62 @@ fn expression_to_string(expr: &sqlrustgo_parser::Expression) -> String {
         sqlrustgo_parser::Expression::IsNotNull(inner) => {
             format!("{} IS NOT NULL", expression_to_string(inner))
         }
-        sqlrustgo_parser::Expression::Aggregate(agg) => {
-            match agg.func {
-                sqlrustgo_parser::AggregateFunction::Count => {
-                    if agg.args.is_empty() {
-                        "COUNT(*)".to_string()
-                    } else {
-                        format!("COUNT({})", agg.args.iter()
+        sqlrustgo_parser::Expression::Aggregate(agg) => match agg.func {
+            sqlrustgo_parser::AggregateFunction::Count => {
+                if agg.args.is_empty() {
+                    "COUNT(*)".to_string()
+                } else {
+                    format!(
+                        "COUNT({})",
+                        agg.args
+                            .iter()
                             .map(expression_to_string)
                             .collect::<Vec<_>>()
-                            .join(", "))
-                    }
-                }
-                sqlrustgo_parser::AggregateFunction::Sum => {
-                    format!("SUM({})", agg.args.iter()
-                        .map(expression_to_string)
-                        .collect::<Vec<_>>()
-                        .join(", "))
-                }
-                sqlrustgo_parser::AggregateFunction::Avg => {
-                    format!("AVG({})", agg.args.iter()
-                        .map(expression_to_string)
-                        .collect::<Vec<_>>()
-                        .join(", "))
-                }
-                sqlrustgo_parser::AggregateFunction::Min => {
-                    format!("MIN({})", agg.args.iter()
-                        .map(expression_to_string)
-                        .collect::<Vec<_>>()
-                        .join(", "))
-                }
-                sqlrustgo_parser::AggregateFunction::Max => {
-                    format!("MAX({})", agg.args.iter()
-                        .map(expression_to_string)
-                        .collect::<Vec<_>>()
-                        .join(", "))
+                            .join(", ")
+                    )
                 }
             }
-        }
+            sqlrustgo_parser::AggregateFunction::Sum => {
+                format!(
+                    "SUM({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            sqlrustgo_parser::AggregateFunction::Avg => {
+                format!(
+                    "AVG({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            sqlrustgo_parser::AggregateFunction::Min => {
+                format!(
+                    "MIN({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            sqlrustgo_parser::AggregateFunction::Max => {
+                format!(
+                    "MAX({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        },
         _ => "?".to_string(),
     }
 }
@@ -1756,19 +1629,15 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
             eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
         }
         // IS NULL - always goes through evaluate_expression for value extraction
-        Expression::IsNull(inner) => {
-            match evaluate_expression(inner, row, table_info) {
-                Ok(val) => matches!(val, Value::Null),
-                Err(_) => false,
-            }
-        }
+        Expression::IsNull(inner) => match evaluate_expression(inner, row, table_info) {
+            Ok(val) => matches!(val, Value::Null),
+            Err(_) => false,
+        },
         // IS NOT NULL
-        Expression::IsNotNull(inner) => {
-            match evaluate_expression(inner, row, table_info) {
-                Ok(val) => !matches!(val, Value::Null),
-                Err(_) => false,
-            }
-        }
+        Expression::IsNotNull(inner) => match evaluate_expression(inner, row, table_info) {
+            Ok(val) => !matches!(val, Value::Null),
+            Err(_) => false,
+        },
         // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
@@ -1790,14 +1659,12 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
             sql_compare(op, &left_val, &right_val)
         }
         // For other expressions, evaluate and check if truthy
-        _ => {
-            match evaluate_expression(expr, row, table_info) {
-                Ok(val) => {
-                    matches!(val, Value::Boolean(true))
-                }
-                Err(_) => false,
+        _ => match evaluate_expression(expr, row, table_info) {
+            Ok(val) => {
+                matches!(val, Value::Boolean(true))
             }
-        }
+            Err(_) => false,
+        },
     }
 }
 
@@ -1923,44 +1790,17 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
     }
 }
 
-/// Compare two values for ORDER BY sorting. Returns -1, 0, or 1.
-fn compare_values_for_sort(a: &Value, b: &Value) -> i32 {
-    use std::cmp::Ordering;
-    match (a, b) {
-        (Value::Null, Value::Null) => 0,
-        (Value::Null, _) => 1, // NULL sorts last (ascending)
-        (_, Value::Null) => -1,
-        (Value::Integer(a_i), Value::Integer(b_i)) => a_i.cmp(b_i) as i32,
-        (Value::Float(a_f), Value::Float(b_f)) => {
-            if a_f < b_f {
-                -1
-            } else if a_f > b_f {
-                1
-            } else {
-                0
-            }
-        }
-        (Value::Text(a_s), Value::Text(b_s)) => a_s.cmp(b_s) as i32,
-        (Value::Boolean(a_b), Value::Boolean(b_b)) => a_b.cmp(b_b) as i32,
-        _ => 0,
-    }
-}
-
 /// Find the index of a column in the table info
 /// For JOIN queries with combined tables, handles qualified names like "t2.id"
 /// by routing to the correct portion of the combined schema.
 /// Combined table naming: left_table.col, right_table.col
 fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    // Handle qualified names in JOIN context (e.g., "t1.id" or "t2.id")
     if let Some((qualifier, col)) = col_name.split_once('.') {
-        // In JOIN combined table, columns are named as "left_table.col" and "right_table.col"
-        // Look for exact match with qualifier
         for (i, c) in table_info.columns.iter().enumerate() {
             if c.name.eq_ignore_ascii_case(col_name) {
                 return Some(i);
             }
         }
-        // Fallback: strip qualifier and find first match (for non-JOIN queries)
         table_info
             .columns
             .iter()
@@ -1971,6 +1811,131 @@ fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
     }
+}
+
+fn build_combined_schema(
+    left_info: &TableInfo,
+    right_table_name: &str,
+    right_info: &TableInfo,
+) -> SqlResult<TableInfo> {
+    let mut columns = Vec::new();
+
+    for c in &left_info.columns {
+        columns.push(ColumnDefinition {
+            name: format!("{}.{}", left_info.name, c.name),
+            data_type: c.data_type.clone(),
+            nullable: c.nullable,
+            primary_key: c.primary_key,
+        });
+    }
+
+    for c in &right_info.columns {
+        columns.push(ColumnDefinition {
+            name: format!("{}.{}", right_table_name, c.name),
+            data_type: c.data_type.clone(),
+            nullable: c.nullable,
+            primary_key: c.primary_key,
+        });
+    }
+
+    Ok(TableInfo {
+        name: format!("{}_join_{}", left_info.name, right_table_name),
+        columns,
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
+    })
+}
+
+fn build_aggregate_schema(
+    group_by: &[Expression],
+    aggregates: &[AggregateCall],
+) -> SqlResult<TableInfo> {
+    let mut columns = Vec::new();
+
+    for expr in group_by {
+        columns.push(ColumnDefinition {
+            name: expression_to_string(expr),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            primary_key: false,
+        });
+    }
+
+    for agg in aggregates {
+        let name = match agg.func {
+            AggregateFunction::Count => {
+                if agg.args.is_empty() {
+                    "COUNT(*)".to_string()
+                } else {
+                    format!(
+                        "COUNT({})",
+                        agg.args
+                            .iter()
+                            .map(expression_to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+            }
+            AggregateFunction::Sum => {
+                format!(
+                    "SUM({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            AggregateFunction::Avg => {
+                format!(
+                    "AVG({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            AggregateFunction::Min => {
+                format!(
+                    "MIN({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            AggregateFunction::Max => {
+                format!(
+                    "MAX({})",
+                    agg.args
+                        .iter()
+                        .map(expression_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        };
+        columns.push(ColumnDefinition {
+            name,
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            primary_key: false,
+        });
+    }
+
+    Ok(TableInfo {
+        name: "aggregate".to_string(),
+        columns,
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
+    })
 }
 
 #[cfg(test)]
