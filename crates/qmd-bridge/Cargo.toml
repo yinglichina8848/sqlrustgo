@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "QMD Bridge for SQLRustGo - Unified retrieval layer"
 license = "Apache-2.0"
-repository = "https://github.com/minzuuniversity/sqlrustgo"
+repository = "http://192.168.0.252:3000/openclaw/sqlrustgo"
 keywords = ["database", "vector-search", "graph", "qmd"]
 categories = ["database"]
 

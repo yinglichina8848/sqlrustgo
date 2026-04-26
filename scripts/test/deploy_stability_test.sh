@@ -117,7 +117,7 @@ clone_or_update() {
         fi
     else
         log "克隆仓库..."
-        git clone https://github.com/minzuuniversity/sqlrustgo.git .
+        git clone --depth 1 http://192.168.0.252:3000/openclaw/sqlrustgo.git .
         git checkout "$BRANCH"
     fi
 
