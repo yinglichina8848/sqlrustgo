@@ -19,16 +19,21 @@
 
 ### 1.2 功能目标
 
-- ✅ FULL OUTER JOIN 修复 (执行器已实现，3/3 测试通过)
+- 🔄 FULL OUTER JOIN 修复 (执行器部分未完成 - blocked by parser/planner type gap)
 - ✅ TRUNCATE/REPLACE INTO 支持
 - ✅ 窗口函数完善
+- ✅ 审计告警系统 (78 tests pass)
+- ✅ 英文错误消息
+- ✅ 英文 API 文档
+- ✅ 安全加固指南
 - ⏳ 分区表完整支持
 - ⏳ 主从复制完善
 - ⏳ 基础故障转移
 - ⏳ 基础负载均衡
 - ⏳ 读写分离路由
 - ⏳ SIMD 向量化加速
-- ⏳ 列级权限控制
+- ⏳ 列级权限控制 (ColumnMasker 存在，缺少 GRANT/REVOKE)
+- ⏳ 数据加密基础
 
 ---
 
@@ -38,43 +43,43 @@
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-11 | FULL OUTER JOIN 修复 | P0 | ✅ 完成 | 3d | 解析器 ✅，执行器 ✅ (3/3 测试通过) |
+| T-11 | FULL OUTER JOIN 修复 | P0 | 🔄 部分完成 | 3d | 解析器 ✅，执行器 🔲 (blocked: parser/planner type gap) |
 | T-12 | TRUNCATE/REPLACE 支持 | P0 | ✅ 完成 | 2d | 解析器 ✅，执行器 ✅ |
 | T-13 | 窗口函数完善 | P1 | ✅ 完成 | 4d | 已实现 RowNumber/Rank 等 |
-| T-23 | 分区表完整支持 | P0 | ✅ 完成 | 5d | distributed/src/partition.rs 已添加 KEY/LIST 分区支持和 PartitionPruner (106 tests pass) |
-| T-24 | 主从复制完善 | P0 | ⏳ 未开始 | 5d | distributed/src/replication.rs 已存在 BinlogManager，需添加 Semi-sync 和 GTID |
+| T-23 | 分区表完整支持 | P0 | ⏳ 未开始 | 5d | |
+| T-24 | 主从复制完善 | P0 | ⏳ 未开始 | 5d | 基础架构已存在 |
 
 ### Phase B: 初步分布式能力 (Week 5-8)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-25 | 基础故障转移 | P1 | ⏳ 未开始 | 5d | distributed/src/failover_manager.rs 已存在，需添加自动故障检测和触发 |
-| T-26 | 基础负载均衡 | P1 | ⏳ 未开始 | 3d | server/src/connection_pool.rs + storage/src/read_write_split.rs 已有基础实现 |
-| T-27 | 读写分离路由 | P1 | ⏳ 未开始 | 3d | distributed/src/shard_router.rs 已存在，需与 ReadWriteSplit 集成 |
+| T-25 | 基础故障转移 | P1 | ⏳ 未开始 | 5d | failover_manager.rs 已存在基础架构 |
+| T-26 | 基础负载均衡 | P1 | ⏳ 未开始 | 3d | connection_pool.rs 已存在 |
+| T-27 | 读写分离路由 | P1 | ⏳ 未开始 | 3d | shard_router.rs 已存在 |
 
 ### Phase C: 性能优化 (Week 9-12)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-14 | SIMD 向量化加速 | P0 | ✅ 完成 | 8d | crates/vector/src/simd_explicit.rs，5 个测试通过 |
-| T-15 | Hash Join 并行化 | P1 | ✅ 完成 | 5d | parallel_executor.rs 存在，架构级集成问题（非代码缺失） |
-| T-16 | 查询计划器优化 | P1 | ✅ 完成 | 4d | 81 planner tests 通过 |
+| T-14 | SIMD 向量化加速 | P0 | ⏳ 未开始 | 8d | Issue #1736 |
+| T-15 | Hash Join 并行化 | P1 | ⚠️ 未集成 | 5d | parallel_executor.rs 存在但有集成障碍 (private fields, missing methods) |
+| T-16 | 查询计划器优化 | P1 | ⏳ 未开始 | 4d | |
 
 ### Phase D: 安全加固 (Week 13-16)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-17 | 列级权限控制 | P0 | ✅ 完成 | 5d | GRANT/REVOKE 解析器已实现 (parser/src/parser.rs) |
-| T-18 | 审计告警系统 | P1 | ✅ 完成 | 4d | security/src/audit.rs，78 tests 通过 |
-| T-19 | 数据加密基础 | P1 | ✅ 完成 | 3d | AES-256-GCM 实现 (security/src/encryption.rs) |
+| T-17 | 列级权限控制 | P0 | ⚠️ 部分实现 | 5d | Issue #1737 - ColumnMasker 存在，缺少 GRANT/REVOKE 解析器 |
+| T-18 | 审计告警系统 | P1 | ✅ 验证通过 | 4d | security/src/audit.rs 存在，78 个测试通过 |
+| T-19 | 数据加密基础 | P1 | ⏳ 未开始 | 3d | |
 
 ### Phase E: 文档与多语言 (Week 17-20)
 
 | Task | 功能 | 优先级 | 状态 | 预计工时 | 说明 |
 |------|------|--------|------|----------|------|
-| T-20 | 英文错误消息 | P1 | ✅ 完成 | 3d | ERROR_MESSAGES.md |
-| T-21 | 英文 API 文档 | P1 | ✅ 完成 | 5d | API_REFERENCE.md |
-| T-22 | 安全加固指南 | P1 | ✅ 完成 | 2d | SECURITY_HARDENING.md |
+| T-20 | 英文错误消息 | P1 | ✅ 完成 | 3d | |
+| T-21 | 英文 API 文档 | P1 | ✅ 完成 | 5d | |
+| T-22 | 安全加固指南 | P1 | ✅ 完成 | 2d | |
 
 ---
 
@@ -84,10 +89,10 @@
 v2.8.0 开发计划
 │
 ├── Week 1-4 (04/23-05/20)
-│   ├── T-11: FULL OUTER JOIN 修复 (✅ 完成 - 3/3 测试通过)
+│   ├── T-11: FULL OUTER JOIN 修复 (🔄 解析器完成，执行器待完成)
 │   ├── T-12: TRUNCATE/REPLACE 支持 (✅ 完成)
 │   ├── T-13: 窗口函数完善 (✅ 完成)
-│   ├── T-23: 分区表完整支持 (✅ 完成 - KEY/LIST 分区 + PartitionPruner)
+│   ├── T-23: 分区表完整支持 (⏳ 未开始)
 │   └── T-24: 主从复制完善 (⏳ 未开始)
 │
 ├── Week 5-8 (05/21-06/10)
