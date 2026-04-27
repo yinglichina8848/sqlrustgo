@@ -3,7 +3,6 @@
 //! This module provides trigger execution functionality for SQL triggers.
 //! Triggers are executed before or after INSERT, UPDATE, or DELETE operations.
 
-use crate::trigger_eval;
 use sqlrustgo_parser::parse;
 use sqlrustgo_storage::{
     Record, StorageEngine, TriggerEvent as StorageTriggerEvent, TriggerInfo,
@@ -408,14 +407,14 @@ impl TriggerExecutor {
                 table_info.columns.iter().map(|c| c.name.clone()).collect();
             let num_cols = table_info.columns.len();
 
-            let trigger_ctx = trigger_eval::TriggerContext::new(new_row, None);
+            let trigger_ctx = crate::trigger_eval::TriggerContext::new(new_row, None);
 
             for values in &insert.values {
                 let mut record = Vec::new();
+                let eval_ctx = crate::trigger_eval::EvalContext::new(&trigger_ctx, None)
+                    .with_target_col_names(target_col_names.clone());
                 for expr in values {
-                    let eval_ctx = trigger_eval::EvalContext::new(&trigger_ctx, None);
-                    let val =
-                        trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
+                    let val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
                     record.push(val);
                 }
                 while record.len() < num_cols {
@@ -466,15 +465,15 @@ impl TriggerExecutor {
             let mut has_match = false;
 
             for row in all_rows {
-                let trigger_ctx = trigger_eval::TriggerContext::new(new_row, None)
+                let trigger_ctx = crate::trigger_eval::TriggerContext::new(new_row, None)
                     .with_new_col_names(trigger_col_names.clone());
-                let eval_ctx = trigger_eval::EvalContext::new(&trigger_ctx, Some(&row))
+                let eval_ctx = crate::trigger_eval::EvalContext::new(&trigger_ctx, Some(&row))
                     .with_target_col_names(target_col_names.clone());
                 let mut updated_row = row.clone();
 
                 if let Some(ref where_cond) = where_expr {
                     let where_result =
-                        trigger_eval::expression_to_bool(where_cond, &eval_ctx, None);
+                        crate::trigger_eval::expression_to_bool(where_cond, &eval_ctx, None);
                     if !where_result {
                         modified_rows.push(row);
                         continue;
@@ -488,7 +487,7 @@ impl TriggerExecutor {
                         .iter()
                         .position(|c| c.name.eq_ignore_ascii_case(col_name))
                     {
-                        let new_val = trigger_eval::expression_to_value(expr, &eval_ctx, None);
+                        let new_val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, None);
                         if col_idx < updated_row.len() {
                             updated_row[col_idx] = new_val;
                         }
@@ -645,68 +644,6 @@ impl TriggerExecutor {
         old_row: Option<&Record>,
     ) -> String {
         self.expand_row_variables_with_info(sql, table_info, old_row, None)
-    }
-
-    /// Convert parser Expression to Value
-    #[allow(dead_code)]
-    fn expression_to_value(
-        &self,
-        expr: &sqlrustgo_parser::Expression,
-        new_row: Option<&Record>,
-    ) -> Value {
-        match expr {
-            sqlrustgo_parser::Expression::Literal(s) => {
-                let s = s.trim();
-                if s.eq_ignore_ascii_case("NULL") {
-                    Value::Null
-                } else if let Ok(n) = s.parse::<i64>() {
-                    Value::Integer(n)
-                } else if let Ok(f) = s.parse::<f64>() {
-                    Value::Float(f)
-                } else if s.starts_with('\'') && s.ends_with('\'') {
-                    Value::Text(s[1..s.len() - 1].to_string())
-                } else {
-                    Value::Text(s.to_string())
-                }
-            }
-            sqlrustgo_parser::Expression::Identifier(name) => {
-                if let Some(new) = new_row {
-                    if name.eq_ignore_ascii_case("NEW.id") && !new.is_empty() {
-                        new[0].clone()
-                    } else if name.eq_ignore_ascii_case("NEW.col1") && new.len() > 1 {
-                        new[1].clone()
-                    } else {
-                        Value::Text(name.clone())
-                    }
-                } else {
-                    Value::Text(name.clone())
-                }
-            }
-            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
-                let left_val = self.expression_to_value(left, new_row);
-                let right_val = self.expression_to_value(right, new_row);
-                match (left_val, op.as_str(), right_val) {
-                    (Value::Integer(l), "+", Value::Integer(r)) => Value::Integer(l + r),
-                    (Value::Integer(l), "-", Value::Integer(r)) => Value::Integer(l - r),
-                    (Value::Integer(l), "*", Value::Integer(r)) => Value::Integer(l * r),
-                    (Value::Integer(l), "/", Value::Integer(r)) if r != 0 => Value::Integer(l / r),
-                    (Value::Float(l), "+", Value::Float(r)) => Value::Float(l + r),
-                    (Value::Float(l), "-", Value::Float(r)) => Value::Float(l - r),
-                    (Value::Float(l), "*", Value::Float(r)) => Value::Float(l * r),
-                    (Value::Float(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l / r),
-                    (Value::Integer(l), "+", Value::Float(r)) => Value::Float(l as f64 + r),
-                    (Value::Float(l), "+", Value::Integer(r)) => Value::Float(l + r as f64),
-                    (Value::Integer(l), "-", Value::Float(r)) => Value::Float(l as f64 - r),
-                    (Value::Float(l), "-", Value::Integer(r)) => Value::Float(l - r as f64),
-                    (Value::Integer(l), "*", Value::Float(r)) => Value::Float(l as f64 * r),
-                    (Value::Float(l), "*", Value::Integer(r)) => Value::Float(l * r as f64),
-                    (Value::Integer(l), "/", Value::Float(r)) if r != 0.0 => Value::Float(l as f64 / r),
-                    (Value::Float(l), "/", Value::Integer(r)) if r != 0 => Value::Float(l / r as f64),
-                    _ => Value::Null,
-                }
-            }
-            _ => Value::Null,
-        }
     }
 
     /// Parse simple SET NEW.col = value assignments

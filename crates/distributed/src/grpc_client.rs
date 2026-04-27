@@ -397,13 +397,8 @@ mod tests {
     fn test_property_map_creation() {
         let mut props = HashMap::new();
         props.insert("name".to_string(), "test".to_string());
-        let property_map = PropertyMap {
-            properties: props.clone(),
-        };
-        assert_eq!(
-            property_map.properties.get("name"),
-            Some(&"test".to_string())
-        );
+        let property_map = PropertyMap { properties: props.clone() };
+        assert_eq!(property_map.properties.get("name"), Some(&"test".to_string()));
     }
 
     #[test]
@@ -714,10 +709,7 @@ mod tests {
             found: true,
         };
         assert!(response.found);
-        assert_eq!(
-            response.properties.as_ref().unwrap().properties.get("name"),
-            Some(&"Alice".to_string())
-        );
+        assert_eq!(response.properties.as_ref().unwrap().properties.get("name"), Some(&"Alice".to_string()));
     }
 
     #[test]
