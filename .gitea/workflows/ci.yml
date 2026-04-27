@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
       - name: Build
@@ -21,7 +21,7 @@ jobs:
 
   test:
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
@@ -34,7 +34,7 @@ jobs:
 
   gate:
     needs: [test]
-    runs-on: ubuntu-latest
+    runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -52,7 +52,7 @@ jobs:
 
   verify:
     needs: [gate]
-    runs-on: ubuntu-latest
+    runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
       - name: Run verification
@@ -65,7 +65,7 @@ jobs:
 
   audit:
     needs: [verify]
-    runs-on: ubuntu-latest
+    runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
       - name: Run audit
