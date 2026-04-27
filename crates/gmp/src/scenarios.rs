@@ -196,6 +196,7 @@ impl GraphPattern {
 /// GMP query builder for scenarios
 #[derive(Debug, Clone)]
 pub struct GmpQueryBuilder {
+    #[allow(dead_code)]
     scenario: GmpScenario,
     pattern: GraphPattern,
     filters: Vec<String>,

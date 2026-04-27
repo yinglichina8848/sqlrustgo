@@ -820,10 +820,7 @@ mod tests {
         let entry = RaftEntry {
             term: 1,
             index: 1,
-            data: RaftEntryData::ConfigChange {
-                node_id: 5,
-                add: true,
-            },
+            data: RaftEntryData::ConfigChange { node_id: 5, add: true },
         };
 
         match entry.data {

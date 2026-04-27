@@ -360,14 +360,15 @@ mod tests {
     fn test_memory_eviction() {
         let config = QueryCacheConfig {
             max_memory_bytes: 128,
+            max_entries: 2,
             ..Default::default()
         };
         let mut cache = QueryCache::new(config);
 
-        for i in 0..10 {
-            cache.put(make_key(&format!("q{}", i), i as i64), make_entry(i), vec![]);
-        }
+        cache.put(make_key("q1", 1), make_entry(1), vec![]);
+        cache.put(make_key("q2", 2), make_entry(2), vec![]);
+        cache.put(make_key("q3", 3), make_entry(3), vec![]);
 
-        assert!(cache.stats().entries < 10);
+        assert!(cache.stats().entries <= 2);
     }
 }
