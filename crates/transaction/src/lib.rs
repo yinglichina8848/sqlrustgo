@@ -1,8 +1,13 @@
+pub mod deadlock;
+pub mod dtc;
 pub mod gid;
+pub mod lock;
 pub mod lock_manager;
 pub mod mvcc;
+pub mod savepoint;
 pub mod ssi;
 pub mod transaction_manager;
+pub mod version_chain;
 
 pub use gid::NodeId;
 pub use lock_manager::DistributedLockManager;

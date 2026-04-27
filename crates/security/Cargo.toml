@@ -21,7 +21,7 @@ rand = { version = "0.8", optional = true }
 zeroize = { version = "1.6", optional = true }
 
 [features]
-default = []
+default = ["aes256"]
 aes256 = ["dep:aes-gcm", "dep:rand", "dep:zeroize"]
 
 [dev-dependencies]
