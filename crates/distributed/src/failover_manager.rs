@@ -574,20 +574,14 @@ mod tests {
     fn test_failure_detector_set_check_interval() {
         let mut detector = FailureDetector::new(1);
         detector.set_check_interval(Duration::from_millis(500));
-        assert_eq!(
-            detector.get_config().check_interval,
-            Duration::from_millis(500)
-        );
+        assert_eq!(detector.get_config().check_interval, Duration::from_millis(500));
     }
 
     #[test]
     fn test_failure_detector_set_heartbeat_timeout() {
         let mut detector = FailureDetector::new(1);
         detector.set_heartbeat_timeout(Duration::from_millis(1000));
-        assert_eq!(
-            detector.get_config().heartbeat_timeout,
-            Duration::from_millis(1000)
-        );
+        assert_eq!(detector.get_config().heartbeat_timeout, Duration::from_millis(1000));
     }
 
     #[test]
@@ -610,14 +604,8 @@ mod tests {
 
     #[test]
     fn test_failure_reason_debug() {
-        assert_eq!(
-            format!("{:?}", FailureReason::HeartbeatTimeout),
-            "HeartbeatTimeout"
-        );
-        assert_eq!(
-            format!("{:?}", FailureReason::ReplicationLag),
-            "ReplicationLag"
-        );
+        assert_eq!(format!("{:?}", FailureReason::HeartbeatTimeout), "HeartbeatTimeout");
+        assert_eq!(format!("{:?}", FailureReason::ReplicationLag), "ReplicationLag");
         assert_eq!(format!("{:?}", FailureReason::NetworkError), "NetworkError");
         assert_eq!(format!("{:?}", FailureReason::Manual), "Manual");
     }
@@ -710,18 +698,9 @@ mod tests {
 
     #[test]
     fn test_failure_reason_variants() {
-        assert!(matches!(
-            FailureReason::HeartbeatTimeout,
-            FailureReason::HeartbeatTimeout
-        ));
-        assert!(matches!(
-            FailureReason::ReplicationLag,
-            FailureReason::ReplicationLag
-        ));
-        assert!(matches!(
-            FailureReason::NetworkError,
-            FailureReason::NetworkError
-        ));
+        assert!(matches!(FailureReason::HeartbeatTimeout, FailureReason::HeartbeatTimeout));
+        assert!(matches!(FailureReason::ReplicationLag, FailureReason::ReplicationLag));
+        assert!(matches!(FailureReason::NetworkError, FailureReason::NetworkError));
         assert!(matches!(FailureReason::Manual, FailureReason::Manual));
     }
 
@@ -911,18 +890,9 @@ mod tests {
 
     #[test]
     fn test_failure_reason_all_variants() {
-        assert!(matches!(
-            FailureReason::HeartbeatTimeout,
-            FailureReason::HeartbeatTimeout
-        ));
-        assert!(matches!(
-            FailureReason::ReplicationLag,
-            FailureReason::ReplicationLag
-        ));
-        assert!(matches!(
-            FailureReason::NetworkError,
-            FailureReason::NetworkError
-        ));
+        assert!(matches!(FailureReason::HeartbeatTimeout, FailureReason::HeartbeatTimeout));
+        assert!(matches!(FailureReason::ReplicationLag, FailureReason::ReplicationLag));
+        assert!(matches!(FailureReason::NetworkError, FailureReason::NetworkError));
         assert!(matches!(FailureReason::Manual, FailureReason::Manual));
     }
 

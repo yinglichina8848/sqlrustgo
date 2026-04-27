@@ -677,3 +677,116 @@ fn test_semantic_join_group_by_having_null_key() {
         "NULL id should NOT be in result (COUNT=0 fails HAVING)"
     );
 }
+
+// Phase 2: Three-valued logic (TriBool) tests
+// SQL NULL comparison semantics: NULL compared to anything yields UNKNOWN
+// For WHERE/HAVING: UNKNOWN → FALSE (row excluded)
+
+// Test: NOT(col = NULL) should produce UNKNOWN, which for WHERE means FALSE
+// Currently this is guarded since parser may not support standalone NOT
+// But AND/OR with NULL comparisons should be correct
+
+#[test]
+fn test_tribool_and_with_null_comparison() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 1), (1, NULL), (NULL, 1), (NULL, NULL)")
+        .unwrap();
+
+    // AND: TRUE AND UNKNOWN = UNKNOWN → FALSE for WHERE
+    // a=1 IS TRUE, b>0 with NULL b is UNKNOWN
+    // TRUE AND UNKNOWN = UNKNOWN → FALSE → row excluded
+    let result = engine
+        .execute("SELECT * FROM t WHERE a = 1 AND b > 0")
+        .unwrap();
+    // Only (1,1) passes both conditions
+    assert_eq!(result.rows.len(), 1, "Only (1,1) should pass a=1 AND b>0");
+}
+
+#[test]
+fn test_tribool_or_with_null_comparison() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 1), (1, NULL), (NULL, 1), (NULL, NULL)")
+        .unwrap();
+
+    // OR: FALSE OR UNKNOWN = UNKNOWN → FALSE for WHERE
+    // a=0 IS FALSE, b>0 with NULL b is UNKNOWN
+    // FALSE OR UNKNOWN = UNKNOWN → FALSE → row excluded
+    let result = engine
+        .execute("SELECT * FROM t WHERE a = 0 OR b > 0")
+        .unwrap();
+    // Only (1,1) and (NULL,1) have b>0 (TRUE dominates)
+    assert_eq!(
+        result.rows.len(),
+        2,
+        "(1,1) and (NULL,1) should pass FALSE OR b>0 check"
+    );
+}
+
+#[test]
+fn test_tribool_multiple_conditions() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE t (x INTEGER, y INTEGER, z INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 1, 1), (1, NULL, 1), (1, NULL, NULL), (NULL, 1, 1)")
+        .unwrap();
+
+    // Complex: (x=1) AND (y>0 OR z=1) WHERE y could be NULL
+    // Row (1, NULL, 1): TRUE AND (UNKNOWN OR TRUE) = TRUE AND TRUE = TRUE → included
+    let result = engine
+        .execute("SELECT * FROM t WHERE x = 1 AND (y > 0 OR z = 1)")
+        .unwrap();
+    // (1,1,1): passes both sides
+    // (1,NULL,1): TRUE AND (UNKNOWN OR TRUE) = TRUE AND TRUE = TRUE → included
+    // (1,NULL,NULL): TRUE AND (UNKNOWN OR FALSE) = TRUE AND UNKNOWN = UNKNOWN → excluded
+    // (NULL,1,1): x=1 is UNKNOWN → excluded
+    assert_eq!(
+        result.rows.len(),
+        2,
+        "Only (1,1,1) and (1,NULL,1) should pass"
+    );
+}
+
+// NOT handling: parser currently doesn't have standalone NOT for expressions
+// This test verifies that NOT(col = x) syntax is handled correctly when parser supports it
+// For now, verify that NOT IS NULL works correctly through existing IS NOT NULL path
+
+#[test]
+fn test_tribool_is_not_null() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (1), (2)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM t WHERE val IS NOT NULL")
+        .unwrap();
+    assert_eq!(result.rows.len(), 2, "Only non-NULL values should pass");
+}
+
+// Verify that WHERE col = NULL still returns 0 rows (SQL standard: UNKNOWN → FALSE)
+#[test]
+fn test_tribool_equals_null_returns_empty() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (1), (2)")
+        .unwrap();
+
+    let result = engine.execute("SELECT * FROM t WHERE val = NULL").unwrap();
+    assert_eq!(
+        result.rows.len(),
+        0,
+        "WHERE col = NULL should return 0 rows (UNKNOWN → FALSE)"
+    );
+}

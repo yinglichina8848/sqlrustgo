@@ -1308,18 +1308,9 @@ mod tests {
     #[test]
     fn test_binlog_event_type_variants() {
         assert!(matches!(BinlogEventType::Query, BinlogEventType::Query));
-        assert!(matches!(
-            BinlogEventType::WriteRows,
-            BinlogEventType::WriteRows
-        ));
-        assert!(matches!(
-            BinlogEventType::UpdateRows,
-            BinlogEventType::UpdateRows
-        ));
-        assert!(matches!(
-            BinlogEventType::DeleteRows,
-            BinlogEventType::DeleteRows
-        ));
+        assert!(matches!(BinlogEventType::WriteRows, BinlogEventType::WriteRows));
+        assert!(matches!(BinlogEventType::UpdateRows, BinlogEventType::UpdateRows));
+        assert!(matches!(BinlogEventType::DeleteRows, BinlogEventType::DeleteRows));
     }
 
     #[test]
@@ -1548,18 +1539,9 @@ mod tests {
     #[test]
     fn test_binlog_event_type_variants_coverage() {
         assert!(matches!(BinlogEventType::Query, BinlogEventType::Query));
-        assert!(matches!(
-            BinlogEventType::WriteRows,
-            BinlogEventType::WriteRows
-        ));
-        assert!(matches!(
-            BinlogEventType::UpdateRows,
-            BinlogEventType::UpdateRows
-        ));
-        assert!(matches!(
-            BinlogEventType::DeleteRows,
-            BinlogEventType::DeleteRows
-        ));
+        assert!(matches!(BinlogEventType::WriteRows, BinlogEventType::WriteRows));
+        assert!(matches!(BinlogEventType::UpdateRows, BinlogEventType::UpdateRows));
+        assert!(matches!(BinlogEventType::DeleteRows, BinlogEventType::DeleteRows));
     }
 
     // =====================================================================

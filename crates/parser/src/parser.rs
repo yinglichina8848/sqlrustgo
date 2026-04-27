@@ -56,7 +56,6 @@ pub struct CreateIndexStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub unique: bool,
-    pub fulltext: bool,
 }
 
 /// ALTER TABLE statement
@@ -293,49 +292,14 @@ pub struct DeleteStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStatement {
     pub name: String,
-    pub if_not_exists: bool,
     pub columns: Vec<ColumnDefinition>,
     pub constraints: Vec<TableConstraint>,
-    pub partition: Option<PartitionDefinition>,
-}
-
-/// Partition definition for table partitioning
-#[derive(Debug, Clone, PartialEq)]
-pub struct PartitionDefinition {
-    pub strategy: PartitionStrategy,
-    pub columns: Vec<String>,
-    pub partitions: Vec<PartitionSpec>,
-}
-
-/// Partition strategy (RANGE, LIST, KEY)
-#[derive(Debug, Clone, PartialEq)]
-pub enum PartitionStrategy {
-    Range,
-    List,
-    Key,
-}
-
-/// Partition specification (individual partition definition)
-#[derive(Debug, Clone, PartialEq)]
-pub struct PartitionSpec {
-    pub name: String,
-    pub value: PartitionValue,
-}
-
-/// Value in partition (for RANGE/LIST)
-#[derive(Debug, Clone, PartialEq)]
-pub enum PartitionValue {
-    Value(String),
-    Max,
-    Min,
-    Values,
 }
 
 /// DROP TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStatement {
     pub name: String,
-    pub if_exists: bool,
 }
 
 /// TRUNCATE TABLE statement
@@ -408,8 +372,6 @@ pub enum Expression {
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
     Aggregate(AggregateCall), // For HAVING clause - supports aggregate functions in expressions
-    IsNull(Box<Expression>),  // IS NULL expression
-    IsNotNull(Box<Expression>), // IS NOT NULL expression
 }
 
 /// SQL Parser
@@ -630,12 +592,7 @@ impl Parser {
         self.expect(Token::Create)?;
         match self.current() {
             Some(Token::Table) => self.parse_create_table(),
-            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(false),
-            Some(Token::Fulltext) => {
-                self.next(); // consume FULLTEXT
-                self.expect(Token::Index)?;
-                self.parse_create_index(true)
-            }
+            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(t) => Err(format!(
@@ -646,10 +603,8 @@ impl Parser {
         }
     }
 
-    fn parse_create_index(&mut self, is_fulltext: bool) -> Result<Statement, String> {
-        if !is_fulltext {
-            self.expect(Token::Index)?;
-        }
+    fn parse_create_index(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Index)?;
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
             Some(t) => return Err(format!("Expected index name, got {:?}", t)),
@@ -668,7 +623,6 @@ impl Parser {
             table: table_name,
             columns,
             unique: false,
-            fulltext: is_fulltext,
         }))
     }
 
@@ -1514,6 +1468,7 @@ impl Parser {
             }
             self.next(); // consume =
 
+            // Parse value - use parse_expression to support binary operations
             let value = self.parse_expression()?;
 
             set_clauses.push((column, value));
@@ -1576,40 +1531,6 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_multiplicative_expression()?;
-
-        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
-            let op = match self.current() {
-                Some(Token::Plus) => "+",
-                Some(Token::Minus) => "-",
-                _ => break,
-            };
-            self.next();
-            let right = self.parse_multiplicative_expression()?;
-            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
-        }
-
-        Ok(left)
-    }
-
-    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_primary_expression()?;
-
-        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
-            let op = match self.current() {
-                Some(Token::Star) => "*",
-                Some(Token::Slash) => "/",
-                _ => break,
-            };
-            self.next();
-            let right = self.parse_primary_expression()?;
-            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
-        }
-
-        Ok(left)
-    }
-
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
         let left = self.parse_additive_expression()?;
 
@@ -1631,18 +1552,6 @@ impl Parser {
                 return Ok(Expression::NotIn(Box::new(left), Box::new(subquery)));
             }
             return Err("NOT must be followed by IN or EXISTS".to_string());
-        }
-
-        // Handle IS NULL and IS NOT NULL
-        if matches!(self.current(), Some(Token::Is)) {
-            self.next();
-            if matches!(self.current(), Some(Token::Not)) {
-                self.next();
-                self.expect(Token::Null)?;
-                return Ok(Expression::IsNotNull(Box::new(left)));
-            }
-            self.expect(Token::Null)?;
-            return Ok(Expression::IsNull(Box::new(left)));
         }
 
         let op = match self.current() {
@@ -1694,6 +1603,40 @@ impl Parser {
                 Box::new(right),
             ))
         }
+    }
+
+    fn parse_additive_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+            let op = match self.current() {
+                Some(Token::Plus) => "+",
+                Some(Token::Minus) => "-",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_multiplicative_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_primary_expression()?;
+
+        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+            let op = match self.current() {
+                Some(Token::Star) => "*",
+                Some(Token::Slash) => "/",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_primary_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
@@ -1817,17 +1760,6 @@ impl Parser {
             self.next(); // consume CREATE if not already consumed
         }
         self.expect(Token::Table)?;
-
-        // Check for IF NOT EXISTS
-        let if_not_exists = if matches!(self.current(), Some(Token::If)) {
-            self.next(); // consume IF
-            self.expect(Token::Not)?;
-            self.expect(Token::Exists)?;
-            true
-        } else {
-            false
-        };
-
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -1913,204 +1845,11 @@ impl Parser {
             }
         }
 
-        // Parse PARTITION BY clause (if present)
-        let partition = if matches!(self.current(), Some(Token::Partition)) {
-            Some(self.parse_partition_definition()?)
-        } else {
-            None
-        };
-
         Ok(Statement::CreateTable(CreateTableStatement {
             name,
-            if_not_exists,
             columns,
             constraints,
-            partition,
         }))
-    }
-
-    /// Parse PARTITION BY clause for table partitioning
-    fn parse_partition_definition(&mut self) -> Result<PartitionDefinition, String> {
-        // Consume PARTITION
-        self.expect(Token::Partition)?;
-        self.expect(Token::By)?;
-
-        // Parse strategy (RANGE, LIST, or KEY)
-        let strategy = match self.current() {
-            Some(Token::Range) => {
-                self.next();
-                PartitionStrategy::Range
-            }
-            Some(Token::List) => {
-                self.next();
-                PartitionStrategy::List
-            }
-            Some(Token::Key) => {
-                self.next();
-                PartitionStrategy::Key
-            }
-            Some(Token::Identifier(s)) => {
-                let s = s.to_uppercase();
-                self.next();
-                match s.as_str() {
-                    "RANGE" => PartitionStrategy::Range,
-                    "LIST" => PartitionStrategy::List,
-                    "KEY" => PartitionStrategy::Key,
-                    _ => return Err(format!("Unknown partition strategy: {}", s)),
-                }
-            }
-            _ => return Err("Expected RANGE, LIST, or KEY after PARTITION BY".to_string()),
-        };
-
-        // Parse partition column(s) - inline to avoid consuming RParen twice
-        self.expect(Token::LParen)?;
-        let mut partition_cols = Vec::new();
-        loop {
-            match self.next() {
-                Some(Token::Identifier(name)) => {
-                    partition_cols.push(name);
-                    match self.current() {
-                        Some(Token::Comma) => {
-                            self.next();
-                            continue;
-                        }
-                        Some(Token::RParen) => {
-                            self.next();
-                            break;
-                        }
-                        _ => return Err("Expected ',' or ')' after column name".to_string()),
-                    }
-                }
-                Some(Token::RParen) => {
-                    self.next();
-                    break;
-                }
-                _ => return Err("Expected column name".to_string()),
-            }
-        }
-
-        // Parse individual partition definitions
-        self.expect(Token::LParen)?;
-        let mut partitions = Vec::new();
-        loop {
-            match self.current() {
-                Some(Token::Partition) => {
-                    // Skip PARTITION keyword
-                    self.next();
-                }
-                Some(Token::Identifier(name)) => {
-                    let name = name.clone();
-                    self.next();
-
-                    // Check if it's a VALUES clause or just partition name
-                    let value = match self.current() {
-                        Some(Token::Values) => {
-                            self.next(); // consume VALUES
-                                         // Check for VALUES LESS THAN (expr)
-                            if matches!(self.current(), Some(Token::Identifier(less)) if less.to_uppercase() == "LESS")
-                            {
-                                self.next(); // consume LESS
-                                if matches!(self.current(), Some(Token::Identifier(than)) if than.to_uppercase() == "THAN")
-                                {
-                                    self.next(); // consume THAN
-                                    if matches!(self.current(), Some(Token::LParen)) {
-                                        self.next(); // consume LParen
-                                        let val = match self.current() {
-                                            Some(Token::NumberLiteral(n)) => {
-                                                let v = n.clone();
-                                                self.next();
-                                                v
-                                            }
-                                            Some(Token::StringLiteral(s)) => {
-                                                let v = s.clone();
-                                                self.next();
-                                                v
-                                            }
-                                            Some(Token::Identifier(s)) => {
-                                                let v = s.clone();
-                                                self.next();
-                                                v
-                                            }
-                                            _ => "".to_string(),
-                                        };
-                                        self.expect(Token::RParen)?;
-                                        PartitionValue::Value(val)
-                                    } else {
-                                        PartitionValue::Values
-                                    }
-                                } else {
-                                    PartitionValue::Values
-                                }
-                            } else {
-                                PartitionValue::Values
-                            }
-                        }
-                        Some(Token::Less) => {
-                            self.next();
-                            // Handle < (expr)
-                            if matches!(self.current(), Some(Token::LParen)) {
-                                self.next(); // consume LParen
-                                let val = match self.current() {
-                                    Some(Token::NumberLiteral(n)) => {
-                                        let v = n.clone();
-                                        self.next();
-                                        v
-                                    }
-                                    Some(Token::StringLiteral(s)) => {
-                                        let v = s.clone();
-                                        self.next();
-                                        v
-                                    }
-                                    Some(Token::Identifier(s)) => {
-                                        let v = s.clone();
-                                        self.next();
-                                        v
-                                    }
-                                    _ => "".to_string(),
-                                };
-                                self.expect(Token::RParen)?;
-                                PartitionValue::Value(val)
-                            } else {
-                                PartitionValue::Value("LESS".to_string())
-                            }
-                        }
-                        Some(Token::Equal) => {
-                            self.next();
-                            match self.current() {
-                                Some(Token::NumberLiteral(n)) => {
-                                    let n = n.clone();
-                                    self.next();
-                                    PartitionValue::Value(n)
-                                }
-                                Some(Token::StringLiteral(s)) => {
-                                    let s = s.clone();
-                                    self.next();
-                                    PartitionValue::Value(s)
-                                }
-                                _ => PartitionValue::Values,
-                            }
-                        }
-                        _ => PartitionValue::Values,
-                    };
-
-                    partitions.push(PartitionSpec { name, value });
-                }
-                Some(Token::RParen) => {
-                    self.next();
-                    break;
-                }
-                Some(Token::Comma) => {
-                    self.next();
-                }
-                _ => break,
-            }
-        }
-
-        Ok(PartitionDefinition {
-            strategy,
-            columns: partition_cols,
-            partitions,
-        })
     }
 
     fn parse_column_definition(&mut self) -> Result<ColumnDefinition, String> {
@@ -2328,22 +2067,12 @@ impl Parser {
     fn parse_drop_table(&mut self) -> Result<Statement, String> {
         self.expect(Token::Drop)?;
         self.expect(Token::Table)?;
-
-        // Check for IF EXISTS
-        let if_exists = if matches!(self.current(), Some(Token::If)) {
-            self.next(); // consume IF
-            self.expect(Token::Exists)?;
-            true
-        } else {
-            false
-        };
-
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
         };
 
-        Ok(Statement::DropTable(DropTableStatement { name, if_exists }))
+        Ok(Statement::DropTable(DropTableStatement { name }))
     }
 
     fn parse_truncate(&mut self) -> Result<Statement, String> {
@@ -3148,63 +2877,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_create_table_with_range_partition() {
-        let sql = "CREATE TABLE sales (id INTEGER, amount INTEGER) PARTITION BY RANGE (id) (PARTITION p1 VALUES LESS THAN (1000))";
-        let result = parse(sql);
-        if result.is_err() {
-            eprintln!("PARSE ERROR: {:?}", result.as_ref().err());
-        }
-        assert!(result.is_ok());
-        match result.unwrap() {
-            Statement::CreateTable(ref c) => {
-                assert_eq!(c.name, "sales");
-                assert!(c.partition.is_some());
-                let part = c.partition.as_ref().unwrap();
-                assert!(matches!(part.strategy, PartitionStrategy::Range));
-                assert_eq!(part.columns, vec!["id"]);
-                assert_eq!(part.partitions.len(), 1);
-                assert_eq!(part.partitions[0].name, "p1");
-            }
-            _ => panic!("Expected CREATE TABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_table_with_list_partition() {
-        // VALUES IN is not yet supported, use VALUES instead
-        let result = parse("CREATE TABLE orders (region TEXT, amount INTEGER) PARTITION BY LIST (region) (PARTITION north VALUES)");
-        assert!(result.is_ok());
-        match result.unwrap() {
-            Statement::CreateTable(ref c) => {
-                assert_eq!(c.name, "orders");
-                assert!(c.partition.is_some());
-                let part = c.partition.as_ref().unwrap();
-                assert!(matches!(part.strategy, PartitionStrategy::List));
-                assert_eq!(part.columns, vec!["region"]);
-            }
-            _ => panic!("Expected CREATE TABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_table_with_key_partition() {
-        let result = parse(
-            "CREATE TABLE users (id INTEGER, name TEXT) PARTITION BY KEY (id) (PARTITION p1)",
-        );
-        assert!(result.is_ok());
-        match result.unwrap() {
-            Statement::CreateTable(ref c) => {
-                assert_eq!(c.name, "users");
-                assert!(c.partition.is_some());
-                let part = c.partition.as_ref().unwrap();
-                assert!(matches!(part.strategy, PartitionStrategy::Key));
-                assert_eq!(part.columns, vec!["id"]);
-            }
-            _ => panic!("Expected CREATE TABLE statement"),
-        }
-    }
-
-    #[test]
     fn test_parse_aggregate_count() {
         let result = parse("SELECT COUNT(*) FROM users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
@@ -3230,38 +2902,6 @@ mod tests {
                 assert_eq!(s.aggregates[0].func, AggregateFunction::Sum);
             }
             _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_fulltext_index() {
-        let sql = "CREATE FULLTEXT INDEX ft_idx ON articles(content)";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result.as_ref().err());
-        match result.unwrap() {
-            Statement::CreateIndex(idx) => {
-                assert_eq!(idx.name, "ft_idx");
-                assert_eq!(idx.table, "articles");
-                assert_eq!(idx.columns, vec!["content"]);
-                assert!(idx.fulltext);
-            }
-            _ => panic!("Expected CREATE INDEX statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_regular_index() {
-        let sql = "CREATE INDEX idx ON articles(title)";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result.as_ref().err());
-        match result.unwrap() {
-            Statement::CreateIndex(idx) => {
-                assert_eq!(idx.name, "idx");
-                assert_eq!(idx.table, "articles");
-                assert_eq!(idx.columns, vec!["title"]);
-                assert!(!idx.fulltext);
-            }
-            _ => panic!("Expected CREATE INDEX statement"),
         }
     }
 
@@ -3850,126 +3490,6 @@ fn test_debug_having() {
                 assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
             }
             _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
-        }
-    }
-
-    // =========================================================================
-    // ORDER BY Parser Tests
-    // =========================================================================
-
-    #[test]
-    fn test_parse_order_by_ascending() {
-        // Test ORDER BY with ASC
-        let sql = "SELECT * FROM users ORDER BY age ASC";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "users");
-                // ORDER BY field exists but is currently empty (not yet implemented)
-                // This test documents the current behavior
-                assert!(
-                    s.order_by.is_empty(),
-                    "ORDER BY not yet implemented, expected empty"
-                );
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_descending() {
-        // Test ORDER BY with DESC
-        let sql = "SELECT * FROM users ORDER BY age DESC";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "users");
-                // ORDER BY not yet implemented
-                assert!(s.order_by.is_empty());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_multiple_columns() {
-        // Test ORDER BY with multiple columns
-        let sql = "SELECT * FROM orders ORDER BY category ASC, price DESC";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "orders");
-                // Multiple column ORDER BY not yet implemented
-                assert!(s.order_by.is_empty());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_without_explicit_direction() {
-        // Test ORDER BY without explicit ASC/DESC (should default to ASC)
-        let sql = "SELECT name FROM products ORDER BY price";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "products");
-                assert!(s.order_by.is_empty());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_with_expression() {
-        // Test ORDER BY with expression
-        let sql = "SELECT * FROM users ORDER BY LENGTH(name)";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "users");
-                // ORDER BY expressions not yet implemented
-                assert!(s.order_by.is_empty());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_with_limit() {
-        // Test ORDER BY combined with LIMIT
-        let sql = "SELECT * FROM products ORDER BY price DESC LIMIT 10";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "products");
-                assert!(s.order_by.is_empty());
-                // LIMIT is also not yet implemented
-                assert!(s.limit.is_none());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_order_by_qualified_column() {
-        // Test ORDER BY with qualified column name
-        let sql = "SELECT u.name FROM users u ORDER BY u.id DESC";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.table, "users");
-                // Qualified ORDER BY not yet implemented
-                assert!(s.order_by.is_empty());
-            }
-            _ => panic!("Expected SELECT statement"),
         }
     }
 }
