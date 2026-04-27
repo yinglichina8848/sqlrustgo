@@ -312,7 +312,7 @@ impl StorageBackend for SqliteBackend {
         let rows = stmt
             .query_map([], |row| {
                 let blob: Vec<u8> = row.get(1)?;
-                let embedding: Vec<f32> = if blob.len() % 4 == 0 {
+                let embedding: Vec<f32> = if blob.len().is_multiple_of(4) {
                     cast_slice(&blob).to_vec()
                 } else {
                     vec![]

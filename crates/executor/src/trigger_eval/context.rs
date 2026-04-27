@@ -1,6 +1,6 @@
 use sqlrustgo_storage::Record;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TriggerContext<'a> {
     new: Option<&'a Record>,
     old: Option<&'a Record>,
