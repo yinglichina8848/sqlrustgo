@@ -372,6 +372,8 @@ pub enum Expression {
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
     Aggregate(AggregateCall), // For HAVING clause - supports aggregate functions in expressions
+    IsNull(Box<Expression>),  // IS NULL check
+    IsNotNull(Box<Expression>), // IS NOT NULL check
 }
 
 /// SQL Parser
@@ -1552,6 +1554,24 @@ impl Parser {
                 return Ok(Expression::NotIn(Box::new(left), Box::new(subquery)));
             }
             return Err("NOT must be followed by IN or EXISTS".to_string());
+        }
+
+        // IS NULL / IS NOT NULL
+        if matches!(self.current(), Some(Token::Is)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Not)) {
+                self.next();
+                if matches!(self.current(), Some(Token::Null)) {
+                    self.next();
+                    return Ok(Expression::IsNotNull(Box::new(left)));
+                }
+                return Err("IS NOT must be followed by NULL".to_string());
+            }
+            if matches!(self.current(), Some(Token::Null)) {
+                self.next();
+                return Ok(Expression::IsNull(Box::new(left)));
+            }
+            return Err("IS must be followed by NULL or NOT NULL".to_string());
         }
 
         let op = match self.current() {
