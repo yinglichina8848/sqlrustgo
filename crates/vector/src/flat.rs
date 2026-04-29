@@ -1,7 +1,10 @@
 //! Flat index implementation (brute-force O(n) search)
 
 use crate::error::{VectorError, VectorResult};
-use crate::metrics::{compute_similarity, DistanceMetric};
+use crate::metrics::DistanceMetric;
+use crate::simd_explicit::{
+    batch_cosine_distance_simd, batch_dot_product_simd, batch_l2_distance_simd,
+};
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 
 #[derive(Debug, Clone)]
@@ -69,22 +72,38 @@ impl VectorIndex for FlatIndex {
             });
         }
 
-        let mut scored: Vec<_> = self
+        let vector_refs: Vec<_> = self.vectors.iter().map(|e| &e.vector[..]).collect();
+        let scores = match self.metric {
+            DistanceMetric::Euclidean => {
+                batch_l2_distance_simd(query, &vector_refs)
+                    .into_iter()
+                    .map(|d| -d)
+                    .collect()
+            }
+            DistanceMetric::Cosine => batch_cosine_distance_simd(query, &vector_refs),
+            DistanceMetric::DotProduct => batch_dot_product_simd(query, &vector_refs),
+            DistanceMetric::Manhattan => {
+                self.vectors
+                    .iter()
+                    .map(|e| -crate::simd_explicit::manhattan_distance_simd(query, &e.vector))
+                    .collect()
+            }
+        };
+
+        let mut entries: Vec<_> = self
             .vectors
             .iter()
-            .map(|entry| {
-                let score = compute_similarity(query, &entry.vector, self.metric);
-                IndexEntry::new(entry.id, score)
-            })
+            .zip(scores.into_iter())
+            .map(|(e, s)| IndexEntry::new(e.id, s))
             .collect();
 
-        scored.sort_by(|a, b| {
+        entries.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        Ok(scored.into_iter().take(k).collect())
+        Ok(entries.into_iter().take(k).collect())
     }
 
     fn build_index(&mut self) -> VectorResult<()> {

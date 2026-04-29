@@ -233,6 +233,52 @@ pub fn batch_compute_distances<V: AsRef<[f32]>>(
         .collect()
 }
 
+/// Compute L2 distance (euclidean) using SIMD - alias for euclidean_distance_simd
+#[inline]
+pub fn l2_distance_simd(a: &[f32], b: &[f32]) -> f32 {
+    euclidean_distance_simd(a, b)
+}
+
+/// Compute cosine distance (1 - cosine similarity) using SIMD
+#[inline]
+pub fn cosine_distance_simd(a: &[f32], b: &[f32]) -> f32 {
+    1.0 - cosine_similarity_simd(a, b)
+}
+
+/// Batch compute dot products: query against multiple vectors in one pass
+/// Uses AVX2 for efficient batch processing
+pub fn batch_dot_product_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| dot_product_simd(query, v.as_ref()))
+        .collect()
+}
+
+/// Batch compute L2 distances: query against multiple vectors
+pub fn batch_l2_distance_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| l2_distance_simd(query, v.as_ref()))
+        .collect()
+}
+
+/// Batch compute cosine distances: query against multiple vectors
+pub fn batch_cosine_distance_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| cosine_distance_simd(query, v.as_ref()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

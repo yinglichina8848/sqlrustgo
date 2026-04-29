@@ -4,6 +4,9 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
+use crate::simd_explicit::{
+    cosine_distance_simd, dot_product_simd, l2_distance_simd,
+};
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use parking_lot::RwLock;
 use rand::Rng;
@@ -126,7 +129,15 @@ impl HnswIndex {
     }
 
     fn distance_to_query(&self, query: &[f32], idx: usize) -> f32 {
-        -compute_similarity(query, &self.nodes[idx].vector, self.metric)
+        let node_vector = &self.nodes[idx].vector;
+        match self.metric {
+            DistanceMetric::Euclidean => l2_distance_simd(query, node_vector),
+            DistanceMetric::Cosine => cosine_distance_simd(query, node_vector),
+            DistanceMetric::DotProduct => -dot_product_simd(query, node_vector),
+            DistanceMetric::Manhattan => {
+                -crate::simd_explicit::manhattan_distance_simd(query, node_vector)
+            }
+        }
     }
 
     fn search_layer(

@@ -238,10 +238,10 @@ impl VectorIndex for IvfIndex {
 
         for &cluster_id in &selected_ids {
             if let Some(cluster) = self.clusters.iter().find(|c| c.center.id == cluster_id) {
-                for &vid in &cluster.vector_ids {
-                    if let Some(v) = id_to_vector.get(&vid) {
+                for vid in &cluster.vector_ids {
+                    if let Some(v) = id_to_vector.get(vid) {
                         let score = compute_similarity(query, v, self.metric);
-                        candidates.push(IndexEntry::new(vid, score));
+                        candidates.push(IndexEntry::new(*vid, score));
                     }
                 }
             }
