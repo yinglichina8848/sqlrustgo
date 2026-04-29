@@ -320,14 +320,7 @@ impl PrivilegeGrant {
             return false;
         }
 
-        if self.object_name.eq_ignore_ascii_case(&object.object_name) {
-            return match self.privilege {
-                Privilege::All => true,
-                p => p == required,
-            };
-        }
-
-        if self.object_name == "*" {
+        if self.object_name.eq_ignore_ascii_case(&object.object_name) || self.object_name == "*" {
             return match self.privilege {
                 Privilege::All => true,
                 p => p == required,
@@ -339,6 +332,26 @@ impl PrivilegeGrant {
                 Privilege::All => true,
                 p => p == required,
             };
+        }
+
+        false
+    }
+
+    pub fn matches_column(&self, required: Privilege, table: &str, column: &str) -> bool {
+        if self.object_type != ObjectType::Column {
+            return false;
+        }
+
+        if !self.object_name.eq_ignore_ascii_case(table) {
+            return false;
+        }
+
+        if !self.privilege.implies(required) {
+            return false;
+        }
+
+        if let Some(ref granted_column) = self.column_name {
+            return granted_column.eq_ignore_ascii_case(column);
         }
 
         false
@@ -642,6 +655,38 @@ impl AuthManager {
         Ok(id)
     }
 
+    pub fn grant_column_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        table_name: &str,
+        column_name: &str,
+        granted_by: u64,
+    ) -> AuthResult<u64> {
+        let id = self.next_grant_id;
+        self.next_grant_id += 1;
+
+        let grant = PrivilegeGrant {
+            id,
+            grantee_type: GranteeType::User,
+            grantee_id: 0,
+            privilege,
+            object_type: ObjectType::Column,
+            object_name: table_name.to_string(),
+            column_name: Some(column_name.to_string()),
+            granted_by,
+            granted_at: current_timestamp(),
+            with_grant_option: false,
+        };
+
+        self.privileges
+            .entry(identity.clone())
+            .or_default()
+            .push(grant);
+
+        Ok(id)
+    }
+
     pub fn grant_role_privilege(
         &mut self,
         role_id: u64,
@@ -827,6 +872,47 @@ impl AuthManager {
 
     pub fn all_privileges(&self) -> impl Iterator<Item = (&UserIdentity, &Vec<PrivilegeGrant>)> {
         self.privileges.iter()
+    }
+
+    pub fn get_authorized_columns(
+        &self,
+        identity: &UserIdentity,
+        table_name: &str,
+        privilege: Privilege,
+    ) -> Vec<String> {
+        let mut columns = Vec::new();
+        let normalized_identity = identity.normalize();
+
+        if let Some(grants) = self.privileges.get(&normalized_identity) {
+            for grant in grants {
+                if grant.object_type == ObjectType::Column
+                    && grant.object_name.eq_ignore_ascii_case(table_name)
+                    && grant.privilege.implies(privilege)
+                {
+                    if let Some(ref col_name) = grant.column_name {
+                        columns.push(col_name.clone());
+                    }
+                }
+            }
+        }
+
+        let wildcard_identity = UserIdentity::new(&normalized_identity.username, "%");
+        if let Some(grants) = self.privileges.get(&wildcard_identity) {
+            for grant in grants {
+                if grant.object_type == ObjectType::Column
+                    && grant.object_name.eq_ignore_ascii_case(table_name)
+                    && grant.privilege.implies(privilege)
+                {
+                    if let Some(ref col_name) = grant.column_name {
+                        if !columns.iter().any(|c| c.eq_ignore_ascii_case(col_name)) {
+                            columns.push(col_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        columns
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {
@@ -1542,5 +1628,58 @@ mod tests {
 
         let privs = auth.get_user_privileges(&identity);
         assert_eq!(privs.len(), 2);
+    }
+
+    #[test]
+    fn test_grant_column_privilege() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        auth.create_user(&identity, "hash").unwrap();
+
+        auth.grant_column_privilege(&identity, Privilege::Read, "users", "email", 0)
+            .unwrap();
+        auth.grant_column_privilege(&identity, Privilege::Read, "users", "name", 0)
+            .unwrap();
+
+        let authorized = auth.get_authorized_columns(&identity, "users", Privilege::Read);
+        assert_eq!(authorized.len(), 2);
+        assert!(authorized.contains(&"email".to_string()));
+        assert!(authorized.contains(&"name".to_string()));
+    }
+
+    #[test]
+    fn test_matches_column() {
+        let grant = PrivilegeGrant::new(
+            1,
+            GranteeType::User,
+            0,
+            Privilege::Read,
+            ObjectType::Column,
+            "users".to_string(),
+            0,
+        );
+        let grant_with_column = PrivilegeGrant {
+            column_name: Some("email".to_string()),
+            ..grant.clone()
+        };
+
+        assert!(grant_with_column.matches_column(Privilege::Read, "users", "email"));
+        assert!(!grant_with_column.matches_column(Privilege::Read, "users", "password"));
+        assert!(!grant_with_column.matches_column(Privilege::Insert, "users", "email"));
+    }
+
+    #[test]
+    fn test_get_authorized_columns_wildcard() {
+        let mut auth = AuthManager::new();
+        let identity = UserIdentity::new("alice", "localhost");
+        auth.create_user(&identity, "hash").unwrap();
+
+        let wildcard_identity = UserIdentity::new("alice", "%");
+        auth.grant_column_privilege(&wildcard_identity, Privilege::Read, "users", "email", 0)
+            .unwrap();
+
+        let authorized = auth.get_authorized_columns(&identity, "users", Privilege::Read);
+        assert_eq!(authorized.len(), 1);
+        assert!(authorized.contains(&"email".to_string()));
     }
 }

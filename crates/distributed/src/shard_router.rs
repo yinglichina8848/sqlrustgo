@@ -1004,8 +1004,14 @@ mod tests {
     #[test]
     fn test_consistency_level_variants() {
         assert!(matches!(ConsistencyLevel::Strong, ConsistencyLevel::Strong));
-        assert!(matches!(ConsistencyLevel::Eventual, ConsistencyLevel::Eventual));
-        assert!(matches!(ConsistencyLevel::Session, ConsistencyLevel::Session));
+        assert!(matches!(
+            ConsistencyLevel::Eventual,
+            ConsistencyLevel::Eventual
+        ));
+        assert!(matches!(
+            ConsistencyLevel::Session,
+            ConsistencyLevel::Session
+        ));
     }
 
     #[test]
@@ -1129,10 +1135,7 @@ mod tests {
         manager.initialize_table_shards("users", 3, &nodes);
 
         // Create range partition with specific boundaries
-        let rule = PartitionRule::new(
-            "users",
-            PartitionKey::new_range("id", vec![10, 20, 30]),
-        );
+        let rule = PartitionRule::new("users", PartitionKey::new_range("id", vec![10, 20, 30]));
         manager.add_partition_rule(rule);
 
         let router = ShardRouter::new(manager, 1);
@@ -1148,10 +1151,7 @@ mod tests {
         let nodes = vec![1, 2, 3];
         manager.initialize_table_shards("users", 4, &nodes);
 
-        let rule = PartitionRule::new(
-            "users",
-            PartitionKey::new_range("id", vec![10, 20, 30]),
-        );
+        let rule = PartitionRule::new("users", PartitionKey::new_range("id", vec![10, 20, 30]));
         manager.add_partition_rule(rule);
 
         let router = ShardRouter::new(manager, 1);

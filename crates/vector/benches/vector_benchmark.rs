@@ -193,18 +193,14 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
             .collect();
 
         // Scalar dot product
-        group.bench_with_input(
-            BenchmarkId::new("scalar_dot", dim),
-            dim,
-            |b, _| {
-                b.iter(|| {
-                    for v in &vectors {
-                        let sum: f32 = query.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
-                        black_box(sum);
-                    }
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("scalar_dot", dim), dim, |b, _| {
+            b.iter(|| {
+                for v in &vectors {
+                    let sum: f32 = query.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+                    black_box(sum);
+                }
+            });
+        });
 
         // SIMD dot product
         group.bench_with_input(BenchmarkId::new("simd_dot", dim), dim, |b, _| {
@@ -224,23 +220,19 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
         });
 
         // Scalar L2 distance
-        group.bench_with_input(
-            BenchmarkId::new("scalar_l2", dim),
-            dim,
-            |b, _| {
-                b.iter(|| {
-                    for v in &vectors {
-                        let dist: f32 = query
-                            .iter()
-                            .zip(v.iter())
-                            .map(|(a, b)| (a - b).powi(2))
-                            .sum::<f32>()
-                            .sqrt();
-                        black_box(dist);
-                    }
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("scalar_l2", dim), dim, |b, _| {
+            b.iter(|| {
+                for v in &vectors {
+                    let dist: f32 = query
+                        .iter()
+                        .zip(v.iter())
+                        .map(|(a, b)| (a - b).powi(2))
+                        .sum::<f32>()
+                        .sqrt();
+                    black_box(dist);
+                }
+            });
+        });
 
         // SIMD L2 distance
         group.bench_with_input(BenchmarkId::new("simd_l2", dim), dim, |b, _| {

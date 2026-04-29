@@ -4,9 +4,7 @@
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
-use crate::simd_explicit::{
-    cosine_distance_simd, dot_product_simd, l2_distance_simd,
-};
+use crate::simd_explicit::{cosine_distance_simd, dot_product_simd, l2_distance_simd};
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
 use parking_lot::RwLock;
 use rand::Rng;

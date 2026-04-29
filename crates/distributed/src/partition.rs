@@ -756,9 +756,18 @@ mod tests {
     #[test]
     fn test_list_partition_found() {
         let partitions = vec![
-            ListPartition { id: 0, values: vec![1, 2] },
-            ListPartition { id: 1, values: vec![10, 20] },
-            ListPartition { id: 2, values: vec![100, 200] },
+            ListPartition {
+                id: 0,
+                values: vec![1, 2],
+            },
+            ListPartition {
+                id: 1,
+                values: vec![10, 20],
+            },
+            ListPartition {
+                id: 2,
+                values: vec![100, 200],
+            },
         ];
         let value = PartitionValue::Integer(20);
         let result = list_partition(&value, &partitions);

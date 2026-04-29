@@ -4,6 +4,7 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
+use sqlrustgo_catalog::auth::{AuthManager, Privilege, UserIdentity};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{Catalog, StoredProcedure};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
@@ -33,6 +34,8 @@ use std::sync::{Arc, RwLock};
 pub struct ExecutionEngine<S: StorageEngine> {
     storage: Arc<RwLock<S>>,
     catalog: Option<Arc<RwLock<Catalog>>>,
+    auth_manager: Option<Arc<RwLock<AuthManager>>>,
+    current_user: Option<UserIdentity>,
     stats: Arc<RwLock<ExecutionStats>>,
     cbo_enabled: bool,
     transaction_manager: TransactionManager,
@@ -71,6 +74,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Self {
             storage,
             catalog: None,
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
             transaction_manager: TransactionManager::new(),
@@ -84,6 +89,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Self {
             storage,
             catalog: None,
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
             transaction_manager: TransactionManager::new(),
@@ -97,6 +104,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Self {
             storage,
             catalog: Some(catalog),
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
             transaction_manager: TransactionManager::new(),
@@ -113,6 +122,27 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Enable or disable CBO
     pub fn set_cbo_enabled(&mut self, enabled: bool) {
         self.cbo_enabled = enabled;
+    }
+
+    /// Set authentication manager and current user for column-level privilege checking
+    pub fn set_auth_context(
+        &mut self,
+        auth_manager: Arc<RwLock<AuthManager>>,
+        current_user: UserIdentity,
+    ) {
+        self.auth_manager = Some(auth_manager);
+        self.current_user = Some(current_user);
+    }
+
+    /// Clear authentication context (e.g., on logout)
+    pub fn clear_auth_context(&mut self) {
+        self.auth_manager = None;
+        self.current_user = None;
+    }
+
+    /// Get the current authenticated user, if any
+    pub fn current_user(&self) -> Option<&UserIdentity> {
+        self.current_user.as_ref()
     }
 
     /// Get table statistics for CBO
@@ -484,8 +514,78 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        let row_count = rows.len();
-        Ok(ExecutorResult::new(rows, row_count))
+        // Step 4: PROJECTION - filter columns based on privileges
+        let authorized_indices = self.get_authorized_column_indices(select, &table_info)?;
+        let projected_rows: Vec<Vec<Value>> = rows
+            .into_iter()
+            .map(|row| {
+                authorized_indices
+                    .iter()
+                    .map(|&i| row.get(i).cloned().unwrap_or(Value::Null))
+                    .collect()
+            })
+            .collect();
+
+        let row_count = projected_rows.len();
+        Ok(ExecutorResult::new(projected_rows, row_count))
+    }
+
+    fn get_authorized_column_indices(
+        &self,
+        select: &SelectStatement,
+        table_info: &TableInfo,
+    ) -> SqlResult<Vec<usize>> {
+        // If no auth context, return all column indices
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok((0..table_info.columns.len()).collect());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok((0..table_info.columns.len()).collect());
+        };
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.get_authorized_columns(current_user, &select.table, Privilege::Read);
+
+        // If user has no column restrictions, return all indices
+        if authorized.is_empty() {
+            return Ok((0..table_info.columns.len()).collect());
+        }
+
+        // Filter select.columns to only authorized ones
+        let is_select_star = select.columns.len() == 1 && select.columns[0].name == "*";
+        let requested_columns = if select.columns.is_empty() || is_select_star {
+            // SELECT * - use all table columns
+            table_info
+                .columns
+                .iter()
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>()
+        } else {
+            select.columns.iter().map(|c| c.name.clone()).collect()
+        };
+
+        let mut indices = Vec::new();
+        for col_name in &requested_columns {
+            // Check if this column is authorized
+            let is_authorized = authorized
+                .iter()
+                .any(|auth_col| auth_col.eq_ignore_ascii_case(col_name) || auth_col == "*");
+
+            // Find the column index
+            if let Some(idx) = table_info.columns.iter().position(|c| c.name == *col_name) {
+                if is_authorized {
+                    indices.push(idx);
+                }
+                // If not authorized, silently skip (column won't be in result)
+            }
+        }
+
+        // If no indices found, return empty result
+        if indices.is_empty() && !requested_columns.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Ok(indices)
     }
 
     fn compute_aggregates(
@@ -1395,6 +1495,8 @@ impl ExecutionEngine<MemoryStorage> {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
             catalog: None,
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
             transaction_manager: TransactionManager::new(),
@@ -1408,6 +1510,8 @@ impl ExecutionEngine<MemoryStorage> {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
             catalog: None,
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
             transaction_manager: TransactionManager::new(),
@@ -1421,6 +1525,8 @@ impl ExecutionEngine<MemoryStorage> {
         Self {
             storage: Arc::new(RwLock::new(MemoryStorage::new())),
             catalog: Some(catalog),
+            auth_manager: None,
+            current_user: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
             transaction_manager: TransactionManager::new(),
@@ -2232,5 +2338,97 @@ mod tests {
 
         // Smallest (t3 with 5 rows) should be first after ANALYZE
         assert_eq!(optimal[0], "t3");
+    }
+
+    #[test]
+    fn test_column_filtering_with_auth() {
+        use sqlrustgo_catalog::auth::{AuthManager, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        // Use simpler types to match existing working tests
+        let create_result =
+            engine.execute("CREATE TABLE users (id INTEGER, name TEXT, secret TEXT)");
+        assert!(
+            create_result.is_ok(),
+            "CREATE TABLE failed: {:?}",
+            create_result.err()
+        );
+
+        let insert1 = engine.execute("INSERT INTO users VALUES (1, 'Alice', 'secret123')");
+        assert!(insert1.is_ok(), "INSERT 1 failed: {:?}", insert1.err());
+
+        let insert2 = engine.execute("INSERT INTO users VALUES (2, 'Bob', 'pass456')");
+        assert!(insert2.is_ok(), "INSERT 2 failed: {:?}", insert2.err());
+
+        // First verify data was inserted
+        let before_result = engine.execute("SELECT * FROM users");
+        assert!(
+            before_result.is_ok(),
+            "SELECT failed: {:?}",
+            before_result.err()
+        );
+        let before_rows = before_result.unwrap();
+        assert_eq!(
+            before_rows.rows.len(),
+            2,
+            "Should have 2 rows before auth, got {}",
+            before_rows.rows.len()
+        );
+        assert_eq!(before_rows.rows[0].len(), 3, "Should have 3 columns");
+
+        // With auth context restricting to only id and name columns
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Read, "users", "id", 0)
+                .unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Read, "users", "name", 0)
+                .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        // Now SELECT * should only return id and name (not secret)
+        let result = engine.execute("SELECT * FROM users").unwrap();
+        assert_eq!(result.rows.len(), 2);
+        // Each row should have 2 columns (id and name), not 3
+        assert_eq!(result.rows[0].len(), 2);
+    }
+
+    #[test]
+    fn test_get_authorized_column_indices() {
+        use sqlrustgo_catalog::auth::{AuthManager, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
+            .unwrap();
+
+        // Without auth, should return all indices
+        let result = engine.execute("SELECT * FROM users").unwrap();
+        assert_eq!(result.rows.len(), 0); // No data
+
+        // Set up auth with column restrictions
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Read, "users", "id", 0)
+                .unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Read, "users", "email", 0)
+                .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        // Should only return id and email columns
+        let result = engine.execute("SELECT * FROM users").unwrap();
+        // Row should have 2 columns
+        assert_eq!(result.rows.len(), 0); // No data
     }
 }

@@ -69,6 +69,26 @@ impl<'a> DdlExecutor<'a> {
         )?;
         Ok(())
     }
+
+    pub fn execute_grant_columns(
+        &mut self,
+        grantee: &UserIdentity,
+        privilege: Privilege,
+        table_name: &str,
+        columns: &[String],
+        grantor_id: u64,
+    ) -> AuthResult<()> {
+        for column in columns {
+            self.auth_manager.grant_column_privilege(
+                grantee,
+                privilege,
+                table_name,
+                column,
+                grantor_id,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -210,13 +230,15 @@ mod tests {
             .execute_create_user(&[grantee.clone()], "password123")
             .unwrap();
 
-        let object = ObjectRef::column("users", "email");
-        let result = executor.execute_grant(&grantee, Privilege::Update, &object, 0);
+        let columns = vec!["email".to_string(), "name".to_string()];
+        let result = executor.execute_grant_columns(&grantee, Privilege::Select, "users", &columns, 0);
 
         assert!(result.is_ok());
-        assert!(auth_manager
-            .check_privilege(&grantee, &object, Privilege::Update)
-            .is_ok());
+
+        let authorized = auth_manager.get_authorized_columns(&grantee, "users", Privilege::Select);
+        assert_eq!(authorized.len(), 2);
+        assert!(authorized.contains(&"email".to_string()));
+        assert!(authorized.contains(&"name".to_string()));
     }
 
     #[test]

@@ -414,7 +414,11 @@ impl TriggerExecutor {
                 let eval_ctx = crate::trigger_eval::EvalContext::new(&trigger_ctx, None)
                     .with_target_col_names(target_col_names.clone());
                 for expr in values {
-                    let val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, Some(&target_col_names));
+                    let val = crate::trigger_eval::expression_to_value(
+                        expr,
+                        &eval_ctx,
+                        Some(&target_col_names),
+                    );
                     record.push(val);
                 }
                 while record.len() < num_cols {
@@ -487,7 +491,8 @@ impl TriggerExecutor {
                         .iter()
                         .position(|c| c.name.eq_ignore_ascii_case(col_name))
                     {
-                        let new_val = crate::trigger_eval::expression_to_value(expr, &eval_ctx, None);
+                        let new_val =
+                            crate::trigger_eval::expression_to_value(expr, &eval_ctx, None);
                         if col_idx < updated_row.len() {
                             updated_row[col_idx] = new_val;
                         }
