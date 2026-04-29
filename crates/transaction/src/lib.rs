@@ -1,3 +1,18 @@
+//! SQLRustGo Transaction Module
+//!
+//! Provides MVCC-based transaction management with Serializable Snapshot Isolation (SSI).
+//!
+//! # Core Components
+//!
+//! - `TransactionManager`: Manages transaction lifecycle with SSI conflict detection
+//! - `mvcc`: Multi-Version Concurrency Control implementation
+//! - `ssi`: Serializable Snapshot Isolation conflict detection
+//! - `lock_manager`: Distributed lock management
+//!
+//! # Transaction Isolation
+//!
+//! Supports Snapshot Isolation and Serializable isolation levels.
+
 pub mod deadlock;
 pub mod dtc;
 pub mod gid;
