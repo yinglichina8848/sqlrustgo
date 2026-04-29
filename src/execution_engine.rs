@@ -25,7 +25,7 @@ use sqlrustgo_parser::{
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_transaction::{IsolationLevel as TmIsolationLevel, TransactionManager, TxId};
-use sqlrustgo_types::Value as SqlValue;
+use sqlrustgo_types::{TriBool, Value as SqlValue};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -420,7 +420,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         // Step 2: WHERE
         if let Some(ref where_expr) = select.where_clause {
-            rows.retain(|row| eval_predicate(where_expr, row, &table_info));
+            rows.retain(|row| eval_predicate(where_expr, row, &table_info).to_predicate());
         }
 
         // Step 3: GROUP BY + AGGREGATE
@@ -432,7 +432,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 if let Some(ref having_expr) = select.having {
                     let having_schema = build_aggregate_schema(&[], &select.aggregates)?;
-                    if !eval_predicate(having_expr, &agg_values, &having_schema) {
+                    if !eval_predicate(having_expr, &agg_values, &having_schema).to_predicate() {
                         return Ok(ExecutorResult::new(vec![], 0));
                     }
                 }
@@ -474,7 +474,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 if let Some(ref having_expr) = select.having {
                     let having_schema = build_aggregate_schema(group_exprs, &select.aggregates)?;
-                    agg_result_rows.retain(|row| eval_predicate(having_expr, row, &having_schema));
+                    agg_result_rows.retain(|row| {
+                        eval_predicate(having_expr, row, &having_schema).to_predicate()
+                    });
                 }
 
                 let row_count = agg_result_rows.len();
@@ -1613,30 +1615,37 @@ fn validate_foreign_keys(
     Ok(())
 }
 
-/// Evaluate a WHERE clause expression against a row
-/// Returns true if the row matches the WHERE condition
-/// Evaluate a predicate expression to a boolean result
-/// Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
+/// Evaluate a predicate expression to TriBool for SQL three-valued logic
 /// All NULL handling is centralized here - no NULL logic in individual operators
-fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> TriBool {
     match expr {
-        // AND short-circuits on false
+        // AND with SQL three-valued logic (short-circuits on FALSE)
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
+            let left_result = eval_predicate(left, row, table_info);
+            if left_result == TriBool::False {
+                return TriBool::False;
+            }
+            let right_result = eval_predicate(right, row, table_info);
+            left_result.and(right_result)
         }
-        // OR short-circuits on true
+        // OR with SQL three-valued logic (short-circuits on TRUE)
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
+            let left_result = eval_predicate(left, row, table_info);
+            if left_result == TriBool::True {
+                return TriBool::True;
+            }
+            let right_result = eval_predicate(right, row, table_info);
+            left_result.or(right_result)
         }
-        // IS NULL - always goes through evaluate_expression for value extraction
+        // IS NULL
         Expression::IsNull(inner) => match evaluate_expression(inner, row, table_info) {
-            Ok(val) => matches!(val, Value::Null),
-            Err(_) => false,
+            Ok(val) => TriBool::from_option(Some(matches!(val, Value::Null))),
+            Err(_) => TriBool::False,
         },
         // IS NOT NULL
         Expression::IsNotNull(inner) => match evaluate_expression(inner, row, table_info) {
-            Ok(val) => !matches!(val, Value::Null),
-            Err(_) => false,
+            Ok(val) => TriBool::from_option(Some(!matches!(val, Value::Null))),
+            Err(_) => TriBool::False,
         },
         // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
@@ -1660,10 +1669,8 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
         }
         // For other expressions, evaluate and check if truthy
         _ => match evaluate_expression(expr, row, table_info) {
-            Ok(val) => {
-                matches!(val, Value::Boolean(true))
-            }
-            Err(_) => false,
+            Ok(val) => TriBool::from_option(Some(matches!(val, Value::Boolean(true)))),
+            Err(_) => TriBool::False,
         },
     }
 }
@@ -1671,25 +1678,34 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
 /// Legacy alias for compatibility
 #[allow(dead_code)]
 fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
-    eval_predicate(expr, row, table_info)
+    eval_predicate(expr, row, table_info).to_predicate()
 }
 
-/// SQL comparison operator
-/// Returns false if either operand is NULL (UNKNOWN semantics)
-/// This is Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
-fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
-    if matches!(left, Value::Null) || matches!(right, Value::Null) {
-        return false;
-    }
+/// SQL comparison operator returning TriBool for three-valued logic
+/// NULL comparisons return UNKNOWN, not TRUE or FALSE
+fn sql_compare(op: &str, left: &Value, right: &Value) -> TriBool {
+    let left_null = matches!(left, Value::Null);
+    let right_null = matches!(right, Value::Null);
 
-    match op.to_uppercase().as_str() {
-        "=" | "==" => left == right,
-        "!=" | "<>" => left != right,
-        ">" => compare_values(left, right) > 0,
-        ">=" => compare_values(left, right) >= 0,
-        "<" => compare_values(left, right) < 0,
-        "<=" => compare_values(left, right) <= 0,
-        _ => false,
+    if left_null && right_null {
+        match op.to_uppercase().as_str() {
+            "=" | "==" | "IS" => TriBool::Unknown,
+            "!=" | "<>" => TriBool::Unknown,
+            _ => TriBool::Unknown,
+        }
+    } else if left_null || right_null {
+        TriBool::Unknown
+    } else {
+        let result = match op.to_uppercase().as_str() {
+            "=" | "==" => left == right,
+            "!=" | "<>" => left != right,
+            ">" => compare_values(left, right) > 0,
+            ">=" => compare_values(left, right) >= 0,
+            "<" => compare_values(left, right) < 0,
+            "<=" => compare_values(left, right) <= 0,
+            _ => false,
+        };
+        TriBool::from_bool(result)
     }
 }
 

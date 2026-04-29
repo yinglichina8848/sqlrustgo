@@ -2,9 +2,11 @@
 // Core data types for SQLRustGo
 
 pub mod error;
+pub mod tribool;
 pub mod value;
 
 pub use error::{SqlError, SqlResult};
+pub use tribool::TriBool;
 pub use value::Value;
 
 /// Convert a SQL literal string to Value
