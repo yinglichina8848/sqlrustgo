@@ -900,6 +900,38 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(())
     }
 
+    fn check_column_privileges_for_update(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.get_authorized_columns(current_user, table, Privilege::Update);
+
+        for col in columns {
+            let is_authorized = authorized
+                .iter()
+                .any(|auth_col| auth_col.eq_ignore_ascii_case(col) || auth_col == "*");
+
+            if !is_authorized {
+                return Err(SqlError::ExecutionError(format!("Column '{}' not accessible", col)));
+            }
+        }
+
+        Ok(())
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
@@ -1031,6 +1063,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
         let table_name = update.table.clone();
+
+        let update_columns: Vec<String> = update.set_clauses.iter().map(|(col, _)| col.clone()).collect();
+        if let Err(e) = self.check_column_privileges_for_update(&table_name, &update_columns) {
+            return Err(e);
+        }
 
         // If no WHERE clause, use the simple storage.update() path
         if update.where_clause.is_none() {
