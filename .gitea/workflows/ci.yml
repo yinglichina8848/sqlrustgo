@@ -10,8 +10,6 @@ jobs:
   build:
     runs-on: [hp-z6g4]
     steps:
-      - name: Install Node.js
-        run: apk add --no-cache nodejs
       - uses: actions/checkout@v4
       - name: Build
         run: cargo build --all-features
@@ -25,8 +23,6 @@ jobs:
     needs: [build]
     runs-on: [hp-z6g4]
     steps:
-      - name: Install Node.js
-        run: apk add --no-cache nodejs
       - uses: actions/checkout@v4
       - name: Run tests
         run: cargo test --all-features 2>&1 | tee test_report.log
@@ -45,8 +41,6 @@ jobs:
     needs: [test]
     runs-on: [hp-z6g4]
     steps:
-      - name: Install Node.js
-        run: apk add --no-cache nodejs
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
@@ -65,8 +59,6 @@ jobs:
     needs: [gate]
     runs-on: [hp-z6g4]
     steps:
-      - name: Install Node.js
-        run: apk add --no-cache nodejs
       - uses: actions/checkout@v4
       - name: Run verification
         run: python3 verify/verification_engine.py
@@ -80,8 +72,6 @@ jobs:
     needs: [verify]
     runs-on: [hp-z6g4]
     steps:
-      - name: Install Node.js
-        run: apk add --no-cache nodejs
       - uses: actions/checkout@v4
       - name: Run audit
         run: python3 audit/self_audit.py
