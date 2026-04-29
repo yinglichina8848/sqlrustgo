@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - develop/v2.8.0
+  pull_request:
+    branches:
+      - develop/v2.8.0
 
 jobs:
   build:
