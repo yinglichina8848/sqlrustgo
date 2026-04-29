@@ -13,20 +13,28 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+/// Recovery target specification
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum RecoveryTarget {
+    /// Recover to specific LSN
     LSN(u64),
+    /// Recover to specific Unix timestamp
     Timestamp(u64),
+    /// Recover to specific transaction ID
     TransactionId(u64),
 }
 
+/// A point-in-time recovery target with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecoveryPoint {
+    /// The recovery target specification
     pub target: RecoveryTarget,
+    /// Human-readable description of the recovery point
     pub description: String,
 }
 
 impl RecoveryPoint {
+    /// Create recovery point at specific LSN
     pub fn at_lsn(lsn: u64) -> Self {
         Self {
             target: RecoveryTarget::LSN(lsn),
@@ -34,6 +42,7 @@ impl RecoveryPoint {
         }
     }
 
+    /// Create recovery point at specific Unix timestamp
     pub fn at_timestamp(timestamp: u64) -> Self {
         Self {
             target: RecoveryTarget::Timestamp(timestamp),
@@ -41,6 +50,7 @@ impl RecoveryPoint {
         }
     }
 
+    /// Create recovery point at specific transaction ID
     pub fn at_transaction(tx_id: u64) -> Self {
         Self {
             target: RecoveryTarget::TransactionId(tx_id),
@@ -49,6 +59,7 @@ impl RecoveryPoint {
     }
 }
 
+/// Point-in-time recovery manager
 pub struct PITRRecovery {
     _storage_path: PathBuf,
     wal_path: PathBuf,
@@ -57,6 +68,7 @@ pub struct PITRRecovery {
 }
 
 impl PITRRecovery {
+    /// Create new PITR recovery manager
     pub fn new(storage_path: PathBuf, wal_path: PathBuf, backup_path: PathBuf) -> Self {
         Self {
             _storage_path: storage_path,

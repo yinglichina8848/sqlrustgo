@@ -55,7 +55,8 @@ fn bool_to_yn(value: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthManager, ObjectType, UserIdentity};
+    use crate::{AuthManager, UserIdentity};
+    use crate::auth::ObjectType;
 
     #[test]
     fn test_schema() {

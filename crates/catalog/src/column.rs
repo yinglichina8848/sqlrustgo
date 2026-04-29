@@ -9,10 +9,6 @@ use sqlrustgo_types::Value;
 /// Column definition describing a single column in a table
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
-
-/// Column definition describing a single column in a table
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColumnDefinition {
     /// Column name
     pub name: String,
     /// Data type
