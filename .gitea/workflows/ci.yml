@@ -10,7 +10,29 @@ on:
       - develop/v2.8.0
 
 jobs:
+  ##################################
+  # Precheck: 防炸门控
+  ##################################
+  precheck:
+    runs-on: [hp-z6g4]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PR freshness
+        run: |
+          git fetch origin develop/v2.8.0
+          BEHIND=$(git rev-list --count HEAD..origin/develop/v2.8.0 2>/dev/null || echo "0")
+          echo "Behind develop/v2.8.0: $BEHIND commits"
+          if [ "$BEHIND" -gt 50 ]; then
+            echo "❌ PR too old ($BEHIND commits behind), please rebase first"
+            exit 1
+          fi
+          echo "✅ PR is fresh enough"
+
+  ##################################
+  # Build
+  ##################################
   build:
+    needs: [precheck]
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +44,9 @@ jobs:
           name: sqlrustgo-bin
           path: target/debug/sqlrustgo
 
+  ##################################
+  # Test
+  ##################################
   test:
     needs: [build]
     runs-on: [hp-z6g4]
@@ -33,13 +58,15 @@ jobs:
         run: |
           PASS=$(grep -c 'test result: ok' test_report.log 2>/dev/null | tr -cd '0-9' || echo "0")
           FAIL=$(grep -c 'test result: FAILED' test_report.log 2>/dev/null | tr -cd '0-9' || echo "0")
-          # Ensure numeric values
           PASS=${PASS:-0}
           FAIL=${FAIL:-0}
           [ -z "$PASS" ] && PASS=0
           [ -z "$FAIL" ] && FAIL=0
           echo "{\"passed\": $([ "${FAIL}" -eq 0 ] && echo 'true' || echo 'false'), \"total\": $((PASS+FAIL))}" > test_report.json
 
+  ##################################
+  # Hermes Gate (clippy + fmt + audit)
+  ##################################
   gate:
     needs: [test]
     runs-on: [hp-z6g4]
@@ -58,6 +85,9 @@ jobs:
           name: gate-report
           path: gate_report.json
 
+  ##################################
+  # Verification
+  ##################################
   verify:
     needs: [gate]
     runs-on: [hp-z6g4]
@@ -71,6 +101,9 @@ jobs:
           name: verification-report
           path: verification_report.json
 
+  ##################################
+  # Audit
+  ##################################
   audit:
     needs: [verify]
     runs-on: [hp-z6g4]
