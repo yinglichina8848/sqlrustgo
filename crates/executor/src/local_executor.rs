@@ -913,11 +913,9 @@ fn hash_inner_join(
                     .collect(),
             );
 
+            // SQL three-valued logic: NULL = anything → UNKNOWN → no match
             let eval_result = condition.evaluate(&combined, &full_schema);
-            if eval_result
-                .map(|v| v.to_bool())
-                .unwrap_or(false)
-            {
+            if matches!(eval_result, Some(Value::Boolean(true))) {
                 results.push(combined);
             }
         }
@@ -991,11 +989,11 @@ fn sort_merge_inner_join(
                     .collect(),
             );
 
-            if condition
-                .evaluate(&combined, &full_schema)
-                .map(|v| v.to_bool())
-                .unwrap_or(false)
-            {
+            // SQL three-valued logic: NULL = anything → UNKNOWN → no match
+            if matches!(
+                condition.evaluate(&combined, &full_schema),
+                Some(Value::Boolean(true))
+            ) {
                 results.push(combined);
             }
 
