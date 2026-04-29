@@ -868,8 +868,44 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
+    fn check_column_privileges_for_insert(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.get_authorized_columns(current_user, table, Privilege::Insert);
+
+        for col in columns {
+            let is_authorized = authorized
+                .iter()
+                .any(|auth_col| auth_col.eq_ignore_ascii_case(col) || auth_col == "*");
+
+            if !is_authorized {
+                return Err(SqlError::ExecutionError(format!("Column '{}' not accessible", col)));
+            }
+        }
+
+        Ok(())
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
+
+        if let Err(e) = self.check_column_privileges_for_insert(&table_name, &insert.columns) {
+            return Err(e);
+        }
 
         // Get table info first (need it for triggers and FK validation)
         let table_info = {
