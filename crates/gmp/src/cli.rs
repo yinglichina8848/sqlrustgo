@@ -1136,15 +1136,13 @@ mod tests {
                 name: "Alice".to_string(),
                 props: serde_json::json!({}),
             },
-            neighbors: vec![
-                NeighborView {
-                    id: "2".to_string(),
-                    node_type: "User".to_string(),
-                    name: "Bob".to_string(),
-                    rel_type: "KNOWS".to_string(),
-                    props: serde_json::json!({}),
-                },
-            ],
+            neighbors: vec![NeighborView {
+                id: "2".to_string(),
+                node_type: "User".to_string(),
+                name: "Bob".to_string(),
+                rel_type: "KNOWS".to_string(),
+                props: serde_json::json!({}),
+            }],
         };
         assert_eq!(result.neighbors.len(), 1);
         assert_eq!(result.center.name, "Alice");
@@ -1178,7 +1176,9 @@ mod tests {
         let json = r#"{"cmd":"ImportDoc","title":"Doc1","doc_type":"manual","content":"content","keywords":["k1"],"properties":null}"#;
         let req: Request = serde_json::from_str(json).unwrap();
         match req {
-            Request::ImportDoc { title, doc_type, .. } => {
+            Request::ImportDoc {
+                title, doc_type, ..
+            } => {
                 assert_eq!(title, "Doc1");
                 assert_eq!(doc_type, "manual");
             }
@@ -1191,7 +1191,9 @@ mod tests {
         let json = r#"{"cmd":"UpsertNode","node_type":"Person","name":"Alice","code":null,"properties":null}"#;
         let req: Request = serde_json::from_str(json).unwrap();
         match req {
-            Request::UpsertNode { node_type, name, .. } => {
+            Request::UpsertNode {
+                node_type, name, ..
+            } => {
                 assert_eq!(node_type, "Person");
                 assert_eq!(name, "Alice");
             }
@@ -1204,7 +1206,9 @@ mod tests {
         let json = r#"{"cmd":"UpsertEdge","from_name":"A","from_type":"Person","to_name":"B","to_type":"Person","rel_type":"KNOWS","weight":1.0}"#;
         let req: Request = serde_json::from_str(json).unwrap();
         match req {
-            Request::UpsertEdge { rel_type, weight, .. } => {
+            Request::UpsertEdge {
+                rel_type, weight, ..
+            } => {
                 assert_eq!(rel_type, "KNOWS");
                 assert_eq!(weight, Some(1.0));
             }
@@ -1217,7 +1221,11 @@ mod tests {
         let json = r#"{"cmd":"GraphNeighbors","node_type":"Person","node_name":"Alice","rel_type":"KNOWS"}"#;
         let req: Request = serde_json::from_str(json).unwrap();
         match req {
-            Request::GraphNeighbors { node_name, rel_type, .. } => {
+            Request::GraphNeighbors {
+                node_name,
+                rel_type,
+                ..
+            } => {
                 assert_eq!(node_name, "Alice");
                 assert_eq!(rel_type, Some("KNOWS".to_string()));
             }
@@ -1242,7 +1250,12 @@ mod tests {
         let json = r#"{"cmd":"SqlSearch","query":"test","department":"IT","category":null,"chapter":null,"top_k":10}"#;
         let req: Request = serde_json::from_str(json).unwrap();
         match req {
-            Request::SqlSearch { query, department, top_k, .. } => {
+            Request::SqlSearch {
+                query,
+                department,
+                top_k,
+                ..
+            } => {
                 assert_eq!(query, "test");
                 assert_eq!(department, Some("IT".to_string()));
                 assert_eq!(top_k, 10);

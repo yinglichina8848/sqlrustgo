@@ -234,7 +234,9 @@ mod tests {
         let executor = CrossShardQueryExecutor::new(pool);
 
         let nodes = vec![(1u64, 0u64), (2u64, 0u64)];
-        let results = executor.broadcast_vector_insert(&nodes, 1, &[0.1, 0.2, 0.3]).await;
+        let results = executor
+            .broadcast_vector_insert(&nodes, 1, &[0.1, 0.2, 0.3])
+            .await;
 
         assert_eq!(results.len(), 0);
     }
@@ -351,7 +353,9 @@ mod tests {
         let executor = CrossShardQueryExecutor::new(pool);
 
         let nodes = vec![];
-        let results = executor.broadcast_vector_insert(&nodes, 1, &[0.1, 0.2]).await;
+        let results = executor
+            .broadcast_vector_insert(&nodes, 1, &[0.1, 0.2])
+            .await;
         assert!(results.is_empty());
     }
 
@@ -439,7 +443,9 @@ mod tests {
         let executor = CrossShardQueryExecutor::new(pool);
 
         let nodes = vec![(1u64, 0u64), (2u64, 1u64)];
-        let result = executor.scatter_gather_vector_search(&nodes, &[0.1, 0.2], 1000).await;
+        let result = executor
+            .scatter_gather_vector_search(&nodes, &[0.1, 0.2], 1000)
+            .await;
         assert!(result.is_ok());
     }
 
@@ -449,7 +455,9 @@ mod tests {
         let executor = CrossShardQueryExecutor::new(pool);
 
         let nodes = vec![(1u64, 0u64), (2u64, 0u64), (3u64, 1u64)];
-        let results = executor.broadcast_vector_insert(&nodes, 42, &[0.1, 0.2, 0.3]).await;
+        let results = executor
+            .broadcast_vector_insert(&nodes, 42, &[0.1, 0.2, 0.3])
+            .await;
         assert!(results.is_empty());
     }
 
@@ -459,7 +467,9 @@ mod tests {
         let executor = CrossShardQueryExecutor::new(pool);
 
         let shard_to_node = HashMap::new();
-        let result = executor.execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10).await;
+        let result = executor
+            .execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10)
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -471,7 +481,9 @@ mod tests {
 
         let mut shard_to_node = HashMap::new();
         shard_to_node.insert(0, 1);
-        let result = executor.execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10).await;
+        let result = executor
+            .execute_vector_search_all_shards(&shard_to_node, &[0.1, 0.2], 10)
+            .await;
         assert!(result.is_ok());
     }
 

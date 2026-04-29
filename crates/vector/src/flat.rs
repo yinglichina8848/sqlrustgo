@@ -74,20 +74,17 @@ impl VectorIndex for FlatIndex {
 
         let vector_refs: Vec<_> = self.vectors.iter().map(|e| &e.vector[..]).collect();
         let scores = match self.metric {
-            DistanceMetric::Euclidean => {
-                batch_l2_distance_simd(query, &vector_refs)
-                    .into_iter()
-                    .map(|d| -d)
-                    .collect()
-            }
+            DistanceMetric::Euclidean => batch_l2_distance_simd(query, &vector_refs)
+                .into_iter()
+                .map(|d| -d)
+                .collect(),
             DistanceMetric::Cosine => batch_cosine_distance_simd(query, &vector_refs),
             DistanceMetric::DotProduct => batch_dot_product_simd(query, &vector_refs),
-            DistanceMetric::Manhattan => {
-                self.vectors
-                    .iter()
-                    .map(|e| -crate::simd_explicit::manhattan_distance_simd(query, &e.vector))
-                    .collect()
-            }
+            DistanceMetric::Manhattan => self
+                .vectors
+                .iter()
+                .map(|e| -crate::simd_explicit::manhattan_distance_simd(query, &e.vector))
+                .collect(),
         };
 
         let mut entries: Vec<_> = self

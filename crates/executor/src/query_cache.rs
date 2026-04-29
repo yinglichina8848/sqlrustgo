@@ -348,7 +348,11 @@ mod tests {
     #[test]
     fn test_cache_with_table_index() {
         let mut cache = QueryCache::new(QueryCacheConfig::default());
-        cache.put(make_key("q1", 1), make_entry(1), vec!["users".to_string(), "orders".to_string()]);
+        cache.put(
+            make_key("q1", 1),
+            make_entry(1),
+            vec!["users".to_string(), "orders".to_string()],
+        );
         cache.put(make_key("q2", 2), make_entry(2), vec!["users".to_string()]);
 
         assert_eq!(cache.stats().table_count, 2);
