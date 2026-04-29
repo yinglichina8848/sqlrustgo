@@ -18,9 +18,15 @@ const PAGE_DATA_SIZE: usize = 4096 - 64;
 #[derive(Debug, Clone, Error)]
 #[error("unique constraint violation: key {key} already exists")]
 pub struct UniqueConstraintViolation {
+    /// The duplicate key that caused the violation
     pub key: i64,
 }
 
+/// B+Tree key wrapper for i64 keys
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Key(pub i64);
+
+/// B+Tree key wrapper for i64 keys
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub i64);
 
@@ -32,16 +38,19 @@ pub struct CompositeKey {
 }
 
 impl CompositeKey {
+    /// Create a new composite key from values
     pub fn new(values: Vec<Value>) -> Self {
         Self { values }
     }
 
+    /// Create composite key from a slice
     pub fn from_slice(slice: &[Value]) -> Self {
         Self {
             values: slice.to_vec(),
         }
     }
 
+    /// Check if composite key is empty
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -124,17 +133,25 @@ impl Ord for CompositeKey {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct IndexValue(pub u32);
 
+/// B+Tree node for disk-based storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BTreeNode {
+    /// Whether this is a leaf node
     pub is_leaf: bool,
+    /// Number of keys in this node
     pub num_keys: u16,
+    /// Keys stored in this node
     pub keys: Vec<i64>,
+    /// Values (row IDs) stored in this node
     pub values: Vec<u32>,
+    /// Child node page IDs
     pub children: Vec<u32>,
+    /// Next leaf node page ID (for leaf nodes only)
     pub next_leaf: Option<u32>,
 }
 
 impl BTreeNode {
+    /// Create a new leaf node
     pub fn new_leaf() -> Self {
         Self {
             is_leaf: true,
@@ -146,6 +163,7 @@ impl BTreeNode {
         }
     }
 
+    /// Create a new internal node
     pub fn new_internal() -> Self {
         Self {
             is_leaf: false,
@@ -157,25 +175,26 @@ impl BTreeNode {
         }
     }
 
+    /// Check if node is full (no more keys can be added)
     pub fn is_full(&self) -> bool {
         self.num_keys as usize >= MAX_KEYS_PER_NODE
     }
 
+    /// Check if node can be split
     pub fn can_split(&self) -> bool {
         self.num_keys as usize >= MAX_KEYS_PER_NODE
     }
 
+    /// Find child index for insert (binary search)
     pub fn find_child_index(&self, key: i64) -> usize {
-        // Binary search for the first key >= search key
-        // This is more efficient than linear search for B+Tree nodes
         match self.keys.binary_search(&key) {
-            Ok(idx) => idx + 1, // Key found, go to child at idx+1
-            Err(idx) => idx,    // Key not found, idx is insertion point
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
         }
     }
 
+    /// Find exact key index
     pub fn find_key_index(&self, key: i64) -> Option<usize> {
-        // Binary search for exact key match
         self.keys.binary_search(&key).ok()
     }
 

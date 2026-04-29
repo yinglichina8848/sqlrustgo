@@ -9,13 +9,17 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
+/// User identity (username@host)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UserIdentity {
+    /// Username
     pub username: String,
+    /// Host (%, IP, or hostname)
     pub host: String,
 }
 
 impl UserIdentity {
+    /// Create a new user identity
     pub fn new(username: &str, host: &str) -> Self {
         Self {
             username: username.to_lowercase(),
@@ -23,6 +27,7 @@ impl UserIdentity {
         }
     }
 
+    /// Normalize the identity
     pub fn normalize(&self) -> Self {
         Self {
             username: self.username.to_lowercase(),
@@ -55,21 +60,33 @@ impl<'de> Deserialize<'de> for UserIdentity {
     }
 }
 
+/// User authentication information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAuthInfo {
+    /// User identity
     pub identity: UserIdentity,
+    /// Password hash
     pub password_hash: String,
+    /// Whether user is active
     pub is_active: bool,
+    /// Creation timestamp
     pub created_at: u64,
+    /// Last update timestamp
     pub updated_at: u64,
 }
 
+/// SCRAM-SHA-256 credential storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScramCredential {
+    /// Credential version
     pub version: u8,
+    /// Salt for PBKDF2
     pub salt: Vec<u8>,
+    /// PBKDF2 iterations
     pub iterations: u32,
+    /// Stored key (HMAC-SHA256 of salted password)
     pub stored_key: Vec<u8>,
+    /// Server key
     pub server_key: Vec<u8>,
 }
 
@@ -145,16 +162,26 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     result == 0
 }
 
+/// Database privilege types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Privilege {
+    /// SELECT privilege
     Read,
+    /// INSERT privilege
     Insert,
+    /// UPDATE privilege
     Update,
+    /// DELETE privilege
     Delete,
+    /// ALTER TABLE privilege
     Alter,
+    /// DROP privilege
     Drop,
+    /// CREATE privilege
     Create,
+    /// GRANT OPTION privilege
     Grant,
+    /// ALL privileges
     All,
 }
 
@@ -199,14 +226,17 @@ impl std::fmt::Display for Privilege {
     }
 }
 
+/// Object type for privileges
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
+    /// Database or schema
     Database,
+    /// Table
     Table,
+    /// Column
     Column,
 }
 
-#[allow(clippy::should_implement_trait)]
 impl ObjectType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
@@ -218,19 +248,29 @@ impl ObjectType {
     }
 }
 
+/// Type of grantee (user or role)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GranteeType {
+    /// Individual user
     User,
+    /// Role
     Role,
 }
 
+/// Database user
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
+    /// User ID
     pub id: u64,
+    /// Username
     pub username: String,
+    /// Password hash
     pub password_hash: String,
+    /// Creation timestamp
     pub created_at: u64,
+    /// Last update timestamp
     pub updated_at: u64,
+    /// Whether user is active
     pub is_active: bool,
 }
 

@@ -1,8 +1,12 @@
+//! MySQL system table for user authentication
+
 use crate::AuthManager;
 
+/// MySQL user table (mysql.user)
 pub struct MysqlUserTable;
 
 impl MysqlUserTable {
+    /// Get the schema for mysql.user table
     pub fn schema() -> Vec<(&'static str, &'static str)> {
         vec![
             ("user", "VARCHAR(32)"),
