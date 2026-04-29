@@ -32,6 +32,7 @@ pub struct Edge {
 impl Edge {
     pub const LABEL: &'static str = "Edge";
 
+    /// Create a new edge with default outgoing direction
     pub fn new(
         id: EdgeId,
         from: NodeId,
@@ -49,6 +50,7 @@ impl Edge {
         }
     }
 
+    /// Create a new edge with specified direction
     pub fn with_direction(
         id: EdgeId,
         from: NodeId,

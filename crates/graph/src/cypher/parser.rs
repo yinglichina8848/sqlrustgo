@@ -1,16 +1,25 @@
+//! Cypher query parser
+
 use super::lexer::{CypherLexer, CypherToken};
 use crate::error::GraphError;
 
+/// Parsed Cypher query
 #[derive(Debug, Clone, PartialEq)]
 pub struct CypherQuery {
+    /// Match pattern
     pub pattern: CypherPattern,
+    /// WHERE clause predicate
     pub where_clause: Option<CypherPredicate>,
+    /// RETURN clause items
     pub return_items: Vec<ReturnItem>,
 }
 
+/// Cypher pattern - node or relationship pattern
 #[derive(Debug, Clone, PartialEq)]
 pub enum CypherPattern {
+    /// Node pattern: (var:Label)
     Node(NodePattern),
+    /// Relationship pattern: (a)-[r:REL]->(b)
     Relationship {
         from: Box<NodePattern>,
         to: Box<NodePattern>,
@@ -19,31 +28,43 @@ pub enum CypherPattern {
     },
 }
 
+/// Node pattern in a Cypher query
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodePattern {
+    /// Variable name (e.g., 'n' in (n:Label))
     pub variable: Option<String>,
+    /// Node label (e.g., 'User' in (n:User))
     pub label: Option<String>,
 }
 
+/// RETURN clause item
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReturnItem {
+    /// Variable to return
     pub variable: String,
+    /// Optional property accessor
     pub property: Option<String>,
 }
 
+/// Predicate for WHERE clause
 #[derive(Debug, Clone, PartialEq)]
 pub enum CypherPredicate {
+    /// Property comparison: n.age > 30
     PropertyComparison {
         variable: String,
         property: String,
         operator: ComparisonOp,
         value: Literal,
     },
+    /// AND predicate
     And(Box<CypherPredicate>, Box<CypherPredicate>),
+    /// OR predicate
     Or(Box<CypherPredicate>, Box<CypherPredicate>),
+    /// NOT predicate
     Not(Box<CypherPredicate>),
 }
 
+/// Comparison operators
 #[derive(Debug, Clone, PartialEq)]
 pub enum ComparisonOp {
     Equals,
@@ -54,6 +75,7 @@ pub enum ComparisonOp {
     LessEq,
 }
 
+/// Literal value in Cypher
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     String(String),
@@ -62,12 +84,14 @@ pub enum Literal {
     Boolean(bool),
 }
 
+/// Cypher query parser
 pub struct CypherParser {
     tokens: Vec<CypherToken>,
     position: usize,
 }
 
 impl CypherParser {
+    /// Create a new parser with the given tokens
     pub fn new(tokens: Vec<CypherToken>) -> Self {
         CypherParser {
             tokens,

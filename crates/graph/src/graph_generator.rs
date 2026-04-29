@@ -1,16 +1,21 @@
+//! Graph generator for creating test graph data with controlled topology
+
 use crate::model::{NodeId, PropertyMap};
 use crate::store::{GraphStore, InMemoryGraphStore};
 use std::collections::HashMap;
 
+/// Generator for creating graph data with power-law degree distribution
 pub struct GraphGenerator {
     seed: u64,
 }
 
 impl GraphGenerator {
+    /// Create a new generator with the given seed
     pub fn new(seed: u64) -> Self {
         GraphGenerator { seed }
     }
 
+    /// Generate a graph with the given number of nodes and average edges per node
     pub fn generate(&self, node_count: usize, edges_per_node: usize) -> InMemoryGraphStore {
         let mut store = InMemoryGraphStore::new();
         let mut rng = SimpleRng::new(self.seed);

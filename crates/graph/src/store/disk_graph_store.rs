@@ -15,10 +15,14 @@ const EDGES_FILE: &str = "edges.json";
 const LABELS_FILE: &str = "labels.json";
 const META_FILE: &str = "meta.json";
 
+/// Graph metadata for persistence
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GraphMeta {
+    /// Schema version
     pub version: String,
+    /// Next available node ID
     pub next_node_id: u64,
+    /// Next available edge ID
     pub next_edge_id: u64,
 }
 
@@ -32,6 +36,7 @@ impl Default for GraphMeta {
     }
 }
 
+/// WAL entry types for graph operations
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GraphWalEntry {
     CreateNode {
@@ -58,6 +63,7 @@ pub enum GraphWalEntry {
     },
 }
 
+/// Disk-based graph store with WAL recovery
 pub struct DiskGraphStore {
     inner: InMemoryGraphStore,
     path: PathBuf,
@@ -68,6 +74,7 @@ pub struct DiskGraphStore {
 }
 
 impl DiskGraphStore {
+    /// Create a new disk-based graph store with WAL enabled
     pub fn new(base_path: PathBuf) -> Result<Self, GraphError> {
         fs::create_dir_all(&base_path).map_err(|e| GraphError::StorageError(e.to_string()))?;
 
@@ -86,6 +93,7 @@ impl DiskGraphStore {
         Ok(store)
     }
 
+    /// Create a new disk-based graph store without WAL
     pub fn new_without_wal(base_path: PathBuf) -> Result<Self, GraphError> {
         fs::create_dir_all(&base_path).map_err(|e| GraphError::StorageError(e.to_string()))?;
 

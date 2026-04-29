@@ -1,6 +1,9 @@
+//! Multi-hop graph traversal
+
 use crate::model::NodeId;
 use std::collections::HashSet;
 
+/// Find nodes reachable within N hops from start node
 pub fn multi_hop<G>(graph: G, start: NodeId, depth: usize) -> Vec<NodeId>
 where
     G: Fn(NodeId) -> Vec<NodeId>,

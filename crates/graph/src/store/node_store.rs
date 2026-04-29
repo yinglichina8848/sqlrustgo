@@ -13,6 +13,7 @@ pub struct NodeStore {
 }
 
 impl NodeStore {
+    /// Create a new empty node store
     pub fn new() -> Self {
         NodeStore {
             nodes: DashMap::new(),

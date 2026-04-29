@@ -16,6 +16,7 @@ pub enum PropertyValue {
 }
 
 impl PropertyValue {
+    /// Get string value if variant is String
     pub fn as_string(&self) -> Option<&String> {
         match self {
             PropertyValue::String(s) => Some(s),
@@ -23,6 +24,7 @@ impl PropertyValue {
         }
     }
 
+    /// Get integer value if variant is Int
     pub fn as_int(&self) -> Option<i64> {
         match self {
             PropertyValue::Int(i) => Some(*i),
@@ -30,6 +32,7 @@ impl PropertyValue {
         }
     }
 
+    /// Get float value if variant is Float
     pub fn as_float(&self) -> Option<f64> {
         match self {
             PropertyValue::Float(f) => Some(*f),
@@ -37,6 +40,7 @@ impl PropertyValue {
         }
     }
 
+    /// Get boolean value if variant is Bool
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             PropertyValue::Bool(b) => Some(*b),
@@ -101,18 +105,21 @@ pub struct PropertyMap {
 }
 
 impl PropertyMap {
+    /// Create a new empty property map
     pub fn new() -> Self {
         PropertyMap {
             props: HashMap::new(),
         }
     }
 
+    /// Create a new property map with pre-allocated capacity
     pub fn with_capacity(capacity: usize) -> Self {
         PropertyMap {
             props: HashMap::with_capacity(capacity),
         }
     }
 
+    /// Insert a key-value pair
     pub fn insert<K: Into<String>, V: Into<PropertyValue>>(
         &mut self,
         key: K,
@@ -185,6 +192,7 @@ pub struct PropertyMapBuilder {
 }
 
 impl PropertyMapBuilder {
+    /// Create a new builder
     pub fn new() -> Self {
         PropertyMapBuilder {
             props: PropertyMap::new(),
