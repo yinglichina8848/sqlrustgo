@@ -189,7 +189,7 @@ name = "tpch_data_gen"
 path = "crates/bench/examples/tpch_data_gen.rs"
 
 [dependencies.rusqlite]
-version = "0.32"
+version = "0.39"
 features = ["bundled"]
 
 [dev-dependencies.mysql]
