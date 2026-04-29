@@ -178,6 +178,127 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_simd_vs_scalar(c: &mut Criterion) {
+    use sqlrustgo_vector::simd_explicit::{
+        batch_dot_product_simd, batch_l2_distance_simd, cosine_distance_simd, dot_product_simd,
+        euclidean_distance_simd,
+    };
+
+    let mut group = c.benchmark_group("simd_vs_scalar");
+
+    for dim in [256, 512, 1024, 2048].iter() {
+        let query = vec![0.5f32; *dim];
+        let vectors: Vec<Vec<f32>> = (0..100)
+            .map(|_| (0..*dim).map(|_| rand::random::<f32>()).collect())
+            .collect();
+
+        // Scalar dot product
+        group.bench_with_input(
+            BenchmarkId::new("scalar_dot", dim),
+            dim,
+            |b, _| {
+                b.iter(|| {
+                    for v in &vectors {
+                        let sum: f32 = query.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+                        black_box(sum);
+                    }
+                });
+            },
+        );
+
+        // SIMD dot product
+        group.bench_with_input(BenchmarkId::new("simd_dot", dim), dim, |b, _| {
+            b.iter(|| {
+                for v in &vectors {
+                    let sum = dot_product_simd(&query, v);
+                    black_box(sum);
+                }
+            });
+        });
+
+        // Batch SIMD dot product
+        group.bench_with_input(BenchmarkId::new("simd_batch_dot", dim), dim, |b, _| {
+            b.iter(|| {
+                let _ = batch_dot_product_simd(&query, &vectors);
+            });
+        });
+
+        // Scalar L2 distance
+        group.bench_with_input(
+            BenchmarkId::new("scalar_l2", dim),
+            dim,
+            |b, _| {
+                b.iter(|| {
+                    for v in &vectors {
+                        let dist: f32 = query
+                            .iter()
+                            .zip(v.iter())
+                            .map(|(a, b)| (a - b).powi(2))
+                            .sum::<f32>()
+                            .sqrt();
+                        black_box(dist);
+                    }
+                });
+            },
+        );
+
+        // SIMD L2 distance
+        group.bench_with_input(BenchmarkId::new("simd_l2", dim), dim, |b, _| {
+            b.iter(|| {
+                for v in &vectors {
+                    let dist = euclidean_distance_simd(&query, v);
+                    black_box(dist);
+                }
+            });
+        });
+
+        // Batch SIMD L2 distance
+        group.bench_with_input(BenchmarkId::new("simd_batch_l2", dim), dim, |b, _| {
+            b.iter(|| {
+                let _ = batch_l2_distance_simd(&query, &vectors);
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_hnsw_ivfpq_e2e(c: &mut Criterion) {
+    let mut group = c.benchmark_group("hnsw_ivfpq_e2e");
+
+    for size in [1000, 10000].iter() {
+        let vectors = generate_random_vectors(*size, 128);
+        let query = vec![0.5f32; 128];
+
+        // HNSW search
+        group.bench_with_input(BenchmarkId::new("hnsw", size), size, |b, &size| {
+            let mut index = HnswIndex::new(DistanceMetric::Euclidean);
+            for (id, v) in vectors.iter().take(size) {
+                let _ = index.insert(*id, v);
+            }
+
+            b.iter(|| {
+                let _ = index.search(black_box(&query), black_box(10));
+            });
+        });
+
+        // IVFPQ search
+        group.bench_with_input(BenchmarkId::new("ivfpq", size), size, |b, &size| {
+            let mut index = IvfpqIndex::new(DistanceMetric::Euclidean, 16, 8);
+            for (id, v) in vectors.iter().take(size) {
+                let _ = index.insert(*id, v);
+            }
+            index.build_index().unwrap();
+
+            b.iter(|| {
+                let _ = index.search(black_box(&query), black_box(10));
+            });
+        });
+    }
+
+    group.finish();
+}
+
 fn bench_parallel_knn_search(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_knn_search");
 
@@ -675,6 +796,8 @@ criterion_group!(
     bench_hnsw_insert,
     bench_hnsw_search,
     bench_scalar_vs_vectorized,
+    bench_simd_vs_scalar,
+    bench_hnsw_ivfpq_e2e,
     bench_parallel_knn_search,
     bench_parallel_batch_search,
     bench_write_throughput,
