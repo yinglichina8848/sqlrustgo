@@ -1,15 +1,21 @@
+//! Cypher query executor
+
 use super::parser::{ComparisonOp, CypherPattern, CypherPredicate, CypherQuery, Literal};
 use crate::error::GraphError;
 use crate::model::*;
 use crate::store::InMemoryGraphStore;
 use crate::GraphStore;
 
+/// Result of executing a Cypher query
 #[derive(Debug, Clone)]
 pub struct CypherResult {
+    /// Column names
     pub columns: Vec<String>,
+    /// Result rows
     pub rows: Vec<Vec<PropertyValue>>,
 }
 
+/// Execute a Cypher query against a graph store
 pub fn execute_cypher(query: &str, store: &InMemoryGraphStore) -> Result<CypherResult, GraphError> {
     let mut lexer = super::lexer::CypherLexer::new(query);
     let mut tokens = Vec::new();

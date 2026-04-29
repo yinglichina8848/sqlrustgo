@@ -13,6 +13,7 @@ pub struct AdjacencyIndex {
 }
 
 impl AdjacencyIndex {
+    /// Create a new empty adjacency index
     pub fn new() -> Self {
         AdjacencyIndex {
             index: Arc::new(DashMap::new()),

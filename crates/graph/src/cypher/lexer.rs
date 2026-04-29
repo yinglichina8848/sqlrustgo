@@ -1,5 +1,8 @@
+//! Cypher lexer for tokenizing Cypher queries
+
 use std::fmt;
 
+/// Cypher token types
 #[derive(Debug, Clone, PartialEq)]
 pub enum CypherToken {
     Match,
@@ -63,6 +66,7 @@ impl fmt::Display for CypherToken {
     }
 }
 
+/// Lexer for tokenizing Cypher queries
 pub struct CypherLexer {
     input: Vec<char>,
     position: usize,

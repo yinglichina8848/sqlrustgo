@@ -76,6 +76,7 @@ pub struct MultiShardGraphStore {
 }
 
 impl MultiShardGraphStore {
+    /// Create a new multi-shard graph store
     pub fn new() -> Self {
         MultiShardGraphStore {
             shards: HashMap::new(),
@@ -85,15 +86,19 @@ impl MultiShardGraphStore {
         }
     }
 
+    /// Create a new shard
     pub fn create_shard(&mut self, shard_id: GraphShardId) {
         self.shards.entry(shard_id).or_insert_with(GraphShard::new);
     }
 
+    /// Register a label to shard mapping
+    /// Register a label to shard mapping
     pub fn register_label_sharding(&mut self, label: &str, shard_id: GraphShardId) {
         self.create_shard(shard_id);
         self.partitioner.register_label(label, shard_id);
     }
 
+    /// Set the default shard for unmapped labels
     pub fn set_default_shard(&mut self, shard_id: GraphShardId) {
         self.create_shard(shard_id);
         self.partitioner.set_default_shard(shard_id);

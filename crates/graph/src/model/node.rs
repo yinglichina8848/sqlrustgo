@@ -17,6 +17,7 @@ pub struct Node {
 impl Node {
     pub const LABEL: &'static str = "Node";
 
+    /// Create a new node with the given ID, label, and properties
     pub fn new(id: NodeId, label: LabelId, properties: PropertyMap) -> Self {
         Node {
             id,
@@ -25,6 +26,7 @@ impl Node {
         }
     }
 
+    /// Create a new node with pre-allocated property capacity
     pub fn with_capacity(id: NodeId, label: LabelId, capacity: usize) -> Self {
         Node {
             id,
