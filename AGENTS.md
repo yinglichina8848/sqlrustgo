@@ -126,6 +126,48 @@ gh issue view <id> --json closedByPullRequestsReferences
 
 详见: `docs/governance/ISSUE_CLOSING_VERIFICATION.md`
 
+## Gitea DevStack Remote
+
+本项目使用自托管 Gitea，CI/CD 和代码托管均在此。
+
+### Git Remote (SSH)
+
+```bash
+git remote set-url origin git@gitea-devstack:openclaw/sqlrustgo.git
+```
+
+SSH 别名 `gitea-devstack` 已配置在 `~/.ssh/config`（指向 `192.168.0.252:222`）。
+
+### Git 身份
+
+```bash
+git config user.name "openclaw"
+git config user.email "openclaw@gaoyuanyiyao.com"
+git config commit.gpgsign true   # 用 ~/.ssh/id_ed25519_openheart 签名
+```
+
+### 本机 SSH Key
+
+- 私钥: `~/.ssh/id_ed25519_openheart`
+- 公钥已绑定到 openclaw 用户（key ID: `opencode-agent (openheart key)`）
+- Gitea SSH 端口: **222**（不是 22）
+- 测试: `ssh -T gitea-devstack`
+
+### 测试连通性
+
+```bash
+# SSH 认证测试
+ssh -T gitea-devstack
+
+# Git push 测试
+git push origin develop/v2.8.0
+```
+
+### Gitea Web UI
+
+- URL: http://192.168.0.252:3000/openclaw/sqlrustgo
+- 用户: openclaw / details8848
+
 ## Test Execution Notes
 
 - Integration tests are in `tests/` directory
