@@ -6,24 +6,30 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Invalid transaction ID constant
 pub const INVALID_TX_ID: u64 = 0;
 
+/// Transaction identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TxId(u64);
 
 impl TxId {
+    /// Create a new transaction ID
     pub fn new(id: u64) -> Self {
         Self(id)
     }
 
+    /// Create an invalid transaction ID
     pub fn invalid() -> Self {
         Self(INVALID_TX_ID)
     }
 
+    /// Check if this is a valid transaction ID
     pub fn is_valid(&self) -> bool {
         self.0 != INVALID_TX_ID
     }
 
+    /// Get the raw u64 value
     pub fn as_u64(&self) -> u64 {
         self.0
     }
@@ -41,22 +47,32 @@ impl std::fmt::Display for TxId {
     }
 }
 
+/// Status of a transaction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransactionStatus {
+    /// Transaction is currently executing
     Active,
+    /// Transaction has been committed
     Committed,
+    /// Transaction was aborted
     Aborted,
 }
 
+/// Transaction record with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
+    /// Transaction ID
     pub id: TxId,
+    /// Current status
     pub status: TransactionStatus,
+    /// Start timestamp (when transaction began)
     pub start_timestamp: u64,
+    /// Commit timestamp (None if not committed)
     pub commit_timestamp: Option<u64>,
 }
 
 impl Transaction {
+    /// Create a new transaction
     pub fn new(id: TxId, start_timestamp: u64) -> Self {
         Self {
             id,
@@ -66,15 +82,18 @@ impl Transaction {
         }
     }
 
+    /// Mark transaction as committed
     pub fn commit(&mut self, commit_timestamp: u64) {
         self.status = TransactionStatus::Committed;
         self.commit_timestamp = Some(commit_timestamp);
     }
 
+    /// Mark transaction as aborted
     pub fn abort(&mut self) {
         self.status = TransactionStatus::Aborted;
     }
 
+    /// Check if transaction is still active
     pub fn is_active(&self) -> bool {
         self.status == TransactionStatus::Active
     }

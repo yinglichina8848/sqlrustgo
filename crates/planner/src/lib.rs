@@ -25,57 +25,96 @@ pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 use sqlrustgo_types::Value;
 use std::fmt;
 
+/// Type of join operation in query execution
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinType {
+    /// Inner join - returns matching rows from both tables
     Inner,
+    /// Left outer join - returns all rows from left table
     Left,
+    /// Right outer join - returns all rows from right table
     Right,
+    /// Full outer join - returns all rows from both tables
     Full,
+    /// Cross join - Cartesian product of both tables
     Cross,
+    /// Left semi join - returns rows from left that have match in right
     LeftSemi,
+    /// Left anti join - returns rows from left that have no match in right
     LeftAnti,
+    /// Right semi join - returns rows from right that have match in left
     RightSemi,
+    /// Right anti join - returns rows from right that have no match in left
     RightAnti,
 }
 
+/// Aggregate function types
 #[derive(Debug, Clone, PartialEq)]
 pub enum AggregateFunction {
+    /// COUNT - counts number of rows
     Count,
+    /// SUM - sum of values
     Sum,
+    /// AVG - average of values
     Avg,
+    /// MIN - minimum value
     Min,
+    /// MAX - maximum value
     Max,
 }
 
+/// Binary and unary operators in expressions
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
+    /// Equal (=)
     Eq,
+    /// Not equal (!=)
     NotEq,
+    /// Less than (<)
     Lt,
+    /// Less than or equal (<=)
     LtEq,
+    /// Greater than (>)
     Gt,
+    /// Greater than or equal (>=)
     GtEq,
+    /// Addition (+)
     Plus,
+    /// Subtraction (-)
     Minus,
+    /// Multiplication (*)
     Multiply,
+    /// Division (/)
     Divide,
+    /// Modulo (%)
     Modulo,
+    /// Logical AND
     And,
+    /// Logical OR
     Or,
+    /// Logical NOT
     Not,
+    /// LIKE pattern matching
     Like,
 }
 
+/// Sort expression with direction and null ordering
 #[derive(Debug, Clone, PartialEq)]
 pub struct SortExpr {
+    /// Expression to sort by
     pub expr: Expr,
+    /// Sort in ascending order if true, descending if false
     pub asc: bool,
+    /// Place nulls first if true, last if false
     pub nulls_first: bool,
 }
 
+/// Column reference in query
 #[derive(Debug, Clone, PartialEq)]
 pub struct Column {
+    /// Table alias or name (None for unqualified columns)
     pub relation: Option<String>,
+    /// Column name
     pub name: String,
 }
 
@@ -104,32 +143,76 @@ impl fmt::Display for Column {
     }
 }
 
+/// Expression in query (column reference, literal, computation, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
+    /// Column reference
     Column(Column),
+    /// Literal value
     Literal(Value),
+    /// Binary expression (left op right)
     BinaryExpr {
         left: Box<Expr>,
         op: Operator,
         right: Box<Expr>,
     },
+    /// Unary expression (op expr)
     UnaryExpr {
         op: Operator,
         expr: Box<Expr>,
     },
+    /// Aggregate function call
     AggregateFunction {
         func: AggregateFunction,
         args: Vec<Expr>,
         distinct: bool,
     },
+    /// Alias expression (expr AS name)
     Alias {
         expr: Box<Expr>,
         name: String,
     },
+    /// Wildcard (*) select
     Wildcard,
+    /// Qualified wildcard (table.*)
     QualifiedWildcard {
         qualifier: String,
     },
+}
+
+/// Schema containing field definitions
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Schema {
+    /// Fields in this schema
+    pub fields: Vec<Field>,
+}
+
+/// Field definition in a schema
+#[derive(Debug, Clone, PartialEq)]
+pub struct Field {
+    /// Field name
+    pub name: String,
+    /// Data type
+    pub data_type: DataType,
+    /// Whether field can be null
+    pub nullable: bool,
+}
+
+/// Planner data types (logical types)
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataType {
+    /// Boolean type
+    Boolean,
+    /// Integer type
+    Integer,
+    /// Floating point type
+    Float,
+    /// Text/string type
+    Text,
+    /// Binary data type
+    Blob,
+    /// Null type
+    Null,
 }
 
 impl Expr {
@@ -204,11 +287,6 @@ impl fmt::Display for Operator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Schema {
-    pub fields: Vec<Field>,
-}
-
 impl Schema {
     pub fn new(fields: Vec<Field>) -> Self {
         Self { fields }
@@ -227,13 +305,6 @@ impl Schema {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Field {
-    pub name: String,
-    pub data_type: DataType,
-    pub nullable: bool,
-}
-
 impl Field {
     pub fn new(name: String, data_type: DataType) -> Self {
         Self {
@@ -250,16 +321,6 @@ impl Field {
             nullable: false,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum DataType {
-    Boolean,
-    Integer,
-    Float,
-    Text,
-    Blob,
-    Null,
 }
 
 impl DataType {
