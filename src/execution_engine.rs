@@ -933,9 +933,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
-        if let Err(e) = self.check_column_privileges_for_insert(&table_name, &insert.columns) {
-            return Err(e);
-        }
+        self.check_column_privileges_for_insert(&table_name, &insert.columns)?;
 
         // Get table info first (need it for triggers and FK validation)
         let table_info = {
@@ -1067,9 +1065,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .iter()
             .map(|(col, _)| col.clone())
             .collect();
-        if let Err(e) = self.check_column_privileges_for_update(&table_name, &update_columns) {
-            return Err(e);
-        }
+        self.check_column_privileges_for_update(&table_name, &update_columns)?;
 
         // If no WHERE clause, use the simple storage.update() path
         if update.where_clause.is_none() {
