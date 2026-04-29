@@ -4,6 +4,7 @@
 //! This enables 16x compression for 128-dimensional vectors with m_pq=16.
 
 use crate::error::{VectorError, VectorResult};
+use crate::simd_explicit::euclidean_distance_simd as euclidean;
 
 /// Product Quantization encoder
 ///
@@ -226,16 +227,6 @@ impl ProductQuantizer {
 
         total.sqrt()
     }
-}
-
-/// Compute Euclidean distance between two vectors
-#[inline]
-fn euclidean(a: &[f32], b: &[f32]) -> f32 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (x - y).powi(2))
-        .sum::<f32>()
-        .sqrt()
 }
 
 #[cfg(test)]
