@@ -107,14 +107,19 @@ impl Transaction {
     }
 }
 
+/// MVCC snapshot for transaction visibility
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Transaction ID that owns this snapshot
     pub tx_id: TxId,
+    /// Snapshot timestamp (all reads see data before this time)
     pub snapshot_timestamp: u64,
+    /// Active transactions at snapshot time
     pub active_transactions: Vec<TxId>,
 }
 
 impl Snapshot {
+    /// Create a new snapshot
     pub fn new(tx_id: TxId, snapshot_timestamp: u64, active: Vec<TxId>) -> Self {
         Self {
             tx_id,
@@ -123,6 +128,7 @@ impl Snapshot {
         }
     }
 
+    /// Create a read-committed snapshot (no active transaction tracking)
     pub fn new_read_committed(tx_id: TxId, snapshot_timestamp: u64) -> Self {
         Self {
             tx_id,
@@ -131,6 +137,7 @@ impl Snapshot {
         }
     }
 
+    /// Check if a transaction is visible in this snapshot (snapshot isolation)
     pub fn is_visible(&self, tx_id: TxId, commit_timestamp: Option<u64>) -> bool {
         if tx_id == self.tx_id {
             return true;
@@ -148,6 +155,7 @@ impl Snapshot {
         }
     }
 
+    /// Check if a transaction is visible (read committed)
     pub fn is_visible_read_committed(
         &self,
         tx_id: TxId,
@@ -164,15 +172,19 @@ impl Snapshot {
         }
     }
 
+    /// Refresh snapshot for read-committed isolation
     pub fn refresh_for_read_committed(&mut self, current_timestamp: u64) {
         self.snapshot_timestamp = current_timestamp;
         self.active_transactions.clear();
     }
 }
 
+/// Version chain for MVCC row versioning
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionChain {
+    /// Row key
     pub row_key: Vec<u8>,
+    /// Version history (newest first)
     pub versions: Vec<RowVersion>,
 }
 
