@@ -174,3 +174,11 @@ git push origin develop/v2.8.0
 - E2E tests in `tests/e2e/`
 - Crate-specific tests in each crate's `tests/` or `src/`
 - Use `--test <test_name>` to run specific test files
+
+## Gitea Identity (Z6G4/250)
+
+本机使用独立的 Gitea 账户：
+- 用户: hermes-z6g4
+- SSH 密钥: ~/.ssh/id_ed25519_z6g4
+- SSH 别名: gitea-z6g4 (port 222)
+- Git email: hermes-z6g4@gaoyuanyiyao.com
