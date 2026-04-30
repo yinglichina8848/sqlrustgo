@@ -10,15 +10,18 @@
 
 本报告对 SQLRustGo 的测试覆盖率进行了全面的白盒分析，涵盖 Parser、Planner、Optimizer 和 Storage 四个核心模块。
 
-### 当前测试状态
+### 当前测试状态 (2026-04-30 更新)
 
 | Crate | 测试数 | 行覆盖率(估) | 状态 |
 |-------|--------|--------------|------|
-| sqlrustgo-parser | 67 passed | ~55% | 需增强 |
-| sqlrustgo-planner | 81 passed | ~45% | 有 bug |
-| sqlrustgo-optimizer | 233 passed | ~60% | 占位符 |
-| sqlrustgo-storage | 159 passed | ~70% | 基本良好 |
-| **总计** | **540 passed** | **~55%** | **中等** |
+| sqlrustgo-parser | ~90 passed | ~65% | 需增强 |
+| sqlrustgo-planner | ~85 passed | ~50% | 有 bug |
+| sqlrustgo-optimizer | ~233 passed | ~60% | 占位符 |
+| sqlrustgo-storage | ~160 passed | ~70% | 基本良好 |
+| sqlrustgo-executor | ~120 passed | ~60% | 良好 |
+| **总计** | **~688 passed** | **~60%** | **中等** |
+
+> 注: 2026-04-30 更新: ORDER BY/LIMIT/OFFSET 已实现 (commit 43dae2b71, 76185c7f3)，TriBool 三值逻辑已修复 (commit f42a848ca)
 
 ### 目标
 - 短期目标: 70% 覆盖率
@@ -194,16 +197,16 @@ Phase 3 (完善 4-8 周):
 
 ## 六、具体任务清单
 
-| # | 任务 | 优先级 | 预计时间 | 状态 |
-|---|------|--------|----------|------|
-| 1 | 修复 UNION bug (右孩子被忽略) | P0 | 30min | 待开始 |
-| 2 | 添加 ORDER BY parser 测试 | P0 | 1h | 待开始 |
-| 3 | 添加 LIMIT/OFFSET parser 测试 | P0 | 1h | 待开始 |
-| 4 | 添加 FileStorage 错误路径测试 | P1 | 1h | 待开始 |
-| 5 | 添加 UNION 端到端测试 | P1 | 1h | 待开始 |
-| 6 | 实现 ORDER BY parser | P0 | 2h | 待开始 |
-| 7 | 实现 LIMIT/OFFSET parser | P0 | 2h | 待开始 |
-| 8 | 完善优化器占位规则 | P2 | 4h | 待开始 |
+| # | 任务 | 优先级 | 预计时间 | 状态 | 更新日期 |
+|---|------|--------|----------|------|----------|
+| 1 | 修复 UNION bug (右孩子被忽略) | P0 | 30min | 待开始 | 2026-04-30 |
+| 2 | 添加 ORDER BY parser 测试 | P0 | 1h | ✅ 已实现 | 2026-04-30 |
+| 3 | 添加 LIMIT/OFFSET parser 测试 | P0 | 1h | ✅ 已实现 | 2026-04-30 |
+| 4 | 添加 FileStorage 错误路径测试 | P1 | 1h | 待开始 | 2026-04-30 |
+| 5 | 添加 UNION 端到端测试 | P1 | 1h | 待开始 | 2026-04-30 |
+| 6 | 实现 ORDER BY parser | P0 | 2h | ✅ 已实现 | 2026-04-30 |
+| 7 | 实现 LIMIT/OFFSET parser | P0 | 2h | ✅ 已实现 | 2026-04-30 |
+| 8 | 完善优化器占位规则 | P2 | 4h | 待开始 | 2026-04-30 |
 
 ---
 

@@ -228,6 +228,7 @@ mysql -h 127.0.0.1 -P 3306 -u root -p
 
 ## Related Documentation
 
+- [Rust API 使用示例](./API_USAGE_EXAMPLES.md)
 - [Error Messages Reference](./ERROR_MESSAGES.md)
 - [Security Hardening Guide](./SECURITY_HARDENING.md)
 - [Client Connection Guide](./CLIENT_CONNECTION.md)
