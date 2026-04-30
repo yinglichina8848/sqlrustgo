@@ -437,6 +437,15 @@ impl ObjectRef {
 }
 
 #[derive(Debug, Clone)]
+pub struct GrantInfo {
+    pub user: UserIdentity,
+    pub privilege: Privilege,
+    pub object: ObjectRef,
+    pub columns: Option<Vec<String>>,
+    pub grant_option: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthError {
     pub code: AuthErrorCode,
     pub message: String,
@@ -874,6 +883,28 @@ impl AuthManager {
             .get(identity)
             .map(|grants| grants.iter().collect())
             .unwrap_or_default()
+    }
+
+    pub fn get_all_grants_for_user(&self, user: &UserIdentity) -> Vec<GrantInfo> {
+        let mut grants = Vec::new();
+        if let Some(user_grants) = self.privileges.get(user) {
+            for grant in user_grants {
+                let object = ObjectRef {
+                    object_type: grant.object_type,
+                    object_name: grant.object_name.clone(),
+                    column_name: grant.column_name.clone(),
+                };
+                let columns = grant.column_name.as_ref().map(|c| vec![c.clone()]);
+                grants.push(GrantInfo {
+                    user: user.clone(),
+                    privilege: grant.privilege,
+                    object,
+                    columns,
+                    grant_option: grant.with_grant_option,
+                });
+            }
+        }
+        grants
     }
 
     pub fn has_grant_option(

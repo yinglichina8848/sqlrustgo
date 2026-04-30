@@ -939,11 +939,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         };
 
         let auth = auth_manager.read().unwrap();
-        let authorized = auth.check_table_privilege(
-            current_user,
-            &ObjectRef::table(table),
-            Privilege::Delete,
-        )?;
+        let authorized =
+            auth.check_table_privilege(current_user, &ObjectRef::table(table), Privilege::Delete)?;
 
         if !authorized {
             return Err(SqlError::ExecutionError(format!(
@@ -1584,6 +1581,56 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })?;
         self.current_tx_id = None;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_show_grants(&self, user: Option<&str>) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_catalog::auth::GrantInfo;
+
+        let target_user = if let Some(u) = user {
+            UserIdentity::new(u, "%")
+        } else {
+            self.current_user
+                .clone()
+                .ok_or_else(|| SqlError::ExecutionError("No current user set".to_string()))?
+        };
+
+        let auth = self
+            .auth_manager
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("Auth manager not configured".to_string()))?;
+        let auth_guard = auth.read().unwrap();
+        let grants = auth_guard.get_all_grants_for_user(&target_user);
+
+        let row_count = grants.len();
+        let rows: Vec<Vec<Value>> = grants
+            .iter()
+            .map(|g: &GrantInfo| {
+                let mut sql = String::new();
+                sql.push_str(&format!("GRANT {} ON ", g.privilege));
+                match g.object.object_type {
+                    sqlrustgo_catalog::auth::ObjectType::Database => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                    sqlrustgo_catalog::auth::ObjectType::Table => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                    sqlrustgo_catalog::auth::ObjectType::Column => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                }
+                if let Some(ref cols) = g.columns {
+                    sql.push_str(&format!(" ({})", cols.join(", ")));
+                }
+                sql.push_str(&format!(" TO '{}'@'{}'", g.user.username, g.user.host));
+                if g.grant_option {
+                    sql.push_str(" WITH GRANT OPTION");
+                }
+                Value::Text(sql)
+            })
+            .map(|v| vec![v])
+            .collect();
+
+        Ok(ExecutorResult::new(rows, row_count))
     }
 }
 
