@@ -321,6 +321,9 @@ pub enum ShowStatement {
     Index {
         table: String,
     },
+    Grants {
+        user: Option<String>,
+    },
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -2180,6 +2183,20 @@ impl Parser {
                     _ => return Err("Expected table name".to_string()),
                 };
                 Ok(Statement::Show(ShowStatement::Index { table }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "GRANTS" => {
+                self.next();
+                let user = if matches!(self.current(), Some(Token::ForEach)) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::StringLiteral(u)) => Some(u),
+                        Some(Token::Identifier(u)) => Some(u),
+                        _ => return Err("Expected user string".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::Grants { user }))
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),

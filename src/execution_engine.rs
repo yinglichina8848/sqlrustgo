@@ -4,7 +4,7 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
-use sqlrustgo_catalog::auth::{AuthManager, Privilege, UserIdentity};
+use sqlrustgo_catalog::auth::{AuthManager, ObjectRef, Privilege, UserIdentity};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{Catalog, StoredProcedure};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
@@ -15,7 +15,7 @@ use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
+    InsertStatement, SelectStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
     TruncateStatement,
 };
@@ -426,6 +426,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
+            Statement::Show(ShowStatement::Grants { ref user }) => {
+                self.execute_show_grants(user.as_deref())
+            }
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
@@ -930,6 +933,28 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(())
     }
 
+    fn check_table_privilege_for_delete(&self, table: &str) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        let auth = auth_manager.read().unwrap();
+        let authorized =
+            auth.check_table_privilege(current_user, &ObjectRef::table(table), Privilege::Delete)?;
+
+        if !authorized {
+            return Err(SqlError::ExecutionError(format!(
+                "DELETE command denied to user '{}'@'{}'",
+                current_user.username, current_user.host
+            )));
+        }
+
+        Ok(())
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
@@ -1208,6 +1233,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     fn execute_delete(&self, delete: &DeleteStatement) -> SqlResult<ExecutorResult> {
         let table_name = delete.table.clone();
+
+        self.check_table_privilege_for_delete(&table_name)?;
 
         // If no WHERE clause, delete all rows (current behavior is correct)
         if delete.where_clause.is_none() {
@@ -1557,6 +1584,56 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })?;
         self.current_tx_id = None;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_show_grants(&self, user: Option<&str>) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_catalog::auth::GrantInfo;
+
+        let target_user = if let Some(u) = user {
+            UserIdentity::new(u, "%")
+        } else {
+            self.current_user
+                .clone()
+                .ok_or_else(|| SqlError::ExecutionError("No current user set".to_string()))?
+        };
+
+        let auth = self
+            .auth_manager
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("Auth manager not configured".to_string()))?;
+        let auth_guard = auth.read().unwrap();
+        let grants = auth_guard.get_all_grants_for_user(&target_user);
+
+        let row_count = grants.len();
+        let rows: Vec<Vec<Value>> = grants
+            .iter()
+            .map(|g: &GrantInfo| {
+                let mut sql = String::new();
+                sql.push_str(&format!("GRANT {} ON ", g.privilege));
+                match g.object.object_type {
+                    sqlrustgo_catalog::auth::ObjectType::Database => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                    sqlrustgo_catalog::auth::ObjectType::Table => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                    sqlrustgo_catalog::auth::ObjectType::Column => {
+                        sql.push_str(&g.object.object_name);
+                    }
+                }
+                if let Some(ref cols) = g.columns {
+                    sql.push_str(&format!(" ({})", cols.join(", ")));
+                }
+                sql.push_str(&format!(" TO '{}'@'{}'", g.user.username, g.user.host));
+                if g.grant_option {
+                    sql.push_str(" WITH GRANT OPTION");
+                }
+                Value::Text(sql)
+            })
+            .map(|v| vec![v])
+            .collect();
+
+        Ok(ExecutorResult::new(rows, row_count))
     }
 }
 
@@ -2564,5 +2641,42 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Column 'email' not accessible"));
+    }
+
+    #[test]
+    fn test_delete_privilege_denied() {
+        use sqlrustgo_catalog::auth::{AuthManager, ObjectType, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage.clone());
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice')")
+            .unwrap();
+
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_privilege(
+                &identity,
+                Privilege::Read,
+                ObjectType::Table,
+                "users",
+                &identity,
+                false,
+            )
+            .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        let result = engine.execute("DELETE FROM users WHERE id = 1");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("DELETE command denied"));
     }
 }

@@ -7,6 +7,7 @@
 //! - Permission checking
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sqlrustgo_types::SqlResult;
 use std::collections::HashMap;
 
 /// User identity (username@host)
@@ -238,6 +239,7 @@ pub enum ObjectType {
 }
 
 impl ObjectType {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "DATABASE" | "SCHEMA" => Some(ObjectType::Database),
@@ -328,7 +330,7 @@ pub struct PrivilegeGrant {
     pub column_name: Option<String>,
     pub granted_by: u64,
     pub granted_at: u64,
-    pub with_grant_option: bool,
+    pub grant_option: bool,
 }
 
 impl PrivilegeGrant {
@@ -351,7 +353,7 @@ impl PrivilegeGrant {
             column_name: None,
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         }
     }
 
@@ -436,6 +438,15 @@ impl ObjectRef {
 }
 
 #[derive(Debug, Clone)]
+pub struct GrantInfo {
+    pub user: UserIdentity,
+    pub privilege: Privilege,
+    pub object: ObjectRef,
+    pub columns: Option<Vec<String>>,
+    pub grant_option: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthError {
     pub code: AuthErrorCode,
     pub message: String,
@@ -476,7 +487,7 @@ pub struct AuthManager {
 
 impl AuthManager {
     pub fn new() -> Self {
-        Self {
+        let mut auth = Self {
             users: HashMap::new(),
             roles: HashMap::new(),
             roles_by_name: HashMap::new(),
@@ -485,7 +496,13 @@ impl AuthManager {
             next_user_id: 1,
             next_role_id: 1,
             next_grant_id: 1,
-        }
+        };
+
+        auth.roles
+            .insert(0, Role::new(0, "PUBLIC".to_string(), None));
+        auth.roles_by_name.insert("PUBLIC".to_string(), 0);
+
+        auth
     }
 
     pub fn create_user(&mut self, identity: &UserIdentity, password_hash: &str) -> AuthResult<()> {
@@ -669,8 +686,34 @@ impl AuthManager {
         privilege: Privilege,
         object_type: ObjectType,
         object_name: &str,
-        granted_by: u64,
+        grantor: &UserIdentity,
+        grant_option: bool,
     ) -> AuthResult<u64> {
+        let object = ObjectRef {
+            object_type,
+            object_name: object_name.to_string(),
+            column_name: None,
+        };
+
+        if grant_option {
+            let has_option = self.has_grant_option(grantor, privilege, &object);
+            match has_option {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Err(AuthError {
+                        code: AuthErrorCode::PermissionDenied,
+                        message: "Access denied: you need GRANT OPTION".to_string(),
+                    });
+                }
+                Err(e) => {
+                    return Err(AuthError {
+                        code: AuthErrorCode::PermissionDenied,
+                        message: e.to_string(),
+                    });
+                }
+            }
+        }
+
         let id = self.next_grant_id;
         self.next_grant_id += 1;
 
@@ -682,9 +725,9 @@ impl AuthManager {
             object_type,
             object_name: object_name.to_string(),
             column_name: None,
-            granted_by,
+            granted_by: 0,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option,
         };
 
         self.privileges
@@ -693,6 +736,25 @@ impl AuthManager {
             .push(grant);
 
         Ok(id)
+    }
+
+    pub fn has_grant_option(
+        &self,
+        user: &UserIdentity,
+        privilege: Privilege,
+        object: &ObjectRef,
+    ) -> SqlResult<bool> {
+        let grants = self.get_user_privileges(user);
+        for grant in grants {
+            if grant.privilege == privilege
+                && grant.object_type == object.object_type
+                && grant.object_name == object.object_name
+                && grant.grant_option
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn grant_column_privilege(
@@ -716,7 +778,7 @@ impl AuthManager {
             column_name: Some(column_name.to_string()),
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         };
 
         self.privileges
@@ -748,7 +810,7 @@ impl AuthManager {
             column_name: None,
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         };
 
         let public_identity = UserIdentity::new("%", "%");
@@ -783,22 +845,11 @@ impl AuthManager {
         object: &ObjectRef,
         required_privilege: Privilege,
     ) -> AuthResult<()> {
-        let normalized_identity = identity.normalize();
+        let grants = self.effective_permissions(identity);
 
-        if let Some(grants) = self.privileges.get(&normalized_identity) {
-            for grant in grants {
-                if grant.matches(required_privilege, object) {
-                    return Ok(());
-                }
-            }
-        }
-
-        let wildcard_identity = UserIdentity::new(&normalized_identity.username, "%");
-        if let Some(grants) = self.privileges.get(&wildcard_identity) {
-            for grant in grants {
-                if grant.matches(required_privilege, object) {
-                    return Ok(());
-                }
+        for grant in grants {
+            if grant.matches(required_privilege, object) {
+                return Ok(());
             }
         }
 
@@ -842,6 +893,31 @@ impl AuthManager {
         false
     }
 
+    pub fn effective_permissions(&self, identity: &UserIdentity) -> Vec<PrivilegeGrant> {
+        let mut grants = Vec::new();
+        let normalized_identity = identity.normalize();
+
+        if let Some(direct_grants) = self.privileges.get(&normalized_identity) {
+            grants.extend(direct_grants.clone());
+        }
+
+        let wildcard_identity = UserIdentity::new(&normalized_identity.username, "%");
+        if let Some(wildcard_grants) = self.privileges.get(&wildcard_identity) {
+            grants.extend(wildcard_grants.clone());
+        }
+
+        let public_identity = UserIdentity::new("%", "%");
+        if let Some(public_grants) = self.privileges.get(&public_identity) {
+            for grant in public_grants {
+                if grant.grantee_type == GranteeType::Role && grant.grantee_id == 0 {
+                    grants.push(grant.clone());
+                }
+            }
+        }
+
+        grants
+    }
+
     #[allow(dead_code)]
     fn matches_object(
         &self,
@@ -875,23 +951,26 @@ impl AuthManager {
             .unwrap_or_default()
     }
 
-    pub fn has_grant_option(
-        &self,
-        identity: &UserIdentity,
-        privilege: Privilege,
-        object_type: ObjectType,
-        object_name: &str,
-    ) -> bool {
-        if let Some(grants) = self.privileges.get(identity) {
-            return grants.iter().any(|g| {
-                g.grantee_type == GranteeType::User
-                    && g.privilege == privilege
-                    && g.object_type == object_type
-                    && g.object_name == object_name
-                    && g.with_grant_option
-            });
+    pub fn get_all_grants_for_user(&self, user: &UserIdentity) -> Vec<GrantInfo> {
+        let mut grants = Vec::new();
+        if let Some(user_grants) = self.privileges.get(user) {
+            for grant in user_grants {
+                let object = ObjectRef {
+                    object_type: grant.object_type,
+                    object_name: grant.object_name.clone(),
+                    column_name: grant.column_name.clone(),
+                };
+                let columns = grant.column_name.as_ref().map(|c| vec![c.clone()]);
+                grants.push(GrantInfo {
+                    user: user.clone(),
+                    privilege: grant.privilege,
+                    object,
+                    columns,
+                    grant_option: grant.grant_option,
+                });
+            }
         }
-        false
+        grants
     }
 
     pub fn list_users(&self) -> Vec<&UserAuthInfo> {
@@ -953,6 +1032,21 @@ impl AuthManager {
         }
 
         columns
+    }
+
+    pub fn check_table_privilege(
+        &self,
+        user: &UserIdentity,
+        object: &ObjectRef,
+        privilege: Privilege,
+    ) -> SqlResult<bool> {
+        let grants = self.get_user_privileges(user);
+        for grant in grants {
+            if grant.matches(privilege, object) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {
@@ -1157,8 +1251,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         assert!(auth
             .check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read)
@@ -1176,8 +1277,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::All,
+            ObjectType::Database,
+            "*",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         assert!(auth
             .check_privilege(&identity, &ObjectRef::database("anything"), Privilege::Read)
@@ -1335,8 +1443,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let result = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
         assert!(result.is_ok());
@@ -1369,8 +1484,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let result = auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "users");
         assert!(result.is_ok());
@@ -1431,11 +1553,18 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
-        let result = auth.has_grant_option(&identity, Privilege::Read, ObjectType::Table, "users");
-        assert!(!result);
+        let result = auth.has_grant_option(&identity, Privilege::Read, &ObjectRef::table("users"));
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1451,7 +1580,9 @@ mod tests {
         assert_eq!(users.len(), 1);
 
         let roles = auth.list_roles();
-        assert_eq!(roles.len(), 1);
+        assert_eq!(roles.len(), 2);
+        assert!(roles.iter().any(|r| r.name == "PUBLIC"));
+        assert!(roles.iter().any(|r| r.name == "admin"));
     }
 
     #[test]
@@ -1462,8 +1593,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let grants = auth.list_grants();
         assert_eq!(grants.len(), 1);
@@ -1649,8 +1787,15 @@ mod tests {
         let mut auth = AuthManager::new();
         let identity = UserIdentity::new("alice", "localhost");
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let privs: Vec<_> = auth.all_privileges().collect();
         assert_eq!(privs.len(), 1);
@@ -1661,10 +1806,24 @@ mod tests {
         let mut auth = AuthManager::new();
         let identity = UserIdentity::new("alice", "localhost");
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
-            .unwrap();
-        auth.grant_privilege(&identity, Privilege::Insert, ObjectType::Table, "t1", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Insert,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let privs = auth.get_user_privileges(&identity);
         assert_eq!(privs.len(), 2);
@@ -1721,5 +1880,73 @@ mod tests {
         let authorized = auth.get_authorized_columns(&identity, "users", Privilege::Read);
         assert_eq!(authorized.len(), 1);
         assert!(authorized.contains(&"email".to_string()));
+    }
+
+    #[test]
+    fn test_delete_without_privilege() {
+        let mut auth = AuthManager::new();
+        let alice = UserIdentity::new("alice", "localhost");
+        auth.create_user(&alice, "hash").unwrap();
+
+        let result =
+            auth.check_table_privilege(&alice, &ObjectRef::table("users"), Privilege::Delete);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_show_grants() {
+        let mut auth = AuthManager::new();
+        let alice = UserIdentity::new("alice", "localhost");
+        auth.create_user(&alice, "hash").unwrap();
+
+        auth.grant_privilege(
+            &alice,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &alice,
+            false,
+        )
+        .unwrap();
+
+        let grants = auth.get_all_grants_for_user(&alice);
+        assert!(grants.iter().any(|g| g.privilege == Privilege::Read));
+    }
+
+    #[test]
+    fn test_grant_option() {
+        let mut auth = AuthManager::new();
+        let alice = UserIdentity::new("alice", "localhost");
+        let bob = UserIdentity::new("bob", "localhost");
+        auth.create_user(&alice, "hash").unwrap();
+        auth.create_user(&bob, "hash").unwrap();
+
+        auth.grant_privilege(
+            &bob,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &alice,
+            false,
+        )
+        .unwrap();
+
+        let has_go = auth.has_grant_option(&bob, Privilege::Read, &ObjectRef::table("users"));
+        assert!(has_go.is_ok());
+        assert!(!has_go.unwrap());
+    }
+
+    #[test]
+    fn test_public_role() {
+        let mut auth = AuthManager::new();
+        let alice = UserIdentity::new("alice", "localhost");
+        auth.create_user(&alice, "hash").unwrap();
+
+        auth.grant_role_privilege(0, Privilege::Read, ObjectType::Table, "users", 0)
+            .unwrap();
+
+        let result = auth.check_privilege(&alice, &ObjectRef::table("users"), Privilege::Read);
+        assert!(result.is_ok());
     }
 }

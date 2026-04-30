@@ -55,8 +55,8 @@ fn bool_to_yn(value: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthManager, UserIdentity};
     use crate::auth::ObjectType;
+    use crate::{AuthManager, UserIdentity};
 
     #[test]
     fn test_schema() {
@@ -82,14 +82,22 @@ mod tests {
         let identity = UserIdentity::new("alice", "localhost");
 
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Database, "mydb", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Database,
+            "mydb",
+            &identity,
+            false,
+        )
+        .unwrap();
         auth.grant_privilege(
             &identity,
             Privilege::Insert,
             ObjectType::Database,
             "mydb",
-            0,
+            &identity,
+            false,
         )
         .unwrap();
 
