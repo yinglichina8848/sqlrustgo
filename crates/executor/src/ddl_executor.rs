@@ -43,14 +43,16 @@ impl<'a> DdlExecutor<'a> {
         grantee: &UserIdentity,
         privilege: Privilege,
         object: &ObjectRef,
-        grantor_id: u64,
+        grantor: &UserIdentity,
+        grant_option: bool,
     ) -> AuthResult<()> {
         self.auth_manager.grant_privilege(
             grantee,
             privilege,
             object.object_type,
             &object.object_name,
-            grantor_id,
+            grantor,
+            grant_option,
         )?;
         Ok(())
     }
@@ -158,7 +160,7 @@ mod tests {
             .unwrap();
 
         let object = ObjectRef::table("users");
-        let result = executor.execute_grant(&grantee, Privilege::Read, &object, 0);
+        let result = executor.execute_grant(&grantee, Privilege::Read, &object, &grantee, false);
 
         assert!(result.is_ok());
         assert!(auth_manager
@@ -178,7 +180,7 @@ mod tests {
                 .execute_create_user(&[grantee.clone()], "password123")
                 .unwrap();
             executor
-                .execute_grant(&grantee, Privilege::Read, &object, 0)
+                .execute_grant(&grantee, Privilege::Read, &object, &grantee, false)
                 .unwrap();
         }
 
@@ -209,7 +211,7 @@ mod tests {
             .unwrap();
 
         let object = ObjectRef::database("mydb");
-        let result = executor.execute_grant(&grantee, Privilege::All, &object, 0);
+        let result = executor.execute_grant(&grantee, Privilege::All, &object, &grantee, false);
 
         assert!(result.is_ok());
         assert!(auth_manager

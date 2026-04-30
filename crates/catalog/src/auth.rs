@@ -679,9 +679,34 @@ impl AuthManager {
         privilege: Privilege,
         object_type: ObjectType,
         object_name: &str,
-        granted_by: u64,
+        grantor: &UserIdentity,
         grant_option: bool,
     ) -> AuthResult<u64> {
+        let object = ObjectRef {
+            object_type,
+            object_name: object_name.to_string(),
+            column_name: None,
+        };
+
+        if grant_option {
+            let has_option = self.has_grant_option(grantor, privilege, &object);
+            match has_option {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Err(AuthError {
+                        code: AuthErrorCode::PermissionDenied,
+                        message: "Access denied: you need GRANT OPTION".to_string(),
+                    });
+                }
+                Err(e) => {
+                    return Err(AuthError {
+                        code: AuthErrorCode::PermissionDenied,
+                        message: e.to_string(),
+                    });
+                }
+            }
+        }
+
         let id = self.next_grant_id;
         self.next_grant_id += 1;
 
@@ -693,7 +718,7 @@ impl AuthManager {
             object_type,
             object_name: object_name.to_string(),
             column_name: None,
-            granted_by,
+            granted_by: 0,
             granted_at: current_timestamp(),
             grant_option,
         };
@@ -1205,8 +1230,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         assert!(auth
             .check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read)
@@ -1224,8 +1256,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::All,
+            ObjectType::Database,
+            "*",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         assert!(auth
             .check_privilege(&identity, &ObjectRef::database("anything"), Privilege::Read)
@@ -1383,8 +1422,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let result = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
         assert!(result.is_ok());
@@ -1417,8 +1463,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let result = auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "users");
         assert!(result.is_ok());
@@ -1479,8 +1532,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let result = auth.has_grant_option(&identity, Privilege::Read, &ObjectRef::table("users"));
         assert!(!result.unwrap());
@@ -1510,8 +1570,15 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "users",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let grants = auth.list_grants();
         assert_eq!(grants.len(), 1);
@@ -1697,8 +1764,15 @@ mod tests {
         let mut auth = AuthManager::new();
         let identity = UserIdentity::new("alice", "localhost");
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let privs: Vec<_> = auth.all_privileges().collect();
         assert_eq!(privs.len(), 1);
@@ -1709,10 +1783,24 @@ mod tests {
         let mut auth = AuthManager::new();
         let identity = UserIdentity::new("alice", "localhost");
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
-            .unwrap();
-        auth.grant_privilege(&identity, Privilege::Insert, ObjectType::Table, "t1", 0, false)
-            .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Read,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
+        auth.grant_privilege(
+            &identity,
+            Privilege::Insert,
+            ObjectType::Table,
+            "t1",
+            &identity,
+            false,
+        )
+        .unwrap();
 
         let privs = auth.get_user_privileges(&identity);
         assert_eq!(privs.len(), 2);
