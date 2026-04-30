@@ -868,8 +868,72 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
+    fn check_column_privileges_for_insert(&self, table: &str, columns: &[String]) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.get_authorized_columns(current_user, table, Privilege::Insert);
+
+        for col in columns {
+            let is_authorized = authorized
+                .iter()
+                .any(|auth_col| auth_col.eq_ignore_ascii_case(col) || auth_col == "*");
+
+            if !is_authorized {
+                return Err(SqlError::ExecutionError(format!(
+                    "Column '{}' not accessible",
+                    col
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn check_column_privileges_for_update(&self, table: &str, columns: &[String]) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.get_authorized_columns(current_user, table, Privilege::Update);
+
+        for col in columns {
+            let is_authorized = authorized
+                .iter()
+                .any(|auth_col| auth_col.eq_ignore_ascii_case(col) || auth_col == "*");
+
+            if !is_authorized {
+                return Err(SqlError::ExecutionError(format!(
+                    "Column '{}' not accessible",
+                    col
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
+
+        self.check_column_privileges_for_insert(&table_name, &insert.columns)?;
 
         // Get table info first (need it for triggers and FK validation)
         let table_info = {
@@ -995,6 +1059,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
         let table_name = update.table.clone();
+
+        let update_columns: Vec<String> = update
+            .set_clauses
+            .iter()
+            .map(|(col, _)| col.clone())
+            .collect();
+        self.check_column_privileges_for_update(&table_name, &update_columns)?;
 
         // If no WHERE clause, use the simple storage.update() path
         if update.where_clause.is_none() {
@@ -2430,5 +2501,68 @@ mod tests {
         let result = engine.execute("SELECT * FROM users").unwrap();
         // Row should have 2 columns
         assert_eq!(result.rows.len(), 0); // No data
+    }
+
+    #[test]
+    fn test_insert_column_privilege_denied() {
+        use sqlrustgo_catalog::auth::{AuthManager, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage.clone());
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
+            .unwrap();
+
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Insert, "users", "id", 0)
+                .unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Insert, "users", "name", 1)
+                .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        let result = engine.execute(
+            "INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')",
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Column 'email' not accessible"));
+    }
+
+    #[test]
+    fn test_update_column_privilege_denied() {
+        use sqlrustgo_catalog::auth::{AuthManager, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage.clone());
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Bob', 'bob@example.com')")
+            .unwrap();
+
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Update, "users", "id", 0)
+                .unwrap();
+            auth.grant_column_privilege(&identity, Privilege::Update, "users", "name", 1)
+                .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        let result = engine.execute("UPDATE users SET email = 'new@example.com' WHERE id = 1");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Column 'email' not accessible"));
     }
 }

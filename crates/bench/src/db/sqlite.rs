@@ -59,7 +59,7 @@ impl Database for SqliteDB {
 
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.query_row("SELECT * FROM accounts WHERE id = ?1", [key], |_row| Ok(()))?;
+        conn.query_row("SELECT * FROM accounts WHERE id = ?1", [key as i64], |_row| Ok(()))?;
         Ok(())
     }
 
@@ -67,21 +67,21 @@ impl Database for SqliteDB {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "UPDATE accounts SET balance = balance + 1 WHERE id = ?1",
-            [key],
+            [key as i64],
         )?;
         Ok(())
     }
 
     async fn insert(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("INSERT OR IGNORE INTO accounts VALUES (?1, 100)", [key])?;
+        conn.execute("INSERT OR IGNORE INTO accounts VALUES (?1, 100)", [key as i64])?;
         Ok(())
     }
 
     async fn scan(&self, start: usize, end: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT * FROM accounts WHERE id BETWEEN ?1 AND ?2")?;
-        let mut rows = stmt.query([start, end])?;
+        let mut rows = stmt.query([start as i64, end as i64])?;
         while rows.next()?.is_some() {
             // Consume all rows
         }
