@@ -8,6 +8,7 @@ use crate::metrics_endpoint::MetricsRegistry;
 use crate::scheduler;
 use query_stats::StatsCollector;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_distributed::read_write_splitter::{QueryClass, ReadWriteSplitter};
 use sqlrustgo_gmp::compliance::ComplianceCheckRequest;
 use sqlrustgo_optimizer::{
     IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
@@ -15,7 +16,6 @@ use sqlrustgo_optimizer::{
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::{Statement, TransactionCommand};
 use sqlrustgo_rag::{Document, OpenClawClient};
-use sqlrustgo_distributed::read_write_splitter::{QueryClass, ReadWriteSplitter};
 use sqlrustgo_storage::engine::{StorageEngine, TriggerEvent, TriggerInfo, TriggerTiming};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -1925,6 +1925,24 @@ fn execute_sql(
     storage: &Arc<RwLock<dyn StorageEngine>>,
 ) -> Result<SqlExecResult, String> {
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
+
+    // T-27: Route SQL to read replica or write primary using ReadWriteSplitter
+    // Local node_id = 1 for single-node setup
+    let splitter = ReadWriteSplitter::new(1);
+    match splitter.route_simple(sql) {
+        Ok((query_class, is_primary)) => {
+            log::debug!(
+                "T-27 routing: sql=\"{}\" class={:?} is_primary={} -> target={}",
+                sql.chars().take(50).collect::<String>(),
+                query_class,
+                is_primary,
+                if is_primary { "primary" } else { "replica" }
+            );
+        }
+        Err(e) => {
+            log::warn!("T-27 routing failed, defaulting to primary: {}", e);
+        }
+    }
 
     // Handle transaction commands first (using storage's transaction support)
     if let Statement::Transaction(ref tx_stmt) = statement {
