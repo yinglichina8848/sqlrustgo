@@ -59,7 +59,11 @@ impl Database for SqliteDB {
 
     async fn read(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.query_row("SELECT * FROM accounts WHERE id = ?1", [key as i64], |_row| Ok(()))?;
+        conn.query_row(
+            "SELECT * FROM accounts WHERE id = ?1",
+            [key as i64],
+            |_row| Ok(()),
+        )?;
         Ok(())
     }
 
@@ -74,7 +78,10 @@ impl Database for SqliteDB {
 
     async fn insert(&self, key: usize) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("INSERT OR IGNORE INTO accounts VALUES (?1, 100)", [key as i64])?;
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts VALUES (?1, 100)",
+            [key as i64],
+        )?;
         Ok(())
     }
 

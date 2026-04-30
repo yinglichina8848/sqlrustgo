@@ -200,7 +200,12 @@ impl ReadWriteRouter {
     fn select_least_connections<'a>(&self, replicas: &'a [&ReplicaNode]) -> &'a ReplicaNode {
         replicas
             .iter()
-            .min_by_key(|r| self.replica_connection_counts.get(&r.addr).map(|c| c.load(Ordering::SeqCst)).unwrap_or(0))
+            .min_by_key(|r| {
+                self.replica_connection_counts
+                    .get(&r.addr)
+                    .map(|c| c.load(Ordering::SeqCst))
+                    .unwrap_or(0)
+            })
             .unwrap_or(&replicas[0])
     }
 
@@ -294,7 +299,8 @@ impl ReadWriteRouter {
             || sql_trimmed.starts_with("START")
             || sql_trimmed.starts_with("COMMIT")
             || sql_trimmed.starts_with("ROLLBACK")
-            || sql_trimmed.starts_with("SAVEPOINT") {
+            || sql_trimmed.starts_with("SAVEPOINT")
+        {
             return QueryType::Transaction;
         }
 
@@ -309,7 +315,8 @@ impl ReadWriteRouter {
             || sql_trimmed.starts_with("REVOKE")
             || sql_trimmed.starts_with("REPLACE")
             || sql_trimmed.starts_with("LOAD")
-            || sql_trimmed.starts_with("RENAME") {
+            || sql_trimmed.starts_with("RENAME")
+        {
             return QueryType::Write;
         }
 
@@ -317,7 +324,8 @@ impl ReadWriteRouter {
             || sql_trimmed.starts_with("SHOW")
             || sql_trimmed.starts_with("DESCRIBE")
             || sql_trimmed.starts_with("EXPLAIN")
-            || sql_trimmed.starts_with("CALL") {
+            || sql_trimmed.starts_with("CALL")
+        {
             return QueryType::Read;
         }
 

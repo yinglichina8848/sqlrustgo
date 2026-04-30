@@ -21,14 +21,14 @@ pub mod index;
 pub mod rebuild;
 pub mod schema;
 pub mod stored_proc;
-pub mod table;
 pub mod system_tables;
+pub mod table;
 
+pub use auth::{AuthManager, Privilege, User, UserIdentity};
 pub use catalog::Catalog;
 pub use column::ColumnDefinition;
 pub use data_type::DataType;
 pub use error::{CatalogError, CatalogResult};
-pub use auth::{AuthManager, Privilege, User, UserIdentity};
 pub use stored_proc::{
     HandlerCondition, ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure,
 };

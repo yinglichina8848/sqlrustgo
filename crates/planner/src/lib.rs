@@ -157,10 +157,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary expression (op expr)
-    UnaryExpr {
-        op: Operator,
-        expr: Box<Expr>,
-    },
+    UnaryExpr { op: Operator, expr: Box<Expr> },
     /// Aggregate function call
     AggregateFunction {
         func: AggregateFunction,
@@ -168,16 +165,11 @@ pub enum Expr {
         distinct: bool,
     },
     /// Alias expression (expr AS name)
-    Alias {
-        expr: Box<Expr>,
-        name: String,
-    },
+    Alias { expr: Box<Expr>, name: String },
     /// Wildcard (*) select
     Wildcard,
     /// Qualified wildcard (table.*)
-    QualifiedWildcard {
-        qualifier: String,
-    },
+    QualifiedWildcard { qualifier: String },
 }
 
 /// Schema containing field definitions
