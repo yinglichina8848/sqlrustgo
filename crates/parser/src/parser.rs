@@ -3515,6 +3515,72 @@ fn test_debug_having() {
 }
 
 #[test]
+fn test_parse_is_null_expression() {
+    let result = parse("SELECT * FROM t WHERE col IS NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_is_not_null_expression() {
+    let result = parse("SELECT * FROM t WHERE col IS NOT NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.where_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_null_literal_is_null() {
+    let result = parse("SELECT * FROM t WHERE NULL IS NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_null_literal_is_not_null() {
+    let result = parse("SELECT * FROM t WHERE NULL IS NOT NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_and_with_null_in_where() {
+    let result = parse("SELECT * FROM t WHERE col1 IS NULL AND col2 IS NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_or_with_null_in_where() {
+    let result = parse("SELECT * FROM t WHERE col1 IS NULL OR col2 IS NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_is_not_null_in_where() {
+    let result = parse("SELECT * FROM t WHERE col IS NOT NULL AND other_col IS NOT NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_complex_three_valued_expression() {
+    let result = parse("SELECT * FROM t WHERE col1 IS NULL AND col2 IS NOT NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_is_null_in_join_condition() {
+    let result = parse("SELECT * FROM t1 JOIN t2 ON t1.id IS NULL");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+}
+
+#[test]
 fn test_debug_fk() {
     let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)";
     match parse(sql) {
