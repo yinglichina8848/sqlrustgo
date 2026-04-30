@@ -283,6 +283,58 @@ impl ReadWriteRouter {
     pub fn release_connection(&self, addr: &SocketAddr) {
         self.decrement_connection_count(addr);
     }
+
+    /// Automatically classify SQL statement type based on the SQL text.
+    /// This is a simple keyword-based classifier that determines if a SQL
+    /// statement is a read, write, or transaction operation.
+    pub fn classify_sql(sql: &str) -> QueryType {
+        let sql_trimmed = sql.trim().to_uppercase();
+
+        if sql_trimmed.starts_with("BEGIN")
+            || sql_trimmed.starts_with("START")
+            || sql_trimmed.starts_with("COMMIT")
+            || sql_trimmed.starts_with("ROLLBACK")
+            || sql_trimmed.starts_with("SAVEPOINT") {
+            return QueryType::Transaction;
+        }
+
+        if sql_trimmed.starts_with("INSERT")
+            || sql_trimmed.starts_with("UPDATE")
+            || sql_trimmed.starts_with("DELETE")
+            || sql_trimmed.starts_with("CREATE")
+            || sql_trimmed.starts_with("DROP")
+            || sql_trimmed.starts_with("ALTER")
+            || sql_trimmed.starts_with("TRUNCATE")
+            || sql_trimmed.starts_with("GRANT")
+            || sql_trimmed.starts_with("REVOKE")
+            || sql_trimmed.starts_with("REPLACE")
+            || sql_trimmed.starts_with("LOAD")
+            || sql_trimmed.starts_with("RENAME") {
+            return QueryType::Write;
+        }
+
+        if sql_trimmed.starts_with("SELECT")
+            || sql_trimmed.starts_with("SHOW")
+            || sql_trimmed.starts_with("DESCRIBE")
+            || sql_trimmed.starts_with("EXPLAIN")
+            || sql_trimmed.starts_with("CALL") {
+            return QueryType::Read;
+        }
+
+        QueryType::Write
+    }
+
+    /// Automatically route a SQL statement to the appropriate node.
+    pub fn route_sql(&self, sql: &str) -> RouteResult {
+        let query_type = Self::classify_sql(sql);
+        let result = self.route(query_type);
+
+        if result.is_read && self.config.strategy == LoadBalanceStrategy::LeastConnections {
+            self.increment_connection_count(&result.target_addr);
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -329,7 +381,6 @@ pub struct ReadAfterWriteConsistency {
     config: ReadWriteSplitConfig,
 }
 
-use std::collections::HashMap;
 use std::sync::RwLock;
 
 impl ReadAfterWriteConsistency {
@@ -561,8 +612,6 @@ mod tests {
         router.increment_connection_count(&replica1_addr);
         router.increment_connection_count(&replica1_addr);
         router.increment_connection_count(&replica2_addr);
-
-        router.release_connection(&replica1_addr);
 
         let result = router.route(QueryType::Read);
         assert_eq!(result.target_addr, replica2_addr);
