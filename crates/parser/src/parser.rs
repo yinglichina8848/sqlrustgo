@@ -3581,6 +3581,62 @@ fn test_parse_is_null_in_join_condition() {
 }
 
 #[test]
+fn test_parse_cross_join() {
+    let result = parse("SELECT * FROM t1 CROSS JOIN t2");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "t1");
+            assert!(s.join_clause.is_some());
+            let join = s.join_clause.unwrap();
+            assert_eq!(join.table, "t2");
+            assert_eq!(join.join_type, JoinType::Cross);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_join_on_multiple_conditions() {
+    let result = parse("SELECT * FROM t1 JOIN t2 ON t1.id = t2.id AND t1.type = t2.type");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert!(s.join_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_join_with_table_alias() {
+    let result = parse("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "users");
+            assert!(s.join_clause.is_some());
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_join_without_on_clause_implicit_inner() {
+    let result = parse("SELECT * FROM t1 JOIN t2");
+    assert!(result.is_ok(), "Parse failed: {:?}", result);
+    match result.unwrap() {
+        Statement::Select(s) => {
+            assert_eq!(s.table, "t1");
+            assert!(s.join_clause.is_some());
+            let join = s.join_clause.unwrap();
+            assert_eq!(join.join_type, JoinType::Inner);
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
 fn test_debug_fk() {
     let sql = "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)";
     match parse(sql) {
