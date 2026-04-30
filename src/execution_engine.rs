@@ -15,7 +15,7 @@ use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
+    InsertStatement, SelectStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
     TruncateStatement,
 };
@@ -426,6 +426,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
+            Statement::Show(ShowStatement::Grants { ref user }) => {
+                self.execute_show_grants(user.as_deref())
+            }
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
