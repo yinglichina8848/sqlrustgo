@@ -2054,6 +2054,636 @@ mod tests {
         assert_eq!(vars.get("name"), Some(&Value::Text("test".to_string())));
     }
 
+    // =====================================================================
+    // White-box tests for stored_proc.rs - Coverage: Statement Execution Paths
+    // =====================================================================
+
+    // --- ProcedureContext: Label operations (enter_label, exit_label, has_label) ---
+
+    #[test]
+    fn test_procedure_context_nested_labels() {
+        let mut ctx = ProcedureContext::new();
+        // Enter two nested labels
+        ctx.enter_label("outer".to_string());
+        ctx.enter_label("inner".to_string());
+        assert!(ctx.has_label("outer"));
+        assert!(ctx.has_label("inner"));
+        // exit_label pops the top (inner)
+        ctx.exit_label();
+        assert!(ctx.has_label("outer"));
+        assert!(!ctx.has_label("inner"));
+        // exit_label pops outer
+        ctx.exit_label();
+        assert!(!ctx.has_label("outer"));
+    }
+
+    #[test]
+    fn test_procedure_context_get_label() {
+        let mut ctx = ProcedureContext::new();
+        assert!(ctx.get_label().is_none());
+        ctx.enter_label("test_label".to_string());
+        assert_eq!(ctx.get_label(), Some(&"test_label".to_string()));
+    }
+
+    #[test]
+    fn test_procedure_context_set_label() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_label(Some("my_label".to_string()));
+        assert_eq!(ctx.get_label(), Some(&"my_label".to_string()));
+        ctx.set_label(None);
+        assert!(ctx.get_label().is_none());
+    }
+
+    // --- ProcedureContext: Scope operations (enter_scope, exit_scope) ---
+
+    #[test]
+    fn test_procedure_context_nested_scopes() {
+        let mut ctx = ProcedureContext::new();
+        // Set x = 1 in outer scope
+        ctx.set_local_var("x", Value::Integer(1));
+        assert_eq!(ctx.get_local_var("x"), Some(&Value::Integer(1)));
+        // Enter inner scope
+        ctx.enter_scope();
+        // Inner scope has its own variables, x should still be accessible via saved scope
+        ctx.set_local_var("y", Value::Text("hello".to_string()));
+        assert_eq!(ctx.get_local_var("y"), Some(&Value::Text("hello".to_string())));
+        // Exit inner scope
+        ctx.exit_scope();
+        // y should be gone, x should still be 1
+        assert!(ctx.get_local_var("y").is_none());
+        assert_eq!(ctx.get_local_var("x"), Some(&Value::Integer(1)));
+    }
+
+    #[test]
+    fn test_procedure_context_scope_shadowing() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_local_var("z", Value::Integer(100));
+        ctx.enter_scope();
+        ctx.set_local_var("z", Value::Integer(200));
+        assert_eq!(ctx.get_local_var("z"), Some(&Value::Integer(200)));
+        ctx.exit_scope();
+        // Should restore outer z
+        assert_eq!(ctx.get_local_var("z"), Some(&Value::Integer(100)));
+    }
+
+    // --- ProcedureContext: Variable operations (local vars, session vars, get_var, has_var) ---
+
+    #[test]
+    fn test_procedure_context_local_vs_session_var() {
+        let mut ctx = ProcedureContext::new();
+        // Local var (no @ prefix)
+        ctx.set_local_var("local_x", Value::Integer(10));
+        assert_eq!(ctx.get_local_var("local_x"), Some(&Value::Integer(10)));
+        // Session var (with @ prefix)
+        ctx.set_session_var("session_y", Value::Text("test".to_string()));
+        assert_eq!(ctx.get_session_var("session_y"), Some(&Value::Text("test".to_string())));
+        // get_var checks local first, then session
+        assert_eq!(ctx.get_var("local_x"), Some(&Value::Integer(10)));
+        assert_eq!(ctx.get_var("session_y"), Some(&Value::Text("test".to_string())));
+    }
+
+    #[test]
+    fn test_procedure_context_get_var_strips_prefix() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("@uid", Value::Integer(999));
+        // get_var should strip @ prefix
+        assert_eq!(ctx.get_var("@uid"), Some(&Value::Integer(999)));
+        assert_eq!(ctx.get_var("uid"), Some(&Value::Integer(999)));
+    }
+
+    #[test]
+    fn test_procedure_context_has_var() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("x", Value::Integer(1));
+        ctx.set_var("@y", Value::Text("a".to_string()));
+        assert!(ctx.has_var("x"));
+        assert!(ctx.has_var("@x")); // strip prefix
+        assert!(ctx.has_var("@y"));
+        assert!(ctx.has_var("y"));
+        assert!(!ctx.has_var("nonexistent"));
+    }
+
+    #[test]
+    fn test_procedure_context_clear_local_vars() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("x", Value::Integer(1));
+        ctx.set_var("@y", Value::Integer(2));
+        ctx.clear_local_vars();
+        // Local x should be gone
+        assert!(!ctx.has_var("x"));
+        // Session y should still exist
+        assert!(ctx.has_var("y"));
+    }
+
+    #[test]
+    fn test_procedure_context_return_value() {
+        let mut ctx = ProcedureContext::new();
+        // get_return on new context
+        assert!(ctx.get_return().is_none());
+        // set_return should store value
+        ctx.set_return(Value::Integer(42));
+        assert_eq!(ctx.get_return(), Some(Value::Integer(42)));
+    }
+
+    // --- StoredProcExecutor: evaluate_constant ---
+
+    #[test]
+    fn test_evaluate_constant_string_literal() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let result = executor.evaluate_constant("'hello world'");
+        assert_eq!(result, Value::Text("hello world".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_constant_integer() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.evaluate_constant("42"), Value::Integer(42));
+        assert_eq!(executor.evaluate_constant("-10"), Value::Integer(-10));
+    }
+
+    #[test]
+    fn test_evaluate_constant_float() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.evaluate_constant("3.14"), Value::Float(3.14));
+        assert_eq!(executor.evaluate_constant("-2.5"), Value::Float(-2.5));
+    }
+
+    #[test]
+    fn test_evaluate_constant_null() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.evaluate_constant("NULL"), Value::Null);
+        assert_eq!(executor.evaluate_constant("null"), Value::Null);
+    }
+
+    #[test]
+    fn test_evaluate_constant_boolean() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.evaluate_constant("TRUE"), Value::Boolean(true));
+        assert_eq!(executor.evaluate_constant("FALSE"), Value::Boolean(false));
+        assert_eq!(executor.evaluate_constant("true"), Value::Boolean(true));
+        assert_eq!(executor.evaluate_constant("false"), Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_evaluate_constant_identifier() {
+        // Unquoted identifiers become Text
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.evaluate_constant("some_identifier"), Value::Text("some_identifier".to_string()));
+    }
+
+    // --- StoredProcExecutor: expand_variables_in_sql ---
+
+    #[test]
+    fn test_expand_variables_in_sql_no_vars() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let ctx = ProcedureContext::new();
+        let sql = "SELECT * FROM users WHERE id = 1";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), sql);
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_integer_var() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("user_id", Value::Integer(42));
+        let sql = "SELECT * FROM users WHERE id = @user_id";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE id = 42");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_text_var() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("name", Value::Text("Alice".to_string()));
+        let sql = "SELECT * FROM users WHERE name = '@name'";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE name = 'Alice'");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_undefined_var() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let ctx = ProcedureContext::new();
+        let sql = "SELECT * FROM users WHERE id = @undefined_var";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE id = NULL");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_multiple_vars() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("a", Value::Integer(1));
+        ctx.set_var("b", Value::Integer(2));
+        let sql = "WHERE x = @a AND y = @b";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "WHERE x = 1 AND y = 2");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_alphanumeric_var() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("user123", Value::Integer(100));
+        let sql = "SELECT * FROM users WHERE user_id = @user123";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE user_id = 100");
+    }
+
+    // --- StoredProcExecutor: compare_values ---
+
+    #[test]
+    fn test_compare_values_equality() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let int42 = Value::Integer(42);
+        let int42b = Value::Integer(42);
+        let int100 = Value::Integer(100);
+        assert!(executor.compare_values(&int42, &int42b, "="));
+        assert!(executor.compare_values(&int42, &int42b, "=="));
+        assert!(!executor.compare_values(&int42, &int100, "="));
+    }
+
+    #[test]
+    fn test_compare_values_inequality() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Integer(10);
+        let b = Value::Integer(20);
+        assert!(executor.compare_values(&a, &b, "!="));
+        assert!(executor.compare_values(&a, &b, "<>"));
+        assert!(!executor.compare_values(&a, &b, "="));
+    }
+
+    #[test]
+    fn test_compare_values_greater_than() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let big = Value::Integer(100);
+        let small = Value::Integer(50);
+        assert!(executor.compare_values(&big, &small, ">"));
+        assert!(!executor.compare_values(&small, &big, ">"));
+    }
+
+    #[test]
+    fn test_compare_values_greater_than_or_equal() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Integer(10);
+        let b = Value::Integer(10);
+        let c = Value::Integer(5);
+        assert!(executor.compare_values(&a, &b, ">="));
+        assert!(executor.compare_values(&a, &c, ">="));
+        assert!(!executor.compare_values(&c, &a, ">="));
+    }
+
+    #[test]
+    fn test_compare_values_less_than() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let small = Value::Integer(5);
+        let big = Value::Integer(100);
+        assert!(executor.compare_values(&small, &big, "<"));
+        assert!(!executor.compare_values(&big, &small, "<"));
+    }
+
+    #[test]
+    fn test_compare_values_less_than_or_equal() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Integer(10);
+        let b = Value::Integer(10);
+        let c = Value::Integer(15);
+        assert!(executor.compare_values(&a, &b, "<="));
+        assert!(executor.compare_values(&a, &c, "<="));
+        assert!(!executor.compare_values(&c, &a, "<="));
+    }
+
+    #[test]
+    fn test_compare_values_text() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let alice = Value::Text("Alice".to_string());
+        let bob = Value::Text("Bob".to_string());
+        assert!(executor.compare_values(&alice, &bob, "<")); // A < B
+        assert!(executor.compare_values(&alice, &alice, "="));
+    }
+
+    #[test]
+    fn test_compare_values_boolean() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let t = Value::Boolean(true);
+        let f = Value::Boolean(false);
+        assert!(executor.compare_values(&t, &t, "="));
+        assert!(executor.compare_values(&t, &f, "!="));
+    }
+
+    #[test]
+    fn test_compare_values_null() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let null = Value::Null;
+        let val = Value::Integer(1);
+        // NULL comparisons return false
+        assert!(!executor.compare_values(&null, &val, "="));
+        assert!(!executor.compare_values(&val, &null, "="));
+    }
+
+    // --- StoredProcExecutor: partial_cmp ---
+
+    #[test]
+    fn test_partial_cmp_integer() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Integer(5);
+        let b = Value::Integer(10);
+        assert_eq!(executor.partial_cmp(&a, &b), Some(std::cmp::Ordering::Less));
+        assert_eq!(executor.partial_cmp(&b, &a), Some(std::cmp::Ordering::Greater));
+        assert_eq!(executor.partial_cmp(&a, &a), Some(std::cmp::Ordering::Equal));
+    }
+
+    #[test]
+    fn test_partial_cmp_float() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Float(1.5);
+        let b = Value::Float(2.5);
+        assert_eq!(executor.partial_cmp(&a, &b), Some(std::cmp::Ordering::Less));
+    }
+
+    #[test]
+    fn test_partial_cmp_text() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let a = Value::Text("abc".to_string());
+        let b = Value::Text("def".to_string());
+        assert_eq!(executor.partial_cmp(&a, &b), Some(std::cmp::Ordering::Less));
+    }
+
+    #[test]
+    fn test_partial_cmp_boolean() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let t = Value::Boolean(true);
+        let f = Value::Boolean(false);
+        assert_eq!(executor.partial_cmp(&f, &t), Some(std::cmp::Ordering::Less));
+    }
+
+    #[test]
+    fn test_partial_cmp_null_left() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.partial_cmp(&Value::Null, &Value::Integer(1)), None);
+        assert_eq!(executor.partial_cmp(&Value::Integer(1), &Value::Null), None);
+    }
+
+    #[test]
+    fn test_partial_cmp_mixed_types() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        // Integer vs Float
+        assert_eq!(executor.partial_cmp(&Value::Integer(1), &Value::Float(1.0)), None);
+    }
+
+    // --- StoredProcExecutor: arithmetic_op ---
+
+    #[test]
+    fn test_arithmetic_op_integer_add() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.arithmetic_op(&Value::Integer(1), &Value::Integer(2), "+"), Ok(Value::Integer(3)));
+    }
+
+    #[test]
+    fn test_arithmetic_op_integer_subtract() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.arithmetic_op(&Value::Integer(10), &Value::Integer(3), "-"), Ok(Value::Integer(7)));
+    }
+
+    #[test]
+    fn test_arithmetic_op_integer_multiply() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.arithmetic_op(&Value::Integer(6), &Value::Integer(7), "*"), Ok(Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_arithmetic_op_integer_divide() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.arithmetic_op(&Value::Integer(20), &Value::Integer(4), "/"), Ok(Value::Integer(5)));
+    }
+
+    #[test]
+    fn test_arithmetic_op_integer_divide_by_zero() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert!(executor.arithmetic_op(&Value::Integer(1), &Value::Integer(0), "/").is_err());
+    }
+
+    #[test]
+    fn test_arithmetic_op_float_operations() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert_eq!(executor.arithmetic_op(&Value::Float(1.5), &Value::Float(2.5), "+"), Ok(Value::Float(4.0)));
+        assert_eq!(executor.arithmetic_op(&Value::Float(5.0), &Value::Float(2.0), "-"), Ok(Value::Float(3.0)));
+        assert_eq!(executor.arithmetic_op(&Value::Float(3.0), &Value::Float(2.0), "*"), Ok(Value::Float(6.0)));
+        assert_eq!(executor.arithmetic_op(&Value::Float(6.0), &Value::Float(2.0), "/"), Ok(Value::Float(3.0)));
+    }
+
+    #[test]
+    fn test_arithmetic_op_float_divide_by_zero() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert!(executor.arithmetic_op(&Value::Float(1.0), &Value::Float(0.0), "/").is_err());
+    }
+
+    #[test]
+    fn test_arithmetic_op_unsupported() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        // Text + Integer is not supported
+        assert!(executor.arithmetic_op(&Value::Text("a".to_string()), &Value::Integer(1), "+").is_err());
+    }
+
+    // --- HandlerCondition matching ---
+
+    #[test]
+    fn test_find_matching_handler_sql_exception_45xxx() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlException,
+            vec![StoredProcStatement::Return { value: "1".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "45000".to_string(), message: "test".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_sql_exception_22000() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlException,
+            vec![StoredProcStatement::Return { value: "1".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "22000".to_string(), message: "data error".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_sql_exception_not_matched() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlException,
+            vec![StoredProcStatement::Return { value: "1".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "01000".to_string(), message: "warning".to_string() };
+        // 01xxx is SQLWARNING, not SQLEXCEPTION
+        assert!(ctx.find_matching_handler(&exc).is_none());
+    }
+
+    #[test]
+    fn test_find_matching_handler_sql_warning() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlWarning,
+            vec![StoredProcStatement::Return { value: "2".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "01000".to_string(), message: "warning".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_not_found() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::NotFound,
+            vec![StoredProcStatement::Return { value: "3".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "02000".to_string(), message: "no rows".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_sqlstate_specific() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlState("23000".to_string()),
+            vec![StoredProcStatement::Return { value: "4".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "23000".to_string(), message: "constraint".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_custom_by_message() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::Custom("deadlock".to_string()),
+            vec![StoredProcStatement::Return { value: "5".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "40001".to_string(), message: "deadlock detected".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_multiple_handlers() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(HandlerCondition::SqlWarning, vec![]);
+        ctx.push_handler(HandlerCondition::SqlException, vec![]);
+        ctx.push_handler(HandlerCondition::NotFound, vec![]);
+        // Should find the first matching one (top of stack)
+        let exc = StoredProcError { sqlstate: "45000".to_string(), message: "error".to_string() };
+        let handler = ctx.find_matching_handler(&exc);
+        assert!(handler.is_some());
+    }
+
+    #[test]
+    fn test_find_matching_handler_no_match() {
+        let mut ctx = ProcedureContext::new();
+        ctx.push_handler(
+            HandlerCondition::SqlState("99999".to_string()),
+            vec![StoredProcStatement::Return { value: "1".to_string() }],
+        );
+        let exc = StoredProcError { sqlstate: "00000".to_string(), message: "unknown".to_string() };
+        assert!(ctx.find_matching_handler(&exc).is_none());
+    }
+
+    // --- Cursor: edge cases ---
+
+    #[test]
+    fn test_cursor_fetch_into_more_vars_than_columns() {
+        let mut ctx = ProcedureContext::new();
+        ctx.declare_cursor("cur".to_string(), "SELECT a, b FROM t".to_string());
+        ctx.set_cursor_records(
+            "cur",
+            vec![vec![Value::Integer(1), Value::Text("x".to_string())]],
+        );
+        ctx.open_cursor("cur").unwrap();
+        // Fetch with 3 vars but only 2 columns
+        let result = ctx.fetch_cursor("cur", &["v1".to_string(), "v2".to_string(), "v3".to_string()]);
+        assert!(result.is_ok());
+        assert!(result.unwrap()); // has rows
+        // Third var should be set to Null
+        assert_eq!(ctx.get_var("v3"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn test_cursor_close_nonexistent() {
+        let mut ctx = ProcedureContext::new();
+        let result = ctx.close_cursor("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cursor_fetch_when_not_open() {
+        let mut ctx = ProcedureContext::new();
+        ctx.declare_cursor("cur".to_string(), "SELECT 1".to_string());
+        // Don't open cursor
+        let result = ctx.fetch_cursor("cur", &["v1".to_string()]);
+        assert!(result.is_err());
+    }
+
+    // --- Exception handling flow ---
+
+    #[test]
+    fn test_exception_handling_flow_full() {
+        let mut ctx = ProcedureContext::new();
+        assert!(!ctx.is_handling_exception());
+        ctx.set_exception_handling(true);
+        assert!(ctx.is_handling_exception());
+        ctx.set_exception("45000".to_string(), "test error".to_string());
+        let exc = ctx.get_exception();
+        assert!(exc.is_some());
+        assert_eq!(exc.unwrap().sqlstate, "45000");
+        ctx.clear_exception();
+        assert!(ctx.get_exception().is_none());
+        ctx.set_exception_handling(false);
+        assert!(!ctx.is_handling_exception());
+    }
+
+    #[test]
+    fn test_exception_handling_update_existing() {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_exception("11111".to_string(), "first".to_string());
+        ctx.set_exception("22222".to_string(), "second".to_string());
+        let exc = ctx.get_exception().unwrap();
+        assert_eq!(exc.sqlstate, "22222");
+        assert_eq!(exc.message, "second");
+    }
+
+    // --- StoredProcError ---
+
     #[test]
     fn test_stored_proc_error_display() {
         let err = StoredProcError {
@@ -2063,5 +2693,57 @@ mod tests {
         let display = format!("{}", err);
         assert!(display.contains("45000"));
         assert!(display.contains("test error"));
+    }
+
+    // --- StoredProcExecutor: procedure existence checks ---
+
+    #[test]
+    fn test_has_procedure_false() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        assert!(!executor.has_procedure("nonexistent"));
+    }
+
+    // --- expand_variables_in_sql: edge cases ---
+
+    #[test]
+    fn test_expand_variables_in_sql_var_with_underscore() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("user_name", Value::Text("Bob".to_string()));
+        let sql = "SELECT * FROM users WHERE name = '@user_name'";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE name = 'Bob'");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_at_end() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("id", Value::Integer(5));
+        let sql = "SELECT @id";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT 5");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_consecutive_vars() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("a", Value::Integer(1));
+        ctx.set_var("b", Value::Integer(2));
+        let sql = "@a@b";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "12");
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_only_var() {
+        let catalog = Arc::new(Catalog::new("test"));
+        let executor = StoredProcExecutor::new_for_test(catalog);
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("x", Value::Null);
+        let sql = "@x";
+        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "NULL");
     }
 }
