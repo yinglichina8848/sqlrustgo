@@ -329,7 +329,7 @@ pub struct PrivilegeGrant {
     pub column_name: Option<String>,
     pub granted_by: u64,
     pub granted_at: u64,
-    pub with_grant_option: bool,
+    pub grant_option: bool,
 }
 
 impl PrivilegeGrant {
@@ -352,7 +352,7 @@ impl PrivilegeGrant {
             column_name: None,
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         }
     }
 
@@ -680,6 +680,7 @@ impl AuthManager {
         object_type: ObjectType,
         object_name: &str,
         granted_by: u64,
+        grant_option: bool,
     ) -> AuthResult<u64> {
         let id = self.next_grant_id;
         self.next_grant_id += 1;
@@ -694,7 +695,7 @@ impl AuthManager {
             column_name: None,
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option,
         };
 
         self.privileges
@@ -703,6 +704,25 @@ impl AuthManager {
             .push(grant);
 
         Ok(id)
+    }
+
+    pub fn has_grant_option(
+        &self,
+        user: &UserIdentity,
+        privilege: Privilege,
+        object: &ObjectRef,
+    ) -> SqlResult<bool> {
+        let grants = self.get_user_privileges(user);
+        for grant in grants {
+            if grant.privilege == privilege
+                && grant.object_type == object.object_type
+                && grant.object_name == object.object_name
+                && grant.grant_option
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn grant_column_privilege(
@@ -726,7 +746,7 @@ impl AuthManager {
             column_name: Some(column_name.to_string()),
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         };
 
         self.privileges
@@ -758,7 +778,7 @@ impl AuthManager {
             column_name: None,
             granted_by,
             granted_at: current_timestamp(),
-            with_grant_option: false,
+            grant_option: false,
         };
 
         let public_identity = UserIdentity::new("%", "%");
@@ -900,30 +920,11 @@ impl AuthManager {
                     privilege: grant.privilege,
                     object,
                     columns,
-                    grant_option: grant.with_grant_option,
+                    grant_option: grant.grant_option,
                 });
             }
         }
         grants
-    }
-
-    pub fn has_grant_option(
-        &self,
-        identity: &UserIdentity,
-        privilege: Privilege,
-        object_type: ObjectType,
-        object_name: &str,
-    ) -> bool {
-        if let Some(grants) = self.privileges.get(identity) {
-            return grants.iter().any(|g| {
-                g.grantee_type == GranteeType::User
-                    && g.privilege == privilege
-                    && g.object_type == object_type
-                    && g.object_name == object_name
-                    && g.with_grant_option
-            });
-        }
-        false
     }
 
     pub fn list_users(&self) -> Vec<&UserAuthInfo> {
