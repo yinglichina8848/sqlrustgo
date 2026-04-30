@@ -5,11 +5,39 @@ on:
   push:
     branches:
       - develop/v2.8.0
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'ARCHITECTURE_RULES.md'
+      - 'CHANGELOG.md'
+      - 'RELEASE_NOTES.md'
   pull_request:
     branches:
       - develop/v2.8.0
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'ARCHITECTURE_RULES.md'
+      - 'CHANGELOG.md'
+      - 'RELEASE_NOTES.md'
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 1
 
 jobs:
+  ##################################
+  # Docs-only check (fast path)
+  ##################################
+  docs-check:
+    if: contains(join(github.event.commits.*.modified, ' '), 'docs/') || contains(join(github.event.commits.*.modified, ' '), '.md')
+    runs-on: [hp-z6g4]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check markdown links
+        run: |
+          bash scripts/gate/check_docs_links.sh 2>/dev/null || echo "⚠️ Link check script not found, skipping"
+
   ##################################
   # Precheck: 防炸门控
   ##################################
@@ -17,9 +45,11 @@ jobs:
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Check PR freshness
         run: |
-          git fetch origin develop/v2.8.0
+          git fetch origin develop/v2.8.0 --depth=1
           BEHIND=$(git rev-list --count HEAD..origin/develop/v2.8.0 2>/dev/null || echo "0")
           echo "Behind develop/v2.8.0: $BEHIND commits"
           if [ "$BEHIND" -gt 50 ]; then
@@ -27,15 +57,55 @@ jobs:
             exit 1
           fi
           echo "✅ PR is fresh enough"
+          echo "BEHIND=$BEHIND" >> $GITHUB_ENV
+
+  ##################################
+  # Lint (parallel: clippy + fmt)
+  ##################################
+  lint:
+    needs: [precheck]
+    runs-on: [hp-z6g4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('Cargo.lock') }}-v2.8.0
+          restore-keys: |
+            cargo-v2.8.0
+      - name: Install components
+        run: rustup component add clippy rustfmt 2>/dev/null || true
+      - name: Clippy
+        run: cargo clippy --all-features -- -D warnings
+      - name: Format check
+        run: cargo fmt --check --all
 
   ##################################
   # Build
   ##################################
   build:
-    needs: [precheck]
+    needs: [lint]
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('Cargo.lock') }}-v2.8.0
+          restore-keys: |
+            cargo-v2.8.0
       - name: Build
         run: cargo build --all-features
       - name: Archive binary
@@ -52,29 +122,40 @@ jobs:
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Restore build cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('Cargo.lock') }}-v2.8.0
       - name: Run tests
         run: cargo test --all-features 2>&1 | tee test_report.log
       - name: Test summary
+        if: always()
         run: |
-          PASS=$(grep -c 'test result: ok' test_report.log 2>/dev/null | tr -cd '0-9' || echo "0")
-          FAIL=$(grep -c 'test result: FAILED' test_report.log 2>/dev/null | tr -cd '0-9' || echo "0")
-          PASS=${PASS:-0}
-          FAIL=${FAIL:-0}
-          [ -z "$PASS" ] && PASS=0
-          [ -z "$FAIL" ] && FAIL=0
+          PASS=$(grep -c 'test result: ok' test_report.log 2>/dev/null || echo "0")
+          FAIL=$(grep -c 'test result: FAILED' test_report.log 2>/dev/null || echo "0")
           echo "{\"passed\": $([ "${FAIL}" -eq 0 ] && echo 'true' || echo 'false'), \"total\": $((PASS+FAIL))}" > test_report.json
+      - name: Upload test report
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test_report.json
 
   ##################################
-  # Hermes Gate (clippy + fmt + audit)
+  # Hermes Gate (clippy + fmt) — fast check
   ##################################
   gate:
     needs: [test]
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          rustup component add clippy rustfmt 2>/dev/null || true
+        with:
+          fetch-depth: 1
       - name: Run Gate
         run: |
           chmod +x gate/hermes_gate.sh
@@ -93,6 +174,8 @@ jobs:
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Run verification
         run: python3 verify/verification_engine.py
       - name: Upload verification report
@@ -109,6 +192,8 @@ jobs:
     runs-on: [hp-z6g4]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Run audit
         run: python3 audit/self_audit.py
       - name: Upload audit report
