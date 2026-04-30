@@ -39,6 +39,8 @@ pub enum Statement {
     Transaction(TransactionStatement),
     Grant(GrantStatement),
     Revoke(RevokeStatement),
+    Show(ShowStatement),
+    Describe(DescribeStatement),
 }
 
 /// UNION statement
@@ -308,6 +310,25 @@ pub struct TruncateStatement {
     pub name: String,
 }
 
+/// SHOW statement variants
+#[derive(Debug, Clone, PartialEq)]
+pub enum ShowStatement {
+    Tables,
+    Columns {
+        table: String,
+        pattern: Option<String>,
+    },
+    Index {
+        table: String,
+    },
+}
+
+/// DESCRIBE statement (aliased as DESC)
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeStatement {
+    pub table: String,
+}
+
 /// Column definition
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -315,6 +336,7 @@ pub struct ColumnDefinition {
     pub data_type: String,
     pub nullable: bool,
     pub primary_key: bool,
+    pub auto_increment: bool,
     pub default_value: Option<String>,
     pub references: Option<ForeignKeyRef>,
 }
@@ -442,6 +464,8 @@ impl Parser {
             | Some(Token::Start) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
+            Some(Token::Show) => self.parse_show(),
+            Some(Token::Describe) => self.parse_describe(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1897,6 +1921,7 @@ impl Parser {
 
         let mut nullable = true;
         let mut primary_key = false;
+        let mut auto_increment = false;
         let mut default_value = None;
         let mut references = None;
 
@@ -1944,6 +1969,10 @@ impl Parser {
                         on_update,
                     });
                 }
+                Some(Token::AutoIncrement) => {
+                    self.next();
+                    auto_increment = true;
+                }
                 _ => break,
             }
         }
@@ -1953,6 +1982,7 @@ impl Parser {
             data_type,
             nullable,
             primary_key,
+            auto_increment,
             default_value,
             references,
         })
@@ -2104,6 +2134,65 @@ impl Parser {
         };
 
         Ok(Statement::Truncate(TruncateStatement { name }))
+    }
+
+    fn parse_show(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Show)?;
+
+        match self.current() {
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "TABLES" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Tables))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "COLUMNS" => {
+                self.next();
+                self.expect(Token::From)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                let pattern = if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
+                {
+                    self.next();
+                    match self.next() {
+                        Some(Token::StringLiteral(p)) => Some(p),
+                        _ => return Err("Expected pattern string".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::Columns { table, pattern }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "INDEX" => {
+                self.next();
+                self.expect(Token::From)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::Show(ShowStatement::Index { table }))
+            }
+            Some(Token::Index) => {
+                self.next();
+                self.expect(Token::From)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::Show(ShowStatement::Index { table }))
+            }
+            Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
+            None => Err("Unexpected end of input after SHOW".to_string()),
+        }
+    }
+
+    fn parse_describe(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Describe)?;
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Describe(DescribeStatement { table }))
     }
 
     fn parse_analyze(&mut self) -> Result<Statement, String> {
@@ -2897,6 +2986,22 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_create_with_auto_increment() {
+        let result = parse("CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::CreateTable(c) => {
+                assert_eq!(c.name, "t");
+                assert_eq!(c.columns.len(), 1);
+                assert!(c.columns[0].auto_increment);
+                assert!(c.columns[0].primary_key);
+                assert!(!c.columns[0].nullable);
+            }
+            _ => panic!("Expected CREATE TABLE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_aggregate_count() {
         let result = parse("SELECT COUNT(*) FROM users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
@@ -2960,6 +3065,78 @@ mod tests {
                 assert_eq!(a.table_name, Some("users".to_string()));
             }
             _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_tables() {
+        let result = parse("SHOW TABLES");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Show(ShowStatement::Tables) => {}
+            _ => panic!("Expected SHOW TABLES statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_columns() {
+        let result = parse("SHOW COLUMNS FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+                assert_eq!(table, "users");
+                assert!(pattern.is_none());
+            }
+            _ => panic!("Expected SHOW COLUMNS FROM users statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_columns_with_like() {
+        let result = parse("SHOW COLUMNS FROM users LIKE '%name%'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+                assert_eq!(table, "users");
+                assert_eq!(pattern, Some("%name%".to_string()));
+            }
+            _ => panic!("Expected SHOW COLUMNS FROM users LIKE '%name%' statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_show_index() {
+        let result = parse("SHOW INDEX FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Show(ShowStatement::Index { table }) => {
+                assert_eq!(table, "users");
+            }
+            _ => panic!("Expected SHOW INDEX FROM users statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_describe() {
+        let result = parse("DESCRIBE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Describe(DescribeStatement { table }) => {
+                assert_eq!(table, "users");
+            }
+            _ => panic!("Expected DESCRIBE users statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_desc_alias() {
+        let result = parse("DESC users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Describe(DescribeStatement { table }) => {
+                assert_eq!(table, "users");
+            }
+            _ => panic!("Expected DESC users statement"),
         }
     }
 
