@@ -2642,4 +2642,41 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Column 'email' not accessible"));
     }
+
+    #[test]
+    fn test_delete_privilege_denied() {
+        use sqlrustgo_catalog::auth::{AuthManager, ObjectType, UserIdentity};
+
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage.clone());
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice')")
+            .unwrap();
+
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
+        let identity = UserIdentity::new("alice", "localhost");
+        {
+            let mut auth = auth_manager.write().unwrap();
+            auth.create_user(&identity, "hash").unwrap();
+            auth.grant_privilege(
+                &identity,
+                Privilege::Read,
+                ObjectType::Table,
+                "users",
+                &identity,
+                false,
+            )
+            .unwrap();
+        }
+        engine.set_auth_context(auth_manager, identity);
+
+        let result = engine.execute("DELETE FROM users WHERE id = 1");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("DELETE command denied"));
+    }
 }
