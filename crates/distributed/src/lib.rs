@@ -22,6 +22,7 @@ pub mod proto;
 pub mod raft;
 pub mod replica_sync;
 pub mod replication;
+pub mod read_write_splitter;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;

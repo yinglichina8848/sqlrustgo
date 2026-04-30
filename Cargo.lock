@@ -4213,6 +4213,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlrustgo-graph",
+ "sqlrustgo-parser",
  "sqlrustgo-vector",
  "tempfile",
  "thiserror 1.0.69",

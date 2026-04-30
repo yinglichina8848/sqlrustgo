@@ -24,9 +24,11 @@ async-trait = "0.1"
 http = "1.0"
 tower = "0.5"
 rand = "0.8"
+sqlrustgo-parser = { path = "../parser" }
 
 [dev-dependencies]
 tempfile = "3.0"
 criterion = "0.8"
 sqlrustgo-graph = { path = "../graph" }
 sqlrustgo-vector = { path = "../vector" }
+sqlrustgo-parser = { path = "../parser" }
