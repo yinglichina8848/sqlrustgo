@@ -82,7 +82,7 @@ mod tests {
         let identity = UserIdentity::new("alice", "localhost");
 
         auth.create_user(&identity, "hash").unwrap();
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Database, "mydb", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Database, "mydb", 0, false)
             .unwrap();
         auth.grant_privilege(
             &identity,
@@ -90,6 +90,7 @@ mod tests {
             ObjectType::Database,
             "mydb",
             0,
+            false,
         )
         .unwrap();
 

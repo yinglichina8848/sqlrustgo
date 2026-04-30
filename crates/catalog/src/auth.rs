@@ -1205,7 +1205,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
             .unwrap();
 
         assert!(auth
@@ -1224,7 +1224,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0)
+        auth.grant_privilege(&identity, Privilege::All, ObjectType::Database, "*", 0, false)
             .unwrap();
 
         assert!(auth
@@ -1383,7 +1383,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
             .unwrap();
 
         let result = auth.check_privilege(&identity, &ObjectRef::table("users"), Privilege::Read);
@@ -1417,7 +1417,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
             .unwrap();
 
         let result = auth.revoke_privilege(&identity, Privilege::Read, ObjectType::Table, "users");
@@ -1479,11 +1479,11 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
             .unwrap();
 
-        let result = auth.has_grant_option(&identity, Privilege::Read, ObjectType::Table, "users");
-        assert!(!result);
+        let result = auth.has_grant_option(&identity, Privilege::Read, &ObjectRef::table("users"));
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1510,7 +1510,7 @@ mod tests {
 
         auth.create_user(&identity, &password_hash).unwrap();
 
-        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0)
+        auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "users", 0, false)
             .unwrap();
 
         let grants = auth.list_grants();
@@ -1711,7 +1711,7 @@ mod tests {
         auth.create_user(&identity, "hash").unwrap();
         auth.grant_privilege(&identity, Privilege::Read, ObjectType::Table, "t1", 0)
             .unwrap();
-        auth.grant_privilege(&identity, Privilege::Insert, ObjectType::Table, "t1", 0)
+        auth.grant_privilege(&identity, Privilege::Insert, ObjectType::Table, "t1", 0, false)
             .unwrap();
 
         let privs = auth.get_user_privileges(&identity);
