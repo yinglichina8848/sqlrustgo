@@ -48,6 +48,7 @@ pub enum Token {
     No,
     Action,
     Default,
+    AutoIncrement,
 
     // Subquery keywords
     Exists,
@@ -134,6 +135,10 @@ pub enum Token {
     Call,
     Procedure,
     End,
+
+    // Show keywords
+    Show,
+    Describe,
 
     // Trigger keywords
     Trigger,
@@ -238,6 +243,7 @@ impl fmt::Display for Token {
             Token::No => write!(f, "NO"),
             Token::Action => write!(f, "ACTION"),
             Token::Default => write!(f, "DEFAULT"),
+            Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
             Token::Exists => write!(f, "EXISTS"),
             Token::If => write!(f, "IF"),
             Token::In => write!(f, "IN"),
@@ -288,6 +294,8 @@ impl fmt::Display for Token {
             Token::Call => write!(f, "CALL"),
             Token::Procedure => write!(f, "PROCEDURE"),
             Token::End => write!(f, "END"),
+            Token::Show => write!(f, "SHOW"),
+            Token::Describe => write!(f, "DESCRIBE"),
             Token::Trigger => write!(f, "TRIGGER"),
             Token::Before => write!(f, "BEFORE"),
             Token::After => write!(f, "AFTER"),
@@ -400,6 +408,9 @@ pub fn is_keyword(s: &str) -> bool {
             | "RECURSIVE"
             | "AS"
             | "TRUNCATE"
+            | "SHOW"
+            | "DESCRIBE"
+            | "AUTO_INCREMENT"
     )
 }
 
@@ -435,6 +446,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ANALYZE" => Some(Token::Analyze),
         "TRUNCATE" => Some(Token::Truncate),
         "REPLACE" => Some(Token::Replace),
+        "SHOW" => Some(Token::Show),
+        "DESCRIBE" => Some(Token::Describe),
+        "DESC" => Some(Token::Describe),
         "INTEGER" => Some(Token::Integer),
         "TEXT" => Some(Token::Text),
         "FLOAT" => Some(Token::Float),
@@ -456,6 +470,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "NO" => Some(Token::No),
         "ACTION" => Some(Token::Action),
         "DEFAULT" => Some(Token::Default),
+        "AUTO_INCREMENT" => Some(Token::AutoIncrement),
         "EXISTS" => Some(Token::Exists),
         "IN" => Some(Token::In),
         "IS" => Some(Token::Is),
