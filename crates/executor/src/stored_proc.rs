@@ -1257,6 +1257,22 @@ impl StoredProcExecutor {
                 let val = self.expression_to_value(inner, ctx);
                 Value::Boolean(!matches!(val, Value::Null))
             }
+            sqlrustgo_parser::Expression::InList(left, values) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let value_list: Vec<Value> = values
+                    .iter()
+                    .map(|v| self.expression_to_value(v, ctx))
+                    .collect();
+                Value::Boolean(value_list.contains(&left_val))
+            }
+            sqlrustgo_parser::Expression::NotInList(left, values) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let value_list: Vec<Value> = values
+                    .iter()
+                    .map(|v| self.expression_to_value(v, ctx))
+                    .collect();
+                Value::Boolean(!value_list.contains(&left_val))
+            }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
         }
     }

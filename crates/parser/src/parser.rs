@@ -393,6 +393,8 @@ pub enum Expression {
     Subquery(Box<SelectStatement>),
     In(Box<Expression>, Box<SelectStatement>),
     NotIn(Box<Expression>, Box<SelectStatement>),
+    InList(Box<Expression>, Vec<Expression>),  // MySQL: col IN (1, 2, 3)
+    NotInList(Box<Expression>, Vec<Expression>),  // MySQL: col NOT IN (1, 2, 3)
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
@@ -929,6 +931,14 @@ impl Parser {
     fn parse_select_statement(&mut self) -> Result<SelectStatement, String> {
         self.expect(Token::Select)?;
 
+        // Check for DISTINCT keyword (MySQL: SELECT DISTINCT col FROM t)
+        let distinct = if matches!(self.current(), Some(Token::Distinct)) {
+            self.next();
+            true
+        } else {
+            false
+        };
+
         let mut columns = Vec::new();
         let mut aggregates = Vec::new();
 
@@ -1201,7 +1211,7 @@ impl Parser {
             order_by: Vec::new(),
             limit: None,
             offset: None,
-            distinct: false,
+            distinct,
         })
     }
 
@@ -1566,9 +1576,25 @@ impl Parser {
         if matches!(self.current(), Some(Token::In)) {
             self.next();
             self.expect(Token::LParen)?;
-            let subquery = self.parse_select_statement()?;
-            self.expect(Token::RParen)?;
-            return Ok(Expression::In(Box::new(left), Box::new(subquery)));
+            // Check if it's a subquery (SELECT ...) or a value list (1, 2, 3)
+            if matches!(self.current(), Some(Token::Select)) {
+                let subquery = self.parse_select_statement()?;
+                self.expect(Token::RParen)?;
+                return Ok(Expression::In(Box::new(left), Box::new(subquery)));
+            } else {
+                // Parse value list: IN (1, 2, 3)
+                let mut values = Vec::new();
+                loop {
+                    values.push(self.parse_expression()?);
+                    if matches!(self.current(), Some(Token::Comma)) {
+                        self.next();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect(Token::RParen)?;
+                return Ok(Expression::InList(Box::new(left), values));
+            }
         }
 
         if matches!(self.current(), Some(Token::Not)) {
@@ -1576,9 +1602,25 @@ impl Parser {
             if matches!(self.current(), Some(Token::In)) {
                 self.next();
                 self.expect(Token::LParen)?;
-                let subquery = self.parse_select_statement()?;
-                self.expect(Token::RParen)?;
-                return Ok(Expression::NotIn(Box::new(left), Box::new(subquery)));
+                // Check if it's a subquery or value list
+                if matches!(self.current(), Some(Token::Select)) {
+                    let subquery = self.parse_select_statement()?;
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::NotIn(Box::new(left), Box::new(subquery)));
+                } else {
+                    // Parse value list: NOT IN (1, 2, 3)
+                    let mut values = Vec::new();
+                    loop {
+                        values.push(self.parse_expression()?);
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    return Ok(Expression::NotInList(Box::new(left), values));
+                }
             }
             return Err("NOT must be followed by IN or EXISTS".to_string());
         }
