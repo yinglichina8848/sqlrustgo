@@ -7,6 +7,7 @@
 //! - Permission checking
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sqlrustgo_types::SqlResult;
 use std::collections::HashMap;
 
 /// User identity (username@host)
@@ -953,6 +954,21 @@ impl AuthManager {
         }
 
         columns
+    }
+
+    pub fn check_table_privilege(
+        &self,
+        user: &UserIdentity,
+        object: &ObjectRef,
+        privilege: Privilege,
+    ) -> SqlResult<bool> {
+        let grants = self.get_user_privileges(user);
+        for grant in grants {
+            if grant.matches(privilege, object) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {

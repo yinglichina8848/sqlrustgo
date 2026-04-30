@@ -4,7 +4,7 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
-use sqlrustgo_catalog::auth::{AuthManager, Privilege, UserIdentity};
+use sqlrustgo_catalog::auth::{AuthManager, ObjectRef, Privilege, UserIdentity};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{Catalog, StoredProcedure};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
@@ -930,6 +930,31 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(())
     }
 
+    fn check_table_privilege_for_delete(&self, table: &str) -> SqlResult<()> {
+        let Some(ref auth_manager) = self.auth_manager else {
+            return Ok(());
+        };
+        let Some(ref current_user) = self.current_user else {
+            return Ok(());
+        };
+
+        let auth = auth_manager.read().unwrap();
+        let authorized = auth.check_table_privilege(
+            current_user,
+            &ObjectRef::table(table),
+            Privilege::Delete,
+        )?;
+
+        if !authorized {
+            return Err(SqlError::ExecutionError(format!(
+                "DELETE command denied to user '{}'@'{}'",
+                current_user.username, current_user.host
+            )));
+        }
+
+        Ok(())
+    }
+
     fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
@@ -1208,6 +1233,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     fn execute_delete(&self, delete: &DeleteStatement) -> SqlResult<ExecutorResult> {
         let table_name = delete.table.clone();
+
+        self.check_table_privilege_for_delete(&table_name)?;
 
         // If no WHERE clause, delete all rows (current behavior is correct)
         if delete.where_clause.is_none() {
