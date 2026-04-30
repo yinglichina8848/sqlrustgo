@@ -177,10 +177,17 @@ impl FailoverManager {
         tracing::info!("Node {} has been recovered", node_id);
     }
 
-    pub fn get_failed_shards(&self) -> Vec<ShardId> {
-        let failed = Vec::new();
+    pub async fn get_failed_shards(&self) -> Vec<ShardId> {
+        let mut failed = Vec::new();
+        let shard_manager = self.shard_manager.read().await;
         for node_id in &self.dead_nodes {
             tracing::debug!("Node {} is dead", node_id);
+            let shards = shard_manager.get_shards_by_node(*node_id);
+            for shard in shards {
+                if !failed.contains(&shard.shard_id) {
+                    failed.push(shard.shard_id);
+                }
+            }
         }
         failed
     }
@@ -379,6 +386,7 @@ impl Default for FailoverNotifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shard_manager::ShardInfo;
 
     fn create_test_shard_manager() -> Arc<RwLock<ShardManager>> {
         let manager = ShardManager::new();
@@ -954,5 +962,38 @@ mod tests {
         };
         assert!(health.healthy);
         assert_eq!(health.total_nodes - health.dead_nodes, 5);
+    }
+
+    #[tokio::test]
+    async fn test_get_failed_shards_returns_shards_from_dead_nodes() {
+        let shard_manager = Arc::new(RwLock::new(ShardManager::new()));
+        {
+            let mut manager = shard_manager.write().await;
+            manager.create_shard(ShardInfo::new(0, 2));
+            manager.create_shard(ShardInfo::new(1, 2));
+            manager.create_shard(ShardInfo::new(2, 3));
+        }
+
+        let replica_manager = create_test_replica_manager();
+        let mut failover_manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        failover_manager.dead_nodes.insert(2);
+
+        let failed_shards = failover_manager.get_failed_shards().await;
+
+        assert!(failed_shards.contains(&0));
+        assert!(failed_shards.contains(&1));
+        assert!(!failed_shards.contains(&2));
+    }
+
+    #[tokio::test]
+    async fn test_get_failed_shards_empty_when_no_dead_nodes() {
+        let shard_manager = create_test_shard_manager();
+        let replica_manager = create_test_replica_manager();
+        let manager = FailoverManager::new(1, shard_manager, replica_manager);
+
+        let failed_shards = manager.get_failed_shards().await;
+
+        assert!(failed_shards.is_empty());
     }
 }
