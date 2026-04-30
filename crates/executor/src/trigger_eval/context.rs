@@ -122,8 +122,14 @@ mod tests {
             .with_new_col_names(vec!["id".into(), "amount".into()])
             .with_old_col_names(vec!["id".into(), "amount".into()]);
 
-        assert_eq!(ctx.new_col_names(), Some(&["id".into(), "amount".into()][..]));
-        assert_eq!(ctx.old_col_names(), Some(&["id".into(), "amount".into()][..]));
+        assert_eq!(
+            ctx.new_col_names(),
+            Some(&["id".into(), "amount".into()][..])
+        );
+        assert_eq!(
+            ctx.old_col_names(),
+            Some(&["id".into(), "amount".into()][..])
+        );
     }
 
     #[test]
@@ -139,10 +145,16 @@ mod tests {
     fn test_eval_context_with_target() {
         let trigger_ctx = TriggerContext::new(None, None);
         let target = make_record(&[10, 20, 30]);
-        let eval = EvalContext::new(&trigger_ctx, Some(&target))
-            .with_target_col_names(vec!["a".into(), "b".into(), "c".into()]);
+        let eval = EvalContext::new(&trigger_ctx, Some(&target)).with_target_col_names(vec![
+            "a".into(),
+            "b".into(),
+            "c".into(),
+        ]);
 
         assert_eq!(eval.target_row(), Some(&target));
-        assert_eq!(eval.target_col_names(), Some(&["a".into(), "b".into(), "c".into()][..]));
+        assert_eq!(
+            eval.target_col_names(),
+            Some(&["a".into(), "b".into(), "c".into()][..])
+        );
     }
 }
