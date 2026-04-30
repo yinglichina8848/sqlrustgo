@@ -7,6 +7,7 @@
 //! - Read consistency guarantees
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -103,15 +104,22 @@ pub enum ConsistencyMode {
 pub struct ReadWriteRouter {
     config: ReadWriteSplitConfig,
     replica_index: Arc<AtomicU64>,
-    connection_count: Arc<AtomicU64>,
+    /// Per-replica connection counts for LeastConnections strategy
+    replica_connection_counts: Arc<HashMap<SocketAddr, AtomicU64>>,
 }
 
 impl ReadWriteRouter {
     pub fn new(config: ReadWriteSplitConfig) -> Self {
+        let replica_connection_counts: HashMap<SocketAddr, AtomicU64> = config
+            .replica_addrs
+            .iter()
+            .map(|r| (r.addr, AtomicU64::new(0)))
+            .collect();
+
         Self {
             config,
             replica_index: Arc::new(AtomicU64::new(0)),
-            connection_count: Arc::new(AtomicU64::new(0)),
+            replica_connection_counts: Arc::new(replica_connection_counts),
         }
     }
 
@@ -154,7 +162,9 @@ impl ReadWriteRouter {
             LoadBalanceStrategy::Random => self.select_random(&replicas),
         };
 
-        self.connection_count.fetch_add(1, Ordering::SeqCst);
+        if self.config.strategy == LoadBalanceStrategy::LeastConnections {
+            self.increment_connection_count(&target.addr);
+        }
 
         RouteResult {
             target_addr: target.addr,
@@ -188,9 +198,24 @@ impl ReadWriteRouter {
     }
 
     fn select_least_connections<'a>(&self, replicas: &'a [&ReplicaNode]) -> &'a ReplicaNode {
-        self.connection_count.fetch_add(1, Ordering::SeqCst);
-        let index = self.replica_index.fetch_add(1, Ordering::SeqCst) as usize;
-        replicas[index % replicas.len()]
+        replicas
+            .iter()
+            .min_by_key(|r| self.replica_connection_counts.get(&r.addr).map(|c| c.load(Ordering::SeqCst)).unwrap_or(0))
+            .unwrap_or(&replicas[0])
+    }
+
+    /// Increment connection count for a replica (call when connection is acquired)
+    pub fn increment_connection_count(&self, addr: &SocketAddr) {
+        if let Some(counter) = self.replica_connection_counts.get(addr) {
+            counter.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// Decrement connection count for a replica (call when connection is released)
+    pub fn decrement_connection_count(&self, addr: &SocketAddr) {
+        if let Some(counter) = self.replica_connection_counts.get(addr) {
+            counter.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     fn select_least_lag<'a>(&self, replicas: &'a [&ReplicaNode]) -> &'a ReplicaNode {
@@ -255,8 +280,8 @@ impl ReadWriteRouter {
             .count()
     }
 
-    pub fn release_connection(&self) {
-        self.connection_count.fetch_sub(1, Ordering::SeqCst);
+    pub fn release_connection(&self, addr: &SocketAddr) {
+        self.decrement_connection_count(addr);
     }
 }
 
@@ -507,5 +532,54 @@ mod tests {
 
         assert_eq!(conn.addr, "127.0.0.1:3306".parse().unwrap());
         assert!(conn.is_connected);
+    }
+
+    #[test]
+    fn test_least_connections_selects_min() {
+        let mut config = create_test_config();
+        config.strategy = LoadBalanceStrategy::LeastConnections;
+        let router = ReadWriteRouter::new(config);
+
+        let result1 = router.route(QueryType::Read);
+        let result2 = router.route(QueryType::Read);
+        let result3 = router.route(QueryType::Read);
+
+        assert!(result1.is_read);
+        assert!(result2.is_read);
+        assert!(result3.is_read);
+    }
+
+    #[test]
+    fn test_least_connections_tracks_counts() {
+        let mut config = create_test_config();
+        config.strategy = LoadBalanceStrategy::LeastConnections;
+        let router = ReadWriteRouter::new(config);
+
+        let replica1_addr: SocketAddr = "127.0.0.1:3307".parse().unwrap();
+        let replica2_addr: SocketAddr = "127.0.0.1:3308".parse().unwrap();
+
+        router.increment_connection_count(&replica1_addr);
+        router.increment_connection_count(&replica1_addr);
+        router.increment_connection_count(&replica2_addr);
+
+        router.release_connection(&replica1_addr);
+
+        let result = router.route(QueryType::Read);
+        assert_eq!(result.target_addr, replica2_addr);
+    }
+
+    #[test]
+    fn test_increment_decrement_connection_count() {
+        let config = create_test_config();
+        let router = ReadWriteRouter::new(config);
+
+        let replica_addr: SocketAddr = "127.0.0.1:3307".parse().unwrap();
+
+        router.increment_connection_count(&replica_addr);
+        router.increment_connection_count(&replica_addr);
+        router.decrement_connection_count(&replica_addr);
+
+        let result = router.route(QueryType::Read);
+        assert!(result.is_read);
     }
 }
