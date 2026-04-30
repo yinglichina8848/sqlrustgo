@@ -970,8 +970,8 @@ fn test_parse_greater_than_or_equal() {
 fn test_parse_not_in() {
     let sql = "SELECT * FROM users WHERE id NOT IN (1, 2, 3)";
     let result = parse(sql);
-    // Parser doesn't support NOT IN with parenthesized list
-    assert!(result.is_err(), "NOT IN not supported: {:?}", result);
+    // Parser supports NOT IN with parenthesized list (MySQL compatibility)
+    assert!(result.is_ok(), "NOT IN should be supported: {:?}", result);
 }
 
 // ============ DROP TABLE ============
