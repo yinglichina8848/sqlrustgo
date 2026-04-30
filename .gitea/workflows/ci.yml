@@ -17,6 +17,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '*.md'
+      - 'VERSION'
       - 'ARCHITECTURE_RULES.md'
       - 'CHANGELOG.md'
       - 'RELEASE_NOTES.md'
