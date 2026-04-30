@@ -78,3 +78,71 @@ impl<'a> EvalContext<'a> {
         self.target_col_names.as_deref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlrustgo_storage::Record;
+    use sqlrustgo_types::Value;
+
+    fn make_record(values: &[i64]) -> Record {
+        values.iter().map(|&v| Value::Integer(v)).collect()
+    }
+
+    #[test]
+    fn test_trigger_context_new_row_only() {
+        let new_record = make_record(&[1, 100, 5000]);
+        let ctx = TriggerContext::new(Some(&new_record), None);
+        assert_eq!(ctx.new_row(), Some(&new_record));
+        assert_eq!(ctx.old_row(), None);
+    }
+
+    #[test]
+    fn test_trigger_context_old_row_only() {
+        let old_record = make_record(&[1, 50, 3000]);
+        let ctx = TriggerContext::new(None, Some(&old_record));
+        assert_eq!(ctx.new_row(), None);
+        assert_eq!(ctx.old_row(), Some(&old_record));
+    }
+
+    #[test]
+    fn test_trigger_context_both_rows() {
+        let old_record = make_record(&[1, 50, 3000]);
+        let new_record = make_record(&[1, 100, 5000]);
+        let ctx = TriggerContext::new(Some(&new_record), Some(&old_record));
+        assert_eq!(ctx.new_row(), Some(&new_record));
+        assert_eq!(ctx.old_row(), Some(&old_record));
+    }
+
+    #[test]
+    fn test_trigger_context_col_names() {
+        let new_record = make_record(&[1, 100]);
+        let old_record = make_record(&[1, 50]);
+        let ctx = TriggerContext::new(Some(&new_record), Some(&old_record))
+            .with_new_col_names(vec!["id".into(), "amount".into()])
+            .with_old_col_names(vec!["id".into(), "amount".into()]);
+
+        assert_eq!(ctx.new_col_names(), Some(&["id".into(), "amount".into()][..]));
+        assert_eq!(ctx.old_col_names(), Some(&["id".into(), "amount".into()][..]));
+    }
+
+    #[test]
+    fn test_eval_context_basic() {
+        let trigger_ctx = TriggerContext::new(None, None);
+        let eval = EvalContext::new(&trigger_ctx, None);
+        assert!(eval.target_row().is_none());
+        assert!(eval.target_col_names().is_none());
+        assert_eq!(eval.trigger().new_row(), None);
+    }
+
+    #[test]
+    fn test_eval_context_with_target() {
+        let trigger_ctx = TriggerContext::new(None, None);
+        let target = make_record(&[10, 20, 30]);
+        let eval = EvalContext::new(&trigger_ctx, Some(&target))
+            .with_target_col_names(vec!["a".into(), "b".into(), "c".into()]);
+
+        assert_eq!(eval.target_row(), Some(&target));
+        assert_eq!(eval.target_col_names(), Some(&["a".into(), "b".into(), "c".into()][..]));
+    }
+}
