@@ -320,11 +320,7 @@ impl DefaultMetrics {
 
     /// Get average query time in milliseconds
     pub fn avg_query_time_ms(&self) -> u64 {
-        if self.query_count == 0 {
-            0
-        } else {
-            self.total_query_time_ms / self.query_count
-        }
+        self.total_query_time_ms.checked_div(self.query_count).unwrap_or(0)
     }
 }
 
