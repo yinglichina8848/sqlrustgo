@@ -31,46 +31,72 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "1"
+  # Persist cargo registry across runs via host-mounted volume
+  CARGO_REGISTRY_CACHE: "/var/local/cargo/registry"
 
 lint:
   runs-on: [hp-z6g4]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-    - name: Install clippy + rustfmt
-      run: rustup component add clippy rustfmt 2>/dev/null || true
+      run: |
+        REPO_URL="https://${GITEA_ACTOR}:${GITEA_TOKEN}@${GITEA_REPO_DEFAULT_BRANCH#*@}"
+        # Extract host from instance URL
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
+        pwd
     - name: Clippy
-      run: cargo clippy --all-features -- -D warnings
+      run: |
+        cd repo
+        cargo clippy --all-features -- -D warnings
     - name: Format check
-      run: cargo fmt --check --all
+      run: |
+        cd repo
+        cargo fmt --check --all
 
 build:
   runs-on: [hp-z6g4]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      run: |
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
     - name: Build
-      run: cargo build --all-features
+      run: |
+        cd repo
+        cargo build --all-features
 
 test:
   runs-on: [hp-z6g4]
   needs: [build]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      run: |
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
     - name: Build
-      run: cargo build --all-features
+      run: |
+        cd repo
+        cargo build --all-features
     - name: Run tests
-      run: cargo test --all-features 2>&1 | tee test_report.log
+      run: |
+        cd repo
+        cargo test --all-features 2>&1 | tee test_report.log
     - name: Test summary
       if: always()
       run: |
+        cd repo
         PASS=$(grep -c 'test result: ok' test_report.log 2>/dev/null || echo "0")
         FAIL=$(grep -c 'test result: FAILED' test_report.log 2>/dev/null || echo "0")
         echo "Tests: passed=$PASS failed=$FAIL"
@@ -81,11 +107,16 @@ gate:
   needs: [test]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      run: |
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
     - name: Run Gate
       run: |
+        cd repo
         chmod +x gate/hermes_gate.sh
         bash gate/hermes_gate.sh
 
@@ -94,19 +125,31 @@ verify:
   needs: [test]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      run: |
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
     - name: Run verification
-      run: python3 verify/verification_engine.py
+      run: |
+        cd repo
+        python3 verify/verification_engine.py
 
 audit:
   runs-on: [hp-z6g4]
   needs: [verify]
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      run: |
+        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
+        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
+        git clone --depth=1 "$REPO_URL" repo
+        cd repo
+        git fetch --depth=1 origin "$GITEA_SHA"
+        git checkout "$GITEA_SHA"
     - name: Run audit
-      run: python3 audit/self_audit.py
+      run: |
+        cd repo
+        python3 audit/self_audit.py
