@@ -140,6 +140,24 @@ fn evaluate_binary_op(left: &Value, op: &str, right: &Value) -> Value {
                 }
             }
         }
+        "<" => {
+            return Value::Boolean(left < right);
+        }
+        ">" => {
+            return Value::Boolean(left > right);
+        }
+        "<=" => {
+            return Value::Boolean(left <= right);
+        }
+        ">=" => {
+            return Value::Boolean(left >= right);
+        }
+        "=" => {
+            return Value::Boolean(left == right);
+        }
+        "!=" | "<>" => {
+            return Value::Boolean(left != right);
+        }
         _ => {}
     }
     Value::Null
@@ -402,9 +420,8 @@ mod tests {
         let trigger_ctx2 =
             TriggerContext::new(Some(&new_record2), None).with_new_col_names(vec!["b".into()]);
         let eval2 = EvalContext::new(&trigger_ctx2, None);
-        // A literal boolean expression is not directly supported,
-        // but a NEW.b = false expression would evaluate to Value::Boolean(false)
-        let eq_expr = binop(ident("NEW.b"), "=", lit("0"));
+        // A NEW.b = 1 expression where NEW.b is 0 evaluates to false
+        let eq_expr = binop(ident("NEW.b"), "=", lit("1"));
         assert!(!expression_to_bool(&eq_expr, &eval2, None));
     }
 }
