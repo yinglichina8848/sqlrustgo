@@ -319,7 +319,7 @@ echo "=== G-Gate 检查完成 ==="
 |------|------|----------|------|
 | A-Gate | ✅ 完成 | 2026-04-30 | Baseline 226/226 PASS, 100% |
 | B-Gate | ✅ 完成 | 2026-05-01 | hermes_gate + run_hermes_gate PASS |
-| R-Gate | 🔄 进行中 | TBD | 待 Gitea CI 验证 + 覆盖率 |
+| R-Gate | 🔄 进行中 | 2026-05-07（目标） | 三平台 CI 验证 + 覆盖率 ≥80% |
 | G-Gate | ⚪ 未启动 | TBD | 需 R-Gate 完成 |
 
 ---

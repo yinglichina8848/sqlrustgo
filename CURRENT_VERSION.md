@@ -1,15 +1,15 @@
 # 当前版本状态
 
-alpha/v2.8.0
+rc/v2.8.0
 
 ## 阶段信息
 
-- **阶段**: Alpha (早期开发)
-- **当前里程碑**: Phase A - 兼容性增强
+- **阶段**: RC (候选发布)
+- **当前里程碑**: 三平台协作发布
 - **开始日期**: 2026-04-22
 - **开发分支**: develop/v2.8.0
-- **目标**: MySQL 5.7 兼容性 + 初步分布式能力
-- **开发 Issue**: [#1731](https://github.com/minzuuniversity/sqlrustgo/issues/1731)
+- **目标**: 三平台协同 + R-Gate 全量验证 → GA
+- **协作 Issue**: [#11](https://github.com/minzuuniversity/sqlrustgo/issues/11)
 
 ## 版本概述
 
