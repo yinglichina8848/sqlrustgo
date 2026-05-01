@@ -395,7 +395,7 @@ pub enum Expression {
     NotIn(Box<Expression>, Box<SelectStatement>),
     InList(Box<Expression>, Vec<Expression>), // MySQL: col IN (1, 2, 3)
     NotInList(Box<Expression>, Vec<Expression>), // MySQL: col NOT IN (1, 2, 3)
-    NotLike(Box<Expression>, Box<Expression>),    // col NOT LIKE pattern
+    NotLike(Box<Expression>, Box<Expression>), // col NOT LIKE pattern
     NotBetween(Box<Expression>, Box<Expression>, Box<Expression>), // col NOT BETWEEN low AND high
     NotRegexp(Box<Expression>, Box<Expression>), // col NOT REGEXP pattern
     Exists(Box<SelectStatement>),
@@ -1632,7 +1632,8 @@ impl Parser {
         if matches!(self.current(), Some(Token::Not)) {
             self.next();
             // Check for NOT LIKE
-            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE") {
+            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
+            {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotLike(Box::new(left), Box::new(pattern)));
@@ -1643,10 +1644,15 @@ impl Parser {
                 let low = self.parse_additive_expression()?;
                 self.expect(Token::And)?;
                 let high = self.parse_additive_expression()?;
-                return Ok(Expression::NotBetween(Box::new(left), Box::new(low), Box::new(high)));
+                return Ok(Expression::NotBetween(
+                    Box::new(left),
+                    Box::new(low),
+                    Box::new(high),
+                ));
             }
             // Check for NOT REGEXP
-            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "REGEXP") {
+            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "REGEXP")
+            {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));

@@ -32,7 +32,10 @@ fn bench_flat_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = FlatIndex::new(DistanceMetric::Cosine);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
+                    let _ = index.insert(
+                        std::hint::black_box(*id),
+                        std::hint::black_box(v.as_slice()),
+                    );
                 }
             });
         });
@@ -72,7 +75,10 @@ fn bench_ivf_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = IvfIndex::new(DistanceMetric::Euclidean, 10);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
+                    let _ = index.insert(
+                        std::hint::black_box(*id),
+                        std::hint::black_box(v.as_slice()),
+                    );
                 }
             });
         });
@@ -112,7 +118,10 @@ fn bench_hnsw_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = HnswIndex::new(DistanceMetric::Cosine);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
+                    let _ = index.insert(
+                        std::hint::black_box(*id),
+                        std::hint::black_box(v.as_slice()),
+                    );
                 }
             });
         });
@@ -180,8 +189,7 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
 
 fn bench_simd_vs_scalar(c: &mut Criterion) {
     use sqlrustgo_vector::simd_explicit::{
-        batch_dot_product_simd, batch_l2_distance_simd, dot_product_simd,
-        euclidean_distance_simd,
+        batch_dot_product_simd, batch_l2_distance_simd, dot_product_simd, euclidean_distance_simd,
     };
 
     let mut group = c.benchmark_group("simd_vs_scalar");
@@ -319,7 +327,8 @@ fn bench_parallel_knn_search(c: &mut Criterion) {
             let parallel_index = ParallelKnn::new(index);
 
             b.iter(|| {
-                let result = parallel_index.parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
+                let result = parallel_index
+                    .parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
                 let _ = std::hint::black_box(result);
             });
         });
@@ -499,7 +508,8 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
         let parallel_index = ParallelKnn::new(index);
 
         b.iter(|| {
-            let _ = parallel_index.parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
+            let _ = parallel_index
+                .parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 }
@@ -607,7 +617,11 @@ fn bench_hybrid_query_performance(c: &mut Criterion) {
             .collect();
 
         b.iter(|| {
-            let _ = searcher.search_hybrid(std::hint::black_box(&query), &sql_scores, std::hint::black_box(10));
+            let _ = searcher.search_hybrid(
+                std::hint::black_box(&query),
+                &sql_scores,
+                std::hint::black_box(10),
+            );
         });
     });
 
@@ -620,7 +634,11 @@ fn bench_hybrid_query_performance(c: &mut Criterion) {
         let predicates = vec![];
 
         b.iter(|| {
-            let _ = searcher.execute_filtered_search(std::hint::black_box(&query), &predicates, std::hint::black_box(10));
+            let _ = searcher.execute_filtered_search(
+                std::hint::black_box(&query),
+                &predicates,
+                std::hint::black_box(10),
+            );
         });
     });
 }
@@ -639,7 +657,10 @@ fn bench_ivfpq_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 10, 16);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
+                    let _ = index.insert(
+                        std::hint::black_box(*id),
+                        std::hint::black_box(v.as_slice()),
+                    );
                 }
             });
         });
