@@ -255,6 +255,7 @@ pub struct SelectStatement {
 pub struct OrderByExpression {
     pub expression: Expression,
     pub ascending: bool,
+    pub nulls_first: Option<bool>,
 }
 
 /// Column in SELECT
@@ -1203,6 +1204,15 @@ impl Parser {
             None
         };
 
+        // Parse ORDER BY clause
+        let order_by = if matches!(self.current(), Some(Token::Order)) {
+            self.next();
+            self.expect(Token::By)?;
+            self.parse_order_by()?
+        } else {
+            Vec::new()
+        };
+
         // Parse LIMIT clause
         let limit = if matches!(self.current(), Some(Token::Limit)) {
             self.next();
@@ -1260,7 +1270,7 @@ impl Parser {
             aggregates,
             group_by,
             having,
-            order_by: Vec::new(),
+            order_by,
             limit,
             offset,
             distinct,
@@ -1278,6 +1288,52 @@ impl Parser {
             }
         }
         Ok(exprs)
+    }
+
+    fn parse_order_by(&mut self) -> Result<Vec<OrderByExpression>, String> {
+        let mut expressions = Vec::new();
+        loop {
+            let expr = self.parse_expression()?;
+            let ascending = match self.current() {
+                Some(Token::Asc) => {
+                    self.next();
+                    true
+                }
+                Some(Token::Desc) => {
+                    self.next();
+                    false
+                }
+                _ => true,
+            };
+            let nulls_first = match self.current() {
+                Some(Token::Nulls) => {
+                    self.next();
+                    match self.current() {
+                        Some(Token::First) => {
+                            self.next();
+                            Some(true)
+                        }
+                        Some(Token::Last) => {
+                            self.next();
+                            Some(false)
+                        }
+                        _ => return Err("Expected FIRST or LAST after NULLS".to_string()),
+                    }
+                }
+                _ => None,
+            };
+            expressions.push(OrderByExpression {
+                expression: expr,
+                ascending,
+                nulls_first,
+            });
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+            } else {
+                break;
+            }
+        }
+        Ok(expressions)
     }
 
     fn parse_join_clause(&mut self) -> Result<JoinClause, String> {
