@@ -179,6 +179,7 @@ git push origin develop/v2.8.0
 - Crate-specific tests in each crate's `tests/` or `src/`
 - Use `--test <test_name>` to run specific test files
 
+<<<<<<< Updated upstream
 ## Gitea Identity (Z6G4/250)
 
 本机使用独立的 Gitea 账户：
@@ -186,3 +187,67 @@ git push origin develop/v2.8.0
 - SSH 密钥: ~/.ssh/id_ed25519_z6g4
 - SSH 别名: gitea-z6g4 (port 222)
 - Git email: hermes-z6g4@gaoyuanyiyao.com
+=======
+---
+
+## Gitea DevStack Remote
+
+本项目使用自托管 Gitea，CI/CD 和代码托管均在此。
+
+### Git Remote (SSH)
+
+```bash
+# 方式 A：SSH 别名（推荐）
+git remote set-url origin git@gitea-macmini:openclaw/sqlrustgo.git
+
+# 方式 B：完整 SSH URL
+git remote set-url origin ssh://git@192.168.0.252:222/openclaw/sqlrustgo.git
+```
+
+### Git 身份
+
+```bash
+git config user.name "yinglichina8848"
+git config user.email "openheart@gaoyuanyiyao.com"  # pre-commit 强制
+git config commit.gpgsign false
+```
+
+### Gitea SSH Key
+
+- 私钥: `~/.ssh/id_ed25519_macmini`
+- 公钥已绑定到 hermes-macmini 用户（Key ID 4: "Mac Mini Hermes Agent"）
+- Gitea SSH 端口: **222**（不是 22）
+
+### Gitea PAT
+
+```bash
+# API 操作 Token（read/write）
+cat ~/.ssh/openclaw-gitea-write.PAT
+
+# Hermes CLI 只读 Token
+cat ~/.ssh/hermes-cli-gitea.PAT
+```
+
+### 测试连通性
+
+```bash
+# 1. SSH 认证测试
+ssh -p 222 -i ~/.ssh/id_ed25519_macmini git@192.168.0.252
+
+# 2. Git ls-remote 测试
+git ls-remote origin refs/heads/develop/v2.8.0
+
+# 3. Gitea Web UI
+open http://192.168.0.252:3000/openclaw/sqlrustgo
+```
+
+### 相关 Wiki 页面
+
+- [Git Remote Configuration](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Git-Remote-Configuration)
+- [Multi Agent Orchestration](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Multi-Agent-Orchestration-2026-04)
+- [Gitea Infrastructure](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Gitea-Infrastructure)
+
+---
+
+提醒：pre-commit hook 强制邮箱为 openheart@gaoyuanyiyao.com，在本地 git config 中设置好。
+>>>>>>> Stashed changes

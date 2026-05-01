@@ -6,3 +6,9 @@ test_report.log
 __pycache__/
 *.pyc
 *.profraw
+target/
+data/tpch-sf01-generated/
+data/tpch-sf01/
+artifacts/coverage/
+.DS_Store
+Cargo.lock
