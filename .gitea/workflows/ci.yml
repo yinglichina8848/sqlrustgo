@@ -30,10 +30,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "1"
-  CARGO_REGISTRY_CACHE: "/var/local/cargo/registry"
 
-lint:
+# Combined lint + build: share one clone, build once
+lint-build:
   runs-on: [hp-z6g4]
   steps:
     - name: Checkout
@@ -51,25 +50,15 @@ lint:
       run: |
         cd repo
         cargo fmt --check --all
-
-build:
-  runs-on: [hp-z6g4]
-  steps:
-    - name: Checkout
-      run: |
-        REPO="openclaw/sqlrustgo"
-        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
-        cd repo
-        git fetch --depth=1 origin "$GITEA_SHA"
-        git checkout "$GITEA_SHA"
     - name: Build
       run: |
         cd repo
         cargo build --all-features
 
+# Test: no rebuild needed, lint-build already has the binary
 test:
   runs-on: [hp-z6g4]
-  needs: [build]
+  needs: [lint-build]
   steps:
     - name: Checkout
       run: |
@@ -95,7 +84,8 @@ test:
         echo "Tests: passed=$PASS failed=$FAIL"
         if [ "$FAIL" -gt 0 ]; then exit 1; fi
 
-gate:
+# Post-test checks: gate + verify + audit in one job to share clone + build
+postcheck:
   runs-on: [hp-z6g4]
   needs: [test]
   steps:
@@ -111,34 +101,10 @@ gate:
         cd repo
         chmod +x gate/hermes_gate.sh
         bash gate/hermes_gate.sh
-
-verify:
-  runs-on: [hp-z6g4]
-  needs: [test]
-  steps:
-    - name: Checkout
-      run: |
-        REPO="openclaw/sqlrustgo"
-        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
-        cd repo
-        git fetch --depth=1 origin "$GITEA_SHA"
-        git checkout "$GITEA_SHA"
     - name: Run verification
       run: |
         cd repo
         python3 verify/verification_engine.py
-
-audit:
-  runs-on: [hp-z6g4]
-  needs: [verify]
-  steps:
-    - name: Checkout
-      run: |
-        REPO="openclaw/sqlrustgo"
-        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
-        cd repo
-        git fetch --depth=1 origin "$GITEA_SHA"
-        git checkout "$GITEA_SHA"
     - name: Run audit
       run: |
         cd repo
