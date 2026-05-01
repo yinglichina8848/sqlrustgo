@@ -200,7 +200,7 @@
 ### 9.1 相关链接
 
 - [ISSUE #19](https://github.com/minzuuniversity/sqlrustgo/issues/19): RC1 任务和门禁验收
-- [VERSION_PROMOTION_SOP.md](../VERSION_PROMOTION_SOP.md): 版本推进标准操作流程
+- [VERSION_PROMOTION_SOP.md](../../../../VERSION_PROMOTION_SOP.md): 版本推进标准操作流程
 - [PROTECTION_RULES.md](PROTECTION_RULES.md): RC1 分支保护规则
 
 ### 9.2 联系方式

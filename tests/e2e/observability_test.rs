@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_executor_metrics_rows() {
-        let metrics = ExecutorMetrics::new();
+        let mut metrics = ExecutorMetrics::new();
         metrics.record_rows(100);
 
         assert_eq!(metrics.rows_processed(), 100);

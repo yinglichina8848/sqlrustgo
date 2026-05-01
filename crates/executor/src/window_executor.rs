@@ -1,9 +1,7 @@
 // SQLRustGo window function executor module
 
 use crate::executor::{ExecutorResult, VolcanoExecutor};
-use sqlrustgo_planner::{
-    Column, ExcludeMode, Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction,
-};
+use sqlrustgo_planner::{Expr, FrameBound, Schema, SortExpr, WindowFrame, WindowFunction};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::collections::HashMap;
@@ -590,7 +588,7 @@ impl VolcanoExecutor for WindowVolcanoExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_planner::{Expr, SortExpr};
+    use sqlrustgo_planner::{Column, ExcludeMode, Expr, SortExpr};
 
     fn create_test_partition() -> PartitionState {
         // Create test rows: (id, value)

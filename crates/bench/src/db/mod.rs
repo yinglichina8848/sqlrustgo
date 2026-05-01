@@ -1,6 +1,8 @@
 //! Database adapters for benchmark
 
 pub mod comparison;
+pub mod mysql;
+pub mod mysql_benchmark;
 pub mod postgres;
 pub mod postgres_benchmark;
 pub mod sqlite;
@@ -13,6 +15,7 @@ use std::sync::Arc;
 
 /// Database trait for benchmark
 #[async_trait]
+#[allow(dead_code)]
 pub trait Database: Send + Sync {
     /// Execute a SQL statement
     async fn execute(&self, sql: &str) -> Result<()>;
@@ -39,6 +42,7 @@ pub async fn create_db(name: &str, config: &DbConfig) -> Result<Arc<dyn Database
         "postgres" | "postgresql" => {
             Ok(Arc::new(postgres::PostgresDB::new(&config.pg_conn).await?))
         }
+        "mysql" | "mariadb" => Ok(Arc::new(mysql::MySqlDB::new(&config.mysql_addr).await?)),
         "sqlite" => Ok(Arc::new(
             sqlite::SqliteDB::new(&config.sqlite_path, config.scale).await?,
         )),
@@ -51,6 +55,7 @@ pub async fn create_db(name: &str, config: &DbConfig) -> Result<Arc<dyn Database
 pub struct DbConfig {
     pub sqlrustgo_addr: String,
     pub pg_conn: String,
+    pub mysql_addr: String,
     pub sqlite_path: String,
     pub scale: usize,
 }
@@ -60,6 +65,7 @@ impl Default for DbConfig {
         Self {
             sqlrustgo_addr: "127.0.0.1:4000".to_string(),
             pg_conn: "host=localhost user=postgres password=postgres dbname=bench".to_string(),
+            mysql_addr: "127.0.0.1:3306".to_string(),
             sqlite_path: "bench.db".to_string(),
             scale: 10000,
         }
@@ -71,6 +77,7 @@ impl From<&crate::cli::BenchArgs> for DbConfig {
         Self {
             sqlrustgo_addr: args.sqlrustgo_addr.clone(),
             pg_conn: args.get_pg_conn(),
+            mysql_addr: args.mysql_addr.clone(),
             sqlite_path: args.get_sqlite_path(),
             scale: args.scale,
         }

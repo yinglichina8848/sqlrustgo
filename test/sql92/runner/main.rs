@@ -180,7 +180,7 @@ fn generate_report(results: &[TestResult]) -> String {
                 report.push_str(&format!("  - {}\n", msg));
             }
         }
-        report.push_str("\n");
+        report.push('\n');
     }
 
     report

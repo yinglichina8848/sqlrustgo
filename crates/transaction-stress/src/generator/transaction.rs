@@ -84,6 +84,7 @@ impl TransactionOperation {
 
 pub struct TransactionGenerator {
     table_count: usize,
+    #[allow(dead_code)]
     active_savepoints: Vec<String>,
 }
 

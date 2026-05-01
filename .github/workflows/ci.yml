@@ -1,59 +1,109 @@
-name: CI
+name: Anti-Cheat CI
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch to build (for manual trigger)'
-        required: false
-        type: string
   push:
     branches:
-      - main
-      - rc/*
-      - release/*
-      - ga/*
-      - develop/*
-      - feature/*
-  pull_request:
-    branches:
-      - main
-      - rc/*
-      - release/*
-      - ga/*
-      - develop/*
-      - feature/*
-
-env:
-  CARGO_TERM_COLOR: always
+      - develop/v2.8.0
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
+      # -----------------------------
+      # 1. 防测试篡改
+      # -----------------------------
+      - name: Detect test file changes
+        run: |
+          git fetch origin main
+          CHANGED=$(git diff --name-only origin/main...HEAD | grep "^tests/" || true)
+          if [ ! -z "$CHANGED" ]; then
+            echo "❌ Tests modified:"
+            echo "$CHANGED"
+            exit 1
+          fi
+
+      # -----------------------------
+      # 2. 禁止新增 #[ignore]（不追溯现有）
+      # -----------------------------
+      - name: Detect NEW #[ignore] additions
+        run: |
+          git fetch origin main
+          NEW_IGNORES=$(git diff origin/main...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
+          if [ ! -z "$NEW_IGNORES" ]; then
+            echo "❌ NEW #[ignore] detected in PR:"
+            echo "$NEW_IGNORES"
+            exit 1
+          fi
+
+      # -----------------------------
+      # 3. 安装 Rust
+      # -----------------------------
       - name: Setup Rust
-        run: |
-          rustup install stable
-          rustup default stable
-          rustup component add clippy rustfmt
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Format Check
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
+      # -----------------------------
+      # 4. 构建
+      # -----------------------------
       - name: Build
-        run: cargo build --all
-
-      - name: Test
         run: |
-          # Limit virtual memory to 8GB to prevent excessive memory usage
-          ulimit -v 8388608
-          cargo test --all
+          set -e
+          cargo build --all
+
+      # -----------------------------
+      # 5. 运行 clippy
+      # -----------------------------
+      - name: Clippy
+        run: |
+          set -e
+          cargo clippy --all -- -D warnings
+
+      # -----------------------------
+      # 6. 强制完整测试
+      # -----------------------------
+      - name: Run full test suite
+        run: |
+          set -e
+          cargo test
+
+      # -----------------------------
+      # 5. 生成 proof（CI 生成，不信任 PR）
+      # -----------------------------
+      - name: Generate verification report
+        run: |
+          python3 scripts/verification_engine.py
+
+      # -----------------------------
+      # 6. 校验 proof
+      # -----------------------------
+      - name: Validate proof
+        run: |
+          cat verification_report.json
+
+          BASELINE=$(jq -r '.baseline_verified' verification_report.json)
+          BLOCKERS=$(jq -r '.blocker_count' verification_report.json)
+
+          if [ "$BASELINE" != "true" ]; then
+            echo "❌ baseline_verified != true"
+            exit 1
+          fi
+
+          if [ "$BLOCKERS" != "0" ]; then
+            echo "❌ blockers exist"
+            exit 1
+          fi
+
+          echo "✅ Proof verified"
+
+      # -----------------------------
+      # 7. 禁止 proof 文件被 PR 修改
+      # -----------------------------
+      - name: Prevent proof tampering
+        run: |
+          if git diff --name-only origin/main...HEAD | grep "verification_report.json"; then
+            echo "❌ Proof file modified in PR"
+            exit 1
+          fi

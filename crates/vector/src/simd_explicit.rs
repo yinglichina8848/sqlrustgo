@@ -6,7 +6,8 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", test))]
+#[allow(unused_imports)]
 use std::arch::aarch64::*;
 
 /// SIMD vector size for f32 (AVX2 = 8, AVX-512 = 16)
@@ -167,7 +168,9 @@ pub fn manhattan_distance_simd(a: &[f32], b: &[f32]) -> f32 {
                 let a_vec = _mm256_loadu_ps(a.as_ptr().add(i));
                 let b_vec = _mm256_loadu_ps(b.as_ptr().add(i));
                 let diff = _mm256_sub_ps(a_vec, b_vec);
-                let abs_diff = _mm256_abs_ps(diff);
+                // _mm256_abs_ps is AVX2 but not available in stable std::arch - use manual abs via sign mask
+                let sign_mask = _mm256_set1_ps(-0.0f32);
+                let abs_diff = _mm256_andnot_ps(sign_mask, diff);
                 acc = _mm256_add_ps(acc, abs_diff);
                 i += 8;
             }
@@ -227,6 +230,52 @@ pub fn batch_compute_distances<V: AsRef<[f32]>>(
     vectors
         .iter()
         .map(|v| compute_similarity_simd(query, v.as_ref(), metric))
+        .collect()
+}
+
+/// Compute L2 distance (euclidean) using SIMD - alias for euclidean_distance_simd
+#[inline]
+pub fn l2_distance_simd(a: &[f32], b: &[f32]) -> f32 {
+    euclidean_distance_simd(a, b)
+}
+
+/// Compute cosine distance (1 - cosine similarity) using SIMD
+#[inline]
+pub fn cosine_distance_simd(a: &[f32], b: &[f32]) -> f32 {
+    1.0 - cosine_similarity_simd(a, b)
+}
+
+/// Batch compute dot products: query against multiple vectors in one pass
+/// Uses AVX2 for efficient batch processing
+pub fn batch_dot_product_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| dot_product_simd(query, v.as_ref()))
+        .collect()
+}
+
+/// Batch compute L2 distances: query against multiple vectors
+pub fn batch_l2_distance_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| l2_distance_simd(query, v.as_ref()))
+        .collect()
+}
+
+/// Batch compute cosine distances: query against multiple vectors
+pub fn batch_cosine_distance_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| cosine_distance_simd(query, v.as_ref()))
         .collect()
 }
 

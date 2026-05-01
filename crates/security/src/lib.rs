@@ -11,6 +11,7 @@
 pub mod alert;
 pub mod audit;
 pub mod cancel;
+pub mod encryption;
 pub mod firewall;
 pub mod session;
 pub mod tls;
@@ -21,6 +22,9 @@ pub use alert::{
 };
 pub use audit::{AuditConfig, AuditEvent, AuditFilter, AuditManager, AuditRecord, AuditStats};
 pub use cancel::{check_cancel, CancelGuard, CancelToken, SqlError};
+pub use encryption::{
+    create_shared_key_manager, EncryptionError, Encryptor, KeyManager, SharedKeyManager,
+};
 pub use firewall::{
     create_shared_firewall, BlacklistPattern, FirewallConfig, FirewallError, FirewallStats,
     SharedFirewall, SqlFirewall, ThreatSeverity, WhitelistPattern,

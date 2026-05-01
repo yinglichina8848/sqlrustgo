@@ -1,0 +1,235 @@
+name: CI (Optimized)
+
+on:
+  pull_request:
+    branches:
+      - develop/v2.8.0
+      - develop/v2.7.0
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.env*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ----------------------------------------
+  # Pre-check jobs (run in parallel)
+  # ----------------------------------------
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "clippy"
+          cache-targets: false
+
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+  docs:
+    name: Docs Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check docs build
+        run: cargo doc --no-deps --all-features
+        continue-on-error: true
+
+  # ----------------------------------------
+  # Build job
+  # ----------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build"
+          cache-targets: false
+
+      - name: Build
+        run: cargo build --all-features
+
+  # ----------------------------------------
+  # Test jobs (run in parallel after build)
+  # ----------------------------------------
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "test"
+          cache-targets: false
+
+      - name: Run unit tests
+        run: cargo test --workspace --lib
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "test-integration"
+          cache-targets: false
+
+      - name: Run integration tests
+        run: cargo test --workspace --test '*'
+
+  # ----------------------------------------
+  # Security audit
+  # ----------------------------------------
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run security audit
+        run: cargo audit || true
+
+  # ----------------------------------------
+  # Verification gate
+  # ----------------------------------------
+  verify:
+    name: Anti-Cheat Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # -----------------------------
+      # 1. 防测试篡改
+      # -----------------------------
+      - name: Detect test file changes
+        run: |
+          git fetch origin main
+          CHANGED=$(git diff --name-only origin/main...HEAD | grep "^tests/" || true)
+          if [ ! -z "$CHANGED" ]; then
+            echo "❌ Tests modified:"
+            echo "$CHANGED"
+            exit 1
+          fi
+
+      # -----------------------------
+      # 2. 禁止新增 #[ignore]
+      # -----------------------------
+      - name: Detect NEW #[ignore] additions
+        run: |
+          git fetch origin main
+          NEW_IGNORES=$(git diff origin/main...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
+          if [ ! -z "$NEW_IGNORES" ]; then
+            echo "❌ NEW #[ignore] detected in PR:"
+            echo "$NEW_IGNORES"
+            exit 1
+          fi
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate verification report
+        run: |
+          python3 scripts/verification_engine.py || true
+
+      - name: Validate proof
+        run: |
+          if [ -f verification_report.json ]; then
+            cat verification_report.json
+            BASELINE=$(jq -r '.baseline_verified' verification_report.json)
+            BLOCKERS=$(jq -r '.blocker_count' verification_report.json)
+
+            if [ "$BASELINE" != "true" ]; then
+              echo "❌ baseline_verified != true"
+              exit 1
+            fi
+
+            if [ "$BLOCKERS" != "0" ]; then
+              echo "❌ blockers exist"
+              exit 1
+            fi
+
+            echo "✅ Proof verified"
+          else
+            echo "⚠️ verification_report.json not found, skipping"
+          fi
+
+      - name: Prevent proof tampering
+        run: |
+          if git diff --name-only origin/main...HEAD | grep "verification_report.json"; then
+            echo "❌ Proof file modified in PR"
+            exit 1
+          fi

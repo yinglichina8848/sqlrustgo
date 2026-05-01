@@ -63,8 +63,8 @@ impl<'a> InformationSchema<'a> {
     /// Get all schemata from the catalog
     pub fn get_schemata(&self) -> Vec<SchemaRow> {
         self.catalog
-            .all_schemas()
-            .iter()
+            .schemas()
+            .values()
             .map(|schema| SchemaRow {
                 schema_name: schema.name.clone(),
                 schema_owner: "owner".to_string(), // Default owner since Catalog doesn't track owners
@@ -76,8 +76,8 @@ impl<'a> InformationSchema<'a> {
     pub fn get_tables(&self) -> Vec<TableRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
                 let table_type = "BASE TABLE".to_string();
 
                 // Tables are generally insertable
@@ -85,7 +85,7 @@ impl<'a> InformationSchema<'a> {
 
                 rows.push(TableRow {
                     table_schema: schema.name.clone(),
-                    table_name: table.name.clone(),
+                    table_name: table_ref.name.clone(),
                     table_type,
                     is_insertable_into,
                 });
@@ -99,15 +99,15 @@ impl<'a> InformationSchema<'a> {
     pub fn get_columns(&self) -> Vec<ColumnRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
-                for (i, column) in table.columns.iter().enumerate() {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                for (i, column) in table_ref.columns.iter().enumerate() {
                     let (character_maximum_length, numeric_precision, numeric_scale) =
                         Self::get_type_attributes(&column.data_type);
 
                     rows.push(ColumnRow {
                         table_schema: schema.name.clone(),
-                        table_name: table.name.clone(),
+                        table_name: table_ref.name.clone(),
                         column_name: column.name.clone(),
                         ordinal_position: (i + 1) as i32,
                         column_default: column.default_value.as_ref().map(|v| format!("{}", v)),
@@ -140,13 +140,13 @@ impl<'a> InformationSchema<'a> {
     pub fn get_indexes(&self) -> Vec<IndexRow> {
         let mut rows = Vec::new();
 
-        for schema in self.catalog.all_schemas() {
-            for table in schema.tables() {
-                for index in &table.indices {
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                for index in &table_ref.indices {
                     for (i, column_name) in index.columns.iter().enumerate() {
                         rows.push(IndexRow {
                             table_schema: schema.name.clone(),
-                            table_name: table.name.clone(),
+                            table_name: table_ref.name.clone(),
                             index_name: index.name.clone(),
                             column_name: column_name.clone(),
                             ordinal_position: (i + 1) as i32,
@@ -173,7 +173,6 @@ impl<'a> InformationSchema<'a> {
             DataType::Timestamp => (None, None, None),
             DataType::Null => (None, None, None),
             DataType::Uuid => (None, Some(128), None),
-            DataType::Uuid => (None, None, None),
             DataType::Array => (None, None, None),
             DataType::Enum => (None, None, None),
         }
@@ -183,12 +182,16 @@ impl<'a> InformationSchema<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlrustgo_catalog::{ColumnDefinition, DataType, IndexInfo, Schema, Table};
+    use sqlrustgo_catalog::{index::IndexInfo, schema::Schema, ColumnDefinition, DataType, Table};
 
     fn create_test_catalog() -> Catalog {
-        let mut catalog = Catalog::new();
+        let mut catalog = Catalog::new("test_catalog");
 
-        // Add a schema
+        // Add public schema (default)
+        let public_schema = Schema::new("public");
+        catalog.add_schema(public_schema).unwrap();
+
+        // Add test schema
         let schema = Schema::new("test_schema");
 
         // Create users table
@@ -346,13 +349,12 @@ mod tests {
 
     #[test]
     fn test_empty_catalog() {
-        let catalog = Catalog::new();
+        let catalog = Catalog::new("test");
         let info_schema = InformationSchema::new(&catalog);
 
-        // Should still have public schema
+        // Empty catalog has no schemas (public is not auto-created)
         let schemata = info_schema.get_schemata();
-        assert_eq!(schemata.len(), 1);
-        assert_eq!(schemata[0].schema_name, "public");
+        assert_eq!(schemata.len(), 0);
 
         // No tables or columns
         assert!(info_schema.get_tables().is_empty());

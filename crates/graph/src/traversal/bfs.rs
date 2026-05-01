@@ -120,8 +120,8 @@ where
         let neighbors = graph(node);
 
         for neighbor in neighbors {
-            if !distances.contains_key(&neighbor) {
-                distances.insert(neighbor, dist + 1);
+            if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor) {
+                e.insert(dist + 1);
                 parents.insert(neighbor, node);
                 queue.push_back((neighbor, dist + 1));
                 visited.push(neighbor);

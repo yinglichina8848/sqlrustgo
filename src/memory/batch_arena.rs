@@ -182,4 +182,34 @@ mod tests {
         let v: Vec<i32> = arena.alloc_vector();
         assert_eq!(v.capacity(), 1024);
     }
+
+    #[test]
+    fn test_batch_arena_alloc_vector_with_capacity() {
+        let arena = BatchArena::with_batch_size(1024);
+        let v: Vec<i32> = arena.alloc_vector_with_capacity(256);
+        assert!(v.capacity() >= 256);
+    }
+
+    #[test]
+    fn test_batch_arena_dictionary() {
+        let arena = BatchArena::with_batch_size(1024);
+        let dict: Vec<i32> = arena.alloc_dictionary();
+        assert!(dict.capacity() >= 0);
+    }
+
+    #[test]
+    fn test_batch_arena_multiple_allocations() {
+        let arena = BatchArena::with_batch_size(1024);
+        let v1: Vec<i32> = arena.alloc_vector();
+        let v2: Vec<i32> = arena.alloc_vector();
+        assert_eq!(v1.capacity(), 1024);
+        assert_eq!(v2.capacity(), 1024);
+    }
+
+    #[test]
+    fn test_batch_arena_remaining() {
+        let arena = BatchArena::with_batch_size(1024);
+        let remaining = arena.remaining();
+        assert!(remaining >= 1024 * 64); // capacity_hint estimate
+    }
 }

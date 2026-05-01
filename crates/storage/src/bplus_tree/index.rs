@@ -1,6 +1,7 @@
 //! Disk-based B+Tree index implementation
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo_types::Value;
 use std::collections::{BTreeMap, HashSet};
 use thiserror::Error;
 
@@ -17,30 +18,99 @@ const PAGE_DATA_SIZE: usize = 4096 - 64;
 #[derive(Debug, Clone, Error)]
 #[error("unique constraint violation: key {key} already exists")]
 pub struct UniqueConstraintViolation {
+    /// The duplicate key that caused the violation
     pub key: i64,
 }
 
+/// B+Tree key wrapper for i64 keys
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub i64);
 
-/// Composite key for multi-column indexes
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
+/// B+Tree key wrapper for i64 keys
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Key(pub i64);
+
+/// Composite key for multi-column indexes - uses Vec<Value> with lexicographic ordering
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CompositeKey {
-    pub columns: Vec<i64>,
+    /// Column values in order
+    pub values: Vec<Value>,
 }
 
 impl CompositeKey {
-    pub fn new(columns: Vec<i64>) -> Self {
-        Self { columns }
+    /// Create a new composite key from values
+    pub fn new(values: Vec<Value>) -> Self {
+        Self { values }
     }
 
-    pub fn from_slice(slice: &[i64]) -> Self {
+    /// Create composite key from a slice
+    pub fn from_slice(slice: &[Value]) -> Self {
         Self {
-            columns: slice.to_vec(),
+            values: slice.to_vec(),
+        }
+    }
+
+    /// Check if composite key is empty
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    /// Create from a row with specified column indices
+    pub fn from_row(row: &[Value], column_indices: &[usize]) -> Self {
+        Self {
+            values: column_indices
+                .iter()
+                .map(|&i| row.get(i).cloned().unwrap_or(Value::Null))
+                .collect(),
         }
     }
 }
 
+/// Compare two Values with a total order.
+/// Null is considered less than any other value.
+/// When types differ, ordering is based on type variant order.
+fn compare_values(lhs: &Value, rhs: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    // Define type precedence for total ordering across variants
+    fn type_order(v: &Value) -> u8 {
+        match v {
+            Value::Null => 0,
+            Value::Boolean(_) => 1,
+            Value::Integer(_) => 2,
+            Value::Float(_) => 3,
+            Value::Decimal(_) => 4,
+            Value::Text(_) => 5,
+            Value::Blob(_) => 6,
+            Value::Date(_) => 7,
+            Value::Timestamp(_) => 8,
+            Value::Uuid(_) => 9,
+            Value::Array(_) => 10,
+            Value::Enum(_, _) => 11,
+        }
+    }
+
+    // If both are Null, they're equal
+    match (lhs, rhs) {
+        (Value::Null, Value::Null) => Ordering::Equal,
+        (Value::Null, _) => Ordering::Less,
+        (_, Value::Null) => Ordering::Greater,
+        _ => {
+            // First compare by type order
+            let type_cmp = type_order(lhs).cmp(&type_order(rhs));
+            if type_cmp != Ordering::Equal {
+                return type_cmp;
+            }
+            // Same type - use PartialOrd
+            match lhs.partial_cmp(rhs) {
+                Some(cmp) => cmp,
+                None => Ordering::Equal, // Shouldn't happen for same-type comparisons
+            }
+        }
+    }
+}
+
+/// Lexicographic ordering for CompositeKey
 impl PartialOrd for CompositeKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -49,30 +119,39 @@ impl PartialOrd for CompositeKey {
 
 impl Ord for CompositeKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        for (a, b) in self.columns.iter().zip(other.columns.iter()) {
-            match a.cmp(b) {
-                std::cmp::Ordering::Equal => continue,
-                other => return other,
+        for (lhs, rhs) in self.values.iter().zip(other.values.iter()) {
+            let cmp = compare_values(lhs, rhs);
+            if cmp != std::cmp::Ordering::Equal {
+                return cmp;
             }
         }
-        self.columns.len().cmp(&other.columns.len())
+        self.values.len().cmp(&other.values.len())
     }
 }
 
+/// Index value wrapper (row ID in index)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Value(pub u32);
+pub struct IndexValue(pub u32);
 
+/// B+Tree node for disk-based storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BTreeNode {
+    /// Whether this is a leaf node
     pub is_leaf: bool,
+    /// Number of keys in this node
     pub num_keys: u16,
+    /// Keys stored in this node
     pub keys: Vec<i64>,
+    /// Values (row IDs) stored in this node
     pub values: Vec<u32>,
+    /// Child node page IDs
     pub children: Vec<u32>,
+    /// Next leaf node page ID (for leaf nodes only)
     pub next_leaf: Option<u32>,
 }
 
 impl BTreeNode {
+    /// Create a new leaf node
     pub fn new_leaf() -> Self {
         Self {
             is_leaf: true,
@@ -84,6 +163,7 @@ impl BTreeNode {
         }
     }
 
+    /// Create a new internal node
     pub fn new_internal() -> Self {
         Self {
             is_leaf: false,
@@ -95,25 +175,26 @@ impl BTreeNode {
         }
     }
 
+    /// Check if node is full (no more keys can be added)
     pub fn is_full(&self) -> bool {
         self.num_keys as usize >= MAX_KEYS_PER_NODE
     }
 
+    /// Check if node can be split
     pub fn can_split(&self) -> bool {
         self.num_keys as usize >= MAX_KEYS_PER_NODE
     }
 
+    /// Find child index for insert (binary search)
     pub fn find_child_index(&self, key: i64) -> usize {
-        // Binary search for the first key >= search key
-        // This is more efficient than linear search for B+Tree nodes
         match self.keys.binary_search(&key) {
-            Ok(idx) => idx + 1, // Key found, go to child at idx+1
-            Err(idx) => idx,    // Key not found, idx is insertion point
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
         }
     }
 
+    /// Find exact key index
     pub fn find_key_index(&self, key: i64) -> Option<usize> {
-        // Binary search for exact key match
         self.keys.binary_search(&key).ok()
     }
 
@@ -601,9 +682,14 @@ impl CompositeBTreeIndex {
     }
 
     fn encode_composite_key(&self, key: &CompositeKey) -> i64 {
-        // Simple encoding: use first column as the key
-        // For full implementation, would need more sophisticated encoding
-        key.columns.first().copied().unwrap_or(0)
+        // Simplified encoding: use first column as i64 for storage
+        // For proper multi-column support, the BTreeNode would need generic key types
+        // This is a temporary solution until the full refactor
+        if let Some(Value::Integer(v)) = key.values.first() {
+            *v
+        } else {
+            0
+        }
     }
 
     fn allocate_node(&mut self, node: BTreeNode) -> u32 {
@@ -1623,14 +1709,19 @@ mod tests {
 
     #[test]
     fn test_composite_key_creation() {
-        let key = CompositeKey::new(vec![1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
+        let key = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        assert_eq!(key.values.len(), 3);
     }
 
     #[test]
     fn test_composite_key_from_slice() {
-        let key = CompositeKey::from_slice(&[1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
+        let key =
+            CompositeKey::from_slice(&[Value::Integer(1), Value::Integer(2), Value::Integer(3)]);
+        assert_eq!(key.values.len(), 3);
     }
 
     #[test]
@@ -1670,8 +1761,14 @@ mod tests {
     #[test]
     fn test_composite_btree_index_insert_unique() {
         let mut index = CompositeBTreeIndex::new(2);
-        index.insert(CompositeKey::new(vec![1, 2]), 100);
-        index.insert(CompositeKey::new(vec![3, 4]), 200);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]),
+            100,
+        );
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(3), Value::Integer(4)]),
+            200,
+        );
 
         assert_eq!(index.len(), 2);
     }
@@ -1679,9 +1776,12 @@ mod tests {
     #[test]
     fn test_composite_btree_index_search() {
         let mut index = CompositeBTreeIndex::new(2);
-        index.insert(CompositeKey::new(vec![1, 2]), 100);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]),
+            100,
+        );
 
-        let key = CompositeKey::new(vec![1, 2]);
+        let key = CompositeKey::new(vec![Value::Integer(1), Value::Integer(2)]);
         let result = index.search(&key);
         assert_eq!(result, Some(100));
     }
@@ -1689,12 +1789,12 @@ mod tests {
     #[test]
     fn test_composite_btree_index_range_query() {
         let mut index = CompositeBTreeIndex::new(1);
-        index.insert(CompositeKey::new(vec![1]), 100);
-        index.insert(CompositeKey::new(vec![5]), 200);
-        index.insert(CompositeKey::new(vec![10]), 300);
+        index.insert(CompositeKey::new(vec![Value::Integer(1)]), 100);
+        index.insert(CompositeKey::new(vec![Value::Integer(5)]), 200);
+        index.insert(CompositeKey::new(vec![Value::Integer(10)]), 300);
 
-        let start = CompositeKey::new(vec![2]);
-        let end = CompositeKey::new(vec![8]);
+        let start = CompositeKey::new(vec![Value::Integer(2)]);
+        let end = CompositeKey::new(vec![Value::Integer(8)]);
         let results = index.range_query(&start, &end);
         // Should return values in range
         assert!(results.len() >= 0);
@@ -1744,24 +1844,44 @@ mod composite_index_tests {
     #[test]
     fn test_composite_key_creation() {
         // Test composite key creation
-        let key = CompositeKey::new(vec![1, 2, 3]);
-        assert_eq!(key.columns.len(), 3);
-        assert_eq!(key.columns[0], 1);
-        assert_eq!(key.columns[1], 2);
-        assert_eq!(key.columns[2], 3);
+        let key = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        assert_eq!(key.values.len(), 3);
+        assert_eq!(key.values[0], Value::Integer(1));
+        assert_eq!(key.values[1], Value::Integer(2));
+        assert_eq!(key.values[2], Value::Integer(3));
     }
 
     #[test]
     fn test_composite_key_from_slice() {
-        let key = CompositeKey::from_slice(&[10, 20, 30]);
-        assert_eq!(key.columns, vec![10, 20, 30]);
+        let key =
+            CompositeKey::from_slice(&[Value::Integer(10), Value::Integer(20), Value::Integer(30)]);
+        assert_eq!(
+            key.values,
+            vec![Value::Integer(10), Value::Integer(20), Value::Integer(30)]
+        );
     }
 
     #[test]
     fn test_composite_key_equality() {
-        let key1 = CompositeKey::new(vec![1, 2, 3]);
-        let key2 = CompositeKey::new(vec![1, 2, 3]);
-        let key3 = CompositeKey::new(vec![1, 2, 4]);
+        let key1 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let key2 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let key3 = CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(4),
+        ]);
 
         assert_eq!(key1, key2);
         assert!(key1 != key3);
@@ -1772,10 +1892,16 @@ mod composite_index_tests {
         let mut index = CompositeBTreeIndex::new(2);
 
         // Insert composite keys
-        index.insert(CompositeKey::new(vec![1, 100]), 1);
+        index.insert(
+            CompositeKey::new(vec![Value::Integer(1), Value::Integer(100)]),
+            1,
+        );
 
         // Search should work
-        let result = index.search(&CompositeKey::new(vec![1, 100]));
+        let result = index.search(&CompositeKey::new(vec![
+            Value::Integer(1),
+            Value::Integer(100),
+        ]));
         assert!(result.is_some());
     }
 

@@ -1,9 +1,17 @@
 //! HNSW (Hierarchical Navigable Small World) index implementation
+//!
+//! Optimized implementation using binary heaps and efficient data structures.
 
 use crate::error::{VectorError, VectorResult};
 use crate::metrics::{compute_similarity, DistanceMetric};
+use crate::simd_explicit::{cosine_distance_simd, dot_product_simd, l2_distance_simd};
 use crate::traits::{IndexEntry, VectorIndex, VectorRecord};
+use parking_lot::RwLock;
 use rand::Rng;
+use rayon::prelude::*;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
 #[derive(Debug, Clone)]
 struct HnswNode {
@@ -18,6 +26,41 @@ struct Layer {
 }
 
 #[derive(Debug, Clone)]
+struct DistNode {
+    dist: f32,
+    idx: usize,
+}
+
+impl PartialEq for DistNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.dist == other.dist && self.idx == other.idx
+    }
+}
+
+impl Eq for DistNode {}
+
+impl Ord for DistNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.dist
+            .partial_cmp(&other.dist)
+            .map(|o| {
+                if o == Ordering::Equal {
+                    self.idx.cmp(&other.idx)
+                } else {
+                    o
+                }
+            })
+            .unwrap_or(Ordering::Greater)
+    }
+}
+
+impl PartialOrd for DistNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug)]
 pub struct HnswIndex {
     dimension: usize,
     metric: DistanceMetric,
@@ -29,6 +72,9 @@ pub struct HnswIndex {
     nodes: Vec<HnswNode>,
     layers: Vec<Layer>,
     rng: rand::rngs::StdRng,
+    // Generational visited marker for O(1) visited tracking
+    visit_marker: AtomicU32,
+    visited: RwLock<Vec<u32>>,
 }
 
 impl HnswIndex {
@@ -44,6 +90,8 @@ impl HnswIndex {
             nodes: Vec::new(),
             layers: Vec::new(),
             rng: rand::SeedableRng::from_seed([42u8; 32]),
+            visit_marker: AtomicU32::new(0),
+            visited: RwLock::new(Vec::new()),
         }
     }
 
@@ -64,6 +112,8 @@ impl HnswIndex {
             nodes: Vec::new(),
             layers: Vec::new(),
             rng: rand::SeedableRng::from_seed([42u8; 32]),
+            visit_marker: AtomicU32::new(0),
+            visited: RwLock::new(Vec::new()),
         }
     }
 
@@ -76,10 +126,16 @@ impl HnswIndex {
         level.min(16)
     }
 
-    fn distance(&self, idx1: usize, idx2: usize) -> f32 {
-        let v1 = &self.nodes[idx1].vector;
-        let v2 = &self.nodes[idx2].vector;
-        -compute_similarity(v1, v2, self.metric)
+    fn distance_to_query(&self, query: &[f32], idx: usize) -> f32 {
+        let node_vector = &self.nodes[idx].vector;
+        match self.metric {
+            DistanceMetric::Euclidean => l2_distance_simd(query, node_vector),
+            DistanceMetric::Cosine => cosine_distance_simd(query, node_vector),
+            DistanceMetric::DotProduct => -dot_product_simd(query, node_vector),
+            DistanceMetric::Manhattan => {
+                -crate::simd_explicit::manhattan_distance_simd(query, node_vector)
+            }
+        }
     }
 
     fn search_layer(
@@ -88,56 +144,56 @@ impl HnswIndex {
         ep_idx: usize,
         ef: usize,
         level: usize,
+        visited: &mut [u32],
+        marker: u32,
     ) -> Vec<(usize, f32)> {
-        let mut visited = std::collections::HashSet::new();
-        visited.insert(ep_idx);
+        visited[ep_idx] = marker;
 
-        let mut candidates: Vec<(usize, f32)> = vec![(
-            ep_idx,
-            self.distance(ep_idx, self.nodes.len().saturating_sub(1)),
-        )];
+        let mut candidates: BinaryHeap<DistNode> = BinaryHeap::new();
+        candidates.push(DistNode {
+            dist: self.distance_to_query(query, ep_idx),
+            idx: ep_idx,
+        });
 
-        let query_dist = |idx: usize| -> f32 {
-            let v = &self.nodes[idx].vector;
-            -compute_similarity(query, v, self.metric)
-        };
+        let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
 
-        let mut results: Vec<(usize, f32)> = vec![(ep_idx, query_dist(ep_idx))];
+        while let Some(node) = candidates.pop() {
+            let worst_result = results.peek().map(|r| r.dist).unwrap_or(f32::MAX);
 
-        while !candidates.is_empty() {
-            let (current, _) = candidates.remove(0);
+            if results.len() >= ef && node.dist > worst_result {
+                break;
+            }
+
+            let node_idx = node.idx;
+            results.push(node);
 
             let neighbors = self
                 .layers
                 .get(level)
-                .map(|l| l.neighbors.get(current).cloned().unwrap_or_default())
+                .map(|l| l.neighbors.get(node_idx).cloned().unwrap_or_default())
                 .unwrap_or_default();
 
             for &neighbor in neighbors.iter() {
-                if visited.contains(&neighbor) {
-                    continue;
-                }
-                visited.insert(neighbor);
+                if visited[neighbor] != marker {
+                    visited[neighbor] = marker;
 
-                let dist = query_dist(neighbor);
-                let worst_dist = results.last().map(|(_, d)| *d).unwrap_or(f32::MAX);
+                    let neighbor_dist = self.distance_to_query(query, neighbor);
 
-                if worst_dist >= dist || results.len() < ef {
-                    candidates.push((neighbor, dist));
-                    candidates.sort_by(|a, b| {
-                        a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Greater)
-                    });
-
-                    results.push((neighbor, dist));
-                    results.sort_by(|a, b| {
-                        a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Greater)
-                    });
-                    results.truncate(ef);
+                    if results.len() < ef || neighbor_dist < worst_result {
+                        candidates.push(DistNode {
+                            dist: neighbor_dist,
+                            idx: neighbor,
+                        });
+                    }
                 }
             }
         }
 
         results
+            .into_vec()
+            .into_iter()
+            .map(|node| (node.idx, node.dist))
+            .collect()
     }
 }
 
@@ -190,53 +246,32 @@ impl VectorIndex for HnswIndex {
 
         let mut current_idx = self.entry_point.unwrap();
 
+        let n = self.nodes.len();
+        let mut visited = self.visited.write();
+        if visited.len() < n {
+            visited.resize(n, 0);
+        }
+        let marker = self.visit_marker.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+
         for lvl in (1..=self.max_level).rev() {
-            let results = self.search_layer(vector, current_idx, 1, lvl);
+            let results = self.search_layer(vector, current_idx, 1, lvl, &mut visited, marker);
             if let Some((next_idx, _)) = results.first() {
                 current_idx = *next_idx;
             }
         }
 
         let m = self.m;
-        let dist_current_idx = self.distance(current_idx, idx);
 
-        let nodes_len = self.nodes.len();
-        let vectors: Vec<Vec<f32>> = self.nodes.iter().map(|n| n.vector.clone()).collect();
-        let dist_fn =
-            |n: usize| -> f32 { -compute_similarity(&vectors[n], &vectors[idx], self.metric) };
-        let current_distances: Vec<f32> = (0..nodes_len).map(dist_fn).collect();
+        // Use search_layer to find m closest nodes - O(log n) instead of O(n)
+        let neighbor_results =
+            self.search_layer(vector, current_idx, m.max(1), 0, &mut visited, marker);
 
-        for lvl in 0..=level {
-            let layer_idx = lvl.min(self.layers.len().saturating_sub(1));
+        let neighbors = &mut self.layers[0].neighbors;
 
-            {
-                let neighbors = &mut self.layers[layer_idx].neighbors;
-
-                let mut candidates: Vec<(usize, f32)> = vec![(current_idx, dist_current_idx)];
-
-                while !candidates.is_empty() && neighbors[idx].len() < m {
-                    candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    let (best_idx, _) = candidates.remove(0);
-
-                    if !neighbors[idx].contains(&best_idx) {
-                        neighbors[idx].push(best_idx);
-                        neighbors[best_idx].push(idx);
-
-                        let best_dist = current_distances[best_idx];
-                        let new_candidates: Vec<_> = neighbors[best_idx]
-                            .iter()
-                            .map(|&n| (n, current_distances[n]))
-                            .filter(|(_, d)| *d < best_dist)
-                            .collect();
-
-                        for nc in new_candidates {
-                            if !candidates.contains(&nc) {
-                                candidates.push(nc);
-                            }
-                        }
-                        candidates.truncate(m * 2);
-                    }
-                }
+        for (neighbor_idx, _) in neighbor_results.iter().take(m) {
+            if *neighbor_idx != idx && !neighbors[idx].contains(neighbor_idx) {
+                neighbors[idx].push(*neighbor_idx);
+                neighbors[*neighbor_idx].push(idx);
             }
         }
 
@@ -263,14 +298,22 @@ impl VectorIndex for HnswIndex {
         let entry_point = self.entry_point.ok_or(VectorError::EmptyIndex)?;
         let mut current_idx = entry_point;
 
+        let n = self.nodes.len();
+        let mut visited = self.visited.write();
+        if visited.len() < n {
+            visited.resize(n, 0);
+        }
+        let marker = self.visit_marker.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+
         for level in (1..=self.max_level).rev() {
-            let results = self.search_layer(query, current_idx, 1, level);
+            let results = self.search_layer(query, current_idx, 1, level, &mut visited, marker);
             if let Some((next_idx, _)) = results.first() {
                 current_idx = *next_idx;
             }
         }
 
-        let results = self.search_layer(query, current_idx, self.ef_search, 0);
+        let results =
+            self.search_layer(query, current_idx, self.ef_search, 0, &mut visited, marker);
 
         let mut entries: Vec<_> = results
             .into_iter()
@@ -315,6 +358,219 @@ impl VectorIndex for HnswIndex {
             })
             .collect()
     }
+
+    fn iter_vectors(&self) -> Box<dyn Iterator<Item = (u64, &[f32])> + '_> {
+        Box::new(self.nodes.iter().map(|n| (n.id, n.vector.as_slice())))
+    }
+}
+
+impl HnswIndex {
+    pub fn build_from_vectors(&mut self, vectors: Vec<(u64, Vec<f32>)>) -> VectorResult<()> {
+        if vectors.is_empty() {
+            return Ok(());
+        }
+
+        let dim = vectors[0].1.len();
+        self.dimension = dim;
+
+        for (id, vector) in vectors {
+            let node = HnswNode {
+                id,
+                vector,
+                level: 0,
+            };
+            self.nodes.push(node);
+        }
+
+        let n = self.nodes.len();
+        let m = self.m.max(1);
+        let _ef_construction = self.ef_construction.max(64);
+
+        // Assign random levels to each node based on probability 1/m
+        let prob = 1.0 / m as f32;
+        for node in self.nodes.iter_mut() {
+            let mut lvl = 0;
+            while self.rng.gen::<f32>() < prob {
+                lvl += 1;
+            }
+            node.level = lvl;
+        }
+
+        // Calculate max level
+        self.max_level = self.nodes.iter().map(|n| n.level).max().unwrap_or(0);
+        self.max_level = self.max_level.min(16);
+
+        // Initialize layers
+        while self.layers.len() <= self.max_level {
+            self.layers.push(Layer {
+                neighbors: vec![Vec::new(); n],
+            });
+        }
+
+        // Find entry point (node with highest level)
+        self.entry_point = self
+            .nodes
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, n)| n.level)
+            .map(|(idx, _)| idx);
+
+        // Parallel build layer 0 k-NN
+        let nodes = &self.nodes;
+        let metric = self.metric;
+        let max_candidates = (m * 4).max(64);
+
+        let all_knns: Vec<Vec<usize>> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let query = &nodes[idx].vector;
+                let mut results: BinaryHeap<DistNode> = BinaryHeap::new();
+
+                for (j, node) in nodes.iter().enumerate().take(n) {
+                    if j == idx {
+                        continue;
+                    }
+                    let d = -compute_similarity(query, &node.vector, metric);
+                    results.push(DistNode { dist: d, idx: j });
+                    if results.len() > max_candidates {
+                        let _ = results.pop();
+                    }
+                }
+
+                let mut neighbors: Vec<usize> =
+                    results.into_vec().into_iter().map(|n| n.idx).collect();
+
+                // Sort by distance and take top m
+                neighbors.sort_by(|&a, &b| {
+                    let da = -compute_similarity(query, &nodes[a].vector, metric);
+                    let db = -compute_similarity(query, &nodes[b].vector, metric);
+                    da.partial_cmp(&db).unwrap()
+                });
+
+                neighbors.truncate(m);
+                neighbors
+            })
+            .collect();
+
+        // Build bidirectional k-NN graph for layer 0
+        for (idx, knns) in all_knns.into_iter().enumerate() {
+            for &neighbor in &knns {
+                if self.layers[0].neighbors[idx].len() < m
+                    && !self.layers[0].neighbors[idx].contains(&neighbor)
+                {
+                    self.layers[0].neighbors[idx].push(neighbor);
+                }
+                if self.layers[0].neighbors[neighbor].len() < m
+                    && !self.layers[0].neighbors[neighbor].contains(&idx)
+                {
+                    self.layers[0].neighbors[neighbor].push(idx);
+                }
+            }
+        }
+
+        // Build higher layers - just connect nodes to random neighbors at same level
+        for level in 1..=self.max_level {
+            let level_nodes: Vec<usize> = self
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.level >= level)
+                .map(|(idx, _)| idx)
+                .collect();
+
+            if level_nodes.len() < 2 {
+                continue;
+            }
+
+            let m_level = (m / 2 + 1).max(2);
+
+            for &idx in &level_nodes {
+                let mut connected = 0;
+                for &other in &level_nodes {
+                    if other == idx || connected >= m_level {
+                        break;
+                    }
+                    if self.layers[level].neighbors[idx].len() < m_level
+                        && !self.layers[level].neighbors[idx].contains(&other)
+                    {
+                        self.layers[level].neighbors[idx].push(other);
+                        connected += 1;
+                    }
+                }
+            }
+        }
+
+        // Iterative refinement (NN-descent style)
+        self.refine_layer0_graph(n, m)?;
+
+        Ok(())
+    }
+
+    fn refine_layer0_graph(&mut self, n: usize, m: usize) -> VectorResult<()> {
+        let iterations = 5;
+        let nodes = &self.nodes;
+        let metric = self.metric;
+
+        for _iter in 0..iterations {
+            let mut improved = 0;
+
+            for idx in 0..n {
+                let query = &nodes[idx].vector;
+                let mut candidates: Vec<usize> = self.layers[0].neighbors[idx].clone();
+
+                for &neighbor in &self.layers[0].neighbors[idx] {
+                    for &nn in &self.layers[0].neighbors[neighbor] {
+                        if nn != idx && !candidates.contains(&nn) {
+                            candidates.push(nn);
+                        }
+                    }
+                }
+
+                let mut best: BinaryHeap<DistNode> = BinaryHeap::new();
+
+                for &cand in &candidates {
+                    if cand == idx {
+                        continue;
+                    }
+                    let d = -compute_similarity(query, &nodes[cand].vector, metric);
+                    best.push(DistNode { dist: d, idx: cand });
+                    if best.len() > m {
+                        let _ = best.pop();
+                    }
+                }
+
+                let new_neighbors: Vec<usize> =
+                    best.into_vec().into_iter().map(|n| n.idx).collect();
+
+                let old_set: std::collections::HashSet<_> =
+                    self.layers[0].neighbors[idx].iter().cloned().collect();
+                let new_set: std::collections::HashSet<_> = new_neighbors.iter().cloned().collect();
+
+                let diff = old_set.symmetric_difference(&new_set).count();
+                improved += diff;
+
+                if diff > 0 {
+                    self.layers[0].neighbors[idx] = new_neighbors;
+                }
+            }
+
+            if improved < n / 100 {
+                break;
+            }
+        }
+
+        for i in 0..n {
+            for &j in self.layers[0].neighbors[i].clone().iter() {
+                if !self.layers[0].neighbors[j].contains(&i)
+                    && self.layers[0].neighbors[j].len() < m
+                {
+                    self.layers[0].neighbors[j].push(i);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -331,5 +587,196 @@ mod tests {
 
         let results = index.search(&[50.0, 50.0], 5).unwrap();
         assert_eq!(results.len(), 5);
+    }
+
+    #[test]
+    fn test_hnsw_1k_build_and_search() {
+        let size = 1_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("1K HNSW build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 100.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("1K HNSW search: {:.3}ms avg", avg_elapsed);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_10k_build_and_search() {
+        let size = 10_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("10K HNSW build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 100.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("10K HNSW search: {:.3}ms avg", avg_elapsed);
+
+        if avg_elapsed < 5.0 {
+            println!("10K search PASS ✅");
+        } else {
+            println!("10K search FAIL ❌");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_100k_search_performance() {
+        let size = 100_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("100K HNSW build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 10.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("100K HNSW search: {:.2}ms avg (target < 10ms)", avg_elapsed);
+
+        if avg_elapsed < 10.0 {
+            println!("PASS ✅");
+        } else {
+            println!("FAIL ❌ - Need further optimization");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_100k_batch_build() {
+        let size = 100_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        index.build_from_vectors(vectors).unwrap();
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("100K HNSW BATCH build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 10.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("100K HNSW search: {:.2}ms avg (target < 10ms)", avg_elapsed);
+
+        if avg_elapsed < 10.0 {
+            println!("PASS ✅");
+        } else {
+            println!("FAIL ❌ - Need further optimization");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hnsw_1m_search_performance() {
+        let size = 1_000_000;
+        let dim = 128;
+
+        let vectors: Vec<(u64, Vec<f32>)> = (0..size)
+            .map(|i| {
+                let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+                (i as u64, v)
+            })
+            .collect();
+
+        let mut index = HnswIndex::with_params(16, 200, 256, DistanceMetric::Cosine);
+
+        let build_start = std::time::Instant::now();
+        for (id, v) in vectors.iter() {
+            index.insert(*id, v).unwrap();
+        }
+        let build_time = build_start.elapsed().as_secs_f64();
+        println!("1M HNSW build: {:.2}s", build_time);
+
+        let query = vec![0.5f32; dim];
+        let search_start = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = index.search(&query, 10).unwrap();
+        }
+        let total_search_time = search_start.elapsed().as_secs_f64();
+        let avg_elapsed = total_search_time / 10.0 * 1000.0;
+
+        assert_eq!(index.search(&query, 10).unwrap().len(), 10);
+        println!("1M HNSW search: {:.2}ms avg (target < 100ms)", avg_elapsed);
+
+        if avg_elapsed < 100.0 {
+            println!("PASS ✅");
+        } else {
+            println!("FAIL ❌ - Need further optimization");
+        }
     }
 }

@@ -893,66 +893,46 @@ mod sqlrustgo_integration {
                             name: columns::ID.to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
-                            is_unique: true,
-                            is_primary_key: true,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: true,
                         },
                         ColumnDefinition {
                             name: columns::CONTENT.to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: false,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                         ColumnDefinition {
                             name: columns::METADATA.to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: true,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                         ColumnDefinition {
                             name: columns::SOURCE.to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: false,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                         ColumnDefinition {
                             name: columns::VERSION.to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                         ColumnDefinition {
                             name: columns::CREATED_AT.to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                         ColumnDefinition {
                             name: columns::UPDATED_AT.to_string(),
                             data_type: "INTEGER".to_string(),
                             nullable: false,
-                            is_unique: false,
-                            is_primary_key: false,
-                            references: None,
-                            auto_increment: false,
+                            primary_key: false,
                         },
                     ],
+                    ..Default::default()
                 };
                 storage
                     .create_table(&table_info)
@@ -1002,7 +982,7 @@ mod sqlrustgo_integration {
                 .map_err(|e| e.to_string())?;
 
             for record in records {
-                let doc_id = match record.get(0) {
+                let doc_id = match record.first() {
                     Some(Value::Integer(id)) => *id as u64,
                     _ => continue,
                 };
@@ -1096,7 +1076,7 @@ mod sqlrustgo_integration {
                     }
                 })
                 .filter_map(|record| {
-                    let doc_id = match record.get(0) {
+                    let doc_id = match record.first() {
                         Some(Value::Integer(i)) => *i as u64,
                         _ => return None,
                     };
@@ -1143,7 +1123,7 @@ mod sqlrustgo_integration {
                     }
                 })
                 .filter_map(|record| {
-                    let doc_id = match record.get(0) {
+                    let doc_id = match record.first() {
                         Some(Value::Integer(i)) => *i as u64,
                         _ => return None,
                     };
@@ -1194,66 +1174,46 @@ pub mod storage_helpers {
                     name: columns::ID.to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: true,
-                    is_primary_key: true,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: true,
                 },
                 ColumnDefinition {
                     name: columns::CONTENT.to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: columns::METADATA.to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: columns::SOURCE.to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: columns::VERSION.to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: columns::CREATED_AT.to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: columns::UPDATED_AT.to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&table_info).map_err(|e| e.to_string())
     }

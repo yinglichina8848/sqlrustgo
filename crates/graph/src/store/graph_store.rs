@@ -79,13 +79,13 @@ pub trait GraphStore {
 /// In-memory implementation of GraphStore
 #[derive(Clone, Default)]
 pub struct InMemoryGraphStore {
-    nodes: NodeStore,
-    edges: EdgeStore,
-    adjacency: AdjacencyIndex,
-    labels: LabelRegistry,
-    label_index: LabelIndex,
-    next_node_id: NodeId,
-    next_edge_id: EdgeId,
+    pub(crate) nodes: NodeStore,
+    pub(crate) edges: EdgeStore,
+    pub(crate) adjacency: AdjacencyIndex,
+    pub(crate) labels: LabelRegistry,
+    pub(crate) label_index: LabelIndex,
+    pub(crate) next_node_id: NodeId,
+    pub(crate) next_edge_id: EdgeId,
 }
 
 impl InMemoryGraphStore {
@@ -99,6 +99,13 @@ impl InMemoryGraphStore {
             next_node_id: NodeId::MIN,
             next_edge_id: EdgeId::MIN,
         }
+    }
+
+    pub fn create_node_with_id(&mut self, label: &str, props: PropertyMap, node_id: NodeId) {
+        let label_id = self.labels.get_or_register(label);
+        let node = Node::new(node_id, label_id, props);
+        self.nodes.insert(node);
+        self.label_index.add_node(node_id, label_id);
     }
 
     fn next_node_id(&mut self) -> NodeId {

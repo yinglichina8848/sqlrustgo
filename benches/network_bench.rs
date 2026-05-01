@@ -1,8 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::MemoryStorage;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -49,68 +47,59 @@ fn bench_tcp_send_receive(c: &mut Criterion) {
 }
 
 fn bench_query_latency(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::with_memory();
     engine
-        .execute(sqlrustgo::parse("CREATE TABLE latency_test (id INTEGER, value TEXT)").unwrap())
+        .execute("CREATE TABLE latency_test (id INTEGER, value TEXT)")
         .unwrap();
 
     for i in 0..100 {
         engine
-            .execute(
-                sqlrustgo::parse(&format!(
-                    "INSERT INTO latency_test VALUES ({}, 'value{}')",
-                    i, i
-                ))
-                .unwrap(),
-            )
+            .execute(&format!(
+                "INSERT INTO latency_test VALUES ({}, 'value{}')",
+                i, i
+            ))
             .unwrap();
     }
 
     c.bench_function("query_latency_single", |b| {
         b.iter(|| {
             engine
-                .execute(sqlrustgo::parse("SELECT * FROM latency_test WHERE id = 50").unwrap())
+                .execute("SELECT * FROM latency_test WHERE id = 50")
                 .unwrap()
         });
     });
 }
 
 fn bench_query_throughput(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::with_memory();
     engine
-        .execute(sqlrustgo::parse("CREATE TABLE throughput_test (id INTEGER)").unwrap())
+        .execute("CREATE TABLE throughput_test (id INTEGER)")
         .unwrap();
 
     for i in 0..1000 {
         engine
-            .execute(
-                sqlrustgo::parse(&format!("INSERT INTO throughput_test VALUES ({})", i)).unwrap(),
-            )
+            .execute(&format!("INSERT INTO throughput_test VALUES ({})", i))
             .unwrap();
     }
 
     c.bench_function("query_throughput", |b| {
         b.iter(|| {
             for _ in 0..100 {
-                engine
-                    .execute(sqlrustgo::parse("SELECT * FROM throughput_test").unwrap())
-                    .unwrap();
+                engine.execute("SELECT * FROM throughput_test").unwrap();
             }
         });
     });
 }
 
 fn bench_concurrent_queries(c: &mut Criterion) {
-    let mut engine = sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+    let mut engine = sqlrustgo::ExecutionEngine::with_memory();
     engine
-        .execute(sqlrustgo::parse("CREATE TABLE concurrent_test (id INTEGER)").unwrap())
+        .execute("CREATE TABLE concurrent_test (id INTEGER)")
         .unwrap();
 
     for i in 0..100 {
         engine
-            .execute(
-                sqlrustgo::parse(&format!("INSERT INTO concurrent_test VALUES ({})", i)).unwrap(),
-            )
+            .execute(&format!("INSERT INTO concurrent_test VALUES ({})", i))
             .unwrap();
     }
 
@@ -119,12 +108,9 @@ fn bench_concurrent_queries(c: &mut Criterion) {
             let handles: Vec<_> = (0..10)
                 .map(|_| {
                     thread::spawn(|| {
-                        let mut eng =
-                            sqlrustgo::ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+                        let mut eng = sqlrustgo::ExecutionEngine::with_memory();
                         for _ in 0..10 {
-                            let _ = eng.execute(
-                                sqlrustgo::parse("SELECT * FROM concurrent_test").unwrap(),
-                            );
+                            let _ = eng.execute("SELECT * FROM concurrent_test");
                         }
                     })
                 })

@@ -186,4 +186,41 @@ mod tests {
         metrics.record_connection_close();
         assert_eq!(metrics.connections_active(), 0);
     }
+
+    #[test]
+    fn test_network_metrics_bytes_sent_received() {
+        let metrics = NetworkMetrics::new();
+        metrics.record_bytes_sent(1024);
+        metrics.record_bytes_received(512);
+        assert_eq!(metrics.bytes_sent(), 1024);
+        assert_eq!(metrics.bytes_received(), 512);
+    }
+
+    #[test]
+    fn test_network_metrics_packets() {
+        let metrics = NetworkMetrics::new();
+        metrics.record_packet_sent();
+        metrics.record_packet_sent();
+        metrics.record_packet_received();
+        assert_eq!(metrics.packets_sent(), 2);
+        assert_eq!(metrics.packets_received(), 1);
+    }
+
+    #[test]
+    fn test_network_metrics_errors() {
+        let metrics = NetworkMetrics::new();
+        metrics.record_error();
+        metrics.record_error();
+        assert_eq!(metrics.errors_total(), 2);
+    }
+
+    #[test]
+    fn test_network_metrics_multiple_connections() {
+        let metrics = NetworkMetrics::new();
+        metrics.record_connection_open();
+        metrics.record_connection_open();
+        metrics.record_connection_open();
+        assert_eq!(metrics.connections_total(), 3);
+        assert_eq!(metrics.connections_active(), 3);
+    }
 }

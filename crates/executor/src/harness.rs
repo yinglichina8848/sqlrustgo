@@ -255,6 +255,7 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -264,8 +265,10 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(
@@ -293,6 +296,7 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "c_name".to_string(),
@@ -302,8 +306,10 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(
@@ -340,6 +346,7 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "user_id".to_string(),
@@ -349,6 +356,7 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "amount".to_string(),
@@ -358,8 +366,10 @@ pub mod fixtures {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
+            table_foreign_keys: None,
         })?;
 
         storage.insert(

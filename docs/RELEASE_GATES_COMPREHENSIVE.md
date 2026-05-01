@@ -26,23 +26,10 @@
 | 静态分析 (clippy) | ✅ | 无警告，执行 `cargo clippy` 无输出 | `cargo clippy` |
 | 类型检查 (cargo check) | ✅ | 无类型错误，执行 `cargo check` 成功 | `cargo check` |
 | 编译测试 (cargo build) | ✅ | 成功编译，无错误 | `cargo build` |
-| 单元测试 (cargo test) | ✅ | 100% 通过，无失败用例 | `cargo test --lib` |
-| 集成测试 | ✅ | 100% 通过，无失败用例 | `cargo test --test integration_test` |
-| 覆盖率测试 (tarpaulin) | ✅ | 代码覆盖率 ≥ 80% | `cargo tarpaulin --fail-under 80` |
+| 单元测试 (cargo test) | ✅ | 100% 通过，无失败用例 | `cargo test` |
+| 集成测试 | ✅ | 100% 通过，无失败用例 | `cargo test --test integration` |
+| 覆盖率测试 (tarpaulin) | ✅ | 代码覆盖率 ≥ 80% | `cargo tarpaulin` |
 | 安全扫描 (cargo audit) | ✅ | 无高危漏洞，中危漏洞 ≤ 2 | `cargo audit` |
-
-### 2.2 功能测试门禁 (v2.1.0)
-| 检查项 | 状态 | 验收标准 | 检查命令 |
-|-------|------|---------|----------|
-| 回归测试 | ✅ | 70+ 测试文件全部通过 | `cargo test --test regression_test` |
-| TPC-H Q1-Q22 | ✅ | 28 个查询全部通过 | `cargo test --test tpch_full_test` |
-| 向量化执行 | ✅ | 10 个测试通过 | `cargo test --test vectorization_test` |
-| 列式存储 | ✅ | 12 个测试通过 | `cargo test --test columnar_storage_test` |
-| 分布式事务 | ✅ | 31 个测试通过 | `cargo test --test distributed_transaction_test` |
-| 窗口函数 | ✅ | 21 个测试通过 | `cargo test --test window_function_test` |
-| RBAC 权限 | ✅ | 23 个测试通过 | `cargo test --test auth_rbac_test` |
-| WAL 集成 | ✅ | 16 个测试通过 | `cargo test --test wal_integration_test` |
-| 功能矩阵文档 | ✅ | `docs/releases/v2.1.0/v2.1.0-TEST-MATRIX.md` 已更新 | 文档审查 |
 
 ### 2.2 功能完整性门禁
 | 检查项 | 状态 | 验收标准 | 测试方法 |
@@ -66,11 +53,29 @@
 | - 内存使用 | ⏳ | 空闲状态 ≤ 50MB，峰值 ≤ 500MB | 内存监控工具 |
 | - 启动时间 | ⏳ | 冷启动 ≤ 1s，热启动 ≤ 0.1s | 启动时间测试 |
 | - 资源消耗 | ⏳ | CPU 使用率 ≤ 20%（单查询），磁盘 I/O 正常 | 资源监控工具 |
+| **Sysbench 测试** | ⏳ | 使用 sysbench 工具进行 MySQL 协议兼容性测试 | 见下方详细检查项 |
 | **稳定性** | ⏳ | 全部稳定性测试通过 | 稳定性测试套件 |
 | - 长时间运行 | ⏳ | 连续运行 72 小时无崩溃，性能无明显下降 | 长时间运行测试 |
 | - 异常恢复 | ⏳ | 网络中断后自动恢复，数据无丢失 | 异常注入测试 |
 | - 负载测试 | ⏳ | 支持 100 QPS 持续 1 小时，成功率 ≥ 99.9% | 负载测试工具 |
 | - 兼容性 | ⏳ | 兼容 Rust 1.60+，支持主流操作系统 | 多环境测试 |
+
+#### 2.3.1 Sysbench 门禁检查项
+> 参考: `docs/issues/v2.6.0/SYSBENCH_TEST_PLAN.md`
+
+| # | 检查项 | 阈值 | 状态 |
+|---|--------|------|------|
+| 1 | oltp_point_select QPS | ≥ 1000 | ⬜ |
+| 2 | oltp_read_only QPS | ≥ 800 | ⬜ |
+| 3 | oltp_read_write QPS | ≥ 500 | ⬜ |
+| 4 | oltp_write_only QPS | ≥ 300 | ⬜ |
+| 5 | Latency P50 | < 50ms | ⬜ |
+| 6 | Latency P95 | < 100ms | ⬜ |
+| 7 | Latency P99 | < 200ms | ⬜ |
+| 8 | 并发 50 线程稳定 | 无崩溃 | ⬜ |
+| 9 | 并发 100 线程稳定 | 无崩溃 | ⬜ |
+| 10 | 数据一致性 | ACID 验证通过 | ⬜ |
+| 11 | 11 种工作负载全部通过 | 100% | ⬜ |
 
 ### 2.4 文档门禁
 | 检查项 | 状态 | 验收标准 | 检查方法 |

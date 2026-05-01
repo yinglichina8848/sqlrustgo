@@ -287,9 +287,9 @@ AI Developer
 
 | 文档 | 说明 |
 |------|------|
-| [RELEASE_GOVERNANCE.md](./RELEASE_GOVERNANCE.md) | 版本治理模型 |
-| [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md) | AI 协作安全规则 |
-| [BRANCH_PROTECTION.md](./.github/BRANCH_PROTECTION.md) | 分支保护配置 |
+| [RELEASE_GOVERNANCE.md](../../RELEASE_GOVERNANCE.md) | 版本治理模型 |
+| [ARCHITECTURE_RULES.md](../../ARCHITECTURE_RULES.md) | AI 协作安全规则 |
+| [BRANCH_PROTECTION.md](../../.github/BRANCH_PROTECTION.md) | 分支保护配置 |
 
 ---
 

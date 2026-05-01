@@ -39,14 +39,20 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "slow_query_log_test",
                 "types_value_test",
                 "vectorization_test",
+                "stored_procedure_parser_test",
             ],
             description: "测试底层组件：存储、缓冲区、解析器、类型系统",
         },
         // 集成测试 - 核心
         TestCategory {
             name: "集成测试 - 核心 (Core Integration)",
-            test_files: vec!["executor_test", "planner_test", "page_test"],
-            description: "测试执行器、规划器、页面管理",
+            test_files: vec![
+                "executor_test",
+                "planner_test",
+                "page_test",
+                "prepared_statement_test",
+            ],
+            description: "测试执行器、规划器、页面管理、Prepared Statement",
         },
         // 集成测试 - SQL功能
         TestCategory {
@@ -60,9 +66,10 @@ fn get_test_categories() -> Vec<TestCategory> {
                 "savepoint_test",
                 "session_config_test",
                 "openclaw_api_test",
+                "subquery_test",
             ],
             description:
-                "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)、保存点、OpenClaw API",
+                "测试外键、服务器、UPSERT、MySQL兼容性(KILL/PROCESSLIST)、保存点、OpenClaw API、子查询(EXISTS/IN/ANY/ALL)",
         },
         // 集成测试 - 存储
         TestCategory {
@@ -82,20 +89,35 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "性能测试 (Performance)",
             test_files: vec![
                 "performance_test",
-                "tpch_test",
-                "tpch_benchmark",
-                "tpch_full_test",
                 "batch_insert_test",
                 "autoinc_test",
                 "index_integration_test",
+                "oltp_workload_test",
             ],
-            description: "性能测试：批量插入、索引扫描、JOIN、缓存、向量化、TPC-H Q1-Q22",
+            description: "性能测试：批量插入、索引扫描、JOIN、缓存、向量化、OLTP工作负载",
+        },
+        // TPC-H 测试
+        TestCategory {
+            name: "TPC-H 测试 (TPC-H)",
+            test_files: vec![
+                "tpch_test",
+                "tpch_benchmark",
+                "tpch_full_test",
+                "tpch_compliance_test",
+                "tpch_sf03_test",
+                "tpch_sf1_test",
+                "tpch_text_index_test",
+                "tpch_index_test",
+                "tpch_comparison_test",
+            ],
+            description: "TPC-H 基准测试：Q1-Q22 完整查询集",
         },
         // 异常测试 - 并发
         TestCategory {
             name: "异常测试 - 并发 (Anomaly - Concurrency)",
             test_files: vec![
                 "mvcc_concurrency_test",
+                "mvcc_snapshot_isolation_test",
                 "snapshot_isolation_test",
                 "concurrency_stress_test",
             ],
@@ -124,6 +146,7 @@ fn get_test_categories() -> Vec<TestCategory> {
             name: "异常测试 - 查询 (Anomaly - Query)",
             test_files: vec![
                 "join_test",
+                "outer_join_test",
                 "set_operations_test",
                 "view_test",
                 "window_function_test",
@@ -202,14 +225,105 @@ fn get_test_categories() -> Vec<TestCategory> {
         // Executor 内部测试
         TestCategory {
             name: "执行器测试 (Executor)",
-            test_files: vec!["PKG:sqlrustgo-executor:test_stored_proc"],
-            description: "executor crate 内部测试: 存储过程 (36 tests)",
+            test_files: vec![
+                "PKG:sqlrustgo-executor:test_stored_proc",
+                "PKG:sqlrustgo-executor:test_trigger",
+            ],
+            description: "executor crate 内部测试: 存储过程 (40 tests), 触发器 (7 tests)",
         },
-        // 工具测试
+        // 并行执行测试
         TestCategory {
-            name: "工具测试 (Tools)",
-            test_files: vec!["physical_backup_test"],
-            description: "物理备份、mysqldump 等工具集成测试",
+            name: "并行执行测试 (Parallel Executor)",
+            test_files: vec!["PKG:sqlrustgo-executor:test_parallel_executor"],
+            description: "并行执行器测试: 线程对比、加速比、数据规模、聚合函数 (44 tests)",
+        },
+        // 向量化并行执行测试
+        TestCategory {
+            name: "向量化并行测试 (Vectorized Parallel)",
+            test_files: vec!["PKG:sqlrustgo-executor:test_vectorized_parallel"],
+            description: "向量化执行器测试: 批量扫描、SIMD聚合、并行聚合、性能基准 (37 tests)",
+        },
+        // 向量检索测试
+        TestCategory {
+            name: "向量检索测试 (Vector Search)",
+            test_files: vec![
+                "vector_storage_integration_test",
+                "hybrid_search_integration_test",
+            ],
+            description: "向量存储集成测试: Flat/HNSW/IVF/IVFPQ索引, 混合搜索 (40+ tests)",
+        },
+        // Graph 图存储测试
+        TestCategory {
+            name: "图存储测试 (Graph)",
+            test_files: vec!["PKG:sqlrustgo-graph:graph_tests"],
+            description: "Graph crate tests: GMP traceability, BFS/DFS, DiskGraphStore with WAL",
+        },
+        // GMP 语义搜索测试
+        TestCategory {
+            name: "GMP 语义搜索测试 (GMP)",
+            test_files: vec!["PKG:sqlrustgo-gmp:test"],
+            description:
+                "GMP crate tests: semantic embedding, Ollama/OpenAI providers, hybrid search",
+        },
+        // AgentSQL 集成测试
+        TestCategory {
+            name: "AgentSQL 集成测试 (AgentSQL)",
+            test_files: vec!["agentsql_test"],
+            description: "AgentSQL NL2SQL 集成测试",
+        },
+        // MySQL TPC-H 对比测试
+        TestCategory {
+            name: "MySQL TPC-H 对比测试 (MySQL TPC-H)",
+            test_files: vec!["mysql_tpch_test"],
+            description: "MySQL vs SQLRustGo TPC-H 查询对比",
+        },
+        // SQL CLI 测试
+        TestCategory {
+            name: "SQL CLI 测试 (SQL CLI)",
+            test_files: vec!["sql_cli_test"],
+            description: "SQL 命令行工具测试",
+        },
+        // TPC-H Q-Query 测试
+        TestCategory {
+            name: "TPC-H Q-Query 测试 (TPC-H Q-Query)",
+            test_files: vec!["tpch_qtest"],
+            description: "TPC-H Q-Query 特定查询测试",
+        },
+        // Page IO 基准测试
+        TestCategory {
+            name: "Page IO 基准测试 (Page IO)",
+            test_files: vec!["page_io_benchmark_test"],
+            description: "Page IO 性能基准测试",
+        },
+        // TPC-H SF=10 性能测试
+        TestCategory {
+            name: "TPC-H SF=10 性能测试 (TPC-H SF=10)",
+            test_files: vec!["tpch_sf10_benchmark"],
+            description: "TPC-H SF=10 (60M rows) benchmark: Q1-Q22 full query set",
+        },
+        // TPC-H SF=1 性能测试
+        TestCategory {
+            name: "TPC-H SF=1 性能测试 (TPC-H SF=1)",
+            test_files: vec!["tpch_sf1_benchmark"],
+            description: "TPC-H SF=1 (1.5M rows) benchmark: Q1-Q22 full query set",
+        },
+        // WAL 事务集成测试
+        TestCategory {
+            name: "WAL 事务集成测试 (WAL Transaction)",
+            test_files: vec!["wal_transaction_integration_test"],
+            description: "WAL-integrated transaction tests: atomicity, durability, crash recovery",
+        },
+        // 统一查询集成测试
+        TestCategory {
+            name: "统一查询集成测试 (Unified Query)",
+            test_files: vec!["unified_query_integration_test"],
+            description: "SQL+Vector+Graph unified query tests: T1-T7 hybrid workloads (22 tests)",
+        },
+        // 分布式存储测试
+        TestCategory {
+            name: "分布式存储测试 (Distributed Storage)",
+            test_files: vec!["distributed_storage_sharding_test"],
+            description: "ShardGraph/ShardedVectorIndex: label/hash partitioning, cross-shard queries, gRPC communication (32 tests)",
         },
     ]
 }

@@ -2,18 +2,15 @@
 // Target: 100K+ rows processed efficiently
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-use std::sync::Arc;
+use sqlrustgo::ExecutionEngine;
+use sqlrustgo::MemoryStorage;
 
-fn setup_engine_with_rows(count: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+fn setup_engine_with_rows(count: usize) -> ExecutionEngine<MemoryStorage> {
+    let mut engine = ExecutionEngine::with_memory();
 
     // Create table
     engine
-        .execute(
-            parse("CREATE TABLE bench_data (id INTEGER, name TEXT, age INTEGER, value INTEGER)")
-                .unwrap(),
-        )
+        .execute("CREATE TABLE bench_data (id INTEGER, name TEXT, age INTEGER, value INTEGER)")
         .unwrap();
 
     // Insert rows using batch insert
@@ -32,7 +29,7 @@ fn setup_engine_with_rows(count: usize) -> ExecutionEngine {
         }
 
         let sql = format!("INSERT INTO bench_data VALUES {}", values.join(", "));
-        engine.execute(parse(&sql).unwrap()).unwrap();
+        engine.execute(&sql).unwrap();
     }
 
     engine
@@ -43,11 +40,7 @@ fn bench_10k_select_all(c: &mut Criterion) {
     let mut engine = setup_engine_with_rows(10000);
 
     c.bench_function("10k_select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute(parse("SELECT * FROM bench_data").unwrap())
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM bench_data").unwrap());
     });
 }
 
@@ -57,7 +50,7 @@ fn bench_10k_select_where(c: &mut Criterion) {
     c.bench_function("10k_select_where", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM bench_data WHERE age > 50").unwrap())
+                .execute("SELECT * FROM bench_data WHERE age > 50")
                 .unwrap()
         });
     });
@@ -68,11 +61,7 @@ fn bench_100k_select_all(c: &mut Criterion) {
     let mut engine = setup_engine_with_rows(100000);
 
     c.bench_function("100k_select_all", |b| {
-        b.iter(|| {
-            engine
-                .execute(parse("SELECT * FROM bench_data").unwrap())
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM bench_data").unwrap());
     });
 }
 
@@ -82,7 +71,7 @@ fn bench_100k_select_where(c: &mut Criterion) {
     c.bench_function("100k_select_where", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM bench_data WHERE age > 50").unwrap())
+                .execute("SELECT * FROM bench_data WHERE age > 50")
                 .unwrap()
         });
     });
@@ -94,7 +83,7 @@ fn bench_100k_limit(c: &mut Criterion) {
     c.bench_function("100k_limit", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT * FROM bench_data LIMIT 100").unwrap())
+                .execute("SELECT * FROM bench_data LIMIT 100")
                 .unwrap()
         });
     });
@@ -106,7 +95,7 @@ fn bench_100k_projection(c: &mut Criterion) {
     c.bench_function("100k_projection", |b| {
         b.iter(|| {
             engine
-                .execute(parse("SELECT id, name, value FROM bench_data").unwrap())
+                .execute("SELECT id, name, value FROM bench_data")
                 .unwrap()
         });
     });
@@ -116,20 +105,17 @@ fn bench_100k_projection(c: &mut Criterion) {
 fn bench_insert_10k(c: &mut Criterion) {
     c.bench_function("insert_10k", |b| {
         b.iter(|| {
-            let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+            let mut engine = ExecutionEngine::with_memory();
             engine
-                .execute(parse("CREATE TABLE insert_test (id INTEGER, value TEXT)").unwrap())
+                .execute("CREATE TABLE insert_test (id INTEGER, value TEXT)")
                 .unwrap();
 
             for i in 0..10000 {
                 engine
-                    .execute(
-                        parse(&format!(
-                            "INSERT INTO insert_test VALUES ({}, 'value{}')",
-                            i, i
-                        ))
-                        .unwrap(),
-                    )
+                    .execute(&format!(
+                        "INSERT INTO insert_test VALUES ({}, 'value{}')",
+                        i, i
+                    ))
                     .unwrap();
             }
         });

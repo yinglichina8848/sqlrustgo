@@ -4,17 +4,12 @@ use super::{EdgeId, LabelId, NodeId, PropertyMap};
 use serde::{Deserialize, Serialize};
 
 /// Edge direction
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Direction {
-    Outgoing,      // ->
+    #[default]
+    Outgoing, // ->
     Incoming,      // <-
     Bidirectional, // <->
-}
-
-impl Default for Direction {
-    fn default() -> Self {
-        Direction::Outgoing
-    }
 }
 
 /// Edge entity in the graph
@@ -37,6 +32,7 @@ pub struct Edge {
 impl Edge {
     pub const LABEL: &'static str = "Edge";
 
+    /// Create a new edge with default outgoing direction
     pub fn new(
         id: EdgeId,
         from: NodeId,
@@ -54,6 +50,7 @@ impl Edge {
         }
     }
 
+    /// Create a new edge with specified direction
     pub fn with_direction(
         id: EdgeId,
         from: NodeId,
@@ -209,5 +206,35 @@ mod tests {
         assert!(GMP_EDGE_LABELS.contains(&"produced_by"));
         assert!(GMP_EDGE_LABELS.contains(&"governed_by"));
         assert_eq!(GMP_EDGE_LABELS.len(), 9);
+    }
+
+    #[test]
+    fn test_edge_clone() {
+        let edge = Edge::new(
+            EdgeId::new(1),
+            NodeId::new(100),
+            NodeId::new(200),
+            LabelId::new(1),
+            PropertyMap::new(),
+        );
+        let cloned = edge.clone();
+        assert_eq!(edge.id, cloned.id);
+        assert_eq!(edge.from, cloned.from);
+        assert_eq!(edge.to, cloned.to);
+    }
+
+    #[test]
+    fn test_edge_get_property() {
+        let mut props = PropertyMap::new();
+        props.insert("weight", 1.5);
+        let edge = Edge::new(
+            EdgeId::new(1),
+            NodeId::new(100),
+            NodeId::new(200),
+            LabelId::new(1),
+            props,
+        );
+        assert!(edge.get_property("weight").is_some());
+        assert!(edge.get_property("nonexistent").is_none());
     }
 }

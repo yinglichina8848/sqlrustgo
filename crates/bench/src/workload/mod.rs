@@ -1,8 +1,16 @@
 //! Workload generators for benchmark tests
 
+pub mod oltp_delete;
+pub mod oltp_index_scan;
+pub mod oltp_insert;
+pub mod oltp_mixed;
 pub mod oltp_point_select;
+pub mod oltp_range_scan;
 pub mod oltp_read_only;
 pub mod oltp_read_write;
+pub mod oltp_update_index;
+pub mod oltp_update_non_index;
+pub mod oltp_write_only;
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
@@ -12,6 +20,7 @@ use crate::db::Database;
 
 /// Workload trait - defines a benchmark workload
 #[async_trait]
+#[allow(dead_code)]
 pub trait Workload: Send + Sync {
     /// Execute one iteration of the workload
     async fn execute(&self, db: &dyn Database) -> anyhow::Result<()>;
@@ -38,9 +47,17 @@ pub trait Workload: Send + Sync {
 /// Create a workload by name
 pub fn create_workload(name: &str, _scale: usize) -> Arc<dyn Workload> {
     match name.to_lowercase().as_str() {
+        "oltp_delete" => Arc::new(oltp_delete::OltpDelete::new()),
+        "oltp_index_scan" => Arc::new(oltp_index_scan::OltpIndexScan::new()),
+        "oltp_mixed" => Arc::new(oltp_mixed::OltpMixed::new()),
         "oltp_point_select" => Arc::new(oltp_point_select::OltpPointSelect::new()),
         "oltp_read_only" => Arc::new(oltp_read_only::OltpReadOnly::new()),
         "oltp_read_write" => Arc::new(oltp_read_write::OltpReadWrite::new()),
+        "oltp_update_index" => Arc::new(oltp_update_index::OltpUpdateIndex::new()),
+        "oltp_update_non_index" => Arc::new(oltp_update_non_index::OltpUpdateNonIndex::new()),
+        "oltp_insert" => Arc::new(oltp_insert::OltpInsert::new()),
+        "oltp_range_scan" => Arc::new(oltp_range_scan::OltpRangeScan::new()),
+        "oltp_write_only" => Arc::new(oltp_write_only::OltpWriteOnly::new()),
         _ => panic!("Unknown workload: {}", name),
     }
 }
@@ -53,9 +70,17 @@ mod tests {
     #[test]
     fn test_workload_sql_generation() {
         let workloads = vec![
+            create_workload("oltp_index_scan", 1),
             create_workload("oltp_point_select", 1),
             create_workload("oltp_read_only", 1),
             create_workload("oltp_read_write", 1),
+            create_workload("oltp_update_index", 1),
+            create_workload("oltp_update_non_index", 1),
+            create_workload("oltp_insert", 1),
+            create_workload("oltp_range_scan", 1),
+            create_workload("oltp_delete", 1),
+            create_workload("oltp_mixed", 1),
+            create_workload("oltp_write_only", 1),
         ];
 
         for workload in workloads {
@@ -156,5 +181,33 @@ mod tests {
         });
         assert!(has_read, "Read-write should contain SELECT");
         assert!(has_write, "Read-write should contain write operations");
+    }
+
+    #[test]
+    fn test_oltp_index_scan() {
+        let workload = create_workload("oltp_index_scan", 1);
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        assert_eq!(workload.name(), "oltp_index_scan");
+        assert!(workload.is_read_only(), "Index scan should be read-only");
+
+        // Test SQL contains range scan
+        let sql = workload.generate_sql(&mut rng);
+        assert!(sql.contains("SELECT"), "Should contain SELECT");
+        assert!(
+            sql.contains("BETWEEN"),
+            "Should contain BETWEEN for range scan"
+        );
+
+        // Test transaction generation
+        let tx = workload.generate_transaction(&mut rng);
+        assert_eq!(tx.len(), workload.statements_per_tx());
+
+        // Test table names
+        let tables = workload.table_names();
+        assert!(
+            tables.iter().any(|t| t.starts_with("sbtest")),
+            "Should use sbtest table"
+        );
     }
 }

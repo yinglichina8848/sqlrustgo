@@ -4,8 +4,8 @@
 
 #[allow(unused_imports)]
 use sqlrustgo_planner::{
-    AggregateExec, AggregateFunction, FilterExec, HashJoinExec, JoinType, PhysicalPlan,
-    ProjectionExec, SortMergeJoinExec,
+    AggregateExec, AggregateFunction, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType,
+    Operator, PhysicalPlan, PreparedStatementManager, ProjectionExec, SortMergeJoinExec,
 };
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::{SqlResult, Value};
@@ -32,6 +32,8 @@ pub struct LocalExecutor<'a> {
     slow_query_log: StdRwLock<Option<query_stats::SlowQueryLog>>,
     /// SQL text for slow query logging (set when executing with cache)
     current_sql: StdRwLock<String>,
+    /// Prepared statement cache
+    prepared_statements: StdRwLock<PreparedStatementManager>,
 }
 
 impl<'a> LocalExecutor<'a> {
@@ -43,6 +45,7 @@ impl<'a> LocalExecutor<'a> {
             cache_config: QueryCacheConfig::default(),
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
+            prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
         }
     }
 
@@ -54,6 +57,7 @@ impl<'a> LocalExecutor<'a> {
             cache_config: config,
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
+            prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
         }
     }
 
@@ -130,6 +134,7 @@ impl<'a> LocalExecutor<'a> {
             let start = Instant::now();
             let result = match plan.name() {
                 "SeqScan" => self.execute_seq_scan(plan),
+                "IndexScan" => self.execute_index_scan(plan),
                 "Projection" => self.execute_projection(plan),
                 "Filter" => self.execute_filter(plan),
                 "Aggregate" => self.execute_aggregate(plan),
@@ -137,6 +142,7 @@ impl<'a> LocalExecutor<'a> {
                 "SortMergeJoin" => self.execute_sort_merge_join(plan),
                 "Sort" => self.execute_sort(plan),
                 "Limit" => self.execute_limit(plan),
+                "Delete" => self.execute_delete(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
             let duration_ms = start.elapsed().as_millis() as u64;
@@ -163,6 +169,7 @@ impl<'a> LocalExecutor<'a> {
         let start = Instant::now();
         let result = match plan.name() {
             "SeqScan" => self.execute_seq_scan(plan),
+            "IndexScan" => self.execute_index_scan(plan),
             "Projection" => self.execute_projection(plan),
             "Filter" => self.execute_filter(plan),
             "Aggregate" => self.execute_aggregate(plan),
@@ -218,6 +225,108 @@ impl<'a> LocalExecutor<'a> {
 
         // Record to GLOBAL_PROFILER
         GLOBAL_PROFILER.record("SeqScan", "scan", duration.as_nanos() as u64, row_count, 1);
+
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    /// Execute index scan using storage engine's index APIs
+    fn execute_index_scan(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        let table_name = plan.table_name();
+        if table_name.is_empty() {
+            return Ok(ExecutorResult::empty());
+        }
+
+        let index_scan = plan
+            .as_any()
+            .downcast_ref::<IndexScanExec>()
+            .ok_or_else(|| "Not an IndexScanExec".to_string())?;
+
+        let table_name = index_scan.table_name();
+        let key_expr = index_scan.key_expr();
+        let (range_min, range_max) = index_scan.key_range();
+
+        let start = Instant::now();
+
+        // Determine row_ids based on predicate type
+        let row_ids: Vec<u32> = match key_expr {
+            Expr::BinaryExpr {
+                op: Operator::Eq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                self.storage.search_index(table_name, col_name, val)
+            }
+            Expr::BinaryExpr {
+                op: Operator::Gt,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id > value means range (value+1, +infinity)
+                self.storage
+                    .range_index(table_name, col_name, val + 1, i64::MAX)
+            }
+            Expr::BinaryExpr {
+                op: Operator::Lt,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id < value means range (-infinity, value-1)
+                self.storage
+                    .range_index(table_name, col_name, i64::MIN, val - 1)
+            }
+            Expr::BinaryExpr {
+                op: Operator::GtEq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id >= value means range [value, +infinity)
+                self.storage
+                    .range_index(table_name, col_name, val, i64::MAX)
+            }
+            Expr::BinaryExpr {
+                op: Operator::LtEq,
+                left,
+                right,
+            } => {
+                let (col_name, val) = extract_column_value_for_index(left, right)?;
+                // id <= value means range (-infinity, value]
+                self.storage
+                    .range_index(table_name, col_name, i64::MIN, val)
+            }
+            _ => {
+                // Fall back to range if key_range is set
+                if let (Some(min), Some(max)) = (range_min, range_max) {
+                    self.storage
+                        .range_index(table_name, index_scan.index_name(), min, max)
+                } else {
+                    return Err(format!("Unsupported index predicate: {:?}", key_expr).into());
+                }
+            }
+        };
+
+        // Fetch complete rows for each row_id
+        let mut rows = Vec::new();
+        for row_id in row_ids {
+            if let Some(record) = self.storage.get_row(table_name, row_id as usize)? {
+                rows.push(record.into_iter().collect::<Vec<_>>());
+            }
+        }
+
+        let row_count = rows.len();
+        let duration = start.elapsed();
+
+        // Record to GLOBAL_PROFILER
+        GLOBAL_PROFILER.record(
+            "IndexScan",
+            "index_scan",
+            duration.as_nanos() as u64,
+            row_count,
+            1,
+        );
 
         Ok(ExecutorResult::new(rows, 0))
     }
@@ -599,6 +708,69 @@ impl<'a> LocalExecutor<'a> {
 
                 Ok(ExecutorResult::new(results, 0))
             }
+            JoinType::Full => {
+                use std::collections::HashSet;
+
+                let matched = hash_inner_join(
+                    &left_result.rows,
+                    &right_result.rows,
+                    condition,
+                    left_schema,
+                    right_schema,
+                );
+
+                let matched_right_keys: HashSet<Vec<Value>> = matched
+                    .iter()
+                    .map(|row| row.iter().skip(left_schema.fields.len()).cloned().collect())
+                    .collect();
+
+                let left_only: Vec<Vec<Value>> = left_result
+                    .rows
+                    .iter()
+                    .filter(|lrow| {
+                        !matched.iter().any(|m| {
+                            m.iter().take(lrow.len()).cloned().collect::<Vec<_>>()
+                                == lrow.iter().cloned().collect::<Vec<_>>()
+                        })
+                    })
+                    .map(|lrow| {
+                        let mut row = lrow.clone();
+                        row.extend(vec![Value::Null; right_schema.fields.len()]);
+                        row
+                    })
+                    .collect();
+
+                let right_only: Vec<Vec<Value>> = right_result
+                    .rows
+                    .iter()
+                    .filter(|rrow| {
+                        let key: Vec<Value> = rrow.iter().cloned().collect();
+                        !matched_right_keys.contains(&key)
+                    })
+                    .map(|rrow| {
+                        let mut row = vec![Value::Null; left_schema.fields.len()];
+                        row.extend(rrow.clone());
+                        row
+                    })
+                    .collect();
+
+                let mut results = matched;
+                results.extend(left_only);
+                results.extend(right_only);
+
+                let row_count = results.len();
+                let duration = start.elapsed();
+
+                GLOBAL_PROFILER.record(
+                    "HashJoin",
+                    "full_outer_join",
+                    duration.as_nanos() as u64,
+                    row_count,
+                    1,
+                );
+
+                Ok(ExecutorResult::new(results, 0))
+            }
             _ => {
                 let row_count = 0;
                 let duration = start.elapsed();
@@ -694,6 +866,18 @@ impl<'a> LocalExecutor<'a> {
     }
 }
 
+/// Extract column name and integer value from binary expression for index operations
+fn extract_column_value_for_index<'a>(
+    left: &'a Expr,
+    right: &'a Expr,
+) -> Result<(&'a str, i64), String> {
+    match (left, right) {
+        (Expr::Column(col), Expr::Literal(Value::Integer(v))) => Ok((col.name.as_str(), *v)),
+        (Expr::Literal(Value::Integer(v)), Expr::Column(col)) => Ok((col.name.as_str(), *v)),
+        _ => Err("Expected column = integer or integer = column".into()),
+    }
+}
+
 fn cartesian_product(left: &[Vec<Value>], right: &[Vec<Value>]) -> Vec<Vec<Value>> {
     let mut result = Vec::new();
     for lrow in left {
@@ -729,11 +913,9 @@ fn hash_inner_join(
                     .collect(),
             );
 
-            if condition
-                .evaluate(&combined, &full_schema)
-                .map(|v| v.to_bool())
-                .unwrap_or(false)
-            {
+            // SQL three-valued logic: NULL = anything → UNKNOWN → no match
+            let eval_result = condition.evaluate(&combined, &full_schema);
+            if matches!(eval_result, Some(Value::Boolean(true))) {
                 results.push(combined);
             }
         }
@@ -807,11 +989,11 @@ fn sort_merge_inner_join(
                     .collect(),
             );
 
-            if condition
-                .evaluate(&combined, &full_schema)
-                .map(|v| v.to_bool())
-                .unwrap_or(false)
-            {
+            // SQL three-valued logic: NULL = anything → UNKNOWN → no match
+            if matches!(
+                condition.evaluate(&combined, &full_schema),
+                Some(Value::Boolean(true))
+            ) {
                 results.push(combined);
             }
 
@@ -841,6 +1023,32 @@ impl<'a> LocalExecutor<'a> {
 
         // Sort would go here
         Ok(child_result)
+    }
+
+    /// Execute delete
+    fn execute_delete(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_planner::DeleteExec;
+        
+        let delete_exec = plan.as_any().downcast_ref::<DeleteExec>();
+        
+        match delete_exec {
+            Some(delete_plan) => {
+                let table_name = delete_plan.table_name();
+                
+                // For now, delete all rows if no predicate
+                // Full predicate evaluation would require expression evaluation
+                if delete_plan.predicate().is_some() {
+                    // TODO: Implement predicate-based delete
+                    // For now, return empty result
+                    return Ok(ExecutorResult::empty());
+                }
+                
+                // Delete all rows from table
+                let deleted = self.storage.delete(table_name, &[])?;
+                Ok(ExecutorResult::new(vec![], deleted))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
     }
 
     /// Execute limit
@@ -904,6 +1112,7 @@ mod tests {
             .create_table(&sqlrustgo_storage::TableInfo {
                 name: "users".to_string(),
                 columns: vec![],
+                ..Default::default()
             })
             .unwrap();
 
@@ -1816,5 +2025,121 @@ mod tests {
         let result = executor.execute(&sort_merge_join);
         assert!(result.is_ok());
         assert!(result.unwrap().rows.is_empty());
+    }
+
+    #[test]
+    fn test_execute_hash_join_full_outer() {
+        use sqlrustgo_planner::HashJoinExec;
+
+        let mut storage = MemoryStorage::new();
+
+        // Create t1 table
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "t1".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "name".to_string(),
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                ..Default::default()
+            })
+            .unwrap();
+
+        // Create t2 table
+        storage
+            .create_table(&sqlrustgo_storage::TableInfo {
+                name: "t2".to_string(),
+                columns: vec![
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "id".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    sqlrustgo_storage::ColumnDefinition {
+                        name: "value".to_string(),
+                        data_type: "INTEGER".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                ..Default::default()
+            })
+            .unwrap();
+
+        // Insert into t1
+        storage
+            .insert(
+                "t1",
+                vec![
+                    vec![Value::Integer(1), Value::Text("a".to_string())],
+                    vec![Value::Integer(2), Value::Text("b".to_string())],
+                    vec![Value::Integer(3), Value::Text("c".to_string())],
+                ],
+            )
+            .unwrap();
+
+        // Insert into t2
+        storage
+            .insert(
+                "t2",
+                vec![
+                    vec![Value::Integer(1), Value::Integer(100)],
+                    vec![Value::Integer(2), Value::Integer(200)],
+                    vec![Value::Integer(4), Value::Integer(400)],
+                ],
+            )
+            .unwrap();
+
+        let executor = LocalExecutor::new(&storage);
+
+        let left_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+        ]);
+        let right_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+        let output_schema = Schema::new(vec![
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
+            Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
+            Field::new("value".to_string(), sqlrustgo_planner::DataType::Integer),
+        ]);
+
+        let left_scan = SeqScanExec::new("t1".to_string(), left_schema);
+        let right_scan = SeqScanExec::new("t2".to_string(), right_schema);
+
+        let join_condition = Expr::binary_expr(
+            Expr::column("id"),
+            Operator::Eq,
+            Expr::column("id"),
+        );
+
+        let hash_join = HashJoinExec::new(
+            Box::new(left_scan),
+            Box::new(right_scan),
+            JoinType::Full,
+            Some(join_condition),
+            output_schema,
+        );
+
+        let result = executor.execute(&hash_join);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+
+        // Should have 4 rows: (1,a,1,100), (2,b,2,200), (3,c,NULL,NULL), (NULL,NULL,4,400)
+        assert_eq!(result.rows.len(), 4);
     }
 }

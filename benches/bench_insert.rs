@@ -19,7 +19,11 @@ fn create_table_info() -> TableInfo {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            primary_key: false,
         }],
+        foreign_keys: vec![],
+        partition_info: None,
+        unique_constraints: vec![],
     }
 }
 
@@ -85,18 +89,24 @@ fn bench_insert_multi_column(c: &mut Criterion) {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                primary_key: false,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
+                primary_key: false,
             },
             ColumnDefinition {
                 name: "value".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: true,
+                primary_key: false,
             },
         ],
+        foreign_keys: vec![],
+        partition_info: None,
+        unique_constraints: vec![],
     };
 
     for size in [1_000, 10_000] {

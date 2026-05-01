@@ -97,7 +97,7 @@ cargo bench --bench tpch_bench
 ## 相关链接
 
 - [ROADMAP.md](../../ROADMAP.md) - 路线图
-- [CHANGELOG.md](../../CHANGELOG.md) - 完整变更日志
+- [CHANGELOG.md](../../../CHANGELOG.md) - 完整变更日志
 - [GitHub Releases](https://github.com/minzuuniversity/sqlrustgo/releases)
 
 ---

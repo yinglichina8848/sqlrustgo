@@ -3,7 +3,9 @@
 //! A column-oriented storage engine implementing the StorageEngine trait.
 
 use crate::columnar::chunk::{ColumnChunk, ColumnStats};
-use crate::columnar::segment::{ColumnSegment, ColumnStatsDisk, CompressionType};
+use crate::columnar::segment::{
+    auto_select_compression, ColumnSegment, ColumnStatsDisk, CompressionLevel, CompressionType,
+};
 use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
 use crate::wal::WalManager;
 use sqlrustgo_types::Value;
@@ -130,6 +132,33 @@ impl TableStore {
         result
     }
 
+    /// Get all data as columnar arrays for vectorized execution
+    /// Returns (schema, columns) where columns is Vec<StorageColumnArray>
+    pub fn scan_columnar(
+        &self,
+    ) -> ColumnarResult<(
+        Vec<String>,
+        Vec<crate::columnar::convert::StorageColumnArray>,
+    )> {
+        use crate::columnar::convert::{IntoStorageColumnArray, StorageColumnArray};
+
+        let schema: Vec<String> = self.info.columns.iter().map(|c| c.name.clone()).collect();
+        let mut columns: Vec<StorageColumnArray> = Vec::with_capacity(self.info.columns.len());
+
+        // Add columns in order
+        for col_idx in 0..self.info.columns.len() {
+            if let Some(col_chunk) = self.columns.get(&col_idx) {
+                let col_array: StorageColumnArray = col_chunk.clone().into_storage_column_array();
+                columns.push(col_array);
+            } else {
+                // Column doesn't exist, add empty/null column
+                columns.push(StorageColumnArray::Null);
+            }
+        }
+
+        Ok((schema, columns))
+    }
+
     /// Get statistics for a column
     pub fn get_column_stats(&self, col_idx: usize) -> Option<&ColumnStats> {
         self.columns.get(&col_idx).map(|c| c.stats())
@@ -143,8 +172,36 @@ impl TableStore {
         // Write each column as a segment
         for (col_idx, chunk) in &self.columns {
             let segment_path = path.join(format!("column_{}.bin", col_idx));
-            let mut segment =
-                ColumnSegment::with_compression(*col_idx as u32, CompressionType::Zstd);
+
+            // Get compression config from column definition
+            let compression_config = self
+                .info
+                .columns
+                .get(*col_idx)
+                .and_then(|c| c.compression.clone())
+                .unwrap_or_default();
+
+            // Select compression algorithm based on config
+            let compression_type = if compression_config.auto_select {
+                let col_data_type = self
+                    .info
+                    .columns
+                    .get(*col_idx)
+                    .map(|c| c.data_type.as_str())
+                    .unwrap_or("");
+                auto_select_compression(col_data_type, compression_config.level).0
+            } else {
+                // Map level preference to compression type
+                match compression_config.level {
+                    CompressionLevel::Fastest => CompressionType::Lz4,
+                    CompressionLevel::Default => CompressionType::Snappy,
+                    CompressionLevel::Best => CompressionType::Zstd,
+                    CompressionLevel::Custom(n) if n < 5 => CompressionType::Lz4,
+                    CompressionLevel::Custom(_) => CompressionType::Zstd,
+                }
+            };
+
+            let mut segment = ColumnSegment::with_compression(*col_idx as u32, compression_type);
 
             let stats = ColumnStatsDisk::from(chunk.stats());
             segment.stats = stats;
@@ -313,6 +370,112 @@ impl Default for ColumnarStorage {
     }
 }
 
+impl ColumnarStorage {
+    pub fn scan_columnar(
+        &self,
+        table: &str,
+    ) -> ColumnarResult<(
+        Vec<String>,
+        Vec<crate::columnar::convert::StorageColumnArray>,
+    )> {
+        let store = self
+            .tables
+            .get(table)
+            .ok_or_else(|| ColumnarError::TableNotFound(table.to_string()))?;
+        store.scan_columnar()
+    }
+
+    fn extract_column_name_from_predicate(
+        &self,
+        predicate: &crate::predicate::Predicate,
+    ) -> Option<String> {
+        match predicate {
+            crate::predicate::Predicate::Eq(expr, _)
+            | crate::predicate::Predicate::Lt(expr, _)
+            | crate::predicate::Predicate::Lte(expr, _)
+            | crate::predicate::Predicate::Gt(expr, _)
+            | crate::predicate::Predicate::Gte(expr, _) => match &**expr {
+                crate::predicate::Expr::Column(name) => Some(name.clone()),
+                _ => None,
+            },
+            crate::predicate::Predicate::And(left, right) => self
+                .extract_column_name_from_predicate(left)
+                .or_else(|| self.extract_column_name_from_predicate(right)),
+            crate::predicate::Predicate::Or(left, right) => self
+                .extract_column_name_from_predicate(left)
+                .or_else(|| self.extract_column_name_from_predicate(right)),
+            _ => None,
+        }
+    }
+
+    fn build_bloom_filter_for_in(
+        &self,
+        predicate: &crate::predicate::Predicate,
+    ) -> Option<(String, crate::columnar::chunk::BloomFilter)> {
+        match predicate {
+            crate::predicate::Predicate::In(expr, values) => {
+                let col_name = match &**expr {
+                    crate::predicate::Expr::Column(name) => name.clone(),
+                    _ => return None,
+                };
+
+                let mut bloom = crate::columnar::chunk::BloomFilter::new(values.len(), 0.01);
+                for val_expr in values {
+                    if let crate::predicate::Expr::Value(sqlrustgo_types::Value::Text(s)) = val_expr
+                    {
+                        bloom.insert(s);
+                    }
+                }
+
+                Some((col_name, bloom))
+            }
+            crate::predicate::Predicate::And(left, right) => self
+                .build_bloom_filter_for_in(left)
+                .or_else(|| self.build_bloom_filter_for_in(right)),
+            crate::predicate::Predicate::Or(left, right) => self
+                .build_bloom_filter_for_in(left)
+                .or_else(|| self.build_bloom_filter_for_in(right)),
+            _ => None,
+        }
+    }
+
+    fn eval_predicate_with_bloom(
+        &self,
+        table: &str,
+        row: &Vec<Value>,
+        predicate: &crate::predicate::Predicate,
+        bloom_filter: &Option<(String, crate::columnar::chunk::BloomFilter)>,
+    ) -> bool {
+        if let Some((bloom_col_name, bloom)) = bloom_filter {
+            match predicate {
+                crate::predicate::Predicate::In(expr, values) => {
+                    if let crate::predicate::Expr::Column(col_name) = &**expr {
+                        if col_name == bloom_col_name {
+                            let col_val = self.eval_expr(table, row, expr);
+                            if let Value::Text(s) = &col_val {
+                                if !bloom.may_contain(s) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    return self.eval_predicate_for_scan(table, row, predicate);
+                }
+                crate::predicate::Predicate::And(left, right) => {
+                    return self.eval_predicate_with_bloom(table, row, left, bloom_filter)
+                        && self.eval_predicate_with_bloom(table, row, right, bloom_filter);
+                }
+                crate::predicate::Predicate::Or(left, right) => {
+                    return self.eval_predicate_with_bloom(table, row, left, bloom_filter)
+                        || self.eval_predicate_with_bloom(table, row, right, bloom_filter);
+                }
+                _ => return self.eval_predicate_for_scan(table, row, predicate),
+            }
+        }
+        self.eval_predicate_for_scan(table, row, predicate)
+    }
+}
+
 impl StorageEngine for ColumnarStorage {
     fn scan(&self, table: &str) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
         let store = self.tables.get(table).ok_or_else(|| {
@@ -326,6 +489,162 @@ impl StorageEngine for ColumnarStorage {
             }
         }
         Ok(records)
+    }
+
+    fn scan_predicate(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+    ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
+        let store = match self.tables.get(table) {
+            Some(s) => s,
+            None => return Ok(vec![]),
+        };
+
+        let mut filtered = Vec::new();
+        for i in 0..store.row_count() {
+            if let Some(row) = store.get_row(i) {
+                if self.eval_predicate_for_scan(table, &row, predicate) {
+                    filtered.push(row);
+                }
+            }
+        }
+        Ok(filtered)
+    }
+
+    fn scan_predicate_with_limit(
+        &self,
+        table: &str,
+        predicate: &crate::predicate::Predicate,
+        limit: usize,
+    ) -> crate::engine::SqlResult<Vec<Vec<Value>>> {
+        let store = match self.tables.get(table) {
+            Some(s) => s,
+            None => return Ok(vec![]),
+        };
+
+        let mut filtered = Vec::with_capacity(limit);
+        let row_count = store.row_count();
+
+        let col_name = self.extract_column_name_from_predicate(predicate);
+        let col_chunk = col_name.as_ref().and_then(|name| {
+            store
+                .column_indices
+                .get(name)
+                .and_then(|&idx| store.columns.get(&idx))
+        });
+
+        let bloom_filter = self.build_bloom_filter_for_in(predicate);
+
+        if let Some(chunk) = col_chunk {
+            let num_blocks = chunk.num_blocks();
+            for block_idx in 0..num_blocks {
+                if filtered.len() >= limit {
+                    break;
+                }
+
+                if chunk.can_skip_block(block_idx, col_name.as_deref().unwrap_or(""), predicate) {
+                    continue;
+                }
+
+                let block_start = chunk.get_block_start(block_idx);
+                let block_end = chunk.get_block_end(block_idx);
+
+                for i in block_start..block_end {
+                    if filtered.len() >= limit {
+                        break;
+                    }
+                    if let Some(row) = store.get_row(i) {
+                        if self.eval_predicate_with_bloom(table, &row, predicate, &bloom_filter) {
+                            filtered.push(row);
+                        }
+                    }
+                }
+            }
+        } else {
+            for i in 0..row_count {
+                if filtered.len() >= limit {
+                    break;
+                }
+                if let Some(row) = store.get_row(i) {
+                    if self.eval_predicate_with_bloom(table, &row, predicate, &bloom_filter) {
+                        filtered.push(row);
+                    }
+                }
+            }
+        }
+        Ok(filtered)
+    }
+
+    fn eval_predicate_for_scan(
+        &self,
+        table: &str,
+        row: &Vec<Value>,
+        predicate: &crate::predicate::Predicate,
+    ) -> bool {
+        match predicate {
+            crate::predicate::Predicate::Eq(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val == r_val
+            }
+            crate::predicate::Predicate::Lt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val < r_val
+            }
+            crate::predicate::Predicate::Lte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val <= r_val
+            }
+            crate::predicate::Predicate::Gt(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val > r_val
+            }
+            crate::predicate::Predicate::Gte(l, r) => {
+                let l_val = self.eval_expr(table, row, l);
+                let r_val = self.eval_expr(table, row, r);
+                l_val >= r_val
+            }
+            crate::predicate::Predicate::And(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    && self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Or(l, r) => {
+                self.eval_predicate_for_scan(table, row, l)
+                    || self.eval_predicate_for_scan(table, row, r)
+            }
+            crate::predicate::Predicate::Not(p) => !self.eval_predicate_for_scan(table, row, p),
+            crate::predicate::Predicate::IsNull(expr) => {
+                matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::IsNotNull(expr) => {
+                !matches!(self.eval_expr(table, row, expr), Value::Null)
+            }
+            crate::predicate::Predicate::In(col, values) => {
+                let col_val = self.eval_expr(table, row, col);
+                values
+                    .iter()
+                    .any(|v| col_val == self.eval_expr(table, row, v))
+            }
+        }
+    }
+
+    fn eval_expr(&self, table: &str, row: &Vec<Value>, expr: &crate::predicate::Expr) -> Value {
+        match expr {
+            crate::predicate::Expr::Column(name) => {
+                if let Some(store) = self.tables.get(table) {
+                    if let Some(&idx) = store.column_indices.get(name) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            }
+            crate::predicate::Expr::Value(v) => v.clone(),
+            crate::predicate::Expr::Parameter(_) => Value::Null,
+        }
     }
 
     fn get_row(
@@ -539,6 +858,77 @@ impl StorageEngine for ColumnarStorage {
             "Auto-increment not yet implemented for ColumnarStorage".to_string(),
         ))
     }
+
+    fn create_composite_index(
+        &mut self,
+        _table: &str,
+        _columns: Vec<String>,
+    ) -> crate::engine::SqlResult<crate::engine::IndexId> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
+    fn search_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _key: &crate::bplus_tree::index::CompositeKey,
+    ) -> crate::engine::SqlResult<Vec<u32>> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
+    fn range_composite_index(
+        &self,
+        _index_id: crate::engine::IndexId,
+        _start: &crate::bplus_tree::index::CompositeKey,
+        _end: &crate::bplus_tree::index::CompositeKey,
+    ) -> crate::engine::SqlResult<Vec<u32>> {
+        Err(crate::engine::SqlError::ExecutionError(
+            "Composite index not yet implemented for ColumnarStorage".to_string(),
+        ))
+    }
+
+    fn get_referencing_foreign_keys(
+        &self,
+        table: &str,
+    ) -> Vec<crate::engine::ReferencingForeignKey> {
+        use crate::engine::ReferencingForeignKey;
+        let mut result = Vec::new();
+        for (table_name, store) in &self.tables {
+            let table_info = &store.info;
+            for col_def in &table_info.columns {
+                if let Some(ref fk) = col_def.references {
+                    if fk.referenced_table == table {
+                        result.push(ReferencingForeignKey {
+                            constraint_name: None,
+                            child_table: table_name.clone(),
+                            child_columns: vec![col_def.name.clone()],
+                            parent_table: fk.referenced_table.clone(),
+                            parent_columns: vec![fk.referenced_column.clone()],
+                            on_delete: fk.on_delete,
+                            on_update: fk.on_update,
+                        });
+                    }
+                }
+            }
+            for table_fk in table_info.table_foreign_keys.iter().flatten() {
+                if table_fk.parent_table == table {
+                    result.push(ReferencingForeignKey {
+                        constraint_name: table_fk.name.clone(),
+                        child_table: table_name.clone(),
+                        child_columns: table_fk.child_columns.clone(),
+                        parent_table: table_fk.parent_table.clone(),
+                        parent_columns: table_fk.parent_columns.clone(),
+                        on_delete: table_fk.on_delete,
+                        on_update: table_fk.on_update,
+                    });
+                }
+            }
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -559,6 +949,7 @@ mod tests {
                     is_primary_key: true,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -568,6 +959,7 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
                 ColumnDefinition {
                     name: "value".to_string(),
@@ -577,8 +969,10 @@ mod tests {
                     is_primary_key: false,
                     references: None,
                     auto_increment: false,
+                    compression: None,
                 },
             ],
+            ..Default::default()
         }
     }
 

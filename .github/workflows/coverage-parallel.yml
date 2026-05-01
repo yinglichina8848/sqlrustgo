@@ -1,0 +1,255 @@
+name: Coverage (Parallel)
+
+on:
+  push:
+    branches: [develop/v2.7.0, main]
+  pull_request:
+    branches: [develop/v2.7.0]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage-core:
+    name: Coverage (Core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for core crates
+        run: |
+          cargo llvm-cov --package sqlrustgo-parser \
+                         --package sqlrustgo-planner \
+                         --package sqlrustgo-optimizer \
+                         --package sqlrustgo-types \
+                         --package sqlrustgo-common \
+                         --html --output-dir docs/releases/v2.7.0/coverage-core
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-core
+          path: docs/releases/v2.7.0/coverage-core/
+
+  coverage-executor:
+    name: Coverage (Executor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for executor
+        run: |
+          cargo llvm-cov --package sqlrustgo-executor \
+                         --html --output-dir docs/releases/v2.7.0/coverage-executor
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-executor
+          path: docs/releases/v2.7.0/coverage-executor/
+
+  coverage-storage:
+    name: Coverage (Storage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for storage
+        run: |
+          cargo llvm-cov --package sqlrustgo-storage \
+                         --html --output-dir docs/releases/v2.7.0/coverage-storage
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-storage
+          path: docs/releases/v2.7.0/coverage-storage/
+
+  coverage-transaction:
+    name: Coverage (Transaction)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for transaction
+        run: |
+          cargo llvm-cov --package sqlrustgo-transaction \
+                         --package sqlrustgo-catalog \
+                         --html --output-dir docs/releases/v2.7.0/coverage-transaction
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-transaction
+          path: docs/releases/v2.7.0/coverage-transaction/
+
+  coverage-network:
+    name: Coverage (Network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for network/server
+        run: |
+          cargo llvm-cov --package sqlrustgo-network \
+                         --package sqlrustgo-server \
+                         --html --output-dir docs/releases/v2.7.0/coverage-network
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-network
+          path: docs/releases/v2.7.0/coverage-network/
+
+  coverage-vector:
+    name: Coverage (Vector)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Generate coverage for vector
+        run: |
+          cargo llvm-cov --package sqlrustgo-vector \
+                         --html --output-dir docs/releases/v2.7.0/coverage-vector
+        continue-on-error: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-vector
+          path: docs/releases/v2.7.0/coverage-vector/
+
+  coverage-summary:
+    name: Coverage Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [coverage-core, coverage-executor, coverage-storage, coverage-transaction, coverage-network, coverage-vector]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: docs/releases/v2.7.0/
+
+      - name: Generate full coverage report
+        run: |
+          cargo llvm-cov --all-features --html --output-dir docs/releases/v2.7.0/coverage
+          cargo llvm-cov --all-features --json --output-path docs/releases/v2.7.0/coverage.json
+
+      - name: Extract coverage percentage
+        id: extract
+        run: |
+          COVERAGE=$(grep -oP '"line_ratio":\K[0-9.]+' docs/releases/v2.7.0/coverage.json || echo "0")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_OUTPUT
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE_INT=$(echo "${{ steps.extract.outputs.COVERAGE }} * 100" | bc | cut -d. -f1)
+          echo "Total Coverage: ${COVERAGE_INT}%"
+          if [ "$COVERAGE_INT" -lt 70 ]; then
+            echo "❌ Coverage too low! Need at least 70%"
+            exit 1
+          fi
+          echo "✅ Coverage check passed!"
+
+      - name: Upload coverage JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-json
+          path: docs/releases/v2.7.0/coverage.json

@@ -1,7 +1,7 @@
 // TPC-H Comprehensive Benchmark
 
 use serde::Serialize;
-use sqlrustgo::{parse, ExecutionEngine, StorageEngine};
+use sqlrustgo::{ExecutionEngine, StorageEngine};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -174,13 +174,13 @@ impl TpchBenchmark {
         let mut storage = sqlrustgo::MemoryStorage::new();
         self.generate_data(&mut storage);
 
-        let mut engine = ExecutionEngine::new(Arc::new(storage));
+        let mut engine = ExecutionEngine::with_memory();
         let mut results = Vec::new();
         let cache_hits = 0;
 
         for (name, sql) in queries {
             let start = Instant::now();
-            let _ = engine.execute(parse(sql).unwrap());
+            let _ = engine.execute(sql);
             let elapsed = start.elapsed().as_secs_f64() * 1000.0;
 
             let rows = if sql.contains("COUNT") || sql.contains("SUM") {
@@ -204,9 +204,7 @@ impl TpchBenchmark {
     fn run_multi_thread(&self, queries: &[(&str, &str)]) -> (Vec<QueryResult>, usize) {
         let mut storage = sqlrustgo::MemoryStorage::new();
         self.generate_data(&mut storage);
-        let engine = Arc::new(std::sync::Mutex::new(ExecutionEngine::new(Arc::new(
-            storage,
-        ))));
+        let engine = Arc::new(std::sync::Mutex::new(ExecutionEngine::with_memory()));
 
         let mut results = Vec::new();
 
@@ -217,7 +215,7 @@ impl TpchBenchmark {
                     let engine = engine.clone();
                     s.spawn(move || {
                         let start = Instant::now();
-                        let _ = engine.lock().unwrap().execute(parse(sql).unwrap());
+                        let _ = engine.lock().unwrap().execute(sql);
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                         (name.to_string(), elapsed)
                     })
@@ -309,48 +307,60 @@ impl TpchBenchmark {
                         name: "l_orderkey".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: true,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_partkey".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: true,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_suppkey".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: true,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_quantity".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: true,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_extendedprice".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_discount".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_tax".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_returnflag".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "l_shipmode".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                 ],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
+                partition_info: None,
             })
             .ok();
 
@@ -362,28 +372,36 @@ impl TpchBenchmark {
                         name: "o_orderkey".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "o_custkey".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "o_orderstatus".to_string(),
                         data_type: "TEXT".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "o_totalprice".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                     sqlrustgo_storage::ColumnDefinition {
                         name: "o_orderdate".to_string(),
                         data_type: "INTEGER".to_string(),
                         nullable: false,
+                        primary_key: false,
                     },
                 ],
+                foreign_keys: vec![],
+                unique_constraints: vec![],
+                partition_info: None,
             })
             .ok();
 

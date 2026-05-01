@@ -5,23 +5,22 @@
 #![allow(clippy::type_complexity)]
 
 pub mod cost;
+pub mod graph_cost;
+pub mod index_selector;
 pub mod network_cost;
+pub mod path_selector;
 pub mod plan;
-pub mod projection_pushdown;
+pub mod query_planner;
 pub mod rules;
 pub mod stats;
+pub mod unified_cost;
+pub mod unified_plan;
+pub mod vector_cost;
 
-pub use cost::{CboOptimizer, SimpleCostModel};
+pub use cost::SimpleCostModel;
 pub use network_cost::{NetworkCost, NetworkCostEstimator, SimpleNetworkCostEstimator};
 pub use plan::{OptimizerError, OptimizerResult};
-pub use projection_pushdown::{
-    ColumnPruner, ProjectionPushdownConfig, ProjectionPushdownOptimizer, ProjectionPushdownRule,
-};
-pub use rules::{
-    ConstantFolding, Expr, ExpressionSimplification, IndexSelect, JoinReordering, JoinType,
-    MatchResult, Operator, Plan, PlanPattern, PredicatePushdown, ProjectionPruning, RuleContext,
-    RuleMeta, SimpleColumnSet, Value,
-};
+pub use rules::{ConstantFolding, PredicatePushdown, ProjectionPruning};
 pub use stats::{
     ColumnStats, DefaultStatsCollector, InMemoryStatisticsProvider, StatisticsProvider,
     StatsCollector, StatsError, StatsResult, TableStats,
@@ -92,237 +91,90 @@ impl Default for RuleSet {
     }
 }
 
-pub struct DefaultOptimizer {
-    rules: Vec<Box<dyn Rule<Plan>>>,
-    disabled_rules: std::collections::HashSet<String>,
-    use_cbo: bool,
-    cbo_optimizer: Option<CboOptimizer>,
-}
-
-impl DefaultOptimizer {
-    pub fn new() -> Self {
-        let mut optimizer = Self {
-            rules: Vec::new(),
-            disabled_rules: std::collections::HashSet::new(),
-            use_cbo: false,
-            cbo_optimizer: None,
-        };
-        optimizer.add_default_rules();
-        optimizer
-    }
-
-    fn add_default_rules(&mut self) {
-        self.rules.push(Box::new(ConstantFolding::new()));
-        self.rules.push(Box::new(PredicatePushdown::new()));
-        self.rules.push(Box::new(ProjectionPruning::new()));
-        self.rules.push(Box::new(ExpressionSimplification::new()));
-        self.rules.push(Box::new(IndexSelect::new()));
-        self.rules.push(Box::new(JoinReordering::new()));
-    }
-
-    pub fn with_cbo(mut self, cbo: CboOptimizer) -> Self {
-        self.use_cbo = true;
-        self.cbo_optimizer = Some(cbo);
-        self
-    }
-
-    pub fn enable_rule(&mut self, rule_name: &str) {
-        self.disabled_rules.remove(rule_name);
-    }
-
-    pub fn disable_rule(&mut self, rule_name: &str) {
-        self.disabled_rules.insert(rule_name.to_string());
-    }
-
-    pub fn add_rule(&mut self, rule: Box<dyn Rule<Plan>>) {
-        self.rules.push(rule);
-    }
-}
-
-impl Optimizer for DefaultOptimizer {
-    fn optimize(&mut self, plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
-        if let Some(plan) = plan.downcast_mut::<Plan>() {
-            let mut changed = true;
-            let mut iterations = 0;
-            const MAX_ITERATIONS: usize = 100;
-            while changed && iterations < MAX_ITERATIONS {
-                changed = false;
-                iterations += 1;
-                for rule in &self.rules {
-                    if !self.disabled_rules.contains(rule.name()) && rule.apply(plan) {
-                        changed = true;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Default for DefaultOptimizer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_noop_optimizer() {
+    fn test_noop_optimizer_optimize() {
         let mut optimizer = NoOpOptimizer;
-        let mut plan = String::from("test plan");
+        let mut plan: Box<dyn std::any::Any> = Box::new(42i32);
         let result = optimizer.optimize(&mut plan);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_ruleset_new() {
-        let ruleset = RuleSet::new();
-        assert_eq!(ruleset.rules.len(), 0);
+    fn test_noop_optimizer_trait_object() {
+        let mut optimizer: Box<dyn Optimizer> = Box::new(NoOpOptimizer);
+        let mut plan: Box<dyn std::any::Any> = Box::new("test".to_string());
+        assert!(optimizer.optimize(&mut plan).is_ok());
     }
 
     #[test]
-    fn test_ruleset_add_rule() {
-        let mut ruleset = RuleSet::new();
-        let called = std::cell::RefCell::new(false);
-
-        let rule = move |_plan: &mut dyn std::any::Any| {
-            *called.borrow_mut() = true;
-            true
-        };
-
-        ruleset.add_rule(rule);
-        assert_eq!(ruleset.rules.len(), 1);
+    fn test_rule_set_new() {
+        let mut rule_set = RuleSet::new();
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
     }
 
     #[test]
-    fn test_ruleset_apply() {
-        let mut ruleset = RuleSet::new();
-
-        let rule1 = |_plan: &mut dyn std::any::Any| -> bool { true };
-        let rule2 = |_plan: &mut dyn std::any::Any| -> bool { false };
-
-        ruleset.add_rule(rule1);
-        ruleset.add_rule(rule2);
-
-        let mut plan = String::from("test");
-        let changed = ruleset.apply(&mut plan);
-        assert!(changed); // At least one rule returned true
+    fn test_rule_set_default() {
+        let mut rule_set = RuleSet::default();
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
     }
 
     #[test]
-    fn test_ruleset_apply_no_changes() {
-        let mut ruleset = RuleSet::new();
-
-        let rule = |_plan: &mut dyn std::any::Any| -> bool { false };
-        ruleset.add_rule(rule);
-
-        let mut plan = String::from("test");
-        let changed = ruleset.apply(&mut plan);
-        assert!(!changed);
+    fn test_rule_set_add_rule() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| true);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == true);
     }
 
     #[test]
-    fn test_optimizer_trait_object() {
-        struct TestOptimizer {
-            called: std::cell::RefCell<bool>,
-        }
+    fn test_rule_set_multiple_rules() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| false);
+        rule_set.add_rule(|_| true);
+        rule_set.add_rule(|_| false);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == true);
+    }
 
-        impl Optimizer for TestOptimizer {
-            fn optimize(&mut self, _plan: &mut dyn std::any::Any) -> OptimizerResult<()> {
-                *self.called.borrow_mut() = true;
-                Ok(())
-            }
-        }
-
-        let mut optimizer = TestOptimizer {
-            called: std::cell::RefCell::new(false),
-        };
-        let mut plan = String::from("test");
-        optimizer.optimize(&mut plan).unwrap();
-        assert!(*optimizer.called.borrow());
+    #[test]
+    fn test_rule_set_no_changes() {
+        let mut rule_set = RuleSet::new();
+        rule_set.add_rule(|_| false);
+        rule_set.add_rule(|_| false);
+        assert!(rule_set.apply(&mut Box::new(0i32) as &mut dyn std::any::Any) == false);
     }
 
     #[test]
     fn test_rule_trait() {
         struct TestRule;
-
-        impl Rule<String> for TestRule {
+        impl Rule<i32> for TestRule {
             fn name(&self) -> &str {
                 "TestRule"
             }
-
-            fn apply(&self, plan: &mut String) -> bool {
-                plan.push_str("_modified");
+            fn apply(&self, plan: &mut i32) -> bool {
+                *plan += 1;
                 true
             }
         }
-
         let rule = TestRule;
         assert_eq!(rule.name(), "TestRule");
-
-        let mut plan = String::from("original");
-        let changed = rule.apply(&mut plan);
-        assert!(changed);
-        assert_eq!(plan, "original_modified");
+        let mut plan = 10i32;
+        assert!(rule.apply(&mut plan));
+        assert_eq!(plan, 11);
     }
 
     #[test]
     fn test_cost_model_trait() {
         struct TestCostModel;
-
         impl CostModel for TestCostModel {
-            fn estimate_cost(&self, plan: &dyn std::any::Any) -> f64 {
-                if let Some(s) = plan.downcast_ref::<String>() {
-                    s.len() as f64
-                } else {
-                    0.0
-                }
+            fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
+                42.0
             }
         }
-
-        let cost_model = TestCostModel;
-        let plan = String::from("test plan");
-        let cost = cost_model.estimate_cost(&plan);
-        assert_eq!(cost, 9.0);
-    }
-
-    #[test]
-    fn test_ruleset_default() {
-        let ruleset = RuleSet::default();
-        assert_eq!(ruleset.rules.len(), 0);
-    }
-
-    #[test]
-    fn test_default_optimizer_new() {
-        let mut optimizer = DefaultOptimizer::new();
-        let mut plan = String::from("test");
-        let result = optimizer.optimize(&mut plan);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_default_optimizer_with_cbo() {
-        let cbo = CboOptimizer::new();
-        let mut optimizer = DefaultOptimizer::new().with_cbo(cbo);
-        let mut plan = String::from("test");
-        let result = optimizer.optimize(&mut plan);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_cbo_optimizer_new() {
-        let cbo = CboOptimizer::new();
-        let cost = cbo.estimate_scan_cost("test_table");
-        assert!(cost >= 0.0);
-    }
-
-    #[test]
-    fn test_cbo_optimizer_select_access_method() {
-        let cbo = CboOptimizer::new();
-        let method = cbo.select_access_method("test_table", "id", 0.1);
-        assert!(method == "seq_scan" || method == "index_scan");
+        let model = TestCostModel;
+        let cost = model.estimate_cost(&0i32);
+        assert_eq!(cost, 42.0);
     }
 }

@@ -13,12 +13,18 @@
 //!
 //! Traceability chain: Batch → Device → Calibration → Regulation
 
+pub mod cypher;
+pub mod error;
+pub mod graph_generator;
 pub mod model;
 pub mod store;
 pub mod traversal;
-pub mod error;
 
+pub mod sharded_graph;
+pub use sharded_graph::{CrossShardTraversal, GraphShardId, MultiShardGraphStore};
+
+pub use cypher::*;
+pub use error::*;
 pub use model::*;
 pub use store::*;
 pub use traversal::*;
-pub use error::*;

@@ -3,26 +3,23 @@
 //! Benchmarks for full table scan operations.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
-use std::sync::Arc;
+use sqlrustgo::ExecutionEngine;
+use sqlrustgo::MemoryStorage;
 
-fn setup_engine_with_data(rows: usize) -> ExecutionEngine {
-    let mut engine = ExecutionEngine::new(Arc::new(MemoryStorage::new()));
+fn setup_engine_with_data(rows: usize) -> ExecutionEngine<MemoryStorage> {
+    let mut engine = ExecutionEngine::with_memory();
     engine
-        .execute(parse("CREATE TABLE scan_bench (id INTEGER, name TEXT, value INTEGER)").unwrap())
+        .execute("CREATE TABLE scan_bench (id INTEGER, name TEXT, value INTEGER)")
         .unwrap();
 
     for i in 0..rows {
         engine
-            .execute(
-                parse(&format!(
-                    "INSERT INTO scan_bench VALUES ({}, 'name_{}', {})",
-                    i,
-                    i % 1000,
-                    i
-                ))
-                .unwrap(),
-            )
+            .execute(&format!(
+                "INSERT INTO scan_bench VALUES ({}, 'name_{}', {})",
+                i,
+                i % 1000,
+                i
+            ))
             .unwrap();
     }
 
@@ -33,11 +30,7 @@ fn bench_scan_1k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(1_000);
 
     c.bench_function("scan_1k", |b| {
-        b.iter(|| {
-            engine
-                .execute(parse("SELECT * FROM scan_bench").unwrap())
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -45,11 +38,7 @@ fn bench_scan_10k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(10_000);
 
     c.bench_function("scan_10k", |b| {
-        b.iter(|| {
-            engine
-                .execute(parse("SELECT * FROM scan_bench").unwrap())
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -57,11 +46,7 @@ fn bench_scan_100k(c: &mut Criterion) {
     let mut engine = setup_engine_with_data(100_000);
 
     c.bench_function("scan_100k", |b| {
-        b.iter(|| {
-            engine
-                .execute(parse("SELECT * FROM scan_bench").unwrap())
-                .unwrap()
-        });
+        b.iter(|| engine.execute("SELECT * FROM scan_bench").unwrap());
     });
 }
 
@@ -74,7 +59,7 @@ fn bench_scan_with_filter(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
             b.iter(|| {
                 engine
-                    .execute(parse("SELECT * FROM scan_bench WHERE value > 500").unwrap())
+                    .execute("SELECT * FROM scan_bench WHERE value > 500")
                     .unwrap()
             });
         });
@@ -90,11 +75,7 @@ fn bench_scan_projection(c: &mut Criterion) {
         let mut engine = setup_engine_with_data(size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
-            b.iter(|| {
-                engine
-                    .execute(parse("SELECT id, value FROM scan_bench").unwrap())
-                    .unwrap()
-            });
+            b.iter(|| engine.execute("SELECT id, value FROM scan_bench").unwrap());
         });
     }
 

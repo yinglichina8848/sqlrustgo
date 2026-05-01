@@ -2,20 +2,19 @@
 //!
 //! A MySQL-compatible interactive SQL shell
 
+#![allow(dead_code)]
+
 use rustyline::history::FileHistory;
 use rustyline::Editor;
-use sqlrustgo::{parse, ExecutionEngine, MemoryStorage};
+use sqlrustgo::{MemoryExecutionEngine, MemoryStorage};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    CreateTableStatement, DropTableStatement, Expression, InsertStatement, KillStatement, KillType,
-    SelectStatement,
+    CreateTableStatement, DropTableStatement, Expression, InsertStatement, SelectStatement,
 };
-use sqlrustgo_parser::Statement;
 use sqlrustgo_security::SessionManager;
 use sqlrustgo_storage::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::env;
-use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 /// Check if teaching mode is enabled via environment variable
@@ -41,8 +40,7 @@ fn main() {
         let sql = args[1..].join(" ");
 
         // Initialize execution engine
-        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-        let mut engine = ExecutionEngine::new(storage);
+        let mut engine = MemoryExecutionEngine::with_memory();
 
         // Initialize session manager for CLI
         let session_manager = Arc::new(SessionManager::new());
@@ -66,8 +64,8 @@ fn main() {
     println!("Type '.help' for available commands, '.exit' to quit\n");
 
     // Initialize execution engine
+    let mut engine = MemoryExecutionEngine::with_memory();
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    let mut engine = ExecutionEngine::new(storage.clone());
 
     // Initialize session manager and create CLI session
     let session_manager = Arc::new(SessionManager::new());
@@ -146,13 +144,13 @@ fn main() {
 /// Execute SQL query
 fn execute_sql(
     sql: &str,
-    engine: &mut ExecutionEngine,
+    engine: &mut MemoryExecutionEngine,
     _session_manager: &SessionManager,
     _current_session_id: u64,
 ) -> Result<ExecutorResult, String> {
-    let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
+    // Engine.execute() parses the SQL internally
     engine
-        .execute(statement)
+        .execute(sql)
         .map_err(|e: sqlrustgo_types::SqlError| e.to_string())
 }
 
@@ -179,19 +177,7 @@ fn execute_select(
         .map_err(|e| e.to_string())?;
 
     // Scan all rows
-    let mut rows = storage.scan(table_name).map_err(|e| e.to_string())?;
-
-    // Apply OFFSET (skip first N rows)
-    if let Some(offset) = select.offset {
-        let offset = offset.min(rows.len());
-        rows = rows.into_iter().skip(offset).collect();
-    }
-
-    // Apply LIMIT (take first N rows)
-    if let Some(limit) = select.limit {
-        let limit = limit.min(rows.len());
-        rows = rows.into_iter().take(limit).collect();
-    }
+    let rows = storage.scan(table_name).map_err(|e| e.to_string())?;
 
     // If there are columns specified, filter them
     let result_rows: Vec<Vec<Value>> = if select.columns.is_empty() {
@@ -348,16 +334,17 @@ fn execute_create_table(
             name: col.name.clone(),
             data_type: col.data_type.clone(),
             nullable: col.nullable,
-            is_unique: false,
-            is_primary_key: false,
-            references: None,
-            auto_increment: false,
+            primary_key: false,
         })
         .collect();
 
     let table_info = TableInfo {
         name: create.name.clone(),
         columns,
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     };
 
     storage
@@ -532,88 +519,8 @@ fn execute_information_schema_processlist(
     Ok(ExecutorResult::new(rows, 0))
 }
 
-/// Execute KILL statement
-fn execute_kill(
-    kill: &KillStatement,
-    session_manager: &SessionManager,
-    current_session_id: u64,
-) -> Result<ExecutorResult, String> {
-    let kill_type_str = match kill.kill_type {
-        KillType::Connection => "CONNECTION",
-        KillType::Query => "QUERY",
-    };
-
-    let target_session_id = kill.process_id;
-
-    // Get current session for privilege check
-    let current_session = session_manager
-        .get_session(current_session_id)
-        .ok_or_else(|| "Not in a valid session".to_string())?;
-
-    // Cannot kill self
-    if target_session_id == current_session_id {
-        return Err(format!(
-            "Cannot KILL {} {} (cannot kill self session)",
-            kill_type_str, target_session_id
-        ));
-    }
-
-    // Check if target session exists
-    let target_session = session_manager.get_session(target_session_id);
-    if target_session.is_none() {
-        return Err(format!("Unknown thread id: {}", target_session_id));
-    }
-
-    let target_session = target_session.unwrap();
-
-    // Permission check: can kill if current user has SUPER privilege
-    // or if killing own session (same user)
-    let is_own_session = target_session.user == current_session.user;
-    if !is_own_session && !current_session.can_kill() {
-        return Err(format!(
-            "Access denied: cannot KILL {} {} (need SUPER privilege to kill other user's sessions)",
-            kill_type_str, target_session_id
-        ));
-    }
-
-    // Perform the kill based on type
-    match kill.kill_type {
-        KillType::Connection => {
-            // Close the entire connection
-            log::info!(
-                "KILL CONNECTION {} - closing session (user: {}, ip: {}) by {}",
-                target_session_id,
-                target_session.user,
-                target_session.ip,
-                current_session.user
-            );
-            session_manager.close_session(target_session_id);
-        }
-        KillType::Query => {
-            // Just interrupt the query, keep connection alive
-            log::info!(
-                "KILL QUERY {} - interrupting query in session (user: {}, ip: {}) by {}",
-                target_session_id,
-                target_session.user,
-                target_session.ip,
-                current_session.user
-            );
-            // In a real implementation, we would signal the query to interrupt
-            // For now, we just log it
-        }
-    }
-
-    Ok(ExecutorResult::new(
-        vec![vec![Value::Text(format!(
-            "{} {} {}",
-            kill_type_str, target_session_id, "executed"
-        ))]],
-        0,
-    ))
-}
-
 /// Setup sample data for testing CLI commands
-fn setup_sample_data(engine: &mut ExecutionEngine) {
+fn setup_sample_data(engine: &mut MemoryExecutionEngine) {
     let sample_sqls = vec![
         "CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, email TEXT)",
         "INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
@@ -626,9 +533,7 @@ fn setup_sample_data(engine: &mut ExecutionEngine) {
     ];
 
     for sql in sample_sqls {
-        let stmt = parse(sql);
-        if let Ok(stmt) = stmt {
-            let _ = engine.execute(stmt);
-        }
+        // Engine.execute() parses the SQL internally
+        let _ = engine.execute(sql);
     }
 }

@@ -8,10 +8,12 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub struct AdjacencyIndex {
     /// Map: NodeId -> (EdgeLabel -> Vec of (neighbor_node_id, edge_id))
+    #[allow(clippy::type_complexity)]
     index: Arc<DashMap<NodeId, DashMap<LabelId, Vec<(NodeId, EdgeId)>>>>,
 }
 
 impl AdjacencyIndex {
+    /// Create a new empty adjacency index
     pub fn new() -> Self {
         AdjacencyIndex {
             index: Arc::new(DashMap::new()),
@@ -20,8 +22,8 @@ impl AdjacencyIndex {
 
     /// Add an adjacency entry
     pub fn add_edge(&self, from: NodeId, to: NodeId, label: LabelId, edge_id: EdgeId) {
-        let entry = self.index.entry(from).or_insert_with(DashMap::new);
-        let mut label_entry = entry.entry(label).or_insert_with(Vec::new);
+        let entry = self.index.entry(from).or_default();
+        let mut label_entry = entry.entry(label).or_default();
         if !label_entry.iter().any(|(n, e)| *n == to && *e == edge_id) {
             label_entry.push((to, edge_id));
         }
@@ -29,7 +31,7 @@ impl AdjacencyIndex {
 
     /// Remove an adjacency entry
     pub fn remove_edge(&self, from: NodeId, to: NodeId, label: LabelId, edge_id: EdgeId) {
-        if let Some(mut entry) = self.index.get_mut(&from) {
+        if let Some(entry) = self.index.get_mut(&from) {
             if let Some(mut label_entry) = entry.get_mut(&label) {
                 label_entry.retain(|(n, e)| *n != to || *e != edge_id);
             }

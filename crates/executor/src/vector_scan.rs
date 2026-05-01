@@ -15,6 +15,7 @@ use std::sync::Arc;
 ///
 /// This executor takes a vector index and performs similarity search.
 /// It can optionally use SQL predicates for pre-filtering before vector search.
+#[allow(dead_code)]
 pub struct VectorScanVolcanoExecutor {
     /// Vector index reference (Arc for shared access)
     vector_index: Arc<RwLock<HybridSearcher>>,
@@ -99,7 +100,7 @@ impl VectorScanVolcanoExecutor {
         top_k: usize,
         predicate: Expr,
         schema: Schema,
-        input_schema: Schema,
+        _input_schema: Schema,
     ) -> Self {
         Self {
             vector_index,
@@ -177,7 +178,7 @@ impl VolcanoExecutor for VectorScanVolcanoExecutor {
             return Ok(None);
         }
 
-        let (id, score) = self.results[self.result_idx].clone();
+        let (id, score) = self.results[self.result_idx];
         self.result_idx += 1;
 
         // Return row as [id, score] - in real impl, would join with actual table data

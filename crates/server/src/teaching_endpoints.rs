@@ -8,6 +8,9 @@
 use crate::metrics_endpoint::MetricsRegistry;
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::{OperatorProfile, QueryTrace, GLOBAL_PROFILER, GLOBAL_TRACE_COLLECTOR};
+use sqlrustgo_optimizer::{
+    IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
+};
 use sqlrustgo_parser::{parse, Expression, Statement, TransactionCommand};
 use sqlrustgo_storage::engine::{StorageEngine, Value};
 use std::sync::{Arc, RwLock};
@@ -409,6 +412,44 @@ fn execute_sql(
     // Parse the SQL statement
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
 
+    // Handle transaction commands first (using storage's transaction support)
+    if let Statement::Transaction(ref tx_stmt) = statement {
+        let mut storage = storage.write().map_err(|e| e.to_string())?;
+        match tx_stmt.command {
+            TransactionCommand::Begin => {
+                storage.begin_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Commit => {
+                storage.commit_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Rollback => {
+                storage.rollback_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            _ => {
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+        }
+    }
+
     let mut storage = storage
         .write()
         .map_err(|e| format!("Storage lock error: {}", e))?;
@@ -481,12 +522,14 @@ fn execute_sql(
                     is_primary_key: col.primary_key,
                     references: None,
                     auto_increment: col.auto_increment,
+                    compression: None,
                 })
                 .collect();
 
             let table_info = sqlrustgo_storage::engine::TableInfo {
                 name: create.name.clone(),
                 columns,
+                ..Default::default()
             };
 
             storage
@@ -502,6 +545,33 @@ fn execute_sql(
         Statement::Select(select) => {
             if !storage.has_table(&select.table) {
                 return Err(format!("Table '{}' not found", select.table));
+            }
+
+            // 创建 RuleContext（Parser → Optimizer 桥接）
+            let rule_context = RuleContext::with_index_hints(
+                select
+                    .index_hints
+                    .iter()
+                    .map(|h| OptimizerIndexHint {
+                        hint_type: match h.hint_type {
+                            sqlrustgo_parser::IndexHintType::UseIndex => {
+                                OptimizerIndexHintType::UseIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::ForceIndex => {
+                                OptimizerIndexHintType::ForceIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::IgnoreIndex => {
+                                OptimizerIndexHintType::IgnoreIndex
+                            }
+                        },
+                        index_names: h.index_names.clone(),
+                    })
+                    .collect(),
+            );
+
+            // 如果有 index hints，记录日志（当前 endpoint 不使用 optimizer）
+            if !rule_context.index_hints.is_empty() {
+                log::info!("index hints detected for table '{}': {:?} - note: optimizer not used in this endpoint", select.table, rule_context.index_hints);
             }
 
             let table_info = storage.get_table_info(&select.table).ok();
@@ -657,29 +727,6 @@ fn execute_sql(
                 affected_rows: updated_count,
             })
         }
-
-        Statement::Transaction(tx) => match tx.command {
-            TransactionCommand::Begin => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            TransactionCommand::Commit => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            TransactionCommand::Rollback => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-            _ => Ok(SqlExecResult {
-                columns: vec![],
-                rows: vec![],
-                affected_rows: 0,
-            }),
-        },
 
         Statement::DropTable(drop) => {
             if !storage.has_table(&drop.name) {

@@ -5,7 +5,7 @@
 use crate::raft::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub type TransactionId = u64;
 
@@ -233,8 +233,8 @@ impl DistributedLockManager {
 
     pub fn list_all_locks(&self) -> Vec<LockInfo> {
         self.locks
-            .iter()
-            .map(|(_, e)| LockInfo {
+            .values()
+            .map(|e| LockInfo {
                 key: e.key.clone(),
                 owner: e.owner,
                 tx_id: e.tx_id,
@@ -304,10 +304,10 @@ mod tests {
     fn test_lock_expiry() {
         let mut manager = DistributedLockManager::new();
 
-        manager.try_lock_with_ttl("key1", 1, 100, 1);
+        manager.try_lock_with_ttl("key1", 1, 100, 50);
         assert!(manager.is_locked("key1"));
 
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(100));
 
         assert!(!manager.is_locked("key1"));
     }
@@ -316,9 +316,9 @@ mod tests {
     fn test_extend_lock() {
         let mut manager = DistributedLockManager::new();
 
-        manager.try_lock_with_ttl("key1", 1, 100, 1);
+        manager.try_lock_with_ttl("key1", 1, 100, 50);
 
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(100));
 
         assert!(!manager.is_locked("key1"));
 
@@ -339,5 +339,185 @@ mod tests {
         assert!(!manager.is_locked("key1"));
         assert!(!manager.is_locked("key2"));
         assert!(manager.is_locked("key3"));
+    }
+
+    #[test]
+    fn test_lock_entry_new() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100);
+        assert_eq!(entry.key, "key1");
+        assert_eq!(entry.owner, 1);
+        assert_eq!(entry.tx_id, 100);
+        assert!(entry.expires_at.is_none());
+        assert!(!entry.is_expired());
+    }
+
+    #[test]
+    fn test_lock_entry_with_expiry() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100).with_expiry(1000);
+        assert!(entry.expires_at.is_some());
+    }
+
+    #[test]
+    fn test_lock_entry_is_expired() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100).with_expiry(0);
+        std::thread::sleep(Duration::from_millis(1));
+        assert!(entry.is_expired());
+    }
+
+    #[test]
+    fn test_lock_entry_no_expiry() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100);
+        assert!(!entry.is_expired());
+    }
+
+    #[test]
+    fn test_try_lock_same_owner_reentrant() {
+        let mut manager = DistributedLockManager::new();
+
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+    }
+
+    #[test]
+    fn test_lock_manager_unlock() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.unlock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key1", 2, 100), LockResult::Acquired);
+    }
+
+    #[test]
+    fn test_lock_manager_unlock_wrong_owner() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.unlock("key1", 2, 100), LockResult::NotOwner);
+    }
+
+    #[test]
+    fn test_lock_manager_is_locked() {
+        let mut manager = DistributedLockManager::new();
+        assert!(!manager.is_locked("key1"));
+        manager.try_lock("key1", 1, 100);
+        assert!(manager.is_locked("key1"));
+    }
+
+    #[test]
+    fn test_lock_manager_get_lock_owner() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.get_lock_owner("key1"), None);
+        manager.try_lock("key1", 1, 100);
+        assert_eq!(manager.get_lock_owner("key1"), Some((1, 100)));
+    }
+
+    #[test]
+    fn test_try_lock_with_ttl_basic() {
+        let mut manager = DistributedLockManager::new();
+        let result = manager.try_lock_with_ttl("key1", 1, 100, 100);
+        assert_eq!(result, LockResult::Acquired);
+    }
+
+    #[test]
+    fn test_try_lock_with_ttl_already_locked() {
+        let mut manager = DistributedLockManager::new();
+        manager.try_lock_with_ttl("key1", 1, 100, 100);
+        let result = manager.try_lock_with_ttl("key1", 2, 200, 100);
+        assert_eq!(result, LockResult::AlreadyLocked);
+    }
+
+    #[test]
+    fn test_extend_lock_not_found() {
+        let mut manager = DistributedLockManager::new();
+        let result = manager.extend_lock("nonexistent", 1, 100, 100);
+        assert_eq!(result, LockResult::AlreadyLocked);
+    }
+
+    #[test]
+    fn test_extend_lock_not_owner() {
+        let mut manager = DistributedLockManager::new();
+        manager.try_lock_with_ttl("key1", 1, 100, 100);
+        let result = manager.extend_lock("key1", 2, 200, 100);
+        assert_eq!(result, LockResult::NotOwner);
+    }
+
+    #[test]
+    fn test_release_all_for_transaction_none() {
+        let mut manager = DistributedLockManager::new();
+        let count = manager.release_all_for_transaction(999, 999);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_release_all_for_transaction_partial() {
+        let mut manager = DistributedLockManager::new();
+        manager.try_lock("key1", 1, 100);
+        manager.try_lock("key2", 1, 100);
+        manager.try_lock("key3", 2, 200);
+        manager.try_lock("key4", 2, 200);
+        let count = manager.release_all_for_transaction(1, 100);
+        assert_eq!(count, 2);
+        assert!(!manager.is_locked("key1"));
+        assert!(!manager.is_locked("key2"));
+        assert!(manager.is_locked("key3"));
+        assert!(manager.is_locked("key4"));
+    }
+
+    #[test]
+    fn test_lock_manager_with_timeout() {
+        let manager = DistributedLockManager::new().with_timeout(Duration::from_secs(60));
+        assert!(!manager.is_locked("key1"));
+    }
+
+    #[test]
+    fn test_lock_entry_debug() {
+        let entry = LockEntry::new("test_key".to_string(), 42, 999);
+        let debug_str = format!("{:?}", entry);
+        assert!(debug_str.contains("test_key"));
+        assert!(debug_str.contains("42"));
+    }
+
+    #[test]
+    fn test_lock_result_debug() {
+        assert!(format!("{:?}", LockResult::Acquired).contains("Acquired"));
+        assert!(format!("{:?}", LockResult::AlreadyLocked).contains("AlreadyLocked"));
+        assert!(format!("{:?}", LockResult::NotOwner).contains("NotOwner"));
+    }
+
+    #[test]
+    fn test_lock_request_clone() {
+        let request = LockRequest {
+            node_id: 1,
+            tx_id: 100,
+            timestamp: 12345,
+        };
+        let cloned = request.clone();
+        assert_eq!(cloned.node_id, request.node_id);
+        assert_eq!(cloned.tx_id, request.tx_id);
+        assert_eq!(cloned.timestamp, request.timestamp);
+    }
+
+    #[test]
+    fn test_multiple_locks_different_keys() {
+        let mut manager = DistributedLockManager::new();
+        assert_eq!(manager.try_lock("key1", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key2", 1, 100), LockResult::Acquired);
+        assert_eq!(manager.try_lock("key3", 2, 200), LockResult::Acquired);
+        assert!(manager.is_locked("key1"));
+        assert!(manager.is_locked("key2"));
+        assert!(manager.is_locked("key3"));
+    }
+
+    #[test]
+    fn test_unlock_after_expiry() {
+        let mut manager = DistributedLockManager::new();
+        manager.try_lock_with_ttl("key1", 1, 100, 10);
+        std::thread::sleep(Duration::from_millis(20));
+        assert!(!manager.is_locked("key1"));
+        assert_eq!(manager.try_lock("key1", 2, 200), LockResult::Acquired);
+    }
+
+    #[test]
+    fn test_lock_entry_acquired_at() {
+        let entry = LockEntry::new("key1".to_string(), 1, 100);
+        assert!(entry.acquired_at > 0);
     }
 }

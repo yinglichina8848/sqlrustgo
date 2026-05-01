@@ -2,6 +2,8 @@
 //!
 //! Implements MySQL-style meta commands
 
+#![allow(dead_code)]
+
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_storage::{StorageEngine, TableInfo};
 use sqlrustgo_types::SqlError;
@@ -108,32 +110,10 @@ fn execute_indexes(table_name: &str, storage: &dyn StorageEngine) -> CommandResu
 
 /// Get table indexes from storage
 /// This is a workaround since StorageEngine doesn't have a list_indexes method
-fn get_table_indexes(storage: &dyn StorageEngine, table_name: &str) -> Vec<IndexInfo> {
-    // Try to get table info first
-    if let Ok(info) = storage.get_table_info(table_name) {
-        // For each column, try to see if there's an index
-        // Since MemoryStorage doesn't really track indexes, we'll return empty
-        // But this can be extended in the future
-        let mut indexes = Vec::new();
-
-        // Check if we can find any index metadata
-        // For now, return empty - this can be enhanced when StorageEngine is extended
-        for (i, col) in info.columns.iter().enumerate() {
-            // Try search_index to see if column has an index
-            if !storage.search_index(table_name, &col.name, 0).is_empty() {
-                indexes.push(IndexInfo {
-                    name: format!("idx_{}_{}", table_name, col.name),
-                    column: col.name.clone(),
-                    column_index: i,
-                    is_unique: false,
-                });
-            }
-        }
-
-        indexes
-    } else {
-        Vec::new()
-    }
+fn get_table_indexes(_storage: &dyn StorageEngine, _table_name: &str) -> Vec<IndexInfo> {
+    // MemoryStorage doesn't track indexes, so return empty list
+    // This can be enhanced when StorageEngine is extended
+    Vec::new()
 }
 
 /// Index information
@@ -198,7 +178,7 @@ pub fn print_result(result: ExecutorResult) {
 
     // Print rows
     for row in &result.rows {
-        let row_str: Vec<String> = row.iter().map(|v| format_value(v)).collect();
+        let row_str: Vec<String> = row.iter().map(format_value).collect();
         println!("{}", row_str.join("\t"));
     }
 
@@ -211,15 +191,9 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
         sqlrustgo_types::Value::Null => "NULL".to_string(),
         sqlrustgo_types::Value::Integer(i) => i.to_string(),
         sqlrustgo_types::Value::Float(f) => f.to_string(),
-        sqlrustgo_types::Value::Decimal(d) => d.to_string(),
         sqlrustgo_types::Value::Text(s) => s.clone(),
         sqlrustgo_types::Value::Boolean(b) => b.to_string(),
         sqlrustgo_types::Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
-        sqlrustgo_types::Value::Date(d) => d.to_string(),
-        sqlrustgo_types::Value::Timestamp(t) => t.to_string(),
-        sqlrustgo_types::Value::Uuid(u) => u.to_string(),
-        sqlrustgo_types::Value::Array(arr) => format!("[ARRAY: {} elements]", arr.len()),
-        sqlrustgo_types::Value::Enum(idx, s) => format!("{}({})", s, idx),
     }
 }
 
@@ -265,14 +239,11 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
+                primary_key: false,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
-
         let result = execute_command(".tables", &storage);
 
         match result {
@@ -293,21 +264,16 @@ mod tests {
                     name: "id".to_string(),
                     data_type: "INTEGER".to_string(),
                     nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
-                    is_unique: false,
-                    is_primary_key: false,
-                    references: None,
-                    auto_increment: false,
+                    primary_key: false,
                 },
             ],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 
@@ -346,11 +312,9 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                is_primary_key: false,
-                references: None,
-                auto_increment: false,
+                primary_key: false,
             }],
+            ..Default::default()
         };
         storage.create_table(&info).unwrap();
 

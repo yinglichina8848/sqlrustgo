@@ -11,11 +11,25 @@ sqlrustgo-types = { path = "../types" }
 sqlrustgo-storage = { path = "../storage" }
 sqlrustgo-parser = { path = "../parser" }
 sqlrustgo-planner = { path = "../planner" }
+sqlrustgo-graph = { path = "../graph" }
+sqlrustgo-vector = { path = "../vector" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
 anyhow = "1.0"
+rusqlite = { version = "0.39", features = ["bundled"] }
+bytemuck = "1.20"
+dirs = "6.0"
 parking_lot = "0.12"
+sha2.workspace = true
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+
+[[bin]]
+name = "sqlrustgo-gmp-cli"
+path = "src/cli.rs"
+doc = false
 
 [dev-dependencies]
 tempfile.workspace = true

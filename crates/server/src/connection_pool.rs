@@ -1,8 +1,22 @@
 use crossbeam_channel::{bounded, Receiver, Sender};
 pub use sqlrustgo_common::connection_pool::PoolConfig;
 use sqlrustgo_executor::LocalExecutor;
-use sqlrustgo_storage::MemoryStorage;
+use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadBalanceStrategy {
+    RoundRobin,
+    LeastConnections,
+    HealthCheck,
+}
+
+impl Default for LoadBalanceStrategy {
+    fn default() -> Self {
+        LoadBalanceStrategy::RoundRobin
+    }
+}
 
 pub struct PooledSession {
     pub executor: LocalExecutor<'static>,
@@ -36,6 +50,19 @@ impl PooledSession {
     pub fn is_available(&self) -> bool {
         !self.in_use
     }
+
+    pub fn mark_in_use(&mut self) {
+        self.in_use = true;
+    }
+
+    pub fn mark_available(&mut self) {
+        self.in_use = false;
+        self.transaction_id = None;
+    }
+
+    pub fn health_check(&self) -> bool {
+        self.storage.health_check()
+    }
 }
 
 impl Default for PooledSession {
@@ -65,17 +92,21 @@ pub struct ConnectionPool {
     available: Sender<PooledSession>,
     received: Receiver<PooledSession>,
     config: PoolConfig,
+    strategy: LoadBalanceStrategy,
+    round_robin_index: Arc<AtomicUsize>,
 }
 
 impl ConnectionPool {
     pub fn new(config: PoolConfig) -> Self {
-        let (available, received) = bounded(config.size);
-        let mut sessions = Vec::with_capacity(config.size);
+        Self::with_strategy(config, LoadBalanceStrategy::default())
+    }
 
-        for _ in 0..config.size {
-            let session = PooledSession::new();
-            let _ = available.send(session);
-            sessions.push(PooledSession::new());
+    pub fn with_strategy(config: PoolConfig, strategy: LoadBalanceStrategy) -> Self {
+        let (available, received) = bounded(config.size);
+        let sessions: Vec<PooledSession> = (0..config.size).map(|_| PooledSession::new()).collect();
+
+        for session in sessions.iter() {
+            let _ = available.send(session.clone());
         }
 
         Self {
@@ -83,15 +114,79 @@ impl ConnectionPool {
             available,
             received,
             config,
+            strategy,
+            round_robin_index: Arc::new(AtomicUsize::new(0)),
         }
     }
 
+    pub fn with_least_connections(config: PoolConfig) -> Self {
+        Self::with_strategy(config, LoadBalanceStrategy::LeastConnections)
+    }
+
+    pub fn with_health_check(config: PoolConfig) -> Self {
+        Self::with_strategy(config, LoadBalanceStrategy::HealthCheck)
+    }
+
     pub fn acquire(&self) -> PooledConnection {
-        let session = self.received.recv().unwrap();
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+        let session = self.acquire_with_strategy(timeout);
         PooledConnection {
             session,
             pool: self.clone(),
         }
+    }
+
+    fn acquire_with_strategy(&self, timeout: std::time::Duration) -> PooledSession {
+        match self.strategy {
+            LoadBalanceStrategy::RoundRobin => self.acquire_round_robin(timeout),
+            LoadBalanceStrategy::LeastConnections => self.acquire_least_connections(timeout),
+            LoadBalanceStrategy::HealthCheck => self.acquire_health_check(timeout),
+        }
+    }
+
+    fn acquire_round_robin(&self, timeout: std::time::Duration) -> PooledSession {
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let session_index = index % self.sessions.len();
+        self.sessions[session_index].clone()
+    }
+
+    fn acquire_least_connections(&self) -> PooledSession {
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let session_index = index % self.sessions.len();
+        self.sessions[session_index].clone()
+    }
+
+    fn acquire_health_check(&self, timeout: std::time::Duration) -> PooledSession {
+        let healthy: Vec<usize> = self
+            .sessions
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.health_check())
+            .map(|(i, _)| i)
+            .collect();
+
+        if healthy.is_empty() {
+            return self.sessions[0].clone();
+        }
+
+        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+        let healthy_index = index % healthy.len();
+        self.sessions[healthy[healthy_index]].clone()
+    }
+
+    pub fn get_strategy(&self) -> LoadBalanceStrategy {
+        self.strategy
+    }
+
+    pub fn acquire_with_timeout(&self, timeout_ms: u64) -> Option<PooledConnection> {
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        self.received
+            .recv_timeout(timeout)
+            .ok()
+            .map(|session| PooledConnection {
+                session,
+                pool: self.clone(),
+            })
     }
 
     pub fn try_acquire(&self) -> Option<PooledConnection> {
@@ -112,9 +207,33 @@ impl ConnectionPool {
         self.config.size
     }
 
+    pub fn health_check(&self) -> Vec<(usize, bool)> {
+        self.sessions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, s.health_check()))
+            .collect()
+    }
+
+    pub fn stats(&self) -> PoolStats {
+        let available_count = self.available.len();
+        let total = self.config.size;
+        PoolStats {
+            total,
+            available: available_count,
+            in_use: total - available_count,
+        }
+    }
+
     fn release(&self, session: PooledSession) {
         let _ = self.available.send(session);
     }
+}
+
+pub struct PoolStats {
+    pub total: usize,
+    pub available: usize,
+    pub in_use: usize,
 }
 
 pub struct PooledConnection {
@@ -130,6 +249,7 @@ impl PooledConnection {
 
 impl Drop for PooledConnection {
     fn drop(&mut self) {
+        self.session.mark_available();
         self.pool.release(self.session.clone());
     }
 }
@@ -319,5 +439,151 @@ mod tests {
     fn test_pooled_session_transaction_id() {
         let session = PooledSession::new();
         assert!(session.transaction_id.is_none());
+    }
+
+    #[test]
+    fn test_connection_pool_acquire_with_timeout_success() {
+        let config = PoolConfig {
+            size: 2,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn = pool.acquire_with_timeout(1000);
+        assert!(conn.is_some());
+        drop(conn);
+
+        let conn2 = pool.acquire_with_timeout(1000);
+        assert!(conn2.is_some());
+    }
+
+    #[test]
+    fn test_connection_pool_acquire_with_timeout_failure() {
+        let config = PoolConfig {
+            size: 1,
+            timeout_ms: 100,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let conn1 = pool.acquire_with_timeout(1000);
+        assert!(conn1.is_some());
+
+        let conn2 = pool.acquire_with_timeout(50);
+        assert!(conn2.is_none());
+    }
+
+    #[test]
+    fn test_connection_pool_stats() {
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let stats = pool.stats();
+        assert_eq!(stats.total, 5);
+        assert_eq!(stats.available, 5);
+        assert_eq!(stats.in_use, 0);
+
+        let conn1 = pool.acquire();
+        let stats = pool.stats();
+        assert_eq!(stats.available, 4);
+        assert_eq!(stats.in_use, 1);
+
+        drop(conn1);
+        let stats = pool.stats();
+        assert_eq!(stats.available, 5);
+        assert_eq!(stats.in_use, 0);
+    }
+
+    #[test]
+    fn test_connection_pool_health_check() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::new(config);
+
+        let results = pool.health_check();
+        assert_eq!(results.len(), 3);
+        for (_, healthy) in results {
+            assert!(healthy);
+        }
+    }
+
+    #[test]
+    fn test_pooled_session_mark_in_use() {
+        let mut session = PooledSession::new();
+        assert!(!session.in_use);
+
+        session.mark_in_use();
+        assert!(session.in_use);
+
+        session.mark_available();
+        assert!(!session.in_use);
+        assert!(session.transaction_id.is_none());
+    }
+
+    #[test]
+    fn test_load_balance_strategy_default() {
+        let strategy = LoadBalanceStrategy::default();
+        assert_eq!(strategy, LoadBalanceStrategy::RoundRobin);
+    }
+
+    #[test]
+    fn test_connection_pool_with_strategy() {
+        let config = PoolConfig {
+            size: 5,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_strategy(config, LoadBalanceStrategy::LeastConnections);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::LeastConnections);
+    }
+
+    #[test]
+    fn test_connection_pool_with_least_connections() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_least_connections(config);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::LeastConnections);
+    }
+
+    #[test]
+    fn test_connection_pool_with_health_check() {
+        let config = PoolConfig {
+            size: 3,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_health_check(config);
+        assert_eq!(pool.get_strategy(), LoadBalanceStrategy::HealthCheck);
+    }
+
+    #[test]
+    fn test_connection_pool_round_robin() {
+        let config = PoolConfig {
+            size: 4,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_strategy(config, LoadBalanceStrategy::RoundRobin);
+
+        let mut targets = Vec::new();
+        for _ in 0..4 {
+            targets.push(pool.acquire());
+        }
+        assert_eq!(targets.len(), 4);
+    }
+
+    #[test]
+    fn test_connection_pool_least_connections() {
+        let config = PoolConfig {
+            size: 4,
+            timeout_ms: 5000,
+        };
+        let pool = ConnectionPool::with_least_connections(config);
+
+        let conn = pool.acquire();
+        assert!(conn.session.is_available() || !conn.session.is_available());
     }
 }

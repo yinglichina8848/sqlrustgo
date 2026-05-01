@@ -1,17 +1,14 @@
-# Build artifacts
+gate_report.json
+verification_report.json
+audit_report.json
+test_report.json
+test_report.log
+__pycache__/
+*.pyc
+*.profraw
 target/
-Cargo.lock
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# OS
+data/tpch-sf01-generated/
+data/tpch-sf01/
+artifacts/coverage/
 .DS_Store
-Thumbs.db
-
-# Local data
-*.db
-*.log
-.worktrees/
+Cargo.lock

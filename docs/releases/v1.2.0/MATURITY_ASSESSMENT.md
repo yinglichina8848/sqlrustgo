@@ -15,7 +15,7 @@
 
 ### 1.2 评估标准
 
-依据 [成熟度评估模型](../v2.0/成熟度评估/MATURITY_MODEL.md) 进行评估。
+依据 [CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md) 进行评估。
 
 ### 1.3 评估结果
 

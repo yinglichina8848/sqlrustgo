@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 
 use crate::db::Database;
 
@@ -24,19 +24,35 @@ impl OltpReadWrite {
         }
     }
 
+    #[allow(dead_code)]
     fn with_max_id(mut self, max_id: u64) -> Self {
         self.max_id = max_id;
         self
     }
 
+    #[allow(dead_code)]
     fn with_statements(mut self, count: usize) -> Self {
         self.statements_per_tx = count;
         self
     }
 
+    #[allow(dead_code)]
     fn with_read_ratio(mut self, ratio: f64) -> Self {
         self.read_ratio = ratio;
         self
+    }
+
+    #[allow(dead_code)]
+    fn generate_read_sql(&self, rng: &mut SmallRng) -> String {
+        let id = rng.gen_range(1..self.max_id);
+        format!("SELECT * FROM sbtest1 WHERE id = {}", id)
+    }
+
+    #[allow(dead_code)]
+    fn generate_write_sql(&self, rng: &mut SmallRng) -> String {
+        let id = rng.gen_range(1..self.max_id);
+        let k = rng.gen_range(1..100000);
+        format!("UPDATE sbtest1 SET k = {} WHERE id = {}", k, id)
     }
 }
 
@@ -48,9 +64,10 @@ impl Default for OltpReadWrite {
 
 #[async_trait]
 impl crate::workload::Workload for OltpReadWrite {
-    async fn execute(&self, _db: &dyn Database) -> anyhow::Result<()> {
-        // TODO: Implement read write
-        todo!("OLTP Read Write not yet implemented")
+    async fn execute(&self, db: &dyn Database) -> anyhow::Result<()> {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let sql = self.generate_sql(&mut rng);
+        db.execute(&sql).await
     }
 
     fn name(&self) -> &str {
@@ -82,42 +99,5 @@ impl crate::workload::Workload for OltpReadWrite {
 
     fn table_names(&self) -> Vec<String> {
         vec!["sbtest".to_string()]
-    }
-}
-
-impl OltpReadWrite {
-    fn generate_read_sql(&self, rng: &mut SmallRng) -> String {
-        // Read operations: point select
-        let id = rng.gen_range(1..=self.max_id);
-        format!("SELECT c FROM sbtest WHERE id = {}", id)
-    }
-
-    fn generate_write_sql(&self, rng: &mut SmallRng) -> String {
-        // Write operations: randomly choose between UPDATE, DELETE, INSERT
-        let write_type = rng.gen_range(0..3);
-        match write_type {
-            // 0: UPDATE (33%)
-            0 => {
-                let id = rng.gen_range(1..=self.max_id);
-                let c_value = format!("'{:x}'", rng.gen::<u32>());
-                format!("UPDATE sbtest SET c = {} WHERE id = {}", c_value, id)
-            }
-            // 1: DELETE (33%)
-            1 => {
-                let id = rng.gen_range(1..=self.max_id);
-                format!("DELETE FROM sbtest WHERE id = {}", id)
-            }
-            // 2: INSERT (34%)
-            _ => {
-                let id = rng.gen_range(1..=self.max_id);
-                let k = rng.gen_range(0..1_000_000);
-                let c = format!("'c{:x}'", rng.gen::<u32>());
-                let pad = format!("'pad{:x}'", rng.gen::<u32>());
-                format!(
-                    "INSERT INTO sbtest (id, k, c, pad) VALUES ({}, {}, {}, {})",
-                    id, k, c, pad
-                )
-            }
-        }
     }
 }

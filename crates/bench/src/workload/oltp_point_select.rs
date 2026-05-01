@@ -13,6 +13,7 @@ pub struct OltpPointSelect {
     max_id: u64,
 }
 
+#[allow(dead_code)]
 impl OltpPointSelect {
     pub fn new() -> Self {
         Self { max_id: 1_000_000 }
@@ -32,9 +33,9 @@ impl Default for OltpPointSelect {
 
 #[async_trait]
 impl crate::workload::Workload for OltpPointSelect {
-    async fn execute(&self, _db: &dyn Database) -> anyhow::Result<()> {
-        // TODO: Implement point select
-        todo!("OLTP Point Select not yet implemented")
+    async fn execute(&self, db: &dyn Database) -> anyhow::Result<()> {
+        let id = rand::thread_rng().gen_range(1..=self.max_id) as usize;
+        db.read(id).await
     }
 
     fn name(&self) -> &str {

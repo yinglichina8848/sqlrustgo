@@ -256,8 +256,8 @@ git push origin --delete feature/v1.2.0-cascades
 | 文档 | 说明 |
 |------|------|
 | [BRANCH_GOVERNANCE.md](../../BRANCH_GOVERNANCE.md) | 分支治理规范 |
-| [RELEASE_GOVERNANCE.md](../../RELEASE_GOVERNANCE.md) | 版本治理模型 |
-| [DIRECTORY_REFACTORING_PLAN.md](./DIRECTORY_REFACTORING_PLAN.md) | 目录重构计划 |
+| [RELEASE_GOVERNANCE.md](../../../RELEASE_GOVERNANCE.md) | 版本治理模型 |
+| DIRECTORY_REFACTORING_PLAN.md *(已归档)* | 目录重构计划 *(已归档)* |
 
 ---
 

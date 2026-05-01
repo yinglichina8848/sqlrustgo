@@ -441,13 +441,13 @@ Cypher Query
 
 | 模块 | 文档 |
 |------|------|
-| MVCC | [oo/modules/mvcc](./modules/mvcc/) |
-| WAL | [oo/modules/wal](./modules/wal/) |
-| 向量执行 | [oo/modules/executor](./modules/executor/) |
-| 图引擎 | [oo/modules/graph](./modules/graph/) |
-| 向量索引 | [oo/modules/vector](./modules/vector/) |
-| 统一查询 | [oo/modules/unified-query/) |
-| OpenClaw | [oo/modules/openclaw](./modules/openclaw/) |
+| MVCC | [oo/modules/mvcc/MVCC_DESIGN.md](../modules/mvcc/MVCC_DESIGN.md) |
+| WAL | [oo/modules/wal/WAL_DESIGN.md](../modules/wal/WAL_DESIGN.md) |
+| 向量执行 | [oo/modules/executor/EXECUTOR_DESIGN.md](../modules/executor/EXECUTOR_DESIGN.md) |
+| 图引擎 | [oo/modules/graph/GRAPH_DESIGN.md](../modules/graph/GRAPH_DESIGN.md) |
+| 向量索引 | [oo/modules/vector/VECTOR_DESIGN.md](../modules/vector/VECTOR_DESIGN.md) |
+| 统一查询 | *(已归档)* |
+| OpenClaw | *(已归档)* |
 
 ---
 

@@ -2,65 +2,89 @@
 //!
 //! Provides comparison functionality between different databases.
 
+use crate::db::mysql_benchmark::MySqlBenchmark;
 use crate::db::postgres_benchmark::PostgresBenchmark;
 use crate::db::sqlite_benchmark::SQLiteBenchmark;
 use serde::{Deserialize, Serialize};
 
-/// Comparison result between two databases
+/// Comparison result between databases
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComparisonResult {
     pub sqlite_result: Option<crate::db::sqlite_benchmark::BenchmarkResult>,
     pub postgres_result: Option<crate::db::postgres_benchmark::BenchmarkResult>,
+    pub mysql_result: Option<crate::db::mysql_benchmark::BenchmarkResult>,
     pub winner: String,
     pub speedup: f64,
 }
 
-/// Compare SQLite and PostgreSQL benchmarks
+/// Compare SQLite, PostgreSQL and MySQL benchmarks
 #[allow(dead_code)]
 pub struct BenchmarkComparison {
     sqlite_path: String,
     sqlite_scale: usize,
     pg_conn_str: String,
+    mysql_addr: String,
 }
 
 #[allow(dead_code)]
 impl BenchmarkComparison {
-    pub fn new(sqlite_path: &str, sqlite_scale: usize, pg_conn_str: &str) -> Self {
+    pub fn new(
+        sqlite_path: &str,
+        sqlite_scale: usize,
+        pg_conn_str: &str,
+        mysql_addr: &str,
+    ) -> Self {
         Self {
             sqlite_path: sqlite_path.to_string(),
             sqlite_scale,
             pg_conn_str: pg_conn_str.to_string(),
+            mysql_addr: mysql_addr.to_string(),
         }
     }
 
-    pub async fn compare_reads(&self, operations: u64) -> anyhow::Result<ComparisonResult> {
+    pub async fn compare_all(&self, operations: u64) -> anyhow::Result<ComparisonResult> {
         let sqlite_bench = SQLiteBenchmark::new(&self.sqlite_path, self.sqlite_scale);
         let postgres_bench = PostgresBenchmark::new(&self.pg_conn_str);
+        let mysql_bench = MySqlBenchmark::new(&self.mysql_addr);
 
         let sqlite_result = sqlite_bench.run_reads(operations).await.ok();
         let postgres_result = postgres_bench.run_reads(operations).await.ok();
+        let mysql_result = mysql_bench.run_reads(operations).await.ok();
 
-        let (winner, speedup) = if let (Some(sqlite), Some(pg)) = (&sqlite_result, &postgres_result)
-        {
-            if sqlite.qps > 0.0 && pg.qps > 0.0 {
-                let speedup = pg.qps / sqlite.qps;
-                if speedup > 1.0 {
-                    ("postgres".to_string(), speedup)
-                } else {
-                    ("sqlite".to_string(), 1.0 / speedup)
-                }
-            } else {
-                ("unknown".to_string(), 0.0)
+        let mut best_qps = 0.0;
+        let mut winner = "unknown".to_string();
+
+        if let Some(ref sqlite) = sqlite_result {
+            if sqlite.qps > best_qps {
+                best_qps = sqlite.qps;
+                winner = "sqlite".to_string();
             }
-        } else {
-            ("unknown".to_string(), 0.0)
-        };
+        }
+        if let Some(ref pg) = postgres_result {
+            if pg.qps > best_qps {
+                best_qps = pg.qps;
+                winner = "postgres".to_string();
+            }
+        }
+        if let Some(ref mysql) = mysql_result {
+            if mysql.qps > best_qps {
+                best_qps = mysql.qps;
+                winner = "mysql".to_string();
+            }
+        }
+
+        let baseline = sqlite_result
+            .as_ref()
+            .map(|r| r.qps)
+            .unwrap_or(1.0)
+            .max(1.0);
 
         Ok(ComparisonResult {
             sqlite_result,
             postgres_result,
+            mysql_result,
             winner,
-            speedup,
+            speedup: best_qps / baseline,
         })
     }
 }
@@ -100,6 +124,7 @@ mod tests {
         let result = ComparisonResult {
             sqlite_result: None,
             postgres_result: None,
+            mysql_result: None,
             winner: "unknown".to_string(),
             speedup: 0.0,
         };
@@ -133,6 +158,7 @@ mod tests {
         let comparison = ComparisonResult {
             sqlite_result: Some(sqlite_result),
             postgres_result: None,
+            mysql_result: None,
             winner: "sqlite".to_string(),
             speedup: 1.0,
         };

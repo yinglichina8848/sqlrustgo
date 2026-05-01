@@ -13,6 +13,7 @@ pub struct NodeStore {
 }
 
 impl NodeStore {
+    /// Create a new empty node store
     pub fn new() -> Self {
         NodeStore {
             nodes: DashMap::new(),
@@ -26,7 +27,7 @@ impl NodeStore {
         let label = node.label;
         self.nodes.insert(node_id, node);
         // Update label index
-        let mut entry = self.label_index.entry(label).or_insert_with(Vec::new);
+        let mut entry = self.label_index.entry(label).or_default();
         if !entry.contains(&node_id) {
             entry.push(node_id);
         }
@@ -138,5 +139,37 @@ mod tests {
         let removed = store.remove(NodeId(1));
         assert!(removed.is_some());
         assert!(!store.contains(NodeId(1)));
+    }
+
+    #[test]
+    fn test_node_store_get_nonexistent() {
+        let store = NodeStore::new();
+        let result = store.get(NodeId(999));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_node_store_len() {
+        let store = NodeStore::new();
+        store.insert(create_test_node(NodeId(1), LabelId(1), "batch-001"));
+        store.insert(create_test_node(NodeId(2), LabelId(1), "batch-002"));
+        assert_eq!(store.len(), 2);
+    }
+
+    #[test]
+    fn test_node_store_is_empty() {
+        let store = NodeStore::new();
+        assert!(store.is_empty());
+        store.insert(create_test_node(NodeId(1), LabelId(1), "batch-001"));
+        assert!(!store.is_empty());
+    }
+
+    #[test]
+    fn test_node_store_ids() {
+        let store = NodeStore::new();
+        store.insert(create_test_node(NodeId(1), LabelId(1), "batch-001"));
+        store.insert(create_test_node(NodeId(2), LabelId(1), "batch-002"));
+        let ids = store.ids();
+        assert_eq!(ids.len(), 2);
     }
 }

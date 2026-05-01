@@ -45,12 +45,65 @@ pub enum CompressionType {
     Lz4,
 }
 
+/// Compression level options
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompressionLevel {
+    /// Fastest compression - speed priority
+    Fastest,
+    /// Balanced between speed and ratio
+    Default,
+    /// Best compression - ratio priority
+    Best,
+    /// Custom compression level
+    Custom(i32),
+}
+
+/// Compression configuration for a column
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompressionConfig {
+    /// Compression level
+    pub level: CompressionLevel,
+    /// Auto-select algorithm based on data type
+    pub auto_select: bool,
+}
+
+impl Default for CompressionConfig {
+    fn default() -> Self {
+        Self {
+            level: CompressionLevel::Default,
+            auto_select: true,
+        }
+    }
+}
+
+impl CompressionLevel {
+    /// Get LZ4 compression level (0 = fastest, higher = better compression)
+    /// Note: lz4_flex uses compile-time settings, this is for API consistency
+    pub fn lz4_level(&self) -> i32 {
+        match self {
+            CompressionLevel::Fastest => 0,
+            CompressionLevel::Default => 12,
+            CompressionLevel::Best => 17,
+            CompressionLevel::Custom(n) => *n,
+        }
+    }
+
+    /// Get Zstd compression level (1-22, higher = better compression)
+    pub fn zstd_level(&self) -> i32 {
+        match self {
+            CompressionLevel::Fastest => 1,
+            CompressionLevel::Default => 3,
+            CompressionLevel::Best => 19,
+            CompressionLevel::Custom(n) => (*n).clamp(1, 22),
+        }
+    }
+}
+
 impl CompressionType {
     /// Get the magic bytes for this compression type
     pub fn magic_bytes(&self) -> [u8; 4] {
         match self {
             CompressionType::None => *b"NONE",
-            CompressionType::Lz4 => *b"LZ4F",
             CompressionType::Snappy => *b"SNAP",
             CompressionType::Zstd => *b"ZSTD",
             CompressionType::Lz4 => *b"LZ4 ",
@@ -456,6 +509,32 @@ impl ColumnSegment {
     }
 }
 
+/// Auto-select compression algorithm based on data type hint
+/// Returns (CompressionType, CompressionLevel)
+pub fn auto_select_compression(
+    data_type: &str,
+    level: CompressionLevel,
+) -> (CompressionType, CompressionLevel) {
+    match data_type {
+        // Numeric types - LZ4 is fast and effective
+        "INTEGER" | "BIGINT" | "SMALLINT" | "TINYINT" | "FLOAT" | "DOUBLE" | "DECIMAL" => {
+            (CompressionType::Lz4, level)
+        }
+        // Boolean - no compression needed
+        "BOOLEAN" => (CompressionType::None, CompressionLevel::Default),
+        // Text types - Fastest level uses Snappy for balance, otherwise Zstd
+        "VARCHAR" | "CHAR" | "TEXT" | "BLOB" | "JSON" => {
+            if level == CompressionLevel::Fastest {
+                (CompressionType::Snappy, CompressionLevel::Default)
+            } else {
+                (CompressionType::Zstd, level)
+            }
+        }
+        // Default to Zstd
+        _ => (CompressionType::Zstd, level),
+    }
+}
+
 /// Compress data using Snappy
 fn compress_snappy(data: &[u8]) -> SegmentResult<Vec<u8>> {
     use std::io::Write;
@@ -546,6 +625,59 @@ mod tests {
             Some(CompressionType::Lz4)
         );
         assert_eq!(CompressionType::from_magic(b"XXXX"), None);
+    }
+
+    #[test]
+    fn test_compression_level_lz4() {
+        assert_eq!(CompressionLevel::Fastest.lz4_level(), 0);
+        assert_eq!(CompressionLevel::Default.lz4_level(), 12);
+        assert_eq!(CompressionLevel::Best.lz4_level(), 17);
+        assert_eq!(CompressionLevel::Custom(10).lz4_level(), 10);
+    }
+
+    #[test]
+    fn test_compression_level_zstd() {
+        assert_eq!(CompressionLevel::Fastest.zstd_level(), 1);
+        assert_eq!(CompressionLevel::Default.zstd_level(), 3);
+        assert_eq!(CompressionLevel::Best.zstd_level(), 19);
+        assert_eq!(CompressionLevel::Custom(15).zstd_level(), 15);
+        // Test clamping
+        assert_eq!(CompressionLevel::Custom(100).zstd_level(), 22);
+        assert_eq!(CompressionLevel::Custom(-5).zstd_level(), 1);
+    }
+
+    #[test]
+    fn test_compression_config_default() {
+        let config = CompressionConfig::default();
+        assert_eq!(config.level, CompressionLevel::Default);
+        assert!(config.auto_select);
+    }
+
+    #[test]
+    fn test_auto_select_compression() {
+        // Integer -> LZ4
+        let (algo, _) = auto_select_compression("INTEGER", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Lz4);
+
+        // Float -> LZ4
+        let (algo, _) = auto_select_compression("FLOAT", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Lz4);
+
+        // Text -> Zstd
+        let (algo, _) = auto_select_compression("TEXT", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Zstd);
+
+        // Varchar -> Zstd
+        let (algo, _) = auto_select_compression("VARCHAR", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::Zstd);
+
+        // Boolean -> None
+        let (algo, _) = auto_select_compression("BOOLEAN", CompressionLevel::Default);
+        assert_eq!(algo, CompressionType::None);
+
+        // Bigint -> LZ4
+        let (algo, _) = auto_select_compression("BIGINT", CompressionLevel::Best);
+        assert_eq!(algo, CompressionType::Lz4);
     }
 
     #[test]
@@ -702,7 +834,7 @@ mod tests {
 
     #[test]
     fn test_lz4_compression_ratio() {
-        // Test that LZ4 achieves compression on repetitive data
+        // Test that LZ4 achieves compression ratio > 2x on repetitive data
         let dir = tempdir().unwrap();
         let path = dir.path().join("segment_lz4_ratio.bin");
 
@@ -711,14 +843,82 @@ mod tests {
             .map(|i| Value::Text("same_string_value".to_string()))
             .collect();
 
+        // Calculate original data size (JSON serialized)
+        let original_size = serde_json::to_vec(&values).unwrap().len();
+
         let segment = ColumnSegment::with_compression(1, CompressionType::Lz4);
         segment.write_to_file(&path, &values, None).unwrap();
 
+        // Check actual file size vs original
+        let metadata = std::fs::metadata(&path).unwrap();
+        let compressed_size = metadata.len() as usize;
+
+        // Account for header overhead (approximately 200 bytes for header + bitmap)
+        let data_overhead = 200;
+        let actual_compressed = compressed_size.saturating_sub(data_overhead);
+        let ratio = original_size as f64 / actual_compressed as f64;
+
+        println!(
+            "LZ4: original={} bytes, compressed={} bytes, ratio={:.2}x",
+            original_size, actual_compressed, ratio
+        );
+
+        // Verify compression ratio > 2x for highly repetitive data
+        assert!(
+            ratio > 2.0,
+            "LZ4 compression ratio {} should be > 2.0x",
+            ratio
+        );
+
+        // Verify data integrity
         let mut read_segment = ColumnSegment::new(0);
         let (read_values, _) = read_segment.read_from_file(&path).unwrap();
-
         assert_eq!(read_values.len(), 10000);
         assert_eq!(read_values[0], Value::Text("same_string_value".to_string()));
+    }
+
+    #[test]
+    fn test_zstd_compression_ratio() {
+        // Test that Zstd achieves compression ratio > 2x on repetitive data
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("segment_zstd_ratio.bin");
+
+        // Highly repetitive data should compress well
+        let values: Vec<Value> = (0..10000)
+            .map(|i| Value::Text("same_string_value".to_string()))
+            .collect();
+
+        // Calculate original data size (JSON serialized)
+        let original_size = serde_json::to_vec(&values).unwrap().len();
+
+        let segment = ColumnSegment::with_compression(1, CompressionType::Zstd);
+        segment.write_to_file(&path, &values, None).unwrap();
+
+        // Check actual file size vs original
+        let metadata = std::fs::metadata(&path).unwrap();
+        let compressed_size = metadata.len() as usize;
+
+        // Account for header overhead (approximately 200 bytes for header + bitmap)
+        let data_overhead = 200;
+        let actual_compressed = compressed_size.saturating_sub(data_overhead);
+        let ratio = original_size as f64 / actual_compressed as f64;
+
+        println!(
+            "Zstd: original={} bytes, compressed={} bytes, ratio={:.2}x",
+            original_size, actual_compressed, ratio
+        );
+
+        // Verify compression ratio > 2x for highly repetitive data
+        assert!(
+            ratio > 2.0,
+            "Zstd compression ratio {} should be > 2.0x",
+            ratio
+        );
+
+        // Verify data integrity
+        let mut read_segment = ColumnSegment::new(0);
+        let (read_values, _) = read_segment.read_from_file(&path).unwrap();
+        assert_eq!(read_values.len(), 10000);
     }
 
     #[test]

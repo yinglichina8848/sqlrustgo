@@ -1,6 +1,5 @@
-use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager, WalReader, WalWriter};
+use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager, WalWriter};
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 fn create_temp_dir() -> TempDir {

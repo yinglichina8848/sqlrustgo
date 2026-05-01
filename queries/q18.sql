@@ -1,0 +1,1 @@
+SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, SUM(l_quantity) AS sum_l_quantity FROM customer, orders, lineitem WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice HAVING SUM(l_quantity) > 300 ORDER BY o_totalprice DESC, o_orderdate LIMIT 100;

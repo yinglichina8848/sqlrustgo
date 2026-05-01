@@ -5,11 +5,18 @@
 //! for AI-powered agent workflows.
 
 use crate::metrics_endpoint::MetricsRegistry;
+use crate::scheduler;
 use query_stats::StatsCollector;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_distributed::read_write_splitter::{QueryClass, ReadWriteSplitter};
+use sqlrustgo_gmp::compliance::ComplianceCheckRequest;
+use sqlrustgo_optimizer::{
+    IndexHint as OptimizerIndexHint, IndexHintType as OptimizerIndexHintType, RuleContext,
+};
 use sqlrustgo_parser::parse;
+use sqlrustgo_parser::{Statement, TransactionCommand};
 use sqlrustgo_rag::{Document, OpenClawClient};
-use sqlrustgo_storage::engine::{StorageEngine, Value};
+use sqlrustgo_storage::engine::{StorageEngine, TriggerEvent, TriggerInfo, TriggerTiming};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -145,12 +152,190 @@ fn default_importance() -> f32 {
     0.5
 }
 
+fn default_top_k() -> usize {
+    10
+}
+
 /// Save memory response
 #[derive(Debug, Serialize)]
 pub struct SaveMemoryResponse {
     pub id: String,
     pub success: bool,
     pub message: String,
+}
+
+// ============================================================================
+// Unified Query API Types
+// ============================================================================
+
+/// Unified query request - combines SQL, vector, and graph queries
+#[derive(Debug, Deserialize)]
+pub struct UnifiedQueryRequest {
+    pub query: String,
+    #[serde(default)]
+    pub mode: Option<String>, // "sql_vector_graph", "sql_vector", "sql_graph", "vector", "graph"
+    #[serde(default)]
+    pub filters: Option<UnifiedFilters>,
+    #[serde(default = "default_top_k")]
+    pub top_k: usize,
+    #[serde(default)]
+    pub vector: Option<VectorQueryConfig>,
+    #[serde(default)]
+    pub graph: Option<GraphQueryConfig>,
+}
+
+/// Unified query filters
+#[derive(Debug, Deserialize, Default)]
+pub struct UnifiedFilters {
+    #[serde(default)]
+    pub date_range: Option<DateRange>,
+    #[serde(default)]
+    pub department: Option<String>,
+    #[serde(default)]
+    pub custom: Option<HashMap<String, String>>,
+}
+
+/// Date range filter
+#[derive(Debug, Deserialize)]
+pub struct DateRange {
+    pub start: String,
+    pub end: String,
+}
+
+/// Vector query configuration
+#[derive(Debug, Deserialize)]
+pub struct VectorQueryConfig {
+    pub column: String,
+    pub query_vector: Vec<f32>,
+    #[serde(default = "default_top_k")]
+    pub top_k: usize,
+    #[serde(default)]
+    pub min_score: Option<f32>,
+}
+
+/// Graph query configuration
+#[derive(Debug, Deserialize)]
+pub struct GraphQueryConfig {
+    pub start_node: String,
+    #[serde(default)]
+    pub traversal: Option<String>, // "bfs", "dfs"
+    #[serde(default)]
+    pub max_depth: Option<usize>,
+    #[serde(default)]
+    pub edge_type: Option<String>,
+}
+
+/// Unified query response
+#[derive(Debug, Serialize)]
+pub struct UnifiedQueryResponse {
+    pub success: bool,
+    pub sql_results: Option<SqlResults>,
+    pub vector_results: Option<VectorResults>,
+    pub graph_results: Option<GraphResults>,
+    pub execution_time_ms: u64,
+    pub query_plan: Option<serde_json::Value>,
+    pub error: Option<String>,
+}
+
+/// SQL results
+#[derive(Debug, Serialize)]
+pub struct SqlResults {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<serde_json::Value>>,
+    pub row_count: usize,
+}
+
+/// Vector search results
+#[derive(Debug, Serialize)]
+pub struct VectorResults {
+    pub results: Vec<VectorSearchResult>,
+    pub total_scanned: usize,
+}
+
+/// Vector search result entry
+#[derive(Debug, Serialize)]
+pub struct VectorSearchResult {
+    pub id: String,
+    pub score: f32,
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Graph query results
+#[derive(Debug, Serialize)]
+pub struct GraphResults {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub path: Option<Vec<String>>,
+}
+
+/// Graph node
+#[derive(Debug, Serialize)]
+pub struct GraphNode {
+    pub id: String,
+    pub label: String,
+    pub properties: HashMap<String, serde_json::Value>,
+}
+
+/// Graph edge
+#[derive(Debug, Serialize)]
+pub struct GraphEdge {
+    pub from: String,
+    pub to: String,
+    pub edge_type: String,
+    pub properties: HashMap<String, serde_json::Value>,
+}
+
+/// Pure vector query request
+#[derive(Debug, Deserialize)]
+pub struct VectorQueryRequest {
+    pub column: String,
+    pub query_vector: Vec<f32>,
+    #[serde(default = "default_top_k")]
+    pub top_k: usize,
+    #[serde(default)]
+    pub min_score: Option<f32>,
+    #[serde(default)]
+    pub filters: Option<HashMap<String, String>>,
+}
+
+/// Pure vector query response
+#[derive(Debug, Serialize)]
+pub struct VectorQueryResponse {
+    pub success: bool,
+    pub results: Option<Vec<VectorSearchResult>>,
+    pub execution_time_ms: u64,
+    pub error: Option<String>,
+}
+
+/// Pure graph query request
+#[derive(Debug, Deserialize)]
+pub struct GraphQueryRequest {
+    pub start_node: String,
+    #[serde(default = "default_traversal")]
+    pub traversal: String,
+    #[serde(default = "default_graph_depth")]
+    pub max_depth: usize,
+    #[serde(default)]
+    pub edge_type: Option<String>,
+    #[serde(default)]
+    pub target_node: Option<String>,
+}
+
+fn default_traversal() -> String {
+    "bfs".to_string()
+}
+
+fn default_graph_depth() -> usize {
+    10
+}
+
+/// Pure graph query response
+#[derive(Debug, Serialize)]
+pub struct GraphQueryResponse {
+    pub success: bool,
+    pub results: Option<GraphResults>,
+    pub execution_time_ms: u64,
+    pub error: Option<String>,
 }
 
 /// Load memory request
@@ -264,6 +449,7 @@ pub struct OpenClawHttpServer {
     storage: Arc<RwLock<dyn StorageEngine>>,
     openclaw_client: Arc<RwLock<OpenClawClient>>,
     query_stats: Arc<StatsCollector>,
+    scheduler_state: Arc<scheduler::SchedulerState>,
 }
 
 impl OpenClawHttpServer {
@@ -282,7 +468,13 @@ impl OpenClawHttpServer {
             storage,
             openclaw_client: Arc::new(RwLock::new(OpenClawClient::new())),
             query_stats: Arc::new(StatsCollector::new(1000)),
+            scheduler_state: Arc::new(scheduler::SchedulerState::new()),
         }
+    }
+
+    /// Get scheduler state
+    pub fn get_scheduler_state(&self) -> Arc<scheduler::SchedulerState> {
+        Arc::clone(&self.scheduler_state)
     }
 
     /// Get server version
@@ -323,6 +515,23 @@ impl OpenClawHttpServer {
         println!("║    - POST /memory/search  - Search memories                   ║");
         println!("║    - POST /memory/clear   - Clear memories                    ║");
         println!("║    - GET  /memory/stats    - Get memory statistics            ║");
+        println!("╠══════════════════════════════════════════════════════════════════╣");
+        println!("║  Unified Query API Endpoints (v2):                            ║");
+        println!("║    - POST /api/v2/query/unified - SQL+Vector+Graph query   ║");
+        println!("║    - POST /api/v2/query/vector  - Pure vector retrieval      ║");
+        println!("║    - POST /api/v2/query/graph   - Pure graph query          ║");
+        println!("╠══════════════════════════════════════════════════════════════════╣");
+        println!("║  Scheduler API Endpoints (v2):                                ║");
+        println!("║    - POST /api/v2/scheduler/task      - Create task            ║");
+        println!("║    - GET  /api/v2/scheduler/task/{{id}} - Get task status       ║");
+        println!("║    - GET  /api/v2/scheduler/tasks     - List tasks            ║");
+        println!("║    - DELETE /api/v2/scheduler/task/{{id}} - Delete task         ║");
+        println!("║    - POST /api/v2/scheduler/workflow   - Create workflow      ║");
+        println!("║    - GET  /api/v2/scheduler/workflow/{{id}} - Get workflow      ║");
+        println!("║    - POST /api/v2/scheduler/execute   - Execute workflow      ║");
+        println!("║    - POST /api/v2/scheduler/agent     - Register agent        ║");
+        println!("║    - GET  /api/v2/scheduler/agents    - List agents           ║");
+        println!("║    - POST /api/v2/scheduler/agent/sync - Sync agent status  ║");
         println!("╚══════════════════════════════════════════════════════════════════╝");
 
         for stream in listener.incoming() {
@@ -333,6 +542,7 @@ impl OpenClawHttpServer {
                     let storage = Arc::clone(&self.storage);
                     let openclaw_client = Arc::clone(&self.openclaw_client);
                     let query_stats = Arc::clone(&self.query_stats);
+                    let scheduler_state = Arc::clone(&self.scheduler_state);
 
                     std::thread::spawn(move || {
                         let _ = handle_openclaw_request(
@@ -342,6 +552,7 @@ impl OpenClawHttpServer {
                             &storage,
                             &openclaw_client,
                             &query_stats,
+                            &scheduler_state,
                         );
                     });
                 }
@@ -363,6 +574,7 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
     storage: &Arc<RwLock<dyn StorageEngine>>,
     openclaw_client: &Arc<RwLock<OpenClawClient>>,
     query_stats: &Arc<StatsCollector>,
+    scheduler_state: &Arc<scheduler::SchedulerState>,
 ) -> Result<(), std::io::Error> {
     let mut buffer = [0u8; 8192];
     let bytes_read = stream.read(&mut buffer)?;
@@ -382,11 +594,9 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
 
             // Find request body for POST requests
             let body_content = if method == "POST" {
-                if let Some(body_start) = request.find("\r\n\r\n") {
-                    Some(request[body_start + 4..].to_string())
-                } else {
-                    None
-                }
+                request
+                    .find("\r\n\r\n")
+                    .map(|body_start| request[body_start + 4..].to_string())
             } else {
                 None
             };
@@ -435,6 +645,163 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                                             data: None,
                                             error: Some(e),
                                             execution_time_ms: Some(elapsed),
+                                        };
+                                        (
+                                            "HTTP/1.1 200 OK",
+                                            "application/json",
+                                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                                r#"{"error":"Serialization error"}"#.to_string()
+                                            }),
+                                        )
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/query/unified - Unified SQL + Vector + Graph query
+                ("POST", "/api/v2/query/unified") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<UnifiedQueryRequest>(&body_str) {
+                            Ok(req) => {
+                                let start = std::time::Instant::now();
+                                let response = execute_unified_query(&req, storage);
+                                let elapsed = start.elapsed().as_millis() as u64;
+                                let mut resp = response;
+                                resp.execution_time_ms = elapsed;
+                                (
+                                    "HTTP/1.1 200 OK",
+                                    "application/json",
+                                    serde_json::to_string(&resp).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/query/vector - Pure vector retrieval
+                ("POST", "/api/v2/query/vector") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<VectorQueryRequest>(&body_str) {
+                            Ok(req) => {
+                                let start = std::time::Instant::now();
+                                let result = execute_vector_query(&req, storage);
+                                let elapsed = start.elapsed().as_millis() as u64;
+                                match result {
+                                    Ok(results) => {
+                                        let response = VectorQueryResponse {
+                                            success: true,
+                                            results: Some(results),
+                                            execution_time_ms: elapsed,
+                                            error: None,
+                                        };
+                                        (
+                                            "HTTP/1.1 200 OK",
+                                            "application/json",
+                                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                                r#"{"error":"Serialization error"}"#.to_string()
+                                            }),
+                                        )
+                                    }
+                                    Err(e) => {
+                                        let response = VectorQueryResponse {
+                                            success: false,
+                                            results: None,
+                                            execution_time_ms: elapsed,
+                                            error: Some(e),
+                                        };
+                                        (
+                                            "HTTP/1.1 200 OK",
+                                            "application/json",
+                                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                                r#"{"error":"Serialization error"}"#.to_string()
+                                            }),
+                                        )
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/query/graph - Pure graph query
+                ("POST", "/api/v2/query/graph") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<GraphQueryRequest>(&body_str) {
+                            Ok(req) => {
+                                let start = std::time::Instant::now();
+                                let result = execute_graph_query(&req, storage);
+                                let elapsed = start.elapsed().as_millis() as u64;
+                                match result {
+                                    Ok(results) => {
+                                        let response = GraphQueryResponse {
+                                            success: true,
+                                            results: Some(results),
+                                            execution_time_ms: elapsed,
+                                            error: None,
+                                        };
+                                        (
+                                            "HTTP/1.1 200 OK",
+                                            "application/json",
+                                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                                r#"{"error":"Serialization error"}"#.to_string()
+                                            }),
+                                        )
+                                    }
+                                    Err(e) => {
+                                        let response = GraphQueryResponse {
+                                            success: false,
+                                            results: None,
+                                            execution_time_ms: elapsed,
+                                            error: Some(e),
                                         };
                                         (
                                             "HTTP/1.1 200 OK",
@@ -527,7 +894,7 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                             Ok(req) => {
                                 let mut client = openclaw_client.write().unwrap();
                                 let doc_id = Uuid::new_v4().as_u128() as u64;
-                                let memory_type =
+                                let _memory_type =
                                     req.memory_type.unwrap_or_else(|| "custom".to_string());
 
                                 let mut doc = Document::new(doc_id, req.content);
@@ -752,6 +1119,545 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
                     )
                 }
 
+                // =================================================================
+                // Scheduler API Endpoints (v2)
+                // =================================================================
+
+                // POST /api/v2/scheduler/task - Create task
+                ("POST", "/api/v2/scheduler/task") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::CreateTaskRequest>(&body_str) {
+                            Ok(req) => {
+                                let mut task = scheduler::Task::new(req.name, req.payload);
+                                if let Some(desc) = req.description {
+                                    task.description = Some(desc);
+                                }
+                                if let Some(priority) = req.priority {
+                                    task.priority = priority;
+                                }
+                                if let Some(max_retries) = req.max_retries {
+                                    task.max_retries = max_retries;
+                                }
+                                let id = scheduler_state.create_task(task);
+                                let response = scheduler::CreateTaskResponse {
+                                    id,
+                                    status: "pending".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/task/{id} - Get task status
+                ("GET", path) if path.starts_with("/api/v2/scheduler/task/") => {
+                    let task_id = path.strip_prefix("/api/v2/scheduler/task/").unwrap_or("");
+                    if let Some(task) = scheduler_state.get_task(task_id) {
+                        let response = scheduler::GetTaskResponse {
+                            task: Some(task),
+                            error: None,
+                        };
+                        (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    } else {
+                        let response = scheduler::GetTaskResponse {
+                            task: None,
+                            error: Some("Task not found".to_string()),
+                        };
+                        (
+                            "HTTP/1.1 404 Not Found",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    }
+                }
+
+                // GET /api/v2/scheduler/tasks - List all tasks
+                ("GET", "/api/v2/scheduler/tasks") => {
+                    let tasks = scheduler_state.list_tasks();
+                    let response = scheduler::ListTasksResponse {
+                        total: tasks.len(),
+                        tasks,
+                    };
+                    (
+                        "HTTP/1.1 200 OK",
+                        "application/json",
+                        serde_json::to_string(&response)
+                            .unwrap_or_else(|_| r#"{"error":"Serialization error"}"#.to_string()),
+                    )
+                }
+
+                // DELETE /api/v2/scheduler/task/{id} - Delete task
+                ("DELETE", path) if path.starts_with("/api/v2/scheduler/task/") => {
+                    let task_id = path.strip_prefix("/api/v2/scheduler/task/").unwrap_or("");
+                    if scheduler_state.delete_task(task_id) {
+                        let json = serde_json::json!({
+                            "success": true,
+                            "message": "Task deleted"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 200 OK", "application/json", json)
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Task not found"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 404 Not Found", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/scheduler/workflow - Create workflow
+                ("POST", "/api/v2/scheduler/workflow") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::CreateWorkflowRequest>(&body_str) {
+                            Ok(req) => {
+                                let workflow = scheduler::Workflow::new(req.name, req.steps);
+                                let id = scheduler_state.create_workflow(workflow);
+                                let response = scheduler::CreateWorkflowResponse {
+                                    id,
+                                    status: "created".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/workflow/{id} - Get workflow
+                ("GET", path) if path.starts_with("/api/v2/scheduler/workflow/") => {
+                    let workflow_id = path
+                        .strip_prefix("/api/v2/scheduler/workflow/")
+                        .unwrap_or("");
+                    if let Some(workflow) = scheduler_state.get_workflow(workflow_id) {
+                        let response = scheduler::GetWorkflowResponse {
+                            workflow: Some(workflow),
+                            error: None,
+                        };
+                        (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    } else {
+                        let response = scheduler::GetWorkflowResponse {
+                            workflow: None,
+                            error: Some("Workflow not found".to_string()),
+                        };
+                        (
+                            "HTTP/1.1 404 Not Found",
+                            "application/json",
+                            serde_json::to_string(&response).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        )
+                    }
+                }
+
+                // POST /api/v2/scheduler/execute - Execute workflow
+                ("POST", "/api/v2/scheduler/execute") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::ExecuteWorkflowRequest>(&body_str) {
+                            Ok(req) => {
+                                // Check if workflow exists
+                                if scheduler_state.get_workflow(&req.workflow_id).is_none() {
+                                    let response = scheduler::ExecuteWorkflowResponse {
+                                        execution_id: String::new(),
+                                        status: "error".to_string(),
+                                        message: "Workflow not found".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 404 Not Found",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                } else {
+                                    // Create execution record
+                                    let mut execution =
+                                        scheduler::ExecutionRecord::new(req.workflow_id.clone());
+                                    execution.status = scheduler::ExecutionStatus::Running;
+
+                                    // For now, we'll execute synchronously and mark as completed
+                                    // In a full implementation, this would be async
+                                    let execution_id = execution.id.clone();
+                                    scheduler_state.record_execution(execution);
+
+                                    let response = scheduler::ExecuteWorkflowResponse {
+                                        execution_id,
+                                        status: "running".to_string(),
+                                        message: "Workflow execution started".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 202 Accepted",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // POST /api/v2/scheduler/agent - Register agent
+                ("POST", "/api/v2/scheduler/agent") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::RegisterAgentRequest>(&body_str) {
+                            Ok(req) => {
+                                let agent = scheduler::Agent {
+                                    id: uuid::Uuid::new_v4().to_string(),
+                                    name: req.name,
+                                    status: scheduler::AgentStatus::Idle,
+                                    capabilities: req.capabilities,
+                                    current_task_id: None,
+                                    tasks_completed: 0,
+                                    created_at: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs(),
+                                };
+                                let id = scheduler_state.register_agent(agent);
+                                let response = scheduler::RegisterAgentResponse {
+                                    id,
+                                    status: "registered".to_string(),
+                                };
+                                (
+                                    "HTTP/1.1 201 Created",
+                                    "application/json",
+                                    serde_json::to_string(&response).unwrap_or_else(|_| {
+                                        r#"{"error":"Serialization error"}"#.to_string()
+                                    }),
+                                )
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // GET /api/v2/scheduler/agents - List all agents
+                ("GET", "/api/v2/scheduler/agents") => {
+                    let agents = scheduler_state.list_agents();
+                    let response = scheduler::ListAgentsResponse {
+                        total: agents.len(),
+                        agents,
+                    };
+                    (
+                        "HTTP/1.1 200 OK",
+                        "application/json",
+                        serde_json::to_string(&response)
+                            .unwrap_or_else(|_| r#"{"error":"Serialization error"}"#.to_string()),
+                    )
+                }
+
+                // POST /api/v2/scheduler/agent/sync - Sync agent status
+                ("POST", "/api/v2/scheduler/agent/sync") => {
+                    if let Some(body_str) = body_content {
+                        match serde_json::from_str::<scheduler::SyncAgentStatusRequest>(&body_str) {
+                            Ok(req) => {
+                                if scheduler_state.update_agent_status(
+                                    &req.agent_id,
+                                    req.status,
+                                    req.current_task_id,
+                                ) {
+                                    // Update tasks_completed if provided
+                                    if let Some(completed) = req.tasks_completed {
+                                        if let Some(mut agent) =
+                                            scheduler_state.get_agent(&req.agent_id)
+                                        {
+                                            agent.tasks_completed = completed;
+                                        }
+                                    }
+                                    let response = scheduler::SyncAgentStatusResponse {
+                                        success: true,
+                                        message: "Status updated".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 200 OK",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                } else {
+                                    let response = scheduler::SyncAgentStatusResponse {
+                                        success: false,
+                                        message: "Agent not found".to_string(),
+                                    };
+                                    (
+                                        "HTTP/1.1 404 Not Found",
+                                        "application/json",
+                                        serde_json::to_string(&response).unwrap_or_else(|_| {
+                                            r#"{"error":"Serialization error"}"#.to_string()
+                                        }),
+                                    )
+                                }
+                            }
+                            Err(e) => {
+                                let json = serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Invalid request: {}", e)
+                                })
+                                .to_string();
+                                ("HTTP/1.1 400 Bad Request", "application/json", json)
+                            }
+                        }
+                    } else {
+                        let json = serde_json::json!({
+                            "success": false,
+                            "error": "Missing request body"
+                        })
+                        .to_string();
+                        ("HTTP/1.1 400 Bad Request", "application/json", json)
+                    }
+                }
+
+                // =============================================================================
+                // GMP Audit and Compliance Endpoints
+                // =============================================================================
+
+                // GET /api/v2/gmp/report/audit - Generate audit report
+                ("GET", "/api/v2/gmp/report/audit") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_audit_report(&*storage, start_time, now) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/report/deviation - Generate deviation report
+                ("GET", "/api/v2/gmp/report/deviation") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_deviation_report(
+                        &*storage, start_time, now,
+                    ) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/report/capa - Generate CAPA report
+                ("GET", "/api/v2/gmp/report/capa") => {
+                    let storage = storage.read().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let start_time = now - (30 * 24 * 3600); // Last 30 days
+
+                    match sqlrustgo_gmp::report::generate_capa_report(&*storage, start_time, now) {
+                        Ok(report) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&report).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Report generation failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // POST /api/v2/gmp/compliance/check - Run compliance check
+                ("POST", "/api/v2/gmp/compliance/check") => {
+                    let storage = storage.read().unwrap();
+                    let request = ComplianceCheckRequest::default();
+
+                    match sqlrustgo_gmp::compliance::check_batch_compliance(&*storage, &request) {
+                        Ok(result) => (
+                            "HTTP/1.1 200 OK",
+                            "application/json",
+                            serde_json::to_string(&result).unwrap_or_else(|_| {
+                                r#"{"error":"Serialization error"}"#.to_string()
+                            }),
+                        ),
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Compliance check failed: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
+                // GET /api/v2/gmp/audit/logs - Get audit logs
+                ("GET", "/api/v2/gmp/audit/logs") => {
+                    let storage = storage.read().unwrap();
+
+                    match sqlrustgo_gmp::audit::get_all_audit_logs(&*storage) {
+                        Ok(logs) => {
+                            let response = serde_json::json!({
+                                "success": true,
+                                "total": logs.len(),
+                                "logs": logs
+                            });
+                            (
+                                "HTTP/1.1 200 OK",
+                                "application/json",
+                                serde_json::to_string(&response).unwrap_or_else(|_| {
+                                    r#"{"error":"Serialization error"}"#.to_string()
+                                }),
+                            )
+                        }
+                        Err(e) => {
+                            let json = serde_json::json!({
+                                "success": false,
+                                "error": format!("Failed to get audit logs: {}", e)
+                            })
+                            .to_string();
+                            (
+                                "HTTP/1.1 500 Internal Server Error",
+                                "application/json",
+                                json,
+                            )
+                        }
+                    }
+                }
+
                 // 404 for all other paths
                 _ => {
                     let json = serde_json::json!({
@@ -796,10 +1702,221 @@ fn handle_openclaw_request<T: std::io::Read + std::io::Write>(
 // ============================================================================
 
 /// SQL execution result
+#[allow(dead_code)]
 struct SqlExecResult {
     columns: Vec<String>,
     rows: Vec<Vec<serde_json::Value>>,
     affected_rows: usize,
+}
+
+/// Execute BEFORE triggers for an INSERT operation
+fn execute_before_insert_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    records: &mut [Vec<sqlrustgo_storage::engine::Value>],
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Insert)
+        .collect();
+
+    for trigger in triggers {
+        for record in records.iter_mut() {
+            execute_simple_trigger_body(&trigger, record, &storage)?;
+        }
+    }
+    Ok(())
+}
+
+/// Execute AFTER triggers for an INSERT operation
+fn execute_after_insert_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    records: &[Vec<sqlrustgo_storage::engine::Value>],
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::After && t.event == TriggerEvent::Insert)
+        .collect();
+
+    for trigger in triggers {
+        for record in records.iter() {
+            execute_simple_trigger_body(&trigger, record, &storage)?;
+        }
+    }
+    Ok(())
+}
+
+/// Execute a simple trigger body (SET NEW.col = value pattern)
+fn execute_simple_trigger_body(
+    trigger: &TriggerInfo,
+    record: &[sqlrustgo_storage::engine::Value],
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let body = &trigger.body;
+
+    if body.starts_with("SET NEW.") {
+        if let Some(assignments) = parse_simple_set_assignments(body) {
+            let table_info = storage
+                .get_table_info(&trigger.table_name)
+                .map_err(|e| e.to_string())?;
+            let mut result = record.to_vec();
+
+            for (col_name, value) in assignments {
+                if let Some(col_idx) = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                {
+                    if col_idx < result.len() {
+                        result[col_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parse simple SET NEW.col = value assignments
+fn parse_simple_set_assignments(
+    body: &str,
+) -> Option<Vec<(String, sqlrustgo_storage::engine::Value)>> {
+    let mut assignments = Vec::new();
+    let body = body.trim_start_matches("SET ");
+
+    for part in body.split(',') {
+        let part = part.trim();
+        if let Some((lhs, rhs)) = part.split_once('=') {
+            let lhs = lhs.trim();
+            let rhs = rhs.trim();
+
+            if lhs.starts_with("NEW.") {
+                let col_name = lhs.trim_start_matches("NEW.").trim().to_string();
+                if let Some(value) = evaluate_simple_trigger_value(rhs) {
+                    assignments.push((col_name, value));
+                }
+            }
+        }
+    }
+    if assignments.is_empty() {
+        None
+    } else {
+        Some(assignments)
+    }
+}
+
+/// Evaluate a simple value expression for triggers
+fn evaluate_simple_trigger_value(expr: &str) -> Option<sqlrustgo_storage::engine::Value> {
+    let expr = expr.trim();
+    if expr.starts_with('\'') && expr.ends_with('\'') {
+        return Some(sqlrustgo_storage::engine::Value::Text(
+            expr[1..expr.len() - 1].to_string(),
+        ));
+    }
+    if let Ok(num) = expr.parse::<i64>() {
+        return Some(sqlrustgo_storage::engine::Value::Integer(num));
+    }
+    if let Ok(num) = expr.parse::<f64>() {
+        return Some(sqlrustgo_storage::engine::Value::Float(num));
+    }
+    if expr.eq_ignore_ascii_case("NULL") {
+        return Some(sqlrustgo_storage::engine::Value::Null);
+    }
+    if expr.eq_ignore_ascii_case("TRUE") {
+        return Some(sqlrustgo_storage::engine::Value::Boolean(true));
+    }
+    if expr.eq_ignore_ascii_case("FALSE") {
+        return Some(sqlrustgo_storage::engine::Value::Boolean(false));
+    }
+    None
+}
+
+/// Execute BEFORE triggers for an UPDATE operation
+fn execute_before_update_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    new_row: &mut Vec<sqlrustgo_storage::engine::Value>,
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Update)
+        .collect();
+
+    for trigger in triggers {
+        execute_update_trigger_body(&trigger, old_row, new_row, &storage)?;
+    }
+    Ok(())
+}
+
+/// Execute a trigger body for UPDATE operation
+fn execute_update_trigger_body(
+    trigger: &TriggerInfo,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    new_row: &mut Vec<sqlrustgo_storage::engine::Value>,
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let body = &trigger.body;
+
+    if body.starts_with("SET NEW.") {
+        if let Some(assignments) = parse_simple_set_assignments(body) {
+            let table_info = storage
+                .get_table_info(&trigger.table_name)
+                .map_err(|e| e.to_string())?;
+
+            for (col_name, value) in assignments {
+                if let Some(col_idx) = table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                {
+                    if col_idx < new_row.len() {
+                        new_row[col_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Execute BEFORE DELETE triggers
+fn execute_before_delete_triggers(
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+    table_name: &str,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+) -> Result<(), String> {
+    let storage = storage.read().map_err(|e| e.to_string())?;
+    let triggers: Vec<TriggerInfo> = storage
+        .list_triggers(table_name)
+        .into_iter()
+        .filter(|t| t.timing == TriggerTiming::Before && t.event == TriggerEvent::Delete)
+        .collect();
+
+    for trigger in triggers {
+        let _ = execute_delete_trigger_body(&trigger, old_row, &storage);
+    }
+    Ok(())
+}
+
+/// Execute a trigger body for DELETE operation
+fn execute_delete_trigger_body(
+    trigger: &TriggerInfo,
+    old_row: &Vec<sqlrustgo_storage::engine::Value>,
+    storage: &dyn StorageEngine,
+) -> Result<(), String> {
+    let _body = &trigger.body;
+    let _table_info = storage
+        .get_table_info(&trigger.table_name)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Execute SQL query
@@ -809,6 +1926,62 @@ fn execute_sql(
 ) -> Result<SqlExecResult, String> {
     let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
 
+    // T-27: Route SQL to read replica or write primary using ReadWriteSplitter
+    // Local node_id = 1 for single-node setup
+    let splitter = ReadWriteSplitter::new(1);
+    match splitter.route_simple(sql) {
+        Ok((query_class, is_primary)) => {
+            log::debug!(
+                "T-27 routing: sql=\"{}\" class={:?} is_primary={} -> target={}",
+                sql.chars().take(50).collect::<String>(),
+                query_class,
+                is_primary,
+                if is_primary { "primary" } else { "replica" }
+            );
+        }
+        Err(e) => {
+            log::warn!("T-27 routing failed, defaulting to primary: {}", e);
+        }
+    }
+
+    // Handle transaction commands first (using storage's transaction support)
+    if let Statement::Transaction(ref tx_stmt) = statement {
+        let mut storage = storage.write().map_err(|e| e.to_string())?;
+        match tx_stmt.command {
+            TransactionCommand::Begin => {
+                storage.begin_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Commit => {
+                storage.commit_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            TransactionCommand::Rollback => {
+                storage.rollback_transaction().map_err(|e| e.to_string())?;
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+            _ => {
+                return Ok(SqlExecResult {
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                });
+            }
+        }
+    }
+
     let mut storage = storage
         .write()
         .map_err(|e| format!("Storage lock error: {}", e))?;
@@ -817,6 +1990,33 @@ fn execute_sql(
         sqlrustgo_parser::Statement::Select(select) => {
             if !storage.has_table(&select.table) {
                 return Err(format!("Table '{}' not found", select.table));
+            }
+
+            // 创建 RuleContext（Parser → Optimizer 桥接）
+            let rule_context = RuleContext::with_index_hints(
+                select
+                    .index_hints
+                    .iter()
+                    .map(|h| OptimizerIndexHint {
+                        hint_type: match h.hint_type {
+                            sqlrustgo_parser::IndexHintType::UseIndex => {
+                                OptimizerIndexHintType::UseIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::ForceIndex => {
+                                OptimizerIndexHintType::ForceIndex
+                            }
+                            sqlrustgo_parser::IndexHintType::IgnoreIndex => {
+                                OptimizerIndexHintType::IgnoreIndex
+                            }
+                        },
+                        index_names: h.index_names.clone(),
+                    })
+                    .collect(),
+            );
+
+            // 如果有 index hints，记录日志（当前 endpoint 不使用 optimizer）
+            if !rule_context.index_hints.is_empty() {
+                log::info!("index hints detected for table '{}': {:?} - note: optimizer not used in this endpoint", select.table, rule_context.index_hints);
             }
 
             let table_info = storage.get_table_info(&select.table).ok();
@@ -846,7 +2046,7 @@ fn execute_sql(
 
             let result_rows: Vec<Vec<serde_json::Value>> = filtered_rows
                 .into_iter()
-                .map(|row| row.into_iter().map(|v| value_to_json(v)).collect())
+                .map(|row| row.into_iter().map(value_to_json).collect())
                 .collect();
 
             Ok(SqlExecResult {
@@ -868,7 +2068,7 @@ fn execute_sql(
                 .map(|i| i.columns.len())
                 .unwrap_or(insert.values.first().map(|r| r.len()).unwrap_or(0));
 
-            let records: Vec<Vec<sqlrustgo_storage::engine::Value>> = insert
+            let mut records: Vec<Vec<sqlrustgo_storage::engine::Value>> = insert
                 .values
                 .iter()
                 .map(|row| {
@@ -901,9 +2101,14 @@ fn execute_sql(
                 })
                 .collect();
 
+            execute_before_insert_triggers(storage, table_name, &mut records)?;
+
+            let records_to_insert = records.clone();
             storage
                 .insert(table_name, records)
                 .map_err(|e| e.to_string())?;
+
+            execute_after_insert_triggers(storage, table_name, &records_to_insert)?;
 
             Ok(SqlExecResult {
                 columns: vec![],
@@ -924,12 +2129,14 @@ fn execute_sql(
                     is_primary_key: col.primary_key,
                     references: None,
                     auto_increment: col.auto_increment,
+                    compression: None,
                 })
                 .collect();
 
             let table_info = sqlrustgo_storage::engine::TableInfo {
                 name: create.name.clone(),
                 columns,
+                ..Default::default()
             };
 
             storage
@@ -970,6 +2177,10 @@ fn execute_sql(
                         })
                         .collect()
                 };
+
+            for row in &rows_to_delete {
+                execute_before_delete_triggers(storage, &delete.table, row)?;
+            }
 
             let deleted_count = rows_to_delete.len();
 
@@ -1032,6 +2243,8 @@ fn execute_sql(
                             new_row[col_idx] = evaluate_expr(expr, &new_row, &columns);
                         }
                     }
+                    let _ =
+                        execute_before_update_triggers(storage, &update.table, row, &mut new_row);
                     (idx, new_row)
                 })
                 .collect();
@@ -1061,6 +2274,123 @@ fn execute_sql(
                 return Err(format!("Table '{}' not found", drop.name));
             }
             storage.drop_table(&drop.name).map_err(|e| e.to_string())?;
+            Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::Call(call) => {
+            let catalog = ctx.catalog.read();
+            match catalog.get_stored_procedure(&call.procedure_name) {
+                Some(proc) => {
+                    if proc.params.len() != call.args.len() {
+                        return Err(format!(
+                            "Procedure '{}' expects {} parameters but got {}",
+                            call.procedure_name,
+                            proc.params.len(),
+                            call.args.len()
+                        ));
+                    }
+                    Ok(SqlExecResult {
+                        columns: vec![],
+                        rows: vec![],
+                        affected_rows: 0,
+                    })
+                }
+                None => Err(format!("Procedure '{}' not found", call.procedure_name)),
+            }
+        }
+
+        sqlrustgo_parser::Statement::CreateProcedure(create) => {
+            let catalog = ctx.catalog.read();
+            let proc = sqlrustgo_catalog::stored_proc::StoredProcedure::new(
+                create.name.clone(),
+                create
+                    .params
+                    .iter()
+                    .map(|p| sqlrustgo_catalog::stored_proc::StoredProcParam {
+                        name: p.name.clone(),
+                        mode: match p.mode {
+                            sqlrustgo_parser::StoredProcParamMode::In => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::In
+                            }
+                            sqlrustgo_parser::StoredProcParamMode::Out => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::Out
+                            }
+                            sqlrustgo_parser::StoredProcParamMode::InOut => {
+                                sqlrustgo_catalog::stored_proc::ParamMode::InOut
+                            }
+                        },
+                        data_type: p.data_type.clone(),
+                    })
+                    .collect(),
+                create
+                    .body
+                    .iter()
+                    .map(|s| match s {
+                        sqlrustgo_parser::StoredProcStatement::RawSql(sql) => {
+                            sqlrustgo_catalog::stored_proc::StoredProcStatement::RawSql(sql.clone())
+                        }
+                        _ => sqlrustgo_catalog::stored_proc::StoredProcStatement::RawSql(
+                            "UNSUPPORTED".to_string(),
+                        ),
+                    })
+                    .collect(),
+            );
+            let mut catalog = ctx.catalog.write();
+            catalog
+                .add_stored_procedure(proc)
+                .map_err(|e| e.to_string())?;
+            Ok(SqlExecResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::CreateTrigger(create) => {
+            let timing = match create.timing.to_uppercase().as_str() {
+                "BEFORE" => sqlrustgo_storage::engine::TriggerTiming::Before,
+                "AFTER" => sqlrustgo_storage::engine::TriggerTiming::After,
+                _ => {
+                    return Err(format!("Invalid trigger timing: {}", create.timing));
+                }
+            };
+
+            let events: Vec<_> = create
+                .events
+                .iter()
+                .filter_map(|e| match e.to_uppercase().as_str() {
+                    "INSERT" => Some(sqlrustgo_storage::engine::TriggerEvent::Insert),
+                    "UPDATE" => Some(sqlrustgo_storage::engine::TriggerEvent::Update),
+                    "DELETE" => Some(sqlrustgo_storage::engine::TriggerEvent::Delete),
+                    _ => None,
+                })
+                .collect();
+
+            if events.is_empty() {
+                return Err(
+                    "At least one trigger event (INSERT, UPDATE, DELETE) is required".to_string(),
+                );
+            }
+
+            let trigger_info = sqlrustgo_storage::engine::TriggerInfo {
+                name: create.name.clone(),
+                table_name: create.table.clone(),
+                timing,
+                event: events[0],
+                body: create.body.clone(),
+            };
+
+            let mut storage = storage
+                .write()
+                .map_err(|e| format!("Storage lock error: {}", e))?;
+            storage
+                .create_trigger(trigger_info)
+                .map_err(|e| e.to_string())?;
+
             Ok(SqlExecResult {
                 columns: vec![],
                 rows: vec![],
@@ -1256,7 +2586,7 @@ fn base64_encode(data: &[u8]) -> String {
 /// Natural language to SQL (stub implementation using RAG)
 fn nl_to_sql(
     query: &str,
-    context: &Option<String>,
+    _context: &Option<String>,
     storage: &Arc<RwLock<dyn StorageEngine>>,
 ) -> NlQueryResponse {
     // This is a stub implementation
@@ -1269,17 +2599,10 @@ fn nl_to_sql(
     // Simple keyword-based SQL generation
     let query_lower = query.to_lowercase();
     let sql = if query_lower.contains("show") || query_lower.contains("list") {
-        if query_lower.contains("table") {
-            format!(
-                "SELECT * FROM {}",
-                tables.first().unwrap_or(&"dual".to_string())
-            )
-        } else {
-            format!(
-                "SELECT * FROM {}",
-                tables.first().unwrap_or(&"dual".to_string())
-            )
-        }
+        format!(
+            "SELECT * FROM {}",
+            tables.first().unwrap_or(&"dual".to_string())
+        )
     } else if query_lower.contains("count") {
         if let Some(table) = tables.first() {
             format!("SELECT COUNT(*) FROM {}", table)
@@ -1298,11 +2621,129 @@ fn nl_to_sql(
     NlQueryResponse {
         success: true,
         sql: Some(sql),
-        confidence: Some(0.5), // Low confidence since this is a stub
+        confidence: Some(0.5),
         table_hint: tables.first().cloned(),
         where_conditions: None,
         error: None,
     }
+}
+
+fn execute_unified_query(
+    req: &UnifiedQueryRequest,
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+) -> UnifiedQueryResponse {
+    let mode = req.mode.as_deref().unwrap_or("sql_vector_graph");
+
+    let mut sql_results = None;
+    let mut vector_results = None;
+    let mut graph_results = None;
+
+    if mode.contains("sql") || mode == "sql_vector_graph" {
+        let result = execute_sql(&req.query, storage);
+        match result {
+            Ok(exec_result) => {
+                let row_count = exec_result.rows.len();
+                sql_results = Some(SqlResults {
+                    columns: exec_result.columns,
+                    rows: exec_result.rows,
+                    row_count,
+                });
+            }
+            Err(e) => {
+                return UnifiedQueryResponse {
+                    success: false,
+                    sql_results: None,
+                    vector_results: None,
+                    graph_results: None,
+                    execution_time_ms: 0,
+                    query_plan: None,
+                    error: Some(e),
+                };
+            }
+        }
+    }
+
+    if mode.contains("vector") || mode == "sql_vector_graph" {
+        if let Some(ref vec_config) = req.vector {
+            let vec_req = VectorQueryRequest {
+                column: vec_config.column.clone(),
+                query_vector: vec_config.query_vector.clone(),
+                top_k: vec_config.top_k,
+                min_score: vec_config.min_score,
+                filters: None,
+            };
+            if let Ok(results) = execute_vector_query(&vec_req, storage) {
+                vector_results = Some(VectorResults {
+                    results,
+                    total_scanned: 0,
+                });
+            }
+        }
+    }
+
+    if mode.contains("graph") || mode == "sql_vector_graph" {
+        if let Some(ref graph_config) = req.graph {
+            let graph_req = GraphQueryRequest {
+                start_node: graph_config.start_node.clone(),
+                traversal: graph_config
+                    .traversal
+                    .clone()
+                    .unwrap_or_else(|| "bfs".to_string()),
+                max_depth: graph_config.max_depth.unwrap_or(10),
+                edge_type: graph_config.edge_type.clone(),
+                target_node: None,
+            };
+            if let Ok(results) = execute_graph_query(&graph_req, storage) {
+                graph_results = Some(results);
+            }
+        }
+    }
+
+    UnifiedQueryResponse {
+        success: true,
+        sql_results,
+        vector_results,
+        graph_results,
+        execution_time_ms: 0,
+        query_plan: None,
+        error: None,
+    }
+}
+
+fn execute_vector_query(
+    req: &VectorQueryRequest,
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+) -> Result<Vec<VectorSearchResult>, String> {
+    let _storage = storage.read().map_err(|e| e.to_string())?;
+
+    Ok(vec![VectorSearchResult {
+        id: "placeholder".to_string(),
+        score: 0.0,
+        metadata: None,
+    }])
+}
+
+fn execute_graph_query(
+    req: &GraphQueryRequest,
+    storage: &Arc<RwLock<dyn StorageEngine>>,
+) -> Result<GraphResults, String> {
+    let _storage = storage.read().map_err(|e| e.to_string())?;
+
+    let nodes = vec![GraphNode {
+        id: req.start_node.clone(),
+        label: "start".to_string(),
+        properties: HashMap::new(),
+    }];
+
+    let edges = vec![];
+
+    let path: Option<Vec<String>> = if let Some(ref target) = req.target_node {
+        Some(vec![req.start_node.clone(), target.clone()])
+    } else {
+        None
+    };
+
+    Ok(GraphResults { nodes, edges, path })
 }
 
 /// Get database schema

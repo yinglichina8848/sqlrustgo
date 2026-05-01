@@ -1,57 +1,71 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime
+import matplotlib.dates as mdates
+from datetime import datetime, timedelta
 
-# 读取CSV文件
-df = pd.read_csv('export_bill_1774668153.csv')
+CSV_FILE = 'artifacts/usage/export_2026_04_24.csv'
 
-# 转换数据类型
-df['输出消费数'] = pd.to_numeric(df['输出消费数'], errors='coerce')
-df['输出消费数'] = df['输出消费数'].fillna(0)
-df['总消费数'] = pd.to_numeric(df['总消费数'], errors='coerce')
-df['总消费数'] = df['总消费数'].fillna(0)
+df = pd.read_csv(CSV_FILE)
 
-# 解析日期
+df['输入消费数'] = pd.to_numeric(df['输入消费数'].replace('<nil>', '0'), errors='coerce').fillna(0).astype(int)
+df['输出消费数'] = pd.to_numeric(df['输出消费数'].replace('<nil>', '0'), errors='coerce').fillna(0).astype(int)
+df['总消费数'] = pd.to_numeric(df['总消费数'].replace('<nil>', '0'), errors='coerce').fillna(0).astype(int)
+
 def parse_date_time(time_str):
     date_part = time_str.split(' ')[0]
     return datetime.strptime(date_part, '%Y-%m-%d')
 
 df['日期'] = df['消费时间'].apply(parse_date_time)
 
-# 按天汇总
+today = datetime(2026, 4, 24)
+two_weeks_ago = today - timedelta(days=14)
+
 daily_summary = df.groupby('日期').agg({
+    '输入消费数': 'sum',
     '总消费数': 'sum',
     '输出消费数': 'sum',
-    '消费时间': 'count'  # 调用次数
-}).rename(columns={'消费时间': '调用次数'})
+    '消费时间': 'count'
+}).rename(columns={'消费时间': '调用次数'}).sort_index()
 
-# 生成折线图
-plt.figure(figsize=(14, 8))
+plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'PingFang SC']
+plt.rcParams['axes.unicode_minus'] = False
 
-# 子图1：每日调用次数
-plt.subplot(3, 1, 1)
-plt.plot(daily_summary.index, daily_summary['调用次数'], marker='o', linestyle='-', color='b')
-plt.title('每日调用次数')
-plt.xlabel('日期')
-plt.ylabel('调用次数')
-plt.grid(True)
+fig, axes = plt.subplots(4, 1, figsize=(14, 16))
 
-# 子图2：每日总消费数
-plt.subplot(3, 1, 2)
-plt.plot(daily_summary.index, daily_summary['总消费数'], marker='o', linestyle='-', color='r')
-plt.title('每日总消费数')
-plt.xlabel('日期')
-plt.ylabel('总消费数')
-plt.grid(True)
+axes[0].plot(daily_summary.index, daily_summary['调用次数'], marker='o', linestyle='-', color='#2196F3', linewidth=1.5, markersize=3)
+axes[0].axvspan(two_weeks_ago, today, alpha=0.15, color='orange', label='最近2周')
+axes[0].set_title('每日调用次数', fontsize=13, fontweight='bold')
+axes[0].set_ylabel('调用次数')
+axes[0].grid(True, alpha=0.3)
+axes[0].legend()
+axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
 
-# 子图3：每日输出消费数
-plt.subplot(3, 1, 3)
-plt.plot(daily_summary.index, daily_summary['输出消费数'], marker='o', linestyle='-', color='g')
-plt.title('每日输出消费数')
-plt.xlabel('日期')
-plt.ylabel('输出消费数')
-plt.grid(True)
+axes[1].plot(daily_summary.index, daily_summary['输入消费数']/1e8, marker='o', linestyle='-', color='#FF9800', linewidth=1.5, markersize=3)
+axes[1].axvspan(two_weeks_ago, today, alpha=0.15, color='orange', label='最近2周')
+axes[1].set_title('每日输入消费（亿 Token）', fontsize=13, fontweight='bold')
+axes[1].set_ylabel('输入消费（亿）')
+axes[1].grid(True, alpha=0.3)
+axes[1].legend()
+axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
 
+axes[2].plot(daily_summary.index, daily_summary['输出消费数']/1e4, marker='o', linestyle='-', color='#4CAF50', linewidth=1.5, markersize=3)
+axes[2].axvspan(two_weeks_ago, today, alpha=0.15, color='orange', label='最近2周')
+axes[2].set_title('每日输出消费（万 Token）', fontsize=13, fontweight='bold')
+axes[2].set_ylabel('输出消费（万）')
+axes[2].grid(True, alpha=0.3)
+axes[2].legend()
+axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+
+axes[3].plot(daily_summary.index, daily_summary['总消费数']/1e8, marker='o', linestyle='-', color='#F44336', linewidth=1.5, markersize=3)
+axes[3].axvspan(two_weeks_ago, today, alpha=0.15, color='orange', label='最近2周')
+axes[3].set_title('每日总消费数（亿 Token）', fontsize=13, fontweight='bold')
+axes[3].set_ylabel('总消费数（亿）')
+axes[3].set_xlabel('日期')
+axes[3].grid(True, alpha=0.3)
+axes[3].legend()
+axes[3].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+
+fig.autofmt_xdate()
 plt.tight_layout()
-plt.savefig('minimax_usage_trend.png')
-print("折线图已更新为 minimax_usage_trend.png，包含输出消费数")
+plt.savefig('scripts/usage/minimax_usage_trend.png', dpi=150, bbox_inches='tight')
+print("趋势图已更新: scripts/usage/minimax_usage_trend.png")

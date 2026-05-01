@@ -3,46 +3,390 @@
 
 use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
 
-use crate::bplus_tree::hash_index::HashIndex;
-use crate::bplus_tree::SimpleBPlusTree;
-
-/// Column statistics for a single column
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ColumnStats {
-    pub column_name: String,
-    pub distinct_count: u64,
-    pub null_count: u64,
-    pub min_value: Option<Value>,
-    pub max_value: Option<Value>,
-}
-
-/// Table statistics
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TableStats {
-    pub table_name: String,
-    pub row_count: u64,
-    pub column_stats: Vec<ColumnStats>,
-}
-
-/// Foreign key referential action
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Referential action for foreign key constraints
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ForeignKeyAction {
     Cascade,
     SetNull,
     Restrict,
+    NoAction,
 }
 
 /// Foreign key constraint definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForeignKeyConstraint {
+    pub name: Option<String>,
+    pub columns: Vec<String>,
     pub referenced_table: String,
-    pub referenced_column: String,
+    pub referenced_columns: Vec<String>,
     pub on_delete: Option<ForeignKeyAction>,
     pub on_update: Option<ForeignKeyAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UniqueConstraint {
+    pub name: Option<String>,
+    pub columns: Vec<String>,
+}
+
+/// Check constraint definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckConstraint {
+    pub name: Option<String>,
+    pub expression: String,
+}
+
+/// Evaluate a CHECK constraint expression against a record
+/// The expression is stored as a string like "age >= 0" or "name IS NOT NULL"
+/// Returns Ok(true) if constraint is satisfied, Ok(false) if not, Err on parse error
+pub fn evaluate_check_constraint(
+    constraint: &CheckConstraint,
+    columns: &[String],
+    record: &[Value],
+) -> SqlResult<bool> {
+    evaluate_sql_expression(&constraint.expression, columns, record)
+}
+
+/// Evaluate a SQL expression against a record
+/// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
+fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
+    let expr = expr.trim();
+
+    // Handle AND/OR
+    if let Some(idx) = find_top_level_op(expr, "AND") {
+        let left = &expr[..idx];
+        let right = &expr[idx + 3..];
+        return Ok(evaluate_sql_expression(left.trim(), columns, record)?
+            && evaluate_sql_expression(right.trim(), columns, record)?);
+    }
+    if let Some(idx) = find_top_level_op(expr, "OR") {
+        let left = &expr[..idx];
+        let right = &expr[idx + 2..];
+        return Ok(evaluate_sql_expression(left.trim(), columns, record)?
+            || evaluate_sql_expression(right.trim(), columns, record)?);
+    }
+
+    // Handle NOT
+    if expr.to_uppercase().starts_with("NOT ") {
+        let inner = &expr[4..].trim();
+        return Ok(!evaluate_sql_expression(inner, columns, record)?);
+    }
+
+    // Handle IS NULL / IS NOT NULL
+    if let Some(idx) = expr.to_uppercase().find(" IS NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(val) = get_column_value(col_name, columns, record) {
+            return Ok(matches!(val, Value::Null));
+        }
+        return Ok(true); // column not found, assume OK
+    }
+    if let Some(idx) = expr.to_uppercase().find(" IS NOT NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(val) = get_column_value(col_name, columns, record) {
+            return Ok(!matches!(val, Value::Null));
+        }
+        return Ok(false);
+    }
+
+    // Handle comparisons: column op value
+    for (op, check) in &[
+        (">=", "gte"),
+        ("<=", "lte"),
+        ("!=", "neq"),
+        ("<>", "neq"),
+        ("=", "eq"),
+        ("==", "eq"),
+        (">", "gt"),
+        ("<", "lt"),
+    ] {
+        if let Some(idx) = expr.find(op) {
+            let col_name = expr[..idx].trim();
+            let value_str = expr[idx + op.len()..].trim();
+
+            if let Some(col_val) = get_column_value(col_name, columns, record) {
+                return compare_values(col_val, value_str, check);
+            }
+            break;
+        }
+    }
+
+    // If no comparison found, try to evaluate as a literal boolean or column existence check
+    let upper = expr.to_uppercase();
+    if upper == "TRUE" || upper == "1" {
+        return Ok(true);
+    }
+    if upper == "FALSE" || upper == "0" {
+        return Ok(false);
+    }
+
+    // Treat as column name - check if not null
+    if let Some(val) = get_column_value(expr, columns, record) {
+        return Ok(!matches!(val, Value::Null) && !is_zero_or_empty(val));
+    }
+
+    Err(format!("Cannot evaluate CHECK expression: {}", expr).into())
+}
+
+/// Find top-level operator (not inside quotes or parentheses)
+fn find_top_level_op(expr: &str, op: &str) -> Option<usize> {
+    let upper = expr.to_uppercase();
+    let op_upper = op.to_uppercase();
+    let mut depth = 0;
+    let mut in_string = false;
+
+    for (i, c) in expr.char_indices() {
+        match c {
+            '(' => {
+                depth += 1;
+            }
+            ')' => {
+                depth -= 1;
+            }
+            '\'' => {
+                in_string = !in_string;
+            }
+            _ if !in_string && depth == 0 => {
+                if upper[i..].starts_with(&op_upper) {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Get column value by name (case-insensitive)
+fn get_column_value<'a>(
+    name: &str,
+    columns: &'a [String],
+    record: &'a [Value],
+) -> Option<&'a Value> {
+    // Remove quotes if present
+    let name = name.trim().trim_matches(|c| c == '\'' || c == '"');
+
+    for (i, col) in columns.iter().enumerate() {
+        if col.eq_ignore_ascii_case(name) {
+            return record.get(i);
+        }
+    }
+    None
+}
+
+/// Compare column value with string representation
+fn compare_values(col_val: &Value, compare_with: &str, op: &str) -> SqlResult<bool> {
+    let cmp_str = compare_with.trim().trim_matches(|c| c == '\'' || c == '"');
+
+    match op {
+        "eq" => match col_val {
+            Value::Null => Ok(false),
+            Value::Integer(i) => {
+                if let Ok(cmp) = cmp_str.parse::<i64>() {
+                    Ok(*i == cmp)
+                } else {
+                    Ok(false)
+                }
+            }
+            Value::Float(f) => {
+                if let Ok(cmp) = cmp_str.parse::<f64>() {
+                    Ok(*f == cmp)
+                } else {
+                    Ok(false)
+                }
+            }
+            Value::Text(s) => Ok(s == cmp_str),
+            Value::Boolean(b) => {
+                let cmp_bool = cmp_str.eq_ignore_ascii_case("true") || cmp_str == "1";
+                Ok(*b == cmp_bool)
+            }
+            Value::Blob(_) => Ok(false),
+        },
+        "neq" => Ok(!compare_values(col_val, compare_with, "eq")?),
+        "gt" | "gte" | "lt" | "lte" => {
+            match col_val {
+                Value::Integer(i) => {
+                    if let Ok(cmp) = cmp_str.parse::<i64>() {
+                        return Ok(match op {
+                            "gt" => *i > cmp,
+                            "gte" => *i >= cmp,
+                            "lt" => *i < cmp,
+                            "lte" => *i <= cmp,
+                            _ => false,
+                        });
+                    }
+                }
+                Value::Float(f) => {
+                    if let Ok(cmp) = cmp_str.parse::<f64>() {
+                        return Ok(match op {
+                            "gt" => *f > cmp,
+                            "gte" => *f >= cmp,
+                            "lt" => *f < cmp,
+                            "lte" => *f <= cmp,
+                            _ => false,
+                        });
+                    }
+                }
+                Value::Text(s) => {
+                    return Ok(match op {
+                        "gt" => s.as_str() > cmp_str,
+                        "gte" => s.as_str() >= cmp_str,
+                        "lt" => s.as_str() < cmp_str,
+                        "lte" => s.as_str() <= cmp_str,
+                        _ => false,
+                    });
+                }
+                _ => {}
+            }
+            Err(format!("Cannot compare {} with {}", col_val, cmp_str).into())
+        }
+        _ => Err(format!("Unknown operator: {}", op).into()),
+    }
+}
+
+fn is_zero_or_empty(val: &Value) -> bool {
+    match val {
+        Value::Integer(i) => *i == 0,
+        Value::Float(f) => *f == 0.0,
+        Value::Text(s) => s.is_empty(),
+        Value::Boolean(b) => !*b,
+        Value::Null => true,
+        Value::Blob(_) => false,
+    }
+}
+
+/// Trigger timing: BEFORE or AFTER
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// Trigger event: INSERT, UPDATE, or DELETE
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Trigger definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerInfo {
+    pub name: String,
+    pub table_name: String,
+    pub timing: TriggerTiming,
+    pub event: TriggerEvent,
+    pub body: String,
+}
+
+/// Partition type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PartitionType {
+    Range,
+    List,
+    Hash,
+}
+
+/// Partition definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartitionInfo {
+    pub partition_type: PartitionType,
+    pub column: String,
+    pub boundaries: Vec<Value>,
+}
+
+impl PartitionInfo {
+    pub fn new_range(column: &str, boundaries: Vec<Value>) -> Self {
+        Self {
+            partition_type: PartitionType::Range,
+            column: column.to_string(),
+            boundaries,
+        }
+    }
+
+    pub fn new_list(column: &str, values: Vec<Value>) -> Self {
+        Self {
+            partition_type: PartitionType::List,
+            column: column.to_string(),
+            boundaries: values,
+        }
+    }
+
+    pub fn new_hash(column: &str, num_partitions: u32) -> Self {
+        Self {
+            partition_type: PartitionType::Hash,
+            column: column.to_string(),
+            boundaries: vec![Value::Integer(num_partitions as i64)],
+        }
+    }
+
+    pub fn get_partition_index(&self, value: &Value) -> Option<usize> {
+        match self.partition_type {
+            PartitionType::Range => self.get_range_partition(value),
+            PartitionType::List => self.get_list_partition(value),
+            PartitionType::Hash => self.get_hash_partition(value),
+        }
+    }
+
+    fn get_range_partition(&self, value: &Value) -> Option<usize> {
+        if let Value::Integer(n) = value {
+            for (i, boundary) in self.boundaries.iter().enumerate() {
+                if let Value::Integer(b) = boundary {
+                    if n < b {
+                        return Some(i);
+                    }
+                }
+            }
+            Some(self.boundaries.len())
+        } else {
+            None
+        }
+    }
+
+    fn get_list_partition(&self, value: &Value) -> Option<usize> {
+        for (i, boundary) in self.boundaries.iter().enumerate() {
+            if value == boundary {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn get_hash_partition(&self, value: &Value) -> Option<usize> {
+        if let Value::Integer(n) = value {
+            let num_partitions = self.boundaries.first()?.as_integer()? as u64;
+            let hash = n.unsigned_abs() % num_partitions;
+            Some(hash as usize)
+        } else if let Value::Text(s) = value {
+            let num_partitions = self.boundaries.first()?.as_integer()? as u32;
+            let hash = calculate_hash(s.as_bytes()) % num_partitions;
+            Some(hash as usize)
+        } else {
+            None
+        }
+    }
+}
+
+fn calculate_hash(data: &[u8]) -> u32 {
+    data.iter()
+        .fold(0u32, |acc, &b| acc.wrapping_add(b as u32).wrapping_mul(31))
+}
+
+/// Table metadata
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TableInfo {
+    pub name: String,
+    pub columns: Vec<ColumnDefinition>,
+    #[serde(default)]
+    pub foreign_keys: Vec<ForeignKeyConstraint>,
+    #[serde(default)]
+    pub unique_constraints: Vec<UniqueConstraint>,
+    #[serde(default)]
+    pub check_constraints: Vec<CheckConstraint>,
+    #[serde(skip)]
+    pub partition_info: Option<PartitionInfo>,
 }
 
 /// Column definition for table schema
@@ -50,11 +394,10 @@ pub struct ForeignKeyConstraint {
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
+    #[serde(default)]
     pub nullable: bool,
-    pub is_unique: bool,
-    pub is_primary_key: bool,
-    pub references: Option<ForeignKeyConstraint>,
-    pub auto_increment: bool,
+    #[serde(default)]
+    pub primary_key: bool,
 }
 
 impl ColumnDefinition {
@@ -62,20 +405,10 @@ impl ColumnDefinition {
         Self {
             name: name.to_string(),
             data_type: data_type.to_string(),
-            nullable: true,
-            is_unique: false,
-            is_primary_key: false,
-            references: None,
-            auto_increment: false,
+            nullable: false,
+            primary_key: false,
         }
     }
-}
-
-/// Table metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TableInfo {
-    pub name: String,
-    pub columns: Vec<ColumnDefinition>,
 }
 
 /// Table data - combines metadata and rows
@@ -94,36 +427,8 @@ pub trait StorageEngine: Send + Sync {
     /// Scan all rows from a table
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>>;
 
-    /// Get a single row by its index in the table
-    /// Returns None if the index is out of bounds
-    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>>;
-
-    /// Scan rows in batches for streaming (memory-efficient)
-    /// Returns (records, total_count, has_more)
-    fn scan_batch(
-        &self,
-        table: &str,
-        offset: usize,
-        limit: usize,
-    ) -> SqlResult<(Vec<Record>, usize, bool)> {
-        let all_records = self.scan(table)?;
-        let total = all_records.len();
-        let has_more = offset + limit < total;
-        let batch = all_records.into_iter().skip(offset).take(limit).collect();
-        Ok((batch, total, has_more))
-    }
-
     /// Insert rows into a table
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()>;
-
-    /// Bulk load from a TPC-H .tbl file (pipe-delimited)
-    /// Returns the number of rows loaded
-    /// Default implementation returns unsupported error
-    fn bulk_load_tbl_file(&mut self, _table_name: &str, _filepath: &str) -> SqlResult<usize> {
-        Err(SqlError::ExecutionError(
-            "bulk_load_tbl_file not supported by this storage backend".to_string(),
-        ))
-    }
 
     /// Delete rows matching a filter
     fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize>;
@@ -152,148 +457,42 @@ pub trait StorageEngine: Send + Sync {
     fn list_tables(&self) -> Vec<String>;
 
     /// Create an index on a table
-    fn create_table_index(
-        &mut self,
-        table: &str,
-        column: &str,
-        column_index: usize,
-    ) -> SqlResult<()>;
-
-    /// Create a hash index on a table for O(1) point lookups
-    /// Use for primary key and unique index columns
-    fn create_hash_index(
-        &mut self,
-        table: &str,
-        column: &str,
-        column_index: usize,
-    ) -> SqlResult<()>;
+    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
     /// Drop an index from a table
-    fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
+    fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
-    /// Search using index - returns row IDs matching the key
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32>;
+    /// Add a column to an existing table
+    fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()>;
 
-    /// Range query using index - returns row IDs in range [start, end)
-    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32>;
+    /// Rename a table
+    fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()>;
 
-    /// Create a view
-    fn create_view(&mut self, info: ViewInfo) -> SqlResult<()>;
-
-    /// Get view info
-    fn get_view(&self, name: &str) -> Option<ViewInfo>;
-
-    /// List all views
-    fn list_views(&self) -> Vec<String>;
-
-    /// Check if view exists
-    fn has_view(&self, name: &str) -> bool;
-
-    /// Create a trigger
+    /// Create a trigger on a table
     fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()>;
 
-    /// Drop a trigger
+    /// Drop a trigger by name
     fn drop_trigger(&mut self, name: &str) -> SqlResult<()>;
 
-    /// Get trigger info
+    /// Get a trigger by name
     fn get_trigger(&self, name: &str) -> Option<TriggerInfo>;
 
     /// List all triggers for a table
     fn list_triggers(&self, table: &str) -> Vec<TriggerInfo>;
 
-    /// Analyze table and collect statistics
-    fn analyze_table(&self, table: &str) -> SqlResult<TableStats>;
+    /// List all indexes for a table, returns Vec of (column_name, index_name)
+    fn list_indexes(&self, table: &str) -> Vec<(String, String)>;
 
-    /// Get the next auto_increment value for a table column
-    /// Returns the next value and increments the counter
-    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64>;
-
-    /// Get the current auto_increment counter for a table column
-    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64>;
-
-    /// Callback triggered after write operations (INSERT/UPDATE/DELETE)
-    /// Used by upper layers to invalidate query caches
-    fn on_write_complete(&mut self, _table: &str) {}
-
-    /// Scan specific columns from a table (projection pushdown)
-    /// Returns rows with only the requested column indices
-    fn scan_columns(&self, table: &str, column_indices: &[usize]) -> SqlResult<Vec<Record>> {
-        let all_records = self.scan(table)?;
-        let projected: Vec<Record> = all_records
-            .into_iter()
-            .map(|row| {
-                column_indices
-                    .iter()
-                    .filter_map(|&idx| row.get(idx).cloned())
-                    .collect()
-            })
-            .collect();
-        Ok(projected)
-    }
-
-    fn set_cancel_flag(&mut self, _flag: Arc<AtomicBool>) {}
-
-    fn clear_cancel_flag(&mut self) {}
-
-    fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
-        None
-    }
-
-    fn check_cancelled(&self) -> SqlResult<()> {
-        if let Some(ref flag) = self.cancel_flag() {
-            if flag.load(Ordering::SeqCst) {
-                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
-            }
-        }
-        Ok(())
-    }
+    /// Check if a view exists
+    fn has_view(&self, name: &str) -> bool;
 }
 
 /// In-memory storage implementation for testing and caching
-#[allow(clippy::type_complexity)]
 pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
-    views: HashMap<String, ViewInfo>,
     triggers: HashMap<String, TriggerInfo>,
-    table_triggers: HashMap<String, Vec<String>>,
-    /// B+Tree indexes for range queries
-    indexes: HashMap<String, SimpleBPlusTree>,
-    /// Hash indexes for O(1) point lookups
-    hash_indexes: HashMap<String, std::sync::Arc<HashIndex<i64, u32>>>,
-    write_callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
-    auto_increment_counters: HashMap<String, HashMap<usize, i64>>,
-    cancel_flag: Option<Arc<AtomicBool>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ViewInfo {
-    pub name: String,
-    pub query: String,
-    pub schema: TableInfo,
-    pub records: Vec<Record>,
-}
-
-#[derive(Clone, Debug)]
-pub struct TriggerInfo {
-    pub name: String,
-    pub table_name: String,
-    pub timing: TriggerTiming,
-    pub event: TriggerEvent,
-    pub body: String,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TriggerTiming {
-    Before,
-    After,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TriggerEvent {
-    Insert,
-    Update,
-    Delete,
+    views: HashSet<String>,
 }
 
 impl MemoryStorage {
@@ -301,140 +500,9 @@ impl MemoryStorage {
         Self {
             tables: HashMap::new(),
             table_infos: HashMap::new(),
-            views: HashMap::new(),
             triggers: HashMap::new(),
-            table_triggers: HashMap::new(),
-            indexes: HashMap::new(),
-            hash_indexes: HashMap::new(),
-            write_callback: None,
-            auto_increment_counters: HashMap::new(),
-            cancel_flag: None,
+            views: HashSet::new(),
         }
-    }
-
-    pub fn with_callback(callback: Box<dyn Fn(&str) + Send + Sync>) -> Self {
-        Self {
-            tables: HashMap::new(),
-            table_infos: HashMap::new(),
-            views: HashMap::new(),
-            triggers: HashMap::new(),
-            table_triggers: HashMap::new(),
-            indexes: HashMap::new(),
-            hash_indexes: HashMap::new(),
-            write_callback: Some(callback),
-            auto_increment_counters: HashMap::new(),
-            cancel_flag: None,
-        }
-    }
-
-    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
-        self.cancel_flag = Some(flag);
-    }
-
-    pub fn clear_cancel_flag(&mut self) {
-        self.cancel_flag = None;
-    }
-
-    #[allow(dead_code)]
-    fn check_cancel(&self) -> SqlResult<()> {
-        if let Some(ref flag) = self.cancel_flag {
-            if flag.load(Ordering::SeqCst) {
-                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
-            }
-        }
-        Ok(())
-    }
-
-    pub fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
-        self.views.insert(info.name.clone(), info);
-        Ok(())
-    }
-
-    pub fn get_view(&self, name: &str) -> Option<&ViewInfo> {
-        self.views.get(name)
-    }
-
-    pub fn list_views(&self) -> Vec<String> {
-        self.views.keys().cloned().collect()
-    }
-
-    pub fn has_view(&self, name: &str) -> bool {
-        self.views.contains_key(name)
-    }
-
-    pub fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
-        self.triggers.insert(info.name.clone(), info.clone());
-        self.table_triggers
-            .entry(info.table_name.clone())
-            .or_default()
-            .push(info.name.clone());
-        Ok(())
-    }
-
-    pub fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
-        if let Some(info) = self.triggers.remove(name) {
-            if let Some(triggers) = self.table_triggers.get_mut(&info.table_name) {
-                triggers.retain(|n| n != name);
-            }
-            Ok(())
-        } else {
-            Err(SqlError::ExecutionError(format!(
-                "Trigger {} not found",
-                name
-            )))
-        }
-    }
-
-    pub fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
-        self.triggers.get(name).cloned()
-    }
-
-    pub fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
-        self.table_triggers
-            .get(table)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.triggers.get(n).cloned())
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Get all tables that have foreign key references to the given parent table
-    pub fn get_tables_referencing(&self, parent_table: &str) -> Vec<String> {
-        let mut referencing_tables = Vec::new();
-        for (table_name, table_info) in &self.table_infos {
-            for col_def in &table_info.columns {
-                if let Some(ref fk) = col_def.references {
-                    if fk.referenced_table == parent_table {
-                        referencing_tables.push(table_name.clone());
-                        break;
-                    }
-                }
-            }
-        }
-        referencing_tables
-    }
-
-    /// Get the column indices and FK constraints that reference a parent table
-    /// Returns Vec of (column_index, ForeignKeyConstraint)
-    pub fn get_referencing_columns(
-        &self,
-        child_table: &str,
-        parent_table: &str,
-    ) -> Vec<(usize, ForeignKeyConstraint)> {
-        let mut result = Vec::new();
-        if let Some(table_info) = self.table_infos.get(child_table) {
-            for (col_idx, col_def) in table_info.columns.iter().enumerate() {
-                if let Some(ref fk) = col_def.references {
-                    if fk.referenced_table == parent_table {
-                        result.push((col_idx, fk.clone()));
-                    }
-                }
-            }
-        }
-        result
     }
 }
 
@@ -446,312 +514,24 @@ impl Default for MemoryStorage {
 
 impl StorageEngine for MemoryStorage {
     fn scan(&self, table: &str) -> SqlResult<Vec<Record>> {
-        self.check_cancelled()?;
-        let records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancelled()?;
-        Ok(records)
+        Ok(self.tables.get(table).cloned().unwrap_or_default())
     }
 
-    fn get_row(&self, table: &str, row_index: usize) -> SqlResult<Option<Record>> {
-        self.check_cancelled()?;
-        let records = self.tables.get(table);
-        if let Some(records) = records {
-            Ok(records.get(row_index).cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn scan_batch(
-        &self,
-        table: &str,
-        offset: usize,
-        limit: usize,
-    ) -> SqlResult<(Vec<Record>, usize, bool)> {
-        self.check_cancelled()?;
-        let table_records = self.tables.get(table).cloned().unwrap_or_default();
-        self.check_cancelled()?;
-        let total = table_records.len();
-        let has_more = offset + limit < total;
-        let batch = table_records.into_iter().skip(offset).take(limit).collect();
-        Ok((batch, total, has_more))
-    }
-
-    fn insert(&mut self, table: &str, mut records: Vec<Record>) -> SqlResult<()> {
-        if records.is_empty() {
-            return Ok(());
-        }
-
-        let table_info = self.table_infos.get(table);
-
-        if let Some(info) = table_info {
-            let has_unique = info.columns.iter().any(|c| c.is_unique);
-            if has_unique {
-                let table_records = self.tables.get(table).cloned().unwrap_or_default();
-                let existing: Vec<&Record> = table_records.iter().collect();
-                for record in &records {
-                    for (col_idx, col_def) in info.columns.iter().enumerate() {
-                        if col_def.is_unique {
-                            if let Some(value) = record.get(col_idx) {
-                                for existing_record in &existing {
-                                    if let Some(existing_val) = existing_record.get(col_idx) {
-                                        if existing_val == value {
-                                            return Err(SqlError::DuplicateKey {
-                                                value: value.to_string(),
-                                                key: col_def.name.clone(),
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Foreign key validation
-            for record in &records {
-                for (col_idx, col_def) in info.columns.iter().enumerate() {
-                    if let Some(ref fk) = col_def.references {
-                        if let Some(value) = record.get(col_idx) {
-                            if *value != Value::Null {
-                                // Check if the referenced value exists in the parent table
-                                let parent_table_info = self.table_infos.get(&fk.referenced_table);
-                                if let Some(parent_info) = parent_table_info {
-                                    if let Some(parent_col_idx) = parent_info
-                                        .columns
-                                        .iter()
-                                        .position(|c| c.name == fk.referenced_column)
-                                    {
-                                        let parent_records = self
-                                            .tables
-                                            .get(&fk.referenced_table)
-                                            .cloned()
-                                            .unwrap_or_default();
-                                        let value_exists = parent_records.iter().any(|r| {
-                                            r.get(parent_col_idx)
-                                                .map(|v| v == value)
-                                                .unwrap_or(false)
-                                        });
-                                        if !value_exists {
-                                            return Err(SqlError::ExecutionError(format!(
-                                                "Foreign key constraint violation: {} references {}.{} = {} which does not exist",
-                                                col_def.name,
-                                                fk.referenced_table,
-                                                fk.referenced_column,
-                                                value
-                                            )));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+    fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
         self.tables
             .entry(table.to_string())
             .or_default()
-            .append(&mut records);
-        self.on_write_complete(table);
+            .extend(records);
         Ok(())
     }
 
-    fn delete(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
-        // If filters is empty, delete all records (original behavior)
-        // If filters has 1 value, treat it as the value to match on column 0 (backward compatible)
-        // If filters has 2 values, interpret as: filter[0] is the column index, filter[1] is the value to match
-
-        // First, collect information needed for FK constraint checking
-        let (col_idx, match_value, needs_fk_check) = if filters.is_empty() {
-            (0, &Value::Null, false)
-        } else if filters.len() == 1 {
-            // Single value: match on column 0 (backward compatible)
-            (0, &filters[0], true)
-        } else if filters.len() >= 2 {
-            let col_idx = match &filters[0] {
-                Value::Integer(i) => *i as usize,
-                _ => {
-                    return Err(SqlError::ExecutionError(
-                        "Filter column index must be an integer".to_string(),
-                    ))
-                }
-            };
-            (col_idx, &filters[1], true)
-        } else {
-            return Err(SqlError::ExecutionError(
-                "Invalid filter format: expected [column_index, value]".to_string(),
-            ));
-        };
-
-        // First, find the records that will be deleted (for FK action processing)
-        let records_to_delete: Vec<Vec<Value>> = if needs_fk_check {
-            if let Some(table_records) = self.tables.get(table) {
-                table_records
-                    .iter()
-                    .filter(|row| row.get(col_idx).map(|v| v == match_value).unwrap_or(false))
-                    .cloned()
-                    .collect()
-            } else {
-                vec![]
-            }
-        } else {
-            vec![]
-        };
-
-        // Process FK actions BEFORE deleting
-        // For CASCADE, we need to keep processing until no more records are deleted
-        // to handle transitive dependencies (e.g., CEO -> Manager -> Worker)
-        if needs_fk_check && !records_to_delete.is_empty() {
-            let mut restrict_error: Option<String> = None;
-            let referenced_by = self.get_tables_referencing(table);
-
-            // For handling transitive CASCADE deletions, we need to track values that were deleted
-            // so we can find records that reference THOSE deleted records
-            let mut values_to_check: Vec<Value> = vec![match_value.clone()];
-            let mut processed_values: Vec<Value> = Vec::new(); // Track already processed to avoid infinite loops
-
-            // First pass: check RESTRICT on the original values
-            // Skip self-referencing tables - their CASCADE will be processed separately
-            for child_table in &referenced_by {
-                // Skip self-referencing tables - CASCADE will handle them
-                if child_table == table {
-                    continue;
-                }
-                let referencing_cols = self.get_referencing_columns(child_table, table);
-                for (child_col_idx, fk) in referencing_cols {
-                    match fk.on_delete {
-                        Some(ForeignKeyAction::Restrict) => {
-                            if let Some(child_records) = self.tables.get(child_table) {
-                                for child_row in child_records {
-                                    if let Some(fk_value) = child_row.get(child_col_idx) {
-                                        if fk_value == match_value {
-                                            restrict_error = Some(format!(
-                                                "Foreign key constraint violation: ON DELETE RESTRICT - child table '{}' has references to the parent",
-                                                child_table
-                                            ));
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Some(ForeignKeyAction::SetNull) => {
-                            self.set_foreign_key_null(child_table, child_col_idx, match_value)?;
-                        }
-                        Some(ForeignKeyAction::Cascade) | None => {}
-                    }
-                }
-            }
-
-            // Return RESTRICT error if found
-            if let Some(err_msg) = restrict_error {
-                return Err(SqlError::ExecutionError(err_msg));
-            }
-
-            // Process CASCADE deletions with multiple passes to handle transitive dependencies
-            // e.g., CEO -> Manager -> Worker: deleting CEO cascades to Manager, which then cascades to Worker
-            loop {
-                let mut next_values_to_check: Vec<Value> = Vec::new();
-
-                // For each value that needs checking (initially the deleted parent's value,
-                // then values from cascade-deleted records)
-                for current_value in &values_to_check {
-                    // Skip if already processed (avoid infinite loops in case of circular refs)
-                    if processed_values.contains(current_value) {
-                        continue;
-                    }
-                    processed_values.push(current_value.clone());
-
-                    // Find and delete child records that reference this value
-                    for child_table in &referenced_by {
-                        let referencing_cols = self.get_referencing_columns(child_table, table);
-                        for (child_col_idx, fk) in referencing_cols {
-                            if fk.on_delete == Some(ForeignKeyAction::Cascade) {
-                                // Get records that will be deleted to collect their PK values for next pass
-                                let records_to_delete: Vec<Vec<Value>> =
-                                    if let Some(child_records) = self.tables.get(child_table) {
-                                        child_records
-                                            .iter()
-                                            .filter(|row| {
-                                                row.get(child_col_idx)
-                                                    .map(|v| v == current_value)
-                                                    .unwrap_or(false)
-                                            })
-                                            .cloned()
-                                            .collect()
-                                    } else {
-                                        vec![]
-                                    };
-
-                                // Only propagate cascade if the child table is the SAME as the parent table
-                                // (self-referencing FK). For non-self-referencing tables, cascade stops here.
-                                // This is because orders referencing users doesn't mean records referencing orders should be deleted.
-                                if child_table == table {
-                                    // Self-referencing: collect PK of deleted records to find more children
-                                    let child_pk_col_idx = 0; // Assume first column is PK
-
-                                    // Collect the PK values from records being deleted
-                                    // These become the next set of values to check for cascade
-                                    for record in &records_to_delete {
-                                        if let Some(pk_value) = record.get(child_pk_col_idx) {
-                                            if !next_values_to_check.contains(pk_value) {
-                                                next_values_to_check.push(pk_value.clone());
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Delete the child records
-                                let _deleted = self.delete_internal(
-                                    child_table,
-                                    &[Value::Integer(child_col_idx as i64), current_value.clone()],
-                                )?;
-                            }
-                        }
-                    }
-                }
-
-                // If no new values to check, we're done cascading
-                if next_values_to_check.is_empty() {
-                    break;
-                }
-
-                // Continue with the next set of values
-                values_to_check = next_values_to_check;
-            }
-        }
-
-        // Now get mutable access to records and delete
-        let records = self
-            .tables
-            .get_mut(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
-
-        let mut deleted_count = 0;
-        if filters.is_empty() {
-            // Delete all records
-            deleted_count = records.len();
+    fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize> {
+        let mut count = 0;
+        if let Some(records) = self.tables.get_mut(table) {
+            count = records.len();
             records.clear();
-        } else if filters.len() >= 2 {
-            // Delete matching records
-            let original_len = records.len();
-            records.retain(|row| {
-                if let Some(value) = row.get(col_idx) {
-                    value != match_value
-                } else {
-                    true
-                }
-            });
-            deleted_count = original_len - records.len();
         }
-
-        self.on_write_complete(table);
-        Ok(deleted_count)
+        Ok(count)
     }
 
     fn update(
@@ -760,223 +540,39 @@ impl StorageEngine for MemoryStorage {
         filters: &[Value],
         updates: &[(usize, Value)],
     ) -> SqlResult<usize> {
-        if updates.is_empty() {
+        let Some(records) = self.tables.get_mut(table) else {
             return Ok(0);
-        }
+        };
 
-        // First, get table info (immutable borrow)
-        let table_info = self
-            .table_infos
-            .get(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
+        let mut count = 0;
 
-        // Find which updated columns are referenced by foreign keys in other tables
-        // For ON UPDATE CASCADE/SET NULL/RESTRICT, we're updating a PARENT column
-        // and need to find CHILD tables that reference it
-        #[derive(Debug)]
-        struct UpdatedColumn {
-            col_idx: usize,
-            _col_name: String,
-            referenced_by: Vec<(String, usize, ForeignKeyConstraint)>, // (child_table, child_col_idx, fk)
-        }
-
-        let mut updated_columns: Vec<UpdatedColumn> = Vec::new();
-        for (col_idx, _new_value) in updates {
-            if let Some(col_def) = table_info.columns.get(*col_idx) {
-                // Find all child tables that reference this column
-                let mut referencing = Vec::new();
-                let referenced_by = self.get_tables_referencing(table);
-                for child_table in &referenced_by {
-                    let ref_cols = self.get_referencing_columns(child_table, table);
-                    for (child_col_idx, fk) in ref_cols {
-                        // fk.referenced_column is the column in THIS (parent) table that is referenced
-                        if fk.referenced_column == col_def.name {
-                            referencing.push((child_table.clone(), child_col_idx, fk.clone()));
-                        }
-                    }
-                }
-                if !referencing.is_empty() {
-                    updated_columns.push(UpdatedColumn {
-                        col_idx: *col_idx,
-                        _col_name: col_def.name.clone(),
-                        referenced_by: referencing,
-                    });
-                }
-            }
-        }
-
-        // If we're updating columns that are referenced by child tables, handle FK actions
-        // Collect all operations we need to perform
-        #[derive(Debug)]
-        enum ChildUpdateOp {
-            SetNull {
-                child_table: String,
-                child_col_idx: usize,
-                match_value: Value,
-            },
-            Cascade {
-                child_table: String,
-                child_col_idx: usize,
-                new_value: Value,
-            },
-        }
-
-        let mut child_ops: Vec<ChildUpdateOp> = Vec::new();
-        let mut restrict_violation: Option<String> = None;
-
-        // First pass: check RESTRICT and collect SET NULL/CASCADE operations
-        // For each parent column being updated that is referenced by children
-        for updated_col in &updated_columns {
-            for (child_table, child_col_idx, child_fk) in &updated_col.referenced_by {
-                match child_fk.on_update {
-                    Some(ForeignKeyAction::Restrict) => {
-                        // Check if any child record has the old value
-                        if let Some(old_value) = filters.get(1) {
-                            let child_records = self.tables.get(child_table);
-                            if let Some(child_records) = child_records {
-                                for child_row in child_records {
-                                    if let Some(fk_value) = child_row.get(*child_col_idx) {
-                                        if fk_value == old_value {
-                                            restrict_violation = Some(format!(
-                                                "Foreign key constraint violation: ON UPDATE RESTRICT - child table '{}' has references to the parent",
-                                                child_table
-                                            ));
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Some(ForeignKeyAction::SetNull) => {
-                        // Queue SET NULL operation
-                        if let Some(old_value) = filters.get(1) {
-                            child_ops.push(ChildUpdateOp::SetNull {
-                                child_table: child_table.clone(),
-                                child_col_idx: *child_col_idx,
-                                match_value: old_value.clone(),
-                            });
-                        }
-                    }
-                    Some(ForeignKeyAction::Cascade) => {
-                        // Queue CASCADE operation - find the new value for this column
-                        if let Some((_, new_value)) =
-                            updates.iter().find(|(idx, _)| *idx == updated_col.col_idx)
-                        {
-                            if let Some(_old_value) = filters.get(1) {
-                                child_ops.push(ChildUpdateOp::Cascade {
-                                    child_table: child_table.clone(),
-                                    child_col_idx: *child_col_idx,
-                                    new_value: new_value.clone(),
-                                });
-                            }
-                        }
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        // Return RESTRICT error if found
-        if let Some(err_msg) = restrict_violation {
-            return Err(SqlError::ExecutionError(err_msg));
-        }
-
-        // Apply child updates first (if updating FK columns)
-        for op in &child_ops {
-            match op {
-                ChildUpdateOp::SetNull {
-                    child_table,
-                    child_col_idx,
-                    match_value,
-                } => {
-                    if let Some(child_records) = self.tables.get_mut(child_table) {
-                        for child_row in child_records.iter_mut() {
-                            if let Some(fk_value) = child_row.get(*child_col_idx) {
-                                if fk_value == match_value {
-                                    child_row[*child_col_idx] = Value::Null;
-                                }
-                            }
-                        }
-                    }
-                }
-                ChildUpdateOp::Cascade {
-                    child_table,
-                    child_col_idx,
-                    new_value,
-                } => {
-                    if let Some(child_records) = self.tables.get_mut(child_table) {
-                        for child_row in child_records.iter_mut() {
-                            if let Some(fk_value) = child_row.get(*child_col_idx) {
-                                // For CASCADE, we need to match the OLD value that we're updating FROM
-                                // But we don't have the old value directly - we have match_value in filters
-                                // Actually, for CASCADE, the child should be updated to match the new parent value
-                                // The matching is done via filters[1] which is the old value
-                                if let Some(old_value) = filters.get(1) {
-                                    if fk_value == old_value {
-                                        child_row[*child_col_idx] = new_value.clone();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Now get mutable access to records and apply updates to the parent table
-        let records = self
-            .tables
-            .get_mut(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
-
-        let mut updated_count = 0;
+        // If filters is empty, update all rows
+        // If filters has values, match first column against first filter value
         if filters.is_empty() {
-            // Update all records
-            for row in records.iter_mut() {
-                for (col_idx, new_value) in updates {
-                    if let Some(elem) = row.get_mut(*col_idx) {
-                        *elem = new_value.clone();
-                        updated_count += 1;
+            for record in records.iter_mut() {
+                for &(col_idx, ref new_val) in updates {
+                    if col_idx < record.len() {
+                        record[col_idx] = new_val.clone();
                     }
                 }
+                count += 1;
             }
-            // Divide by number of updates per row to get unique row count
-            if !updates.is_empty() {
-                updated_count /= updates.len();
-            }
-        } else if filters.len() >= 2 {
-            // filters[0] = column index, filters[1] = value to match
-            let col_idx = match &filters[0] {
-                Value::Integer(i) => *i as usize,
-                _ => {
-                    return Err(SqlError::ExecutionError(
-                        "Filter column index must be an integer".to_string(),
-                    ))
-                }
-            };
-            let match_value = &filters[1];
-
-            for row in records.iter_mut() {
-                if let Some(value) = row.get(col_idx) {
-                    if value == match_value {
-                        for (upd_col_idx, new_value) in updates {
-                            if let Some(elem) = row.get_mut(*upd_col_idx) {
-                                *elem = new_value.clone();
-                            }
+        } else if let Some(filter_val) = filters.first() {
+            for record in records.iter_mut() {
+                // Check if first column matches filter value
+                let matches = record.first().map(|v| v == filter_val).unwrap_or(false);
+                if matches {
+                    for &(col_idx, ref new_val) in updates {
+                        if col_idx < record.len() {
+                            record[col_idx] = new_val.clone();
                         }
-                        updated_count += 1;
                     }
+                    count += 1;
                 }
             }
         }
 
-        self.on_write_complete(table);
-        Ok(updated_count)
+        Ok(count)
     }
 
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
@@ -992,136 +588,67 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn get_table_info(&self, table: &str) -> SqlResult<TableInfo> {
-        self.table_infos.get(table).cloned().ok_or_else(|| {
-            sqlrustgo_types::SqlError::TableNotFound {
-                table: table.to_string(),
-            }
-        })
+        self.table_infos
+            .get(table)
+            .cloned()
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
     fn has_table(&self, table: &str) -> bool {
-        self.tables.contains_key(table)
+        self.table_infos.contains_key(table)
     }
 
     fn list_tables(&self) -> Vec<String> {
-        self.tables.keys().cloned().collect()
+        self.table_infos.keys().cloned().collect()
     }
 
-    fn create_table_index(
-        &mut self,
-        table: &str,
-        column: &str,
-        column_index: usize,
-    ) -> SqlResult<()> {
-        let index_name = format!("{}_{}", table, column);
-        let mut tree = SimpleBPlusTree::new();
+    fn create_index(&mut self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
+        Ok(())
+    }
 
-        if let Some(records) = self.tables.get(table) {
-            for (row_id, record) in records.iter().enumerate() {
-                if let Some(value) = record.get(column_index) {
-                    if let Some(key) = value.to_index_key() {
-                        tree.insert(key, row_id as u32);
-                    }
-                }
-            }
+    fn drop_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
+        Ok(())
+    }
+
+    fn add_column(&mut self, table: &str, column: ColumnDefinition) -> SqlResult<()> {
+        if let Some(info) = self.table_infos.get_mut(table) {
+            info.columns.push(column);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot add column: table {} not found",
+                table
+            )))
         }
-
-        self.indexes.insert(index_name, tree);
-        Ok(())
     }
 
-    fn create_hash_index(
-        &mut self,
-        table: &str,
-        column: &str,
-        column_index: usize,
-    ) -> SqlResult<()> {
-        let index_name = format!("{}_{}", table, column);
-        let hash_index: std::sync::Arc<HashIndex<i64, u32>> = std::sync::Arc::new(HashIndex::new());
-
-        if let Some(records) = self.tables.get(table) {
-            for (row_id, record) in records.iter().enumerate() {
-                if let Some(value) = record.get(column_index) {
-                    if let Some(key) = value.to_index_key() {
-                        hash_index.insert(key, row_id as u32);
-                    }
-                }
-            }
+    fn rename_table(&mut self, table: &str, new_name: &str) -> SqlResult<()> {
+        let info = self.table_infos.remove(table);
+        let records = self.tables.remove(table);
+        if let (Some(info), Some(records)) = (info, records) {
+            let mut new_info = info;
+            new_info.name = new_name.to_string();
+            self.table_infos.insert(new_name.to_string(), new_info);
+            self.tables.insert(new_name.to_string(), records);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot rename table: table {} not found",
+                table
+            )))
         }
-
-        self.hash_indexes.insert(index_name, hash_index);
-        Ok(())
-    }
-
-    fn drop_table_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
-        let index_name = format!("{}_{}", table, column);
-        self.indexes.remove(&index_name);
-        self.hash_indexes.remove(&index_name);
-        Ok(())
-    }
-
-    fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
-        let index_name = format!("{}_{}", table, column);
-        // First try hash index for O(1) lookup
-        if let Some(hash_idx) = self.hash_indexes.get(&index_name) {
-            if let Some(row_id) = hash_idx.get(&key) {
-                return vec![row_id];
-            }
-            return Vec::new();
-        }
-        // Fall back to B+Tree index
-        self.indexes
-            .get(&index_name)
-            .map(|tree| tree.search_all(key))
-            .unwrap_or_default()
-    }
-
-    fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
-        let index_name = format!("{}_{}", table, column);
-        self.indexes
-            .get(&index_name)
-            .map(|tree| tree.range_query(start, end))
-            .unwrap_or_default()
-    }
-
-    fn create_view(&mut self, info: ViewInfo) -> SqlResult<()> {
-        self.views.insert(info.name.clone(), info);
-        Ok(())
-    }
-
-    fn get_view(&self, name: &str) -> Option<ViewInfo> {
-        self.views.get(name).cloned()
-    }
-
-    fn list_views(&self) -> Vec<String> {
-        self.views.keys().cloned().collect()
-    }
-
-    fn has_view(&self, name: &str) -> bool {
-        self.views.contains_key(name)
     }
 
     fn create_trigger(&mut self, info: TriggerInfo) -> SqlResult<()> {
-        self.triggers.insert(info.name.clone(), info.clone());
-        self.table_triggers
-            .entry(info.table_name.clone())
-            .or_default()
-            .push(info.name.clone());
+        self.triggers.insert(info.name.clone(), info);
         Ok(())
     }
 
     fn drop_trigger(&mut self, name: &str) -> SqlResult<()> {
-        if let Some(info) = self.triggers.remove(name) {
-            if let Some(triggers) = self.table_triggers.get_mut(&info.table_name) {
-                triggers.retain(|n| n != name);
-            }
-            Ok(())
-        } else {
-            Err(SqlError::ExecutionError(format!(
-                "Trigger {} not found",
-                name
-            )))
-        }
+        self.triggers
+            .remove(name)
+            .map(|_| ())
+            .ok_or_else(|| SqlError::ExecutionError(format!("Trigger not found: {}", name)))
     }
 
     fn get_trigger(&self, name: &str) -> Option<TriggerInfo> {
@@ -1129,297 +656,19 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn list_triggers(&self, table: &str) -> Vec<TriggerInfo> {
-        self.table_triggers
-            .get(table)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.triggers.get(n).cloned())
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.triggers
+            .values()
+            .filter(|t| t.table_name == table)
+            .cloned()
+            .collect()
     }
 
-    fn analyze_table(&self, table: &str) -> SqlResult<TableStats> {
-        let records = self
-            .tables
-            .get(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
-
-        let table_info = self.table_infos.get(table);
-
-        let mut column_stats = Vec::new();
-
-        if let Some(info) = table_info {
-            for col in &info.columns {
-                let mut null_count = 0u64;
-                let mut distinct_values: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-
-                for record in records {
-                    if let Some(idx) = info.columns.iter().position(|c| c.name == col.name) {
-                        if let Some(val) = record.get(idx) {
-                            match val {
-                                Value::Null => null_count += 1,
-                                _ => {
-                                    distinct_values.insert(val.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                column_stats.push(ColumnStats {
-                    column_name: col.name.clone(),
-                    distinct_count: distinct_values.len() as u64,
-                    null_count,
-                    min_value: None,
-                    max_value: None,
-                });
-            }
-        }
-
-        Ok(TableStats {
-            table_name: table.to_string(),
-            row_count: records.len() as u64,
-            column_stats,
-        })
+    fn has_view(&self, name: &str) -> bool {
+        self.views.contains(name)
     }
 
-    fn on_write_complete(&mut self, table: &str) {
-        if let Some(callback) = &self.write_callback {
-            callback(table);
-        }
-    }
-
-    fn get_next_auto_increment(&mut self, table: &str, column_index: usize) -> SqlResult<i64> {
-        let counters = self
-            .auto_increment_counters
-            .entry(table.to_string())
-            .or_default();
-        let next = *counters.entry(column_index).or_insert(0);
-        counters.insert(column_index, next + 1);
-        Ok(next + 1)
-    }
-
-    fn get_auto_increment_counter(&self, table: &str, column_index: usize) -> SqlResult<i64> {
-        let counters =
-            self.auto_increment_counters
-                .get(table)
-                .ok_or_else(|| SqlError::TableNotFound {
-                    table: table.to_string(),
-                })?;
-        Ok(*counters.get(&column_index).unwrap_or(&0))
-    }
-
-    fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
-        self.cancel_flag = Some(flag);
-    }
-
-    fn clear_cancel_flag(&mut self) {
-        self.cancel_flag = None;
-    }
-
-    fn cancel_flag(&self) -> Option<Arc<AtomicBool>> {
-        self.cancel_flag.clone()
-    }
-
-    fn check_cancelled(&self) -> SqlResult<()> {
-        if let Some(ref flag) = self.cancel_flag {
-            if flag.load(Ordering::SeqCst) {
-                return Err(SqlError::ExecutionError("Query cancelled".to_string()));
-            }
-        }
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn bulk_load_tbl_file(&mut self, table: &str, filepath: &str) -> SqlResult<usize> {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
-        use std::path::Path;
-
-        let path = Path::new(filepath);
-        if !path.exists() {
-            return Err(SqlError::ExecutionError(format!(
-                "File not found: {}",
-                filepath
-            )));
-        }
-
-        let file = File::open(path)
-            .map_err(|e| SqlError::ExecutionError(format!("Failed to open file: {}", e)))?;
-
-        let reader = BufReader::new(file);
-        let table_info = self
-            .table_infos
-            .get(table)
-            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))?;
-
-        let mut records: Vec<Record> = Vec::new();
-
-        for (line_number, line) in reader.lines().enumerate() {
-            let line = line.map_err(|e| {
-                SqlError::ExecutionError(format!("Failed to read line {}: {}", line_number + 1, e))
-            })?;
-
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let fields: Vec<&str> = line.trim().split('|').collect();
-            if fields.is_empty() || (fields.len() == 1 && fields[0].is_empty()) {
-                continue;
-            }
-
-            let mut record: Record = Vec::new();
-            for (col_idx, field) in fields.iter().enumerate() {
-                let field_str = field.trim();
-                if field_str.is_empty() {
-                    record.push(Value::Null);
-                    continue;
-                }
-
-                if let Some(col_def) = table_info.columns.get(col_idx) {
-                    let value = parse_value(field_str, &col_def.data_type);
-                    record.push(value);
-                } else {
-                    record.push(Value::Text(field_str.to_string()));
-                }
-            }
-
-            records.push(record);
-        }
-
-        if !records.is_empty() {
-            self.insert(table, records.clone())?;
-
-            // Auto-create indexes for integer columns after bulk load
-            if let Some(table_info) = self.table_infos.get(table) {
-                for (col_idx, col_def) in table_info.columns.iter().enumerate() {
-                    // Auto-create index for all columns (supports INTEGER, TEXT via hash)
-                    let index_name = format!("{}_{}", table, col_def.name);
-                    let mut tree = SimpleBPlusTree::new();
-                    if let Some(all_records) = self.tables.get(table) {
-                        for (row_id, record) in all_records.iter().enumerate() {
-                            if let Some(value) = record.get(col_idx) {
-                                if let Some(key) = value.to_index_key() {
-                                    tree.insert(key, row_id as u32);
-                                }
-                            }
-                        }
-                    }
-                    self.indexes.insert(index_name, tree);
-                }
-            }
-        }
-
-        Ok(records.len())
-    }
-}
-
-/// Helper methods for MemoryStorage (not part of StorageEngine trait)
-impl MemoryStorage {
-    /// Internal delete without FK action processing (used for CASCADE)
-    pub fn delete_internal(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
-        let (col_idx, match_value) = if filters.len() >= 2 {
-            let col_idx = match &filters[0] {
-                Value::Integer(i) => *i as usize,
-                _ => {
-                    return Err(SqlError::ExecutionError(
-                        "Filter column index must be an integer".to_string(),
-                    ))
-                }
-            };
-            (col_idx, &filters[1])
-        } else {
-            return Err(SqlError::ExecutionError(
-                "Invalid filter format: expected [column_index, value]".to_string(),
-            ));
-        };
-
-        let records = self
-            .tables
-            .get_mut(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
-
-        let original_len = records.len();
-        records.retain(|row| {
-            if let Some(value) = row.get(col_idx) {
-                value != match_value
-            } else {
-                true
-            }
-        });
-
-        let deleted_count = original_len - records.len();
-        self.on_write_complete(table);
-        Ok(deleted_count)
-    }
-
-    /// Set foreign key column to NULL for records matching the given value
-    pub fn set_foreign_key_null(
-        &mut self,
-        table: &str,
-        col_idx: usize,
-        match_value: &Value,
-    ) -> SqlResult<()> {
-        let records = self
-            .tables
-            .get_mut(table)
-            .ok_or_else(|| SqlError::TableNotFound {
-                table: table.to_string(),
-            })?;
-
-        for row in records.iter_mut() {
-            #[allow(clippy::collapsible_if)]
-            if let Some(value) = row.get(col_idx) {
-                if value == match_value {
-                    if col_idx < row.len() {
-                        row[col_idx] = Value::Null;
-                    }
-                }
-            }
-        }
-
-        self.on_write_complete(table);
-        Ok(())
-    }
-}
-
-/// Parse a string value into a Value based on the column data type
-#[allow(dead_code)]
-fn parse_value(s: &str, data_type: &str) -> Value {
-    let upper = data_type.to_uppercase();
-    if upper.contains("INT") || upper == "BIGINT" || upper == "SMALLINT" || upper == "TINYINT" {
-        if let Ok(n) = s.parse::<i64>() {
-            Value::Integer(n)
-        } else {
-            Value::Text(s.to_string())
-        }
-    } else if upper == "FLOAT"
-        || upper == "DOUBLE"
-        || upper == "DECIMAL"
-        || upper == "REAL"
-        || upper == "NUMERIC"
-    {
-        if let Ok(n) = s.parse::<f64>() {
-            Value::Float(n)
-        } else {
-            Value::Text(s.to_string())
-        }
-    } else if upper == "BOOLEAN" || upper == "BOOL" {
-        match s.to_uppercase().as_str() {
-            "TRUE" | "T" | "1" | "YES" | "Y" => Value::Boolean(true),
-            "FALSE" | "F" | "0" | "NO" | "N" => Value::Boolean(false),
-            _ => Value::Text(s.to_string()),
-        }
-    } else {
-        Value::Text(s.to_string())
+    fn list_indexes(&self, _table: &str) -> Vec<(String, String)> {
+        Vec::new()
     }
 }
 
@@ -1446,9 +695,17 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_storage_list_tables() {
+    fn test_memory_storage_create_and_drop() {
         let mut storage = MemoryStorage::new();
-        storage.tables.insert("users".to_string(), vec![]);
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+        storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
         assert!(tables.contains(&"users".to_string()));
     }
@@ -1482,7 +739,27 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_storage_create_table() {
+    fn test_storage_engine_create_and_drop_table() {
+        let mut storage = MemoryStorage::new();
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+
+        storage.create_table(&info).unwrap();
+        assert!(storage.has_table("users"));
+        assert_eq!(storage.list_tables(), vec!["users"]);
+
+        storage.drop_table("users").unwrap();
+        assert!(!storage.has_table("users"));
+    }
+
+    #[test]
+    fn test_storage_engine_get_table_info() {
         let mut storage = MemoryStorage::new();
         let info = TableInfo {
             name: "users".to_string(),
@@ -1490,630 +767,191 @@ mod tests {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
-                is_unique: false,
-                references: None,
-                is_primary_key: false,
-                auto_increment: false,
+                primary_key: true,
             }],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+
+        storage.create_table(&info).unwrap();
+        let retrieved = storage.get_table_info("users").unwrap();
+        assert_eq!(retrieved.name, "users");
+        assert_eq!(retrieved.columns.len(), 1);
+    }
+
+    #[test]
+    fn test_storage_engine_insert_records() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert("users".to_string(), vec![]);
+
+        storage
+            .insert("users", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        let records = storage.scan("users").unwrap();
+        assert_eq!(records.len(), 1);
+    }
+
+    #[test]
+    fn test_storage_engine_delete_all() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
+        );
+
+        let deleted = storage.delete("users", &[]).unwrap();
+        assert_eq!(deleted, 2);
+    }
+
+    #[test]
+    fn test_storage_engine_update_values() {
+        let mut storage = MemoryStorage::new();
+        storage.tables.insert(
+            "users".to_string(),
+            vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
+        );
+
+        let updated = storage
+            .update("users", &[], &[(1, Value::Text("Bob".to_string()))][..])
+            .unwrap();
+        assert_eq!(updated, 1);
+    }
+
+    #[test]
+    fn test_storage_engine_table_operations() {
+        let mut storage = MemoryStorage::new();
+        let info1 = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+        let info2 = TableInfo {
+            name: "orders".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+        };
+        storage.create_table(&info1).unwrap();
+        storage.create_table(&info2).unwrap();
+
+        let tables = storage.list_tables();
+        assert_eq!(tables.len(), 2);
+        assert!(tables.contains(&"users".to_string()));
+        assert!(tables.contains(&"orders".to_string()));
+    }
+
+    #[test]
+    fn test_storage_engine_has_table_check() {
+        let mut storage = MemoryStorage::new();
+        assert!(!storage.has_table("users"));
+
+        let info = TableInfo {
+            name: "users".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
         };
         storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));
     }
 
     #[test]
-    fn test_memory_storage_drop_table() {
-        let mut storage = MemoryStorage::new();
-        storage.tables.insert("users".to_string(), vec![]);
-        storage.drop_table("users").unwrap();
-        assert!(!storage.has_table("users"));
-    }
-
-    #[test]
-    fn test_memory_storage_get_table_info() {
-        let mut storage = MemoryStorage::new();
-        let info = TableInfo {
-            name: "users".to_string(),
-            columns: vec![ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                is_unique: false,
-                references: None,
-                is_primary_key: false,
-                auto_increment: false,
-            }],
-        };
-        storage.create_table(&info).unwrap();
-        let result = storage.get_table_info("users").unwrap();
-        assert_eq!(result.name, "users");
-    }
-
-    #[test]
-    fn test_memory_storage_delete() {
-        let mut storage = MemoryStorage::new();
-        storage
-            .tables
-            .insert("users".to_string(), vec![vec![Value::Integer(1)]]);
-        let count = storage.delete("users", &[]).unwrap();
-        assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn test_memory_storage_update() {
-        let mut storage = MemoryStorage::new();
-        // Insert into tables
-        storage
-            .tables
-            .insert("users".to_string(), vec![vec![Value::Integer(1)]]);
-        // Also insert into table_infos (required by update method)
-        storage.table_infos.insert(
-            "users".to_string(),
-            TableInfo {
-                name: "users".to_string(),
-                columns: vec![ColumnDefinition {
-                    name: "id".to_string(),
-                    data_type: "INTEGER".to_string(),
-                    nullable: false,
-                    is_unique: false,
-                    is_primary_key: false,
-                    auto_increment: false,
-                    references: None,
-                }],
-            },
-        );
-        let count = storage
-            .update("users", &[], &[(0, Value::Integer(2))])
-            .unwrap();
-        assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn test_column_definition() {
-        let col = ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: false,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        };
-        assert_eq!(col.name, "id");
-    }
-
-    #[test]
-    fn test_table_info() {
-        let info = TableInfo {
-            name: "users".to_string(),
-            columns: vec![],
-        };
-        assert_eq!(info.name, "users");
-    }
-
-    #[test]
-    fn test_table_data() {
-        let data = TableData {
-            info: TableInfo {
-                name: "users".to_string(),
-                columns: vec![],
-            },
-            rows: vec![],
-        };
-        assert_eq!(data.info.name, "users");
-    }
-
-    #[test]
-    fn test_memory_storage_default() {
-        let storage = MemoryStorage::default();
-        assert!(storage.tables.is_empty());
-    }
-
-    #[test]
-    fn test_record_new() {
-        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
-        assert_eq!(record.len(), 2);
-    }
-
-    #[test]
-    fn test_record_index() {
-        let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
-        assert_eq!(record[0], Value::Integer(1));
-    }
-
-    #[test]
-    fn test_memory_storage_with_callback() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-
-        let counter = Arc::new(AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-
-        let storage = MemoryStorage::with_callback(Box::new(move |_table| {
-            counter_clone.fetch_add(1, Ordering::SeqCst);
-        }));
-
-        assert!(storage.write_callback.is_some());
-    }
-
-    #[test]
-    fn test_memory_storage_scan_batch() {
-        let mut storage = MemoryStorage::new();
-        storage.tables.insert(
-            "users".to_string(),
-            vec![
-                vec![Value::Integer(1)],
-                vec![Value::Integer(2)],
-                vec![Value::Integer(3)],
-                vec![Value::Integer(4)],
-                vec![Value::Integer(5)],
-            ],
-        );
-
-        let (batch, total, has_more) = storage.scan_batch("users", 0, 2).unwrap();
-        assert_eq!(batch.len(), 2);
-        assert_eq!(total, 5);
-        assert!(has_more);
-
-        let (batch, total, has_more) = storage.scan_batch("users", 2, 2).unwrap();
-        assert_eq!(batch.len(), 2);
-        assert_eq!(total, 5);
-        assert!(has_more);
-
-        let (batch, total, has_more) = storage.scan_batch("users", 4, 2).unwrap();
-        assert_eq!(batch.len(), 1);
-        assert_eq!(total, 5);
-        assert!(!has_more);
-    }
-
-    #[test]
-    fn test_memory_storage_scan_batch_empty() {
+    fn test_storage_engine_table_not_found() {
         let storage = MemoryStorage::new();
-        let (batch, total, has_more) = storage.scan_batch("nonexistent", 0, 10).unwrap();
-        assert!(batch.is_empty());
-        assert_eq!(total, 0);
-        assert!(!has_more);
+        let result = storage.get_table_info("nonexistent");
+        assert!(result.is_err());
     }
-}
 
-#[test]
-fn test_record_index() {
-    let record: Record = vec![Value::Integer(1), Value::Text("test".to_string())];
-    assert_eq!(record[0], Value::Integer(1));
-}
+    #[test]
+    fn test_evaluate_sql_expression_integer_comparison() {
+        let columns = vec!["age".to_string(), "name".to_string()];
+        let record = vec![Value::Integer(25), Value::Text("Alice".to_string())];
 
-#[test]
-fn test_column_definition_new() {
-    let col = ColumnDefinition {
-        name: "id".to_string(),
-        data_type: "INTEGER".to_string(),
-        nullable: false,
-        is_unique: true,
-        is_primary_key: false,
-        auto_increment: false,
-        references: None,
-    };
-    assert_eq!(col.name, "id");
-    assert_eq!(col.data_type, "INTEGER");
-    assert!(!col.nullable);
-    assert!(col.is_unique);
-}
+        // age > 18
+        let result = evaluate_sql_expression("age > 18", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_table_info_new() {
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![
-            ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                is_unique: true,
-                is_primary_key: false,
-                auto_increment: false,
-                references: None,
-            },
-            ColumnDefinition {
-                name: "name".to_string(),
-                data_type: "TEXT".to_string(),
-                nullable: true,
-                is_unique: false,
-                is_primary_key: false,
-                auto_increment: false,
-                references: None,
-            },
-        ],
-    };
-    assert_eq!(info.name, "users");
-    assert_eq!(info.columns.len(), 2);
-}
+        // age >= 25
+        let result = evaluate_sql_expression("age >= 25", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_table_stats_new() {
-    let stats = TableStats {
-        table_name: "users".to_string(),
-        row_count: 100,
-        column_stats: vec![ColumnStats {
-            column_name: "id".to_string(),
-            distinct_count: 100,
-            null_count: 0,
-            min_value: Some(Value::Integer(1)),
-            max_value: Some(Value::Integer(100)),
-        }],
-    };
-    assert_eq!(stats.row_count, 100);
-    assert_eq!(stats.column_stats.len(), 1);
-}
+        // age < 18
+        let result = evaluate_sql_expression("age < 18", &columns, &record);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
 
-#[test]
-fn test_column_stats_new() {
-    let stats = ColumnStats {
-        column_name: "id".to_string(),
-        distinct_count: 50,
-        null_count: 5,
-        min_value: Some(Value::Integer(1)),
-        max_value: Some(Value::Integer(100)),
-    };
-    assert_eq!(stats.column_name, "id");
-    assert_eq!(stats.distinct_count, 50);
-}
+        // age = 25
+        let result = evaluate_sql_expression("age = 25", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_table_data_new() {
-    let data = TableData {
-        info: TableInfo {
-            name: "users".to_string(),
-            columns: vec![],
-        },
-        rows: vec![vec![Value::Integer(1)], vec![Value::Integer(2)]],
-    };
-    assert_eq!(data.rows.len(), 2);
-}
+        // age <> 30
+        let result = evaluate_sql_expression("age <> 30", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
 
-#[test]
-fn test_column_definition_serialize() {
-    let col = ColumnDefinition {
-        name: "id".to_string(),
-        data_type: "INTEGER".to_string(),
-        nullable: false,
-        is_unique: true,
-        is_primary_key: false,
-        auto_increment: false,
-        references: None,
-    };
-    let json = serde_json::to_string(&col).unwrap();
-    assert!(json.contains("id"));
-}
+    #[test]
+    fn test_evaluate_sql_expression_boolean_and_logical_ops() {
+        let columns = vec!["age".to_string(), "active".to_string()];
+        let record = vec![Value::Integer(25), Value::Boolean(true)];
 
-#[test]
-fn test_table_info_serialize() {
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    let json = serde_json::to_string(&info).unwrap();
-    assert!(json.contains("users"));
-}
+        // age > 18 AND active = true
+        let result = evaluate_sql_expression("age > 18 AND active = true", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_view_info_new() {
-    let view = ViewInfo {
-        name: "user_view".to_string(),
-        query: "SELECT * FROM users".to_string(),
-        schema: TableInfo {
-            name: "user_view".to_string(),
-            columns: vec![],
-        },
-        records: vec![],
-    };
-    assert_eq!(view.name, "user_view");
-}
+        // age < 18 OR active = true
+        let result = evaluate_sql_expression("age < 18 OR active = true", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_memory_storage_views() {
-    let mut storage = MemoryStorage::new();
-    let view = ViewInfo {
-        name: "user_view".to_string(),
-        query: "SELECT * FROM users".to_string(),
-        schema: TableInfo {
-            name: "user_view".to_string(),
-            columns: vec![],
-        },
-        records: vec![],
-    };
-    storage.create_view(view).unwrap();
-    assert!(storage.has_view("user_view"));
-    assert_eq!(storage.list_views(), vec!["user_view"]);
-}
+        // NOT active = false
+        let result = evaluate_sql_expression("NOT active = false", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
 
-#[test]
-fn test_memory_storage_get_view() {
-    let mut storage = MemoryStorage::new();
-    let view = ViewInfo {
-        name: "v1".to_string(),
-        query: "SELECT 1".to_string(),
-        schema: TableInfo {
-            name: "v1".to_string(),
-            columns: vec![],
-        },
-        records: vec![],
-    };
-    storage.create_view(view).unwrap();
-    let retrieved = storage.get_view("v1");
-    assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().query, "SELECT 1");
-}
+    #[test]
+    fn test_evaluate_sql_expression_null_handling() {
+        let columns = vec!["age".to_string(), "email".to_string()];
+        let record = vec![Value::Null, Value::Text("test@test.com".to_string())];
 
-#[test]
-fn test_memory_storage_insert_empty() {
-    let mut storage = MemoryStorage::new();
-    let result = storage.insert("users", vec![]);
-    assert!(result.is_ok());
-}
+        // age IS NOT NULL should be false
+        let result = evaluate_sql_expression("age IS NOT NULL", &columns, &record);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
 
-#[test]
-fn test_memory_storage_insert_with_info() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-    let rows = storage.scan("users").unwrap();
-    assert_eq!(rows.len(), 1);
-}
+        // email IS NOT NULL should be true
+        let result = evaluate_sql_expression("email IS NOT NULL", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
 
-#[test]
-fn test_memory_storage_duplicate_key() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-    let result = storage.insert("users", vec![vec![Value::Integer(1)]]);
-    assert!(result.is_err());
-}
+    #[test]
+    fn test_evaluate_sql_expression_text_comparison() {
+        let columns = vec!["name".to_string()];
+        let record = vec![Value::Text("Alice".to_string())];
 
-#[test]
-fn test_memory_storage_get_table_info() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: false,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    let retrieved = storage.get_table_info("users").unwrap();
-    assert_eq!(retrieved.name, "users");
-    assert_eq!(retrieved.columns.len(), 1);
-}
+        // name = 'Alice'
+        let result = evaluate_sql_expression("name = 'Alice'", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
-#[test]
-fn test_memory_storage_get_table_info_not_found() {
-    let storage = MemoryStorage::new();
-    let result = storage.get_table_info("nonexistent");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_memory_storage_default() {
-    let storage = MemoryStorage::default();
-    assert!(storage.tables.is_empty());
-}
-
-#[test]
-fn test_memory_storage_with_callback() {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    let called = AtomicBool::new(false);
-    let storage = MemoryStorage::with_callback(Box::new(move |_t| {
-        called.store(true, Ordering::SeqCst);
-    }));
-    assert!(storage.write_callback.is_some());
-}
-
-#[test]
-fn test_memory_storage_on_write_complete() {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    let count = AtomicUsize::new(0);
-    let storage = MemoryStorage::with_callback(Box::new(move |_t| {
-        count.fetch_add(1, Ordering::SeqCst);
-    }));
-    assert!(storage.write_callback.is_some());
-}
-
-#[test]
-fn test_memory_storage_list_tables() {
-    let mut storage = MemoryStorage::new();
-    let info1 = TableInfo {
-        name: "users".to_string(),
-        columns: vec![],
-    };
-    let info2 = TableInfo {
-        name: "orders".to_string(),
-        columns: vec![],
-    };
-    storage.create_table(&info1).unwrap();
-    storage.create_table(&info2).unwrap();
-
-    let tables = storage.list_tables();
-    assert_eq!(tables.len(), 2);
-    assert!(tables.contains(&"users".to_string()));
-    assert!(tables.contains(&"orders".to_string()));
-}
-
-#[test]
-fn test_memory_storage_create_index() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-
-    let result = storage.create_table_index("users", "id", 0);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_memory_storage_drop_index() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-    storage.create_table_index("users", "id", 0).unwrap();
-
-    let result = storage.drop_table_index("users", "id");
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_memory_storage_search_index() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(2)]])
-        .unwrap();
-    storage.create_table_index("users", "id", 0).unwrap();
-
-    let result = storage.search_index("users", "id", 1);
-    assert!(!result.is_empty());
-}
-
-#[test]
-fn test_memory_storage_range_index() {
-    let mut storage = MemoryStorage::new();
-    let info = TableInfo {
-        name: "users".to_string(),
-        columns: vec![ColumnDefinition {
-            name: "id".to_string(),
-            data_type: "INTEGER".to_string(),
-            nullable: false,
-            is_unique: true,
-            is_primary_key: false,
-            auto_increment: false,
-            references: None,
-        }],
-    };
-    storage.create_table(&info).unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(1)]])
-        .unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(5)]])
-        .unwrap();
-    storage
-        .insert("users", vec![vec![Value::Integer(10)]])
-        .unwrap();
-    storage.create_table_index("users", "id", 0).unwrap();
-
-    let result = storage.range_index("users", "id", 1, 10);
-    assert!(!result.is_empty());
-}
-
-#[test]
-fn test_foreign_key_constraint_new() {
-    let fk = ForeignKeyConstraint {
-        referenced_table: "users".to_string(),
-        referenced_column: "id".to_string(),
-        on_delete: Some(ForeignKeyAction::Cascade),
-        on_update: Some(ForeignKeyAction::Restrict),
-    };
-    assert_eq!(fk.referenced_table, "users");
-    assert_eq!(fk.referenced_column, "id");
-}
-
-#[test]
-fn test_column_definition_with_foreign_key() {
-    let fk = ForeignKeyConstraint {
-        referenced_table: "users".to_string(),
-        referenced_column: "id".to_string(),
-        on_delete: None,
-        on_update: None,
-    };
-    let col = ColumnDefinition {
-        name: "user_id".to_string(),
-        data_type: "INTEGER".to_string(),
-        nullable: false,
-        is_unique: false,
-        is_primary_key: false,
-        auto_increment: false,
-        references: Some(fk),
-    };
-    assert!(col.references.is_some());
+        // name <> 'Bob'
+        let result = evaluate_sql_expression("name <> 'Bob'", &columns, &record);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
 }

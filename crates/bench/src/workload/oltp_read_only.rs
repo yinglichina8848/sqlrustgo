@@ -14,6 +14,7 @@ pub struct OltpReadOnly {
     statements_per_tx: usize,
 }
 
+#[allow(dead_code)]
 impl OltpReadOnly {
     pub fn new() -> Self {
         Self {
@@ -41,9 +42,9 @@ impl Default for OltpReadOnly {
 
 #[async_trait]
 impl crate::workload::Workload for OltpReadOnly {
-    async fn execute(&self, _db: &dyn Database) -> anyhow::Result<()> {
-        // TODO: Implement read only
-        todo!("OLTP Read Only not yet implemented")
+    async fn execute(&self, db: &dyn Database) -> anyhow::Result<()> {
+        let id = rand::thread_rng().gen_range(1..=self.max_id) as usize;
+        db.read(id).await
     }
 
     fn name(&self) -> &str {

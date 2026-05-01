@@ -1,22 +1,25 @@
-//! Distance metric implementations
+//! Distance metric implementations for vector similarity search
+//!
+//! Supports cosine similarity, Euclidean distance, dot product, and Manhattan distance.
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Distance metric for vector similarity search
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum DistanceMetric {
+    /// Cosine similarity - angle between vectors
+    #[default]
     Cosine,
+    /// Euclidean distance - straight-line distance
     Euclidean,
+    /// Dot product - projection of one vector onto another
     DotProduct,
+    /// Manhattan distance - sum of absolute differences
     Manhattan,
 }
 
-impl Default for DistanceMetric {
-    fn default() -> Self {
-        DistanceMetric::Cosine
-    }
-}
-
 impl DistanceMetric {
+    /// Get the name of this metric
     pub fn name(&self) -> &'static str {
         match self {
             DistanceMetric::Cosine => "cosine",
@@ -27,6 +30,7 @@ impl DistanceMetric {
     }
 }
 
+/// Compute cosine similarity between two vectors
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
@@ -46,6 +50,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot_product / (magnitude_a * magnitude_b)
 }
 
+/// Compute Euclidean distance between two vectors
 pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return f32::MAX;
@@ -57,6 +62,7 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
         .sqrt()
 }
 
+/// Compute dot product of two vectors
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
@@ -64,6 +70,7 @@ pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
 
+/// Compute Manhattan distance between two vectors
 pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return f32::MAX;
@@ -71,6 +78,7 @@ pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).sum()
 }
 
+/// Compute distance (lower is better) between two vectors
 pub fn compute_distance(a: &[f32], b: &[f32], metric: DistanceMetric) -> f32 {
     match metric {
         DistanceMetric::Cosine => 1.0 - cosine_similarity(a, b),
@@ -80,6 +88,7 @@ pub fn compute_distance(a: &[f32], b: &[f32], metric: DistanceMetric) -> f32 {
     }
 }
 
+/// Compute similarity (higher is better) between two vectors
 pub fn compute_similarity(a: &[f32], b: &[f32], metric: DistanceMetric) -> f32 {
     match metric {
         DistanceMetric::Cosine => cosine_similarity(a, b),

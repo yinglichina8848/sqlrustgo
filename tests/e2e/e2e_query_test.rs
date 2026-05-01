@@ -1,7 +1,6 @@
 //! End-to-End Query Integration Tests
 
-use sqlrustgo_planner::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
-use sqlrustgo_types::Value;
+use sqlrustgo::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
 
 #[test]
 fn test_simple_seqscan() {
@@ -56,7 +55,6 @@ fn test_physical_plan_traits() {
 
     let scan = SeqScanExec::new("users".to_string(), schema.clone());
 
-    // Test PhysicalPlan trait methods
     let name = scan.name();
     let table_name = scan.table_name();
     let _result_schema = scan.schema();
