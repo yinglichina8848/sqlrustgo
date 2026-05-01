@@ -497,7 +497,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
 
         let row_count = rows.len();
-        Ok(ExecutorResult::new(rows, row_count))
+
+        // Apply LIMIT and OFFSET for non-aggregate queries
+        let limited_rows = if let Some(limit) = select.limit {
+            let start_usize: usize = select.offset.unwrap_or(0).try_into().unwrap();
+            let limit_usize: usize = limit.try_into().unwrap();
+            rows.into_iter().skip(start_usize).take(limit_usize).collect()
+        } else {
+            rows
+        };
+
+        Ok(ExecutorResult::new(limited_rows, row_count))
     }
 
     fn compute_aggregates(
