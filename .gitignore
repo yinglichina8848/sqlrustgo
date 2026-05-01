@@ -5,3 +5,4 @@ test_report.json
 test_report.log
 __pycache__/
 *.pyc
+*.profraw
