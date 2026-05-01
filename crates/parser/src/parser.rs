@@ -1748,11 +1748,29 @@ impl Parser {
         if matches!(self.current(), Some(Token::Not)) {
             self.next();
             // Check for NOT LIKE
-            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
+            if matches!(self.current(), Some(Token::Like))
+                || matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
             {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
-                return Ok(Expression::NotLike(Box::new(left), Box::new(pattern), None));
+                let escape = if matches!(self.current(), Some(Token::Escape)) {
+                    self.next();
+                    match self.current() {
+                        Some(Token::StringLiteral(s)) if s.len() == 1 => {
+                            let esc = s.chars().next().unwrap();
+                            self.next();
+                            Some(esc)
+                        }
+                        _ => return Err("Expected single character after ESCAPE".to_string()),
+                    }
+                } else {
+                    None
+                };
+                return Ok(Expression::NotLike(
+                    Box::new(left),
+                    Box::new(pattern),
+                    escape,
+                ));
             }
             // Check for NOT BETWEEN
             if matches!(self.current(), Some(Token::Between)) {
