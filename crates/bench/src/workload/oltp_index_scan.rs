@@ -12,6 +12,7 @@ use crate::db::Database;
 pub struct OltpIndexScan {
     max_id: u64,
     range_size: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

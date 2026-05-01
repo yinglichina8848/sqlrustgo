@@ -1,7 +1,7 @@
 //! Hybrid search implementation
 
-use crate::error::QmdResult;
-use crate::types::{Filter, QmdData, QmdDataType, SearchResult};
+
+use crate::types::{Filter, QmdData, SearchResult};
 
 /// Configuration for hybrid search
 #[derive(Debug, Clone)]

@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
@@ -24,8 +24,10 @@ pub enum BackupType {
 pub enum BackupStatus {
     InProgress,
     Completed,
+    #[allow(dead_code)]
     Failed(String),
 }
+
 
 /// Backup metadata
 #[derive(Debug, Clone)]
@@ -63,6 +65,7 @@ impl BackupMetadata {
         self.checksum = Some(checksum);
     }
 
+    #[allow(dead_code)]
     pub fn fail(&mut self, error: String) {
         self.completed_at = Some(chrono_lite_now());
         self.status = BackupStatus::Failed(error);
@@ -109,8 +112,6 @@ impl BackupManager {
 
         // Create backup file
         let backup_file = self.backup_dir.join(format!("{}.sql", backup_id));
-        let mut total_size = 0u64;
-
         // Write header
         let mut content = format!(
             "-- SQLRustGo Backup\n-- Database: {}\n-- Date: {}\n\n",
@@ -124,7 +125,7 @@ impl BackupManager {
 
             // Create table structure (simplified)
             if let Some(first_row) = rows.first() {
-                let columns: Vec<String> = first_row.keys().map(|k| k.clone()).collect();
+                let columns: Vec<String> = first_row.keys().cloned().collect();
                 content.push_str(&format!(
                     "CREATE TABLE IF NOT EXISTS {} ({});\n",
                     table_name,
@@ -150,13 +151,11 @@ impl BackupManager {
         file.write_all(content.as_bytes())
             .map_err(|e| e.to_string())?;
 
-        total_size = content.len() as u64;
-
         // Calculate checksum (simplified)
         let checksum = format!("{:x}", md5_simple(&content));
 
         // Update and save metadata
-        metadata.complete(total_size, checksum.clone());
+        metadata.complete(content.len() as u64, checksum.clone());
 
         // Save metadata file
         let meta_file = self.backup_dir.join(format!("{}.meta.json", backup_id));
@@ -173,11 +172,13 @@ impl BackupManager {
     }
 
     /// List all backups
+    #[allow(dead_code)]
     pub fn list_backups(&self) -> Vec<BackupMetadata> {
         self.metadata.read().unwrap().values().cloned().collect()
     }
 
     /// Get backup metadata
+    #[allow(dead_code)]
     pub fn get_backup(&self, id: &str) -> Option<BackupMetadata> {
         self.metadata.read().unwrap().get(id).cloned()
     }
@@ -207,7 +208,7 @@ impl BackupManager {
                 // Basic parsing - extract table name and values
                 if let Some(table) = line.split_whitespace().nth(2) {
                     let table_name = table.trim_end_matches('(').trim_matches('`');
-                    data.entry(table_name.to_string()).or_insert_with(Vec::new);
+                    data.entry(table_name.to_string()).or_default();
                 }
             }
         }
@@ -216,6 +217,7 @@ impl BackupManager {
     }
 
     /// Delete a backup
+    #[allow(dead_code)]
     pub fn delete_backup(&self, backup_id: &str) -> Result<(), String> {
         let backup_file = self.backup_dir.join(format!("{}.sql", backup_id));
         let meta_file = self.backup_dir.join(format!("{}.meta.json", backup_id));
@@ -229,6 +231,7 @@ impl BackupManager {
     }
 
     /// Get backup directory
+    #[allow(dead_code)]
     pub fn backup_dir(&self) -> &Path {
         &self.backup_dir
     }
@@ -268,6 +271,7 @@ fn serde_json_simple(metadata: &BackupMetadata) -> String {
 
 /// Restore result
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RestoreResult {
     pub backup_id: String,
     pub rows_restored: u64,
@@ -276,6 +280,7 @@ pub struct RestoreResult {
 
 /// Backup export options
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ExportOptions {
     /// Include schema only (no data)
     pub schema_only: bool,
@@ -321,10 +326,12 @@ pub struct BackupCommand {
 
     /// Include schema only (no data)
     #[structopt(long)]
+    #[allow(dead_code)]
     pub schema_only: bool,
 
     /// Enable compression
     #[structopt(long)]
+    #[allow(dead_code)]
     pub compress: bool,
 }
 
@@ -345,6 +352,7 @@ pub struct RestoreCommand {
 
     /// Drop existing tables before restore
     #[structopt(long)]
+    #[allow(dead_code)]
     pub drop_first: bool,
 }
 

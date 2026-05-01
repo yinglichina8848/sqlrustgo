@@ -13,6 +13,7 @@ use crate::db::Database;
 /// Write-only workload - only write operations
 pub struct OltpWriteOnly {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

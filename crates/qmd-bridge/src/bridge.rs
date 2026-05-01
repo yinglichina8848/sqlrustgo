@@ -39,11 +39,6 @@ impl QmdBridgeImpl {
         }
     }
 
-    /// Create with default configuration
-    pub fn default() -> Self {
-        Self::new(QmdConfig::default())
-    }
-
     /// Get configuration
     pub fn config(&self) -> &QmdConfig {
         &self.config
@@ -93,7 +88,7 @@ impl QmdBridge for QmdBridgeImpl {
                 query.filters.iter().all(|f| {
                     data.metadata
                         .get(&f.field)
-                        .map_or(false, |v| match f.operator {
+                        .is_some_and(|v| match f.operator {
                             FilterOperator::Eq => v == &f.value,
                             FilterOperator::Contains => v.contains(&f.value),
                             _ => false,
@@ -170,7 +165,7 @@ impl QmdBridge for QmdBridgeImpl {
         });
         reranked_results.truncate(query.limit);
 
-        let scores: Vec<f32> = reranked_results.iter().map(|r| r.score).collect();
+        let _scores: Vec<f32> = reranked_results.iter().map(|r| r.score).collect();
 
         // Convert SearchResult to HybridSearchResultItem
         let reranked: Vec<HybridSearchResultItem> = reranked_results

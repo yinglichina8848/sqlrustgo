@@ -17,8 +17,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use sqlrustgo_gmp::persist_sqlite::{
-    DocumentRecord, EdgeUpsertRecord, EmbeddingRecord, NodeRecord, SqliteBackend, StorageBackend,
-};
+    DocumentRecord, EdgeUpsertRecord, EmbeddingRecord, NodeRecord, SqliteBackend, };
 
 // ============================================================================
 // Request / Response
@@ -148,6 +147,7 @@ pub struct NeighborView {
 // ============================================================================
 
 pub struct GmpCliState {
+    #[allow(dead_code)]
     storage: Arc<RwLock<MemoryStorage>>,
     graph: Arc<RwLock<InMemoryGraphStore>>,
     gmp: GmpExecutor,
@@ -392,11 +392,9 @@ impl GmpCliState {
                 if let Some(c) = code {
                     props_map.insert("code".to_string(), serde_json::json!(c));
                 }
-                if let Some(p) = props.clone() {
-                    if let serde_json::Value::Object(map) = p {
-                        for (k, v) in map {
-                            props_map.insert(k, v);
-                        }
+                if let Some(serde_json::Value::Object(map)) = props.clone() {
+                    for (k, v) in map {
+                        props_map.insert(k, v);
                     }
                 }
                 let now = std::time::SystemTime::now()
@@ -411,21 +409,19 @@ impl GmpCliState {
                 if let Some(c) = code {
                     pm.insert("code".to_string(), PropertyValue::String(c.to_string()));
                 }
-                if let Some(p) = props {
-                    if let serde_json::Value::Object(map) = p {
-                        for (k, v) in map {
-                            let pv = match v {
-                                serde_json::Value::String(s) => PropertyValue::String(s),
-                                serde_json::Value::Number(n) => {
-                                    PropertyValue::Float(n.as_f64().unwrap_or(0.0))
-                                }
-                                serde_json::Value::Bool(b) => {
-                                    PropertyValue::Int(if b { 1 } else { 0 })
-                                }
-                                _ => PropertyValue::String(v.to_string()),
-                            };
-                            pm.insert(k, pv);
-                        }
+                if let Some(serde_json::Value::Object(map)) = props {
+                    for (k, v) in map {
+                        let pv = match v {
+                            serde_json::Value::String(s) => PropertyValue::String(s),
+                            serde_json::Value::Number(n) => {
+                                PropertyValue::Float(n.as_f64().unwrap_or(0.0))
+                            }
+                            serde_json::Value::Bool(b) => {
+                                PropertyValue::Int(if b { 1 } else { 0 })
+                            }
+                            _ => PropertyValue::String(v.to_string()),
+                        };
+                        pm.insert(k, pv);
                     }
                 }
                 let id = graph.create_node(&label, pm);
@@ -537,13 +533,13 @@ impl GmpCliState {
                 let incoming: Vec<NodeId> = graph
                     .incoming_neighbors(nid)
                     .into_iter()
-                    .filter(|target_id| {
+                    .filter(|_target_id| {
                         // Check if there's an edge with the rel_type label from target to nid
                         // This is a simplification - proper implementation would check edge labels
                         true
                     })
                     .collect();
-                out.into_iter().chain(incoming.into_iter()).collect()
+                out.into_iter().chain(incoming).collect()
             }
             None => {
                 let out = graph.outgoing_neighbors(nid);
@@ -613,7 +609,7 @@ impl GmpCliState {
                     .get_label(node.label)
                     .map(|s| s.as_str())
                     .unwrap_or("?");
-                if node_type.map_or(true, |t| label_str == t) {
+                if node_type.is_none_or(|t| label_str != t) {
                     let name = node
                         .properties
                         .get("name")
@@ -639,7 +635,7 @@ impl GmpCliState {
                         .get_label(node.label)
                         .map(|s| s.as_str())
                         .unwrap_or("?");
-                    if node_type.map_or(true, |t| label_str == t) {
+                    if node_type.is_none_or(|t| label_str != t) {
                         let name = node
                             .properties
                             .get("name")
@@ -857,7 +853,6 @@ fn handle_request(line: &str, state: &GmpCliState) -> Result<Response, String> {
             chapter,
             top_k,
         } => {
-            use std::collections::HashMap;
             // Load all docs from SQLite backend, score by text match
             let docs = state
                 .backend
@@ -1014,8 +1009,8 @@ fn handle_request(line: &str, state: &GmpCliState) -> Result<Response, String> {
                             for current in queue.drain(..) {
                                 for neighbor in graph.outgoing_neighbors(current) {
                                     let nid0 = neighbor.0;
-                                    if !visited.contains_key(&nid0) {
-                                        visited.insert(nid0, hop);
+                                    if let std::collections::hash_map::Entry::Vacant(e) = visited.entry(nid0) {
+                                        e.insert(hop);
                                         next.push(neighbor);
                                     }
                                 }

@@ -11,6 +11,7 @@ use crate::db::Database;
 /// Update non-index workload - update on non-indexed column 'c'
 pub struct OltpUpdateNonIndex {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 
