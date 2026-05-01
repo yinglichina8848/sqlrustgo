@@ -31,7 +31,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "1"
-  # Persist cargo registry across runs via host-mounted volume
   CARGO_REGISTRY_CACHE: "/var/local/cargo/registry"
 
 lint:
@@ -39,15 +38,11 @@ lint:
   steps:
     - name: Checkout
       run: |
-        REPO_URL="https://${GITEA_ACTOR}:${GITEA_TOKEN}@${GITEA_REPO_DEFAULT_BRANCH#*@}"
-        # Extract host from instance URL
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
-        pwd
     - name: Clippy
       run: |
         cd repo
@@ -62,9 +57,8 @@ build:
   steps:
     - name: Checkout
       run: |
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
@@ -79,9 +73,8 @@ test:
   steps:
     - name: Checkout
       run: |
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
@@ -108,9 +101,8 @@ gate:
   steps:
     - name: Checkout
       run: |
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
@@ -126,9 +118,8 @@ verify:
   steps:
     - name: Checkout
       run: |
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
@@ -143,9 +134,8 @@ audit:
   steps:
     - name: Checkout
       run: |
-        HOST=$(echo "$GITEA_INSTANCE_URL" | sed -E 's|https?://||')
-        REPO_URL="http://${GITEA_ACTOR}:${GITEA_TOKEN}@${HOST}${GITEA_REPO}"
-        git clone --depth=1 "$REPO_URL" repo
+        REPO="openclaw/sqlrustgo"
+        git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
         cd repo
         git fetch --depth=1 origin "$GITEA_SHA"
         git checkout "$GITEA_SHA"
