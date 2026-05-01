@@ -311,7 +311,7 @@ impl<'a> Lexer<'a> {
                     "END" => Token::End,
                     "SHOW" => Token::Show,
                     "DESCRIBE" => Token::Describe,
-                    "DESC" => Token::Describe,
+                    "DESC" => Token::Desc,
                     "TRIGGER" => Token::Trigger,
                     "BEFORE" => Token::Before,
                     "AFTER" => Token::After,
