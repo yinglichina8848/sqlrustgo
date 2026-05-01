@@ -4,9 +4,11 @@
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rcgen::{CertificateParams, KeyPair};
+use sha1::{Digest, Sha1};
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::{SqlError, Value};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
@@ -16,7 +18,7 @@ const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
 #[allow(dead_code)]
 const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
-const SKIP_AUTH: bool = true;
+const SKIP_AUTH: bool = false;
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -86,6 +88,83 @@ impl From<SqlError> for MySqlError {
     }
 }
 pub type MySqlResult<T> = Result<T, MySqlError>;
+
+// User storage for mysql_native_password authentication
+#[derive(Debug, Clone)]
+struct UserPassword {
+    password_hash: [u8; 20],
+}
+
+#[derive(Debug, Clone, Default)]
+struct UserStore {
+    users: HashMap<String, UserPassword>,
+}
+
+impl UserStore {
+    fn new() -> Self {
+        let mut store = Self {
+            users: HashMap::new(),
+        };
+        store.add_user("root", "");
+        store.add_user("mysql", "mysql");
+        store
+    }
+
+    fn add_user(&mut self, username: &str, password: &str) {
+        let password_hash = compute_double_sha1(password.as_bytes());
+        self.users
+            .insert(username.to_string(), UserPassword { password_hash });
+    }
+
+    fn verify_password(&self, username: &str, scramble: &[u8; 20], auth_response: &[u8]) -> bool {
+        let user = match self.users.get(username) {
+            Some(u) => u,
+            None => return false,
+        };
+        verify_mysql_native_password(&user.password_hash, scramble, auth_response)
+    }
+}
+
+// Compute SHA1(SHA1(password)) - what MySQL stores
+fn compute_double_sha1(data: &[u8]) -> [u8; 20] {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    let first = hasher.finalize();
+    let mut hasher = Sha1::new();
+    hasher.update(first);
+    hasher.finalize().into()
+}
+
+// Compute SHA1(data)
+fn sha1_simple(data: &[u8]) -> [u8; 20] {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    hasher.finalize().into()
+}
+
+// Verify mysql_native_password authentication
+// auth_response = SHA1(password) XOR SHA1(scramble + SHA1(SHA1(password)))
+// We verify by checking if: SHA1(scramble + stored_password_hash) XOR auth_response = SHA1(password)
+// And then verify SHA1(SHA1(password)) = stored_password_hash
+fn verify_mysql_native_password(
+    stored_password_hash: &[u8; 20],
+    scramble: &[u8; 20],
+    auth_response: &[u8],
+) -> bool {
+    if auth_response.len() != 20 {
+        return false;
+    }
+    let mut hasher = Sha1::new();
+    hasher.update(scramble);
+    hasher.update(stored_password_hash);
+    let expected_hash = hasher.finalize();
+    let mut result = [0u8; 20];
+    for i in 0..20 {
+        result[i] = expected_hash[i] ^ auth_response[i];
+    }
+    let computed_first = sha1_simple(&result);
+    computed_first == *stored_password_hash
+}
 
 // ============================================================================
 // Tests
@@ -365,6 +444,36 @@ mod tests {
 
         let err = MySqlError::Sql("sql error".to_string());
         assert_eq!(format!("{}", err), "SQL: sql error");
+    }
+
+    #[test]
+    fn test_user_store_default_user() {
+        let store = UserStore::new();
+        assert!(store.users.contains_key("root"));
+        assert!(store.users.contains_key("mysql"));
+    }
+
+    #[test]
+    fn test_double_sha1_computation() {
+        let data = b"password";
+        let hash = compute_double_sha1(data);
+        assert_eq!(hash.len(), 20);
+    }
+
+    #[test]
+    fn test_verify_password_unknown_user() {
+        let store = UserStore::new();
+        let scramble = [0u8; 20];
+        let auth_response = [0u8; 20];
+        assert!(!store.verify_password("unknown", &scramble, &auth_response));
+    }
+
+    #[test]
+    fn test_verify_password_empty_auth_response() {
+        let store = UserStore::new();
+        let scramble = [0u8; 20];
+        let auth_response = [];
+        assert!(!store.verify_password("root", &scramble, &auth_response));
     }
 }
 
@@ -765,6 +874,7 @@ fn send_result_set<W: Write>(
 
 struct PreparedStatementInfo {
     sql: String,
+    #[allow(dead_code)]
     param_count: u16,
     column_count: u16,
 }
@@ -1005,8 +1115,7 @@ fn do_command_loop<S: Read + Write>(
                                 MySqlError::Sql(_) => 1064,
                                 _ => 2000,
                             };
-                            make_err_packet(seq, code, "42000", &e.to_string())
-                                .write_to(stream)?;
+                            make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(_) => {
@@ -1018,13 +1127,11 @@ fn do_command_loop<S: Read + Write>(
                 } else {
                     match execute_write(&q, &mut eng) {
                         Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0)
-                                .write_to(stream)?;
+                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
-                            make_err_packet(seq, 1064, "42000", &e.to_string())
-                                .write_to(stream)?;
+                            make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -1047,7 +1154,9 @@ fn do_command_loop<S: Read + Write>(
                         if cols_str.eq_ignore_ascii_case("*") {
                             if let Ok(storage_guard) = storage.try_read() {
                                 if let Some(table_name) = extract_table_name(&sql) {
-                                    if let Ok(table_info) = storage_guard.get_table_info(&table_name) {
+                                    if let Ok(table_info) =
+                                        storage_guard.get_table_info(&table_name)
+                                    {
                                         table_info.columns.len() as u16
                                     } else {
                                         1
@@ -1133,7 +1242,12 @@ fn do_command_loop<S: Read + Write>(
                     }
                 }
 
-                tracing::info!("STMT PREPARE done: id={}, params={}, cols={}", stmt_id, param_count, column_count);
+                tracing::info!(
+                    "STMT PREPARE done: id={}, params={}, cols={}",
+                    stmt_id,
+                    param_count,
+                    column_count
+                );
             }
             packet_type::COM_STMT_EXECUTE => {
                 if payload.len() < 4 {
@@ -1143,8 +1257,7 @@ fn do_command_loop<S: Read + Write>(
                     continue;
                 }
 
-                let stmt_id =
-                    u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+                let stmt_id = u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
                 let stmt = match ps_manager.get(stmt_id) {
                     Some(s) => (s.sql.clone(), s.column_count),
@@ -1169,14 +1282,20 @@ fn do_command_loop<S: Read + Write>(
                         execute_select(&final_sql, &mut eng, &storage)
                     })) {
                         Ok(Ok((c, t, r))) => {
-                            let c_trimmed: Vec<String> = c.into_iter().take(stmt_col_count as usize).collect();
-                            let t_trimmed: Vec<String> = t.into_iter().take(stmt_col_count as usize).collect();
-                            let r_trimmed: Vec<Vec<Value>> = r.into_iter().map(|row| row.into_iter().take(stmt_col_count as usize).collect()).collect();
-                            seq = send_result_set(stream, &c_trimmed, &t_trimmed, &r_trimmed, seq, cap)?;
+                            let c_trimmed: Vec<String> =
+                                c.into_iter().take(stmt_col_count as usize).collect();
+                            let t_trimmed: Vec<String> =
+                                t.into_iter().take(stmt_col_count as usize).collect();
+                            let r_trimmed: Vec<Vec<Value>> = r
+                                .into_iter()
+                                .map(|row| row.into_iter().take(stmt_col_count as usize).collect())
+                                .collect();
+                            seq = send_result_set(
+                                stream, &c_trimmed, &t_trimmed, &r_trimmed, seq, cap,
+                            )?;
                         }
                         Ok(Err(e)) => {
-                            make_err_packet(seq, 1064, "42000", &e.to_string())
-                                .write_to(stream)?;
+                            make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(_) => {
@@ -1188,13 +1307,11 @@ fn do_command_loop<S: Read + Write>(
                 } else {
                     match execute_write(&final_sql, &mut eng) {
                         Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0)
-                                .write_to(stream)?;
+                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
-                            make_err_packet(seq, 1064, "42000", &e.to_string())
-                                .write_to(stream)?;
+                            make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -1202,12 +1319,8 @@ fn do_command_loop<S: Read + Write>(
             }
             packet_type::COM_STMT_CLOSE => {
                 if payload.len() >= 4 {
-                    let stmt_id = u32::from_le_bytes([
-                        payload[0],
-                        payload[1],
-                        payload[2],
-                        payload[3],
-                    ]);
+                    let stmt_id =
+                        u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
                     ps_manager.remove(stmt_id);
                 }
             }
@@ -1225,6 +1338,7 @@ fn handle_connection(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
     tls_config: Arc<rustls::ServerConfig>,
+    user_store: UserStore,
 ) {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(600)))
@@ -1302,15 +1416,16 @@ fn handle_connection(
                 resp.auth_plugin_name,
                 resp.auth_response.len()
             );
-            tracing::info!(
-                "Auth check: is_empty={}, len=20? {}",
-                resp.auth_response.is_empty(),
-                resp.auth_response.len() == 20
-            );
-            if SKIP_AUTH {
-                tracing::info!("SKIP_AUTH enabled, accepting connection");
-            } else if !(resp.auth_response.is_empty() || resp.auth_response.len() == 20) {
-                tracing::warn!("Auth response rejected: len={}", resp.auth_response.len());
+            let auth_ok = if SKIP_AUTH {
+                true
+            } else if resp.auth_response.is_empty() {
+                tracing::warn!("Empty auth response for user {}", resp.username);
+                false
+            } else {
+                user_store.verify_password(&resp.username, &scramble, &resp.auth_response)
+            };
+            if !auth_ok {
+                tracing::warn!("Auth failed for user {}", resp.username);
                 make_err_packet(3, 1045, "28000", "Access denied")
                     .write_to(&mut tls)
                     .ok();
@@ -1320,7 +1435,14 @@ fn handle_connection(
             make_ok_packet(3, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
-            let _ = do_command_loop(&mut tls, addr, storage, resp.capability_flags, 4, &mut ps_manager);
+            let _ = do_command_loop(
+                &mut tls,
+                addr,
+                storage,
+                resp.capability_flags,
+                4,
+                &mut ps_manager,
+            );
             return;
         }
     }
@@ -1341,10 +1463,16 @@ fn handle_connection(
         resp.capability_flags,
         resp.auth_response.len()
     );
-    if SKIP_AUTH {
-        tracing::info!("SKIP_AUTH enabled, accepting connection");
-    } else if !(resp.auth_response.is_empty() || resp.auth_response.len() == 20) {
-        tracing::warn!("Auth response rejected: len={}", resp.auth_response.len());
+    let auth_ok = if SKIP_AUTH {
+        true
+    } else if resp.auth_response.is_empty() {
+        tracing::warn!("Empty auth response for user {}", resp.username);
+        false
+    } else {
+        user_store.verify_password(&resp.username, &scramble, &resp.auth_response)
+    };
+    if !auth_ok {
+        tracing::warn!("Auth failed for user {}", resp.username);
         make_err_packet(2, 1045, "28000", "Access denied")
             .write_to(&mut &stream)
             .ok();
@@ -1356,7 +1484,14 @@ fn handle_connection(
         .ok();
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
-    let _ = do_command_loop(&mut &stream, addr, storage, resp.capability_flags, 3, &mut ps_manager);
+    let _ = do_command_loop(
+        &mut &stream,
+        addr,
+        storage,
+        resp.capability_flags,
+        3,
+        &mut ps_manager,
+    );
 }
 
 pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
@@ -1366,7 +1501,6 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
 
-    // Create a SINGLE shared storage for ALL connections
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
     {
         let mut eng = MemoryExecutionEngine::new(storage.clone());
@@ -1376,6 +1510,7 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
             if let Err(e) = eng.execute(sql) { tracing::warn!("Init: {}", e); }
         }
     }
+    let user_store = UserStore::new();
     for s in listener.incoming() {
         match s {
             Ok(stream) => {
@@ -1384,7 +1519,8 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
                     .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
                 let st = storage.clone();
                 let tc = tls_config.clone();
-                thread::spawn(move || handle_connection(stream, addr, st, tc));
+                let us = user_store.clone();
+                thread::spawn(move || handle_connection(stream, addr, st, tc, us));
             }
             Err(e) => tracing::error!("Accept: {}", e),
         }
