@@ -40,6 +40,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | 编译检查 | `cargo build --workspace` | 无错误 |
 | 单元测试 | `cargo test --workspace` | ≥80% 通过 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
+| Baseline 验证 | `python3 scripts/verify_baseline.py` | 226/226 PASS |
 | 文档检查 | `bash scripts/gate/check_docs_links.sh` | 无死链 |
 
 ### 2.3 覆盖率要求
@@ -100,6 +101,8 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | 全量测试 | `cargo test --all-features` | 100% 通过 |
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
+| Baseline 验证 | `cat verification_report.json | jq .baseline_verified` | true |
+| 审计验证 | `cat audit_report.json | jq .proof_match` | true |
 | 覆盖率 | `cargo tarpaulin --workspace --all-features` | ≥80% |
 | 安全扫描 | `cargo audit` | 无漏洞 |
 
@@ -314,10 +317,10 @@ echo "=== G-Gate 检查完成 ==="
 
 | 门禁 | 状态 | 完成日期 | 备注 |
 |------|------|----------|------|
-| A-Gate | ⏳ 待开始 | - | Day 1-3 |
-| B-Gate | ⏳ 待开始 | - | Day 3-5 |
-| R-Gate | ⏳ 待开始 | - | Day 5-7 |
-| G-Gate | ⏳ 待开始 | - | Day 7+ |
+| A-Gate | ✅ 完成 | 2026-04-30 | Baseline 226/226 PASS, 100% |
+| B-Gate | ✅ 完成 | 2026-05-01 | hermes_gate + run_hermes_gate PASS |
+| R-Gate | 🔄 进行中 | TBD | 待 Gitea CI 验证 + 覆盖率 |
+| G-Gate | ⚪ 未启动 | TBD | 需 R-Gate 完成 |
 
 ---
 
