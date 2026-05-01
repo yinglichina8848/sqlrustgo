@@ -385,6 +385,13 @@ pub enum TableConstraint {
     },
 }
 
+/// WHEN clause for CASE expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhenClause {
+    pub condition: Expression,
+    pub result: Expression,
+}
+
 /// Expression
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -396,7 +403,7 @@ pub enum Expression {
     NotIn(Box<Expression>, Box<SelectStatement>),
     InList(Box<Expression>, Vec<Expression>), // MySQL: col IN (1, 2, 3)
     NotInList(Box<Expression>, Vec<Expression>), // MySQL: col NOT IN (1, 2, 3)
-    NotLike(Box<Expression>, Box<Expression>), // col NOT LIKE pattern
+    NotLike(Box<Expression>, Box<Expression>, Option<char>), // col NOT LIKE pattern [ESCAPE char]
     NotBetween(Box<Expression>, Box<Expression>, Box<Expression>), // col NOT BETWEEN low AND high
     NotRegexp(Box<Expression>, Box<Expression>), // col NOT REGEXP pattern
     Exists(Box<SelectStatement>),
@@ -405,6 +412,10 @@ pub enum Expression {
     Aggregate(AggregateCall), // For HAVING clause - supports aggregate functions in expressions
     IsNull(Box<Expression>),  // IS NULL check
     IsNotNull(Box<Expression>), // IS NOT NULL check
+    UnaryOp(String, Box<Expression>), // Unary operator: NOT expr
+    Like(Box<Expression>, Box<Expression>, Option<char>), // LIKE pattern [ESCAPE char]
+    Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
+    CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
 }
 
 /// SQL Parser
@@ -1741,7 +1752,7 @@ impl Parser {
             {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
-                return Ok(Expression::NotLike(Box::new(left), Box::new(pattern)));
+                return Ok(Expression::NotLike(Box::new(left), Box::new(pattern), None));
             }
             // Check for NOT BETWEEN
             if matches!(self.current(), Some(Token::Between)) {
@@ -1782,6 +1793,39 @@ impl Parser {
                 return Ok(Expression::IsNull(Box::new(left)));
             }
             return Err("IS must be followed by NULL or NOT NULL".to_string());
+        }
+
+        // BETWEEN
+        if matches!(self.current(), Some(Token::Between)) {
+            self.next();
+            let low = self.parse_additive_expression()?;
+            self.expect(Token::And)?;
+            let high = self.parse_additive_expression()?;
+            return Ok(Expression::Between(
+                Box::new(left),
+                Box::new(low),
+                Box::new(high),
+            ));
+        }
+
+        // LIKE / NOT LIKE
+        if matches!(self.current(), Some(Token::Like)) {
+            self.next();
+            let pattern = self.parse_additive_expression()?;
+            let escape = if matches!(self.current(), Some(Token::Escape)) {
+                self.next();
+                match self.current() {
+                    Some(Token::StringLiteral(s)) if s.len() == 1 => {
+                        let esc = s.chars().next().unwrap();
+                        self.next();
+                        Some(esc)
+                    }
+                    _ => return Err("Expected single character after ESCAPE".to_string()),
+                }
+            } else {
+                None
+            };
+            return Ok(Expression::Like(Box::new(left), Box::new(pattern), escape));
         }
 
         let op = match self.current() {
@@ -1949,8 +1993,13 @@ impl Parser {
                     self.expect(Token::RParen)?;
                     Ok(Expression::NotExists(Box::new(subquery)))
                 } else {
-                    Err("NOT without EXISTS".to_string())
+                    let expr = self.parse_expression()?;
+                    Ok(Expression::UnaryOp("NOT".to_string(), Box::new(expr)))
                 }
+            }
+            Some(Token::Case) => {
+                self.next();
+                self.parse_case_when_expression()
             }
             // Support aggregate functions in expressions (for HAVING clause)
             Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
@@ -1959,6 +2008,42 @@ impl Parser {
                 Ok(Expression::Aggregate(agg))
             }
             _ => Err("Expected expression".to_string()),
+        }
+    }
+
+    fn parse_case_when_expression(&mut self) -> Result<Expression, String> {
+        let mut when_clauses = Vec::new();
+
+        loop {
+            match self.current() {
+                Some(Token::When) => {
+                    self.next();
+                    let condition = self.parse_expression()?;
+                    self.expect(Token::Then)?;
+                    let result = self.parse_expression()?;
+                    when_clauses.push(WhenClause { condition, result });
+                }
+                Some(Token::Else) => {
+                    self.next();
+                    let else_result = self.parse_expression()?;
+                    self.expect(Token::End)?;
+                    return Ok(Expression::CaseWhen(
+                        when_clauses,
+                        Some(Box::new(else_result)),
+                    ));
+                }
+                Some(Token::End) => {
+                    self.next();
+                    return Ok(Expression::CaseWhen(when_clauses, None));
+                }
+                _ => {
+                    if when_clauses.is_empty() {
+                        return Err("CASE must have at least one WHEN clause".to_string());
+                    } else {
+                        return Err("Expected WHEN, ELSE, or END".to_string());
+                    }
+                }
+            }
         }
     }
 

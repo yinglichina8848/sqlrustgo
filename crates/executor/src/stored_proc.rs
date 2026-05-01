@@ -1273,7 +1273,7 @@ impl StoredProcExecutor {
                     .collect();
                 Value::Boolean(!value_list.contains(&left_val))
             }
-            sqlrustgo_parser::Expression::NotLike(left, pattern) => {
+            sqlrustgo_parser::Expression::NotLike(left, pattern, _) => {
                 let left_val = self.expression_to_value(left, ctx);
                 let pattern_val = self.expression_to_value(pattern, ctx);
                 let like_result = self.like_match(&left_val, &pattern_val);
@@ -1291,6 +1291,43 @@ impl StoredProcExecutor {
                 let pattern_val = self.expression_to_value(pattern, ctx);
                 let regexp_result = self.regexp_match(&left_val, &pattern_val);
                 Value::Boolean(!regexp_result)
+            }
+            sqlrustgo_parser::Expression::UnaryOp(op, expr) => {
+                let val = self.expression_to_value(expr, ctx);
+                match op.as_str() {
+                    "NOT" => {
+                        if let Value::Boolean(b) = val {
+                            Value::Boolean(!b)
+                        } else {
+                            Value::Boolean(false)
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
+            sqlrustgo_parser::Expression::Like(left, pattern, _) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let pattern_val = self.expression_to_value(pattern, ctx);
+                Value::Boolean(self.like_match(&left_val, &pattern_val))
+            }
+            sqlrustgo_parser::Expression::Between(left, low, high) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let low_val = self.expression_to_value(low, ctx);
+                let high_val = self.expression_to_value(high, ctx);
+                Value::Boolean(self.between_match(&left_val, &low_val, &high_val))
+            }
+            sqlrustgo_parser::Expression::CaseWhen(when_clauses, else_expr) => {
+                for clause in when_clauses {
+                    let cond_val = self.expression_to_value(&clause.condition, ctx);
+                    if let Value::Boolean(true) = cond_val {
+                        return self.expression_to_value(&clause.result, ctx);
+                    }
+                }
+                if let Some(else_box) = else_expr {
+                    self.expression_to_value(else_box, ctx)
+                } else {
+                    Value::Null
+                }
             }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
         }
