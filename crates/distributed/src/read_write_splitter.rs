@@ -57,7 +57,11 @@ impl std::fmt::Display for RouteTarget {
                 write!(f, "shard={}, node={}", shard_id, node_id)
             }
             RouteTarget::Local { is_primary } => {
-                write!(f, "local({})", if *is_primary { "primary" } else { "replica" })
+                write!(
+                    f,
+                    "local({})",
+                    if *is_primary { "primary" } else { "replica" }
+                )
             }
         }
     }
@@ -95,7 +99,10 @@ impl ReadWriteSplitter {
         self
     }
 
-    pub fn with_read_write_router(mut self, read_write_router: Arc<RwLock<ReadWriteShardRouter>>) -> Self {
+    pub fn with_read_write_router(
+        mut self,
+        read_write_router: Arc<RwLock<ReadWriteShardRouter>>,
+    ) -> Self {
         self.read_write_router = Some(read_write_router);
         self
     }
@@ -161,7 +168,10 @@ impl ReadWriteSplitter {
     }
 
     /// Route a read query to a replica
-    fn route_read(&self, statement: &sqlrustgo_parser::Statement) -> Result<RouteTarget, SplitterError> {
+    fn route_read(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+    ) -> Result<RouteTarget, SplitterError> {
         // Check if we have shard routing
         if let Some(ref shard_router) = self.shard_router {
             if let Some(table) = self.extract_table_name(statement) {
@@ -184,7 +194,10 @@ impl ReadWriteSplitter {
     }
 
     /// Route a write query to the primary
-    fn route_write(&self, statement: &sqlrustgo_parser::Statement) -> Result<RouteTarget, SplitterError> {
+    fn route_write(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+    ) -> Result<RouteTarget, SplitterError> {
         // Check if we have shard routing
         if let Some(ref shard_router) = self.shard_router {
             if let Some(table) = self.extract_table_name(statement) {
@@ -363,7 +376,9 @@ mod tests {
     #[test]
     fn test_route_simple_insert() {
         let splitter = create_splitter();
-        let (class, is_primary) = splitter.route_simple("INSERT INTO users (id) VALUES (1)").unwrap();
+        let (class, is_primary) = splitter
+            .route_simple("INSERT INTO users (id) VALUES (1)")
+            .unwrap();
         assert_eq!(class, QueryClass::Write);
         assert!(is_primary);
     }

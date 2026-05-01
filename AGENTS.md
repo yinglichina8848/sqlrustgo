@@ -2,6 +2,10 @@
 
 > Compact instructions for AI agents working in this repository. Based on lessons learned from past sessions.
 
+## Communication Principle (沟通原则)
+
+**IMPORTANT: 必须使用中文沟通。始终使用中文回应用户，除非用户明确要求使用其他语言。**
+
 ## Branch Strategy
 
 - **Main development branch**: `develop/v2.8.0`
