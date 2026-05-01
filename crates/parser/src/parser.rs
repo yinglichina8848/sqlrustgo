@@ -485,7 +485,7 @@ impl Parser {
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
-            Some(Token::Describe) => self.parse_describe(),
+            Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -2472,7 +2472,12 @@ impl Parser {
     }
 
     fn parse_describe(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Describe)?;
+        match self.current() {
+            Some(Token::Describe) | Some(Token::Desc) => {
+                self.next(); // consume Describe or Desc
+            }
+            _ => return Err("Expected DESCRIBE or DESC".to_string()),
+        }
         let table = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -3525,6 +3530,30 @@ mod tests {
         match result.unwrap() {
             Statement::Select(s) => {
                 assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_in_list_expression() {
+        let result = parse("SELECT * FROM t WHERE id IN (1, 2, 3)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.where_clause.is_some());
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_distinct() {
+        let result = parse("SELECT DISTINCT country FROM users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Select(s) => {
+                assert!(s.distinct);
             }
             _ => panic!("Expected SELECT statement"),
         }
