@@ -1856,7 +1856,7 @@ impl StoredProcExecutor {
                 let var_name: String = chars[start + 1..i].iter().collect();
                 let value = ctx
                     .get_var(&var_name)
-                    .map(|v| v.to_string())
+                    .map(|v| self.escape_sql_value(v))
                     .unwrap_or_else(|| "NULL".to_string());
                 result.push_str(&value);
             } else {
@@ -1866,6 +1866,21 @@ impl StoredProcExecutor {
         }
 
         result
+    }
+
+    fn escape_sql_value(&self, value: &Value) -> String {
+        match value {
+            Value::Text(s) => s.replace('\'', "''"),
+            Value::Integer(n) => n.to_string(),
+            Value::Float(f) => f.to_string(),
+            Value::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
+            Value::Null => "NULL".to_string(),
+            Value::Blob(b) => b
+                .iter()
+                .map(|&x| x as char)
+                .collect::<String>()
+                .replace('\'', "''"),
+        }
     }
 
     /// Evaluate a constant expression
