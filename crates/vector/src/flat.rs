@@ -90,7 +90,7 @@ impl VectorIndex for FlatIndex {
         let mut entries: Vec<_> = self
             .vectors
             .iter()
-            .zip(scores.into_iter())
+            .zip(scores)
             .map(|(e, s)| IndexEntry::new(e.id, s))
             .collect();
 

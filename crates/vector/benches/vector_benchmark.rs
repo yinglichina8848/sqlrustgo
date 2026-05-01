@@ -5,7 +5,7 @@
 //! - 100K vectors KNN < 10ms
 //! - 1M vectors KNN < 100ms
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use sqlrustgo_vector::{
     flat::FlatIndex, hnsw::HnswIndex, ivf::IvfIndex, ivfpq::IvfpqIndex, metrics::DistanceMetric,
     parallel_knn::ParallelKnn, sql_vector_hybrid::HybridSearcher, VectorIndex,
@@ -32,7 +32,7 @@ fn bench_flat_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = FlatIndex::new(DistanceMetric::Cosine);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(black_box(*id), black_box(v.as_slice()));
+                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
                 }
             });
         });
@@ -55,7 +55,7 @@ fn bench_flat_search(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -72,7 +72,7 @@ fn bench_ivf_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = IvfIndex::new(DistanceMetric::Euclidean, 10);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(black_box(*id), black_box(v.as_slice()));
+                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
                 }
             });
         });
@@ -95,7 +95,7 @@ fn bench_ivf_search(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -112,7 +112,7 @@ fn bench_hnsw_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = HnswIndex::new(DistanceMetric::Cosine);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(black_box(*id), black_box(v.as_slice()));
+                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
                 }
             });
         });
@@ -134,7 +134,7 @@ fn bench_hnsw_search(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -160,7 +160,7 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
                 for (a, b) in query.iter().zip(v.1.iter()) {
                     sum += a * b;
                 }
-                black_box(sum);
+                std::hint::black_box(sum);
             }
         });
     });
@@ -170,7 +170,7 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
         b.iter(|| {
             for v in vectors.iter().take(100) {
                 let sum: f32 = query.iter().zip(v.1.iter()).map(|(a, b)| a * b).sum();
-                black_box(sum);
+                std::hint::black_box(sum);
             }
         });
     });
@@ -180,7 +180,7 @@ fn bench_scalar_vs_vectorized(c: &mut Criterion) {
 
 fn bench_simd_vs_scalar(c: &mut Criterion) {
     use sqlrustgo_vector::simd_explicit::{
-        batch_dot_product_simd, batch_l2_distance_simd, cosine_distance_simd, dot_product_simd,
+        batch_dot_product_simd, batch_l2_distance_simd, dot_product_simd,
         euclidean_distance_simd,
     };
 
@@ -197,7 +197,7 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
             b.iter(|| {
                 for v in &vectors {
                     let sum: f32 = query.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
-                    black_box(sum);
+                    std::hint::black_box(sum);
                 }
             });
         });
@@ -207,7 +207,7 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
             b.iter(|| {
                 for v in &vectors {
                     let sum = dot_product_simd(&query, v);
-                    black_box(sum);
+                    std::hint::black_box(sum);
                 }
             });
         });
@@ -229,7 +229,7 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
                         .map(|(a, b)| (a - b).powi(2))
                         .sum::<f32>()
                         .sqrt();
-                    black_box(dist);
+                    std::hint::black_box(dist);
                 }
             });
         });
@@ -239,7 +239,7 @@ fn bench_simd_vs_scalar(c: &mut Criterion) {
             b.iter(|| {
                 for v in &vectors {
                     let dist = euclidean_distance_simd(&query, v);
-                    black_box(dist);
+                    std::hint::black_box(dist);
                 }
             });
         });
@@ -270,7 +270,7 @@ fn bench_hnsw_ivfpq_e2e(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
 
@@ -283,7 +283,7 @@ fn bench_hnsw_ivfpq_e2e(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -306,7 +306,7 @@ fn bench_parallel_knn_search(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
 
@@ -319,8 +319,8 @@ fn bench_parallel_knn_search(c: &mut Criterion) {
             let parallel_index = ParallelKnn::new(index);
 
             b.iter(|| {
-                let result = parallel_index.parallel_search(black_box(&query), black_box(10));
-                black_box(result);
+                let result = parallel_index.parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
+                let _ = std::hint::black_box(result);
             });
         });
     }
@@ -346,10 +346,10 @@ fn bench_parallel_batch_search(c: &mut Criterion) {
             b.iter(|| {
                 let results = sqlrustgo_vector::parallel_knn::batch_search(
                     &index,
-                    black_box(&queries[..size]),
-                    black_box(10),
+                    std::hint::black_box(&queries[..size]),
+                    std::hint::black_box(10),
                 );
-                black_box(results);
+                let _ = std::hint::black_box(results);
             });
         });
     }
@@ -367,7 +367,7 @@ fn bench_write_throughput(c: &mut Criterion) {
                 let mut index = FlatIndex::new(DistanceMetric::Cosine);
                 for i in 0..size {
                     let v: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
-                    let _ = index.insert(black_box(i as u64), black_box(&v));
+                    let _ = index.insert(std::hint::black_box(i as u64), std::hint::black_box(&v));
                 }
             });
         });
@@ -397,7 +397,7 @@ fn bench_large_scale_search(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -410,7 +410,7 @@ fn bench_large_scale_search(c: &mut Criterion) {
         index.build_index().unwrap();
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 }
@@ -431,7 +431,7 @@ fn bench_10k_knn_performance(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -442,7 +442,7 @@ fn bench_10k_knn_performance(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 }
@@ -464,7 +464,7 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -475,7 +475,7 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -487,7 +487,7 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
         index.build_index().unwrap();
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -499,7 +499,7 @@ fn bench_100k_knn_performance(c: &mut Criterion) {
         let parallel_index = ParallelKnn::new(index);
 
         b.iter(|| {
-            let _ = parallel_index.parallel_search(black_box(&query), black_box(10));
+            let _ = parallel_index.parallel_search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 }
@@ -520,7 +520,7 @@ fn bench_1m_knn_performance(c: &mut Criterion) {
         }
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 }
@@ -544,7 +544,7 @@ fn bench_hnsw_parameter_tuning(c: &mut Criterion) {
                 }
 
                 b.iter(|| {
-                    let _ = index.search(black_box(&query), black_box(10));
+                    let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
                 });
             },
         );
@@ -558,7 +558,7 @@ fn bench_hnsw_parameter_tuning(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -581,7 +581,7 @@ fn bench_ivf_parameter_tuning(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -607,7 +607,7 @@ fn bench_hybrid_query_performance(c: &mut Criterion) {
             .collect();
 
         b.iter(|| {
-            let _ = searcher.search_hybrid(black_box(&query), &sql_scores, black_box(10));
+            let _ = searcher.search_hybrid(std::hint::black_box(&query), &sql_scores, std::hint::black_box(10));
         });
     });
 
@@ -620,7 +620,7 @@ fn bench_hybrid_query_performance(c: &mut Criterion) {
         let predicates = vec![];
 
         b.iter(|| {
-            let _ = searcher.execute_filtered_search(black_box(&query), &predicates, black_box(10));
+            let _ = searcher.execute_filtered_search(std::hint::black_box(&query), &predicates, std::hint::black_box(10));
         });
     });
 }
@@ -639,7 +639,7 @@ fn bench_ivfpq_insert(c: &mut Criterion) {
             b.iter(|| {
                 let mut index = IvfpqIndex::new(DistanceMetric::Cosine, 10, 16);
                 for (id, v) in vectors.iter().take(size) {
-                    let _ = index.insert(black_box(*id), black_box(v.as_slice()));
+                    let _ = index.insert(std::hint::black_box(*id), std::hint::black_box(v.as_slice()));
                 }
             });
         });
@@ -662,7 +662,7 @@ fn bench_ivfpq_search(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -686,7 +686,7 @@ fn bench_ivfpq_10k_knn(c: &mut Criterion) {
         index.build_index().unwrap();
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -711,7 +711,7 @@ fn bench_ivfpq_100k_knn(c: &mut Criterion) {
         index.build_index().unwrap();
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -735,7 +735,7 @@ fn bench_ivfpq_1m_knn(c: &mut Criterion) {
         index.build_index().unwrap();
 
         b.iter(|| {
-            let _ = index.search(black_box(&query), black_box(10));
+            let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
         });
     });
 
@@ -759,7 +759,7 @@ fn bench_ivfpq_parameter_tuning(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
@@ -773,7 +773,7 @@ fn bench_ivfpq_parameter_tuning(c: &mut Criterion) {
             index.build_index().unwrap();
 
             b.iter(|| {
-                let _ = index.search(black_box(&query), black_box(10));
+                let _ = index.search(std::hint::black_box(&query), std::hint::black_box(10));
             });
         });
     }
