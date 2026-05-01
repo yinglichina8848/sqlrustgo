@@ -41,8 +41,8 @@ pub use partition::{PartitionKey, PartitionStrategy};
 pub use raft::{RaftMessage, RaftNode, RaftState};
 pub use replica_sync::{ReplicaSynchronizer, SyncConfig, SyncProgress, SyncResult, LSN};
 pub use replication::{
-    BinlogEvent, BinlogManager, BinlogStatus, GtidEvent, GtidInterval, GtidManager, GtidSet,
-    MasterStatus, ReplicationConfig, ReplicationRole, ReplicationState, SemiSyncError,
+    BinlogEvent, BinlogManager, BinlogStatus, GtidEvent, GtidInterval, GtidManager, GtidPosition,
+    GtidSet, MasterStatus, ReplicationConfig, ReplicationRole, ReplicationState, SemiSyncError,
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
