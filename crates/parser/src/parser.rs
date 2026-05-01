@@ -1203,6 +1203,55 @@ impl Parser {
             None
         };
 
+        // Parse LIMIT clause
+        let limit = if matches!(self.current(), Some(Token::Limit)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let val = n
+                        .parse::<u64>()
+                        .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                    self.next();
+                    Some(val)
+                }
+                Some(Token::Identifier(ref s)) => {
+                    // Support LIMIT variable (e.g., @limit)
+                    let val = s
+                        .parse::<u64>()
+                        .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                    self.next();
+                    Some(val)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Parse OFFSET clause
+        let offset = if matches!(self.current(), Some(Token::Offset)) {
+            self.next();
+            match self.current() {
+                Some(Token::NumberLiteral(n)) => {
+                    let val = n
+                        .parse::<u64>()
+                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                    self.next();
+                    Some(val)
+                }
+                Some(Token::Identifier(ref s)) => {
+                    let val = s
+                        .parse::<u64>()
+                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                    self.next();
+                    Some(val)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         Ok(SelectStatement {
             columns,
             table,
@@ -1212,8 +1261,8 @@ impl Parser {
             group_by,
             having,
             order_by: Vec::new(),
-            limit: None,
-            offset: None,
+            limit,
+            offset,
             distinct,
         })
     }
