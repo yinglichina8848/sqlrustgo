@@ -482,6 +482,20 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        // Step 4: LIMIT / OFFSET
+        if let Some(limit) = select.limit {
+            let offset = select.offset.unwrap_or(0);
+            if offset as usize >= rows.len() {
+                rows.clear();
+            } else {
+                rows = rows
+                    .into_iter()
+                    .skip(offset as usize)
+                    .take(limit as usize)
+                    .collect();
+            }
+        }
+
         let row_count = rows.len();
         Ok(ExecutorResult::new(rows, row_count))
     }
