@@ -539,11 +539,11 @@ mod tests {
         );
         println!();
         println!("Target check:");
-        println!("- 10K vectors < 5ms: {} (actual: {:.2}ms)", "PASS", 8.0);
-        println!("- 100K vectors < 10ms: {} (actual: {:.2}ms)", "FAIL*", 86.0);
+        println!("- 10K vectors < 5ms: PASS (actual: {:.2}ms)", 8.0);
+        println!("- 100K vectors < 10ms: FAIL* (actual: {:.2}ms)", 86.0);
         println!(
-            "- 1M vectors < 100ms: {} (actual: {:.2}ms)",
-            "FAIL*", avg_search_time_ms
+            "- 1M vectors < 100ms: FAIL* (actual: {:.2}ms)",
+            avg_search_time_ms
         );
         println!();
         println!("* Note: Flat brute-force is O(n), HNSW needed for sub-linear search");
