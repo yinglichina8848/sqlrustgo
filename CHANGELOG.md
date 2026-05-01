@@ -5,6 +5,27 @@ SQLRustGo 的所有显着更改都将记录在此文件中。
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-05-01 (GA)
+
+### 目标
+
+生产化+分布式+安全版本，MySQL 5.7 功能覆盖率 92%，分布式能力（分区表、主从复制、故障转移），安全性评分 92%。
+
+### 已完成
+
+| 功能 | PR | 状态 |
+|------|-----|------|
+| PR 100 CASE WHEN NULLIF | #100 | ✅ |
+| PR 101 clippy fix | #101 | ✅ |
+| PR 102 OFFSET/LIMIT | #102 | ✅ |
+| Git 历史清理 (target/ 移除) | #103 | ✅ |
+| 仓库压缩 62.8GB→95MB | #103 | ✅ |
+| SSH fetch 修复 (3秒) | #103 | ✅ |
+
+### 发布 PR
+
+- [#103](https://192.168.0.252:3000/openclaw/sqlrustgo/pulls/103) - chore: R-Gate cleanup
+
 ## [2.7.0] - 2026-04-22 (GA)
 
 ### 目标
