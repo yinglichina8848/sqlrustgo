@@ -1,7 +1,7 @@
 name: Hermes Pipeline
 run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
 
-on:
+'on':
   push:
     branches:
       - develop/v2.8.0
@@ -11,9 +11,9 @@ on:
     paths-ignore:
       - 'docs/**'
       - '*.md'
-      - 'ARCHITECTURE_RULES.md'
-      - 'CHANGELOG.md'
-      - 'RELEASE_NOTES.md'
+      - ARCHITECTURE_RULES.md
+      - CHANGELOG.md
+      - RELEASE_NOTES.md
   pull_request:
     branches:
       - develop/v2.8.0
@@ -23,10 +23,10 @@ on:
     paths-ignore:
       - 'docs/**'
       - '*.md'
-      - 'VERSION'
-      - 'ARCHITECTURE_RULES.md'
-      - 'CHANGELOG.md'
-      - 'RELEASE_NOTES.md'
+      - VERSION
+      - ARCHITECTURE_RULES.md
+      - CHANGELOG.md
+      - RELEASE_NOTES.md
 
 env:
   CARGO_TERM_COLOR: always
