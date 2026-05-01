@@ -183,6 +183,8 @@ impl Default for ReplicationConfig {
 pub struct ReplicationState {
     config: RwLock<ReplicationConfig>,
     binlog: Arc<BinlogManager>,
+    gtid_manager: Arc<GtidManager>,
+    semi_sync_manager: Arc<SemiSyncManager>,
     slave_status: RwLock<Option<SlaveStatus>>,
 }
 
@@ -197,6 +199,8 @@ impl ReplicationState {
         Self {
             config: RwLock::new(ReplicationConfig::default()),
             binlog: Arc::new(BinlogManager::new(1)),
+            gtid_manager: Arc::new(GtidManager::new(1)),
+            semi_sync_manager: Arc::new(SemiSyncManager::new()),
             slave_status: RwLock::new(None),
         }
     }
@@ -205,6 +209,8 @@ impl ReplicationState {
         Self {
             config: RwLock::new(config.clone()),
             binlog: Arc::new(BinlogManager::new(config.server_id)),
+            gtid_manager: Arc::new(GtidManager::new(config.server_id)),
+            semi_sync_manager: Arc::new(SemiSyncManager::new()),
             slave_status: RwLock::new(None),
         }
     }
@@ -212,6 +218,16 @@ impl ReplicationState {
     /// Get binlog manager
     pub fn binlog(&self) -> &Arc<BinlogManager> {
         &self.binlog
+    }
+
+    /// Get GTID manager
+    pub fn gtid_manager(&self) -> &Arc<GtidManager> {
+        &self.gtid_manager
+    }
+
+    /// Get semi-sync manager
+    pub fn semi_sync_manager(&self) -> &Arc<SemiSyncManager> {
+        &self.semi_sync_manager
     }
 
     /// Get replication configuration
@@ -239,7 +255,7 @@ impl ReplicationState {
             position: binlog_status.position,
             binlog_do_db: Vec::new(),
             binlog_ignore_db: Vec::new(),
-            executed_gtid_set: String::new(),
+            executed_gtid_set: self.gtid_manager.get_executed_string(),
         })
     }
 
@@ -485,6 +501,38 @@ impl GtidEvent {
     }
 }
 
+/// GTID position for replication
+#[derive(Debug, Clone, PartialEq)]
+pub struct GtidPosition {
+    pub sid: u64,
+    pub gno: u64,
+    pub server_id: u32,
+    pub log_file: String,
+    pub log_pos: u64,
+}
+
+impl GtidPosition {
+    pub fn new(sid: u64, gno: u64, server_id: u32, log_file: String, log_pos: u64) -> Self {
+        Self {
+            sid,
+            gno,
+            server_id,
+            log_file,
+            log_pos,
+        }
+    }
+
+    pub fn from_gtid_event(event: &GtidEvent, log_file: String, log_pos: u64) -> Self {
+        Self {
+            sid: event.sid,
+            gno: event.gno,
+            server_id: event.server_id,
+            log_file,
+            log_pos,
+        }
+    }
+}
+
 // ============================================================================
 // Semi-synchronous Replication Support
 // ============================================================================
@@ -644,22 +692,39 @@ impl SemiSyncManager {
             return Ok(());
         }
 
-        let replicas = self.replicas.read().unwrap();
         let required_acks = *self.wait_count.read().unwrap();
 
-        let mut acked = 0;
-        for replica in replicas.iter() {
-            if let Some(elapsed) = replica.get_last_ack_elapsed_ms() {
-                if elapsed <= self.ack_timeout_ms {
-                    acked += 1;
-                }
-            }
+        if self.replicas.read().unwrap().is_empty() {
+            return Err(SemiSyncError::no_replica());
         }
 
-        if acked >= required_acks as usize {
-            Ok(())
-        } else {
-            Err(SemiSyncError::ack_timeout(lsn))
+        let timeout_ms = self.wait_timeout_ms;
+        let ack_timeout_ms = self.ack_timeout_ms;
+
+        let start = std::time::Instant::now();
+        loop {
+            let acked = {
+                let replicas = self.replicas.read().unwrap();
+                let mut count = 0;
+                for replica in replicas.iter() {
+                    if let Some(elapsed) = replica.get_last_ack_elapsed_ms() {
+                        if elapsed <= ack_timeout_ms {
+                            count += 1;
+                        }
+                    }
+                }
+                count
+            };
+
+            if acked >= required_acks as usize {
+                return Ok(());
+            }
+
+            if start.elapsed().as_millis() as u64 >= timeout_ms {
+                return Err(SemiSyncError::ack_timeout(lsn));
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
     }
 
