@@ -127,12 +127,13 @@ fn test_parse_comparison_operators() {
         assert!(result.is_ok(), "Parse failed for {}: {:?}", sql, result);
 
         match result.unwrap() {
-            Statement::Select(select) => {
-                match select.where_clause.unwrap() {
-                    Expression::BinaryOp(_, op, _) if op == expected_op => {}
-                    other => panic!("Expected BinaryOp with {}, got {:?} for {}", expected_op, other, sql),
-                }
-            }
+            Statement::Select(select) => match select.where_clause.unwrap() {
+                Expression::BinaryOp(_, op, _) if op == expected_op => {}
+                other => panic!(
+                    "Expected BinaryOp with {}, got {:?} for {}",
+                    expected_op, other, sql
+                ),
+            },
             _ => panic!("Expected SELECT statement for {}", sql),
         }
     }
