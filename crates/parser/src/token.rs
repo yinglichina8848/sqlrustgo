@@ -60,6 +60,10 @@ pub enum Token {
 
     // Conditional keywords
     If,
+    Case,
+    When,
+    Then,
+    Else,
 
     // CTE keywords
     With,
@@ -253,6 +257,10 @@ impl fmt::Display for Token {
             Token::AutoIncrement => write!(f, "AUTO_INCREMENT"),
             Token::Exists => write!(f, "EXISTS"),
             Token::If => write!(f, "IF"),
+            Token::Case => write!(f, "CASE"),
+            Token::When => write!(f, "WHEN"),
+            Token::Then => write!(f, "THEN"),
+            Token::Else => write!(f, "ELSE"),
             Token::In => write!(f, "IN"),
             Token::Is => write!(f, "IS"),
             Token::All => write!(f, "ALL"),
