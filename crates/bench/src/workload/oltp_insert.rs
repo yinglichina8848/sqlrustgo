@@ -11,6 +11,7 @@ use crate::db::Database;
 /// Insert workload - bulk insert operations
 pub struct OltpInsert {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

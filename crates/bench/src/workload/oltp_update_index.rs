@@ -11,6 +11,7 @@ use crate::db::Database;
 /// Update index workload - update on indexed column 'k'
 pub struct OltpUpdateIndex {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

@@ -12,6 +12,7 @@ use crate::db::Database;
 /// Mixed workload - combines read and write operations
 pub struct OltpMixed {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

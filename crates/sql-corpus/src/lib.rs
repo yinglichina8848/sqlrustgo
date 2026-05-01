@@ -246,10 +246,7 @@ impl SimpleExecutor {
                 .storage
                 .get_table_info(&select.table)
                 .map_err(|e| format!("Get table info error: {:?}", e))?;
-            rows = rows
-                .into_iter()
-                .filter(|row| self.evaluate_where(where_clause, row, &table_info))
-                .collect();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &table_info));
         }
 
         Ok(rows)
@@ -452,7 +449,7 @@ impl SqlCorpus {
                 let mut sub_corpus = SqlCorpus::new(path);
                 let sub_results = sub_corpus.execute_all();
                 results.extend(sub_results);
-            } else if path.extension().map_or(false, |e| e == "sql") {
+            } else if path.extension().is_some_and(|e| e == "sql") {
                 let file_result = self.execute_file(&path);
                 let relative_path = path
                     .strip_prefix(&self.corpus_root)

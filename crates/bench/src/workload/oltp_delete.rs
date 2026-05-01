@@ -11,6 +11,7 @@ use crate::db::Database;
 /// Delete workload - delete operations
 pub struct OltpDelete {
     max_id: u64,
+    #[allow(dead_code)]
     statements_per_tx: usize,
 }
 

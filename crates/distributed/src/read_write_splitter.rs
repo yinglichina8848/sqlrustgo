@@ -140,8 +140,6 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::Revoke(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Transaction(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Analyze(_) => QueryClass::Write,
-            // Default to write for safety
-            _ => QueryClass::Write,
         }
     }
 
@@ -162,7 +160,7 @@ impl ReadWriteSplitter {
         Ok(SplitterResult {
             sql: sql.to_string(),
             query_class,
-            target: target,
+            target,
             consistency_level: consistency,
         })
     }
@@ -230,11 +228,9 @@ impl ReadWriteSplitter {
     }
 
     /// Infer consistency level from query
-    fn infer_consistency(&self, statement: &sqlrustgo_parser::Statement) -> ConsistencyLevel {
-        match statement {
-            // Default to eventual consistency for reads, strong for writes
-            _ => ConsistencyLevel::Eventual,
-        }
+    fn infer_consistency(&self, _statement: &sqlrustgo_parser::Statement) -> ConsistencyLevel {
+        // Default to eventual consistency for reads, strong for writes
+        ConsistencyLevel::Eventual
     }
 
     /// Simple route: returns (QueryClass, is_primary)

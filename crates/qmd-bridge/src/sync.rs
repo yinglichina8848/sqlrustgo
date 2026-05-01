@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 /// Synchronization manager for QMD data sync
 pub struct SyncManager {
+    #[allow(dead_code)]
     config: QmdConfig,
     state: Arc<Mutex<SyncStateInner>>,
 }
