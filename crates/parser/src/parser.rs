@@ -395,6 +395,9 @@ pub enum Expression {
     NotIn(Box<Expression>, Box<SelectStatement>),
     InList(Box<Expression>, Vec<Expression>), // MySQL: col IN (1, 2, 3)
     NotInList(Box<Expression>, Vec<Expression>), // MySQL: col NOT IN (1, 2, 3)
+    NotLike(Box<Expression>, Box<Expression>),    // col NOT LIKE pattern
+    NotBetween(Box<Expression>, Box<Expression>, Box<Expression>), // col NOT BETWEEN low AND high
+    NotRegexp(Box<Expression>, Box<Expression>), // col NOT REGEXP pattern
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
@@ -1623,6 +1626,33 @@ impl Parser {
                 }
             }
             return Err("NOT must be followed by IN or EXISTS".to_string());
+        }
+
+        // NOT LIKE (after NOT IN check failed)
+        if matches!(self.current(), Some(Token::Not)) {
+            self.next();
+            // Check for NOT LIKE
+            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE") {
+                self.next();
+                let pattern = self.parse_primary_expression()?;
+                return Ok(Expression::NotLike(Box::new(left), Box::new(pattern)));
+            }
+            // Check for NOT BETWEEN
+            if matches!(self.current(), Some(Token::Between)) {
+                self.next();
+                let low = self.parse_additive_expression()?;
+                self.expect(Token::And)?;
+                let high = self.parse_additive_expression()?;
+                return Ok(Expression::NotBetween(Box::new(left), Box::new(low), Box::new(high)));
+            }
+            // Check for NOT REGEXP
+            if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "REGEXP") {
+                self.next();
+                let pattern = self.parse_primary_expression()?;
+                return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));
+            }
+            // Put back the Not token for higher-level handling
+            return Err("NOT must be followed by IN, LIKE, BETWEEN, or REGEXP".to_string());
         }
 
         // IS NULL / IS NOT NULL

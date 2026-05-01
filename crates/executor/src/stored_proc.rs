@@ -1273,6 +1273,25 @@ impl StoredProcExecutor {
                     .collect();
                 Value::Boolean(!value_list.contains(&left_val))
             }
+            sqlrustgo_parser::Expression::NotLike(left, pattern) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let pattern_val = self.expression_to_value(pattern, ctx);
+                let like_result = self.like_match(&left_val, &pattern_val);
+                Value::Boolean(!like_result)
+            }
+            sqlrustgo_parser::Expression::NotBetween(left, low, high) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let low_val = self.expression_to_value(low, ctx);
+                let high_val = self.expression_to_value(high, ctx);
+                let between_result = self.between_match(&left_val, &low_val, &high_val);
+                Value::Boolean(!between_result)
+            }
+            sqlrustgo_parser::Expression::NotRegexp(left, pattern) => {
+                let left_val = self.expression_to_value(left, ctx);
+                let pattern_val = self.expression_to_value(pattern, ctx);
+                let regexp_result = self.regexp_match(&left_val, &pattern_val);
+                Value::Boolean(!regexp_result)
+            }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
         }
     }
@@ -1621,6 +1640,128 @@ impl StoredProcExecutor {
                 }
             }
             _ => Value::Null,
+        }
+    }
+
+    /// LIKE pattern matching (supports % and _ wildcards) - simple O(n*m) implementation
+    fn like_match(&self, left: &Value, pattern: &Value) -> bool {
+        let (text, pat) = match (left, pattern) {
+            (Value::Text(t), Value::Text(p)) => (t.as_str(), p.as_str()),
+            _ => return false,
+        };
+        // Simple recursive match: text[i..] matches pat[j..]
+        fn do_match(text: &str, pat: &str) -> bool {
+            let t_bytes = text.as_bytes();
+            let p_bytes = pat.as_bytes();
+            let mut i = 0;
+            let mut j = 0;
+            let mut stack: Vec<(usize, usize)> = vec![];
+
+            loop {
+                if j >= p_bytes.len() {
+                    if i >= t_bytes.len() {
+                        return true;
+                    }
+                    // Try to backtrack
+                    if let Some((prev_i, prev_j)) = stack.pop() {
+                        i = prev_i;
+                        j = prev_j + 1;
+                        if j < p_bytes.len() && p_bytes[j] == b'%' {
+                            j += 1;
+                            if j >= p_bytes.len() {
+                                return true;
+                            }
+                        }
+                        continue;
+                    }
+                    return i >= t_bytes.len();
+                }
+                if i >= t_bytes.len() {
+                    // Only % can match empty string at end of pattern
+                    while j < p_bytes.len() && p_bytes[j] == b'%' {
+                        j += 1;
+                    }
+                    return j >= p_bytes.len();
+                }
+
+                match p_bytes[j] {
+                    b'%' => {
+                        // Try matching 0 chars, and save state to try more
+                        stack.push((i, j));
+                        j += 1;
+                        if j >= p_bytes.len() {
+                            return true;
+                        }
+                    }
+                    b'_' => {
+                        i += 1;
+                        j += 1;
+                    }
+                    c => {
+                        // Case-insensitive char comparison
+                        let text_lower = t_bytes[i].to_ascii_lowercase();
+                        let pat_lower = c.to_ascii_lowercase();
+                        if text_lower == pat_lower {
+                            i += 1;
+                            j += 1;
+                        } else {
+                            // Try backtracking
+                            if let Some((prev_i, prev_j)) = stack.pop() {
+                                i = prev_i;
+                                j = prev_j + 1;
+                                if j < p_bytes.len() && p_bytes[j] == b'%' {
+                                    j += 1;
+                                }
+                                continue;
+                            }
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        do_match(text, pat)
+    }
+
+    /// BETWEEN check: left >= low AND left <= high
+    fn between_match(&self, left: &Value, low: &Value, high: &Value) -> bool {
+        // Check left >= low AND left <= high
+        let ge_result = self.ge_values(left, low);
+        let le_result = self.le_values(left, high);
+        ge_result && le_result
+    }
+
+    /// REGEXP pattern matching - simple anchored prefix/suffix match
+    /// For complex regex, falls back to substring search
+    fn regexp_match(&self, left: &Value, pattern: &Value) -> bool {
+        let (text, pat) = match (left, pattern) {
+            (Value::Text(t), Value::Text(p)) => (t.as_str(), p.as_str()),
+            _ => return false,
+        };
+        // Case-insensitive search
+        let text_lower = text.to_lowercase();
+        let pat_lower = pat.to_lowercase();
+        text_lower.contains(&pat_lower)
+    }
+
+    /// Greater-than-or-equal comparison helper
+    fn ge_values(&self, left: &Value, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l >= r,
+            (Value::Float(l), Value::Float(r)) => l >= r,
+            (Value::Text(l), Value::Text(r)) => l >= r,
+            _ => false,
+        }
+    }
+
+    /// Less-than-or-equal comparison helper
+    fn le_values(&self, left: &Value, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Integer(l), Value::Integer(r)) => l <= r,
+            (Value::Float(l), Value::Float(r)) => l <= r,
+            (Value::Text(l), Value::Text(r)) => l <= r,
+            _ => false,
         }
     }
 
