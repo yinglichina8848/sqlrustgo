@@ -148,7 +148,10 @@ fn evaluate_binary_op(left: &Value, op: &str, right: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use crate::trigger_eval::context::{EvalContext, TriggerContext};
-    use crate::trigger_eval::expression::{evaluate_binary_op, expression_to_bool, expression_to_value, parse_literal, resolve_identifier};
+    use crate::trigger_eval::expression::{
+        evaluate_binary_op, expression_to_bool, expression_to_value, parse_literal,
+        resolve_identifier,
+    };
     use sqlrustgo_parser::Expression;
     use sqlrustgo_storage::Record;
     use sqlrustgo_types::Value;
@@ -194,7 +197,10 @@ mod tests {
     #[test]
     fn test_parse_literal_string() {
         assert_eq!(parse_literal("'hello'"), Value::Text("hello".to_string()));
-        assert_eq!(parse_literal("'foo bar'"), Value::Text("foo bar".to_string()));
+        assert_eq!(
+            parse_literal("'foo bar'"),
+            Value::Text("foo bar".to_string())
+        );
         // unquoted falls through to Text
         assert_eq!(parse_literal("hello"), Value::Text("hello".to_string()));
     }
@@ -287,8 +293,11 @@ mod tests {
     #[test]
     fn test_resolve_identifier_new_row() {
         let new_record = make_record(&[0, 100, 5000]);
-        let trigger_ctx = TriggerContext::new(Some(&new_record), None)
-            .with_new_col_names(vec!["id".into(), "amt".into(), "total".into()]);
+        let trigger_ctx = TriggerContext::new(Some(&new_record), None).with_new_col_names(vec![
+            "id".into(),
+            "amt".into(),
+            "total".into(),
+        ]);
         let eval = EvalContext::new(&trigger_ctx, None);
 
         assert_eq!(resolve_identifier("NEW.id", &eval), Value::Integer(0));
@@ -315,8 +324,11 @@ mod tests {
     fn test_resolve_identifier_target_row() {
         let trigger_ctx = TriggerContext::new(None, None);
         let target = make_record(&[7, 8, 9]);
-        let eval = EvalContext::new(&trigger_ctx, Some(&target))
-            .with_target_col_names(vec!["x".into(), "y".into(), "z".into()]);
+        let eval = EvalContext::new(&trigger_ctx, Some(&target)).with_target_col_names(vec![
+            "x".into(),
+            "y".into(),
+            "z".into(),
+        ]);
 
         assert_eq!(resolve_identifier("x", &eval), Value::Integer(7));
         assert_eq!(resolve_identifier("y", &eval), Value::Integer(8));
@@ -339,7 +351,10 @@ mod tests {
     fn test_expression_to_value_literal() {
         let trigger_ctx = TriggerContext::new(None, None);
         let eval = EvalContext::new(&trigger_ctx, None);
-        assert_eq!(expression_to_value(&lit("42"), &eval, None), Value::Integer(42));
+        assert_eq!(
+            expression_to_value(&lit("42"), &eval, None),
+            Value::Integer(42)
+        );
         assert_eq!(expression_to_value(&lit("NULL"), &eval, None), Value::Null);
     }
 
@@ -384,8 +399,8 @@ mod tests {
         assert!(!expression_to_bool(&lit("NULL"), &eval, None));
         // Boolean false -> false
         let new_record2 = make_record(&[0]);
-        let trigger_ctx2 = TriggerContext::new(Some(&new_record2), None)
-            .with_new_col_names(vec!["b".into()]);
+        let trigger_ctx2 =
+            TriggerContext::new(Some(&new_record2), None).with_new_col_names(vec!["b".into()]);
         let eval2 = EvalContext::new(&trigger_ctx2, None);
         // A literal boolean expression is not directly supported,
         // but a NEW.b = false expression would evaluate to Value::Boolean(false)

@@ -2106,7 +2106,10 @@ mod tests {
         ctx.enter_scope();
         // Inner scope has its own variables, x should still be accessible via saved scope
         ctx.set_local_var("y", Value::Text("hello".to_string()));
-        assert_eq!(ctx.get_local_var("y"), Some(&Value::Text("hello".to_string())));
+        assert_eq!(
+            ctx.get_local_var("y"),
+            Some(&Value::Text("hello".to_string()))
+        );
         // Exit inner scope
         ctx.exit_scope();
         // y should be gone, x should still be 1
@@ -2136,10 +2139,16 @@ mod tests {
         assert_eq!(ctx.get_local_var("local_x"), Some(&Value::Integer(10)));
         // Session var (with @ prefix)
         ctx.set_session_var("session_y", Value::Text("test".to_string()));
-        assert_eq!(ctx.get_session_var("session_y"), Some(&Value::Text("test".to_string())));
+        assert_eq!(
+            ctx.get_session_var("session_y"),
+            Some(&Value::Text("test".to_string()))
+        );
         // get_var checks local first, then session
         assert_eq!(ctx.get_var("local_x"), Some(&Value::Integer(10)));
-        assert_eq!(ctx.get_var("session_y"), Some(&Value::Text("test".to_string())));
+        assert_eq!(
+            ctx.get_var("session_y"),
+            Some(&Value::Text("test".to_string()))
+        );
     }
 
     #[test]
@@ -2234,7 +2243,10 @@ mod tests {
         // Unquoted identifiers become Text
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.evaluate_constant("some_identifier"), Value::Text("some_identifier".to_string()));
+        assert_eq!(
+            executor.evaluate_constant("some_identifier"),
+            Value::Text("some_identifier".to_string())
+        );
     }
 
     // --- StoredProcExecutor: expand_variables_in_sql ---
@@ -2255,7 +2267,10 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.set_var("user_id", Value::Integer(42));
         let sql = "SELECT * FROM users WHERE id = @user_id";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE id = 42");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "SELECT * FROM users WHERE id = 42"
+        );
     }
 
     #[test]
@@ -2265,7 +2280,10 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.set_var("name", Value::Text("Alice".to_string()));
         let sql = "SELECT * FROM users WHERE name = '@name'";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE name = 'Alice'");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "SELECT * FROM users WHERE name = 'Alice'"
+        );
     }
 
     #[test]
@@ -2274,7 +2292,10 @@ mod tests {
         let executor = StoredProcExecutor::new_for_test(catalog);
         let ctx = ProcedureContext::new();
         let sql = "SELECT * FROM users WHERE id = @undefined_var";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE id = NULL");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "SELECT * FROM users WHERE id = NULL"
+        );
     }
 
     #[test]
@@ -2285,7 +2306,10 @@ mod tests {
         ctx.set_var("a", Value::Integer(1));
         ctx.set_var("b", Value::Integer(2));
         let sql = "WHERE x = @a AND y = @b";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "WHERE x = 1 AND y = 2");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "WHERE x = 1 AND y = 2"
+        );
     }
 
     #[test]
@@ -2295,7 +2319,10 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.set_var("user123", Value::Integer(100));
         let sql = "SELECT * FROM users WHERE user_id = @user123";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE user_id = 100");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "SELECT * FROM users WHERE user_id = 100"
+        );
     }
 
     // --- StoredProcExecutor: compare_values ---
@@ -2407,8 +2434,14 @@ mod tests {
         let a = Value::Integer(5);
         let b = Value::Integer(10);
         assert_eq!(executor.partial_cmp(&a, &b), Some(std::cmp::Ordering::Less));
-        assert_eq!(executor.partial_cmp(&b, &a), Some(std::cmp::Ordering::Greater));
-        assert_eq!(executor.partial_cmp(&a, &a), Some(std::cmp::Ordering::Equal));
+        assert_eq!(
+            executor.partial_cmp(&b, &a),
+            Some(std::cmp::Ordering::Greater)
+        );
+        assert_eq!(
+            executor.partial_cmp(&a, &a),
+            Some(std::cmp::Ordering::Equal)
+        );
     }
 
     #[test]
@@ -2451,7 +2484,10 @@ mod tests {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
         // Integer vs Float
-        assert_eq!(executor.partial_cmp(&Value::Integer(1), &Value::Float(1.0)), None);
+        assert_eq!(
+            executor.partial_cmp(&Value::Integer(1), &Value::Float(1.0)),
+            None
+        );
     }
 
     // --- StoredProcExecutor: arithmetic_op ---
@@ -2460,52 +2496,80 @@ mod tests {
     fn test_arithmetic_op_integer_add() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.arithmetic_op(&Value::Integer(1), &Value::Integer(2), "+"), Ok(Value::Integer(3)));
+        assert_eq!(
+            executor.arithmetic_op(&Value::Integer(1), &Value::Integer(2), "+"),
+            Ok(Value::Integer(3))
+        );
     }
 
     #[test]
     fn test_arithmetic_op_integer_subtract() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.arithmetic_op(&Value::Integer(10), &Value::Integer(3), "-"), Ok(Value::Integer(7)));
+        assert_eq!(
+            executor.arithmetic_op(&Value::Integer(10), &Value::Integer(3), "-"),
+            Ok(Value::Integer(7))
+        );
     }
 
     #[test]
     fn test_arithmetic_op_integer_multiply() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.arithmetic_op(&Value::Integer(6), &Value::Integer(7), "*"), Ok(Value::Integer(42)));
+        assert_eq!(
+            executor.arithmetic_op(&Value::Integer(6), &Value::Integer(7), "*"),
+            Ok(Value::Integer(42))
+        );
     }
 
     #[test]
     fn test_arithmetic_op_integer_divide() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.arithmetic_op(&Value::Integer(20), &Value::Integer(4), "/"), Ok(Value::Integer(5)));
+        assert_eq!(
+            executor.arithmetic_op(&Value::Integer(20), &Value::Integer(4), "/"),
+            Ok(Value::Integer(5))
+        );
     }
 
     #[test]
     fn test_arithmetic_op_integer_divide_by_zero() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert!(executor.arithmetic_op(&Value::Integer(1), &Value::Integer(0), "/").is_err());
+        assert!(executor
+            .arithmetic_op(&Value::Integer(1), &Value::Integer(0), "/")
+            .is_err());
     }
 
     #[test]
     fn test_arithmetic_op_float_operations() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert_eq!(executor.arithmetic_op(&Value::Float(1.5), &Value::Float(2.5), "+"), Ok(Value::Float(4.0)));
-        assert_eq!(executor.arithmetic_op(&Value::Float(5.0), &Value::Float(2.0), "-"), Ok(Value::Float(3.0)));
-        assert_eq!(executor.arithmetic_op(&Value::Float(3.0), &Value::Float(2.0), "*"), Ok(Value::Float(6.0)));
-        assert_eq!(executor.arithmetic_op(&Value::Float(6.0), &Value::Float(2.0), "/"), Ok(Value::Float(3.0)));
+        assert_eq!(
+            executor.arithmetic_op(&Value::Float(1.5), &Value::Float(2.5), "+"),
+            Ok(Value::Float(4.0))
+        );
+        assert_eq!(
+            executor.arithmetic_op(&Value::Float(5.0), &Value::Float(2.0), "-"),
+            Ok(Value::Float(3.0))
+        );
+        assert_eq!(
+            executor.arithmetic_op(&Value::Float(3.0), &Value::Float(2.0), "*"),
+            Ok(Value::Float(6.0))
+        );
+        assert_eq!(
+            executor.arithmetic_op(&Value::Float(6.0), &Value::Float(2.0), "/"),
+            Ok(Value::Float(3.0))
+        );
     }
 
     #[test]
     fn test_arithmetic_op_float_divide_by_zero() {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
-        assert!(executor.arithmetic_op(&Value::Float(1.0), &Value::Float(0.0), "/").is_err());
+        assert!(executor
+            .arithmetic_op(&Value::Float(1.0), &Value::Float(0.0), "/")
+            .is_err());
     }
 
     #[test]
@@ -2513,7 +2577,9 @@ mod tests {
         let catalog = Arc::new(Catalog::new("test"));
         let executor = StoredProcExecutor::new_for_test(catalog);
         // Text + Integer is not supported
-        assert!(executor.arithmetic_op(&Value::Text("a".to_string()), &Value::Integer(1), "+").is_err());
+        assert!(executor
+            .arithmetic_op(&Value::Text("a".to_string()), &Value::Integer(1), "+")
+            .is_err());
     }
 
     // --- HandlerCondition matching ---
@@ -2523,9 +2589,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlException,
-            vec![StoredProcStatement::Return { value: "1".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "1".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "45000".to_string(), message: "test".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "45000".to_string(),
+            message: "test".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2534,9 +2605,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlException,
-            vec![StoredProcStatement::Return { value: "1".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "1".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "22000".to_string(), message: "data error".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "22000".to_string(),
+            message: "data error".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2545,9 +2621,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlException,
-            vec![StoredProcStatement::Return { value: "1".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "1".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "01000".to_string(), message: "warning".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "01000".to_string(),
+            message: "warning".to_string(),
+        };
         // 01xxx is SQLWARNING, not SQLEXCEPTION
         assert!(ctx.find_matching_handler(&exc).is_none());
     }
@@ -2557,9 +2638,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlWarning,
-            vec![StoredProcStatement::Return { value: "2".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "2".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "01000".to_string(), message: "warning".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "01000".to_string(),
+            message: "warning".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2568,9 +2654,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::NotFound,
-            vec![StoredProcStatement::Return { value: "3".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "3".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "02000".to_string(), message: "no rows".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "02000".to_string(),
+            message: "no rows".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2579,9 +2670,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlState("23000".to_string()),
-            vec![StoredProcStatement::Return { value: "4".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "4".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "23000".to_string(), message: "constraint".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "23000".to_string(),
+            message: "constraint".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2590,9 +2686,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::Custom("deadlock".to_string()),
-            vec![StoredProcStatement::Return { value: "5".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "5".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "40001".to_string(), message: "deadlock detected".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "40001".to_string(),
+            message: "deadlock detected".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_some());
     }
 
@@ -2603,7 +2704,10 @@ mod tests {
         ctx.push_handler(HandlerCondition::SqlException, vec![]);
         ctx.push_handler(HandlerCondition::NotFound, vec![]);
         // Should find the first matching one (top of stack)
-        let exc = StoredProcError { sqlstate: "45000".to_string(), message: "error".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "45000".to_string(),
+            message: "error".to_string(),
+        };
         let handler = ctx.find_matching_handler(&exc);
         assert!(handler.is_some());
     }
@@ -2613,9 +2717,14 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.push_handler(
             HandlerCondition::SqlState("99999".to_string()),
-            vec![StoredProcStatement::Return { value: "1".to_string() }],
+            vec![StoredProcStatement::Return {
+                value: "1".to_string(),
+            }],
         );
-        let exc = StoredProcError { sqlstate: "00000".to_string(), message: "unknown".to_string() };
+        let exc = StoredProcError {
+            sqlstate: "00000".to_string(),
+            message: "unknown".to_string(),
+        };
         assert!(ctx.find_matching_handler(&exc).is_none());
     }
 
@@ -2631,10 +2740,13 @@ mod tests {
         );
         ctx.open_cursor("cur").unwrap();
         // Fetch with 3 vars but only 2 columns
-        let result = ctx.fetch_cursor("cur", &["v1".to_string(), "v2".to_string(), "v3".to_string()]);
+        let result = ctx.fetch_cursor(
+            "cur",
+            &["v1".to_string(), "v2".to_string(), "v3".to_string()],
+        );
         assert!(result.is_ok());
         assert!(result.unwrap()); // has rows
-        // Third var should be set to Null
+                                  // Third var should be set to Null
         assert_eq!(ctx.get_var("v3"), Some(&Value::Null));
     }
 
@@ -2713,7 +2825,10 @@ mod tests {
         let mut ctx = ProcedureContext::new();
         ctx.set_var("user_name", Value::Text("Bob".to_string()));
         let sql = "SELECT * FROM users WHERE name = '@user_name'";
-        assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "SELECT * FROM users WHERE name = 'Bob'");
+        assert_eq!(
+            executor.expand_variables_in_sql(sql, &ctx),
+            "SELECT * FROM users WHERE name = 'Bob'"
+        );
     }
 
     #[test]

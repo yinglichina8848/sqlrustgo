@@ -393,8 +393,8 @@ pub enum Expression {
     Subquery(Box<SelectStatement>),
     In(Box<Expression>, Box<SelectStatement>),
     NotIn(Box<Expression>, Box<SelectStatement>),
-    InList(Box<Expression>, Vec<Expression>),  // MySQL: col IN (1, 2, 3)
-    NotInList(Box<Expression>, Vec<Expression>),  // MySQL: col NOT IN (1, 2, 3)
+    InList(Box<Expression>, Vec<Expression>), // MySQL: col IN (1, 2, 3)
+    NotInList(Box<Expression>, Vec<Expression>), // MySQL: col NOT IN (1, 2, 3)
     Exists(Box<SelectStatement>),
     NotExists(Box<SelectStatement>),
     QuantifiedOp(Box<Expression>, String, Box<SelectStatement>),
