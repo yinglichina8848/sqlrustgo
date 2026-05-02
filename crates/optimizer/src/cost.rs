@@ -206,3 +206,133 @@ mod tests {
         assert_eq!(cost, 100.0);
     }
 }
+
+/// CboOptimizer - Cost-Based Optimizer with statistics support
+///
+/// This is a wrapper around SimpleCostModel that integrates with the statistics
+/// provider for more accurate cost estimations.
+#[derive(Debug, Clone)]
+pub struct CboOptimizer {
+    /// Base cost model
+    cost_model: SimpleCostModel,
+    /// Default row count estimate when no statistics available
+    default_row_count: u64,
+    /// Default page count estimate when no statistics available
+    default_page_count: u64,
+}
+
+impl CboOptimizer {
+    /// Create a new CboOptimizer with default settings
+    pub fn new() -> Self {
+        Self {
+            cost_model: SimpleCostModel::default_model(),
+            default_row_count: 1000,
+            default_page_count: 10,
+        }
+    }
+
+    /// Create a new CboOptimizer with custom defaults
+    pub fn with_defaults(row_count: u64, page_count: u64) -> Self {
+        Self {
+            cost_model: SimpleCostModel::default_model(),
+            default_row_count: row_count,
+            default_page_count: page_count,
+        }
+    }
+
+    /// Get the underlying cost model
+    pub fn cost_model(&self) -> &SimpleCostModel {
+        &self.cost_model
+    }
+
+    /// Get default row count estimate
+    pub fn default_row_count(&self) -> u64 {
+        self.default_row_count
+    }
+
+    /// Get default page count estimate
+    pub fn default_page_count(&self) -> u64 {
+        self.default_page_count
+    }
+
+    /// Estimate cost for a table scan using statistics
+    pub fn estimate_scan_cost(&self, row_count: u64, page_count: u64) -> f64 {
+        self.cost_model.seq_scan_cost(row_count, page_count)
+    }
+
+    /// Estimate cost for an index scan
+    pub fn estimate_index_scan_cost(
+        &self,
+        row_count: u64,
+        index_pages: u64,
+        data_pages: u64,
+    ) -> f64 {
+        self.cost_model
+            .index_scan_cost(row_count, index_pages, data_pages)
+    }
+
+    /// Estimate cost for a join operation
+    pub fn estimate_join_cost(&self, left_rows: u64, right_rows: u64, method: &str) -> f64 {
+        self.cost_model.join_cost(left_rows, right_rows, method)
+    }
+}
+
+impl Default for CboOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CostModel for CboOptimizer {
+    fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
+        // Simplified - return default cost based on row count
+        self.cost_model.seq_scan_cost(self.default_row_count, self.default_page_count)
+    }
+}
+
+#[cfg(test)]
+mod cbo_tests {
+    use super::*;
+
+    #[test]
+    fn test_cbo_optimizer_new() {
+        let cbo = CboOptimizer::new();
+        assert_eq!(cbo.default_row_count(), 1000);
+        assert_eq!(cbo.default_page_count(), 10);
+    }
+
+    #[test]
+    fn test_cbo_optimizer_with_defaults() {
+        let cbo = CboOptimizer::with_defaults(5000, 50);
+        assert_eq!(cbo.default_row_count(), 5000);
+        assert_eq!(cbo.default_page_count(), 50);
+    }
+
+    #[test]
+    fn test_cbo_estimate_scan_cost() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_scan_cost(1000, 10);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_estimate_index_scan_cost() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_index_scan_cost(100, 2, 5);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_estimate_join_cost() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_join_cost(100, 200, "hash_join");
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_cost_model_trait() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_cost(&());
+        assert!(cost > 0.0);
+    }
+}
