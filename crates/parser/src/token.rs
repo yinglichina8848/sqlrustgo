@@ -128,6 +128,7 @@ pub enum Token {
 
     // MySQL-specific keywords
     Duplicate,
+    Modify,
 
     // Transaction keywords
     Transaction,
@@ -252,6 +253,7 @@ impl fmt::Display for Token {
             Token::Truncate => write!(f, "TRUNCATE"),
             Token::Replace => write!(f, "REPLACE"),
             Token::Duplicate => write!(f, "DUPLICATE"),
+            Token::Modify => write!(f, "MODIFY"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
@@ -483,6 +485,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "TRUNCATE" => Some(Token::Truncate),
         "REPLACE" => Some(Token::Replace),
         "DUPLICATE" => Some(Token::Duplicate),
+        "MODIFY" => Some(Token::Modify),
         "SHOW" => Some(Token::Show),
         "DESCRIBE" => Some(Token::Describe),
         "ROLE" => Some(Token::Role),

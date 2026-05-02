@@ -83,6 +83,14 @@ pub enum AlterTableOperation {
         nullable: bool,
         default_value: Option<String>,
     },
+    DropColumn {
+        name: String,
+    },
+    ModifyColumn {
+        name: String,
+        data_type: String,
+        nullable: bool,
+    },
     RenameTo {
         new_name: String,
     },
@@ -3325,7 +3333,48 @@ impl Parser {
                     operation: AlterTableOperation::RenameTo { new_name },
                 }))
             }
-            _ => Err("Expected ADD or RENAME".to_string()),
+            Some(Token::Drop) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Column)) {
+                    self.next();
+                }
+                let col_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::DropColumn { name: col_name },
+                }))
+            }
+            Some(Token::Modify) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Column)) {
+                    self.next();
+                }
+                let col_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.next() {
+                    Some(Token::Identifier(typename)) => typename,
+                    Some(Token::Integer) => "INTEGER".to_string(),
+                    Some(Token::Text) => "TEXT".to_string(),
+                    Some(Token::Float) => "FLOAT".to_string(),
+                    Some(Token::Boolean) => "BOOLEAN".to_string(),
+                    _ => return Err("Expected data type".to_string()),
+                };
+                let nullable = true;
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::ModifyColumn {
+                        name: col_name,
+                        data_type,
+                        nullable,
+                    },
+                }))
+            }
+            _ => Err("Expected ADD, DROP, MODIFY or RENAME".to_string()),
         }
     }
 }
