@@ -4,6 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Setup tool paths
+export PATH="$HOME/.local/z3/z3-4.12.2-x64-glibc-2.35/bin:$HOME/.dotnet/tools:$HOME/.dotnet:$PATH"
+export DOTNET_ROOT="$HOME/.dotnet"
+
 echo "=== SQLRustGo Formal Verification ==="
 echo "Date: $(date)"
 echo ""
