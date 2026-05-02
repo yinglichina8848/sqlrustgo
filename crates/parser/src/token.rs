@@ -126,6 +126,9 @@ pub enum Token {
     Rollup,
     Cube,
 
+    // MySQL-specific keywords
+    Duplicate,
+
     // Transaction keywords
     Transaction,
     Work,
@@ -248,6 +251,7 @@ impl fmt::Display for Token {
             Token::Analyze => write!(f, "ANALYZE"),
             Token::Truncate => write!(f, "TRUNCATE"),
             Token::Replace => write!(f, "REPLACE"),
+            Token::Duplicate => write!(f, "DUPLICATE"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
@@ -478,6 +482,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ANALYZE" => Some(Token::Analyze),
         "TRUNCATE" => Some(Token::Truncate),
         "REPLACE" => Some(Token::Replace),
+        "DUPLICATE" => Some(Token::Duplicate),
         "SHOW" => Some(Token::Show),
         "DESCRIBE" => Some(Token::Describe),
         "ROLE" => Some(Token::Role),
