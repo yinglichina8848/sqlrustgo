@@ -10,6 +10,9 @@
 //! - Failover and health checking
 //! - Replica synchronization
 //! - Semi-synchronous replication (AFTER_SYNC/AFTER_COMMIT modes)
+//! - Multi-threaded slave (MTS) parallel replication
+//! - Multi-source replication from multiple masters
+//! - XA transaction coordinator for distributed transactions
 
 pub mod consensus;
 pub mod cross_shard_query;
@@ -18,6 +21,8 @@ pub mod error;
 pub mod failover_manager;
 pub mod grpc_client;
 pub mod grpc_server;
+pub mod mts;
+pub mod multi_source;
 pub mod partition;
 pub mod proto;
 pub mod raft;
@@ -28,6 +33,7 @@ pub mod semisync;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
+pub mod worker_pool;
 pub mod xa_coordinator;
 
 pub use consensus::{Operation, ShardReplicaManager};
@@ -40,6 +46,14 @@ pub use failover_manager::{
 };
 pub use grpc_client::{ClientPool, ShardClient};
 pub use grpc_server::{start_server, GraphStorage, ShardServer, ShardServerConfig, VectorStorage};
+pub use mts::{
+    LogicalClock, MtsConfig, MtsError, MtsParallelType, MtsState, MtsStats, TransactionEntry,
+    TransactionScheduler, WorkerStats,
+};
+pub use multi_source::{
+    ChannelId, ChannelMeta, ChannelState, ConflictRecord, ConflictResolution, ConflictStrategy,
+    MultiSourceConfig, MultiSourceError, MultiSourceManager, MultiSourceStats,
+};
 pub use partition::{PartitionKey, PartitionStrategy};
 pub use raft::{RaftMessage, RaftNode, RaftState};
 pub use replica_sync::{ReplicaSynchronizer, SyncConfig, SyncProgress, SyncResult, LSN};
@@ -49,7 +63,7 @@ pub use replication::{
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
 };
 pub use semisync::{
-    SemiSyncMode, SemiSyncMaster, SemiSyncMasterStatus,
+    SemiSyncError as SemiSyncMasterError, SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode,
     SemiSyncSlave, SemiSyncSlaveStatus, SemiSyncTimeoutError,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
@@ -60,4 +74,9 @@ pub use shard_router::{
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
-pub use xa_coordinator::{XaCoordinator, XaError, XaState, XaTransaction, Xid};
+pub use worker_pool::{
+    Worker, WorkerMessage, WorkerPool, WorkerPoolConfig, WorkerPoolState, WorkerPoolStats,
+};
+pub use xa_coordinator::{
+    XaCoordinator, XaError, XaTransaction, XaTransactionState, Xid,
+};
