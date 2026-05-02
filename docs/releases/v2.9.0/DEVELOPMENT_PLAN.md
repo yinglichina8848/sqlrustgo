@@ -65,12 +65,15 @@
 | C-06 | 子查询去关联优化 | P1 | 5d |
 
 ### Phase D: 分布式增强 (Distributed)
-| Task | 功能 | 优先级 | 工时 |
-|------|------|--------|------|
-| D-01 | 半同步复制完善 | P1 | 3d |
-| D-02 | 并行复制 (MTS) | P1 | 5d |
-| D-03 | 多源复制 | P2 | 8d |
-| D-04 | 2PC 强化 | P1 | 5d |
+
+> 详细设计: [DISTRIBUTED_DESIGN.md](./DISTRIBUTED_DESIGN.md)
+
+| Task | 功能 | 优先级 | 工时 | MySQL 5.7 差距 |
+|------|------|--------|------|----------------|
+| D-01 | 半同步复制完善 | P1 | 3d | AFTER_SYNC/AFTER_COMMIT 模式 |
+| D-02 | 并行复制 (MTS) | P1 | 5d | LOGICAL_CLOCK 并行回放 |
+| D-03 | 多源复制 | P2 | 8d | 一从库多主源 |
+| D-04 | 2PC 强化 | P1 | 5d | XA 恢复、死锁检测 |
 
 ### Phase E: 生产就绪 (Enterprise)
 | Task | 功能 | 优先级 | 工时 |

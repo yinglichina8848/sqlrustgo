@@ -170,13 +170,26 @@ C-04: 窗口函数补全 (P1)
 
 ### Phase D: 分布式增强 → Z440 OpenCode
 
-```
-D-01: 半同步复制
-  crates/distributed/src/replication.rs
-  AFTER_SYNC, AFTER_COMMIT 模式
+> 详细设计: docs/releases/v2.9.0/DISTRIBUTED_DESIGN.md
 
-D-02: 并行复制 (MTS)
-  从库并行回放 WAL entry
+```
+D-01: 半同步复制 (3d)
+  crates/distributed/src/semisync.rs
+  AFTER_SYNC, AFTER_COMMIT 模式
+  超时降级、ACK 收集器
+
+D-02: 并行复制 MTS (5d)
+  crates/distributed/src/mts.rs
+  crates/distributed/src/worker_pool.rs
+  LOGICAL_CLOCK 并行回放、提交顺序保证
+
+D-03: 多源复制 (8d)
+  crates/distributed/src/multi_source.rs
+  通道管理、冲突解决
+
+D-04: 2PC 强化 (5d)
+  crates/distributed/src/xa_coordinator.rs
+  XA 恢复、死锁检测
 ```
 
 ### Phase E: 生产就绪 → OpenCode 3
