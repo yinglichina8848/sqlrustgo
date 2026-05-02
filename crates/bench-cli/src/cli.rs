@@ -87,3 +87,22 @@ pub struct CustomArgs {
     #[arg(long)]
     pub pg_conn: Option<String>,
 }
+
+#[derive(Parser, Debug)]
+pub struct TpchImportArgs {
+    /// Path to DDL file (CREATE TABLE statements)
+    #[arg(long)]
+    pub ddl: String,
+    /// Path to .tbl data files directory
+    #[arg(long)]
+    pub data: String,
+    /// Output directory for ColumnarStorage
+    #[arg(long)]
+    pub output: String,
+    /// Only verify data without importing
+    #[arg(long, default_value = "false")]
+    pub verify_only: bool,
+    /// Batch size for inserts
+    #[arg(long, default_value = "10000")]
+    pub batch_size: usize,
+}

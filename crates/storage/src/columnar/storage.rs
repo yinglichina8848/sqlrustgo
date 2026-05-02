@@ -6,7 +6,7 @@ use crate::columnar::chunk::{ColumnChunk, ColumnStats};
 use crate::columnar::segment::{
     auto_select_compression, ColumnSegment, ColumnStatsDisk, CompressionLevel, CompressionType,
 };
-use crate::engine::{StorageEngine, TableInfo, TableStats, TriggerInfo, ViewInfo};
+use crate::engine::{StorageEngine, TableInfo};
 use crate::wal::WalManager;
 use sqlrustgo_types::Value;
 use std::collections::HashMap;

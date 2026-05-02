@@ -8,8 +8,9 @@ mod cli;
 mod commands;
 mod metrics;
 mod reporter;
+mod tpch_import;
 
-use cli::BenchmarkConfig;
+use cli::{BenchmarkConfig, TpchImportArgs};
 use commands::{custom, oltp, tpch};
 
 #[derive(Parser, Debug)]
@@ -25,6 +26,7 @@ enum Command {
     Tpch(cli::TpchArgs),
     Oltp(cli::OltpArgs),
     Custom(cli::CustomArgs),
+    TpchImport(cli::TpchImportArgs),
 }
 
 /// Load configuration from file, CLI args take precedence
@@ -130,6 +132,12 @@ fn main() {
             if let Some(ref conn) = pg_conn {
                 println!("\n=== PostgreSQL Comparison ===");
                 run_pg_comparison(conn, 100);
+            }
+        }
+        Command::TpchImport(args) => {
+            if let Err(e) = tpch_import::run(args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
     };
