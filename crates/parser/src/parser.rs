@@ -41,6 +41,13 @@ pub enum Statement {
     Revoke(RevokeStatement),
     Show(ShowStatement),
     Describe(DescribeStatement),
+    CreateRole(CreateRoleStatement),
+    DropRole(DropRoleStatement),
+    GrantRole(GrantRoleStatement),
+    RevokeRole(RevokeRoleStatement),
+    SetRole(SetRoleStatement),
+    ShowRoles,
+    ShowGrantsFor(String),
 }
 
 /// UNION statement
@@ -196,6 +203,41 @@ pub enum ObjectType {
     Procedure,
     Function,
     Column,
+}
+
+/// CREATE ROLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateRoleStatement {
+    pub name: String,
+    pub parent_role: Option<String>,
+}
+
+/// DROP ROLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRoleStatement {
+    pub name: String,
+}
+
+/// GRANT role TO user statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrantRoleStatement {
+    pub role_name: String,
+    pub user_name: String,
+    pub host: Option<String>,
+}
+
+/// REVOKE role FROM user statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RevokeRoleStatement {
+    pub role_name: String,
+    pub user_name: String,
+    pub host: Option<String>,
+}
+
+/// SET ROLE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetRoleStatement {
+    pub role_name: String,
 }
 
 /// Join type
@@ -472,7 +514,7 @@ impl Parser {
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
             Some(Token::Create) => self.parse_create(),
-            Some(Token::Drop) => self.parse_drop_table(),
+            Some(Token::Drop) => self.parse_drop(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(Token::Analyze) => self.parse_analyze(),
             Some(Token::With) => self.parse_with_select(),
@@ -497,7 +539,14 @@ impl Parser {
             Some(Token::Begin) => self.parse_begin(),
             Some(Token::Commit) => self.parse_commit(),
             Some(Token::Rollback) => self.parse_rollback(),
-            Some(Token::Set) => self.parse_set_transaction(),
+            Some(Token::Set) => {
+                // Check if this is SET ROLE or SET TRANSACTION using peek
+                if let Some(Token::Role) = self.peek() {
+                    self.parse_set_role()
+                } else {
+                    self.parse_set_transaction()
+                }
+            }
             Some(Token::Start) => self.parse_start_transaction(),
             Some(t) => Err(format!("Unexpected transaction token: {:?}", t)),
             None => Err("Unexpected end of input".to_string()),
@@ -602,6 +651,18 @@ impl Parser {
         ))
     }
 
+    fn parse_set_role(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Set)?;
+        self.expect(Token::Role)?;
+        let role_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected role name, got {:?}", t)),
+            None => return Err("Expected role name".to_string()),
+        };
+        Ok(Statement::SetRole(SetRoleStatement { role_name }))
+    }
+
     fn parse_isolation_level_value(&mut self) -> Result<IsolationLevel, String> {
         match self.current() {
             Some(Token::Serializable) => {
@@ -642,12 +703,42 @@ impl Parser {
             Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
+            Some(Token::Role) => self.parse_create_role(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE, got {:?}",
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, PROCEDURE, or TRIGGER after CREATE".to_string()),
+            None => Err("Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE".to_string()),
         }
+    }
+
+    fn parse_create_role(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Role)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected role name, got {:?}", t)),
+            None => return Err("Expected role name".to_string()),
+        };
+
+        let mut parent_role = None;
+        if let Some(Token::Identifier(name)) = self.current() {
+            let upper = name.to_uppercase();
+            if upper == "WITH" {
+                self.next();
+                if matches!(self.current(), Some(Token::Parent)) {
+                    self.next();
+                    parent_role = match self.next() {
+                        Some(Token::Identifier(n)) => Some(n.clone()),
+                        Some(Token::StringLiteral(s)) => Some(s.clone()),
+                        Some(t) => return Err(format!("Expected parent role name, got {:?}", t)),
+                        None => return Err("Expected parent role name".to_string()),
+                    };
+                }
+            }
+        }
+
+        Ok(Statement::CreateRole(CreateRoleStatement { name, parent_role }))
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
@@ -2464,15 +2555,32 @@ impl Parser {
         Ok(columns)
     }
 
-    fn parse_drop_table(&mut self) -> Result<Statement, String> {
+    fn parse_drop(&mut self) -> Result<Statement, String> {
         self.expect(Token::Drop)?;
-        self.expect(Token::Table)?;
+        match self.current() {
+            Some(Token::Table) => {
+                self.next();
+                let name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::DropTable(DropTableStatement { name }))
+            }
+            Some(Token::Role) => self.parse_drop_role(),
+            Some(t) => Err(format!("Expected TABLE or ROLE after DROP, got {:?}", t)),
+            None => Err("Expected TABLE or ROLE after DROP".to_string()),
+        }
+    }
+
+    fn parse_drop_role(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Role)?;
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
-            _ => return Err("Expected table name".to_string()),
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected role name, got {:?}", t)),
+            None => return Err("Expected role name".to_string()),
         };
-
-        Ok(Statement::DropTable(DropTableStatement { name }))
+        Ok(Statement::DropRole(DropRoleStatement { name }))
     }
 
     fn parse_truncate(&mut self) -> Result<Statement, String> {
@@ -2533,17 +2641,18 @@ impl Parser {
             }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "GRANTS" => {
                 self.next();
-                let user = if matches!(self.current(), Some(Token::ForEach)) {
-                    self.next();
-                    match self.next() {
-                        Some(Token::StringLiteral(u)) => Some(u),
-                        Some(Token::Identifier(u)) => Some(u),
-                        _ => return Err("Expected user string".to_string()),
-                    }
-                } else {
-                    None
+                self.expect(Token::For)?;
+                let user = match self.next() {
+                    Some(Token::StringLiteral(u)) => u,
+                    Some(Token::Identifier(u)) => u,
+                    Some(t) => return Err(format!("Expected user string, got {:?}", t)),
+                    None => return Err("Expected user string".to_string()),
                 };
-                Ok(Statement::Show(ShowStatement::Grants { user }))
+                Ok(Statement::ShowGrantsFor(user))
+            }
+            Some(Token::Roles) => {
+                self.next();
+                Ok(Statement::ShowRoles)
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
@@ -2582,6 +2691,22 @@ impl Parser {
 
     fn parse_grant(&mut self) -> Result<Statement, String> {
         self.expect(Token::Grant)?;
+
+        // Detect if this is GRANT role_name TO user_name or GRANT privilege ON object TO user
+        let is_role_grant = match self.current() {
+            Some(Token::Select) | Some(Token::Insert) | Some(Token::Update)
+            | Some(Token::Delete) => false,
+            Some(Token::Identifier(name)) => {
+                let upper = name.to_uppercase();
+                !matches!(upper.as_str(), "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE")
+            }
+            Some(Token::StringLiteral(_)) => true,
+            _ => false,
+        };
+
+        if is_role_grant {
+            return self.parse_grant_role();
+        }
 
         let mut privileges = Vec::new();
         loop {
@@ -2739,8 +2864,75 @@ impl Parser {
         }))
     }
 
+    fn parse_grant_role(&mut self) -> Result<Statement, String> {
+        let role_name = match self.current() {
+            Some(Token::Identifier(name)) => name.clone(),
+            Some(Token::StringLiteral(s)) => s.clone(),
+            Some(t) => return Err(format!("Expected role name, got {:?}", t)),
+            None => return Err("Expected role name".to_string()),
+        };
+        self.next();
+
+        self.expect(Token::To)?;
+
+        let (user_name, host) = self.parse_user_identity()?;
+
+        Ok(Statement::GrantRole(GrantRoleStatement {
+            role_name,
+            user_name,
+            host,
+        }))
+    }
+
+    fn parse_user_identity(&mut self) -> Result<(String, Option<String>), String> {
+        let user_name = match self.current() {
+            Some(Token::Identifier(name)) => name.clone(),
+            Some(Token::StringLiteral(s)) => s.clone(),
+            Some(t) => return Err(format!("Expected user name, got {:?}", t)),
+            None => return Err("Expected user name".to_string()),
+        };
+        self.next();
+
+        Ok((user_name, None))
+    }
+
+    fn parse_revoke_role(&mut self) -> Result<Statement, String> {
+        let role_name = match self.current() {
+            Some(Token::Identifier(name)) => name.clone(),
+            Some(Token::StringLiteral(s)) => s.clone(),
+            Some(t) => return Err(format!("Expected role name, got {:?}", t)),
+            None => return Err("Expected role name".to_string()),
+        };
+        self.next();
+
+        self.expect(Token::From)?;
+
+        let (user_name, host) = self.parse_user_identity()?;
+
+        Ok(Statement::RevokeRole(RevokeRoleStatement {
+            role_name,
+            user_name,
+            host,
+        }))
+    }
+
     fn parse_revoke(&mut self) -> Result<Statement, String> {
         self.expect(Token::Revoke)?;
+
+        let is_role_revoke = match self.current() {
+            Some(Token::Select) | Some(Token::Insert) | Some(Token::Update)
+            | Some(Token::Delete) => false,
+            Some(Token::Identifier(name)) => {
+                let upper = name.to_uppercase();
+                !matches!(upper.as_str(), "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE")
+            }
+            Some(Token::StringLiteral(_)) => true,
+            _ => false,
+        };
+
+        if is_role_revoke {
+            return self.parse_revoke_role();
+        }
 
         let grant_option_for = if let Some(Token::Identifier(name)) = self.current() {
             if name.to_uppercase() == "GRANT" {
