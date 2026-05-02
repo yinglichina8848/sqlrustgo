@@ -174,12 +174,8 @@ impl SemiSyncMaster {
         SemiSyncMasterStatus {
             rpl_semi_sync_master_status: status.rpl_semi_sync_master_status,
             rpl_semi_sync_master_clients: status.rpl_semi_sync_master_clients,
-            rpl_semi_sync_master_yes_transactions: self
-                .yes_transactions
-                .load(Ordering::SeqCst),
-            rpl_semi_sync_master_no_transactions: self
-                .no_transactions
-                .load(Ordering::SeqCst),
+            rpl_semi_sync_master_yes_transactions: self.yes_transactions.load(Ordering::SeqCst),
+            rpl_semi_sync_master_no_transactions: self.no_transactions.load(Ordering::SeqCst),
         }
     }
 
