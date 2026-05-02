@@ -3,6 +3,7 @@
 //! Catalog -> Schema -> Table
 //! Catalog -> StoredProcedure
 
+use crate::auth::{AuthManager, ObjectType, Privilege, UserIdentity};
 use crate::error::{CatalogError, CatalogResult};
 use crate::schema::Schema;
 use crate::stored_proc::StoredProcedure;
@@ -20,6 +21,8 @@ pub struct Catalog {
     default_schema: String,
     /// Stored procedures (name -> StoredProcedure)
     stored_procedures: HashMap<String, StoredProcedure>,
+    #[serde(skip)]
+    auth_manager: AuthManager,
 }
 
 impl Catalog {
@@ -31,6 +34,7 @@ impl Catalog {
             schemas: HashMap::new(),
             default_schema: "public".to_string(),
             stored_procedures: HashMap::new(),
+            auth_manager: AuthManager::new(),
         }
     }
 
@@ -142,6 +146,45 @@ impl Catalog {
     /// List all stored procedures
     pub fn stored_procedures(&self) -> Vec<&StoredProcedure> {
         self.stored_procedures.values().collect()
+    }
+
+    /// Grant a privilege to a user
+    pub fn grant_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+        grant_option: bool,
+    ) -> CatalogResult<u64> {
+        self.auth_manager
+            .grant_privilege(
+                identity,
+                privilege,
+                object_type,
+                object_name,
+                &UserIdentity::new("root", "%"),
+                grant_option,
+            )
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Revoke a privilege from a user
+    pub fn revoke_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+    ) -> CatalogResult<()> {
+        self.auth_manager
+            .revoke_privilege(identity, privilege, object_type, object_name)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Get the auth manager for direct access
+    pub fn auth_manager(&self) -> &AuthManager {
+        &self.auth_manager
     }
 }
 

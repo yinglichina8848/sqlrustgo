@@ -1,6 +1,34 @@
--- === SKIP ===
-
 -- === Common Table Expression Advanced Test Suite ===
+
+-- === SETUP ===
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));
+CREATE TABLE orders (order_id INT PRIMARY KEY, user_id INT, total DECIMAL(10,2));
+CREATE TABLE employees (id INT PRIMARY KEY, name VARCHAR(100), manager_id INT);
+
+INSERT INTO users VALUES (1, 'Alice', 'alice@email.com');
+INSERT INTO users VALUES (2, 'Bob', 'bob@email.com');
+INSERT INTO users VALUES (3, 'Charlie', 'charlie@email.com');
+INSERT INTO users VALUES (4, 'Diana', 'diana@email.com');
+INSERT INTO users VALUES (5, 'Eve', 'eve@email.com');
+
+INSERT INTO orders VALUES (1, 1, 150.00);
+INSERT INTO orders VALUES (2, 1, 250.00);
+INSERT INTO orders VALUES (3, 2, 100.00);
+INSERT INTO orders VALUES (4, 3, 300.00);
+INSERT INTO orders VALUES (5, 4, 450.00);
+INSERT INTO orders VALUES (6, 5, 200.00);
+INSERT INTO orders VALUES (7, 1, 175.00);
+INSERT INTO orders VALUES (8, 2, 125.00);
+INSERT INTO orders VALUES (9, 3, 350.00);
+INSERT INTO orders VALUES (10, 4, 500.00);
+
+INSERT INTO employees VALUES (1, 'CEO', NULL);
+INSERT INTO employees VALUES (2, 'Manager1', 1);
+INSERT INTO employees VALUES (3, 'Manager2', 1);
+INSERT INTO employees VALUES (4, 'Employee1', 2);
+INSERT INTO employees VALUES (5, 'Employee2', 2);
+INSERT INTO employees VALUES (6, 'Employee3', 3);
+INSERT INTO employees VALUES (7, 'Employee4', 3);
 
 -- === CASE: Recursive CTE for factorial ===
 -- EXPECT: 6 rows

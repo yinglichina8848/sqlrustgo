@@ -1,0 +1,17 @@
+{
+  "registry_version": "1.0",
+  "updated_at": "2026-05-02",
+  "total_proofs": 10,
+  "proofs": [
+    {"id": "PROOF-001", "title": "SQL SELECT 解析不丢失信息", "language": "Formulog", "category": "parser"},
+    {"id": "PROOF-002", "title": "类型推断终止且唯一", "language": "Dafny", "category": "type_system"},
+    {"id": "PROOF-003", "title": "WAL 重放后等于崩溃前已提交状态", "language": "TLA+", "category": "transaction"},
+    {"id": "PROOF-004", "title": "B+Tree 查询返回所有匹配行", "language": "Dafny", "category": "storage"},
+    {"id": "PROOF-005", "title": "MVCC 快照读一致性", "language": "TLA+", "category": "transaction"},
+    {"id": "PROOF-006", "title": "SQL WHERE 子句语义保持", "language": "Formulog", "category": "parser"},
+    {"id": "PROOF-007", "title": "JOIN 语法树构造正确性", "language": "Formulog", "category": "parser"},
+    {"id": "PROOF-008", "title": "ORDER BY 排序语义正确性", "language": "Formulog", "category": "parser"},
+    {"id": "PROOF-009", "title": "聚合函数语义完整性", "language": "Dafny", "category": "executor"},
+    {"id": "PROOF-010", "title": "子查询嵌套正确性", "language": "Formulog", "category": "parser"}
+  ]
+}

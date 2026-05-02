@@ -34,8 +34,6 @@ fn test_parse_call_with_args() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports NULL literal
-#[ignore]
 #[test]
 fn test_parse_call_with_null() {
     let sql = "CALL test_proc(NULL)";
@@ -66,8 +64,6 @@ fn test_parse_create_procedure_simple() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports IN/OUT/INOUT parameter modes
-#[ignore]
 #[test]
 fn test_parse_create_procedure_with_in_param() {
     let sql =
@@ -86,8 +82,6 @@ fn test_parse_create_procedure_with_in_param() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports IN/OUT/INOUT parameter modes
-#[ignore]
 #[test]
 fn test_parse_create_procedure_with_multiple_params() {
     let sql = "CREATE PROCEDURE add_user(IN name TEXT, IN email TEXT) BEGIN INSERT INTO users VALUES (name, email) END";
@@ -106,8 +100,6 @@ fn test_parse_create_procedure_with_multiple_params() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports IN/OUT/INOUT parameter modes
-#[ignore]
 #[test]
 fn test_parse_create_procedure_with_out_param() {
     let sql =
@@ -128,7 +120,6 @@ fn test_parse_create_procedure_with_out_param() {
 
 #[test]
 fn test_parse_create_procedure_without_param_mode() {
-    // When no mode is specified, defaults to IN
     let sql = "CREATE PROCEDURE test_proc(id INTEGER) BEGIN SELECT * FROM users END";
     let result = parse(sql);
     assert!(result.is_ok(), "Parse failed: {:?}", result);
@@ -144,8 +135,6 @@ fn test_parse_create_procedure_without_param_mode() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports IN/OUT/INOUT parameter modes
-#[ignore]
 #[test]
 fn test_parse_create_procedure_with_inout_param() {
     let sql =
@@ -164,8 +153,6 @@ fn test_parse_create_procedure_with_inout_param() {
     }
 }
 
-// TODO(v2.6.0): Re-enable when parser supports NULL literal
-#[ignore]
 #[test]
 fn test_parse_call_with_mixed_args() {
     let sql = "CALL process_user(1, 'Alice', balance, NULL)";

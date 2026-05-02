@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement,
+    WithSelect,
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
@@ -196,6 +197,10 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::WithSelect(with_select) => {
+                self.execute_with_select(&with_select)?;
+                Ok(ExecutorResult::new(vec![], 0))
+            }
             _ => Err("Unsupported statement type".to_string()),
         }
     }
@@ -410,6 +415,53 @@ impl SimpleExecutor {
             .columns
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    }
+
+    fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
+        if let Some(ref with_clause) = with_select.with_clause {
+            for cte in &with_clause.ctes {
+                let cte_rows = self.execute_select(&cte.subquery)?;
+                let column_count = if cte.columns.is_empty() {
+                    if cte_rows.is_empty() {
+                        0
+                    } else {
+                        cte_rows[0].len()
+                    }
+                } else {
+                    cte.columns.len()
+                };
+                let columns: Vec<ColumnDefinition> = (0..column_count)
+                    .map(|i| ColumnDefinition {
+                        name: if cte.columns.is_empty() {
+                            format!("col_{}", i)
+                        } else {
+                            cte.columns[i].clone()
+                        },
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    })
+                    .collect();
+                let table_info = TableInfo {
+                    name: cte.name.clone(),
+                    columns,
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                };
+                self.storage
+                    .create_table(&table_info)
+                    .map_err(|e| format!("Create CTE table error: {:?}", e))?;
+                if !cte_rows.is_empty() {
+                    self.storage
+                        .insert(&cte.name, cte_rows)
+                        .map_err(|e| format!("Insert CTE rows error: {:?}", e))?;
+                }
+            }
+        }
+        self.execute_select(&with_select.select)?;
+        Ok(())
     }
 }
 

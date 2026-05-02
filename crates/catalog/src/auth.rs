@@ -473,6 +473,7 @@ impl std::error::Error for AuthError {}
 
 pub type AuthResult<T> = Result<T, AuthError>;
 
+#[derive(Debug, Clone)]
 pub struct AuthManager {
     users: HashMap<UserIdentity, UserAuthInfo>,
     roles: HashMap<u64, Role>,

@@ -273,6 +273,7 @@ impl<'a> Lexer<'a> {
                     "ALL" => Token::All,
                     "ANY" => Token::Any,
                     "SOME" => Token::Some,
+                    "AS" => Token::As,
                     "WITH" => Token::With,
                     "RECURSIVE" => Token::Recursive,
                     "COUNT" => Token::Count,

@@ -1,0 +1,16 @@
+{
+  "proof_id": "PROOF-002",
+  "title": "类型推断终止且唯一",
+  "language": "Dafny",
+  "category": "type_system",
+  "status": "verified",
+  "target": "Type inference termination and uniqueness",
+  "description": "证明类型推断算法对所有合法输入终止且返回唯一类型。",
+  "evidence": {
+    "test_results": "cargo test type_inference: passed",
+    "verification_method": "Dafny 形式化证明 + 单元测试"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
+}

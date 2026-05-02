@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Formal Proof",
+  "description": "Schema for formal proof records in SQLRustGo",
+  "type": "object",
+  "required": ["proof_id", "title", "language", "category", "status", "description", "evidence", "created_at"],
+  "properties": {
+    "proof_id": {
+      "type": "string",
+      "pattern": "^PROOF-\\d{3}$",
+      "description": "Unique proof identifier (e.g., PROOF-001)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable proof title"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["Formulog", "Dafny", "TLA+", "Coq", "Lean", "Isabelle", "ACL2"],
+      "description": "Formal verification language"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["parser", "type_system", "transaction", "storage", "executor", "optimizer", "network"],
+      "description": "Component category"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "in_review", "verified", "expired"],
+      "description": "Proof verification status"
+    },
+    "target": {
+      "type": "string",
+      "description": "Specific property being proven"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed proof description"
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["verification_method"],
+      "properties": {
+        "test_results": {
+          "type": "string",
+          "description": "Test results or benchmark data"
+        },
+        "corpus_results": {
+          "type": "string",
+          "description": "SQL Corpus test results"
+        },
+        "verification_method": {
+          "type": "string",
+          "description": "How the proof was verified"
+        },
+        "formal_spec": {
+          "type": "string",
+          "description": "Reference to formal specification file"
+        },
+        "formal_proof_file": {
+          "type": "string",
+          "description": "Path to formal proof file"
+        }
+      }
+    },
+    "author": {
+      "type": "string",
+      "description": "Proof author"
+    },
+    "reviewer": {
+      "type": "string",
+      "description": "Proof reviewer"
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Verification timestamp"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Proof expiration date"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Creation date"
+    }
+  }
+}
