@@ -557,6 +557,8 @@ fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     p.extend_from_slice(&[0u8; 10]); // reserved
     p.extend_from_slice(&scramble[8..20]);
     p.push(0x00); // scramble part2 + null
+    p.extend_from_slice(AUTH_PLUGIN.as_bytes()); // auth plugin name
+    p.push(0x00); // null terminator for plugin name
     Packet {
         length: p.len() as u32,
         sequence: seq,
