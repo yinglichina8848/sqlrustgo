@@ -332,10 +332,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })
     }
 
-    /// Execute a SQL statement and return results
-    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
-        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-
+    /// Execute a pre-parsed SQL statement and return results
+    /// This avoids re-parsing on every execute for prepared statements
+    pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
         match statement {
             Statement::Select(ref select) => self.execute_select(select),
             Statement::Insert(ref insert) => self.execute_insert(insert),
@@ -361,7 +360,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ))
             }
             Statement::Union(ref union_stmt) => {
-                // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
                     _ => {
@@ -382,10 +380,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut left_result = self.execute_select(left_select)?;
                 let right_result = self.execute_select(right_select)?;
 
-                // Append rows from right to left
                 left_result.rows.extend(right_result.rows);
 
-                // If not UNION ALL, deduplicate
                 if !union_stmt.union_all {
                     left_result.rows.sort();
                     left_result.rows.dedup();
@@ -412,9 +408,15 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             _ => Err(SqlError::ExecutionError(
-                "Unsupported statement type".to_string(),
+                format!("Unsupported statement type: {:?}", std::mem::discriminant(&statement)),
             )),
         }
+    }
+
+    /// Execute a SQL statement and return results
+    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
+        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        self.execute_statement(statement)
     }
 
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
