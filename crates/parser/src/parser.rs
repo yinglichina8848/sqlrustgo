@@ -27,7 +27,9 @@ pub enum Statement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
+    CreateView(CreateViewStatement),
     DropTable(DropTableStatement),
+    DropView(DropViewStatement),
     Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
     WithSelect(WithSelect),
@@ -141,6 +143,21 @@ pub struct CreateTriggerStatement {
     pub timing: String,
     pub events: Vec<String>,
     pub body: String,
+}
+
+/// CREATE VIEW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStatement {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub query: Box<Statement>,
+}
+
+/// DROP VIEW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropViewStatement {
+    pub name: String,
+    pub if_exists: bool,
 }
 
 /// Common Table Expression (CTE)
@@ -719,13 +736,14 @@ impl Parser {
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(Token::Role) => self.parse_create_role(),
+            Some(Token::View) => self.parse_create_view(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE, got {:?}",
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE, got {:?}",
                 t
             )),
-            None => {
-                Err("Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE".to_string())
-            }
+            None => Err(
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE".to_string(),
+            ),
         }
     }
 
@@ -942,6 +960,56 @@ impl Parser {
             events,
             body: body.trim().to_string(),
         }))
+    }
+
+    fn parse_create_view(&mut self) -> Result<Statement, String> {
+        self.expect(Token::View)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected view name, got {:?}", t)),
+            None => return Err("Expected view name".to_string()),
+        };
+        let mut columns = Vec::new();
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            while !matches!(self.current(), Some(Token::RParen) | None) {
+                match self.next() {
+                    Some(Token::Identifier(col)) => columns.push(col),
+                    Some(Token::Comma) => {}
+                    t => return Err(format!("Expected column name, got {:?}", t)),
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+        self.expect(Token::As)?;
+        let query = Box::new(self.parse_select_or_union()?);
+        Ok(Statement::CreateView(CreateViewStatement {
+            name,
+            columns,
+            query,
+        }))
+    }
+
+    fn parse_drop_view(&mut self) -> Result<Statement, String> {
+        self.expect(Token::View)?;
+        let if_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            match self.current() {
+                Some(Token::Exists) => {
+                    self.next();
+                    true
+                }
+                _ => return Err("Expected 'EXISTS' after 'IF'".to_string()),
+            }
+        } else {
+            false
+        };
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected view name, got {:?}", t)),
+            None => return Err("Expected view name".to_string()),
+        };
+        Ok(Statement::DropView(DropViewStatement { name, if_exists }))
     }
 
     fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
@@ -2690,9 +2758,13 @@ impl Parser {
                 };
                 Ok(Statement::DropTable(DropTableStatement { name, if_exists }))
             }
+            Some(Token::View) => self.parse_drop_view(),
             Some(Token::Role) => self.parse_drop_role(),
-            Some(t) => Err(format!("Expected TABLE or ROLE after DROP, got {:?}", t)),
-            None => Err("Expected TABLE or ROLE after DROP".to_string()),
+            Some(t) => Err(format!(
+                "Expected TABLE, VIEW or ROLE after DROP, got {:?}",
+                t
+            )),
+            None => Err("Expected TABLE, VIEW or ROLE after DROP".to_string()),
         }
     }
 

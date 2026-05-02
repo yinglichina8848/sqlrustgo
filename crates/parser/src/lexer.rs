@@ -318,6 +318,7 @@ impl<'a> Lexer<'a> {
                     "DESCRIBE" => Token::Describe,
                     "DESC" => Token::Desc,
                     "TRIGGER" => Token::Trigger,
+                    "VIEW" => Token::View,
                     "BEFORE" => Token::Before,
                     "AFTER" => Token::After,
                     "FOR" => Token::ForEach,
