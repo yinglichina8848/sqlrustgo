@@ -23,6 +23,7 @@ pub mod raft;
 pub mod read_write_splitter;
 pub mod replica_sync;
 pub mod replication;
+pub mod semisync;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
@@ -44,6 +45,10 @@ pub use replication::{
     BinlogEvent, BinlogManager, BinlogStatus, GtidEvent, GtidInterval, GtidManager, GtidPosition,
     GtidSet, MasterStatus, ReplicationConfig, ReplicationRole, ReplicationState, SemiSyncError,
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
+};
+pub use semisync::{
+    SemiSyncError as SemiSyncMasterError, SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode,
+    SemiSyncSlave, SemiSyncSlaveStatus, SemiSyncTimeoutError,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{
