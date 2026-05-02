@@ -1,6 +1,6 @@
 {
-  "registry_version": "1.1",
-  "updated_at": "2026-05-02T15:34:56Z",
+  "registry_version": "1.2",
+  "updated_at": "2026-05-03T00:00:00Z",
   "total_proofs": 14,
   "proofs": [
     {"id": "PROOF-001-parser-select", "title": "SQL SELECT 解析不丢失信息", "language": "Formulog", "category": "parser", "status": "verified"},
