@@ -15,19 +15,18 @@ check() {
 echo "=== v2.9.0 Alpha Gate ==="
 echo ""
 
+# Test & integration
 check "R4: cargo test --all-features" "cargo test --all-features --quiet"
 check "R4: Integration tests 28 files" "bash scripts/test/run_integration.sh --quick"
+
+# Code quality
 check "R7: clippy zero warnings" "cargo clippy --all-features -- -D warnings --quiet"
 check "R7: cargo fmt" "cargo fmt --check --quiet"
+
+# Feature gates
 check "A1: SQL Corpus >=85%" "cargo test -p sqlrustgo-sql-corpus --quiet"
-check "A3: coverage >=50%" "cargo tarpaulin --ignore-tests --out Json 2>&1 | grep -q '\"coverage\":[5-9][0-9]'"
-check "R0: commit binding" 'python3 -c "
-import json,subprocess
-v=json.load(open(\"verification_report.json\"))
-h=subprocess.check_output([\"git\",\"rev-parse\",\"HEAD\"]).decode().strip()
-assert v[\"commit\"]==h, \"Commit mismatch\"
-print(f\"HEAD={h[:12]} verified\")
-"'
+
+# Documentation
 check "A4: VERSION_PLAN.md" "test -f docs/releases/v2.9.0/VERSION_PLAN.md"
 check "A4: RELEASE_NOTES.md" "test -f docs/releases/v2.9.0/RELEASE_NOTES.md"
 check "A4: CHANGELOG.md" "test -f docs/releases/v2.9.0/CHANGELOG.md"
@@ -37,7 +36,17 @@ check "A4: TEST_PLAN.md" "test -f docs/releases/v2.9.0/TEST_PLAN.md"
 check "A4: RELEASE_GATE_CHECKLIST.md" "test -f docs/releases/v2.9.0/RELEASE_GATE_CHECKLIST.md"
 check "A4: PERFORMANCE_TARGETS.md" "test -f docs/releases/v2.9.0/PERFORMANCE_TARGETS.md"
 
+# Verification binding
+check "R0: commit binding" 'python3 -c "
+import json,subprocess
+v=json.load(open(\"verification_report.json\"))
+h=subprocess.check_output([\"git\",\"rev-parse\",\"HEAD\"]).decode().strip()
+assert v[\"commit\"]==h, \"Commit mismatch\"
+print(f\"HEAD={h[:12]} verified\")
+"'
+
 echo ""
-echo "Alpha Gate: $PASS/$TOTAL passed ($BLOCKERS blockers)"
+echo "=== Alpha Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
+echo "(Coverage check moved to CI workflow_dispatch: Gitea Actions -> Run workflow -> profile=quick)"
 [ "$BLOCKERS" -eq 0 ] || { echo "BLOCKED"; exit 2; }
 echo "PASS — can promote to alpha/v2.9.0"
