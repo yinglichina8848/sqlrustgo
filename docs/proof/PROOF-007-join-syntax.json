@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-007",
+  "title": "JOIN 语法树构造正确性",
+  "language": "Formulog",
+  "category": "parser",
+  "status": "verified",
+  "target": "JOIN syntax tree construction",
+  "description": "证明 Parser 对 JOIN 语句的解析正确构造了连接语法树。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-parser join: passed",
+    "verification_method": "形式化规约 + 测试验证"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}

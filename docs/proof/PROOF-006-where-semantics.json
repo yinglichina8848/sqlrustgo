@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-006",
+  "title": "SQL WHERE 子句语义保持",
+  "language": "Formulog",
+  "category": "parser",
+  "status": "verified",
+  "target": "WHERE clause semantic preservation",
+  "description": "证明 Parser 对 WHERE 子句的解析正确保留了布尔表达式语义。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-parser where: passed",
+    "verification_method": "形式化规约 + 测试验证"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}
