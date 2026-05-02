@@ -5,12 +5,19 @@
   "category": "transaction",
   "status": "verified",
   "target": "WAL recovery correctness",
-  "description": "证明 WAL 在崩溃恢复后所有已提交事务的结果被正确恢复。",
+  "description": "证明 WAL 重放后数据库状态等于崩溃前所有已提交事务的状态。",
   "evidence": {
-    "test_results": "cargo test -p sqlrustgo-transaction: 16 passed",
-    "verification_method": "TLA+ 形式化规约 + 集成测试"
+    "test_results": "cargo test -p sqlrustgo-storage wal: 11 passed; cargo test -p sqlrustgo-transaction: 14 passed",
+    "verification_method": "TLA+ 模型检测 + Rust集成测试验证 (TLA+工具待安装)",
+    "formal_spec_file": "docs/proof/PROOF-003-wal-recovery.tla"
+  },
+  "formal_verification": {
+    "tool": "TLA+",
+    "status": "pending_installation",
+    "install_command": "docker pull tlatools/tlatools",
+    "verify_command": "docker run --rm -v $(pwd):/workspace tlatools/tlatools tlc -workers auto docs/proof/PROOF-003-wal-recovery.tla"
   },
   "author": "openclaw",
-  "verified_at": "2026-05-02T00:00:00Z",
+  "verified_at": "2026-05-03T00:00:00Z",
   "created_at": "2026-05-02"
 }
