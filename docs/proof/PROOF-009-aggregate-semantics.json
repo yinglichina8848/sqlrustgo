@@ -5,11 +5,12 @@
   "category": "executor",
   "status": "verified",
   "target": "Aggregate function semantic completeness",
-  "description": "证明聚合函数 (COUNT, SUM, AVG, MIN, MAX) 的语义在执行器中正确实现。",
+  "description": "证明聚合函数 (COUNT, SUM, AVG, MIN, MAX) 的语义正确实现。",
   "evidence": {
     "test_results": "cargo test aggregate: passed",
     "verification_method": "Dafny 形式化证明 + 测试验证"
   },
-  "created_at": "2026-05-02",
-  "author": "openclaw"
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
 }
