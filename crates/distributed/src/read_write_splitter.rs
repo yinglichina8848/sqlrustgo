@@ -135,6 +135,7 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::CreateProcedure(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::CreateView(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropTable(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::DropIndex(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropView(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Truncate(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::AlterTable(_) => QueryClass::Write,

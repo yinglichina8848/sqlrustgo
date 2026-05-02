@@ -29,6 +29,7 @@ pub enum Statement {
     CreateIndex(CreateIndexStatement),
     CreateView(CreateViewStatement),
     DropTable(DropTableStatement),
+    DropIndex(DropIndexStatement),
     DropView(DropViewStatement),
     Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
@@ -67,6 +68,13 @@ pub struct CreateIndexStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub unique: bool,
+}
+
+/// DROP INDEX statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropIndexStatement {
+    pub name: String,
+    pub if_exists: bool,
 }
 
 /// ALTER TABLE statement
@@ -732,7 +740,15 @@ impl Parser {
         self.expect(Token::Create)?;
         match self.current() {
             Some(Token::Table) => self.parse_create_table(),
-            Some(Token::Index) | Some(Token::Unique) => self.parse_create_index(),
+            Some(Token::Index) => {
+                self.next();
+                self.parse_create_index(false)
+            }
+            Some(Token::Unique) => {
+                self.next();
+                self.expect(Token::Index)?;
+                self.parse_create_index(true)
+            }
             Some(Token::Procedure) => self.parse_create_procedure(),
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(Token::Role) => self.parse_create_role(),
@@ -779,8 +795,7 @@ impl Parser {
         }))
     }
 
-    fn parse_create_index(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Index)?;
+    fn parse_create_index(&mut self, unique: bool) -> Result<Statement, String> {
         let index_name = match self.next() {
             Some(Token::Identifier(name)) => name,
             Some(t) => return Err(format!("Expected index name, got {:?}", t)),
@@ -798,7 +813,7 @@ impl Parser {
             name: index_name,
             table: table_name,
             columns,
-            unique: false,
+            unique,
         }))
     }
 
@@ -2758,13 +2773,14 @@ impl Parser {
                 };
                 Ok(Statement::DropTable(DropTableStatement { name, if_exists }))
             }
+            Some(Token::Index) => self.parse_drop_index(),
             Some(Token::View) => self.parse_drop_view(),
             Some(Token::Role) => self.parse_drop_role(),
             Some(t) => Err(format!(
-                "Expected TABLE, VIEW or ROLE after DROP, got {:?}",
+                "Expected TABLE, INDEX, VIEW or ROLE after DROP, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, VIEW or ROLE after DROP".to_string()),
+            None => Err("Expected TABLE, INDEX, VIEW or ROLE after DROP".to_string()),
         }
     }
 
@@ -2777,6 +2793,27 @@ impl Parser {
             None => return Err("Expected role name".to_string()),
         };
         Ok(Statement::DropRole(DropRoleStatement { name }))
+    }
+
+    fn parse_drop_index(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Index)?;
+        let if_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            match self.current() {
+                Some(Token::Exists) => {
+                    self.next();
+                    true
+                }
+                _ => return Err("Expected 'EXISTS' after 'IF'".to_string()),
+            }
+        } else {
+            false
+        };
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected index name".to_string()),
+        };
+        Ok(Statement::DropIndex(DropIndexStatement { name, if_exists }))
     }
 
     fn parse_truncate(&mut self) -> Result<Statement, String> {
