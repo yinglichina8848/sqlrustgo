@@ -899,19 +899,19 @@ fn hash_inner_join(
 ) -> Vec<Vec<Value>> {
     let mut results = Vec::new();
 
+    let full_schema = sqlrustgo_planner::Schema::new(
+        left_schema
+            .fields
+            .iter()
+            .chain(right_schema.fields.iter())
+            .cloned()
+            .collect(),
+    );
+
     for lrow in left {
         for rrow in right {
             let mut combined = lrow.clone();
             combined.extend(rrow.clone());
-
-            let full_schema = sqlrustgo_planner::Schema::new(
-                left_schema
-                    .fields
-                    .iter()
-                    .chain(right_schema.fields.iter())
-                    .cloned()
-                    .collect(),
-            );
 
             // SQL three-valued logic: NULL = anything → UNKNOWN → no match
             let eval_result = condition.evaluate(&combined, &full_schema);
@@ -962,6 +962,15 @@ fn sort_merge_inner_join(
     let mut i = 0;
     let mut j = 0;
 
+    let full_schema = sqlrustgo_planner::Schema::new(
+        left_schema
+            .fields
+            .iter()
+            .chain(right_schema.fields.iter())
+            .cloned()
+            .collect(),
+    );
+
     while i < left_sorted.len() && j < right_sorted.len() {
         let lrow = &left_sorted[i];
         let rrow = &right_sorted[j];
@@ -979,15 +988,6 @@ fn sort_merge_inner_join(
             // Found match - check condition and add
             let mut combined = lrow.clone();
             combined.extend(rrow.clone());
-
-            let full_schema = sqlrustgo_planner::Schema::new(
-                left_schema
-                    .fields
-                    .iter()
-                    .chain(right_schema.fields.iter())
-                    .cloned()
-                    .collect(),
-            );
 
             // SQL three-valued logic: NULL = anything → UNKNOWN → no match
             if matches!(

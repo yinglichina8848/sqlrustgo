@@ -434,6 +434,7 @@ pub mod vectorized_expr {
         }
     }
 
+    #[inline]
     pub(crate) fn eval_int_op(left: i64, op: &Operator, right: i64) -> bool {
         match op {
             Operator::Eq => left == right,
@@ -453,6 +454,7 @@ pub mod vectorized_expr {
         }
     }
 
+    #[inline]
     fn eval_float_op(left: f64, op: &Operator, right: f64) -> bool {
         match op {
             Operator::Eq => left == right,
@@ -465,6 +467,7 @@ pub mod vectorized_expr {
         }
     }
 
+    #[inline]
     fn eval_text_op(left: &str, op: &Operator, right: &str) -> bool {
         match op {
             Operator::Eq => left == right,
