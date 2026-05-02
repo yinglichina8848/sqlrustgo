@@ -39,6 +39,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     catalog: Option<Arc<RwLock<Catalog>>>,
     stats: Arc<RwLock<ExecutionStats>>,
     cbo_enabled: bool,
+    stats_enabled: bool,
     transaction_manager: TransactionManager,
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
@@ -80,6 +81,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
@@ -96,6 +98,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
@@ -112,6 +115,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
@@ -129,6 +133,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Enable or disable CBO
     pub fn set_cbo_enabled(&mut self, enabled: bool) {
         self.cbo_enabled = enabled;
+    }
+
+    /// Check if statistics collection is enabled
+    pub fn is_stats_enabled(&self) -> bool {
+        self.stats_enabled
+    }
+
+    /// Enable or disable statistics collection
+    pub fn set_stats_enabled(&mut self, enabled: bool) {
+        self.stats_enabled = enabled;
     }
 
     /// Get table statistics for CBO
@@ -1794,6 +1808,7 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
@@ -1810,6 +1825,7 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
@@ -1826,6 +1842,7 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
