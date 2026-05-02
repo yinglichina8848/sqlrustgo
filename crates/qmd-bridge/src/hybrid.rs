@@ -1,6 +1,5 @@
 //! Hybrid search implementation
 
-
 use crate::types::{Filter, QmdData, SearchResult};
 
 /// Configuration for hybrid search

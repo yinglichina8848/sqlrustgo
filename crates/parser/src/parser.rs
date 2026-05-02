@@ -708,7 +708,9 @@ impl Parser {
                 "Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE".to_string()),
+            None => {
+                Err("Expected TABLE, INDEX, PROCEDURE, TRIGGER, or ROLE after CREATE".to_string())
+            }
         }
     }
 
@@ -738,7 +740,10 @@ impl Parser {
             }
         }
 
-        Ok(Statement::CreateRole(CreateRoleStatement { name, parent_role }))
+        Ok(Statement::CreateRole(CreateRoleStatement {
+            name,
+            parent_role,
+        }))
     }
 
     fn parse_create_index(&mut self) -> Result<Statement, String> {
@@ -2698,7 +2703,10 @@ impl Parser {
             | Some(Token::Delete) => false,
             Some(Token::Identifier(name)) => {
                 let upper = name.to_uppercase();
-                !matches!(upper.as_str(), "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE")
+                !matches!(
+                    upper.as_str(),
+                    "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE"
+                )
             }
             Some(Token::StringLiteral(_)) => true,
             _ => false,
@@ -2924,7 +2932,10 @@ impl Parser {
             | Some(Token::Delete) => false,
             Some(Token::Identifier(name)) => {
                 let upper = name.to_uppercase();
-                !matches!(upper.as_str(), "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE")
+                !matches!(
+                    upper.as_str(),
+                    "READ" | "WRITE" | "ALL" | "EXECUTE" | "USAGE"
+                )
             }
             Some(Token::StringLiteral(_)) => true,
             _ => false,

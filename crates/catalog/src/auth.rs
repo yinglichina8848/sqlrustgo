@@ -1072,11 +1072,7 @@ impl AuthManager {
         Ok(())
     }
 
-    pub fn revoke_role_from_user(
-        &mut self,
-        user_id: u64,
-        role_id: u64,
-    ) -> AuthResult<()> {
+    pub fn revoke_role_from_user(&mut self, user_id: u64, role_id: u64) -> AuthResult<()> {
         let pos = self
             .user_roles
             .iter()

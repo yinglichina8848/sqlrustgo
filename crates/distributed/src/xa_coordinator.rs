@@ -95,12 +95,7 @@ impl Xid {
         fn bytes_to_string(bytes: &[u8]) -> String {
             String::from_utf8(bytes.to_vec())
                 .map(|s| s.replace('\0', "\\0"))
-                .unwrap_or_else(|_| {
-                    bytes
-                        .iter()
-                        .map(|b| format!("{:02x}", b))
-                        .collect()
-                })
+                .unwrap_or_else(|_| bytes.iter().map(|b| format!("{:02x}", b)).collect())
         }
         format!(
             "{}:{}:{}",
@@ -113,9 +108,7 @@ impl Xid {
 
 impl PartialEq for Xid {
     fn eq(&self, other: &Self) -> bool {
-        self.format_id == other.format_id
-            && self.gtrid == other.gtrid
-            && self.bqual == other.bqual
+        self.format_id == other.format_id && self.gtrid == other.gtrid && self.bqual == other.bqual
     }
 }
 
@@ -234,7 +227,11 @@ impl fmt::Display for XaError {
                 write!(f, "Malformed XID string: {}", s)
             }
             XaError::InvalidXidFormat { expected, found } => {
-                write!(f, "Invalid XID format: expected {}, found {}", expected, found)
+                write!(
+                    f,
+                    "Invalid XID format: expected {}, found {}",
+                    expected, found
+                )
             }
             XaError::InvalidForState(msg) => {
                 write!(f, "Invalid operation for current state: {}", msg)
@@ -454,7 +451,8 @@ impl XaCoordinator {
     /// Removes transactions that are in Committed or RolledBack state
     pub fn cleanup_completed(&self) {
         let mut transactions = self.transactions.write().unwrap();
-        transactions.retain(|_, tx| tx.state != XaState::Committed && tx.state != XaState::RolledBack);
+        transactions
+            .retain(|_, tx| tx.state != XaState::Committed && tx.state != XaState::RolledBack);
     }
 
     /// Returns all transactions in the coordinator

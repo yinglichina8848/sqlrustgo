@@ -3,7 +3,7 @@
 //! Catalog -> Schema -> Table
 //! Catalog -> StoredProcedure
 
-use crate::auth::{AuthManager, ObjectType, Privilege, UserIdentity};
+use crate::auth::{AuthManager, ObjectType, Privilege, Role, UserIdentity};
 use crate::error::{CatalogError, CatalogResult};
 use crate::schema::Schema;
 use crate::stored_proc::StoredProcedure;
@@ -185,6 +185,44 @@ impl Catalog {
     /// Get the auth manager for direct access
     pub fn auth_manager(&self) -> &AuthManager {
         &self.auth_manager
+    }
+
+    /// Create a new role
+    pub fn create_role(&mut self, name: &str, parent_role_id: Option<u64>) -> CatalogResult<u64> {
+        self.auth_manager
+            .create_role(name, parent_role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Drop a role
+    pub fn drop_role(&mut self, role_id: u64) -> CatalogResult<()> {
+        self.auth_manager
+            .drop_role(role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Grant a role to a user
+    pub fn grant_role_to_user(
+        &mut self,
+        user_id: u64,
+        role_id: u64,
+        granted_by: u64,
+    ) -> CatalogResult<()> {
+        self.auth_manager
+            .grant_role_to_user(user_id, role_id, granted_by)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Revoke a role from a user
+    pub fn revoke_role_from_user(&mut self, user_id: u64, role_id: u64) -> CatalogResult<()> {
+        self.auth_manager
+            .revoke_role_from_user(user_id, role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Find a role by name
+    pub fn find_role_by_name(&self, name: &str) -> Option<&Role> {
+        self.auth_manager.find_role_by_name(name)
     }
 }
 

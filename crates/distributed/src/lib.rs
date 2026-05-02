@@ -49,8 +49,8 @@ pub use replication::{
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
 };
 pub use semisync::{
-    SemiSyncMode, SemiSyncMaster, SemiSyncMasterStatus,
-    SemiSyncSlave, SemiSyncSlaveStatus, SemiSyncTimeoutError,
+    SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode, SemiSyncSlave, SemiSyncSlaveStatus,
+    SemiSyncTimeoutError,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{
