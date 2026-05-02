@@ -1,0 +1,18 @@
+{
+  "proof_id": "PROOF-012",
+  "title": "WAL恢复保持ACID性质",
+  "language": "TLA+",
+  "category": "transaction",
+  "status": "verified",
+  "target": "WAL recovery preserves ACID properties",
+  "description": "证明WAL恢复后：原子性（所有已提交事务被应用，所有未提交回滚）、一致性（数据库状态满足所有约束）、隔离性（MVCC确保串行化）、持久性（所有已提交事务在崩溃后存活）。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-transaction --test wal_recovery: passed",
+    "verification_method": "TLA+ model checking + integration tests",
+    "formal_spec": "PROOF-012-wal-acid.tla",
+    "formal_proof_file": "docs/proof/PROOF-012-wal-acid.tla"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
+}
