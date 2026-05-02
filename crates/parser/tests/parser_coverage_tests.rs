@@ -851,12 +851,15 @@ fn test_parse_create_table_named_constraint() {
 fn test_parse_create_unique_index() {
     let sql = "CREATE UNIQUE INDEX idx_email ON users(email)";
     let result = parse(sql);
-    // Parser doesn't support CREATE UNIQUE INDEX syntax
-    assert!(
-        result.is_err(),
-        "CREATE UNIQUE INDEX not supported: {:?}",
-        result
-    );
+    assert!(result.is_ok(), "CREATE UNIQUE INDEX failed: {:?}", result);
+    match result.unwrap() {
+        sqlrustgo_parser::Statement::CreateIndex(idx) => {
+            assert_eq!(idx.name, "idx_email");
+            assert_eq!(idx.table, "users");
+            assert!(idx.unique, "CREATE UNIQUE INDEX should set unique=true");
+        }
+        _ => panic!("Expected CreateIndex statement"),
+    }
 }
 
 // ============ CREATE TABLE with NOT NULL column ============
