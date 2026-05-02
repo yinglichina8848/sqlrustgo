@@ -1136,18 +1136,44 @@ impl Parser {
                 Some(Token::LParen) => {
                     let expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: format!("{:?}", expr),
-                        alias: None,
+                        alias,
                         expression: Some(expr),
                     });
                 }
                 // Handle CASE expressions in SELECT
                 Some(Token::Case) => {
                     let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: format!("{:?}", expr),
-                        alias: None,
+                        alias,
                         expression: Some(expr),
                     });
                 }
@@ -2211,11 +2237,29 @@ impl Parser {
     fn parse_case_when_expression(&mut self) -> Result<Expression, String> {
         let mut when_clauses = Vec::new();
 
+        let base_expr = match self.current() {
+            Some(Token::When) => None,
+            Some(Token::Case) => None,
+            _ => {
+                let expr = self.parse_expression()?;
+                Some(expr)
+            }
+        };
+
         loop {
             match self.current() {
                 Some(Token::When) => {
                     self.next();
-                    let condition = self.parse_expression()?;
+                    let condition = if let Some(ref base) = base_expr {
+                        let value = self.parse_expression()?;
+                        Expression::BinaryOp(
+                            Box::new(base.clone()),
+                            "=".to_string(),
+                            Box::new(value),
+                        )
+                    } else {
+                        self.parse_expression()?
+                    };
                     self.expect(Token::Then)?;
                     let result = self.parse_expression()?;
                     when_clauses.push(WhenClause { condition, result });
