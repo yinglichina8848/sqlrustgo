@@ -2810,6 +2810,9 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
+                    Some(Token::Identifier(_)) => {
+                        // Column definition consumed, loop continues to next column
+                    }
                     _ => break,
                 }
             }
@@ -2833,6 +2836,18 @@ impl Parser {
             Some(Token::Identifier(type_name)) => {
                 let t = type_name.to_uppercase();
                 self.next();
+                // Consume optional type parameters: VARCHAR(25), DECIMAL(10,2), CHAR(15)
+                if matches!(self.current(), Some(Token::LParen)) {
+                    self.next();
+                    let mut depth = 1;
+                    while let Some(token) = self.current() {
+                        match token {
+                            Token::LParen => { self.next(); depth += 1; }
+                            Token::RParen => { self.next(); depth -= 1; if depth == 0 { break; } }
+                            _ => { self.next(); }
+                        }
+                    }
+                }
                 t
             }
             Some(Token::Integer) => {

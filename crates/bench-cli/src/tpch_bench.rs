@@ -67,43 +67,54 @@ fn parse_ddl(ddl_path: &str) -> Result<Vec<TableSchema>, String> {
 
     let mut remaining = content.as_str();
     loop {
-        if let Some(pos) = remaining.find(";\n") {
-            let stmt = &remaining[..pos + 1];
-            remaining = &remaining[pos + 2..];
-
-            let trimmed = stmt.trim();
-            if trimmed.is_empty() {
-                continue;
+        // Try ";\n" first (normal case), then fallback to ";" at EOF
+        let pos = remaining.find(";\n").or_else(|| remaining.find(");"));
+        let (stmt, rest) = match pos {
+            Some(p) => (&remaining[..p + 1], &remaining[p + 2..]),
+            None if !remaining.trim().is_empty() => {
+                // Last statement without trailing newline
+                (remaining.trim(), "")
             }
+            None => break,
+        };
 
-            // Remove leading comment lines
-            let content_no_comments = trimmed
-                .split('\n')
-                .filter(|line| !line.trim().starts_with("--"))
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_string();
-            if content_no_comments.is_empty() {
-                continue;
-            }
-
-            let upper = content_no_comments.to_uppercase();
-            if upper.contains("DROP ")
-                || upper.contains("CREATE DATABASE")
-                || upper.contains("VACUUM")
-                || upper.contains("ANALYZE")
-                || upper.contains("CREATE INDEX")
-            {
-                continue;
-            }
-
-            if let Ok(Statement::CreateTable(stmt)) = parse(&content_no_comments) {
-                schemas.push(convert_create_table(&stmt)?);
-            }
-        } else {
-            break;
+        let trimmed = stmt.trim();
+        if trimmed.is_empty() {
+            remaining = rest;
+            continue;
         }
+
+        // Remove leading comment lines
+        let content_no_comments = trimmed
+            .split('\n')
+            .filter(|line| !line.trim().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string();
+        if content_no_comments.is_empty() {
+            remaining = rest;
+            continue;
+        }
+
+        let upper = content_no_comments.to_uppercase();
+        if upper.contains("DROP ")
+            || upper.contains("CREATE DATABASE")
+            || upper.contains("VACUUM")
+            || upper.contains("ANALYZE")
+            || upper.contains("CREATE INDEX")
+        {
+            remaining = rest;
+            continue;
+        }
+
+        if let Ok(Statement::CreateTable(stmt)) = parse(&content_no_comments) {
+            eprintln!("DEBUG: parse_ddl got {} columns for table {}: col_names={:?}", stmt.columns.len(), stmt.name, stmt.columns.iter().map(|c|c.name.clone()).collect::<Vec<_>>());
+            schemas.push(convert_create_table(&stmt)?);
+        } else {
+            eprintln!("DEBUG: parse_ddl failed to parse as CREATE TABLE: {}", &content_no_comments[..content_no_comments.len().min(120)]);
+        }
+        remaining = rest;
     }
 
     Ok(schemas)
