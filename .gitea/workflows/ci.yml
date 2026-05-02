@@ -127,6 +127,93 @@ jobs:
           cd repo
           python3 audit/self_audit.py
 
+  # ============================================================
+  # Formal Verification: CI/CD Integration
+  # ============================================================
+  formal-verification:
+    runs-on: [hp-z6g4]
+    needs: [lint-build]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      # ---------- Dafny Verification ----------
+      # Scans both docs/formal/*.dfy and docs/proof/PROOF-*.dfy
+      - name: Verify Dafny Proofs
+        run: |
+          cd repo
+          echo "=== Running Dafny Verification ==="
+          for spec in docs/formal/*.dfy docs/proof/PROOF-*-*.dfy; do
+            [ -f "$spec" ] || continue
+            echo "Verifying: $spec"
+            dafny verify "$spec" /dafnyVerify:1 /compile:0 2>&1 || {
+              echo "FAILED: $spec"
+              exit 1
+            }
+          done
+          echo "Dafny verification complete"
+
+      # ---------- TLA+ TLC Model Checking ----------
+      # Scans both docs/formal/*.tla and docs/proof/PROOF-*-*.tla
+      - name: Verify TLA+ Specs (Java 17)
+        run: |
+          cd repo
+          echo "=== Running TLA+ TLC Model Checking ==="
+          # Ensure TLC jar exists
+          if [ ! -f /tmp/tla2tools.jar ]; then
+            echo "Extracting TLA+ tools from Docker..."
+            docker run --rm tla-java17 cat /opt/tla2tools.jar > /tmp/tla2tools.jar
+          fi
+          for spec in docs/formal/*.tla docs/proof/PROOF-*-*.tla; do
+            [ -f "$spec" ] || continue
+            spec_base=$(basename "$spec" .tla)
+            echo "Model checking: $spec_base"
+            java -cp /tmp/tla2tools.jar tlc2.TLC \
+              -metadir /tmp/tlc_meta_"$spec_base" \
+              -workers 16 \
+              "$spec" 2>&1 | tee tlc_"$spec_base".log
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
+              echo "TLC FAILED: $spec_base"
+              exit 1
+            fi
+          done
+          echo "TLA+ TLC model checking complete"
+
+      # ---------- Formulog Verification ----------
+      # Formulog specs: *.formulog in docs/proof/
+      - name: Verify Formulog Proofs
+        run: |
+          cd repo
+          echo "=== Running Formulog Verification ==="
+          if [ ! -f /tmp/formulog-0.8.0.jar ]; then
+            echo "Downloading Formulog..."
+            curl -L -o /tmp/formulog-0.8.0.jar \
+              https://github.com/HarvardPL/formulog/releases/download/v0.8.0/formulog-0.8.0.jar
+          fi
+          for spec in docs/proof/*.formulog; do
+            [ -f "$spec" ] || continue
+            echo "Verifying: $spec"
+            java -jar /tmp/formulog-0.8.0.jar "$spec" 2>&1 || {
+              echo "FAILED: $spec"
+              exit 1
+            }
+          done
+          echo "Formulog verification complete"
+
+      # ---------- Proof Summary ----------
+      - name: Proof Summary
+        run: |
+          echo "=== Formal Verification Summary ==="
+          echo "Dafny proofs: $(ls docs/formal/*.dfy docs/proof/PROOF-*-*.dfy 2>/dev/null | wc -l)"
+          echo "TLA+ specs: $(ls docs/formal/*.tla docs/proof/PROOF-*-*.tla 2>/dev/null | wc -l)"
+          echo "Formulog specs: $(ls docs/proof/*.formulog 2>/dev/null | wc -l)"
+          echo "Status: ALL PASSED"
+
   # Coverage check — 手动触发，避免阻塞常规 CI
   coverage:
     if: github.event_name == 'workflow_dispatch'
