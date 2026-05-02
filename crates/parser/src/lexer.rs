@@ -322,7 +322,7 @@ impl<'a> Lexer<'a> {
                     "VIEW" => Token::View,
                     "BEFORE" => Token::Before,
                     "AFTER" => Token::After,
-                    "FOR" => Token::ForEach,
+                    "FOR" => Token::For,
                     "EACH" => Token::Each,
                     "UNBOUNDED" => Token::Unbounded,
                     "PRECEDING" => Token::Preceding,

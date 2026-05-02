@@ -955,7 +955,7 @@ impl Parser {
             None => return Err("Expected table name".to_string()),
         };
 
-        self.expect(Token::ForEach)?;
+        self.expect(Token::For)?;
         self.expect(Token::Each)?;
         self.expect(Token::Row)?;
 
