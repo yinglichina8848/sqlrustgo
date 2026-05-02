@@ -192,6 +192,20 @@ impl SimpleExecutor {
                             .rename_table(&alter.table_name, new_name)
                             .map_err(|e| format!("Rename table error: {:?}", e))?;
                     }
+                    AlterTableOperation::DropColumn { name } => {
+                        return Err(format!(
+                            "DROP COLUMN '{}' not yet implemented in sql-corpus executor",
+                            name
+                        ));
+                    }
+                    AlterTableOperation::ModifyColumn {
+                        name, data_type, ..
+                    } => {
+                        return Err(format!(
+                            "MODIFY COLUMN '{} {}' not yet implemented in sql-corpus executor",
+                            name, data_type
+                        ));
+                    }
                 }
                 Ok(ExecutorResult::new(vec![], 0))
             }
