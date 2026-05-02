@@ -169,6 +169,19 @@ impl Catalog {
             .map_err(|e| CatalogError::ExecutionError(e.to_string()))
     }
 
+    /// Grant a column-level privilege to a user
+    pub fn grant_column_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        table_name: &str,
+        column_name: &str,
+    ) -> CatalogResult<u64> {
+        self.auth_manager
+            .grant_column_privilege(identity, privilege, table_name, column_name, 0)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
     /// Revoke a privilege from a user
     pub fn revoke_privilege(
         &mut self,

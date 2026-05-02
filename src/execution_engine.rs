@@ -1437,15 +1437,25 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
             for recipient in &grant.recipients {
                 let identity = sqlrustgo_catalog::auth::UserIdentity::new(recipient, "%");
-                catalog
-                    .grant_privilege(
-                        &identity,
-                        priv_obj,
-                        obj_type,
-                        &grant.object_name,
-                        grant.with_grant_option,
-                    )
-                    .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+                if grant.object_type == ParserObjectType::Column {
+                    for column in &grant.columns {
+                        catalog
+                            .grant_column_privilege(&identity, priv_obj, &grant.object_name, column)
+                            .map_err(|e| {
+                                SqlError::ExecutionError(format!("GRANT failed: {}", e))
+                            })?;
+                    }
+                } else {
+                    catalog
+                        .grant_privilege(
+                            &identity,
+                            priv_obj,
+                            obj_type,
+                            &grant.object_name,
+                            grant.with_grant_option,
+                        )
+                        .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+                }
             }
         }
 
