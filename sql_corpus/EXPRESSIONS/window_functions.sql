@@ -1,4 +1,4 @@
--- === SKIP ===
+-- === ENABLE FOR C-04 WINDOW ===
 
 -- SQLCorpus: Window Functions
 -- Tests for SQL window functions

@@ -1,4 +1,4 @@
--- === SKIP ===
+-- === ENABLE FOR C-03 JSON ===
 
 -- === JSON Functions Test Suite ===
 

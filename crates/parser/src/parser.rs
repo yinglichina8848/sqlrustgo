@@ -4538,3 +4538,33 @@ fn test_debug_idx() {
         Err(e) => println!("ERROR: {}", e),
     }
 }
+
+#[test]
+fn test_debug_json_extract() {
+    use crate::{lexer::Lexer, parse};
+    
+    let sql = "SELECT JSON_EXTRACT('{\"name\":\"John\"}', '$.name')";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+    
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_json_simple() {
+    use crate::{lexer::Lexer, parse};
+    
+    let sql = "SELECT JSON('{\"key\": \"value\"}') as json_val";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+    
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
