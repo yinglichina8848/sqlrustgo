@@ -169,5 +169,67 @@
     "unit_tests": 3630,
     "sql_corpus_pass_rate": "85.4%",
     "ignored_tests": 0
+  },
+  "doc_requirements": {
+    "phase": {
+      "develop": {
+        "required_docs": [
+          "VERSION_PLAN.md",
+          "DEVELOPMENT_PLAN.md"
+        ],
+        "min_files": 2,
+        "gate_block": true
+      },
+      "alpha": {
+        "required_docs": [
+          "VERSION_PLAN.md",
+          "RELEASE_NOTES.md",
+          "CHANGELOG.md",
+          "FEATURE_MATRIX.md",
+          "INTEGRATION_STATUS.md",
+          "TEST_PLAN.md",
+          "RELEASE_GATE_CHECKLIST.md",
+          "PERFORMANCE_TARGETS.md"
+        ],
+        "min_files": 8,
+        "gate_block": true
+      },
+      "beta": {
+        "required_docs": [
+          "API_DOCUMENTATION.md",
+          "UPGRADE_GUIDE.md",
+          "MIGRATION_GUIDE.md",
+          "SECURITY_ANALYSIS.md",
+          "BENCHMARK.md"
+        ],
+        "min_files": 5,
+        "gate_block": true
+      },
+      "rc": {
+        "required_docs": [
+          "DEPLOYMENT_GUIDE.md",
+          "INSTALL.md",
+          "QUICK_START.md",
+          "RELEASE_GUIDE.md"
+        ],
+        "min_files": 4,
+        "gate_block": true
+      },
+      "ga": {
+        "required_docs": [
+          "COVERAGE_REPORT.md",
+          "CHANGE_LOG_FINAL.md",
+          "RELEASE_ANNOUNCEMENT.md"
+        ],
+        "min_files": 3,
+        "gate_block": true
+      }
+    },
+    "quality_standards": {
+      "doc_links_valid": true,
+      "no_placeholder_content": true,
+      "version_numbers_consistent": true,
+      "pr_references_correct": true
+    }
   }
 }
