@@ -140,7 +140,7 @@ pub struct CreateTriggerStatement {
 pub struct CommonTableExpression {
     pub name: String,
     pub columns: Vec<String>,
-    pub subquery: Box<SelectStatement>,
+    pub subquery: Box<Statement>,
 }
 
 /// WITH clause for CTEs
@@ -969,8 +969,30 @@ impl Parser {
     }
 
     fn parse_select(&mut self) -> Result<Statement, String> {
-        let select = self.parse_select_statement()?;
-        Ok(Statement::Select(select))
+        self.parse_select_or_union()
+    }
+
+    fn parse_select_or_union(&mut self) -> Result<Statement, String> {
+        let first_select = self.parse_select_statement()?;
+
+        if matches!(self.current(), Some(Token::Union)) {
+            self.next();
+            let union_all = if matches!(self.current(), Some(Token::All)) {
+                self.next();
+                true
+            } else {
+                false
+            };
+            let second_select = self.parse_select_statement()?;
+
+            return Ok(Statement::Union(UnionStatement {
+                left: Box::new(Statement::Select(first_select)),
+                right: Box::new(Statement::Select(second_select)),
+                union_all,
+            }));
+        }
+
+        Ok(Statement::Select(first_select))
     }
 
     fn parse_with_select(&mut self) -> Result<Statement, String> {
@@ -1016,7 +1038,7 @@ impl Parser {
 
             self.expect(Token::As)?;
             self.expect(Token::LParen)?;
-            let subquery = self.parse_select_statement()?;
+            let subquery = self.parse_select_or_union()?;
             self.expect(Token::RParen)?;
 
             ctes.push(CommonTableExpression {

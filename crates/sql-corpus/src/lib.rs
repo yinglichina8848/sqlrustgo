@@ -256,6 +256,26 @@ impl SimpleExecutor {
         Ok(rows)
     }
 
+    fn execute_statement(&self, stmt: &Statement) -> Result<Vec<Vec<Value>>, String> {
+        match stmt {
+            Statement::Select(select) => self.execute_select(select),
+            Statement::Union(union_stmt) => {
+                let left_rows = self.execute_statement(&union_stmt.left)?;
+                let right_rows = self.execute_statement(&union_stmt.right)?;
+                if union_stmt.union_all {
+                    Ok(left_rows.into_iter().chain(right_rows).collect())
+                } else {
+                    let mut combined = left_rows;
+                    combined.extend(right_rows);
+                    combined.sort();
+                    combined.dedup();
+                    Ok(combined)
+                }
+            }
+            _ => Err(format!("Unsupported statement type: {:?}", stmt)),
+        }
+    }
+
     fn evaluate_where(&self, expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
         match expr {
             // Handle AND conditions
@@ -419,7 +439,7 @@ impl SimpleExecutor {
     fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
         if let Some(ref with_clause) = with_select.with_clause {
             for cte in &with_clause.ctes {
-                let cte_rows = self.execute_select(&cte.subquery)?;
+                let cte_rows = self.execute_statement(&cte.subquery)?;
                 let column_count = if cte.columns.is_empty() {
                     if cte_rows.is_empty() {
                         0
