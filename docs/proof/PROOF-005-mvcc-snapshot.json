@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-005",
+  "title": "MVCC 快照读一致性",
+  "language": "TLA+",
+  "category": "transaction",
+  "status": "verified",
+  "target": "MVCC snapshot isolation",
+  "description": "证明 Multi-Version Concurrency Control (MVCC) 实现满足快照隔离级别，一致读取不返回脏数据。",
+  "evidence": {
+    "test_results": "cargo test mvcc: passed",
+    "verification_method": "TLA+ 形式化规约 + 并发测试"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}

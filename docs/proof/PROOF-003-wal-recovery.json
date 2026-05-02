@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-003",
+  "title": "WAL 重放后等于崩溃前已提交状态",
+  "language": "TLA+",
+  "category": "transaction",
+  "status": "verified",
+  "target": "WAL recovery correctness",
+  "description": "证明 Write-Ahead Log (WAL) 在崩溃恢复后，所有已提交事务的结果被正确恢复，未提交事务被正确回滚。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-transaction: 16 passed",
+    "verification_method": "TLA+ 形式化规约 + 集成测试"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}

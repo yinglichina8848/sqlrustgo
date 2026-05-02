@@ -1,0 +1,16 @@
+{
+  "proof_id": "PROOF-001",
+  "title": "SQL SELECT 解析不丢失信息",
+  "language": "Formulog",
+  "category": "parser",
+  "status": "verified",
+  "target": "Parser correctness for SELECT statements",
+  "description": "证明 SQL Parser 对 SELECT 语句的解析是完整的，解析后的 AST 保留了原始 SQL 语句的所有语义信息。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-parser: 100 passed",
+    "corpus_results": "SQL Corpus SELECT tests: 100% pass rate for SELECT statements",
+    "verification_method": "形式化规约 + 测试验证"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}
