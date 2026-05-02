@@ -37,6 +37,10 @@ pub enum AlertType {
     BlacklistViolation,
     WhitelistViolation,
     ConfigChange,
+    #[doc = "AV10: Zero-day / unknown threat detected"]
+    UnknownThreat,
+    #[doc = "AV10: Anomaly detected that doesn't match known patterns"]
+    AnomalyDetected,
 }
 
 impl Alert {

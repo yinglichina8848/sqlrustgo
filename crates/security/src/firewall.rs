@@ -32,6 +32,12 @@ pub struct FirewallConfig {
     pub allow_batch_delete: bool,
     pub allow_batch_update: bool,
     pub block_sql_keywords: bool,
+    #[doc = "AV10: Enable zero-day threat detection"]
+    pub enable_zero_day_defense: bool,
+    #[doc = "AV10: Maximum unknown patterns before alert (rate threshold)"]
+    pub anomaly_threshold: u32,
+    #[doc = "AV10: Enable automatic threat pattern learning"]
+    pub enable_pattern_learning: bool,
 }
 
 impl Default for FirewallConfig {
@@ -44,6 +50,9 @@ impl Default for FirewallConfig {
             allow_batch_delete: false,
             allow_batch_update: false,
             block_sql_keywords: true,
+            enable_zero_day_defense: true,
+            anomaly_threshold: 5,
+            enable_pattern_learning: true,
         }
     }
 }

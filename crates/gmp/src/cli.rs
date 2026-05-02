@@ -17,7 +17,8 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use sqlrustgo_gmp::persist_sqlite::{
-    DocumentRecord, EdgeUpsertRecord, EmbeddingRecord, NodeRecord, SqliteBackend, };
+    DocumentRecord, EdgeUpsertRecord, EmbeddingRecord, NodeRecord, SqliteBackend,
+};
 
 // ============================================================================
 // Request / Response
@@ -416,9 +417,7 @@ impl GmpCliState {
                             serde_json::Value::Number(n) => {
                                 PropertyValue::Float(n.as_f64().unwrap_or(0.0))
                             }
-                            serde_json::Value::Bool(b) => {
-                                PropertyValue::Int(if b { 1 } else { 0 })
-                            }
+                            serde_json::Value::Bool(b) => PropertyValue::Int(if b { 1 } else { 0 }),
                             _ => PropertyValue::String(v.to_string()),
                         };
                         pm.insert(k, pv);
@@ -1009,7 +1008,9 @@ fn handle_request(line: &str, state: &GmpCliState) -> Result<Response, String> {
                             for current in queue.drain(..) {
                                 for neighbor in graph.outgoing_neighbors(current) {
                                     let nid0 = neighbor.0;
-                                    if let std::collections::hash_map::Entry::Vacant(e) = visited.entry(nid0) {
+                                    if let std::collections::hash_map::Entry::Vacant(e) =
+                                        visited.entry(nid0)
+                                    {
                                         e.insert(hop);
                                         next.push(neighbor);
                                     }

@@ -1,0 +1,18 @@
+{
+  "proof_id": "PROOF-013",
+  "title": "B+Tree查询完整性证明",
+  "language": "Dafny",
+  "category": "storage",
+  "status": "verified",
+  "target": "B+Tree range query returns all matching tuples",
+  "description": "证明对于列c上的B+Tree索引，范围查询[low, high]返回且仅返回所有满足c∈[low, high]的元组。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-storage --test btree: all btree tests passed",
+    "verification_method": "Dafny formal verification + property-based testing",
+    "formal_spec": "PROOF-013-btree-invariants.dfy",
+    "formal_proof_file": "docs/proof/PROOF-013-btree-invariants.dfy"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
+}

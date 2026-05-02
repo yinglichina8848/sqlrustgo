@@ -41,7 +41,12 @@ pub fn simple_table_info(name: &str) -> TableInfo {
             name: "id".to_string(),
             data_type: "INTEGER".to_string(),
             nullable: false,
+            primary_key: true,
         }],
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     }
 }
 
@@ -54,18 +59,25 @@ pub fn multi_column_table_info(name: &str) -> TableInfo {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                primary_key: true,
             },
             ColumnDefinition {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
+                primary_key: false,
             },
             ColumnDefinition {
                 name: "value".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: true,
+                primary_key: false,
             },
         ],
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     }
 }
 
@@ -78,13 +90,19 @@ pub fn orders_table_info() -> TableInfo {
                 name: "id".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                primary_key: true,
             },
             ColumnDefinition {
                 name: "amount".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
+                primary_key: false,
             },
         ],
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     }
 }
 

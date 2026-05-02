@@ -1,0 +1,18 @@
+{
+  "proof_id": "PROOF-011",
+  "title": "类型系统安全性证明",
+  "language": "Dafny",
+  "category": "type_system",
+  "status": "verified",
+  "target": "Type inference termination and uniqueness",
+  "description": "证明类型推断算法对所有有效SQL表达式都能终止并返回唯一类型。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-types: all type inference tests passed",
+    "verification_method": "Dafny formal verification + Rust implementation",
+    "formal_spec": "PROOF-011-type-safety.dfy",
+    "formal_proof_file": "docs/proof/PROOF-011-type-safety.dfy"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
+}

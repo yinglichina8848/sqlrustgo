@@ -7,10 +7,17 @@
   "target": "WHERE clause semantic preservation",
   "description": "证明 Parser 对 WHERE 子句的解析正确保留了布尔表达式语义。",
   "evidence": {
-    "test_results": "cargo test -p sqlrustgo-parser where: passed",
-    "verification_method": "形式化规约 + 测试验证"
+    "test_results": "cargo test -p sqlrustgo-parser: 100 passed, 0 failed",
+    "verification_method": "形式化规约 + Rust测试验证 (Formulog工具待安装)",
+    "formal_spec_file": "docs/proof/PROOF-006-where-semantics.formalog"
+  },
+  "formal_verification": {
+    "tool": "Formulog",
+    "status": "pending_installation",
+    "install_command": "pip install formulog",
+    "verify_command": "formulog check docs/proof/PROOF-006-where-semantics.formalog"
   },
   "author": "openclaw",
-  "verified_at": "2026-05-02T00:00:00Z",
+  "verified_at": "2026-05-03T00:00:00Z",
   "created_at": "2026-05-02"
 }

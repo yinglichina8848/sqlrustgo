@@ -10,9 +10,6 @@
 //! - Failover and health checking
 //! - Replica synchronization
 //! - Semi-synchronous replication (AFTER_SYNC/AFTER_COMMIT modes)
-//! - Multi-threaded slave (MTS) parallel replication
-//! - Multi-source replication from multiple masters
-//! - XA transaction coordinator for distributed transactions
 
 pub mod consensus;
 pub mod cross_shard_query;
@@ -52,8 +49,8 @@ pub use replication::{
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
 };
 pub use semisync::{
-    SemiSyncError as SemiSyncMasterError, SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode,
-    SemiSyncSlave, SemiSyncSlaveStatus, SemiSyncTimeoutError,
+    SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode, SemiSyncSlave, SemiSyncSlaveStatus,
+    SemiSyncTimeoutError,
 };
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{
@@ -63,7 +60,4 @@ pub use shard_router::{
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
-pub use xa_coordinator::{
-    XACoordinator, XaCoordinatorStats, XaError, XaIsolationLevel, XaRecoverItem, XaTransaction,
-    XaTransactionState, Xid,
-};
+pub use xa_coordinator::{XaCoordinator, XaError, XaState, XaTransaction, Xid};

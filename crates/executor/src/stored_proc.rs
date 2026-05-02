@@ -1364,30 +1364,51 @@ impl StoredProcExecutor {
     /// Execute CTE subquery and return rows
     fn execute_cte_subquery(
         &self,
-        select: &sqlrustgo_parser::SelectStatement,
+        statement: &sqlrustgo_parser::Statement,
         ctx: &mut ProcedureContext,
     ) -> Result<Vec<Vec<Value>>, String> {
-        let table_name = &select.table;
-        let storage = self.storage.read().unwrap();
-        let records = storage
-            .scan(table_name)
-            .map_err(|e| format!("Failed to scan CTE table: {}", e))?;
+        match statement {
+            sqlrustgo_parser::Statement::Select(select) => {
+                let table_name = &select.table;
+                let storage = self.storage.read().unwrap();
+                let records = storage
+                    .scan(table_name)
+                    .map_err(|e| format!("Failed to scan CTE table: {}", e))?;
 
-        if let Some(ref where_expr) = select.where_clause {
-            let filtered: Vec<Vec<Value>> = records
-                .into_iter()
-                .filter(|_row| {
-                    let where_val = self.expression_to_value(where_expr, ctx);
-                    if let Value::Boolean(b) = where_val {
-                        b
-                    } else {
-                        where_val != Value::Null
-                    }
-                })
-                .collect();
-            Ok(filtered)
-        } else {
-            Ok(records)
+                if let Some(ref where_expr) = select.where_clause {
+                    let filtered: Vec<Vec<Value>> = records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect();
+                    Ok(filtered)
+                } else {
+                    Ok(records)
+                }
+            }
+            sqlrustgo_parser::Statement::Union(union_stmt) => {
+                let left_records = self.execute_cte_subquery(&union_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&union_stmt.right, ctx)?;
+                if union_stmt.union_all {
+                    Ok(left_records.into_iter().chain(right_records).collect())
+                } else {
+                    let mut combined = left_records;
+                    combined.extend(right_records);
+                    combined.sort();
+                    combined.dedup();
+                    Ok(combined)
+                }
+            }
+            _ => Err(format!(
+                "Unsupported statement type in CTE: {:?}",
+                statement
+            )),
         }
     }
 

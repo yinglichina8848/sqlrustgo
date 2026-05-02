@@ -5,7 +5,7 @@
 
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
-use sqlrustgo_catalog::{Catalog, StoredProcedure};
+use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
@@ -13,9 +13,10 @@ use sqlrustgo_executor::trigger::{
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
-    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    GrantStatement, InsertStatement, ObjectType as ParserObjectType, Privilege as ParserPrivilege,
-    RevokeStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
+    CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
+    DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
+    ObjectType as ParserObjectType, Privilege as ParserPrivilege, RevokeRoleStatement,
+    RevokeStatement, SelectStatement, SetRoleStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
     TruncateStatement,
 };
@@ -39,7 +40,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     transaction_manager: TransactionManager,
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
-    slow_query_log: Option<Arc<query_stats::SlowQueryLog>>,
+    current_role: Option<String>,
 }
 
 /// Execution statistics for CBO
@@ -78,7 +79,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 
@@ -92,7 +93,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 
@@ -106,7 +107,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 
@@ -123,38 +124,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Get table statistics for CBO
     pub fn get_table_stats(&self) -> Arc<RwLock<ExecutionStats>> {
         self.stats.clone()
-    }
-
-    pub fn enable_slow_query_log(&mut self, threshold_ms: u64, log_path: std::path::PathBuf) {
-        self.slow_query_log = Some(Arc::new(query_stats::SlowQueryLog::new(
-            threshold_ms,
-            log_path,
-        )));
-    }
-
-    pub fn disable_slow_query_log(&mut self) {
-        self.slow_query_log = None;
-    }
-
-    pub fn is_slow_query_log_enabled(&self) -> bool {
-        self.slow_query_log.is_some()
-    }
-
-    pub fn slow_query_log_threshold_ms(&self) -> Option<u64> {
-        self.slow_query_log.as_ref().map(|log| log.threshold_ms())
-    }
-
-    pub fn get_slow_query_records(&self) -> Vec<query_stats::SlowQueryRecord> {
-        self.slow_query_log
-            .as_ref()
-            .map(|log| log.get_recent())
-            .unwrap_or_default()
-    }
-
-    pub fn clear_slow_query_records(&self) {
-        if let Some(ref log) = self.slow_query_log {
-            log.clear_recent();
-        }
     }
 
     /// Estimate the number of rows returned by a query based on statistics
@@ -365,10 +334,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Execute a SQL statement and return results
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
-        let start_time = std::time::Instant::now();
         let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
 
-        let result = match statement {
+        match statement {
             Statement::Select(ref select) => self.execute_select(select),
             Statement::Insert(ref insert) => self.execute_insert(insert),
             Statement::Update(ref update) => self.execute_update(update),
@@ -393,6 +361,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ))
             }
             Statement::Union(ref union_stmt) => {
+                // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
                     _ => {
@@ -413,8 +382,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut left_result = self.execute_select(left_select)?;
                 let right_result = self.execute_select(right_select)?;
 
+                // Append rows from right to left
                 left_result.rows.extend(right_result.rows);
 
+                // If not UNION ALL, deduplicate
                 if !union_stmt.union_all {
                     left_result.rows.sort();
                     left_result.rows.dedup();
@@ -433,19 +404,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
             Statement::Grant(ref grant) => self.execute_grant(grant),
             Statement::Revoke(ref revoke) => self.execute_revoke(revoke),
+            Statement::CreateRole(ref stmt) => self.execute_create_role(stmt),
+            Statement::DropRole(ref stmt) => self.execute_drop_role(stmt),
+            Statement::GrantRole(ref stmt) => self.execute_grant_role(stmt),
+            Statement::RevokeRole(ref stmt) => self.execute_revoke_role(stmt),
+            Statement::SetRole(ref stmt) => self.execute_set_role(stmt),
+            Statement::ShowRoles => self.execute_show_roles(),
+            Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
-        };
-
-        let duration_ms = start_time.elapsed().as_millis() as u64;
-        let rows = result.as_ref().map(|r| r.rows.len() as u64).unwrap_or(0);
-
-        if let Some(ref slow_log) = self.slow_query_log {
-            slow_log.maybe_log(sql, duration_ms, rows);
         }
-
-        result
     }
 
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
@@ -1480,15 +1449,25 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
             for recipient in &grant.recipients {
                 let identity = sqlrustgo_catalog::auth::UserIdentity::new(recipient, "%");
-                catalog
-                    .grant_privilege(
-                        &identity,
-                        priv_obj,
-                        obj_type,
-                        &grant.object_name,
-                        grant.with_grant_option,
-                    )
-                    .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+                if grant.object_type == ParserObjectType::Column {
+                    for column in &grant.columns {
+                        catalog
+                            .grant_column_privilege(&identity, priv_obj, &grant.object_name, column)
+                            .map_err(|e| {
+                                SqlError::ExecutionError(format!("GRANT failed: {}", e))
+                            })?;
+                    }
+                } else {
+                    catalog
+                        .grant_privilege(
+                            &identity,
+                            priv_obj,
+                            obj_type,
+                            &grant.object_name,
+                            grant.with_grant_option,
+                        )
+                        .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+                }
             }
         }
 
@@ -1542,6 +1521,224 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             1,
         ))
     }
+
+    fn execute_create_role(&mut self, stmt: &CreateRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let parent_role_id = if let Some(ref parent_name) = stmt.parent_role {
+            let parent_role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(parent_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Parent role '{}' not found", parent_name))
+                })?;
+            Some(parent_role.id)
+        } else {
+            None
+        };
+
+        catalog_guard
+            .create_role(&stmt.name, parent_role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("CREATE ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("Role {} created", stmt.name))]],
+            1,
+        ))
+    }
+
+    fn execute_drop_role(&mut self, stmt: &DropRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.name))
+                })?;
+            role.id
+        };
+
+        catalog_guard
+            .drop_role(role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("DROP ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("Role {} dropped", stmt.name))]],
+            1,
+        ))
+    }
+
+    fn execute_grant_role(&mut self, stmt: &GrantRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.id
+        };
+
+        let user_identity = UserIdentity::new(&stmt.user_name, stmt.host.as_deref().unwrap_or("%"));
+
+        let user_id = {
+            catalog_guard
+                .auth_manager()
+                .get_user_id_by_identity(&user_identity)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("User '{}' not found", stmt.user_name))
+                })?
+        };
+
+        catalog_guard
+            .grant_role_to_user(user_id, role_id, 0)
+            .map_err(|e| SqlError::ExecutionError(format!("GRANT ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!(
+                "Grant {} to {}",
+                stmt.role_name, stmt.user_name
+            ))]],
+            1,
+        ))
+    }
+
+    fn execute_revoke_role(&mut self, stmt: &RevokeRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.id
+        };
+
+        let user_identity = UserIdentity::new(&stmt.user_name, stmt.host.as_deref().unwrap_or("%"));
+
+        let user_id = {
+            catalog_guard
+                .auth_manager()
+                .get_user_id_by_identity(&user_identity)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("User '{}' not found", stmt.user_name))
+                })?
+        };
+
+        catalog_guard
+            .revoke_role_from_user(user_id, role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("REVOKE ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!(
+                "Revoke {} from {}",
+                stmt.role_name, stmt.user_name
+            ))]],
+            1,
+        ))
+    }
+
+    fn execute_set_role(&mut self, stmt: &SetRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+
+        let role_name = {
+            let catalog_guard = catalog.read().unwrap();
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.name.clone()
+        };
+
+        self.current_role = Some(stmt.role_name.clone());
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("SET ROLE to {}", role_name))]],
+            1,
+        ))
+    }
+
+    fn execute_show_roles(&self) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let catalog_guard = catalog.read().unwrap();
+
+        let roles = catalog_guard.auth_manager().list_roles();
+        let rows: Vec<Vec<Value>> = roles
+            .iter()
+            .map(|r| {
+                vec![
+                    Value::Integer(r.id as i64),
+                    Value::Text(r.name.clone()),
+                    r.parent_role_id
+                        .map(|id| Value::Integer(id as i64))
+                        .unwrap_or(Value::Null),
+                ]
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(rows, 3))
+    }
+
+    fn execute_show_grants_for(&self, user_spec: &str) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let catalog_guard = catalog.read().unwrap();
+
+        let parts: Vec<&str> = user_spec.split('@').collect();
+        let username = parts[0];
+        let host = parts.get(1).unwrap_or(&"%");
+
+        let identity = UserIdentity::new(username, host);
+        let grants = catalog_guard
+            .auth_manager()
+            .get_all_grants_for_user(&identity);
+
+        let rows: Vec<Vec<Value>> = grants
+            .iter()
+            .map(|g| {
+                vec![
+                    Value::Text(format!("{}@{}", g.user.username, g.user.host)),
+                    Value::Text(g.privilege.to_string()),
+                    Value::Text(format!("{:?}", g.object.object_type)),
+                    Value::Text(g.object.object_name.clone()),
+                ]
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(rows, 4))
+    }
 }
 
 impl ExecutionEngine<MemoryStorage> {
@@ -1555,7 +1752,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 
@@ -1569,7 +1766,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 
@@ -1583,7 +1780,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
-            slow_query_log: None,
+            current_role: None,
         }
     }
 }
