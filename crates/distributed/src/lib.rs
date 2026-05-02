@@ -28,6 +28,7 @@ pub mod semisync;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
+pub mod xa_coordinator;
 
 pub use consensus::{Operation, ShardReplicaManager};
 pub use cross_shard_query::{CrossShardQueryExecutor, QueryRouter};
@@ -58,3 +59,4 @@ pub use shard_router::{
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
+pub use xa_coordinator::{XaCoordinator, XaError, XaState, XaTransaction, Xid};
