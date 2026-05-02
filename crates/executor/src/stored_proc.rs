@@ -1158,6 +1158,25 @@ impl StoredProcExecutor {
                             .rename_table(table_name, new_name)
                             .map_err(|e| format!("Failed to rename table: {}", e))?;
                     }
+                    sqlrustgo_parser::AlterTableOperation::DropColumn { name } => {
+                        // Storage interface doesn't support drop_column yet
+                        // For now, return an error indicating feature not implemented
+                        return Err(format!(
+                            "DROP COLUMN '{}' not yet implemented in storage layer",
+                            name
+                        ));
+                    }
+                    sqlrustgo_parser::AlterTableOperation::ModifyColumn {
+                        name,
+                        data_type,
+                        nullable: _,
+                    } => {
+                        // Storage interface doesn't support modify_column yet
+                        return Err(format!(
+                            "MODIFY COLUMN '{} {}' not yet implemented in storage layer",
+                            name, data_type
+                        ));
+                    }
                 }
                 Ok(())
             }

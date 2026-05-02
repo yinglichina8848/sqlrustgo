@@ -83,6 +83,14 @@ pub enum AlterTableOperation {
         nullable: bool,
         default_value: Option<String>,
     },
+    DropColumn {
+        name: String,
+    },
+    ModifyColumn {
+        name: String,
+        data_type: String,
+        nullable: bool,
+    },
     RenameTo {
         new_name: String,
     },
@@ -316,6 +324,7 @@ pub struct InsertStatement {
     pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
     pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
     pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
+    pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
 }
 
 /// UPDATE statement
@@ -339,12 +348,14 @@ pub struct CreateTableStatement {
     pub name: String,
     pub columns: Vec<ColumnDefinition>,
     pub constraints: Vec<TableConstraint>,
+    pub if_not_exists: bool,
 }
 
 /// DROP TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStatement {
     pub name: String,
+    pub if_exists: bool,
 }
 
 /// TRUNCATE TABLE statement
@@ -356,6 +367,7 @@ pub struct TruncateStatement {
 /// SHOW statement variants
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowStatement {
+    Databases,
     Tables,
     Columns {
         table: String,
@@ -366,6 +378,9 @@ pub enum ShowStatement {
     },
     Grants {
         user: Option<String>,
+    },
+    CreateTable {
+        table: String,
     },
 }
 
@@ -1732,12 +1747,61 @@ impl Parser {
             return Err("Expected VALUES or SELECT".to_string());
         };
 
+        let on_duplicate_key_update = if matches!(self.current(), Some(Token::On)) {
+            self.next();
+            match self.current() {
+                Some(Token::Duplicate) => {
+                    self.next();
+                    self.expect(Token::Key)?;
+                    self.expect(Token::Update)?;
+                    let mut updates = Vec::new();
+                    loop {
+                        match self.current() {
+                            Some(Token::Identifier(_)) => {
+                                let expr = self.parse_expression()?;
+                                match expr {
+                                    Expression::BinaryOp(left, op, right) if op == "=" => {
+                                        match (*left, *right) {
+                                            (Expression::Identifier(col), val) => {
+                                                updates.push((col, val));
+                                            }
+                                            _ => {
+                                                return Err("Expected column = value assignment"
+                                                    .to_string())
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        return Err("Expected column = value assignment".to_string())
+                                    }
+                                }
+                            }
+                            Some(Token::Comma) => {
+                                self.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if updates.is_empty() {
+                        return Err(
+                            "Expected column assignments after ON DUPLICATE KEY UPDATE".to_string()
+                        );
+                    }
+                    Some(updates)
+                }
+                _ => return Err("Expected 'DUPLICATE KEY' after 'ON'".to_string()),
+            }
+        } else {
+            None
+        };
+
         Ok(Statement::Insert(InsertStatement {
             table,
             columns,
             values,
             select,
             is_replace,
+            on_duplicate_key_update,
         }))
     }
 
@@ -2272,6 +2336,26 @@ impl Parser {
             self.next(); // consume CREATE if not already consumed
         }
         self.expect(Token::Table)?;
+
+        let if_not_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            match self.current() {
+                Some(Token::Not) => {
+                    self.next();
+                    match self.current() {
+                        Some(Token::Exists) => {
+                            self.next();
+                            true
+                        }
+                        _ => return Err("Expected 'EXISTS' after 'NOT'".to_string()),
+                    }
+                }
+                _ => return Err("Expected 'NOT EXISTS' after 'IF'".to_string()),
+            }
+        } else {
+            false
+        };
+
         let name = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
@@ -2361,6 +2445,7 @@ impl Parser {
             name,
             columns,
             constraints,
+            if_not_exists,
         }))
     }
 
@@ -2587,11 +2672,23 @@ impl Parser {
         match self.current() {
             Some(Token::Table) => {
                 self.next();
+                let if_exists = if matches!(self.current(), Some(Token::If)) {
+                    self.next();
+                    match self.current() {
+                        Some(Token::Exists) => {
+                            self.next();
+                            true
+                        }
+                        _ => return Err("Expected 'EXISTS' after 'IF'".to_string()),
+                    }
+                } else {
+                    false
+                };
                 let name = match self.next() {
                     Some(Token::Identifier(name)) => name,
                     _ => return Err("Expected table name".to_string()),
                 };
-                Ok(Statement::DropTable(DropTableStatement { name }))
+                Ok(Statement::DropTable(DropTableStatement { name, if_exists }))
             }
             Some(Token::Role) => self.parse_drop_role(),
             Some(t) => Err(format!("Expected TABLE or ROLE after DROP, got {:?}", t)),
@@ -2625,9 +2722,22 @@ impl Parser {
         self.expect(Token::Show)?;
 
         match self.current() {
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "DATABASES" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Databases))
+            }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "TABLES" => {
                 self.next();
                 Ok(Statement::Show(ShowStatement::Tables))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "CREATE" => {
+                self.next();
+                self.expect(Token::Table)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::Show(ShowStatement::CreateTable { table }))
             }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "COLUMNS" => {
                 self.next();
@@ -3223,7 +3333,48 @@ impl Parser {
                     operation: AlterTableOperation::RenameTo { new_name },
                 }))
             }
-            _ => Err("Expected ADD or RENAME".to_string()),
+            Some(Token::Drop) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Column)) {
+                    self.next();
+                }
+                let col_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::DropColumn { name: col_name },
+                }))
+            }
+            Some(Token::Modify) => {
+                self.next();
+                if matches!(self.current(), Some(Token::Column)) {
+                    self.next();
+                }
+                let col_name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected column name".to_string()),
+                };
+                let data_type = match self.next() {
+                    Some(Token::Identifier(typename)) => typename,
+                    Some(Token::Integer) => "INTEGER".to_string(),
+                    Some(Token::Text) => "TEXT".to_string(),
+                    Some(Token::Float) => "FLOAT".to_string(),
+                    Some(Token::Boolean) => "BOOLEAN".to_string(),
+                    _ => return Err("Expected data type".to_string()),
+                };
+                let nullable = true;
+                Ok(Statement::AlterTable(AlterTableStatement {
+                    table_name,
+                    operation: AlterTableOperation::ModifyColumn {
+                        name: col_name,
+                        data_type,
+                        nullable,
+                    },
+                }))
+            }
+            _ => Err("Expected ADD, DROP, MODIFY or RENAME".to_string()),
         }
     }
 }
