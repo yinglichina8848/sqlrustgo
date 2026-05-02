@@ -28,6 +28,14 @@ h=subprocess.check_output([\"git\",\"rev-parse\",\"HEAD\"]).decode().strip()
 assert v[\"commit\"]==h, \"Commit mismatch\"
 print(f\"HEAD={h[:12]} verified\")
 "'
+check "A4: VERSION_PLAN.md" "test -f docs/releases/v2.9.0/VERSION_PLAN.md"
+check "A4: RELEASE_NOTES.md" "test -f docs/releases/v2.9.0/RELEASE_NOTES.md"
+check "A4: CHANGELOG.md" "test -f docs/releases/v2.9.0/CHANGELOG.md"
+check "A4: FEATURE_MATRIX.md" "test -f docs/releases/v2.9.0/FEATURE_MATRIX.md"
+check "A4: INTEGRATION_STATUS.md" "test -f docs/releases/v2.9.0/INTEGRATION_STATUS.md"
+check "A4: TEST_PLAN.md" "test -f docs/releases/v2.9.0/TEST_PLAN.md"
+check "A4: RELEASE_GATE_CHECKLIST.md" "test -f docs/releases/v2.9.0/RELEASE_GATE_CHECKLIST.md"
+check "A4: PERFORMANCE_TARGETS.md" "test -f docs/releases/v2.9.0/PERFORMANCE_TARGETS.md"
 
 echo ""
 echo "Alpha Gate: $PASS/$TOTAL passed ($BLOCKERS blockers)"
