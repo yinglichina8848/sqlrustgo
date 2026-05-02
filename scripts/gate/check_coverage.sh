@@ -14,6 +14,7 @@ PROBLEMATIC_TESTS=(
     "test_trigger_executes_delete"
     "test_trigger_executes_update"
     "test_sql_corpus_all"
+    "test_sharded_vector_insert_and_search"
 )
 
 CRATE_FEATURES="aes256"

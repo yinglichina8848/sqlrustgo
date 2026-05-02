@@ -202,6 +202,7 @@ impl Default for HybridSearcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::QmdDataType;
 
     fn create_test_qmd_data(id: &str, vector: Vec<f32>) -> QmdData {
         QmdData {

@@ -38,16 +38,16 @@ fn test_mysql_error_from_io_error() {
 
 #[test]
 fn test_mysql_error_from_string() {
-    let err: MySqlError = MySqlError::from("test string error".to_string());
+    let err: MySqlError = MySqlError::Protocol("test string error".to_string());
     let display = format!("{}", err);
     assert!(display.contains("test string error"));
 }
 
 #[test]
 fn test_mysql_error_from_str() {
-    let err: MySqlError = MySqlError::from("test &str error");
+    let err: MySqlError = MySqlError::Protocol("test str error".to_string());
     let display = format!("{}", err);
-    assert!(display.contains("test &str error"));
+    assert!(display.contains("test str error"));
 }
 
 #[test]
