@@ -28,7 +28,6 @@ pub enum BackupStatus {
     Failed(String),
 }
 
-
 /// Backup metadata
 #[derive(Debug, Clone)]
 pub struct BackupMetadata {

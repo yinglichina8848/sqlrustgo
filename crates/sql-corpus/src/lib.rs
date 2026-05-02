@@ -6,8 +6,7 @@
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement,
-    WithSelect,
+    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement, WithSelect,
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;

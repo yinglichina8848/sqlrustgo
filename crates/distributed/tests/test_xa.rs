@@ -11,7 +11,11 @@
 use sqlrustgo_distributed::{XaCoordinator, XaError, XaState, Xid};
 
 fn create_xid(format_id: i32, gtrid: &str, bqual: &str) -> Xid {
-    Xid::new(format_id, gtrid.as_bytes().to_vec(), bqual.as_bytes().to_vec())
+    Xid::new(
+        format_id,
+        gtrid.as_bytes().to_vec(),
+        bqual.as_bytes().to_vec(),
+    )
 }
 
 #[test]
@@ -141,7 +145,10 @@ fn test_xa_error_invalid_state_end_from_idle() {
     coordinator.xa_end(&xid).unwrap();
 
     let result = coordinator.xa_end(&xid);
-    assert!(matches!(result, Err(XaError::InvalidStateTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(XaError::InvalidStateTransition { .. })
+    ));
 }
 
 #[test]
@@ -152,7 +159,10 @@ fn test_xa_error_commit_not_prepared() {
     coordinator.xa_start(xid.clone()).unwrap();
 
     let result = coordinator.xa_commit(&xid);
-    assert!(matches!(result, Err(XaError::InvalidStateTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(XaError::InvalidStateTransition { .. })
+    ));
 }
 
 #[test]
@@ -163,7 +173,10 @@ fn test_xa_error_prepare_from_active() {
     coordinator.xa_start(xid.clone()).unwrap();
 
     let result = coordinator.xa_prepare(&xid);
-    assert!(matches!(result, Err(XaError::InvalidStateTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(XaError::InvalidStateTransition { .. })
+    ));
 }
 
 #[test]
