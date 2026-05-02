@@ -6,15 +6,13 @@
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
-use sqlrustgo_executor::query_cache::{should_cache, CacheEntry, CacheKey, QueryCache};
-use sqlrustgo_executor::query_cache_config::QueryCacheConfig;
-use sqlrustgo_executor::sql_normalizer::SqlNormalizer;
+use sqlrustgo_executor::query_cache::{should_cache, QueryCache};
+use sqlrustgo_executor::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
-use parking_lot::RwLock;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
@@ -429,7 +427,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
         if !sql.trim().is_empty() && self.cache_config.enabled {
             let cache_key = self.get_cache_key(sql);
-            if let Some(result) = self.query_cache.write().get(&cache_key) {
+            if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
                 return Ok(result);
             }
 
@@ -444,7 +442,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     size_bytes: result.rows.iter().map(|r| r.len()).sum(),
                     last_access: 0,
                 };
-                self.query_cache.write().put(cache_key, entry, vec![]);
+                self.query_cache.write().unwrap().put(cache_key, entry, vec![]);
             }
 
             return Ok(result);
@@ -455,11 +453,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn get_cache_key(&self, sql: &str) -> CacheKey {
-        let (normalized, extracted) = SqlNormalizer::from_literal(sql);
-        let hash = SqlNormalizer::hash_params(&extracted);
         CacheKey {
-            normalized_sql: normalized,
-            params_hash: hash,
+            normalized_sql: sql.trim().to_lowercase(),
+            params_hash: 0,
         }
     }
 
@@ -941,7 +937,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        self.query_cache.write().invalidate_table(&table_name);
+        self.query_cache.write().unwrap().invalidate_table(&table_name);
 
         Ok(ExecutorResult::new(vec![], insert.values.len()))
     }
@@ -1108,7 +1104,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        self.query_cache.write().invalidate_table(&table_name);
+        self.query_cache.write().unwrap().invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -1802,6 +1798,8 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 
@@ -1816,6 +1814,8 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 
@@ -1830,6 +1830,8 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 }
