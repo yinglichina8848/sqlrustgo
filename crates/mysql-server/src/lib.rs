@@ -876,9 +876,10 @@ fn send_result_set<W: Write>(
 
 struct PreparedStatementInfo {
     sql: String,
-    #[allow(dead_code)]
     param_count: u16,
     column_count: u16,
+    // Cached parsed AST to avoid re-parsing on every execute
+    parsed_stmt: Option<sqlrustgo_parser::parser::Statement>,
 }
 
 struct PreparedStatementManager {
@@ -903,6 +904,7 @@ impl PreparedStatementManager {
                 sql,
                 param_count,
                 column_count,
+                parsed_stmt: None,
             },
         );
         id
@@ -910,6 +912,10 @@ impl PreparedStatementManager {
 
     fn get(&self, id: u32) -> Option<&PreparedStatementInfo> {
         self.statements.get(&id)
+    }
+
+    fn get_mut(&mut self, id: u32) -> Option<&mut PreparedStatementInfo> {
+        self.statements.get_mut(&id)
     }
 
     fn remove(&mut self, id: u32) {
@@ -1025,6 +1031,34 @@ fn execute_write(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<u
     Ok(engine.execute(sql).map_err(MySqlError::from)?.affected_rows)
 }
 
+fn execute_write_statement(
+    stmt: sqlrustgo_parser::parser::Statement,
+    engine: &mut MemoryExecutionEngine,
+) -> MySqlResult<usize> {
+    Ok(engine.execute_statement(stmt).map_err(MySqlError::from)?.affected_rows)
+}
+
+#[allow(clippy::type_complexity)]
+fn execute_select_statement(
+    stmt: sqlrustgo_parser::parser::Statement,
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+    storage: &Arc<RwLock<MemoryStorage>>,
+) -> MySqlResult<(Vec<String>, Vec<String>, Vec<Vec<Value>>)> {
+    let r = engine.execute_statement(stmt).map_err(MySqlError::from)?;
+    let real_cols = extract_column_names(sql, storage);
+    let n = r.rows.first().map(|row| row.len()).unwrap_or(0);
+    let cols: Vec<String> = if !real_cols.is_empty() {
+        real_cols
+    } else if n > 0 {
+        (0..n).map(|i| format!("col_{}", i + 1)).collect()
+    } else {
+        vec!["result".to_string()]
+    };
+    let ctypes: Vec<String> = infer_column_types(sql, storage, &cols);
+    Ok((cols, ctypes, r.rows))
+}
+
 fn is_select(sql: &str) -> bool {
     let u = sql.trim().to_uppercase();
     u.starts_with("SELECT")
@@ -1062,6 +1096,7 @@ fn do_command_loop<S: Read + Write>(
     stream: &mut S,
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
+    engine: &mut MemoryExecutionEngine,
     cap: u32,
     mut seq: u8,
     ps_manager: &mut PreparedStatementManager,
@@ -1103,10 +1138,9 @@ fn do_command_loop<S: Read + Write>(
                     seq = seq.wrapping_add(1);
                     continue;
                 }
-                let mut eng = MemoryExecutionEngine::new(storage.clone());
                 if is_select(&q) {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        execute_select(&q, &mut eng, &storage)
+                        execute_select(&q, engine, &storage)
                     })) {
                         Ok(Ok((c, t, r))) => {
                             seq = send_result_set(stream, &c, &t, &r, seq, cap)?;
@@ -1127,7 +1161,7 @@ fn do_command_loop<S: Read + Write>(
                         }
                     }
                 } else {
-                    match execute_write(&q, &mut eng) {
+                    match execute_write(&q, engine) {
                         Ok(a) => {
                             make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
                             seq = seq.wrapping_add(1);
@@ -1180,6 +1214,12 @@ fn do_command_loop<S: Read + Write>(
                 };
 
                 let stmt_id = ps_manager.add(sql.clone(), param_count, column_count);
+
+                if let Ok(stmt) = sqlrustgo_parser::parse(&sql) {
+                    if let Some(stmt_info) = ps_manager.get_mut(stmt_id) {
+                        stmt_info.parsed_stmt = Some(stmt);
+                    }
+                }
 
                 let mut p = Vec::new();
                 p.push(0x00);
@@ -1261,8 +1301,8 @@ fn do_command_loop<S: Read + Write>(
 
                 let stmt_id = u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let stmt = match ps_manager.get(stmt_id) {
-                    Some(s) => (s.sql.clone(), s.column_count),
+                let stmt_info = match ps_manager.get(stmt_id) {
+                    Some(s) => s,
                     None => {
                         make_err_packet(seq, 1243, "HY000", "Unknown statement handler")
                             .write_to(stream)?;
@@ -1270,19 +1310,25 @@ fn do_command_loop<S: Read + Write>(
                         continue;
                     }
                 };
-                let stmt_sql = stmt.0;
-                let stmt_col_count = stmt.1;
+                let stmt_sql = &stmt_info.sql;
+                let stmt_col_count = stmt_info.column_count;
 
                 let params: Vec<Vec<u8>> = Vec::new();
-                let final_sql = replace_placeholders(&stmt_sql, &params);
+                let _final_sql = replace_placeholders(stmt_sql, &params);
 
-                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, final_sql);
-                let mut eng = MemoryExecutionEngine::new(storage.clone());
+                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, stmt_sql);
 
-                if is_select(&final_sql) {
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        execute_select(&final_sql, &mut eng, &storage)
-                    })) {
+                if is_select(stmt_sql) {
+                    let result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            execute_select_statement(parsed_stmt.clone(), stmt_sql, engine, &storage)
+                        }))
+                    } else {
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            execute_select(stmt_sql, engine, &storage)
+                        }))
+                    };
+                    match result {
                         Ok(Ok((c, t, r))) => {
                             let c_trimmed: Vec<String> =
                                 c.into_iter().take(stmt_col_count as usize).collect();
@@ -1307,7 +1353,12 @@ fn do_command_loop<S: Read + Write>(
                         }
                     }
                 } else {
-                    match execute_write(&final_sql, &mut eng) {
+                    let write_result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
+                        execute_write_statement(parsed_stmt.clone(), engine)
+                    } else {
+                        execute_write(stmt_sql, engine)
+                    };
+                    match write_result {
                         Ok(a) => {
                             make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
                             seq = seq.wrapping_add(1);
@@ -1437,10 +1488,12 @@ fn handle_connection(
             make_ok_packet(3, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
+            let mut engine = MemoryExecutionEngine::new(storage.clone());
             let _ = do_command_loop(
                 &mut tls,
                 addr,
                 storage,
+                &mut engine,
                 resp.capability_flags,
                 4,
                 &mut ps_manager,
@@ -1486,10 +1539,12 @@ fn handle_connection(
         .ok();
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
+    let mut engine = MemoryExecutionEngine::new(storage.clone());
     let _ = do_command_loop(
         &mut &stream,
         addr,
         storage,
+        &mut engine,
         resp.capability_flags,
         3,
         &mut ps_manager,

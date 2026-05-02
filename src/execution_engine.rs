@@ -6,11 +6,15 @@
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
+use sqlrustgo_executor::query_cache::{should_cache, CacheEntry, CacheKey, QueryCache};
+use sqlrustgo_executor::query_cache_config::QueryCacheConfig;
+use sqlrustgo_executor::sql_normalizer::SqlNormalizer;
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
+use parking_lot::RwLock;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
@@ -41,6 +45,8 @@ pub struct ExecutionEngine<S: StorageEngine> {
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
     current_role: Option<String>,
+    query_cache: Arc<RwLock<QueryCache>>,
+    cache_config: QueryCacheConfig,
 }
 
 /// Execution statistics for CBO
@@ -80,6 +86,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -94,6 +102,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -108,6 +118,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -332,10 +344,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })
     }
 
-    /// Execute a SQL statement and return results
-    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
-        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-
+    /// Execute a pre-parsed SQL statement and return results
+    /// This avoids re-parsing on every execute for prepared statements
+    pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
         match statement {
             Statement::Select(ref select) => self.execute_select(select),
             Statement::Insert(ref insert) => self.execute_insert(insert),
@@ -361,7 +372,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ))
             }
             Statement::Union(ref union_stmt) => {
-                // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
                     _ => {
@@ -382,10 +392,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut left_result = self.execute_select(left_select)?;
                 let right_result = self.execute_select(right_select)?;
 
-                // Append rows from right to left
                 left_result.rows.extend(right_result.rows);
 
-                // If not UNION ALL, deduplicate
                 if !union_stmt.union_all {
                     left_result.rows.sort();
                     left_result.rows.dedup();
@@ -412,8 +420,46 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             _ => Err(SqlError::ExecutionError(
-                "Unsupported statement type".to_string(),
+                format!("Unsupported statement type: {:?}", std::mem::discriminant(&statement)),
             )),
+        }
+    }
+
+    /// Execute a SQL statement and return results
+    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
+        if !sql.trim().is_empty() && self.cache_config.enabled {
+            let cache_key = self.get_cache_key(sql);
+            if let Some(result) = self.query_cache.write().get(&cache_key) {
+                return Ok(result);
+            }
+
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            let result = self.execute_statement(statement)?;
+
+            if should_cache(&result) {
+                let entry = CacheEntry {
+                    result: result.clone(),
+                    tables: vec![],
+                    created_at: std::time::Instant::now(),
+                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                    last_access: 0,
+                };
+                self.query_cache.write().put(cache_key, entry, vec![]);
+            }
+
+            return Ok(result);
+        }
+
+        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        self.execute_statement(statement)
+    }
+
+    fn get_cache_key(&self, sql: &str) -> CacheKey {
+        let (normalized, extracted) = SqlNormalizer::from_literal(sql);
+        let hash = SqlNormalizer::hash_params(&extracted);
+        CacheKey {
+            normalized_sql: normalized,
+            params_hash: hash,
         }
     }
 
@@ -895,6 +941,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        self.query_cache.write().invalidate_table(&table_name);
+
         Ok(ExecutorResult::new(vec![], insert.values.len()))
     }
 
@@ -1060,6 +1108,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        self.query_cache.write().invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 

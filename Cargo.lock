@@ -2513,6 +2513,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+dependencies = [
+ "twox-hash 2.1.2",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2613,7 +2622,7 @@ dependencies = [
  "serde",
  "serde_json",
  "socket2 0.5.10",
- "twox-hash",
+ "twox-hash 1.6.3",
  "url",
 ]
 
@@ -4016,6 +4025,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
+name = "snap"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
+
+[[package]]
 name = "socket2"
 version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4163,8 +4178,10 @@ dependencies = [
  "sqlrustgo",
  "sqlrustgo-bench",
  "sqlrustgo-executor",
+ "sqlrustgo-parser",
  "sqlrustgo-server",
  "sqlrustgo-storage",
+ "sqlrustgo-types",
  "tempfile",
  "tokio",
  "tokio-postgres",
@@ -4479,13 +4496,16 @@ dependencies = [
  "async-trait",
  "criterion 0.8.2",
  "log",
+ "lz4_flex",
  "miniz_oxide 0.7.4",
  "serde",
  "serde_json",
+ "snap",
  "sqlrustgo-common",
  "sqlrustgo-types",
  "tempfile",
  "thiserror 2.0.18",
+ "zstd",
 ]
 
 [[package]]
@@ -5306,6 +5326,12 @@ dependencies = [
  "rand 0.8.6",
  "static_assertions",
 ]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typenum"

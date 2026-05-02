@@ -13,13 +13,21 @@ This report documents the Sysbench OLTP benchmark infrastructure established for
 | Component | Version/Details |
 |-----------|-----------------|
 | SQLRustGo | v2.9.0 (develop/v2.9.0) |
-| MySQL Server | v2.6.0 (mysql-server crate) |
+| MySQL Server | v2.6.0+ (mysql-server crate) |
 | sysbench | 1.0.20 |
-| OS | macOS (Darwin) |
+| OS | Ubuntu 24.04 (Linux) |
 | Rust | 1.85+ |
 | Test Database | sbtest |
 | Table Size | 10,000 rows |
 | Connection | MySQL Wire Protocol (port 3306) |
+
+### Reference Hardware (for comparison)
+
+| Component | MySQL/PG/SQLite Tests |
+|-----------|----------------------|
+| CPU | Intel Xeon Gold 6138 @ 2.00GHz (80 核) |
+| Memory | 409 GB DDR4 |
+| Disk | NVMe SSD 1.9TB |
 
 ## 2. Benchmark Results
 
@@ -33,7 +41,16 @@ This report documents the Sysbench OLTP benchmark infrastructure established for
 
 **Observation**: QPS remains relatively constant (~2,000) regardless of thread count, suggesting the bottleneck is in query execution rather than concurrency.
 
-### 2.2 Known Limitations
+### 2.2 Comparison with Other Databases (32 threads)
+
+| Database | Point Select TPS | Relative to MySQL |
+|----------|------------------|-------------------|
+| PostgreSQL 16 | 285,128 | 127% |
+| MySQL 8.0 | 224,931 | 100% |
+| SQLite 3.45 | 13,617 | 6% |
+| **SQLRustGo** | **~2,000** | **<1%** |
+
+### 2.3 Known Limitations
 
 1. **No Transaction Support**: OLTP read_write and other transaction-heavy tests fail with "No transaction in progress"
 2. **Limited Concurrency Scaling**: QPS does not increase with additional threads beyond 8
