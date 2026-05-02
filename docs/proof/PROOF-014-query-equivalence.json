@@ -1,0 +1,18 @@
+{
+  "proof_id": "PROOF-014",
+  "title": "查询等价性证明框架",
+  "language": "Formulog",
+  "category": "optimizer",
+  "status": "verified",
+  "target": "Query optimization preserves semantics",
+  "description": "建立SQLRustGo查询等价性证明框架，验证查询优化转换的正确性。两个查询Q1和Q2等价当且仅当对于所有数据库状态D：eval(Q1, D) = eval(Q2, D)。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-optimizer --test query_equivalence: passed",
+    "verification_method": "Formulog logic programming + integration tests",
+    "formal_spec": "PROOF-014-query-equivalence.formalog",
+    "formal_proof_file": "docs/proof/PROOF-014-query-equivalence.formalog"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-02T00:00:00Z",
+  "created_at": "2026-05-02"
+}
