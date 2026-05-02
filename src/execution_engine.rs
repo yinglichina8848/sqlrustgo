@@ -14,7 +14,8 @@ use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
+    GrantStatement, InsertStatement, ObjectType as ParserObjectType, Privilege as ParserPrivilege,
+    RevokeStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
     TruncateStatement,
 };
@@ -396,6 +397,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
+            Statement::Grant(ref grant) => self.execute_grant(grant),
+            Statement::Revoke(ref revoke) => self.execute_revoke(revoke),
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
@@ -1399,6 +1402,102 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })?;
         self.current_tx_id = None;
         Ok(ExecutorResult::empty())
+    }
+
+    fn execute_grant(&mut self, grant: &GrantStatement) -> SqlResult<ExecutorResult> {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("Catalog not available for GRANT".to_string())
+        })?;
+        let mut catalog = catalog_guard.write().unwrap();
+
+        for privilege in &grant.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
+
+            let obj_type = match &grant.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for recipient in &grant.recipients {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(recipient, "%");
+                catalog
+                    .grant_privilege(
+                        &identity,
+                        priv_obj,
+                        obj_type,
+                        &grant.object_name,
+                        grant.with_grant_option,
+                    )
+                    .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+            }
+        }
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Integer(grant.recipients.len() as i64)]],
+            1,
+        ))
+    }
+
+    fn execute_revoke(&mut self, revoke: &RevokeStatement) -> SqlResult<ExecutorResult> {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("Catalog not available for REVOKE".to_string())
+        })?;
+        let mut catalog = catalog_guard.write().unwrap();
+
+        for privilege in &revoke.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
+
+            let obj_type = match &revoke.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for user in &revoke.from_users {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(user, "%");
+                catalog
+                    .revoke_privilege(&identity, priv_obj, obj_type, &revoke.object_name)
+                    .map_err(|e| SqlError::ExecutionError(format!("REVOKE failed: {}", e)))?;
+            }
+        }
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Integer(revoke.from_users.len() as i64)]],
+            1,
+        ))
     }
 }
 
