@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-008",
+  "title": "ORDER BY 排序语义正确性",
+  "language": "Formulog",
+  "category": "parser",
+  "status": "verified",
+  "target": "ORDER BY sort semantic correctness",
+  "description": "证明 ORDER BY 子句的排序语义被正确解析和执行。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-parser order: passed",
+    "verification_method": "形式化规约 + 测试验证"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}

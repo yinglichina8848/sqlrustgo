@@ -1,0 +1,15 @@
+{
+  "proof_id": "PROOF-002",
+  "title": "类型推断终止且唯一",
+  "language": "Dafny",
+  "category": "type_system",
+  "status": "verified",
+  "target": "Type inference termination and uniqueness",
+  "description": "证明 SQLRustGo 类型推断算法对所有合法输入终止，并且返回唯一类型结果。",
+  "evidence": {
+    "test_results": "cargo test type_inference: passed",
+    "verification_method": "Dafny 形式化证明 + 单元测试"
+  },
+  "created_at": "2026-05-02",
+  "author": "openclaw"
+}

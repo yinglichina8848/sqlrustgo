@@ -416,6 +416,7 @@ pub enum Expression {
     Like(Box<Expression>, Box<Expression>, Option<char>), // LIKE pattern [ESCAPE char]
     Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
     CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
+    FunctionCall(String, Vec<Expression>), // Function call: UPPER(name), LOWER(name), etc.
 }
 
 /// SQL Parser
@@ -1008,6 +1009,15 @@ impl Parser {
                         expression: Some(expr),
                     });
                 }
+                // Handle CASE expressions in SELECT
+                Some(Token::Case) => {
+                    let expr = self.parse_expression()?;
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias: None,
+                        expression: Some(expr),
+                    });
+                }
                 // Handle NULL literal in SELECT
                 Some(Token::Null) => {
                     columns.push(SelectColumn {
@@ -1093,6 +1103,7 @@ impl Parser {
                             || matches!(self.peek(), Some(Token::Less))
                             || matches!(self.peek(), Some(Token::GreaterEqual))
                             || matches!(self.peek(), Some(Token::LessEqual))
+                            || matches!(self.peek(), Some(Token::LParen))
                     };
 
                     if is_operator {
@@ -1741,12 +1752,6 @@ impl Parser {
                     return Ok(Expression::NotInList(Box::new(left), values));
                 }
             }
-            return Err("NOT must be followed by IN or EXISTS".to_string());
-        }
-
-        // NOT LIKE (after NOT IN check failed)
-        if matches!(self.current(), Some(Token::Not)) {
-            self.next();
             // Check for NOT LIKE
             if matches!(self.current(), Some(Token::Like))
                 || matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
@@ -1791,7 +1796,6 @@ impl Parser {
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));
             }
-            // Put back the Not token for higher-level handling
             return Err("NOT must be followed by IN, LIKE, BETWEEN, or REGEXP".to_string());
         }
 
@@ -1856,6 +1860,33 @@ impl Parser {
             _ => return Ok(left),
         };
         self.next();
+
+        // Check for quantified comparison (ANY/ALL/SOME) BEFORE parsing right side
+        // because these are not standalone expressions
+        if matches!(
+            self.current(),
+            Some(Token::All) | Some(Token::Any) | Some(Token::Some)
+        ) {
+            let quantifier = match self.current() {
+                Some(Token::All) => "ALL",
+                Some(Token::Any) => "ANY",
+                Some(Token::Some) => "SOME",
+                _ => return Ok(left),
+            };
+            self.next();
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_statement()?;
+            self.expect(Token::RParen)?;
+            return Ok(Expression::QuantifiedOp(
+                Box::new(Expression::BinaryOp(
+                    Box::new(left),
+                    op.to_string(),
+                    Box::new(Expression::Literal("ANY_SUBQUERY".to_string())),
+                )),
+                quantifier.to_string(),
+                Box::new(subquery),
+            ));
+        }
 
         let right = self.parse_primary_expression()?;
 
@@ -1951,6 +1982,21 @@ impl Parser {
                         Some(t) => Err(format!("Expected column name after dot, got {:?}", t)),
                         None => Err("Expected column name after dot".to_string()),
                     }
+                } else if matches!(self.current(), Some(Token::LParen)) {
+                    self.next();
+                    let mut args = Vec::new();
+                    if !matches!(self.current(), Some(Token::RParen)) {
+                        loop {
+                            args.push(self.parse_expression()?);
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    Ok(Expression::FunctionCall(name, args))
                 } else {
                     Ok(Expression::Identifier(name))
                 }
