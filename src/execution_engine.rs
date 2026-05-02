@@ -1405,14 +1405,49 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn execute_grant(&mut self, grant: &GrantStatement) -> SqlResult<ExecutorResult> {
-        let _ = self.catalog.as_ref().ok_or_else(|| {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
             SqlError::ExecutionError("Catalog not available for GRANT".to_string())
         })?;
+        let mut catalog = catalog_guard.write().unwrap();
 
-        match_privilege(&grant.privileges)?;
-        let _catalog_object_type = match_object_type(&grant.object_type);
+        for privilege in &grant.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
 
-        for _recipient in &grant.recipients {}
+            let obj_type = match &grant.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for recipient in &grant.recipients {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(recipient, "%");
+                catalog
+                    .grant_privilege(
+                        &identity,
+                        priv_obj,
+                        obj_type,
+                        &grant.object_name,
+                        grant.with_grant_option,
+                    )
+                    .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+            }
+        }
 
         Ok(ExecutorResult::new(
             vec![vec![Value::Integer(grant.recipients.len() as i64)]],
@@ -1421,14 +1456,43 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn execute_revoke(&mut self, revoke: &RevokeStatement) -> SqlResult<ExecutorResult> {
-        let _ = self.catalog.as_ref().ok_or_else(|| {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
             SqlError::ExecutionError("Catalog not available for REVOKE".to_string())
         })?;
+        let mut catalog = catalog_guard.write().unwrap();
 
-        match_privilege(&revoke.privileges)?;
-        let _catalog_object_type = match_object_type(&revoke.object_type);
+        for privilege in &revoke.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
 
-        for _user in &revoke.from_users {}
+            let obj_type = match &revoke.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for user in &revoke.from_users {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(user, "%");
+                catalog
+                    .revoke_privilege(&identity, priv_obj, obj_type, &revoke.object_name)
+                    .map_err(|e| SqlError::ExecutionError(format!("REVOKE failed: {}", e)))?;
+            }
+        }
 
         Ok(ExecutorResult::new(
             vec![vec![Value::Integer(revoke.from_users.len() as i64)]],
@@ -1986,41 +2050,6 @@ fn build_aggregate_schema(
         check_constraints: vec![],
         partition_info: None,
     })
-}
-
-/// Convert parser privilege to catalog privilege
-fn match_privilege(
-    privs: &[ParserPrivilege],
-) -> SqlResult<Vec<sqlrustgo_catalog::auth::Privilege>> {
-    privs
-        .iter()
-        .map(|p| {
-            let priv_str = match p {
-                ParserPrivilege::Select => "SELECT",
-                ParserPrivilege::Insert => "INSERT",
-                ParserPrivilege::Update => "UPDATE",
-                ParserPrivilege::Delete => "DELETE",
-                ParserPrivilege::Read => "READ",
-                ParserPrivilege::Write => "WRITE",
-                ParserPrivilege::Execute => "EXECUTE",
-                ParserPrivilege::Usage => "USAGE",
-                ParserPrivilege::All => "ALL",
-            };
-            sqlrustgo_catalog::auth::Privilege::from_str(priv_str)
-                .ok_or_else(|| SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str)))
-        })
-        .collect()
-}
-
-/// Convert parser object type to catalog object type
-fn match_object_type(obj_type: &ParserObjectType) -> sqlrustgo_catalog::auth::ObjectType {
-    match obj_type {
-        ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
-        ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
-        ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
-        ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
-        ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
-    }
 }
 
 #[cfg(test)]

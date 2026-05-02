@@ -64,6 +64,10 @@ pub enum CatalogError {
     /// Serialization/deserialization error
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
+    /// Execution error (e.g., from auth operations)
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
 }
 
 /// Result type for catalog operations
