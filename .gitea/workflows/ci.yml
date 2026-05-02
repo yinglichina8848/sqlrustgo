@@ -33,6 +33,16 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - ARCHITECTURE_RULES.md
       - CHANGELOG.md
       - RELEASE_NOTES.md
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Tarpaulin profile (full or quick)'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
 
 env:
   CARGO_TERM_COLOR: always
@@ -116,3 +126,41 @@ jobs:
         run: |
           cd repo
           python3 audit/self_audit.py
+
+  # Coverage check — 手动触发，避免阻塞常规 CI
+  coverage:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+      - name: Install tarpaulin
+        run: |
+          cargo install cargo-tarpaulin --locked 2>&1 | tail -5
+      - name: Full coverage
+        if: github.event.inputs.profile == 'full'
+        run: |
+          cd repo
+          cargo tarpaulin --all-features --out Json --timeout 600 --output-dir ./coverage 2>&1
+      - name: Quick coverage (docs only)
+        if: github.event.inputs.profile == 'quick'
+        run: |
+          cd repo
+          cargo tarpaulin --all-features --out Json --timeout 300 --output-dir ./coverage 2>&1 | tail -30
+      - name: Upload coverage report
+        if: always()
+        run: |
+          cp -r repo/coverage /tmp/coverage-report-$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+          echo "Coverage report saved to /tmp/ on runner host"
+          cat repo/coverage/*.json 2>/dev/null | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print(f'Coverage: {d.get(\"coverage\",\"?\")}%')
+    print(f'Lines: {d.get(\"line_coverage\",\"?\")}')
+except: pass" || true
