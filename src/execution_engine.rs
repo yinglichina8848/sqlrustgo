@@ -39,6 +39,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     transaction_manager: TransactionManager,
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
+    slow_query_log: Option<Arc<query_stats::SlowQueryLog>>,
 }
 
 /// Execution statistics for CBO
@@ -77,6 +78,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 
@@ -90,6 +92,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 
@@ -103,6 +106,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 
@@ -119,6 +123,38 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Get table statistics for CBO
     pub fn get_table_stats(&self) -> Arc<RwLock<ExecutionStats>> {
         self.stats.clone()
+    }
+
+    pub fn enable_slow_query_log(&mut self, threshold_ms: u64, log_path: std::path::PathBuf) {
+        self.slow_query_log = Some(Arc::new(query_stats::SlowQueryLog::new(
+            threshold_ms,
+            log_path,
+        )));
+    }
+
+    pub fn disable_slow_query_log(&mut self) {
+        self.slow_query_log = None;
+    }
+
+    pub fn is_slow_query_log_enabled(&self) -> bool {
+        self.slow_query_log.is_some()
+    }
+
+    pub fn slow_query_log_threshold_ms(&self) -> Option<u64> {
+        self.slow_query_log.as_ref().map(|log| log.threshold_ms())
+    }
+
+    pub fn get_slow_query_records(&self) -> Vec<query_stats::SlowQueryRecord> {
+        self.slow_query_log
+            .as_ref()
+            .map(|log| log.get_recent())
+            .unwrap_or_default()
+    }
+
+    pub fn clear_slow_query_records(&self) {
+        if let Some(ref log) = self.slow_query_log {
+            log.clear_recent();
+        }
     }
 
     /// Estimate the number of rows returned by a query based on statistics
@@ -329,9 +365,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Execute a SQL statement and return results
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
+        let start_time = std::time::Instant::now();
         let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
 
-        match statement {
+        let result = match statement {
             Statement::Select(ref select) => self.execute_select(select),
             Statement::Insert(ref insert) => self.execute_insert(insert),
             Statement::Update(ref update) => self.execute_update(update),
@@ -356,7 +393,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ))
             }
             Statement::Union(ref union_stmt) => {
-                // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
                     _ => {
@@ -377,10 +413,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut left_result = self.execute_select(left_select)?;
                 let right_result = self.execute_select(right_select)?;
 
-                // Append rows from right to left
                 left_result.rows.extend(right_result.rows);
 
-                // If not UNION ALL, deduplicate
                 if !union_stmt.union_all {
                     left_result.rows.sort();
                     left_result.rows.dedup();
@@ -402,7 +436,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             _ => Err(SqlError::ExecutionError(
                 "Unsupported statement type".to_string(),
             )),
+        };
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+        let rows = result.as_ref().map(|r| r.rows.len() as u64).unwrap_or(0);
+
+        if let Some(ref slow_log) = self.slow_query_log {
+            slow_log.maybe_log(sql, duration_ms, rows);
         }
+
+        result
     }
 
     fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
@@ -1512,6 +1555,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 
@@ -1525,6 +1569,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 
@@ -1538,6 +1583,7 @@ impl ExecutionEngine<MemoryStorage> {
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            slow_query_log: None,
         }
     }
 }

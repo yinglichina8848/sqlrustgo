@@ -143,6 +143,7 @@ bytes.workspace = true
 lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
+query-stats = { path = "crates/query-stats" }
 
 [[test]]
 name = "ci_test"
