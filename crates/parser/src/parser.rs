@@ -442,14 +442,25 @@ pub enum TableConstraint {
     },
 }
 
-/// WHEN clause for CASE expression
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhenClause {
     pub condition: Expression,
     pub result: Expression,
 }
 
-/// Expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowSpecification {
+    pub partition_by: Vec<Expression>,
+    pub order_by: Vec<(Expression, bool)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowCall {
+    pub func_name: String,
+    pub args: Vec<Expression>,
+    pub window_spec: WindowSpecification,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Literal(String),
@@ -473,7 +484,8 @@ pub enum Expression {
     Like(Box<Expression>, Box<Expression>, Option<char>), // LIKE pattern [ESCAPE char]
     Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
     CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
-    FunctionCall(String, Vec<Expression>), // Function call: UPPER(name), LOWER(name), etc.
+    FunctionCall(String, Vec<Expression>),
+    WindowCall(WindowCall),
 }
 
 /// SQL Parser
@@ -1107,28 +1119,109 @@ impl Parser {
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
                 | Some(Token::Max) => {
                     if matches!(self.peek(), Some(Token::LParen)) {
-                        let func = self.parse_aggregate_function()?;
-                        aggregates.push(func);
+                        let agg = self.parse_aggregate_function()?;
 
-                        let alias = if matches!(self.current(), Some(Token::As)) {
+                        if matches!(self.current(), Some(Token::Over)) {
                             self.next();
-                            match self.current() {
-                                Some(Token::Identifier(name)) => {
-                                    let alias_name = name.clone();
-                                    self.next();
-                                    Some(alias_name)
-                                }
-                                _ => return Err("Expected alias name".to_string()),
-                            }
-                        } else {
-                            None
-                        };
+                            self.expect(Token::LParen)?;
 
-                        columns.push(SelectColumn {
-                            name: format!("__agg_{}", aggregates.len()),
-                            alias,
-                            expression: None,
-                        });
+                            let func_name = match agg.func {
+                                AggregateFunction::Count => "COUNT",
+                                AggregateFunction::Sum => "SUM",
+                                AggregateFunction::Avg => "AVG",
+                                AggregateFunction::Min => "MIN",
+                                AggregateFunction::Max => "MAX",
+                            };
+
+                            let mut partition_by = Vec::new();
+                            if matches!(self.current(), Some(Token::Partition)) {
+                                self.next();
+                                self.expect(Token::By)?;
+                                loop {
+                                    partition_by.push(self.parse_expression()?);
+                                    if matches!(self.current(), Some(Token::Comma)) {
+                                        self.next();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            let mut order_by = Vec::new();
+                            if matches!(self.current(), Some(Token::Order)) {
+                                self.next();
+                                self.expect(Token::By)?;
+                                loop {
+                                    let expr = self.parse_expression()?;
+                                    let asc = if matches!(self.current(), Some(Token::Asc)) {
+                                        self.next();
+                                        true
+                                    } else if matches!(self.current(), Some(Token::Desc)) {
+                                        self.next();
+                                        false
+                                    } else {
+                                        true
+                                    };
+                                    order_by.push((expr, asc));
+                                    if matches!(self.current(), Some(Token::Comma)) {
+                                        self.next();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            self.expect(Token::RParen)?;
+
+                            let alias = if matches!(self.current(), Some(Token::As)) {
+                                self.next();
+                                match self.current() {
+                                    Some(Token::Identifier(name)) => {
+                                        let alias_name = name.clone();
+                                        self.next();
+                                        Some(alias_name)
+                                    }
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            };
+
+                            columns.push(SelectColumn {
+                                name: format!("{}() OVER (...)", func_name),
+                                alias,
+                                expression: Some(Expression::WindowCall(WindowCall {
+                                    func_name: func_name.to_string(),
+                                    args: agg.args,
+                                    window_spec: WindowSpecification {
+                                        partition_by,
+                                        order_by,
+                                    },
+                                })),
+                            });
+                        } else {
+                            aggregates.push(agg);
+
+                            let alias = if matches!(self.current(), Some(Token::As)) {
+                                self.next();
+                                match self.current() {
+                                    Some(Token::Identifier(name)) => {
+                                        let alias_name = name.clone();
+                                        self.next();
+                                        Some(alias_name)
+                                    }
+                                    _ => return Err("Expected alias name".to_string()),
+                                }
+                            } else {
+                                None
+                            };
+
+                            columns.push(SelectColumn {
+                                name: format!("__agg_{}", aggregates.len()),
+                                alias,
+                                expression: None,
+                            });
+                        }
                     } else {
                         // Not followed by LParen - treat as identifier (column name)
                         // Convert keyword to identifier and process as column
@@ -1151,18 +1244,44 @@ impl Parser {
                 Some(Token::LParen) => {
                     let expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: format!("{:?}", expr),
-                        alias: None,
+                        alias,
                         expression: Some(expr),
                     });
                 }
                 // Handle CASE expressions in SELECT
                 Some(Token::Case) => {
                     let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: format!("{:?}", expr),
-                        alias: None,
+                        alias,
                         expression: Some(expr),
                     });
                 }
@@ -1278,17 +1397,43 @@ impl Parser {
                                 op.to_string(),
                                 Box::new(right),
                             );
+                            let alias = if matches!(self.current(), Some(Token::As)) {
+                                self.next();
+                                match self.current() {
+                                    Some(Token::Identifier(name)) => {
+                                        let alias_name = name.clone();
+                                        self.next();
+                                        Some(alias_name)
+                                    }
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            };
                             columns.push(SelectColumn {
                                 name: format!("{:?}", expr),
-                                alias: None,
+                                alias,
                                 expression: Some(expr),
                             });
                         } else {
                             self.position = start_position;
                             let expr = self.parse_expression()?;
+                            let alias = if matches!(self.current(), Some(Token::As)) {
+                                self.next();
+                                match self.current() {
+                                    Some(Token::Identifier(name)) => {
+                                        let alias_name = name.clone();
+                                        self.next();
+                                        Some(alias_name)
+                                    }
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            };
                             columns.push(SelectColumn {
                                 name: format!("{:?}", expr),
-                                alias: None,
+                                alias,
                                 expression: Some(expr),
                             });
                         }
@@ -1300,6 +1445,16 @@ impl Parser {
                         });
                         if !consumed {
                             self.next();
+                            if matches!(self.current(), Some(Token::As)) {
+                                self.next();
+                                if let Some(Token::Identifier(alias_name)) = self.current() {
+                                    let name = alias_name.clone();
+                                    self.next();
+                                    if let Some(col) = columns.last_mut() {
+                                        col.alias = Some(name);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -2193,7 +2348,62 @@ impl Parser {
                         }
                     }
                     self.expect(Token::RParen)?;
-                    Ok(Expression::FunctionCall(name, args))
+
+                    if matches!(self.current(), Some(Token::Over)) {
+                        self.next();
+                        self.expect(Token::LParen)?;
+
+                        let mut partition_by = Vec::new();
+                        if matches!(self.current(), Some(Token::Partition)) {
+                            self.next();
+                            self.expect(Token::By)?;
+                            loop {
+                                partition_by.push(self.parse_expression()?);
+                                if matches!(self.current(), Some(Token::Comma)) {
+                                    self.next();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        let mut order_by = Vec::new();
+                        if matches!(self.current(), Some(Token::Order)) {
+                            self.next();
+                            self.expect(Token::By)?;
+                            loop {
+                                let expr = self.parse_expression()?;
+                                let asc = if matches!(self.current(), Some(Token::Asc)) {
+                                    self.next();
+                                    true
+                                } else if matches!(self.current(), Some(Token::Desc)) {
+                                    self.next();
+                                    false
+                                } else {
+                                    true
+                                };
+                                order_by.push((expr, asc));
+                                if matches!(self.current(), Some(Token::Comma)) {
+                                    self.next();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        self.expect(Token::RParen)?;
+
+                        Ok(Expression::WindowCall(WindowCall {
+                            func_name: name,
+                            args,
+                            window_spec: WindowSpecification {
+                                partition_by,
+                                order_by,
+                            },
+                        }))
+                    } else {
+                        Ok(Expression::FunctionCall(name, args))
+                    }
                 } else {
                     Ok(Expression::Identifier(name))
                 }
@@ -2266,7 +2476,70 @@ impl Parser {
             Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
             | Some(Token::Max) => {
                 let agg = self.parse_aggregate_function()?;
-                Ok(Expression::Aggregate(agg))
+
+                if matches!(self.current(), Some(Token::Over)) {
+                    self.next();
+                    self.expect(Token::LParen)?;
+
+                    let func_name = match agg.func {
+                        AggregateFunction::Count => "COUNT",
+                        AggregateFunction::Sum => "SUM",
+                        AggregateFunction::Avg => "AVG",
+                        AggregateFunction::Min => "MIN",
+                        AggregateFunction::Max => "MAX",
+                    };
+
+                    let mut partition_by = Vec::new();
+                    if matches!(self.current(), Some(Token::Partition)) {
+                        self.next();
+                        self.expect(Token::By)?;
+                        loop {
+                            partition_by.push(self.parse_expression()?);
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    let mut order_by = Vec::new();
+                    if matches!(self.current(), Some(Token::Order)) {
+                        self.next();
+                        self.expect(Token::By)?;
+                        loop {
+                            let expr = self.parse_expression()?;
+                            let asc = if matches!(self.current(), Some(Token::Asc)) {
+                                self.next();
+                                true
+                            } else if matches!(self.current(), Some(Token::Desc)) {
+                                self.next();
+                                false
+                            } else {
+                                true
+                            };
+                            order_by.push((expr, asc));
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    self.expect(Token::RParen)?;
+
+                    Ok(Expression::WindowCall(WindowCall {
+                        func_name: func_name.to_string(),
+                        args: agg.args,
+                        window_spec: WindowSpecification {
+                            partition_by,
+                            order_by,
+                        },
+                    }))
+                } else {
+                    Ok(Expression::Aggregate(agg))
+                }
             }
             _ => Err("Expected expression".to_string()),
         }
@@ -2275,11 +2548,29 @@ impl Parser {
     fn parse_case_when_expression(&mut self) -> Result<Expression, String> {
         let mut when_clauses = Vec::new();
 
+        let base_expr = match self.current() {
+            Some(Token::When) => None,
+            Some(Token::Case) => None,
+            _ => {
+                let expr = self.parse_expression()?;
+                Some(expr)
+            }
+        };
+
         loop {
             match self.current() {
                 Some(Token::When) => {
                     self.next();
-                    let condition = self.parse_expression()?;
+                    let condition = if let Some(ref base) = base_expr {
+                        let value = self.parse_expression()?;
+                        Expression::BinaryOp(
+                            Box::new(base.clone()),
+                            "=".to_string(),
+                            Box::new(value),
+                        )
+                    } else {
+                        self.parse_expression()?
+                    };
                     self.expect(Token::Then)?;
                     let result = self.parse_expression()?;
                     when_clauses.push(WhenClause { condition, result });
@@ -4636,6 +4927,36 @@ fn test_debug_idx() {
     use crate::{lexer::Lexer, parse};
 
     let sql = "CREATE INDEX idx_orders_user_id ON orders(user_id)";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_json_extract() {
+    use crate::{lexer::Lexer, parse};
+
+    let sql = "SELECT JSON_EXTRACT('{\"name\":\"John\"}', '$.name')";
+    println!("SQL: [{}]", sql);
+    let tokens = Lexer::new(sql).tokenize();
+    println!("Tokens: {:?}", tokens);
+
+    match parse(sql) {
+        Ok(stmt) => println!("OK: {:#?}", stmt),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+#[test]
+fn test_debug_json_simple() {
+    use crate::{lexer::Lexer, parse};
+
+    let sql = "SELECT JSON('{\"key\": \"value\"}') as json_val";
     println!("SQL: [{}]", sql);
     let tokens = Lexer::new(sql).tokenize();
     println!("Tokens: {:?}", tokens);
