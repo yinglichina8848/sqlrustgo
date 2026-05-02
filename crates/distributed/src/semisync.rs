@@ -1,125 +1,87 @@
-//! Semi-Synchronous Replication Module
+//! Semi-synchronous Replication Module
 //!
-//! Implements MySQL 5.7 semi-synchronous replication with:
-//! - AFTER_SYNC mode: Master waits for slave to receive relay log before committing
-//! - AFTER_COMMIT mode: Master waits for slave to commit after commit
+//! MySQL 5.7 compatible semi-synchronous replication support.
 //!
-//! Reference: MySQL 5.7 Reference Manual - Semisynchronous Replication
+//! # Key Concepts
+//!
+//! - **AFTER_SYNC mode** (5.7+): Master waits for slave to receive relay log
+//!   BEFORE committing to storage
+//! - **AFTER_COMMIT mode** (old): Master waits for slave to commit AFTER master
+//!   commits
+//! - **Timeout mechanism**: Master falls back to async if slave doesn't ACK
+//!   within timeout
+//! - **ACK collector**: Master waits for configured number of slave ACKs
+//!
+//! # Example
+//!
+//! ```ignore
+//! use sqlrustgo_distributed::semisync::{SemiSyncMaster, SemiSyncMode};
+//!
+//! let mut master = SemiSyncMaster::new();
+//! master.set_mode(SemiSyncMode::AfterSync);
+//! master.set_timeout_ms(10000);
+//! master.set_wait_count(1);
+//! master.enable();
+//! ```
 
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::RwLock;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use std::time::Duration;
 
 /// Semi-sync replication mode
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SemiSyncMode {
-    /// Master waits for slave to receive relay log before commit
-    /// (MySQL 5.7+ default and recommended)
+    /// Wait for relay log receipt (MySQL 5.7+)
+    /// Master sends transaction to slaves and waits for ACK before committing
+    #[default]
     AfterSync,
-    /// Master waits for slave to commit after local commit
-    /// (Legacy mode, less safe)
+    /// Wait for slave commit (legacy mode)
+    /// Master commits first, then waits for slave to commit
     AfterCommit,
 }
 
-/// Semi-sync replica state
-#[derive(Debug, Clone)]
-pub struct SemiSyncReplicaState {
-    pub node_id: u32,
-    pub connected: bool,
-    pub last_ack_time: Option<Instant>,
-    pub lag_ms: u64,
-    pub last_position: u64,
+/// Semi-sync master status (MySQL compatible)
+#[derive(Debug, Clone, Default)]
+pub struct SemiSyncMasterStatus {
+    /// Rpl_semi_sync_master_status - ON if semi-sync is enabled
+    pub rpl_semi_sync_master_status: bool,
+    /// Rpl_semi_sync_master_clients - number of semi-sync slaves
+    pub rpl_semi_sync_master_clients: u32,
+    /// Rpl_semi_sync_master_yes_transactions - transactions with semi-sync
+    pub rpl_semi_sync_master_yes_transactions: u64,
+    /// Rpl_semi_sync_master_no_transactions - transactions without semi-sync
+    pub rpl_semi_sync_master_no_transactions: u64,
 }
 
-impl SemiSyncReplicaState {
-    pub fn new(node_id: u32) -> Self {
-        Self {
-            node_id,
-            connected: true,
-            last_ack_time: None,
-            lag_ms: 0,
-            last_position: 0,
-        }
-    }
-
-    pub fn record_ack(&mut self, position: u64) {
-        self.last_ack_time = Some(Instant::now());
-        self.last_position = position;
-    }
-
-    pub fn set_disconnected(&mut self) {
-        self.connected = false;
-    }
-
-    pub fn set_connected(&mut self) {
-        self.connected = true;
-    }
-
-    pub fn set_lag(&mut self, lag_ms: u64) {
-        self.lag_ms = lag_ms;
-    }
-}
-
-/// ACK sender for communication between master and replica
-#[derive(Debug, Clone)]
-pub struct AckSender {
-    node_id: u32,
-    sender: mpsc::Sender<u64>,
-}
-
-impl AckSender {
-    pub fn new(node_id: u32) -> (Self, mpsc::Receiver<u64>) {
-        let (sender, receiver) = mpsc::channel(100);
-        (Self { node_id, sender }, receiver)
-    }
-
-    pub async fn send_ack(&self, lsn: u64) -> Result<(), mpsc::error::SendError<u64>> {
-        self.sender.send(lsn).await
-    }
-
-    pub fn node_id(&self) -> u32 {
-        self.node_id
-    }
-}
-
-/// Semi-sync master configuration
-#[derive(Debug, Clone)]
-pub struct SemiSyncMasterConfig {
-    pub mode: SemiSyncMode,
-    pub timeout_ms: u64,
-    pub wait_count: u32,
-    pub ack_timeout_ms: u64,
-    pub replica_lag_max_ms: u64,
-}
-
-impl Default for SemiSyncMasterConfig {
-    fn default() -> Self {
-        Self {
-            mode: SemiSyncMode::AfterSync,
-            timeout_ms: 10000,
-            wait_count: 1,
-            ack_timeout_ms: 1000,
-            replica_lag_max_ms: 5000,
-        }
-    }
+/// Semi-sync slave status
+#[derive(Debug, Clone, Default)]
+pub struct SemiSyncSlaveStatus {
+    /// Whether semi-sync is enabled on slave
+    pub rpl_semi_sync_slave_status: bool,
+    /// Master UUID this slave is connected to
+    pub master_uuid: Option<String>,
+    /// Last ACK sent time
+    pub last_ack_time: Option<std::time::Instant>,
 }
 
 /// Semi-sync master state
 pub struct SemiSyncMaster {
-    config: RwLock<SemiSyncMasterConfig>,
-    replicas: RwLock<Vec<SemiSyncReplicaState>>,
-    ack_senders: RwLock<Vec<AckSender>>,
-    state: RwLock<SemiSyncMasterState>,
-    total_acks: RwLock<u64>,
-    total_timeouts: RwLock<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub enum SemiSyncMasterState {
-    #[default]
-    Off,
-    On,
-    Degraded,
+    /// Whether semi-sync is enabled
+    enabled: AtomicBool,
+    /// Semi-sync replication mode
+    mode: RwLock<SemiSyncMode>,
+    /// Timeout in milliseconds before falling back to async
+    timeout_ms: RwLock<u64>,
+    /// Number of ACKs to wait for
+    wait_count: RwLock<u32>,
+    /// ACK counter for tracking received ACKs
+    ack_counter: AtomicU32,
+    /// Status information
+    status: RwLock<SemiSyncMasterStatus>,
+    /// Transaction counter for yes responses
+    yes_transactions: AtomicU64,
+    /// Transaction counter for no responses
+    no_transactions: AtomicU64,
 }
 
 impl Default for SemiSyncMaster {
@@ -129,255 +91,278 @@ impl Default for SemiSyncMaster {
 }
 
 impl SemiSyncMaster {
+    /// Create a new SemiSyncMaster with default settings
     pub fn new() -> Self {
         Self {
-            config: RwLock::new(SemiSyncMasterConfig::default()),
-            replicas: RwLock::new(Vec::new()),
-            ack_senders: RwLock::new(Vec::new()),
-            state: RwLock::new(SemiSyncMasterState::Off),
-            total_acks: RwLock::new(0),
-            total_timeouts: RwLock::new(0),
+            enabled: AtomicBool::new(false),
+            mode: RwLock::new(SemiSyncMode::default()),
+            timeout_ms: RwLock::new(10000), // 10 seconds default
+            wait_count: RwLock::new(1),
+            ack_counter: AtomicU32::new(0),
+            status: RwLock::new(SemiSyncMasterStatus::default()),
+            yes_transactions: AtomicU64::new(0),
+            no_transactions: AtomicU64::new(0),
         }
     }
 
-    pub fn with_config(config: SemiSyncMasterConfig) -> Self {
+    /// Create with custom configuration
+    pub fn with_config(timeout_ms: u64, wait_count: u32, mode: SemiSyncMode) -> Self {
         Self {
-            config: RwLock::new(config),
-            replicas: RwLock::new(Vec::new()),
-            ack_senders: RwLock::new(Vec::new()),
-            state: RwLock::new(SemiSyncMasterState::Off),
-            total_acks: RwLock::new(0),
-            total_timeouts: RwLock::new(0),
+            enabled: AtomicBool::new(false),
+            mode: RwLock::new(mode),
+            timeout_ms: RwLock::new(timeout_ms),
+            wait_count: RwLock::new(wait_count),
+            ack_counter: AtomicU32::new(0),
+            status: RwLock::new(SemiSyncMasterStatus::default()),
+            yes_transactions: AtomicU64::new(0),
+            no_transactions: AtomicU64::new(0),
         }
     }
 
+    /// Enable semi-synchronous replication
     pub fn enable(&self) {
-        *self.state.write().unwrap() = SemiSyncMasterState::On;
+        self.enabled.store(true, Ordering::SeqCst);
+        let mut status = self.status.write().unwrap();
+        status.rpl_semi_sync_master_status = true;
     }
 
+    /// Disable semi-synchronous replication
     pub fn disable(&self) {
-        *self.state.write().unwrap() = SemiSyncMasterState::Off;
+        self.enabled.store(false, Ordering::SeqCst);
+        let mut status = self.status.write().unwrap();
+        status.rpl_semi_sync_master_status = false;
     }
 
-    pub fn get_state(&self) -> SemiSyncMasterState {
-        self.state.read().unwrap().clone()
-    }
-
+    /// Check if semi-sync is enabled
     pub fn is_enabled(&self) -> bool {
-        match *self.state.read().unwrap() {
-            SemiSyncMasterState::On | SemiSyncMasterState::Degraded => true,
-            SemiSyncMasterState::Off => false,
+        self.enabled.load(Ordering::SeqCst)
+    }
+
+    /// Get current semi-sync mode
+    pub fn get_mode(&self) -> SemiSyncMode {
+        *self.mode.read().unwrap()
+    }
+
+    /// Set semi-sync mode
+    pub fn set_mode(&self, mode: SemiSyncMode) {
+        *self.mode.write().unwrap() = mode;
+    }
+
+    /// Get timeout in milliseconds
+    pub fn get_timeout_ms(&self) -> u64 {
+        *self.timeout_ms.read().unwrap()
+    }
+
+    /// Set timeout in milliseconds
+    pub fn set_timeout_ms(&self, timeout_ms: u64) {
+        *self.timeout_ms.write().unwrap() = timeout_ms;
+    }
+
+    /// Get wait count (number of ACKs to wait for)
+    pub fn get_wait_count(&self) -> u32 {
+        *self.wait_count.read().unwrap()
+    }
+
+    /// Set wait count
+    pub fn set_wait_count(&self, count: u32) {
+        *self.wait_count.write().unwrap() = count;
+    }
+
+    /// Get current status
+    pub fn get_status(&self) -> SemiSyncMasterStatus {
+        let status = self.status.read().unwrap();
+        SemiSyncMasterStatus {
+            rpl_semi_sync_master_status: status.rpl_semi_sync_master_status,
+            rpl_semi_sync_master_clients: status.rpl_semi_sync_master_clients,
+            rpl_semi_sync_master_yes_transactions: self
+                .yes_transactions
+                .load(Ordering::SeqCst),
+            rpl_semi_sync_master_no_transactions: self
+                .no_transactions
+                .load(Ordering::SeqCst),
         }
     }
 
-    pub fn register_replica(&self, node_id: u32) -> AckSender {
-        let replica = SemiSyncReplicaState::new(node_id);
-        self.replicas.write().unwrap().push(replica);
-
-        let (ack_sender, _receiver) = AckSender::new(node_id);
-        self.ack_senders.write().unwrap().push(ack_sender.clone());
-        ack_sender
+    /// Update client count
+    pub fn set_client_count(&self, count: u32) {
+        let mut status = self.status.write().unwrap();
+        status.rpl_semi_sync_master_clients = count;
     }
 
-    pub fn unregister_replica(&self, node_id: u32) {
-        self.replicas
-            .write()
-            .unwrap()
-            .retain(|r| r.node_id != node_id);
-        self.ack_senders
-            .write()
-            .unwrap()
-            .retain(|s| s.node_id() != node_id);
+    /// Increment ACK counter
+    pub fn increment_ack(&self) -> u32 {
+        self.ack_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    pub fn get_replica_count(&self) -> usize {
-        self.replicas.read().unwrap().len()
+    /// Reset ACK counter
+    pub fn reset_ack_counter(&self) {
+        self.ack_counter.store(0, Ordering::SeqCst);
     }
 
-    pub fn get_connected_replica_count(&self) -> usize {
-        self.replicas
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|r| r.connected)
-            .count()
+    /// Get current ACK count
+    pub fn get_ack_count(&self) -> u32 {
+        self.ack_counter.load(Ordering::SeqCst)
     }
 
-    pub fn get_config(&self) -> SemiSyncMasterConfig {
-        self.config.read().unwrap().clone()
+    /// Record a successful semi-sync transaction
+    pub fn record_yes_transaction(&self) {
+        self.yes_transactions.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn set_mode(&self, mode: SemiSyncMode) {
-        self.config.write().unwrap().mode = mode;
+    /// Record a transaction that fell back to async
+    pub fn record_no_transaction(&self) {
+        self.no_transactions.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn set_timeout(&self, timeout_ms: u64) {
-        self.config.write().unwrap().timeout_ms = timeout_ms;
-    }
-
-    pub fn set_wait_count(&self, count: u32) {
-        self.config.write().unwrap().wait_count = count;
-    }
-
-    pub fn set_ack_timeout(&self, ack_timeout_ms: u64) {
-        self.config.write().unwrap().ack_timeout_ms = ack_timeout_ms;
-    }
-
-    pub fn get_total_acks(&self) -> u64 {
-        *self.total_acks.read().unwrap()
-    }
-
-    pub fn get_total_timeouts(&self) -> u64 {
-        *self.total_timeouts.read().unwrap()
-    }
-
-    pub async fn wait_for_slaves(&self, lsn: u64) -> Result<(), SemiSyncError> {
+    /// Wait for ACKs from slaves
+    ///
+    /// Returns Ok(()) if required ACKs received, Err if timeout
+    pub async fn wait_for_acks(&self, required: u32) -> Result<(), SemiSyncTimeoutError> {
         if !self.is_enabled() {
             return Ok(());
         }
 
-        {
-            let state = self.state.read().unwrap().clone();
-            if state == SemiSyncMasterState::Off {
-                return Ok(());
+        let timeout_ms = self.get_timeout_ms();
+        let start = std::time::Instant::now();
+
+        while self.get_ack_count() < required {
+            if start.elapsed().as_millis() as u64 >= timeout_ms {
+                return Err(SemiSyncTimeoutError {
+                    required,
+                    received: self.get_ack_count(),
+                    timeout_ms,
+                });
             }
-        }
-
-        let config = self.config.read().unwrap().clone();
-        let replicas = {
-            let r = self.replicas.read().unwrap();
-            if r.is_empty() {
-                *self.total_timeouts.write().unwrap() += 1;
-                return Err(SemiSyncError::NoReplica);
-            }
-            r.clone()
-        };
-
-        let required_acks = config.wait_count.min(replicas.len() as u32) as usize;
-        let timeout = Duration::from_millis(config.timeout_ms);
-        let ack_timeout = Duration::from_millis(config.ack_timeout_ms);
-        let start = Instant::now();
-
-        loop {
-            let acked_count = {
-                let replicas = self.replicas.read().unwrap();
-                replicas
-                    .iter()
-                    .filter(|r| {
-                        r.connected && r.last_ack_time.is_some_and(|t| t.elapsed() <= ack_timeout)
-                    })
-                    .count()
-            };
-
-            if acked_count >= required_acks {
-                *self.total_acks.write().unwrap() += 1;
-                return Ok(());
-            }
-
-            if start.elapsed() >= timeout {
-                *self.total_timeouts.write().unwrap() += 1;
-
-                let has_connected = {
-                    let replicas = self.replicas.read().unwrap();
-                    replicas.iter().any(|r| r.connected)
-                };
-                if has_connected {
-                    *self.state.write().unwrap() = SemiSyncMasterState::Degraded;
-                }
-                return Err(SemiSyncError::AckTimeout(lsn));
-            }
-
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    }
 
-    pub fn record_slave_ack(&self, node_id: u32, lsn: u64) {
-        if let Some(replica) = self
-            .replicas
-            .write()
-            .unwrap()
-            .iter_mut()
-            .find(|r| r.node_id == node_id)
-        {
-            replica.record_ack(lsn);
-        }
-    }
-
-    pub fn set_replica_disconnected(&self, node_id: u32) {
-        if let Some(replica) = self
-            .replicas
-            .write()
-            .unwrap()
-            .iter_mut()
-            .find(|r| r.node_id == node_id)
-        {
-            replica.set_disconnected();
-        }
-
-        if self.get_connected_replica_count() == 0 && self.get_replica_count() > 0 {
-            *self.state.write().unwrap() = SemiSyncMasterState::Degraded;
-        }
-    }
-
-    pub fn set_replica_connected(&self, node_id: u32) {
-        if let Some(replica) = self
-            .replicas
-            .write()
-            .unwrap()
-            .iter_mut()
-            .find(|r| r.node_id == node_id)
-        {
-            replica.set_connected();
-        }
-
-        if self.get_connected_replica_count() > 0
-            && *self.state.read().unwrap() == SemiSyncMasterState::Degraded
-        {
-            *self.state.write().unwrap() = SemiSyncMasterState::On;
-        }
-    }
-
-    pub fn get_replica_statuses(&self) -> Vec<SemiSyncReplicaState> {
-        self.replicas.read().unwrap().clone()
-    }
-
-    pub fn get_stats(&self) -> SemiSyncStats {
-        SemiSyncStats {
-            state: self.get_state(),
-            replica_count: self.get_replica_count(),
-            connected_count: self.get_connected_replica_count(),
-            total_acks: self.get_total_acks(),
-            total_timeouts: self.get_total_timeouts(),
-            mode: self.get_config().mode,
-        }
+        Ok(())
     }
 }
 
+/// Error indicating ACK timeout
 #[derive(Debug, Clone)]
-pub struct SemiSyncStats {
-    pub state: SemiSyncMasterState,
-    pub replica_count: usize,
-    pub connected_count: usize,
-    pub total_acks: u64,
-    pub total_timeouts: u64,
-    pub mode: SemiSyncMode,
+pub struct SemiSyncTimeoutError {
+    /// Number of ACKs required
+    pub required: u32,
+    /// Number of ACKs received before timeout
+    pub received: u32,
+    /// Timeout in milliseconds
+    pub timeout_ms: u64,
 }
 
+impl std::fmt::Display for SemiSyncTimeoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Semi-sync timeout: required {} ACKs but only received {} within {}ms",
+            self.required, self.received, self.timeout_ms
+        )
+    }
+}
+
+impl std::error::Error for SemiSyncTimeoutError {}
+
+/// Semi-sync slave state
+pub struct SemiSyncSlave {
+    /// Whether semi-sync is enabled
+    enabled: AtomicBool,
+    /// Master UUID this slave is connected to
+    master_uuid: RwLock<Option<String>>,
+    /// Whether ACK has been sent for current transaction
+    ack_sent: AtomicBool,
+    /// Slave status
+    status: RwLock<SemiSyncSlaveStatus>,
+}
+
+impl Default for SemiSyncSlave {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SemiSyncSlave {
+    /// Create a new SemiSyncSlave
+    pub fn new() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            master_uuid: RwLock::new(None),
+            ack_sent: AtomicBool::new(false),
+            status: RwLock::new(SemiSyncSlaveStatus::default()),
+        }
+    }
+
+    /// Enable semi-synchronous replication
+    pub fn enable(&self) {
+        self.enabled.store(true, Ordering::SeqCst);
+        let mut status = self.status.write().unwrap();
+        status.rpl_semi_sync_slave_status = true;
+    }
+
+    /// Disable semi-synchronous replication
+    pub fn disable(&self) {
+        self.enabled.store(false, Ordering::SeqCst);
+        let mut status = self.status.write().unwrap();
+        status.rpl_semi_sync_slave_status = false;
+    }
+
+    /// Check if semi-sync is enabled
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::SeqCst)
+    }
+
+    /// Set master UUID
+    pub fn set_master_uuid(&self, uuid: Option<String>) {
+        *self.master_uuid.write().unwrap() = uuid.clone();
+        let mut status = self.status.write().unwrap();
+        status.master_uuid = uuid;
+    }
+
+    /// Get master UUID
+    pub fn get_master_uuid(&self) -> Option<String> {
+        self.master_uuid.read().unwrap().clone()
+    }
+
+    /// Mark ACK as sent for current transaction
+    pub fn mark_ack_sent(&self) {
+        self.ack_sent.store(true, Ordering::SeqCst);
+        let mut status = self.status.write().unwrap();
+        status.last_ack_time = Some(std::time::Instant::now());
+    }
+
+    /// Reset ACK sent flag
+    pub fn reset_ack_sent(&self) {
+        self.ack_sent.store(false, Ordering::SeqCst);
+    }
+
+    /// Check if ACK was sent
+    pub fn is_ack_sent(&self) -> bool {
+        self.ack_sent.load(Ordering::SeqCst)
+    }
+
+    /// Get slave status
+    pub fn get_status(&self) -> SemiSyncSlaveStatus {
+        self.status.read().unwrap().clone()
+    }
+}
+
+/// Semi-sync error types
 #[derive(Debug, Clone)]
 pub enum SemiSyncError {
-    AckTimeout(u64),
-    NoReplica,
-    NotEnabled,
-    Internal(String),
+    /// Timeout waiting for slave ACK
+    Timeout(SemiSyncTimeoutError),
+    /// No slaves available
+    NoSlaves,
+    /// Invalid configuration
+    InvalidConfig(String),
 }
 
 impl std::fmt::Display for SemiSyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SemiSyncError::AckTimeout(lsn) => write!(f, "Semi-sync ACK timeout for LSN {}", lsn),
-            SemiSyncError::NoReplica => write!(f, "No semi-sync replica available"),
-            SemiSyncError::NotEnabled => write!(f, "Semi-sync replication is not enabled"),
-            SemiSyncError::Internal(msg) => write!(f, "Internal semi-sync error: {}", msg),
+            SemiSyncError::Timeout(e) => write!(f, "Timeout: {}", e),
+            SemiSyncError::NoSlaves => write!(f, "No semi-sync slaves available"),
+            SemiSyncError::InvalidConfig(msg) => write!(f, "Invalid config: {}", msg),
         }
     }
 }
@@ -390,231 +375,294 @@ mod tests {
 
     #[test]
     fn test_semi_sync_mode_default() {
-        let config = SemiSyncMasterConfig::default();
-        assert_eq!(config.mode, SemiSyncMode::AfterSync);
-        assert_eq!(config.timeout_ms, 10000);
-        assert_eq!(config.wait_count, 1);
+        assert_eq!(SemiSyncMode::default(), SemiSyncMode::AfterSync);
+    }
+
+    #[test]
+    fn test_semi_sync_mode_debug() {
+        assert_eq!(format!("{:?}", SemiSyncMode::AfterSync), "AfterSync");
+        assert_eq!(format!("{:?}", SemiSyncMode::AfterCommit), "AfterCommit");
     }
 
     #[test]
     fn test_semi_sync_master_new() {
         let master = SemiSyncMaster::new();
         assert!(!master.is_enabled());
-        assert_eq!(master.get_state(), SemiSyncMasterState::Off);
+        assert_eq!(master.get_mode(), SemiSyncMode::AfterSync);
+        assert_eq!(master.get_timeout_ms(), 10000);
+        assert_eq!(master.get_wait_count(), 1);
     }
 
     #[test]
     fn test_semi_sync_master_enable_disable() {
         let master = SemiSyncMaster::new();
+        assert!(!master.is_enabled());
+
         master.enable();
         assert!(master.is_enabled());
-        assert_eq!(master.get_state(), SemiSyncMasterState::On);
 
         master.disable();
         assert!(!master.is_enabled());
-        assert_eq!(master.get_state(), SemiSyncMasterState::Off);
     }
 
     #[test]
-    fn test_register_unregister_replica() {
+    fn test_semi_sync_master_set_mode() {
         let master = SemiSyncMaster::new();
-        let _sender = master.register_replica(1);
-        assert_eq!(master.get_replica_count(), 1);
+        assert_eq!(master.get_mode(), SemiSyncMode::AfterSync);
 
-        master.unregister_replica(1);
-        assert_eq!(master.get_replica_count(), 0);
-    }
-
-    #[test]
-    fn test_replica_connection_state() {
-        let master = SemiSyncMaster::new();
-        master.register_replica(1);
-        master.register_replica(2);
-
-        assert_eq!(master.get_connected_replica_count(), 2);
-
-        master.set_replica_disconnected(1);
-        assert_eq!(master.get_connected_replica_count(), 1);
-
-        master.set_replica_connected(1);
-        assert_eq!(master.get_connected_replica_count(), 2);
-    }
-
-    #[test]
-    fn test_set_mode() {
-        let master = SemiSyncMaster::new();
         master.set_mode(SemiSyncMode::AfterCommit);
-        assert_eq!(master.get_config().mode, SemiSyncMode::AfterCommit);
-
-        master.set_mode(SemiSyncMode::AfterSync);
-        assert_eq!(master.get_config().mode, SemiSyncMode::AfterSync);
+        assert_eq!(master.get_mode(), SemiSyncMode::AfterCommit);
     }
 
     #[test]
-    fn test_set_timeout() {
+    fn test_semi_sync_master_set_timeout() {
         let master = SemiSyncMaster::new();
-        master.set_timeout(5000);
-        assert_eq!(master.get_config().timeout_ms, 5000);
+        assert_eq!(master.get_timeout_ms(), 10000);
+
+        master.set_timeout_ms(5000);
+        assert_eq!(master.get_timeout_ms(), 5000);
     }
 
     #[test]
-    fn test_set_wait_count() {
+    fn test_semi_sync_master_set_wait_count() {
         let master = SemiSyncMaster::new();
-        master.register_replica(1);
-        master.register_replica(2);
+        assert_eq!(master.get_wait_count(), 1);
 
-        master.set_wait_count(2);
-        assert_eq!(master.get_config().wait_count, 2);
+        master.set_wait_count(3);
+        assert_eq!(master.get_wait_count(), 3);
+    }
+
+    #[test]
+    fn test_semi_sync_master_ack_counter() {
+        let master = SemiSyncMaster::new();
+        assert_eq!(master.get_ack_count(), 0);
+
+        master.increment_ack();
+        assert_eq!(master.get_ack_count(), 1);
+
+        master.increment_ack();
+        assert_eq!(master.get_ack_count(), 2);
+
+        master.reset_ack_counter();
+        assert_eq!(master.get_ack_count(), 0);
+    }
+
+    #[test]
+    fn test_semi_sync_master_status() {
+        let master = SemiSyncMaster::new();
+        let status = master.get_status();
+        assert!(!status.rpl_semi_sync_master_status);
+        assert_eq!(status.rpl_semi_sync_master_clients, 0);
+        assert_eq!(status.rpl_semi_sync_master_yes_transactions, 0);
+        assert_eq!(status.rpl_semi_sync_master_no_transactions, 0);
+
+        master.enable();
+        master.set_client_count(2);
+        master.record_yes_transaction();
+        master.record_yes_transaction();
+        master.record_no_transaction();
+
+        let status = master.get_status();
+        assert!(status.rpl_semi_sync_master_status);
+        assert_eq!(status.rpl_semi_sync_master_clients, 2);
+        assert_eq!(status.rpl_semi_sync_master_yes_transactions, 2);
+        assert_eq!(status.rpl_semi_sync_master_no_transactions, 1);
+    }
+
+    #[test]
+    fn test_semi_sync_master_with_config() {
+        let master = SemiSyncMaster::with_config(5000, 2, SemiSyncMode::AfterCommit);
+        assert_eq!(master.get_timeout_ms(), 5000);
+        assert_eq!(master.get_wait_count(), 2);
+        assert_eq!(master.get_mode(), SemiSyncMode::AfterCommit);
+    }
+
+    #[test]
+    fn test_semi_sync_slave_new() {
+        let slave = SemiSyncSlave::new();
+        assert!(!slave.is_enabled());
+        assert!(slave.get_master_uuid().is_none());
+        assert!(!slave.is_ack_sent());
+    }
+
+    #[test]
+    fn test_semi_sync_slave_enable_disable() {
+        let slave = SemiSyncSlave::new();
+        assert!(!slave.is_enabled());
+
+        slave.enable();
+        assert!(slave.is_enabled());
+
+        slave.disable();
+        assert!(!slave.is_enabled());
+    }
+
+    #[test]
+    fn test_semi_sync_slave_master_uuid() {
+        let slave = SemiSyncSlave::new();
+        assert!(slave.get_master_uuid().is_none());
+
+        slave.set_master_uuid(Some("uuid-123".to_string()));
+        assert_eq!(slave.get_master_uuid(), Some("uuid-123".to_string()));
+
+        slave.set_master_uuid(None);
+        assert!(slave.get_master_uuid().is_none());
+    }
+
+    #[test]
+    fn test_semi_sync_slave_ack() {
+        let slave = SemiSyncSlave::new();
+        assert!(!slave.is_ack_sent());
+
+        slave.mark_ack_sent();
+        assert!(slave.is_ack_sent());
+
+        slave.reset_ack_sent();
+        assert!(!slave.is_ack_sent());
+    }
+
+    #[test]
+    fn test_semi_sync_slave_status() {
+        let slave = SemiSyncSlave::new();
+        let status = slave.get_status();
+        assert!(!status.rpl_semi_sync_slave_status);
+
+        slave.enable();
+        slave.set_master_uuid(Some("uuid-456".to_string()));
+        slave.mark_ack_sent();
+
+        let status = slave.get_status();
+        assert!(status.rpl_semi_sync_slave_status);
+        assert_eq!(status.master_uuid, Some("uuid-456".to_string()));
+        assert!(status.last_ack_time.is_some());
     }
 
     #[tokio::test]
-    async fn test_wait_for_slaves_disabled() {
+    async fn test_semi_sync_master_wait_for_acks_disabled() {
         let master = SemiSyncMaster::new();
-        let result = master.wait_for_slaves(100).await;
+        // When disabled, wait_for_acks should return immediately
+        let result = master.wait_for_acks(1).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_wait_for_slaves_no_replicas() {
+    async fn test_semi_sync_master_wait_for_acks_success() {
         let master = SemiSyncMaster::new();
         master.enable();
-        let result = master.wait_for_slaves(100).await;
-        assert!(result.is_err());
+        master.set_wait_count(2);
+
+        // Simulate receiving ACKs
+        master.increment_ack();
+        master.increment_ack();
+
+        let result = master.wait_for_acks(2).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_record_slave_ack() {
+    async fn test_semi_sync_master_wait_for_acks_timeout() {
         let master = SemiSyncMaster::new();
-        master.register_replica(1);
-        master.record_slave_ack(1, 100);
-        assert_eq!(master.get_total_acks(), 0);
+        master.enable();
+        master.set_timeout_ms(50); // 50ms timeout
+        master.set_wait_count(3); // Wait for 3, but only 0 received
+
+        let result = master.wait_for_acks(3).await;
+        assert!(result.is_err());
     }
 
     #[test]
-    fn test_semi_sync_stats() {
-        let master = SemiSyncMaster::new();
-        master.enable();
-        master.register_replica(1);
-        master.register_replica(2);
-
-        let stats = master.get_stats();
-        assert_eq!(stats.state, SemiSyncMasterState::On);
-        assert_eq!(stats.replica_count, 2);
-        assert_eq!(stats.connected_count, 2);
-        assert_eq!(stats.mode, SemiSyncMode::AfterSync);
+    fn test_semi_sync_timeout_error_display() {
+        let err = SemiSyncTimeoutError {
+            required: 3,
+            received: 1,
+            timeout_ms: 10000,
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("required 3"));
+        assert!(display.contains("received 1"));
+        assert!(display.contains("10000"));
     }
 
     #[test]
     fn test_semi_sync_error_display() {
-        let err = SemiSyncError::AckTimeout(123);
-        assert!(err.to_string().contains("123"));
+        let err = SemiSyncError::NoSlaves;
+        assert_eq!(format!("{}", err), "No semi-sync slaves available");
 
-        let err2 = SemiSyncError::NoReplica;
-        assert!(err2.to_string().contains("No semi-sync replica"));
+        let err = SemiSyncError::InvalidConfig("bad value".to_string());
+        assert_eq!(format!("{}", err), "Invalid config: bad value");
 
-        let err3 = SemiSyncError::NotEnabled;
-        assert!(err3.to_string().contains("not enabled"));
+        let timeout_err = SemiSyncTimeoutError {
+            required: 2,
+            received: 1,
+            timeout_ms: 5000,
+        };
+        let err = SemiSyncError::Timeout(timeout_err);
+        assert!(format!("{}", err).contains("Timeout"));
     }
 
     #[test]
-    fn test_semi_sync_replica_state() {
-        let mut replica = SemiSyncReplicaState::new(1);
-        assert!(replica.connected);
-        assert_eq!(replica.node_id, 1);
+    fn test_semi_sync_master_record_transactions() {
+        let master = SemiSyncMaster::new();
 
-        replica.record_ack(100);
-        assert!(replica.last_ack_time.is_some());
-        assert_eq!(replica.last_position, 100);
+        master.record_yes_transaction();
+        master.record_yes_transaction();
+        master.record_no_transaction();
 
-        replica.set_disconnected();
-        assert!(!replica.connected);
-
-        replica.set_connected();
-        assert!(replica.connected);
-
-        replica.set_lag(50);
-        assert_eq!(replica.lag_ms, 50);
+        let status = master.get_status();
+        assert_eq!(status.rpl_semi_sync_master_yes_transactions, 2);
+        assert_eq!(status.rpl_semi_sync_master_no_transactions, 1);
     }
 
     #[test]
-    fn test_semi_sync_master_state() {
-        assert_eq!(format!("{:?}", SemiSyncMasterState::Off), "Off");
-        assert_eq!(format!("{:?}", SemiSyncMasterState::On), "On");
-        assert_eq!(format!("{:?}", SemiSyncMasterState::Degraded), "Degraded");
+    fn test_semi_sync_master_default() {
+        let master = SemiSyncMaster::default();
+        assert!(!master.is_enabled());
+        assert_eq!(master.get_mode(), SemiSyncMode::AfterSync);
     }
 
     #[test]
-    fn test_ack_sender() {
-        let (sender, mut receiver) = AckSender::new(1);
-        assert_eq!(sender.node_id(), 1);
-
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(async {
-                sender.send_ack(100).await.unwrap();
-                let received = receiver.recv().await.unwrap();
-                assert_eq!(received, 100);
-            });
+    fn test_semi_sync_slave_default() {
+        let slave = SemiSyncSlave::default();
+        assert!(!slave.is_enabled());
     }
 
     #[test]
-    fn test_semi_sync_mode() {
-        assert_eq!(format!("{:?}", SemiSyncMode::AfterSync), "AfterSync");
-        assert_eq!(format!("{:?}", SemiSyncMode::AfterCommit), "AfterCommit");
+    fn test_semi_sync_master_set_client_count() {
+        let master = SemiSyncMaster::new();
+        assert_eq!(master.get_status().rpl_semi_sync_master_clients, 0);
+
+        master.set_client_count(5);
+        assert_eq!(master.get_status().rpl_semi_sync_master_clients, 5);
     }
 
     #[test]
-    fn test_degraded_state_when_all_disconnected() {
+    fn test_semi_sync_mode_clone() {
+        let mode = SemiSyncMode::AfterSync;
+        let cloned = mode;
+        assert_eq!(cloned, SemiSyncMode::AfterSync);
+
+        let mode2 = SemiSyncMode::AfterCommit;
+        let cloned2 = mode2;
+        assert_eq!(cloned2, SemiSyncMode::AfterCommit);
+    }
+
+    #[test]
+    fn test_semi_sync_master_status_clone() {
         let master = SemiSyncMaster::new();
         master.enable();
-        master.register_replica(1);
+        master.record_yes_transaction();
+        master.record_no_transaction();
 
-        master.set_replica_disconnected(1);
-        assert_eq!(master.get_state(), SemiSyncMasterState::Degraded);
-    }
+        let status = master.get_status();
+        let cloned = status.clone();
 
-    #[test]
-    fn test_recover_from_degraded() {
-        let master = SemiSyncMaster::new();
-        master.enable();
-        master.register_replica(1);
-        master.set_replica_disconnected(1);
-
-        assert_eq!(master.get_state(), SemiSyncMasterState::Degraded);
-
-        master.set_replica_connected(1);
-        assert_eq!(master.get_state(), SemiSyncMasterState::On);
-    }
-
-    #[test]
-    fn test_multiple_replicas() {
-        let master = SemiSyncMaster::new();
-        master.register_replica(1);
-        master.register_replica(2);
-        master.register_replica(3);
-
-        assert_eq!(master.get_replica_count(), 3);
-        assert_eq!(master.get_connected_replica_count(), 3);
-
-        master.unregister_replica(2);
-        assert_eq!(master.get_replica_count(), 2);
-    }
-
-    #[test]
-    fn test_config_clone() {
-        let config = SemiSyncMasterConfig::default();
-        let cloned = config.clone();
-        assert_eq!(cloned.mode, config.mode);
-        assert_eq!(cloned.timeout_ms, config.timeout_ms);
-    }
-
-    #[test]
-    fn test_stats_clone() {
-        let master = SemiSyncMaster::new();
-        master.enable();
-        let stats = master.get_stats();
-        let cloned = stats.clone();
-        assert_eq!(cloned.state, SemiSyncMasterState::On);
+        assert_eq!(
+            cloned.rpl_semi_sync_master_yes_transactions,
+            status.rpl_semi_sync_master_yes_transactions
+        );
+        assert_eq!(
+            cloned.rpl_semi_sync_master_no_transactions,
+            status.rpl_semi_sync_master_no_transactions
+        );
     }
 }
