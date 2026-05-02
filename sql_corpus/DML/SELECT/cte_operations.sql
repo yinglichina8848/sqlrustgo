@@ -1,6 +1,30 @@
--- === SKIP ===
-
 -- === CTE (Common Table Expression) Test Suite ===
+
+-- === SETUP ===
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));
+CREATE TABLE orders (order_id INT PRIMARY KEY, user_id INT, total DECIMAL(10,2));
+
+INSERT INTO users VALUES (1, 'Alice', 'alice@email.com');
+INSERT INTO users VALUES (2, 'Bob', 'bob@email.com');
+INSERT INTO users VALUES (3, 'Charlie', 'charlie@email.com');
+INSERT INTO users VALUES (4, 'Diana', 'diana@email.com');
+INSERT INTO users VALUES (5, 'Eve', 'eve@email.com');
+INSERT INTO users VALUES (6, 'Frank', 'frank@email.com');
+INSERT INTO users VALUES (7, 'Grace', 'grace@email.com');
+INSERT INTO users VALUES (8, 'Henry', 'henry@email.com');
+INSERT INTO users VALUES (9, 'Ivy', 'ivy@email.com');
+INSERT INTO users VALUES (10, 'Jack', 'jack@email.com');
+
+INSERT INTO orders VALUES (1, 1, 150.00);
+INSERT INTO orders VALUES (2, 1, 250.00);
+INSERT INTO orders VALUES (3, 2, 100.00);
+INSERT INTO orders VALUES (4, 3, 300.00);
+INSERT INTO orders VALUES (5, 4, 450.00);
+INSERT INTO orders VALUES (6, 5, 200.00);
+INSERT INTO orders VALUES (7, 1, 175.00);
+INSERT INTO orders VALUES (8, 2, 125.00);
+INSERT INTO orders VALUES (9, 3, 350.00);
+INSERT INTO orders VALUES (10, 4, 500.00);
 
 -- === CASE: Simple CTE ===
 -- EXPECT: 5 rows

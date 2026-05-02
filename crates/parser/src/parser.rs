@@ -976,9 +976,24 @@ impl Parser {
                     if matches!(self.peek(), Some(Token::LParen)) {
                         let func = self.parse_aggregate_function()?;
                         aggregates.push(func);
+
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => return Err("Expected alias name".to_string()),
+                            }
+                        } else {
+                            None
+                        };
+
                         columns.push(SelectColumn {
                             name: format!("__agg_{}", aggregates.len()),
-                            alias: None,
+                            alias,
                             expression: None,
                         });
                     } else {
