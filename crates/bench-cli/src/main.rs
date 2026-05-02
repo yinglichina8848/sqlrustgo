@@ -9,8 +9,9 @@ mod commands;
 mod metrics;
 mod reporter;
 mod tpch_import;
+mod tpch_bench;
 
-use cli::{BenchmarkConfig, TpchImportArgs};
+use cli::{BenchmarkConfig, TpchBenchArgs, TpchImportArgs};
 use commands::{custom, oltp, tpch};
 
 #[derive(Parser, Debug)]
@@ -27,6 +28,7 @@ enum Command {
     Oltp(cli::OltpArgs),
     Custom(cli::CustomArgs),
     TpchImport(cli::TpchImportArgs),
+    TpchBench(cli::TpchBenchArgs),
 }
 
 /// Load configuration from file, CLI args take precedence
@@ -136,6 +138,12 @@ fn main() {
         }
         Command::TpchImport(args) => {
             if let Err(e) = tpch_import::run(args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Command::TpchBench(args) => {
+            if let Err(e) = tpch_bench::run(args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

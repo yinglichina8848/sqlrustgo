@@ -488,6 +488,7 @@ pub trait StorageEngine: Send + Sync {
 }
 
 /// In-memory storage implementation for testing and caching
+#[derive(Clone)]
 pub struct MemoryStorage {
     tables: HashMap<String, Vec<Record>>,
     table_infos: HashMap<String, TableInfo>,
