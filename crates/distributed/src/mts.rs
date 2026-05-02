@@ -23,7 +23,10 @@ impl LogicalClock {
     }
 
     pub fn first() -> Self {
-        Self { timestamp: 0, seq: 0 }
+        Self {
+            timestamp: 0,
+            seq: 0,
+        }
     }
 
     pub fn next(&self) -> Self {
@@ -316,8 +319,9 @@ mod tests {
     #[test]
     fn test_transaction_entry_with_shard() {
         let clock = LogicalClock::new(1, 1);
-        let entry = TransactionEntry::new(100, clock, "test_db".to_string(), "SELECT 1".to_string())
-            .with_shard_key(42);
+        let entry =
+            TransactionEntry::new(100, clock, "test_db".to_string(), "SELECT 1".to_string())
+                .with_shard_key(42);
 
         assert_eq!(entry.shard_key, Some(42));
     }
@@ -518,12 +522,8 @@ mod tests {
 
         for i in 0..10 {
             let clock = LogicalClock::new(1, i);
-            let entry = TransactionEntry::new(
-                i,
-                clock,
-                format!("db_{}", i % 2),
-                format!("SELECT {}", i),
-            );
+            let entry =
+                TransactionEntry::new(i, clock, format!("db_{}", i % 2), format!("SELECT {}", i));
             scheduler.schedule_transaction(&entry).await;
         }
 
