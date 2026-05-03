@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
-use sqlrustgo_parser::{Expression, SelectColumn, AggregateFunction};
+use sqlrustgo_parser::{Expression, SelectColumn, AggregateFunction, JoinType};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
@@ -178,8 +178,72 @@ impl RustEngine {
         match statement {
             Statement::Select(select) => {
                 let storage = self.storage.read().map_err(|e| format!("Lock error: {:?}", e))?;
-                let table_name = select.first_table();
 
+                // Handle JOIN
+                if let Some(ref join) = select.join_clause {
+                    let left_table = select.first_table();
+                    let right_table = &join.table;
+
+                    let left_info = storage.get_table_info(&left_table).map_err(|e| format!("Table error: {:?}", e))?;
+                    let right_info = storage.get_table_info(right_table).map_err(|e| format!("Table error: {:?}", e))?;
+
+                    let left_rows = storage.scan(&left_table).map_err(|e| format!("Scan error: {:?}", e))?;
+                    let right_rows = storage.scan(right_table).map_err(|e| format!("Scan error: {:?}", e))?;
+
+                    // Build combined schema for eval_join_expr
+                    let mut combined_info = left_info.clone();
+                    for col in &right_info.columns {
+                        combined_info.columns.push(col.clone());
+                    }
+
+                    let mut result_rows: Vec<Vec<Value>> = match join.join_type {
+                        JoinType::Inner => {
+                            let mut rows = Vec::new();
+                            for left_row in &left_rows {
+                                for right_row in &right_rows {
+                                    let mut combined = left_row.clone();
+                                    combined.extend(right_row.clone());
+                                    if eval_join_expr(&join.on_clause, &combined, &left_info, &right_info) {
+                                        rows.push(combined);
+                                    }
+                                }
+                            }
+                            rows
+                        }
+                        JoinType::Left => {
+                            let mut rows = Vec::new();
+                            for left_row in &left_rows {
+                                let mut matched = false;
+                                for right_row in &right_rows {
+                                    let mut combined = left_row.clone();
+                                    combined.extend(right_row.clone());
+                                    if eval_join_expr(&join.on_clause, &combined, &left_info, &right_info) {
+                                        rows.push(combined);
+                                        matched = true;
+                                    }
+                                }
+                                if !matched {
+                                    let mut combined = left_row.clone();
+                                    combined.extend(vec![Value::Null; right_info.columns.len()].into_iter());
+                                    rows.push(combined);
+                                }
+                            }
+                            rows
+                        }
+                        _ => return Err(format!("Unsupported join type: {:?}", join.join_type)),
+                    };
+
+                    // Apply WHERE if present (after join)
+                    if let Some(ref where_expr) = select.where_clause {
+                        result_rows.retain(|row| eval_predicate(where_expr, row, &combined_info));
+                    }
+
+                    // Projection and output
+                    return project_rows(&select, &result_rows, &combined_info);
+                }
+
+                // Simple case without JOIN
+                let table_name = select.first_table();
                 let table_info = storage
                     .get_table_info(&table_name)
                     .map_err(|e| format!("Table error: {:?}", e))?;
@@ -190,6 +254,62 @@ impl RustEngine {
 
                 if let Some(ref where_expr) = select.where_clause {
                     rows.retain(|row| eval_predicate(where_expr, row, &table_info));
+                }
+
+                if !select.group_by.is_empty() {
+                    let group_indices: Vec<usize> = select.group_by.iter().filter_map(|expr| {
+                        if let Expression::Identifier(name) = expr {
+                            table_info.columns.iter().position(|c| &c.name == name)
+                        } else {
+                            None
+                        }
+                    }).collect();
+
+                    let mut groups: std::collections::HashMap<Vec<String>, Vec<&Vec<Value>>> = std::collections::HashMap::new();
+                    for row in &rows {
+                        let key: Vec<String> = group_indices.iter()
+                            .map(|&i| value_to_string(row.get(i).unwrap_or(&Value::Null)))
+                            .collect();
+                        groups.entry(key).or_default().push(row);
+                    }
+
+                    let mut result_rows: Vec<Row> = groups.into_iter().map(|(key, group_rows)| {
+                        let mut result_row: Row = key;
+                        if !select.aggregates.is_empty() {
+                            for agg in &select.aggregates {
+                                let val = match agg.func {
+                                    AggregateFunction::Count => Value::Integer(group_rows.len() as i64),
+                                    AggregateFunction::Sum => {
+                                        if let Some(expr) = agg.args.first() {
+                                            if let Expression::Identifier(ref col_name) = expr {
+                                                if let Some(idx) = table_info.columns.iter().position(|c| &c.name == col_name) {
+                                                    let sum: i64 = group_rows.iter()
+                                                        .filter_map(|r| r.get(idx))
+                                                        .filter_map(|v| {
+                                                            if let Value::Integer(i) = v { Some(*i) } else { None }
+                                                        })
+                                                        .sum();
+                                                    Value::Integer(sum)
+                                                } else {
+                                                    Value::Null
+                                                }
+                                            } else {
+                                                Value::Null
+                                            }
+                                        } else {
+                                            Value::Null
+                                        }
+                                    }
+                                    _ => Value::Null,
+                                };
+                                result_row.push(value_to_string(&val));
+                            }
+                        }
+                        result_row
+                    }).collect();
+
+                    result_rows.sort();
+                    return Ok(result_rows);
                 }
 
                 if !select.aggregates.is_empty() {
@@ -229,79 +349,102 @@ impl RustEngine {
                     return Ok(result_rows);
                 }
 
-                if !select.group_by.is_empty() {
-                    let group_indices: Vec<usize> = select.group_by.iter().filter_map(|expr| {
-                        if let Expression::Identifier(name) = expr {
-                            table_info.columns.iter().position(|c| &c.name == name)
-                        } else {
-                            None
-                        }
-                    }).collect();
-
-                    let mut groups: std::collections::HashMap<Vec<String>, Vec<&Vec<Value>>> = std::collections::HashMap::new();
-                    for row in &rows {
-                        let key: Vec<String> = group_indices.iter()
-                            .map(|&i| value_to_string(row.get(i).unwrap_or(&Value::Null)))
-                            .collect();
-                        groups.entry(key).or_default().push(row);
-                    }
-
-                    let mut result_rows: Vec<Row> = groups.into_iter().map(|(key, group_rows)| {
-                        let mut result_row: Row = key;
-                        for agg in &select.aggregates {
-                            let val = match agg.func {
-                                AggregateFunction::Count => Value::Integer(group_rows.len() as i64),
-                                AggregateFunction::Sum => {
-                                    if let Some(expr) = agg.args.first() {
-                                        if let Expression::Identifier(ref col_name) = expr {
-                                            if let Some(idx) = table_info.columns.iter().position(|c| &c.name == col_name) {
-                                                let sum: i64 = group_rows.iter()
-                                                    .filter_map(|r| r.get(idx))
-                                                    .filter_map(|v| {
-                                                        if let Value::Integer(i) = v { Some(*i) } else { None }
-                                                    })
-                                                    .sum();
-                                                Value::Integer(sum)
-                                            } else {
-                                                Value::Null
-                                            }
-                                        } else {
-                                            Value::Null
-                                        }
-                                    } else {
-                                        Value::Null
-                                    }
-                                }
-                                _ => Value::Null,
-                            };
-                            result_row.push(value_to_string(&val));
-                        }
-                        result_row
-                    }).collect();
-
-                    result_rows.sort();
-                    return Ok(result_rows);
-                }
-
-                if select.columns.is_empty() || select.columns.iter().all(|c| c.name == "*") {
-                    return Ok(rows.iter().map(|r| r.iter().map(value_to_string).collect()).collect());
-                }
-
-                let col_indices: Vec<usize> = select.columns.iter().filter_map(|c| {
-                    if c.name == "*" {
-                        None
-                    } else {
-                        table_info.columns.iter().position(|col| &col.name == &c.name)
-                    }
-                }).collect();
-
-                Ok(rows.iter().map(|r| {
-                    col_indices.iter().map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null))).collect()
-                }).collect())
+                project_rows(&select, &rows, &table_info)
             }
             _ => Ok(vec![]),
         }
     }
+}
+
+fn eval_join_expr(expr: &Expression, row: &[Value], left_info: &TableInfo, right_info: &TableInfo) -> bool {
+    match expr {
+        Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            match op_upper.as_str() {
+                "AND" => eval_join_expr(left, row, left_info, right_info) && eval_join_expr(right, row, left_info, right_info),
+                "OR" => eval_join_expr(left, row, left_info, right_info) || eval_join_expr(right, row, left_info, right_info),
+                "=" | "==" => {
+                    let left_val = eval_join_expr_val(left, row, left_info, right_info);
+                    let right_val = eval_join_expr_val(right, row, left_info, right_info);
+                    sql_eq(&left_val, &right_val)
+                }
+                _ => {
+                    let left_val = eval_join_expr_val(left, row, left_info, right_info);
+                    let right_val = eval_join_expr_val(right, row, left_info, right_info);
+                    sql_compare(&op_upper, &left_val, &right_val)
+                }
+            }
+        }
+        Expression::IsNull(inner) => matches!(eval_join_expr_val(inner, row, left_info, right_info), Value::Null),
+        Expression::IsNotNull(inner) => !matches!(eval_join_expr_val(inner, row, left_info, right_info), Value::Null),
+        _ => {
+            let val = eval_join_expr_val(expr, row, left_info, right_info);
+            matches!(val, Value::Boolean(true))
+        }
+    }
+}
+
+fn eval_join_expr_val(expr: &Expression, row: &[Value], left_info: &TableInfo, right_info: &TableInfo) -> Value {
+    match expr {
+        Expression::Identifier(name) => {
+            if let Some(dot_pos) = name.find('.') {
+                let (table, col) = name.split_at(dot_pos);
+                let col = &col[1..];
+                if table == left_info.name {
+                    if let Some(idx) = left_info.columns.iter().position(|c| &c.name == col) {
+                        return row.get(idx).cloned().unwrap_or(Value::Null);
+                    }
+                } else if table == right_info.name {
+                    let right_offset = left_info.columns.len();
+                    if let Some(idx) = right_info.columns.iter().position(|c| &c.name == col) {
+                        return row.get(right_offset + idx).cloned().unwrap_or(Value::Null);
+                    }
+                }
+                Value::Null
+            } else {
+                if let Some(idx) = left_info.columns.iter().position(|c| &c.name == name) {
+                    return row.get(idx).cloned().unwrap_or(Value::Null);
+                }
+                let right_offset = left_info.columns.len();
+                if let Some(idx) = right_info.columns.iter().position(|c| &c.name == name) {
+                    return row.get(right_offset + idx).cloned().unwrap_or(Value::Null);
+                }
+                Value::Null
+            }
+        }
+        _ => literal_to_value(&format!("{:?}", expr)),
+    }
+}
+
+fn sql_eq(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Null, Value::Null) => true,
+        (Value::Null, _) => false,
+        (_, Value::Null) => false,
+        (Value::Integer(a), Value::Integer(b)) => a == b,
+        (Value::Float(a), Value::Float(b)) => (a - b).abs() < 1e-9,
+        (Value::Text(a), Value::Text(b)) => a == b,
+        (Value::Boolean(a), Value::Boolean(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn project_rows(select: &sqlrustgo_parser::SelectStatement, rows: &[Vec<Value>], table_info: &TableInfo) -> Result<Vec<Row>, String> {
+    if select.columns.is_empty() || select.columns.iter().all(|c| c.name == "*") {
+        return Ok(rows.iter().map(|r| r.iter().map(value_to_string).collect()).collect());
+    }
+
+    let col_indices: Vec<usize> = select.columns.iter().filter_map(|c| {
+        if c.name == "*" {
+            None
+        } else {
+            table_info.columns.iter().position(|col| &col.name == &c.name)
+        }
+    }).collect();
+
+    Ok(rows.iter().map(|r| {
+        col_indices.iter().map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null))).collect()
+    }).collect())
 }
 
 impl Default for RustEngine {

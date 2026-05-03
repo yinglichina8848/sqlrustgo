@@ -262,6 +262,68 @@ fn test_diff_where_gt() {
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
+const JOIN_SETUP: [&str; 8] = [
+    "CREATE TABLE t1(id INT, v INT)",
+    "CREATE TABLE t2(id INT, w INT)",
+    "INSERT INTO t1 VALUES (1, 10)",
+    "INSERT INTO t1 VALUES (2, 20)",
+    "INSERT INTO t1 VALUES (3, 30)",
+    "INSERT INTO t2 VALUES (2, 200)",
+    "INSERT INTO t2 VALUES (3, 300)",
+    "INSERT INTO t2 VALUES (4, 400)",
+];
+
+#[test]
+fn test_diff_join_inner() {
+    let sql = "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id";
+    assert_sql_eq(sql, &JOIN_SETUP).unwrap();
+}
+
+#[test]
+fn test_diff_join_no_match() {
+    let sql = "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.id = 1";
+    assert_sql_eq(sql, &JOIN_SETUP).unwrap();
+}
+
+const GROUP_SETUP: [&str; 5] = [
+    "CREATE TABLE g(a INT)",
+    "INSERT INTO g VALUES (1)",
+    "INSERT INTO g VALUES (1)",
+    "INSERT INTO g VALUES (2)",
+    "INSERT INTO g VALUES (NULL)",
+];
+
+#[test]
+fn test_diff_group_by() {
+    let sql = "SELECT a, COUNT(*) FROM g GROUP BY a";
+    assert_sql_eq(sql, &GROUP_SETUP).unwrap();
+}
+
+const NULL_SETUP: [&str; 3] = [
+    "CREATE TABLE n(a INT)",
+    "INSERT INTO n VALUES (1)",
+    "INSERT INTO n VALUES (NULL)",
+];
+
+#[test]
+fn test_diff_null_filter() {
+    let sql = "SELECT * FROM n WHERE a IS NULL";
+    assert_sql_eq(sql, &NULL_SETUP).unwrap();
+}
+
+const ORDER_SETUP: [&str; 4] = [
+    "CREATE TABLE o(a INT)",
+    "INSERT INTO o VALUES (3)",
+    "INSERT INTO o VALUES (1)",
+    "INSERT INTO o VALUES (2)",
+];
+
+#[test]
+fn test_diff_order_by_desc() {
+    let sql = "SELECT * FROM o ORDER BY a DESC";
+    assert_sql_eq(sql, &ORDER_SETUP).unwrap();
+}
+
 #[test]
 fn test_diff_where_null() {
     let sql = "SELECT a FROM t WHERE b IS NULL";
