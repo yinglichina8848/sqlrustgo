@@ -876,6 +876,7 @@ fn send_result_set<W: Write>(
 
 struct PreparedStatementInfo {
     sql: String,
+    #[allow(dead_code)]
     param_count: u16,
     column_count: u16,
     // Cached parsed AST to avoid re-parsing on every execute
