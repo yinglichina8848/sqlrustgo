@@ -1,4 +1,5 @@
 mod engine;
+mod sqlite_diff;
 
 use engine::EngineAdapter;
 use sqllogictest::Runner;
@@ -6,6 +7,7 @@ use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo::ExecutorResult;
+use sqlite_diff::{assert_query_eq, SqliteEngine};
 use std::collections::HashSet;
 
 #[tokio::main]
@@ -175,4 +177,50 @@ fn test_fuzz_idempotent_ddl() {
 
     let result2 = engine.execute(sql);
     assert!(result2.is_ok(), "CREATE same table twice should succeed (lenient mode)");
+}
+
+#[test]
+fn test_sqlite_diff_basic() {
+    let sqlite = SqliteEngine::new();
+    sqlite.execute("CREATE TABLE t(a INT)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+
+    let result = sqlite.query("SELECT * FROM t").unwrap();
+    assert_eq!(result.len(), 3);
+}
+
+#[test]
+fn test_sqlite_diff_count() {
+    let sqlite = SqliteEngine::new();
+    sqlite.execute("CREATE TABLE t(a INT)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
+
+    let result = sqlite.query("SELECT COUNT(*) FROM t").unwrap();
+    assert_eq!(result[0][0], "3");
+}
+
+#[test]
+fn test_sqlite_diff_where() {
+    let sqlite = SqliteEngine::new();
+    sqlite.execute("CREATE TABLE t(a INT)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
+    sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
+
+    let result = sqlite.query("SELECT a FROM t WHERE a > 1").unwrap();
+    assert_eq!(result.len(), 2);
+}
+
+#[test]
+fn test_sqlite_diff_aggregate() {
+    let sqlite = SqliteEngine::new();
+    sqlite.execute("CREATE TABLE orders(amount INT)").unwrap();
+    sqlite.execute("INSERT INTO orders VALUES (100)").unwrap();
+    sqlite.execute("INSERT INTO orders VALUES (200)").unwrap();
+    sqlite.execute("INSERT INTO orders VALUES (150)").unwrap();
+
+    let result = sqlite.query("SELECT SUM(amount) FROM orders").unwrap();
+    assert_eq!(result[0][0], "450");
 }
