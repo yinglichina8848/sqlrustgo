@@ -20,6 +20,13 @@ const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
 const SKIP_AUTH: bool = false;
 
+#[derive(Debug, Default)]
+pub struct SessionState {
+    pub transaction_active: bool,
+    pub autocommit: bool,
+    pub current_database: Option<String>,
+}
+
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
     pub const COM_INIT_DB: u8 = 0x02;
@@ -1101,6 +1108,7 @@ fn do_command_loop<S: Read + Write>(
     cap: u32,
     mut seq: u8,
     ps_manager: &mut PreparedStatementManager,
+    session: &mut SessionState,
 ) -> MySqlResult<()> {
     loop {
         let pkt = match Packet::read_from(stream) {
@@ -1490,6 +1498,7 @@ fn handle_connection(
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
             let mut engine = MemoryExecutionEngine::new(storage.clone());
+            let mut session = SessionState::default();
             let _ = do_command_loop(
                 &mut tls,
                 addr,
@@ -1498,6 +1507,7 @@ fn handle_connection(
                 resp.capability_flags,
                 4,
                 &mut ps_manager,
+                &mut session,
             );
             return;
         }
@@ -1541,6 +1551,7 @@ fn handle_connection(
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
     let mut engine = MemoryExecutionEngine::new(storage.clone());
+    let mut session = SessionState::default();
     let _ = do_command_loop(
         &mut &stream,
         addr,
@@ -1549,6 +1560,7 @@ fn handle_connection(
         resp.capability_flags,
         3,
         &mut ps_manager,
+        &mut session,
     );
 }
 
