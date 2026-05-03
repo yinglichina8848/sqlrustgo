@@ -55,7 +55,7 @@ FORMAL_DIR="docs/formal"
 # ============================================================
 
 echo "[Check] Verifying invariants in cfg files..."
-local missing=0
+missing=0
 for cfg in "$FORMAL_DIR"/*.cfg; do
     if [ -f "$cfg" ]; then
         if ! grep -q "INVARIANT" "$cfg" && ! grep -q "SPECIFICATION" "$cfg"; then
@@ -105,7 +105,7 @@ smoke_tla() {
         -config "$FORMAL_DIR/$cfg" \
         -seed 1 -deadlock 2>&1 || true)
 
-    if echo "$out" | grep -q "Model checking completed. No error found"; then
+    if echo "$out" | grep -q "Model checking completed. No error"; then
         if [ "$expected" = "PASS" ]; then
             pass "$model"
         else

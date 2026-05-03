@@ -4,12 +4,12 @@
 
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
-use crate::{Expr, JoinType};
 use crate::physical_plan::{
     AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
     ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
+use crate::{Expr, JoinType};
 use sqlrustgo_optimizer::SimpleCostModel;
 use sqlrustgo_storage::StorageEngine;
 use std::sync::{Arc, RwLock};
