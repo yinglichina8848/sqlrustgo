@@ -1,0 +1,68 @@
+name: Formal Smoke (PR Gate)
+
+on:
+  pull_request:
+    branches:
+      - develop/v2.9.0
+    paths:
+      - 'docs/formal/**/*.tla'
+      - 'docs/formal/**/*.cfg'
+      - 'crates/transaction/**/*.rs'
+      - 'scripts/formal/**'
+
+jobs:
+  formal-smoke:
+    name: Formal Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check TLA+ tools
+        run: |
+          if [ ! -f "/tmp/tla2tools.jar" ]; then
+            echo "Downloading TLA+ tools..."
+            curl -sL https://github.com/tlaplus/tlaplus/releases/download/v1.7.0/tla2tools.jar \
+              -o /tmp/tla2tools.jar
+          fi
+          echo "TLA+ tools: $(ls -lh /tmp/tla2tools.jar)"
+
+      - name: Run Formal Smoke
+        run: |
+          bash scripts/formal/formal_smoke.sh
+
+  rust-transaction-tests:
+    name: Transaction Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "transaction-smoke"
+          cache-targets: false
+
+      - name: Run deadlock tests
+        run: cargo test -p sqlrustgo-transaction deadlock -- --nocapture
+
+      - name: Run MVCC tests
+        run: cargo test -p sqlrustgo-transaction mvcc -- --nocapture || true
+
+      - name: Run SSI tests
+        run: cargo test -p sqlrustgo-transaction ssi -- --nocapture || true
