@@ -886,17 +886,18 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     ) -> SqlResult<Vec<Vec<Value>>> {
         use std::collections::{HashMap, HashSet};
 
-        let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
-        for right_row in right_rows {
+        let mut right_hash: HashMap<String, Vec<(usize, Vec<Value>)>> = HashMap::new();
+        for (ri, right_row) in right_rows.iter().enumerate() {
             if matches!(right_row[right_key_idx], Value::Null) {
                 continue;
             }
             let key = format!("{:?}", right_row[right_key_idx]);
-            right_hash.entry(key).or_default().push(right_row.clone());
+            right_hash.entry(key).or_default().push((ri, right_row.clone()));
         }
 
         let mut matched: Vec<Vec<Value>> = Vec::new();
         let mut left_matched: HashSet<usize> = HashSet::new();
+        let mut right_matched: HashSet<usize> = HashSet::new();
 
         for (li, left_row) in left_rows.iter().enumerate() {
             if matches!(left_row[left_key_idx], Value::Null) {
@@ -905,7 +906,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             let key = format!("{:?}", left_row[left_key_idx]);
             if let Some(right_match_rows) = right_hash.get(&key) {
                 left_matched.insert(li);
-                for right_row in right_match_rows {
+                for (ri, right_row) in right_match_rows {
+                    right_matched.insert(*ri);
                     let mut combined = left_row.clone();
                     combined.extend(right_row.clone());
                     matched.push(combined);
@@ -913,11 +915,23 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        // LEFT: emit unmatched left rows with NULL-padded right
         if matches!(join_type, JoinType::Left | JoinType::Full) {
             for (li, left_row) in left_rows.iter().enumerate() {
                 if !left_matched.contains(&li) {
                     let mut combined = left_row.clone();
                     combined.extend(vec![Value::Null; right_col_count]);
+                    matched.push(combined);
+                }
+            }
+        }
+
+        // RIGHT: emit unmatched right rows with NULL-padded left
+        if matches!(join_type, JoinType::Right | JoinType::Full) {
+            for (ri, right_row) in right_rows.iter().enumerate() {
+                if !right_matched.contains(&ri) {
+                    let mut combined = vec![Value::Null; left_col_count];
+                    combined.extend(right_row.clone());
                     matched.push(combined);
                 }
             }
