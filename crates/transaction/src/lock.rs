@@ -131,28 +131,24 @@ impl LockManager {
         } else {
             // TLA+ v4 Wait(t,k): add edge only if ~Reachable(h,t) for ALL holders.
             // This is pre-check (prevention) — illegal states are unreachable.
-            // Post-check (detection after edge added) is insufficient for PROOF-023 v4.
+            // TOCTOU-safe via DeadlockDetector.try_wait_edge() (atomic Mutex).
             let holders: HashSet<TxId> = lock.holders.clone();
 
-            // NoSelfWait: remove self from holders set if present.
-            let holders_for_check: HashSet<TxId> =
-                holders.iter().filter(|&&h| h != tx_id).cloned().collect();
-
-            // PROOF-023 v4: Wait(t,k) requires ~Reachable(h,t) for all h in Holder(k).
-            if self.deadlock_detector.would_create_cycle(tx_id, &holders_for_check) {
+            // NoSelfWait: if tx_id already holds this lock, self-wait is a deadlock.
+            // (can_grant returning false means we need to wait, but self-wait is
+            // never valid — a transaction cannot wait for its own lock.)
+            if holders.contains(&tx_id) {
                 return Err(LockError::Deadlock);
             }
 
-            // Only add waiter after pre-check passes (TLA+ v4 alignment).
-            lock.add_waiter(tx_id, mode);
-
-            for holder in holders {
-                self.deadlock_detector.add_edge(tx_id, holder);
+            // PROOF-023 atomicity requirement: would_create_cycle + add_edge
+            // must happen in the same locked region (no TOCTOU window).
+            if self.deadlock_detector.try_wait_edge(tx_id, holders).is_err() {
+                return Err(LockError::Deadlock);
             }
 
-            // Safety net: verify NoCycle invariant after mutation.
-            #[cfg(debug_assertions)]
-            self.deadlock_detector.assert_no_cycle();
+            // Only add waiter after atomic pre-check passes.
+            lock.add_waiter(tx_id, mode);
 
             Ok(LockGrantMode::Waiting)
         }
@@ -579,13 +575,13 @@ mod tests {
             Ok(LockGrantMode::Waiting)
         ));
 
-        // T2 releases all locks
+        // T2 releases all locks → T1 promoted to holder of k2
         manager.release_all_locks(TxId::new(2)).unwrap();
 
-        // Now T1 should be able to acquire k2 (deadlock resolved)
-        // After release, T2 no longer in wait-for graph, no cycle possible.
+        // T1 now holds k2. Re-acquiring k2 is a self-dependency → Deadlock.
+        // (NoSelfWait: a txn cannot wait for its own held lock.)
         let result = manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive);
-        assert!(matches!(result, Ok(LockGrantMode::Granted) | Ok(LockGrantMode::Waiting)));
+        assert!(matches!(result, Err(LockError::Deadlock)));
     }
 
     /// TLA+ v4: Linear chain must NOT be flagged as deadlock.

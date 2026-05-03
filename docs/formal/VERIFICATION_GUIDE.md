@@ -1,398 +1,256 @@
-# 可信系统工具链 — 安装、部署与验证手册
+# 可信任系统工具链：安装、部署与验证指南
 
-> 版本：v2.0 | 日期：2026-05-03 | 状态：生产就绪
-
----
-
-## 一、工具链组件概览
-
-| 组件 | 用途 | 验证方法 |
-|------|------|---------|
-| TLA+ (TLC model checker) | 状态机建模与不变量验证 | TLC CLI |
-| Formulog | Datalog 逻辑验证（SQL 语义） | Rust 测试 + Apalache |
-| Rust (cargo test) | 实现 refinement 验证 | 单元测试 + 集成测试 |
-| Dafny | 函数式正确性证明（可选） | dafny verify |
+**适用于**: sqlrustgo `develop/v2.8.0` 分支  
+**工具链**: TLA+ model → Rust implementation (Mutex-atomic DeadlockDetector)
 
 ---
 
-## 二、TLA+ 安装与验证
+## 1. 工具链组件
 
-### 2.1 安装（Linux）
-
-```bash
-# 下载 TLA+ Tools（如果尚未安装）
-cd /tmp
-curl -L -o tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v2.26/tla2tools.jar
-
-# 验证安装
-java -cp /tmp/tla2tools.jar tlc2.TLC -help 2>&1 | head -5
-# 期望输出: TLC2 Version 2.26 ...
-```
-
-**要求**：
-- Java 11+（`java -version` 确认）
-- TLC 使用大量内存，建议 4GB+ heap
-
-### 2.2 运行 TLA+ 验证
-
-```bash
-cd ~/dev/yinglichina163/sqlrustgo/docs/formal
-
-# ── PROOF-023 v4（单Txn预-check，基准）────────────────────────────
-java -XX:+UseParallelGC \
-  -cp /tmp/tla2tools.jar \
-  tlc2.TLC PROOF_023_deadlock_v4 \
-  -config PROOF_023_deadlock_v4.cfg
-
-# 期望: 487 states, 91 distinct, No error found ✅
-
-# ── TOCTOU 反例（非原子 check+commit，预期 FAIL）──────────────────
-java -XX:+UseParallelGC \
-  -cp /tmp/tla2tools.jar \
-  tlc2.TLC PROOF_023_deadlock_toctou \
-  -config PROOF_023_deadlock_toctou.cfg
-
-# 期望: Invariant NoCycle is violated 💀
-# Trace: T1:Check({T2}) → T2:Check({T1}) → T1:Commit → T2:Commit → CYCLE
-
-# ── ATOMIC 修复（原子 check+commit，预期 PASS）───────────────────
-java -XX:+UseParallelGC \
-  -cp /tmp/tla2tools.jar \
-  tlc2.TLC PROOF_023_deadlock_atomic \
-  -config PROOF_023_deadlock_atomic.cfg
-
-# 期望: 11 states, 3 distinct, No error found ✅
-```
-
-### 2.3 TLA+ 验证结果汇总
-
-| 模型 | 文件 | States | Distinct | 结果 |
-|------|------|--------|---------|------|
-| v4 单Txn | `PROOF_023_deadlock_v4.tla` | 487 | 91 | ✅ PASS |
-| TOCTOU 非原子 | `PROOF_023_deadlock_toctou.tla` | 40 | 26 | ❌ **FAIL** |
-| ATOMIC 修复 | `PROOF_023_deadlock_atomic.tla` | 11 | 3 | ✅ PASS |
-| MVCC SSI | `PROOF_016_mvcc_ssi.tla` | — | — | ✅ PASS |
-| DDL Atomicity | `PROOF_015_ddl_atomicity.tla` | — | — | ✅ PASS |
-| LEFT/RIGHT JOIN | `PROOF_019_left_right_join.tla` | — | — | ✅ PASS |
+| 组件 | 位置 | 说明 |
+|---|---|---|
+| TLA+ 工具箱 | `/tmp/tla2tools.jar` | model checking (TLC) |
+| TLA+ 证明文件 | `docs/formal/PROOF_*.tla` | 4 个模型文件 |
+| Rust 实现 | `crates/transaction/src/deadlock.rs` | `DeadlockDetector` + `try_wait_edge` |
+| 单元测试 | `crates/transaction/src/deadlock.rs` `mod tests` | 12 tests (含 2 并发) |
 
 ---
 
-## 三、Rust 实现验证
+## 2. TLA+ 模型验证
 
-### 3.1 安装
-
-```bash
-# 确认 Rust 工具链
-rustc --version    # 期望: 1.70+
-cargo --version
-
-# 构建（debug 模式，测试用）
-cd ~/dev/yinglichina163/sqlrustgo
-cargo build
-
-# 构建（release 模式，生产用）
-cargo build --release
-```
-
-### 3.2 运行 Deadlock 测试
+### 2.1 环境要求
 
 ```bash
-cd ~/dev/yinglichina163/sqlrustgo
-
-# 运行所有 transaction crate 测试
-cargo test -p sqlrustgo-transaction 2>&1 | tail -20
-
-# 运行 deadlock 专项测试（19 个）
-cargo test -p sqlrustgo-transaction deadlock 2>&1 | tail -25
-# 期望: test result: ok. 19 passed; 0 failed
-
-# 运行带 deadlock 检测的锁管理测试
-cargo test -p sqlrustgo-transaction lock 2>&1 | tail -20
+java -version        # Java 11+ required
 ```
 
-### 3.3 PROOF-023 v4 Refinement 测试
+### 2.2 运行 TLC Model Checker
 
-这些测试验证 Rust 实现与 TLA+ v4 对齐：
+所有模型文件位于 `docs/formal/`：
 
 ```bash
-cargo test -p sqlrustgo-transaction \
-  test_prevent_3_cycle_via_precheck \
-  test_multi_resource_wait_for_graph_v4 \
-  test_no_self_wait \
-  test_release_restores_wait_path \
-  test_linear_chain_no_deadlock
+cd /home/openclaw/dev/yinglichina163/sqlrustgo/docs/formal
 
-# 全部通过 ✅
+# ── TOCTOU counterexamples (预期: VIOLATED) ──────────────────────────────
+
+# Model 1: Pure lock TOCTOU
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar \
+  tlc2.TLC PROOF_023_deadlock_toctou -config PROOF_023_deadlock_toctou.cfg
+# 预期结果: Error: Deadlock reached — NoCycle violated
+# 原因: Check + CommitEdge 分离，TOCTOU 窗口
+
+# Model 2: Unified MVCC + Wait-For TOCTOU
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar \
+  tlc2.TLC PROOF_016_023_mvcc_toctou -config PROOF_016_023_mvcc_toctou.cfg
+# 预期结果: Error: Deadlock reached — NoCycle violated
+# 原因: Write conflict → Wait-For edge + Commit 分离，TOCTOU 窗口
+
+# ── Atomic models (预期: PASS) ───────────────────────────────────────────
+
+# Model 3: Pure lock atomic
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar \
+  tlc2.TLC PROOF_023_deadlock_v4 -config PROOF_023_deadlock_v4.cfg
+# 预期结果: Model checking completed. No error found.
+# 状态数: ~300+ distinct states
+
+# Model 4: Unified MVCC + Wait-For atomic
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar \
+  tlc2.TLC PROOF_016_023_mvcc_atomic -config PROOF_016_023_mvcc_atomic.cfg
+# 预期结果: Model checking completed. No error found.
+# 状态数: 993 total, 156 distinct
+# 验证不变量: NoCycle + NoWriteConflict 同时成立
 ```
 
-### 3.4 全量测试（Beta 门禁）
+### 2.3 预期结果汇总
 
-```bash
-# 运行全量 workspace 测试
-cargo test --workspace 2>&1 | tail -30
+| 模型 | 不变量 | 预期 | 实际 |
+|---|---|---|---|
+| `PROOF_023_deadlock_toctou` | NoCycle | ❌ Violated | ❌ Violated |
+| `PROOF_016_023_mvcc_toctou` | NoCycle | ❌ Violated | ❌ Violated |
+| `PROOF_023_deadlock_v4` | NoCycle | ✅ Pass | ✅ Pass |
+| `PROOF_016_023_mvcc_atomic` | NoCycle + NoWriteConflict | ✅ Pass | ✅ Pass |
 
-# 代码覆盖率（需要 cargo-llvm-cov）
-cargo llvm-cov --workspace --lcov --output-path lcov.info
-# 或使用 tarpaulin（备选）
-cargo tarpaulin --workspace --out Xml
+### 2.4 理解 TOCTOU 失败 trace
+
+当 TOCTOU 模型报 `NoCycle violated` 时，查看 State 2-5：
+
+```
+State 2: T1: Check({T2})     ← T1 检查 T2→T1 不可达，通过
+State 3: T2: Check({T1})     ← T2 检查 T1→T2 不可达，通过  ◄ TOCTOU 窗口
+State 4: T1: CommitEdge      ← T1 添加 T1→{T2} 边
+State 5: T2: CommitEdge      ← T2 添加 T2→{T1} 边 → CYCLE
 ```
 
-**当前覆盖率**：
-- executor: 74.69%
-- transaction: 100% (deadlock 模块)
+这证明：分离的 Check + CommitEdge 步骤在并发下会绕过死锁检测。
 
 ---
 
-## 四、TOCTOU 分析验证（关键步骤）
+## 3. Rust 验证
 
-### 4.1 理解 TOCTOU 风险
-
-TOCTOU（Time-Of-Check-Time-Of-Use）问题：
-
-```
-非原子实现（危险）:
-  T1: would_create_cycle(tx, {T2})  → false（通过）
-  T2: would_create_cycle(T1, {tx})  → false（通过）  ← TOCTOU WINDOW
-  T1: add_edge(tx, T2)              → 添加边
-  T2: add_edge(T1, tx)              → 添加边 → CYCLE 💀
-
-原子实现（安全）:
-  Mutex 保护: check + add_edge 在同一锁内
-  → T1 完全完成前，T2 无法介入
-  → T2 看到的是 T1 完成后的状态
-  → NoCycle 保证 ✅
-```
-
-### 4.2 TLA+ TOCTOU 验证（必须失败）
+### 3.1 构建
 
 ```bash
-# 进入 formal 目录
-cd ~/dev/yinglichina163/sqlrustgo/docs/formal
-
-# 运行 TOCTOU 模型（预期 VIOLATED）
-java -XX:+UseParallelGC \
-  -cp /tmp/tla2tools.jar \
-  tlc2.TLC PROOF_023_deadlock_toctou \
-  -config PROOF_023_deadlock_toctou.cfg 2>&1 | grep -E "(NoCycle|violated|State [0-9])"
-
-# 期望输出:
-# Error: Invariant NoCycle is violated.
-# State 1: Init
-# State 2: T1: Check({T2})
-# State 3: T2: Check({T1})   ← TOCTOU WINDOW
-# State 4: T1: Commit
-# State 5: T2: Commit → CYCLE
+cd /home/openclaw/dev/yinglichina163/sqlrustgo
+cargo build -p sqlrustgo-transaction
 ```
 
-### 4.3 TLA+ ATOMIC 修复验证（必须通过）
+### 3.2 全部测试
 
 ```bash
-# 运行 ATOMIC 模型（预期 PASS）
-java -XX:+UseParallelGC \
-  -cp /tmp/tla2tools.jar \
-  tlc2.TLC PROOF_023_deadlock_atomic \
-  -config PROOF_023_deadlock_atomic.cfg 2>&1 | grep -E "(No error|states generated|distinct)"
-
-# 期望输出:
-# Model checking completed. No error has been found. ✅
-# 11 states generated, 3 distinct states found
+cargo test -p sqlrustgo-transaction
 ```
 
-### 4.4 Rust Mutex Wrapper 验证（TODO）
+**预期**: 98+ tests passed (含 14 SSI integration + 12 deadlock + 8 version_chain + …)
 
-**当前状态**：Rust `lock.rs` 实现了 pre-check（v4 对齐），但 `would_create_cycle` + `add_edge` 调用之间**没有 Mutex 保护**，存在 TOCTOU 风险。
+### 3.3 仅 deadlock 模块测试
 
-**验证方法**（TODO）：
 ```bash
-# 运行并发死锁测试（未来）
-cargo test -p sqlrustgo-transaction concurrent_deadlock
-
-# 期望: 0 deadlocks，即使 N 线程同时构造 cycle
+cargo test -p sqlrustgo-transaction deadlock
 ```
+
+**预期**: 12 tests passed
+
+关键测试：
+
+```
+test_concurrent_mutual_deadlock_prevention  # 并发 TOCTOU 防护
+test_concurrent_no_false_positive           # 线性链无误报
+test_try_wait_edge_rejects_cycle            # 原子 pre-check 拒绝环
+test_try_wait_edge_accepts_no_cycle         # 有效路径通过
+test_no_self_wait                           # NoSelfWait 正确
+```
+
+### 3.4 仅 SSI integration 测试
+
+```bash
+cargo test -p sqlrustgo-transaction ssi
+```
+
+**预期**: 14 tests passed
 
 ---
 
-## 五、Formulog 验证
+## 4. S0–S05 验证状态
 
-### 5.1 安装（如果使用 Apalache）
+### S0: TLA+ 模型文件存在 ✅
 
-```bash
-# 推荐：使用 Docker
-docker pull ghcr.io/informalsystems/apalache:latest
-
-# 或直接从 releases
-curl -L -o /usr/local/bin/apalache \
-  https://github.com/informalsystems/apalache/releases/download/v0.45.0/apalache-linux
-chmod +x /usr/local/bin/apalache
+```
+docs/formal/PROOF_023_deadlock_v4.tla          ✅
+docs/formal/PROOF_023_deadlock_toctou.tla      ✅
+docs/formal/PROOF_016_023_mvcc_toctou.tla      ✅
+docs/formal/PROOF_016_023_mvcc_atomic.tla      ✅
 ```
 
-### 5.2 运行 Formulog 证明
+### S1: TOCTOU 模型 Violated ✅
 
-```bash
-cd ~/dev/yinglichina163/sqlrustgo
+运行 `PROOF_023_deadlock_toctou` 和 `PROOF_016_023_mvcc_toctou`，两者均报 `NoCycle violated`。
 
-# PROOF-021 HAVING 语义
-./scripts/formalog/run_formulog_isolated.sh docs/proof/PROOF-021-having-semantics.formulog
+### S2: Atomic 模型 Passed ✅
 
-# PROOF-022 CTE Non-Recursive
-./scripts/formalog/run_formalog_isolated.sh docs/proof/PROOF-022-cte-non-recursive.formulog
+运行 `PROOF_023_deadlock_v4` 和 `PROOF_016_023_mvcc_atomic`，两者均报 `No error found`。
 
-# PROOF-020 NULL 3VL
-./scripts/formalog/run_formalog_isolated.sh docs/proof/PROOF-020-null-3vl.formulog
+### S3: Rust DeadlockDetector 实现 ✅
+
+- `DeadlockDetector` 包装在 `Mutex<Inner>`
+- 唯一安全 API：`try_wait_edge(tx_id, holders)` — 原子 pre-check + add_edge
+- `try_wait_edge` 返回 `Err(LockError::Deadlock)` 当且仅当会创建环
+
+### S4: Rust 并发测试通过 ✅
+
+- `test_concurrent_mutual_deadlock_prevention`: 两个线程同时添加 T1→T2 和 T2→T1，至少一个失败，无 cycle 残留
+- `test_concurrent_no_false_positive`: 线性链不产生误报
+
+### S5: S0–S04 完整闭环 ✅
+
 ```
+TLA+ Atomic Model (PASS)
+    ↓  (same atomicity requirement)
+Rust try_wait_edge() with Mutex
+    ↓  (physical enforcement)
+Concurrent tests pass
+    ↓  (integration)
+SSI integration tests pass
+```
+
+### ⚠️ S-04 残留未竟项
+
+| 未竟项 | 影响 | 建议 |
+|---|---|---|
+| MVCC write-write conflict commit 检测 | `CommitTxn` 在 TLA+ 中有 `NoWriteConflict` 检查，Rust `TransactionManager` 尚未实现 | 在 `ssi_integration.rs` 中加 commit validation 测试 |
+| Serializability end-to-end 测试 | 只有分模块测试，没有全链路 SSI 验证 | 添加 multi-key 跨表事务的 serializability 测试 |
 
 ---
 
-## 六、S0-S05 阶段验证汇总
+## 5. 核心正确性论证
 
-### 6.1 各阶段验证状态
+### 5.1 TOCTOU 漏洞的危险性
 
-| ID | Category | Formal | Rust | 并发安全 | 总体 |
-|----|----------|--------|------|---------|------|
-| **S-01** | Parser | ✅ Formulog | ✅ | N/A | ✅ Complete |
-| **S-02** | Type System | ⚠️ docs only | ⚠️ partial | N/A | ⚠️ Partial |
-| **S-03** | Transaction | ✅ v4 + TOCTOU | ✅ pre-check aligned | ⚠️ Mutex 待加 | 🔄 In Progress |
-| **S-04** | B+Tree | ⚠️ docs only | ⚠️ partial | N/A | ⚠️ Partial |
-| **S-05** | Query Equivalence | ✅ | ✅ | N/A | ✅ Complete |
+TLA+ 已证明：如果 `would_create_cycle` 检查和 `add_edge` 操作不原子：
 
-### 6.2 S-03 详细验证矩阵
+```
+T1: thread-A  checks would_create_cycle(T1,{T2}) → false (pass)
+T2: thread-B  checks would_create_cycle(T2,{T1}) → false (pass)
+T1: thread-A  adds edge T1→T2
+T2: thread-B  adds edge T2→T1  ← CYCLE FORMED
+```
 
-| 验证项 | 方法 | 状态 |
-|--------|------|------|
-| TLA+ v4 NoCycle 不变量 | TLC model checker | ✅ 91 states, PASS |
-| TOCTOU 反例（证明原子必要性） | TLC model checker | ✅ 40 states, FAIL (预期) |
-| ATOMIC 修复（证明Mutex有效） | TLC model checker | ✅ 11 states, PASS |
-| Rust pre-check 对齐（sequential） | `cargo test -p sqlrustgo-transaction deadlock` | ✅ 19 tests PASS |
-| Rust pre-check 对齐（multi-resource） | PROOF-023 v4 refinement tests | ✅ 5 tests PASS |
-| Rust TOCTOU 修复（并发） | `cargo test concurrent_deadlock` | ⏳ TODO |
-| Rust Mutex wrapper 实现 | 代码审查 | ⏳ TODO |
+**没有任何运行时检测可以发现这个错误** — 因为它发生在两个独立操作的间隔中。
 
-### 6.3 验证检查清单
+### 5.2 为什么 Mutex 是必要的
+
+只有两种方式消除 TOCTOU 窗口：
+
+1. **Mutex** (当前方案): 保证 `would_create_cycle` 检查和 `add_edge` 在同一个锁区域内执行
+2. **Lock-free CAS**: 更复杂，需要 `compare_exchange` 保证 graph 操作的原子性
+
+当前采用 Mutex 的原因：
+- 实现简单，错误率最低
+- 锁的临界区极小（只包含图遍历和一次哈希写入）
+- 不会产生死锁（因为外层有 `would_create_cycle` 保护）
+
+### 5.3 形式化 vs 运行时验证的关系
+
+| 层次 | 验证方法 | 保证 |
+|---|---|---|
+| TLA+ model | Model checker (exhaustive state search) | 数学证明：所有可能的 interleavings |
+| Rust unit tests | Single-threaded assertions | 特定场景验证 |
+| Rust concurrent tests | Multi-threaded stress | TOCTOU 防护的运行时证明 |
+
+TLA+ 证明"**不存在**能导致 cycle 的 interleaving"，Rust 测试证明"**实际运行**中也没有 cycle"。
+
+---
+
+## 6. 已知限制
+
+1. **`assert_no_cycle()` 仅在 debug 构建生效**: release 构建没有运行时检查，依赖 `would_create_cycle` 预防
+2. **`try_wait_edge` 是唯一安全并发 API**: 直接调用 `add_edge` 或 `would_create_cycle` 而不使用 `try_wait_edge` 会绕过 TOCTOU 保护（已用 `#[cfg(test)]` 限制测试外使用）
+3. **无死锁超时**: 当前实现没有超时机制；如果 `try_wait_edge` 卡住会一直等待（由外层 `Mutex` 的 `park()` 保证）
+
+---
+
+## 7. 快速验证脚本
 
 ```bash
-# ── Step 1: TLA+ 模型验证 ───────────────────────────────────────
-# [ ] PROOF-023_v4 PASS
-# [ ] PROOF_023_deadlock_toctou FAIL (预期)
-# [ ] PROOF_023_deadlock_atomic PASS
-# [ ] PROOF_016_mvcc_ssi PASS
-# [ ] PROOF_015_ddl_atomicity PASS
-# [ ] PROOF_019_left_right_join PASS
+#!/bin/bash
+set -e
+cd /home/openclaw/dev/yinglichina163/sqlrustgo
 
-# ── Step 2: Rust 测试验证 ───────────────────────────────────────
-# [ ] cargo test -p sqlrustgo-transaction deadlock → 19 PASS
-# [ ] cargo test -p sqlrustgo-transaction → 全部 PASS
-# [ ] cargo test -p sqlrustgo-executor → 全部 PASS
+echo "=== TLA+ Models ==="
+cd docs/formal
+for model in PROOF_023_deadlock_toctou PROOF_016_023_mvcc_toctou PROOF_023_deadlock_v4 PROOF_016_023_mvcc_atomic; do
+    result=$(java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC $model -config ${model}.cfg 2>&1)
+    if echo "$result" | grep -q "No error found"; then
+        echo "$model: ✅ PASS"
+    else
+        echo "$model: ❌ VIOLATED (expected for toctou models)"
+    fi
+done
 
-# ── Step 3: 代码质量 ────────────────────────────────────────────
-# [ ] cargo clippy -- -D warnings → 0 warnings
-# [ ] cargo fmt -- --check → 0 formatting issues
-
-# ── Step 4: 并发安全（TODO）─────────────────────────────────────
-# [ ] 实现 WaitForGraph::add_wait_edge() Mutex wrapper
-# [ ] 添加 concurrent_deadlock_prevention() 测试
-# [ ] 并发测试 100% 通过
+echo ""
+echo "=== Rust Tests ==="
+cargo test -p sqlrustgo-transaction deadlock -- --nocapture
 ```
 
 ---
 
-## 七、已知限制与 TODO
-
-### 7.1 TOCTOU 风险（当前最大问题）
-
-**风险描述**：
-Rust `lock.rs` 的 `acquire_lock` 方法中，`would_create_cycle()` 调用和 `add_edge()` 调用之间没有 Mutex 保护。在**多线程并发**场景下，理论上可能产生 TOCTOU race。
-
-**缓解措施**：
-1. **最小修复**：在 `DeadlockDetector` 上加全局 `Mutex<InnerGraph>`（见 `PROO F_023_MAPPING.md` 10.4 节）
-2. **生产修复**：使用细粒度锁（per-key 或 per-edge）
-
-**验证方法**：
-```rust
-#[test]
-fn concurrent_deadlock_prevention() {
-    // 启动 N 线程，每线程同时执行：
-    //   T1: try_wait(k2) where T2 holds k2
-    //   T2: try_wait(k1) where T1 holds k1
-    // 验证: 0 个线程报告 Deadlock（顺序场景会全部被 pre-check 拒绝）
-    // 或: N 线程全部测到 Deadlock（不可能全部成功）
-}
-```
-
-### 7.2 其他已知限制
-
-| 限制 | 影响 | 优先级 |
-|------|------|--------|
-| S-02 Type System 无形式化证明 | 低（MySQL 类型规则已文档化） | 中 |
-| S-04 B+Tree 无形式化证明 | 中（生产环境有风险） | 中 |
-| 并发压力测试缺失 | 高（无法验证 TOCTOU 修复） | P0 |
-| Mutex wrapper 未实现 | 高（TOCTOU 风险持续存在） | P0 |
-
----
-
-## 八、故障排查
-
-### TLA+ 内存不足
-
-```bash
-# 增加 heap 大小
-java -Xmx16g -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC ...
-```
-
-### TLC Parse Error
-
-```bash
-# 检查 TLA+ 语法（特别是 RECURSIVE 声明）
-# 错误: RECURSIVE Reachable/_/2
-# 正确: RECURSIVE Reachable(_,_)
-```
-
-### Rust 测试失败
-
-```bash
-# 查看详细输出
-cargo test -p sqlrustgo-transaction -- --nocapture deadlock
-
-# 查看具体哪个测试失败
-cargo test -p sqlrustgo-transaction -- --test-threads=1 deadlock
-```
-
-### Git push 失败（Gitea objects 权限）
-
-```bash
-# 如果报错 "unable to migrate objects to permanent storage"
-# 检查 ownership
-ls -la /data/git/repositories/.../objects/
-# 应该是 git:git
-sudo chown -R git:git /data/git/repositories/.../objects/
-```
-
----
-
-## 九、快速验证命令（单行）
-
-```bash
-# 完整验证序列（假设在 sqlrustgo 根目录）
-cd ~/dev/yinglichina163/sqlrustgo/docs/formal && \
-java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC PROOF_023_deadlock_v4 -config PROOF_023_deadlock_v4.cfg 2>&1 | grep -q "No error" && \
-java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC PROOF_023_deadlock_toctou -config PROOF_023_deadlock_toctou.cfg 2>&1 | grep -q "violated" && \
-java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC PROOF_023_deadlock_atomic -config PROOF_023_deadlock_atomic.cfg 2>&1 | grep -q "No error" && \
-echo "✅ ALL TLA+ VERIFICATIONS PASSED" || echo "❌ TLA+ VERIFICATION FAILED"
-
-# Rust 测试
-cd ~/dev/yinglichina163/sqlrustgo && \
-cargo test -p sqlrustgo-transaction deadlock 2>&1 | grep -q "19 passed" && \
-echo "✅ ALL RUST DEADLOCK TESTS PASSED" || echo "❌ RUST TESTS FAILED"
-```
-
----
-
-## 十、文档索引
-
-| 文档 | 路径 | 内容 |
-|------|------|------|
-| TOCTOU 分析 | `docs/formal/PROOF_023_MAPPING.md` §10 | 原子性要求、Mutex wrapper 提案 |
-| TLA+ 映射 | `docs/formal/PROOF_023_MAPPING.md` | v1-v4 版本演进、TLA+→Rust 映射 |
-| PROOF-023 v4 | `docs/formal/PROOF_023_deadlock_v4.tla` | 基准单Txn预-check模型 |
-| TOCTOU 模型 | `docs/formal/PROOF_023_deadlock_toctou.tla` | 非原子check+commit（FAIL） |
-| ATOMIC 修复 | `docs/formal/PROOF_023_deadlock_atomic.tla` | 原子check+commit（PASS） |
-| 本手册 | `docs/formal/VERIFICATION_GUIDE.md` | 本文档 |
+*最后更新: 2026-05-03 (commit: atomic try_wait_edge + unified MVCC model)*

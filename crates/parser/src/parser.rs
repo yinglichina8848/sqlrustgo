@@ -558,9 +558,14 @@ pub enum Expression {
     Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
     CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
     FunctionCall(String, Vec<Expression>), // Function call: UPPER(name), LOWER(name), etc.
-    WindowCall(WindowCall), // Window function call: ROW_NUMBER() OVER ()
+    WindowCall(WindowCall),   // Window function call: ROW_NUMBER() OVER ()
     Position(Box<Expression>, Box<Expression>), // POSITION(substr IN str)
-    Insert(Box<Expression>, Box<Expression>, Box<Expression>, Box<Expression>), // INSERT(str, pos, len, newstr)
+    Insert(
+        Box<Expression>,
+        Box<Expression>,
+        Box<Expression>,
+        Box<Expression>,
+    ), // INSERT(str, pos, len, newstr)
 }
 
 /// SQL Parser
@@ -1133,6 +1138,11 @@ impl Parser {
     }
 
     fn parse_select_or_union(&mut self) -> Result<Statement, String> {
+        // Handle nested WITH (CTE inside CTE definition)
+        if matches!(self.current(), Some(Token::With)) {
+            return self.parse_with_select();
+        }
+
         let first_select = self.parse_select_statement()?;
 
         if matches!(self.current(), Some(Token::Union)) {
@@ -1233,12 +1243,28 @@ impl Parser {
             false
         };
 
+        // Skip MySQL query modifiers - they don't affect result
+        for _ in 0..5 {
+            if let Some(Token::Identifier(ref n)) = self.current() {
+                let upper = n.to_uppercase();
+                if upper == "HIGH_PRIORITY"
+                    || upper == "SQL_CACHE"
+                    || upper == "SQL_NO_CACHE"
+                    || upper == "SQL_CALC_FOUND_ROWS"
+                {
+                    self.next();
+                    continue;
+                }
+            }
+            break;
+        }
+
         let mut columns = Vec::new();
         let mut aggregates = Vec::new();
 
         loop {
             match self.current() {
-                Some(Token::From) | Some(Token::Eof) => break,
+                Some(Token::From) | Some(Token::Eof) | Some(Token::RParen) => break,
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -1248,19 +1274,21 @@ impl Parser {
                     self.next();
                 }
                 // Handle DATE_ADD/DATE_SUB - skip to closing paren (executor handles semantics)
-                Some(Token::Identifier(ref name)) if name.to_uppercase() == "DATE_ADD" 
-                    || name.to_uppercase() == "DATE_SUB" 
-                    || name.to_uppercase() == "ADDTIME"
-                    || name.to_uppercase() == "SUBTIME"
-                    || name.to_uppercase() == "INSERT"
-                    || name.to_uppercase() == "CAST"
-                    || name.to_uppercase() == "SUBSTRING"
-                    || name.to_uppercase() == "IF"
-                    || name.starts_with("ST_") => {
+                Some(Token::Identifier(ref name))
+                    if name.to_uppercase() == "DATE_ADD"
+                        || name.to_uppercase() == "DATE_SUB"
+                        || name.to_uppercase() == "ADDTIME"
+                        || name.to_uppercase() == "SUBTIME"
+                        || name.to_uppercase() == "INSERT"
+                        || name.to_uppercase() == "CAST"
+                        || name.to_uppercase() == "SUBSTRING"
+                        || name.to_uppercase() == "IF"
+                        || name.starts_with("ST_") =>
+                {
                     let func_name = name.to_uppercase();
                     self.next();
                     self.expect(Token::LParen)?;
-                    
+
                     // Skip all content until RParen
                     let mut depth = 1;
                     while depth > 0 {
@@ -1272,7 +1300,7 @@ impl Parser {
                         }
                         self.next();
                     }
-                    
+
                     columns.push(SelectColumn {
                         name: func_name.clone(),
                         alias: None,
@@ -1292,7 +1320,7 @@ impl Parser {
                         expression: Some(Expression::FunctionCall(name, args)),
                     });
                 }
-                // Handle IF function in SELECT  
+                // Handle IF function in SELECT
                 Some(Token::If) => {
                     let name = "IF".to_string();
                     self.next();
@@ -1311,7 +1339,8 @@ impl Parser {
                         Some(Token::Left) => "LEFT",
                         Some(Token::Right) => "RIGHT",
                         _ => unreachable!(),
-                    }.to_string();
+                    }
+                    .to_string();
                     self.next();
                     self.expect(Token::LParen)?;
                     let args = self.parse_expression_list()?;
@@ -1673,6 +1702,10 @@ impl Parser {
                 Some(Token::Comma) => {
                     self.next();
                 }
+                // Skip AS keyword in column list (alias handling is done by individual parsers)
+                Some(Token::As) => {
+                    self.next();
+                }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
                 }
@@ -1702,7 +1735,10 @@ impl Parser {
                             } else {
                                 None
                             };
-                            tables.push(FromTable { name: name.clone(), alias });
+                            tables.push(FromTable {
+                                name: name.clone(),
+                                alias,
+                            });
                             if primary_table.is_empty() {
                                 primary_table = name;
                             }
@@ -1734,6 +1770,9 @@ impl Parser {
             Some(Token::Eof) | None => {
                 // No FROM clause - this is a SELECT without table (e.g., SELECT 1+1)
                 primary_table = "".to_string();
+            }
+            Some(Token::RParen) => {
+                // CTE subquery ending - don't consume, just return empty tables
             }
             Some(t) => return Err(format!("Expected FROM or end of query, got {:?}", t)),
         }
@@ -2726,9 +2765,32 @@ impl Parser {
         Ok(Expression::FunctionCall("INSERT".to_string(), vec![]))
     }
 
+    fn parse_if_expression(&mut self) -> Result<Expression, String> {
+        let mut args = Vec::new();
+        if !matches!(self.current(), Some(Token::RParen)) {
+            loop {
+                args.push(self.parse_expression()?);
+                if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+        self.expect(Token::RParen)?;
+
+        Ok(Expression::FunctionCall("IF".to_string(), args))
+    }
+
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
+            // Handle IF as function call (for nested IF in expressions)
+            Some(Token::If) => {
+                self.next();
+                self.expect(Token::LParen)?;
+                self.parse_if_expression()
+            }
             Some(Token::Identifier(_)) => {
                 let name = match self.current() {
                     Some(Token::Identifier(n)) => n.clone(),
@@ -2758,6 +2820,9 @@ impl Parser {
                     }
                     if name.to_uppercase() == "INSERT" {
                         return self.parse_insert_expression();
+                    }
+                    if name.to_uppercase() == "IF" {
+                        return self.parse_if_expression();
                     }
 
                     let mut args = Vec::new();
