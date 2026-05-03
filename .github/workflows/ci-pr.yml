@@ -161,6 +161,30 @@ jobs:
         run: cargo audit || true
 
   # ----------------------------------------
+  # SQLite Differential Testing
+  # ----------------------------------------
+  sqlite-diff:
+    name: SQLite Differential
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install sqlite3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+
+      - name: Run SQLite differential tests
+        run: |
+          cargo test -p sqlrustgo-executor --test sqlite_diff
+
+  # ----------------------------------------
   # Verification gate
   # ----------------------------------------
   verify:
