@@ -264,7 +264,9 @@ verify_tools() {
 
     # Dafny
     if command -v dafny &> /dev/null; then
-        echo -e "Dafny: ${GREEN}$(dafny --version 2>&1 | head -1)${NC}"
+        local dafny_ver
+        dafny_ver="$(dafny /help 2>&1 | head -1)" || dafny_ver="installed"
+        echo -e "Dafny: ${GREEN}${dafny_ver}${NC}"
     else
         echo -e "Dafny: ${RED}not found${NC}"
         all_ok=false
