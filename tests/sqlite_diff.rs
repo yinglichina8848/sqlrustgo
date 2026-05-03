@@ -928,27 +928,29 @@ fn project_rows(
             .collect());
     }
 
-    let col_indices: Vec<usize> = select
-        .columns
-        .iter()
-        .filter_map(|c| {
-            if c.name == "*" {
-                None
-            } else {
-                table_info
-                    .columns
-                    .iter()
-                    .position(|col| &col.name == &c.name)
-            }
-        })
-        .collect();
-
     Ok(rows
         .iter()
         .map(|r| {
-            col_indices
+            select
+                .columns
                 .iter()
-                .map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null)))
+                .map(|col| {
+                    if col.name == "*" {
+                        return "*".to_string();
+                    }
+                    if let Some(ref expr) = col.expression {
+                        value_to_string(&eval_expr(expr, r, table_info))
+                    } else {
+                        value_to_string(
+                            table_info
+                                .columns
+                                .iter()
+                                .position(|c| &c.name == &col.name)
+                                .and_then(|i| r.get(i))
+                                .unwrap_or(&Value::Null),
+                        )
+                    }
+                })
                 .collect()
         })
         .collect())
