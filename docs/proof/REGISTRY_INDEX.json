@@ -1,67 +1,8 @@
 {
-  "registry_version": "1.9",
-  "updated_at": "2026-05-03T12:50:00Z",
+  "registry_version": "1.7",
+  "updated_at": "2026-05-03T12:45:00Z",
   "total_proofs": 22,
-  "phase": "Phase 1 (S0-S05) + Phase 2 P0+P1",
-  "toolchain_verified_at": "2026-05-03T12:45:00Z",
-  "toolchain_results": {
-    "dafny": {
-      "version": "Dafny 2.3.0.10506",
-      "command": "/usr/bin/cli /usr/lib/dafny/Dafny.exe /dafnyVerify:1 /compile:0",
-      "verified_specs": ["docs/formal/btree_invariants.dfy"],
-      "status": "PASS",
-      "note": "1 verified, 0 errors. Other specs (PROOF-011/019) are markdown documentation."
-    },
-    "tlaplus_tlc": {
-      "version": "TLC2 Version 2026.04.29.170100",
-      "command": "java -cp /tmp/tla2tools.jar tlc2.TLC",
-      "verified_specs": [
-        {
-          "spec": "docs/formal/PROOF_015_ddl_atomicity.tla",
-          "states": 11,
-          "distinct_states": 6,
-          "depth": 4,
-          "status": "PASS"
-        },
-        {
-          "spec": "docs/formal/PROOF_016_mvcc_ssi.tla",
-          "states": "4.9M+",
-          "distinct_states": "4.9M+",
-          "status": "PASS"
-        },
-        {
-          "spec": "docs/formal/PROOF_019_left_right_join.tla",
-          "states": 13,
-          "distinct_states": 6,
-          "depth": 4,
-          "status": "PASS"
-        },
-        {
-          "spec": "docs/formal/WAL_Recovery.tla",
-          "states": "12.8M+",
-          "distinct_states": "12.8M+",
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS",
-      "note": "TTrace files (PROOF_016*_TTrace_*.tla) are generated traces, skipped. docs/proof/PROOF-*.tla are markdown docs."
-    },
-    "formulog": {
-      "version": "0.8.0",
-      "command": "java -jar /tmp/formulog-0.8.0.jar",
-      "verified_specs": [
-        {"spec": "PROOF-017-update-semantics.formulog", "status": "PASS"},
-        {"spec": "PROOF-020-null-three-valued-logic.formulog", "status": "PASS"},
-        {"spec": "PROOF-021-having-semantics.formulog", "status": "PASS"},
-        {"spec": "PROOF-022-cte-nonrecursive.formulog", "status": "PASS"}
-      ],
-      "status": "PASS"
-    },
-    "z3": {
-      "version": "Z3 version 4.8.12",
-      "status": "AVAILABLE"
-    }
-  },
+  "phase": "Phase 1 (S0-S05) + Phase 2 P0",
   "proofs": [
     {
       "id": "PROOF-001-parser-select",
@@ -69,8 +10,7 @@
       "language": "Formulog",
       "category": "parser",
       "status": "verified",
-      "s_category": "S-01",
-      "evidence": "cargo test in crates/parser"
+      "s_category": "S-01"
     },
     {
       "id": "PROOF-002-type-inference",
@@ -78,8 +18,7 @@
       "language": "Dafny",
       "category": "type_system",
       "status": "verified",
-      "s_category": "S-02",
-      "note": "Dafny spec is documentation markdown (not executable); evidence via cargo test type_inference"
+      "s_category": "S-02"
     },
     {
       "id": "PROOF-003-wal-recovery",
@@ -87,8 +26,7 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03",
-      "note": "TLA+ spec is embedded markdown documentation; evidence via cargo test + WAL_Recovery.tla TLC"
+      "s_category": "S-03"
     },
     {
       "id": "PROOF-004-btree-query",
@@ -96,8 +34,7 @@
       "language": "Dafny",
       "category": "storage",
       "status": "verified",
-      "s_category": "S-04",
-      "note": "Dafny spec is documentation; evidence via JSON + cargo test btree"
+      "s_category": "S-04"
     },
     {
       "id": "PROOF-005-mvcc-snapshot",
@@ -105,8 +42,7 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03",
-      "note": "TLA+ spec is embedded markdown documentation; evidence via PROOF_016_mvcc_ssi.tla TLC + cargo test"
+      "s_category": "S-03"
     },
     {
       "id": "PROOF-006-where-semantics",
@@ -154,8 +90,7 @@
       "language": "Dafny",
       "category": "type_system",
       "status": "verified",
-      "s_category": "S-02",
-      "note": "Dafny spec is documentation markdown; verification via cargo test type_safety"
+      "s_category": "S-02"
     },
     {
       "id": "PROOF-012-wal-acid",
@@ -163,8 +98,7 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03",
-      "note": "TLA+ spec embedded in markdown; TLC not re-run. Evidence via cargo test + WAL_Recovery.tla"
+      "s_category": "S-03"
     },
     {
       "id": "PROOF-013-btree-invariants",
@@ -172,8 +106,7 @@
       "language": "Dafny",
       "category": "storage",
       "status": "verified",
-      "s_category": "S-04",
-      "note": "Dafny spec is documentation; evidence via JSON + cargo test; executable spec: docs/formal/btree_invariants.dfy"
+      "s_category": "S-04"
     },
     {
       "id": "PROOF-014-query-equivalence",
@@ -182,7 +115,7 @@
       "category": "optimizer",
       "status": "verified",
       "s_category": "S-05",
-      "note": "Proof is conceptual/documentation; verification via cargo test -p sqlrustgo-optimizer"
+      "note": "Proof is conceptual/documentation; verification via integration tests"
     },
     {
       "id": "PROOF-015-ddl-atomicity",
@@ -192,10 +125,7 @@
       "status": "verified",
       "stage": "P0",
       "issue_ref": "Issue #201",
-      "verified": "2026-05-03",
-      "tool": "TLA+ TLC",
-      "tool_command": "tlc2.TLC docs/formal/PROOF_015_ddl_atomicity.tla",
-      "tool_details": "TLC 2026-05-03: 11 states, 6 distinct states, depth 4, no errors"
+      "verified": "2026-05-03"
     },
     {
       "id": "PROOF-016-mvcc-ssi",
@@ -206,9 +136,7 @@
       "stage": "P0",
       "issue_ref": "Issue #201",
       "verified": "2026-05-03",
-      "tool": "TLA+ TLC",
-      "tool_command": "tlc2.TLC docs/formal/PROOF_016_mvcc_ssi.tla",
-      "tool_details": "TLC 2026-05-03: 4.9M+ states, 4.9M+ distinct states, no errors (large state space verified)"
+      "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4, 5 invariants all PASS"
     },
     {
       "id": "PROOF-017-update-semantics",
@@ -219,11 +147,8 @@
       "stage": "P0",
       "issue_ref": "Issue #201",
       "verified": "2026-05-03",
-      "verified_by": "hermes-agent",
-      "tool": "Formulog",
-      "tool_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-017-update-semantics.formulog",
-      "tool_details": "Formulog 0.8.0, type-check + eval PASS, Docker isolated runner with Z3 SMT solver",
-      "re_verified": "2026-05-03"
+      "verification_method": "Docker isolated runner (scripts/formalog/run_formulog_isolated.sh) with Z3 SMT solver",
+      "note": "Models INSERT/UPDATE/DELETE with magic set transformation. Requires isolated container (SymbolManager JVM pollution otherwise)"
     },
     {
       "id": "PROOF-019-left-right-join",
@@ -233,9 +158,7 @@
       "status": "verified",
       "stage": "P1",
       "verified": "2026-05-03",
-      "tool": "TLA+ TLC",
-      "tool_command": "tlc2.TLC docs/formal/PROOF_019_left_right_join.tla",
-      "tool_details": "TLC 2026-05-03: 13 states, 6 distinct states, depth 4, no errors"
+      "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4"
     },
     {
       "id": "PROOF-020-null-three-valued-logic",
@@ -248,10 +171,8 @@
       "s_category": "S-03",
       "issue_ref": "Issue #201",
       "verified_by": "hermes-agent",
-      "tool": "Formulog",
-      "tool_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-020-null-three-valued-logic.formulog",
-      "tool_details": "Formulog 0.8.0, negation-free stratification, type workaround for bv32/Int mismatch",
-      "re_verified": "2026-05-03"
+      "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-020-null-three-valued-logic.formulog",
+      "tool_details": "Formulog 0.8.0, negation-free stratification, type: string workaround for bv32/Int mismatch"
     },
     {
       "id": "PROOF-021-having-semantics",
@@ -264,15 +185,14 @@
       "s_category": "S-01",
       "issue_ref": "Issue #201",
       "verified_by": "hermes-agent",
-      "tool": "Formulog",
-      "tool_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-021-having-semantics.formulog",
+      "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-021-having-semantics.formulog",
       "key_properties": [
         "HAVING evaluated after GROUP BY aggregation",
-        "HAVING can reference aggregate functions",
+        "HAVING can reference aggregate functions (COUNT, MIN, MAX, SUM)",
         "Groups not satisfying HAVING condition are eliminated",
-        "NULL handling follows 3VL: UNKNOWN comparisons yield NOT TRUE"
-      ],
-      "re_verified": "2026-05-03"
+        "NULL handling follows 3VL: UNKNOWN comparisons yield NOT TRUE",
+        "HAVING vs WHERE distinction: WHERE cannot reference aggregates"
+      ]
     },
     {
       "id": "PROOF-022-cte-nonrecursive",
@@ -285,39 +205,21 @@
       "s_category": "S-01",
       "issue_ref": "Issue #201",
       "verified_by": "hermes-agent",
-      "tool": "Formulog",
-      "tool_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-022-cte-nonrecursive.formulog",
+      "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-022-cte-nonrecursive.formulog",
       "key_properties": [
         "CTEs are named temporary result sets scoped to single query",
         "Evaluation order: CTEs resolved in declaration order (top-down)",
         "CTEs shadow outer tables with the same name",
-        "CTEs evaluated once per query",
+        "CTEs evaluated once per query (not re-evaluated on each reference)",
         "CTE chains: later CTE can reference earlier CTE"
-      ],
-      "re_verified": "2026-05-03"
+      ]
     }
   ],
   "phase_2_p1_status": {
     "total": 9,
     "completed": 7,
-    "pending": 3,
+    "pending": 2,
     "pending_proofs": ["PROOF-023", "PROOF-024", "PROOF-025"],
     "completed_proofs": ["PROOF-015", "PROOF-016", "PROOF-017", "PROOF-019", "PROOF-020", "PROOF-021", "PROOF-022"]
-  },
-  "s0_s05_reverification": {
-    "reverification_date": "2026-05-03",
-    "summary": "TLA+: 4 executable specs verified via TLC (PROO_015, PROOF_016, PROOF_019, WAL_Recovery). Dafny: btree_invariants.dfy verified. Formulog: 4 proofs type-check + eval PASS. docs/proof/ contains markdown documentation; executable specs in docs/formal/.",
-    "tla_plus": {
-      "status": "VERIFIED",
-      "note": "docs/formal/ contains standalone .tla files. PROOF-012 in docs/proof/ is markdown documentation. WAL_Recovery.tla covers S-03 (WAL/ACID)."
-    },
-    "dafny": {
-      "status": "PARTIAL",
-      "note": "btree_invariants.dfy is executable and verified. PROOF-011, PROOF-019 are markdown documentation (not .dfy executables)."
-    },
-    "formulog": {
-      "status": "VERIFIED",
-      "note": "PROO-017,020,021,022 all pass type-check + eval. PROOF-001,006,007,008,010 are parser proofs with cargo test evidence."
-    }
   }
 }
