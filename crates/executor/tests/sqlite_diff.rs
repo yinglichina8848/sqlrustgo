@@ -3,10 +3,22 @@
 //! Compares SQLRustGo executor results against SQLite (ground truth).
 //! Any difference = bug in SQLRustGo (unless marked #[ignore]).
 //!
+//! =============================================================================
+//! TEST LAYERS (STRICTLY enforced):
+//!
+//! Layer 1 — correctness (active, must PASS):
+//!   These are bugs in "already supported" features. Fix these first.
+//!
+//! Layer 2 — capability (#[ignore] = feature gap, not bug):
+//!   These are unimplemented features. Do NOT confuse for bugs.
+//!   Track in sqlite_diff_bugs.md capability section.
+//!
+//! =============================================================================
+//!
 //! Usage:
 //!   cargo test -p sqlrustgo-executor --test sqlite_diff -- --nocapture
 //!
-//! CI Integration (add to .github/workflows/ci-pr.yml):
+//! CI Integration (.github/workflows/ci-pr.yml):
 //!   sqlite-diff:
 //!     runs-on: ubuntu-latest
 //!     steps:
@@ -28,11 +40,11 @@ use std::sync::{Arc, RwLock};
 // SQLite runner
 // =============================================================================
 
-/// Run SQL against real SQLite and return stdout (trimmed)
-/// Uses -list mode (one column per line, no headers) for clean diff comparison.
+/// Run SQL against real SQLite and return stdout (trimmed).
+/// Uses -list mode with \t separator to match SQLRustGo output format exactly.
 fn sqlite_query(sql: &str) -> Result<String, String> {
     let output = Command::new("sqlite3")
-        .args([":memory:", ".mode list", sql])
+        .args(["-separator", "\t", ":memory:", sql])
         .output()
         .map_err(|e| format!("sqlite3 not found: {e}"))?;
 
@@ -50,7 +62,7 @@ fn sqlite_query(sql: &str) -> Result<String, String> {
 // =============================================================================
 
 /// Run SQL against SQLRustGo ExecutionEngine and return formatted output.
-/// Output format matches SQLite -tab-separated rows, no headers.
+/// Output format: \t-separated columns, \n-separated rows, no headers.
 fn sqlrustgo_query(sql: &str) -> Result<String, String> {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     let mut engine = ExecutionEngine::new(storage);
@@ -66,7 +78,6 @@ fn sqlrustgo_query(sql: &str) -> Result<String, String> {
     for stmt in statements {
         match engine.execute(stmt) {
             Ok(exec_result) => {
-                // Format data rows (no column headers — ExecutorResult has no columns field)
                 if !exec_result.rows.is_empty() {
                     let lines: Vec<String> = exec_result
                         .rows
@@ -106,52 +117,72 @@ fn value_to_string(v: &Value) -> String {
         }
         Value::Text(s) => s.clone(),
         Value::Boolean(b) => {
-            if *b {
-                "1".to_string()
-            } else {
-                "0".to_string()
-            }
+            if *b { "1".to_string() } else { "0".to_string() }
         }
         Value::Blob(b) => format!("[blob {} bytes]", b.len()),
     }
 }
 
 // =============================================================================
-// Comparison
+// Row-level comparison (strict, no lossy normalization)
 // =============================================================================
 
-/// Normalize a result string for comparison:
-/// - Lowercase
-/// - Split into lines, filter empty, sort
-fn normalize(s: &str) -> Vec<String> {
-    let mut lines: Vec<String> = s
-        .lines()
-        .map(|l| l.trim().to_lowercase())
-        .filter(|l| !l.is_empty())
-        .collect();
-
-    lines.sort();
-    lines
+/// Parse tab-separated output into a Vec of Vec<String>.
+fn parse_output(s: &str) -> Vec<Vec<String>> {
+    s.lines()
+        .map(|line| line.split('\t').map(|c| c.trim().to_lowercase()).collect())
+        .filter(|row: &Vec<String>| !row.is_empty() && !(row.len() == 1 && row[0].is_empty()))
+        .collect()
 }
 
-/// Compare two query outputs.
-/// Returns (match: bool, detail: String)
-fn compare_results(sqlite_out: &str, sqlrustgo_out: &str) -> (bool, String) {
-    let sqlite_norm = normalize(sqlite_out);
-    let sqlrustgo_norm = normalize(sqlrustgo_out);
+/// Compare two query outputs strictly.
+///
+/// RULES:
+/// 1. Row count must match (no lossy count comparison)
+/// 2. Per-row: column count must match
+/// 3. Per-cell: values must match exactly (lowercased)
+/// 4. Order: MUST match (we do NOT sort — order matters in SQL)
+fn compare_results(sqlite_out: &str, sqlrustgo_out: &str) -> Result<(), String> {
+    let sqlite_rows = parse_output(sqlite_out);
+    let sqlrustgo_rows = parse_output(sqlrustgo_out);
 
-    if sqlite_norm == sqlrustgo_norm {
-        (true, String::new())
-    } else {
-        let detail = format!(
-            "SQLite ({num_sq} data rows):\n{}\n\nSQLRustGo ({num_sw} data rows):\n{}",
-            sqlite_norm.join("\n"),
-            sqlrustgo_norm.join("\n"),
-            num_sq = sqlite_norm.len(),
-            num_sw = sqlrustgo_norm.len()
-        );
-        (false, detail)
+    if sqlite_rows.len() != sqlrustgo_rows.len() {
+        return Err(format!(
+            "Row count mismatch: SQLite={}, SQLRustGo={}\n\
+             SQLite:\n{}\n\nSQLRustGo:\n{}",
+            sqlite_rows.len(),
+            sqlrustgo_rows.len(),
+            sqlite_out,
+            sqlrustgo_out
+        ));
     }
+
+    for (i, (sq_row, sw_row)) in sqlite_rows.iter().zip(sqlrustgo_rows.iter()).enumerate() {
+        if sq_row.len() != sw_row.len() {
+            return Err(format!(
+                "Row {}: column count mismatch: SQLite={} cols, SQLRustGo={} cols\n\
+                 SQLite row: {:?}\n\
+                 SQLRustGo row: {:?}",
+                i + 1,
+                sq_row.len(),
+                sw_row.len(),
+                sq_row,
+                sw_row
+            ));
+        }
+        for (j, (sq_cell, sw_cell)) in sq_row.iter().zip(sw_row.iter()).enumerate() {
+            if sq_cell != sw_cell {
+                return Err(format!(
+                    "Row {}, col {}: value mismatch\n\
+                     SQLite:    '{}'\n\
+                     SQLRustGo: '{}'",
+                    i + 1, j + 1, sq_cell, sw_cell
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -163,11 +194,7 @@ fn compare_results(sqlite_out: &str, sqlrustgo_out: &str) -> (bool, String) {
 /// SQLRustGo errors → FAIL (regression).
 macro_rules! assert_diff {
     ($name:expr, $sql:expr) => {{
-        let sqlite_result = sqlite_query($sql);
-        let sqlrustgo_result = sqlrustgo_query($sql);
-
-        // If SQLite errors, skip (syntax not supported by SQLite)
-        let sqlite_out = match sqlite_result {
+        let sqlite_out = match sqlite_query($sql) {
             Ok(s) => s,
             Err(e) => {
                 println!("SKIP (SQLite error): {} | {}", $name, e);
@@ -175,8 +202,7 @@ macro_rules! assert_diff {
             }
         };
 
-        // If SQLRustGo errors, report as failure
-        let sqlrustgo_out = match sqlrustgo_result {
+        let sqlrustgo_out = match sqlrustgo_query($sql) {
             Ok(s) => s,
             Err(e) => {
                 panic!(
@@ -186,143 +212,23 @@ macro_rules! assert_diff {
             }
         };
 
-        // Compare
-        let (matched, detail) = compare_results(&sqlite_out, &sqlrustgo_out);
-        assert!(
-            matched,
-            "\n=== DIFFERENCE DETECTED ===\nTest: {}\nSQL: {}\n\n{}",
-            $name, $sql, detail
-        );
+        if let Err(detail) = compare_results(&sqlite_out, &sqlrustgo_out) {
+            panic!(
+                "\n=== DIFFERENCE DETECTED ===\n\
+                 Test: {}\n\
+                 SQL: {}\n\n{}",
+                $name, $sql, detail
+            );
+        }
     }};
 }
 
 // =============================================================================
-// Test Cases (run against both SQLite and SQLRustGo)
+// LAYER 1: correctness — bugs in already-supported features
+// These tests define what "supported" means. Fix bugs here first.
 // =============================================================================
 
-#[test]
-fn test_simple_select() {
-    assert_diff!("simple select", "SELECT 1 AS a, 2 AS b");
-}
-
-#[test]
-fn test_union_all() {
-    assert_diff!(
-        "union all",
-        "SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3 ORDER BY x"
-    );
-}
-
-#[test]
-fn test_insert_and_select() {
-    assert_diff!(
-        "insert then select",
-        "CREATE TABLE t(id INTEGER, name TEXT); \
-         INSERT INTO t VALUES (1,'alice'),(2,'bob'),(3,'charlie'); \
-         SELECT * FROM t ORDER BY id"
-    );
-}
-
-#[test]
-fn test_where_eq() {
-    assert_diff!(
-        "where equality",
-        "CREATE TABLE t(x INTEGER); \
-         INSERT INTO t VALUES (10),(20),(30),(40); \
-         SELECT * FROM t WHERE x > 15 ORDER BY x"
-    );
-}
-
-#[test]
-fn test_where_null_condition() {
-    assert_diff!(
-        "where null condition",
-        "CREATE TABLE t(id INTEGER, x INTEGER); \
-         INSERT INTO t VALUES (1,10),(2,NULL),(3,20); \
-         SELECT id FROM t WHERE x = 10 ORDER BY id"
-    );
-}
-
-#[test]
-fn test_group_by_count() {
-    assert_diff!(
-        "group by count",
-        "CREATE TABLE t(a TEXT, b INTEGER); \
-         INSERT INTO t VALUES ('x',10),('x',20),('y',30),('y',40),('y',50); \
-         SELECT a, COUNT(*) FROM t GROUP BY a ORDER BY a"
-    );
-}
-
-#[test]
-fn test_group_by_sum() {
-    assert_diff!(
-        "group by sum",
-        "CREATE TABLE t(a TEXT, b INTEGER); \
-         INSERT INTO t VALUES ('x',10),('x',20),('y',30),('y',40),('z',NULL); \
-         SELECT a, SUM(b) FROM t GROUP BY a ORDER BY a"
-    );
-}
-
-#[test]
-fn test_count_star_vs_count_col() {
-    assert_diff!(
-        "count star vs count column",
-        "CREATE TABLE t(x INTEGER); \
-         INSERT INTO t VALUES (1),(NULL),(2),(NULL),(3); \
-         SELECT COUNT(*), COUNT(x) FROM t"
-    );
-}
-
-#[test]
-fn test_count_distinct_null() {
-    assert_diff!(
-        "count distinct with null",
-        "CREATE TABLE t(x INTEGER); \
-         INSERT INTO t VALUES (1),(NULL),(2),(NULL),(3); \
-         SELECT COUNT(DISTINCT x) FROM t"
-    );
-}
-
-#[test]
-fn test_inner_join() {
-    assert_diff!(
-        "inner join",
-        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
-         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2),(3),(4); \
-         SELECT a.i, b.j FROM a JOIN b ON a.i=b.j ORDER BY a.i"
-    );
-}
-
-#[test]
-fn test_left_join() {
-    assert_diff!(
-        "left join",
-        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
-         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2),(3),(4); \
-         SELECT a.i, b.j FROM a LEFT JOIN b ON a.i=b.j ORDER BY a.i"
-    );
-}
-
-#[test]
-fn test_left_join_with_null() {
-    assert_diff!(
-        "left join with nulls",
-        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
-         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2,NULL),(3,NULL),(NULL,9); \
-         SELECT a.i, b.j FROM a LEFT JOIN b ON a.i=b.j ORDER BY a.i"
-    );
-}
-
-#[test]
-fn test_distinct() {
-    assert_diff!(
-        "distinct",
-        "CREATE TABLE t(x INTEGER); \
-         INSERT INTO t VALUES (1),(1),(2),(NULL),(2),(3),(NULL); \
-         SELECT DISTINCT x FROM t ORDER BY x"
-    );
-}
-
+/// Basic SELECT * with ORDER BY — single integer column
 #[test]
 fn test_order_by_int() {
     assert_diff!(
@@ -333,6 +239,7 @@ fn test_order_by_int() {
     );
 }
 
+/// Text column ORDER BY
 #[test]
 fn test_order_by_text() {
     assert_diff!(
@@ -343,6 +250,29 @@ fn test_order_by_text() {
     );
 }
 
+/// WHERE equality (simple > 15)
+#[test]
+fn test_where_eq() {
+    assert_diff!(
+        "where equality",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (10),(20),(30),(40); \
+         SELECT * FROM t WHERE x > 15 ORDER BY x"
+    );
+}
+
+/// WHERE with column projection — correctness bug: engine outputs full row instead of projected columns
+#[test]
+fn test_where_projection() {
+    assert_diff!(
+        "where projection",
+        "CREATE TABLE t(id INTEGER, x INTEGER); \
+         INSERT INTO t VALUES (1,10),(2,NULL),(3,20); \
+         SELECT id FROM t WHERE x = 10 ORDER BY id"
+    );
+}
+
+/// LIMIT
 #[test]
 fn test_limit() {
     assert_diff!(
@@ -353,6 +283,7 @@ fn test_limit() {
     );
 }
 
+/// LIMIT + OFFSET
 #[test]
 fn test_limit_offset() {
     assert_diff!(
@@ -363,10 +294,146 @@ fn test_limit_offset() {
     );
 }
 
-// --- Known differences (SQL standard vs SQLite behavior) ---
-
+/// INSERT then SELECT with ORDER BY
 #[test]
-#[ignore] // Known diff: NULL = NULL → SQLite=0, SQL standard=NULL
+fn test_insert_and_select() {
+    assert_diff!(
+        "insert then select",
+        "CREATE TABLE t(id INTEGER, name TEXT); \
+         INSERT INTO t VALUES (1,'alice'),(2,'bob'),(3,'charlie'); \
+         SELECT * FROM t ORDER BY id"
+    );
+}
+
+// =============================================================================
+// LAYER 2: capability — unimplemented features (ignore until implemented)
+//
+// These are NOT bugs — they are feature gaps.
+// When you implement a feature, move its test here to Layer 1.
+// =============================================================================
+
+/// DISTINCT — capability gap
+#[test]
+#[ignore]
+fn test_distinct() {
+    assert_diff!(
+        "distinct",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (1),(1),(2),(NULL),(2),(3),(NULL); \
+         SELECT DISTINCT x FROM t ORDER BY x"
+    );
+}
+
+/// Scalar SELECT (SELECT 1, SELECT 'text') — capability gap
+#[test]
+#[ignore]
+fn test_scalar_select() {
+    assert_diff!("scalar int", "SELECT 1 AS a, 2 AS b");
+    assert_diff!("scalar text", "SELECT 'hello' AS msg");
+}
+
+/// UNION ALL — capability gap
+#[test]
+#[ignore]
+fn test_union_all() {
+    assert_diff!(
+        "union all",
+        "SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3 ORDER BY x"
+    );
+}
+
+/// GROUP BY COUNT — capability gap
+#[test]
+#[ignore]
+fn test_group_by_count() {
+    assert_diff!(
+        "group by count",
+        "CREATE TABLE t(a TEXT, b INTEGER); \
+         INSERT INTO t VALUES ('x',10),('x',20),('y',30),('y',40),('y',50); \
+         SELECT a, COUNT(*) FROM t GROUP BY a ORDER BY a"
+    );
+}
+
+/// GROUP BY SUM — capability gap
+#[test]
+#[ignore]
+fn test_group_by_sum() {
+    assert_diff!(
+        "group by sum",
+        "CREATE TABLE t(a TEXT, b INTEGER); \
+         INSERT INTO t VALUES ('x',10),('x',20),('y',30),('y',40),('z',NULL); \
+         SELECT a, SUM(b) FROM t GROUP BY a ORDER BY a"
+    );
+}
+
+/// COUNT(*) vs COUNT(column) — capability gap (aggregation)
+#[test]
+#[ignore]
+fn test_count_star_vs_count_col() {
+    assert_diff!(
+        "count star vs count column",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (1),(NULL),(2),(NULL),(3); \
+         SELECT COUNT(*), COUNT(x) FROM t"
+    );
+}
+
+/// COUNT(DISTINCT x) — capability gap
+#[test]
+#[ignore]
+fn test_count_distinct_null() {
+    assert_diff!(
+        "count distinct with null",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (1),(NULL),(2),(NULL),(3); \
+         SELECT COUNT(DISTINCT x) FROM t"
+    );
+}
+
+/// INNER JOIN — capability gap (high complexity)
+#[test]
+#[ignore]
+fn test_inner_join() {
+    assert_diff!(
+        "inner join",
+        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
+         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2),(3),(4); \
+         SELECT a.i, b.j FROM a JOIN b ON a.i=b.j ORDER BY a.i"
+    );
+}
+
+/// LEFT JOIN — capability gap (high complexity)
+#[test]
+#[ignore]
+fn test_left_join() {
+    assert_diff!(
+        "left join",
+        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
+         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2),(3),(4); \
+         SELECT a.i, b.j FROM a LEFT JOIN b ON a.i=b.j ORDER BY a.i"
+    );
+}
+
+/// LEFT JOIN with NULLs — capability gap
+#[test]
+#[ignore]
+fn test_left_join_with_null() {
+    assert_diff!(
+        "left join with nulls",
+        "CREATE TABLE a(i INTEGER); INSERT INTO a VALUES (1),(2),(3); \
+         CREATE TABLE b(j INTEGER); INSERT INTO b VALUES (2,NULL),(3,NULL),(NULL,9); \
+         SELECT a.i, b.j FROM a LEFT JOIN b ON a.i=b.j ORDER BY a.i"
+    );
+}
+
+// =============================================================================
+// LAYER 3: known semantic differences (ignore, document reason)
+// These are SQL-standard vs SQLite behavior mismatches.
+// =============================================================================
+
+/// Known diff: NULL = NULL → SQLite=0, SQL standard=NULL
+#[test]
+#[ignore]
 fn test_null_eq_null() {
     let sql = "SELECT NULL = NULL AS result";
     let sqlite = sqlite_query(sql).expect("sqlite3 works");
@@ -375,8 +442,9 @@ fn test_null_eq_null() {
     println!("SQLRustGo NULL=NULL: {}", sqlrustgo);
 }
 
+/// Known diff: ORDER BY NULLS LAST — SQLite extension
 #[test]
-#[ignore] // Known diff: SQLRustGo may not support NULLS LAST
+#[ignore]
 fn test_order_by_nulls_last() {
     let sql = "CREATE TABLE t(x INTEGER); \
                INSERT INTO t VALUES (1),(NULL),(3),(2); \
@@ -390,8 +458,9 @@ fn test_order_by_nulls_last() {
     }
 }
 
+/// Known diff: IN with NULL semantics differ
 #[test]
-#[ignore] // Known diff: IN with NULL semantics differ between engines
+#[ignore]
 fn test_in_with_null() {
     let sql = "SELECT 1 IN (1,2,NULL) AS a, 3 IN (1,2,NULL) AS b";
     let sqlite = sqlite_query(sql).expect("sqlite3 works");
@@ -400,8 +469,9 @@ fn test_in_with_null() {
     println!("SQLRustGo IN+NULL:\n{}", sqlrustgo);
 }
 
+/// Known diff: CASE WHEN NULL
 #[test]
-#[ignore] // Known diff: CASE WHEN NULL
+#[ignore]
 fn test_case_when_null() {
     let sql = "SELECT CASE WHEN NULL THEN 'yes' ELSE 'no' END AS result";
     let sqlite = sqlite_query(sql).expect("sqlite3 works");
@@ -410,8 +480,9 @@ fn test_case_when_null() {
     println!("SQLRustGo CASE WHEN NULL:\n{}", sqlrustgo);
 }
 
+/// Known diff: EXISTS(SELECT NULL)
 #[test]
-#[ignore] // Known diff: EXISTS(SELECT NULL)
+#[ignore]
 fn test_exists_with_null() {
     let sql = "SELECT EXISTS(SELECT NULL) AS result";
     let sqlite = sqlite_query(sql).expect("sqlite3 works");

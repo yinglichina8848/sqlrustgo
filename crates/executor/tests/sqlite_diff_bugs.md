@@ -1,76 +1,26 @@
-# SQLite Differential Testing — Known Bug Log
-#
-# Format:
-#   SQL | SQLite | SQLRustGo | Bug Description
-#
-# When a bug is FIXED: remove the entry and add a proper test case.
-# When a NEW bug is found: add an entry here.
-#
-# This file drives the regression tracking system.
+# SQLite Differential Bug Tracker
+# 分类标准：
+#   - correctness: 已支持功能内有语义/逻辑错误（必须修）
+#   - capability: 能力缺失，feature 未实现（排入 roadmap）
 
-## ACTIVE BUGS (unfixed)
+## 🟥 correctness（当前 sprint 必须修）
 
-# --- Parser ---
+| SQL | SQLite | SQLRustGo | 根因 | 状态 |
+|-----|--------|-----------|------|------|
+| WHERE 过滤 | filtered rows | wrong rows | 条件求值错误 | OPEN |
 
-SELECT 1 AS a, 2 AS b
-  → SQLite: "1\t2"
-  → SQLRustGo: ParseError("Expected FROM or column name")
-  → Bug: Scalar SELECT without FROM not supported
-  → Severity: HIGH
+## 🟨 capability（排入 roadmap，分期做）
 
-SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3 ORDER BY x
-  → SQLite: "1\n2\n3"
-  → SQLRustGo: ParseError("Expected FROM or column name")
-  → Bug: UNION ALL not supported
-  → Severity: HIGH
+| Feature | 复杂度 | 建议优先级 | 状态 |
+|---------|--------|-----------|------|
+| DISTINCT | 低 | P1 | 待实现 |
+| SELECT 1（标量） | 低 | P1 | 待实现 |
+| UNION ALL | 中 | P2 | 待实现 |
+| GROUP BY | 高 | P3 | 待实现 |
+| JOIN | 极高 | P4 | 待实现 |
 
-# --- Executor: DISTINCT ---
+---
 
-SELECT DISTINCT x FROM (VALUES ...):
-  → SQLite: distinct values only
-  → SQLRustGo: all values (DISTINCT ignored)
-  → Bug: DISTINCT keyword not implemented
-  → Severity: HIGH
+## 修复记录
 
-# --- Executor: WHERE filter ---
-
-WHERE x = 10 with NULL rows:
-  → SQLite: correctly filters to rows where x=10
-  → SQLRustGo: returns wrong rows, includes non-matching
-  → Bug: WHERE condition not applied correctly
-  → Severity: HIGH
-
-# --- Executor: GROUP BY ---
-
-GROUP BY with COUNT/SUM aggregates:
-  → SQLite: grouped aggregation result
-  → SQLRustGo: empty result or wrong rows
-  → Bug: GROUP BY not implemented
-  → Severity: CRITICAL
-
-# --- Executor: JOIN ---
-
-INNER JOIN / LEFT JOIN:
-  → SQLite: correct join result
-  → SQLRustGo: empty result
-  → Bug: JOIN execution broken
-  → Severity: CRITICAL
-
-# --- Executor: COUNT ---
-
-COUNT(*) vs COUNT(column):
-  → SQLite: correct counts
-  → SQLRustGo: wrong result
-  → Bug: aggregate execution broken
-  → Severity: CRITICAL
-
-# --- Known Intentional Differences (do NOT fix) ---
-
-NULL = NULL → SQLite=0, SQL standard=NULL
-  → Mark #[ignore] in test
-
-ORDER BY x NULLS LAST → SQLRustGo may not support
-  → Mark #[ignore] in test
-
-IN (1,2,NULL) semantics → differs across engines
-  → Mark #[ignore] in test
+_按修复顺序填入_
