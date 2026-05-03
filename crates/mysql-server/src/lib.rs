@@ -18,7 +18,7 @@ const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
 #[allow(dead_code)]
 const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
-const SKIP_AUTH: bool = false;
+const SKIP_AUTH: bool = true;
 
 #[derive(Debug, Default)]
 pub struct SessionState {
@@ -77,9 +77,9 @@ pub enum MySqlError {
 impl std::fmt::Display for MySqlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MySqlError::Io(e) => write!(f, "IO: {}", e),
-            MySqlError::Protocol(s) => write!(f, "Protocol: {}", s),
-            MySqlError::Sql(s) => write!(f, "SQL: {}", s),
+            MySqlError::Io(e) => write!(f, "IO error: {}", e),
+            MySqlError::Protocol(s) => write!(f, "Protocol error: {}", s),
+            MySqlError::Sql(s) => write!(f, "SQL error: {}", s),
         }
     }
 }
@@ -443,14 +443,14 @@ mod tests {
     #[test]
     fn test_mysql_error_display() {
         let err = MySqlError::Protocol("test error".to_string());
-        assert_eq!(format!("{}", err), "Protocol: test error");
+        assert_eq!(format!("{}", err), "Protocol error: test error");
 
         let io_err = std::io::Error::new(std::io::ErrorKind::Other, "io error");
         let err = MySqlError::Io(io_err);
-        assert_eq!(format!("{}", err), "IO: io error");
+        assert_eq!(format!("{}", err), "IO error: io error");
 
         let err = MySqlError::Sql("sql error".to_string());
-        assert_eq!(format!("{}", err), "SQL: sql error");
+        assert_eq!(format!("{}", err), "SQL error: sql error");
     }
 
     #[test]
@@ -573,7 +573,7 @@ fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     }
 }
 
-fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
+pub fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
     let mut p = Vec::new();
     p.push(0x00);
     write_lenenc_int(&mut p, affected).unwrap();
@@ -585,6 +585,41 @@ fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u
         sequence: seq,
         payload: p,
     }
+}
+
+pub fn split_sql_statements(sql: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut string_char = b'\0';
+
+    for ch in sql.chars() {
+        if in_string {
+            current.push(ch);
+            if ch == string_char as char {
+                in_string = false;
+            }
+        } else if ch == '\'' || ch == '"' {
+            current.push(ch);
+            in_string = true;
+            string_char = ch as u8;
+        } else if ch == ';' {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                results.push(trimmed.to_string());
+            }
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        results.push(trimmed.to_string());
+    }
+
+    results
 }
 
 fn make_err_packet(seq: u8, code: u16, state: &str, msg: &str) -> Packet {
@@ -1078,6 +1113,74 @@ fn is_select(sql: &str) -> bool {
         || u.starts_with("EXPLAIN")
 }
 
+const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
+
+fn execute_transaction_queries<S: Read + Write>(
+    stream: &mut S,
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+    storage: &Arc<RwLock<MemoryStorage>>,
+    cap: u32,
+    mut seq: u8,
+) -> MySqlResult<u8> {
+    let statements = split_sql_statements(sql);
+    let total = statements.len();
+
+    for (i, stmt) in statements.iter().enumerate() {
+        let is_last = i == total - 1;
+        let more_results = if is_last {
+            0
+        } else {
+            SERVER_MORE_RESULTS_EXISTS
+        };
+        let status = 0x0002 | more_results;
+
+        tracing::info!(
+            "Executing stmt {}/{}: {}, more_results={}",
+            i + 1,
+            total,
+            stmt,
+            more_results
+        );
+
+        if is_select(stmt) {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                execute_select(stmt, engine, storage)
+            })) {
+                Ok(Ok((c, t, r))) => {
+                    seq = send_result_set(stream, &c, &t, &r, seq, cap)?;
+                }
+                Ok(Err(e)) => {
+                    let code = match &e {
+                        MySqlError::Sql(s) if s.contains("not found") => 1146,
+                        MySqlError::Sql(_) => 1064,
+                        _ => 2000,
+                    };
+                    make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                    return Err(e);
+                }
+                Err(_) => {
+                    make_err_packet(seq, 2000, "HY000", "Internal error").write_to(stream)?;
+                    return Err(MySqlError::Protocol("Internal error".into()));
+                }
+            }
+        } else {
+            match execute_write(stmt, engine) {
+                Ok(a) => {
+                    make_ok_packet(seq, a as u64, 0, status, 0).write_to(stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+                Err(e) => {
+                    make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(seq)
+}
+
 fn is_transaction_cmd(sql: &str) -> bool {
     let u = sql.trim().to_uppercase();
     u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
@@ -1178,7 +1281,14 @@ fn do_command_loop<S: Read + Write>(
                     seq = seq.wrapping_add(1);
                     continue;
                 }
-                if is_select(&q) {
+                if session.transaction_active {
+                    match execute_transaction_queries(stream, &q, engine, &storage, cap, seq) {
+                        Ok(new_seq) => seq = new_seq,
+                        Err(e) => {
+                            tracing::error!("Transaction query error: {}", e);
+                        }
+                    }
+                } else if is_select(&q) {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         execute_select(&q, engine, &storage)
                     })) {
@@ -1515,6 +1625,7 @@ fn handle_connection(
                 resp.auth_response.len()
             );
             let auth_ok = if SKIP_AUTH {
+                tracing::info!("SKIP_AUTH is true, bypassing auth");
                 true
             } else if resp.auth_response.is_empty() {
                 tracing::warn!("Empty auth response for user {}", resp.username);

@@ -1,6 +1,72 @@
 //! MySQL server integration tests - test Packet I/O and MySqlError.
 
-use sqlrustgo_mysql_server::{MySqlError, Packet};
+use sqlrustgo_mysql_server::{make_ok_packet, split_sql_statements, MySqlError, Packet};
+
+#[test]
+fn test_ok_packet_with_more_results() {
+    let pkt = make_ok_packet(1, 5, 10, 0x0002 | 0x0008, 0);
+    assert_eq!(pkt.sequence, 1);
+    assert_eq!(pkt.payload[0], 0x00);
+}
+
+#[test]
+fn test_ok_packet_without_more_results() {
+    let pkt = make_ok_packet(1, 5, 10, 0x0002, 0);
+    assert_eq!(pkt.sequence, 1);
+    assert_eq!(pkt.payload[0], 0x00);
+}
+
+#[test]
+fn test_split_sql_statements_single() {
+    let sql = "SELECT 1";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0], "SELECT 1");
+}
+
+#[test]
+fn test_split_sql_statements_multiple() {
+    let sql = "SELECT 1; SELECT 2; SELECT 3";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0], "SELECT 1");
+    assert_eq!(results[1], "SELECT 2");
+    assert_eq!(results[2], "SELECT 3");
+}
+
+#[test]
+fn test_split_sql_statements_with_insert() {
+    let sql = "INSERT INTO t VALUES(1); SELECT * FROM t";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0], "INSERT INTO t VALUES(1)");
+    assert_eq!(results[1], "SELECT * FROM t");
+}
+
+#[test]
+fn test_split_sql_statements_with_whitespace() {
+    let sql = "SELECT 1 ; SELECT 2 ";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0], "SELECT 1");
+    assert_eq!(results[1], "SELECT 2");
+}
+
+#[test]
+fn test_split_sql_statements_empty() {
+    let sql = "";
+    let results = split_sql_statements(sql);
+    assert!(results.is_empty());
+}
+
+#[test]
+fn test_split_sql_statements_trims_whitespace() {
+    let sql = "  SELECT 1  ;  SELECT 2  ";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0], "SELECT 1");
+    assert_eq!(results[1], "SELECT 2");
+}
 
 // ============ MySqlError Tests ============
 
