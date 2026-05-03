@@ -1,0 +1,58 @@
+// PROOF-022: CTE Non-Recursive Semantics
+// Tool: Formulog 0.8.0
+// Status: in_progress
+// Category: P1-sql-semantics
+//
+// CTE (Common Table Expression) Non-Recursive semantics in SQL:
+// - CTEs are named temporary result sets scoped to a single query
+// - Multiple CTEs can be defined and referenced in subsequent CTEs or main query
+// - Evaluation order: CTEs are resolved in declaration order (top-down)
+// - CTEs shadow outer tables with the same name
+// - CTEs are evaluated once per query (not re-evaluated on each reference)
+
+@edb rel t1(a:int, b:int)
+@edb rel t2(b:int, c:int)
+
+// Simple CTE: single CTE defining a filtered view of t1
+rel cte_simple(x:int, y:int)
+cte_simple(X, Y) :- t1(X, Y), Y > 10.
+
+// CTE referenced in main query - structural property (no real aggregation needed)
+rel cte_main_result(x:int, y:int)
+cte_main_result(X, Y) :- cte_simple(X, Y).
+
+// Multiple CTEs: chain of CTEs
+// cte_a is declared first, cte_b can reference cte_a
+@edb rel cte_a_data(x:int, val:int)
+@edb rel cte_b_data(x:int, val:int)
+
+rel cte_a(x:int, doubled:int)
+cte_a(X, DOUBLED) :- cte_a_data(X, VAL), DOUBLED := VAL * 2.
+
+rel cte_b(x:int, total:int)
+cte_b(X, TOTAL) :- cte_b_data(X, VAL), cte_a(X, D), TOTAL := VAL + D.
+
+rel cte_chain_result(x:int, total:int)
+cte_chain_result(X, TOTAL) :- cte_b(X, TOTAL).
+
+// CTEs with same name as outer table (shadowing)
+// The CTE should be used, not the outer table
+@edb rel outer_table(key:int, val:int)
+@edb rel cte_named_same(key:int, val:int)
+
+rel cte_shadow_result(key:int, val:int)
+cte_shadow_result(K, V) :- cte_named_same(K, V).
+
+// Verify CTE evaluation is once-per-query (idempotent reference)
+// Same CTE referenced twice should produce consistent results
+rel cte_reference_count(x:int, r1:int, r2:int)
+cte_reference_count(X, R1, R2) :- cte_simple(X, Y), R1 := Y, R2 := Y.
+
+// CTE evaluation order: a chain where later CTE can use earlier CTE
+// If data flows correctly through chain, final result is non-empty
+rel cte_order_dep(x:int, a_val:int, b_val:int)
+cte_order_dep(X, A, B) :- cte_a_data(X, VAL), cte_a(X, A), cte_b_data(X, BVAL), cte_b(X, B).
+
+// CTE can be used in JOIN with regular tables
+rel cte_join_result(a:int, c:int)
+cte_join_result(A, C) :- cte_simple(A, B), t2(B, C).
