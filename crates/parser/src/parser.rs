@@ -1206,7 +1206,8 @@ impl Parser {
                     || name.to_uppercase() == "SUBTIME"
                     || name.to_uppercase() == "INSERT"
                     || name.to_uppercase() == "CAST"
-                    || name.to_uppercase() == "SUBSTRING" => {
+                    || name.to_uppercase() == "SUBSTRING" 
+                    || name.starts_with("ST_") => {
                     let func_name = name.to_uppercase();
                     self.next();
                     self.expect(Token::LParen)?;
